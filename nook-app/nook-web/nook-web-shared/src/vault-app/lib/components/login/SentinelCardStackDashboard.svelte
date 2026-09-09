@@ -1,10 +1,11 @@
 <script lang="ts">
+  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   type SentinelParticipation = {
-    readonly payload: string;
-    readonly participantLabel: string;
-  };
+    readonly payload: string
+    readonly participantLabel: string
+  }
 
-  import { I18N_KEYS, type I18nKey } from "../../../../generated/i18n-keys";
+  import { I18N_KEYS, type I18nKey } from '../../../../generated/i18n-keys'
   import {
     ArrowLeft,
     Check,
@@ -13,16 +14,16 @@
     Plus,
     RefreshCw,
     ShieldCheck,
-  } from "@lucide/svelte";
-  import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
+  } from '@lucide/svelte'
+  import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import {
     SentinelRequestClipboard as RequestClipboard,
     SentinelDashboardInteraction as DashboardInteraction,
-  } from "$lib/components/login/sentinel-dashboard-actions";
-  import { SentinelCardOnboardingStage } from "$lib/components/login/sentinel-dashboard-state";
-  import { Button } from "$lib/components/ui/button";
-  import * as Select from "$lib/components/ui/select";
-  import type { VaultState } from "$lib/vault.svelte";
+  } from '$lib/components/login/sentinel-dashboard-actions'
+  import { SentinelCardOnboardingStage } from '$lib/components/login/sentinel-dashboard-state'
+  import { Button } from '$lib/components/ui/button'
+  import * as Select from '$lib/components/ui/select'
+  import type { VaultState } from '$lib/vault.svelte'
   import {
     SentinelGenesisPhase,
     evaluate_sentinel_policy_draft,
@@ -30,16 +31,16 @@
     type NookSentinelGenesisDelivery,
     type NookSentinelGenesisParticipantStatus,
     type StartSentinelGenesisArgs,
-  } from "$app-wasm";
+  } from '$app-wasm'
 
   let {
     vault,
-    name = $bindable(""),
+    name = $bindable(''),
     participantCount = $bindable(3),
     threshold = $bindable(2),
     status,
     request,
-    participantResponse = "",
+    participantResponse = '',
     participants,
     deliveries,
     isBusy,
@@ -52,50 +53,52 @@
     onFinalize,
     onCompleteDelivery,
   }: {
-    vault: VaultState;
-    name: string;
-    participantCount: number;
-    threshold: number;
-    status: SentinelGenesisPhase;
-    request: string;
-    participantResponse?: string;
-    participants: NookSentinelGenesisParticipantStatus[];
-    deliveries: NookSentinelGenesisDelivery[];
-    isBusy: boolean;
-    initiatorFingerprint: string;
-    initiatorKeyLoading: boolean;
-    onPrepareInitiator: () => void | Promise<void>;
-    onBack: () => void;
-    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>;
-    onAddParticipant: (args: SentinelParticipation) => void | Promise<void>;
-    onFinalize: () => void | Promise<void>;
-    onCompleteDelivery: () => void | Promise<void>;
-  } = $props();
+    vault: VaultState
+    name: string
+    participantCount: number
+    threshold: number
+    status: SentinelGenesisPhase
+    request: string
+    participantResponse?: string
+    participants: NookSentinelGenesisParticipantStatus[]
+    deliveries: NookSentinelGenesisDelivery[]
+    isBusy: boolean
+    initiatorFingerprint: string
+    initiatorKeyLoading: boolean
+    onPrepareInitiator: () => void | Promise<void>
+    onBack: () => void
+    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
+    onAddParticipant: (
+      args: SentinelParticipation,
+    ) => Promise<SentinelActionResult<void>>
+    onFinalize: () => Promise<SentinelActionResult<void>>
+    onCompleteDelivery: () => Promise<SentinelActionResult<void>>
+  } = $props()
 
-  let response = $state("");
-  let loadedParticipantResponse = $state("");
-  let participantLabel = $state("");
-  let actionBusy = $state(false);
-  let copied = $state(false);
-  let selected = $state(0);
-  let participantInputError = $state("");
-  let deliveriesAcknowledged = $state(false);
+  let response = $state('')
+  let loadedParticipantResponse = $state('')
+  let participantLabel = $state('')
+  let actionBusy = $state(false)
+  let copied = $state(false)
+  let selected = $state(0)
+  let participantInputError = $state('')
+  let deliveriesAcknowledged = $state(false)
   let onboardingStage = $state<SentinelCardOnboardingStage>(
     SentinelCardOnboardingStage.Identity,
-  );
+  )
 
   const canFinalize = $derived(
     status === SentinelGenesisPhase.ReadyToFinalize ||
       status === SentinelGenesisPhase.AwaitingCompletionCheck,
-  );
+  )
 
-  const t: VaultState["t"] = (request) => vault.t(request);
+  const t: VaultState['t'] = (request) => vault.t(request)
 
   function rosterLabel(key: I18nKey) {
     return t({
       key,
       replacements: { count: String(availableRosterSlots) },
-    });
+    })
   }
 
   function policyLabel(key: I18nKey) {
@@ -105,50 +108,48 @@
         count: String(participantCount),
         threshold: String(threshold),
       },
-    });
+    })
   }
 
-  const requestCopy = $derived<
-    ConstructorParameters<typeof RequestClipboard>[0]
-  >({
+  const requestCopy = $derived<ConstructorParameters<typeof RequestClipboard>[0]>({
     request,
     onCopied: () => {
-      copied = true;
-      setTimeout(() => (copied = false), 1500);
+      copied = true
+      setTimeout(() => (copied = false), 1500)
     },
-    onFailure: () =>
-      (vault.errorMsg = t(I18N_KEYS.LoginSentinelGenesisCopyFailed)),
-  });
+    onFailure: () => (vault.errorMsg = t(I18N_KEYS.LoginSentinelGenesisCopyFailed)),
+  })
 
   const finalization = $derived<
     ConstructorParameters<typeof DashboardInteraction>[0]
   >({
     allowed: canFinalize && !isBusy && !actionBusy,
     setBusy: (value) => (actionBusy = value),
-    action: onFinalize,
-  });
+    action: async () => {
+      const finalized = await onFinalize()
+      if (finalized.isErr()) vault.errorMsg = vault.t(finalized.error.translationKey)
+    },
+  })
 
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
-  );
+  )
   const initiatorKeyReady = $derived(
     Boolean(participants[0]?.fingerprint || initiatorFingerprint),
-  );
+  )
   const rosterCount = $derived(
     initiatorKeyReady ? Math.max(1, participants.length) : 0,
-  );
-  const availableRosterSlots = $derived(
-    Math.max(0, participantCount - rosterCount),
-  );
+  )
+  const availableRosterSlots = $derived(Math.max(0, participantCount - rosterCount))
   const policyDraft = $derived(
     evaluate_sentinel_policy_draft({
       participants: participantCount,
       threshold,
     }),
-  );
+  )
   const policyValid = $derived(
-    name.trim().length > 0 && policyDraft.admission.kind === "accepted",
-  );
+    name.trim().length > 0 && policyDraft.admission.kind === 'accepted',
+  )
   const onboardingStep = $derived(
     onboardingStage === SentinelCardOnboardingStage.Identity
       ? 0
@@ -158,74 +159,72 @@
         : onboardingStage === SentinelCardOnboardingStage.Roster
           ? 2
           : 3,
-  );
+  )
 
   $effect(() => {
-    const incomingResponse = participantResponse.trim();
+    const incomingResponse = participantResponse.trim()
     if (
       incomingResponse &&
       incomingResponse !== loadedParticipantResponse &&
       status === SentinelGenesisPhase.CollectingParticipants
     ) {
-      response = incomingResponse;
-      loadedParticipantResponse = incomingResponse;
-      participantInputError = "";
+      response = incomingResponse
+      loadedParticipantResponse = incomingResponse
+      participantInputError = ''
     }
-  });
+  })
 
   $effect(() => {
     if (status === SentinelGenesisPhase.CollectingParticipants) {
-      onboardingStage = SentinelCardOnboardingStage.Roster;
+      onboardingStage = SentinelCardOnboardingStage.Roster
     } else if (status !== SentinelGenesisPhase.Inactive) {
-      onboardingStage = SentinelCardOnboardingStage.Build;
+      onboardingStage = SentinelCardOnboardingStage.Build
     } else if (
       initiatorKeyReady &&
       (onboardingStage === SentinelCardOnboardingStage.Identity ||
         onboardingStage === SentinelCardOnboardingStage.Build ||
         onboardingStage === SentinelCardOnboardingStage.Roster)
     ) {
-      onboardingStage = SentinelCardOnboardingStage.Name;
+      onboardingStage = SentinelCardOnboardingStage.Name
     } else if (!initiatorKeyReady) {
-      onboardingStage = SentinelCardOnboardingStage.Identity;
+      onboardingStage = SentinelCardOnboardingStage.Identity
     }
-  });
+  })
 
   function changeParticipantCount(value: string) {
-    if (!value) return;
-    participantCount = Number(value);
+    if (!value) return
+    participantCount = Number(value)
   }
 
   function changeThreshold(value: string) {
-    if (!value) return;
-    threshold = Number(value);
+    if (!value) return
+    threshold = Number(value)
   }
 
   function continueToPolicy() {
-    if (!initiatorKeyReady || !name.trim() || isBusy || actionBusy) return;
-    onboardingStage = SentinelCardOnboardingStage.Policy;
+    if (!initiatorKeyReady || !name.trim() || isBusy || actionBusy) return
+    onboardingStage = SentinelCardOnboardingStage.Policy
   }
 
   async function continueToRoster() {
-    if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return;
-    actionBusy = true;
+    if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return
+    actionBusy = true
     try {
       const started = await onStart({
         label: name.trim(),
         participantCount,
         threshold,
-      });
+      })
       if (started !== false) {
-        onboardingStage = SentinelCardOnboardingStage.Roster;
+        onboardingStage = SentinelCardOnboardingStage.Roster
       }
-    } catch {
-      // The vault action publishes the core error through the shared error UI.
     } finally {
-      actionBusy = false;
+      actionBusy = false
     }
   }
 
   async function addParticipant() {
-    const payload = response.trim();
+    const payload = response.trim()
     if (
       !payload ||
       status !== SentinelGenesisPhase.CollectingParticipants ||
@@ -233,24 +232,23 @@
       isBusy ||
       actionBusy
     )
-      return;
-    actionBusy = true;
+      return
+    actionBusy = true
     try {
-      await onAddParticipant({
+      const added = await onAddParticipant({
         payload,
         participantLabel: participantLabel.trim(),
-      });
-      response = "";
-      participantLabel = "";
-      participantInputError = "";
-      selected = participants.length;
-    } catch {
-      participantInputError = t(
-        I18N_KEYS.LoginSentinelGenesisParticipantImportFailed,
-      );
-      vault.errorMsg = participantInputError;
+      })
+      if (added.isErr()) {
+        vault.errorMsg = vault.t(added.error.translationKey)
+        return
+      }
+      response = ''
+      participantLabel = ''
+      participantInputError = ''
+      selected = participants.length
     } finally {
-      actionBusy = false;
+      actionBusy = false
     }
   }
 </script>
@@ -271,9 +269,7 @@
       data-testid="sentinel-dashboard-heading"
     >
       <div data-testid="sentinel-dashboard-brand">
-        <p
-          class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
-        >
+        <p class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase">
           {t(I18N_KEYS.LoginSentinelCardStackEyebrow)}
         </p>
         <h1 class="mt-1 text-3xl font-semibold tracking-[0.18em]">SENTINEL</h1>
@@ -298,28 +294,28 @@
       {#each [t(I18N_KEYS.LoginSentinelOnboardingStepKeys), t(I18N_KEYS.LoginSentinelOnboardingStepShares), t(I18N_KEYS.LoginSentinelOnboardingStepDevices), t(I18N_KEYS.LoginSentinelOnboardingStepBuild)] as label, index (label)}
         <li
           class={[
-            "flex items-center gap-3 rounded-lg px-3 py-3 transition-colors",
+            'flex items-center gap-3 rounded-lg px-3 py-3 transition-colors',
             index === onboardingStep
-              ? "bg-[#79dfff]/10 text-white"
+              ? 'bg-[#79dfff]/10 text-white'
               : index < onboardingStep
-                ? "text-[#63eaa1]"
-                : "text-[#66737e]",
+                ? 'text-[#63eaa1]'
+                : 'text-[#66737e]',
           ]}
-          data-current={index === onboardingStep ? "step" : false}
+          data-current={index === onboardingStep ? 'step' : false}
         >
           <span
             class={[
-              "grid size-7 shrink-0 place-items-center rounded-full border font-mono text-[10px]",
+              'grid size-7 shrink-0 place-items-center rounded-full border font-mono text-[10px]',
               index < onboardingStep
-                ? "border-[#63eaa1] bg-[#63eaa1]/10"
+                ? 'border-[#63eaa1] bg-[#63eaa1]/10'
                 : index === onboardingStep
-                  ? "border-[#79dfff] bg-[#79dfff]/10 text-[#79dfff]"
-                  : "border-white/15",
+                  ? 'border-[#79dfff] bg-[#79dfff]/10 text-[#79dfff]'
+                  : 'border-white/15',
             ]}
           >
-            {#if index < onboardingStep}<Check
-                class="size-3.5"
-              />{:else}{String(index + 1).padStart(2, "0")}{/if}
+            {#if index < onboardingStep}<Check class="size-3.5" />{:else}{String(
+                index + 1,
+              ).padStart(2, '0')}{/if}
           </span>
           <span class="text-[10px] font-semibold tracking-[0.12em] uppercase">
             {label}
@@ -330,9 +326,7 @@
 
     <div class="grid gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
       <div data-testid="sentinel-onboarding-actions-column">
-        <p
-          class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
-        >
+        <p class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase">
           {t(I18N_KEYS.LoginSentinelCardStackParticipantCards)}
         </p>
         {#if onboardingStage === SentinelCardOnboardingStage.Identity}
@@ -353,11 +347,11 @@
         {/if}
         <div class="mt-5 space-y-3">
           <button
-            class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === 0 ? "border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]" : "border-white/5 border-l-[#657580] bg-[#303840]/85"}`}
+            class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === 0 ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
             data-testid="sentinel-onboarding-create-keys"
             onclick={() => {
-              selected = 0;
-              if (!initiatorKeyReady) void onPrepareInitiator();
+              selected = 0
+              if (!initiatorKeyReady) void onPrepareInitiator()
             }}
           >
             <span
@@ -370,9 +364,7 @@
                 {t(I18N_KEYS.LoginSentinelCardStackThisDevice)} ·
                 {t(I18N_KEYS.LoginSentinelCardStackParticipant)} 01
               </b>
-              <span
-                class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]"
-              >
+              <span class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]">
                 {participants[0]?.fingerprint ||
                   initiatorFingerprint ||
                   t(I18N_KEYS.LoginSentinelCardStackKeyPending)}
@@ -404,8 +396,7 @@
               disabled={status !== SentinelGenesisPhase.Inactive ||
                 isBusy ||
                 actionBusy}
-              onclick={() =>
-                (onboardingStage = SentinelCardOnboardingStage.Name)}
+              onclick={() => (onboardingStage = SentinelCardOnboardingStage.Name)}
             >
               <span
                 class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] font-mono text-[10px] text-[#79dfff]"
@@ -426,19 +417,19 @@
 
           {#each participants.slice(1) as participant, index (participant.deviceId)}
             <button
-              class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === index + 1 ? "border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]" : "border-white/5 border-l-[#657580] bg-[#303840]/85"}`}
+              class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === index + 1 ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
               onclick={() => (selected = index + 1)}
             >
               <span
                 class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] font-mono text-[9px] text-[#b9c5ce]"
               >
-                P-{String(index + 2).padStart(2, "0")}
+                P-{String(index + 2).padStart(2, '0')}
               </span>
               <span class="min-w-0">
                 <b class="block truncate text-sm">
                   {participant.label || participant.deviceId} ·
                   {t(I18N_KEYS.LoginSentinelCardStackParticipant)}
-                  {String(index + 2).padStart(2, "0")}
+                  {String(index + 2).padStart(2, '0')}
                 </b>
                 <span
                   class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]"
@@ -458,9 +449,7 @@
                     {t(I18N_KEYS.LoginSentinelCardStackAddParticipant)}
                   </p>
                   <p class="mt-1 font-mono text-[9px] text-[#75818c]">
-                    {rosterLabel(
-                      I18N_KEYS.LoginSentinelCardStackSlotsRemaining,
-                    )}
+                    {rosterLabel(I18N_KEYS.LoginSentinelCardStackSlotsRemaining)}
                   </p>
                 </div>
                 <button
@@ -482,9 +471,7 @@
                 class="mt-4 grid gap-4"
                 data-testid="sentinel-genesis-participant-fields"
               >
-                <label
-                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
-                >
+                <label class="text-[9px] tracking-wider text-[#8d99a4] uppercase">
                   {t(I18N_KEYS.LoginSentinelCardStackDeviceNameLabel)}
                   <input
                     class="mt-2 h-11 w-full border border-white/20 bg-[#192128] px-3 text-sm text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
@@ -496,9 +483,7 @@
                     bind:value={participantLabel}
                   />
                 </label>
-                <label
-                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
-                >
+                <label class="text-[9px] tracking-wider text-[#8d99a4] uppercase">
                   {t(I18N_KEYS.LoginSentinelCardStackPublicKeyLabel)}
                   <textarea
                     class="mt-2 min-h-24 w-full resize-y border border-white/20 bg-[#192128] px-3 py-3 font-mono text-xs text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
@@ -521,9 +506,7 @@
                       {t(I18N_KEYS.LoginSentinelCardStackAuthenticationReady)}
                     </p>
                     <p class="mt-2 text-xs leading-5 text-[#aeb8c2]">
-                      {t(
-                        I18N_KEYS.LoginSentinelCardStackAuthenticationReadyHelp,
-                      )}
+                      {t(I18N_KEYS.LoginSentinelCardStackAuthenticationReadyHelp)}
                     </p>
                   </div>
                 {:else}
@@ -617,9 +600,7 @@
             </p>
             <div class="mt-4" data-testid="sentinel-onboarding-policy">
               <div class="max-w-sm">
-                <span
-                  class="text-[10px] tracking-wider text-[#aab5be] uppercase"
-                >
+                <span class="text-[10px] tracking-wider text-[#aab5be] uppercase">
                   {t(I18N_KEYS.LoginSentinelCardStackThresholdPolicy)}
                 </span>
                 <span
@@ -672,9 +653,7 @@
                       class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
                       data-testid="sentinel-genesis-participant-count"
                       data-value={participantCount}
-                      aria-label={t(
-                        I18N_KEYS.LoginSentinelGenesisParticipantCount,
-                      )}
+                      aria-label={t(I18N_KEYS.LoginSentinelGenesisParticipantCount)}
                     >
                       <span>
                         <span class="block text-3xl font-light text-white">
@@ -711,8 +690,7 @@
                 type="button"
                 class="px-2 py-2 text-[10px] font-semibold tracking-wider text-[#aeb8c2] uppercase hover:text-white"
                 data-testid="sentinel-onboarding-policy-back"
-                onclick={() =>
-                  (onboardingStage = SentinelCardOnboardingStage.Name)}
+                onclick={() => (onboardingStage = SentinelCardOnboardingStage.Name)}
               >
                 {t(I18N_KEYS.CommonBack)}
               </button>
@@ -722,9 +700,7 @@
                 data-testid="sentinel-onboarding-continue-devices"
                 onclick={() => void continueToRoster()}
               >
-                {policyLabel(
-                  I18N_KEYS.LoginSentinelOnboardingContinueWithDevices,
-                )}
+                {policyLabel(I18N_KEYS.LoginSentinelOnboardingContinueWithDevices)}
               </button>
             </div>
           </section>
@@ -734,8 +710,7 @@
               disabled={!canFinalize || isBusy || actionBusy}
               class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
               data-testid="sentinel-genesis-finalize"
-              onclick={() =>
-                void new DashboardInteraction(finalization).execute()}
+              onclick={() => void new DashboardInteraction(finalization).execute()}
             >
               {#if actionBusy}<RefreshCw
                   class="mr-2 inline size-4 animate-spin"
@@ -782,9 +757,12 @@
               type="button"
               class="mt-5"
               data-testid="sentinel-genesis-delivery-complete"
-              disabled={memberDeliveries.length === 0 ||
-                !deliveriesAcknowledged}
-              onclick={() => void onCompleteDelivery()}
+              disabled={memberDeliveries.length === 0 || !deliveriesAcknowledged}
+              onclick={async () => {
+                const completed = await onCompleteDelivery()
+                if (completed.isErr())
+                  vault.errorMsg = vault.t(completed.error.translationKey)
+              }}
             >
               {t(I18N_KEYS.LoginSentinelOnboardingFinishAction)}
             </Button>
@@ -793,9 +771,7 @@
       </div>
 
       <div data-testid="sentinel-onboarding-summary-column">
-        <p
-          class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
-        >
+        <p class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase">
           {t(I18N_KEYS.LoginSentinelCardStackActiveConfiguration)}
         </p>
         <div
@@ -815,9 +791,7 @@
             >
               {status === SentinelGenesisPhase.Inactive
                 ? t(I18N_KEYS.LoginSentinelCardStackPreGenesis)
-                : t(
-                    sentinel_genesis_phase_translation_key(status),
-                  ).toUpperCase()}
+                : t(sentinel_genesis_phase_translation_key(status)).toUpperCase()}
             </span>
           </div>
 
@@ -851,14 +825,10 @@
                 {onboardingStage === SentinelCardOnboardingStage.Identity ||
                 onboardingStage === SentinelCardOnboardingStage.Name
                   ? t(I18N_KEYS.LoginSentinelOnboardingNotSet)
-                  : policyLabel(
-                      I18N_KEYS.LoginSentinelOnboardingThresholdSummary,
-                    )}
+                  : policyLabel(I18N_KEYS.LoginSentinelOnboardingThresholdSummary)}
               </dd>
             </div>
-            <div
-              class="border border-white/10 bg-black/10 px-3 py-2 sm:min-w-28"
-            >
+            <div class="border border-white/10 bg-black/10 px-3 py-2 sm:min-w-28">
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >

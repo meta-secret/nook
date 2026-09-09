@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { Copy, RefreshCw, ShieldCheck } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
-  import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
-  import { sentinelGenesisBrowser } from "$lib/enrollment/sentinel-genesis-link";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { sentinel_genesis_participant_fingerprint } from "$app-wasm";
+  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { Copy, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
+  import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
+  import { sentinelGenesisBrowser } from '$lib/enrollment/sentinel-genesis-link'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { sentinel_genesis_participant_fingerprint } from '$app-wasm'
 
   let {
     vault,
@@ -19,49 +20,51 @@
     onAcceptOnboardingPackage,
     onFinishSentinelInvitation,
   }: {
-    vault: VaultState;
-    isBusy: boolean;
-    sentinelInvitationRequest: string;
-    sentinelParticipantResponsePending: boolean;
-    sentinelOnboardingPackage: string;
+    vault: VaultState
+    isBusy: boolean
+    sentinelInvitationRequest: string
+    sentinelParticipantResponsePending: boolean
+    sentinelOnboardingPackage: string
     onCreateParticipantResponse?: (
       requestPayload: string,
-    ) => string | Promise<string>;
-    onRememberRequest?: (requestPayload: string) => void | Promise<void>;
-    onReceiveShare?: (sharePayload: string) => void | Promise<void>;
-    onAcceptOnboardingPackage?: (packageJson: string) => void | Promise<void>;
-    onFinishSentinelInvitation?: () => void;
-  } = $props();
+    ) => Promise<SentinelActionResult<string>>
+    onRememberRequest?: (
+      requestPayload: string,
+    ) => Promise<SentinelActionResult<void>>
+    onReceiveShare?: (sharePayload: string) => Promise<SentinelActionResult<void>>
+    onAcceptOnboardingPackage?: (packageJson: string) => void | Promise<void>
+    onFinishSentinelInvitation?: () => void
+  } = $props()
 
-  let copyingJoinResponse = $state(false);
-  let actionBusy = $state(false);
-  let participantRequest = $state("");
-  let sessionParticipantRequest = $state("");
-  let generatedParticipantResponse = $state("");
-  let generatedParticipantFingerprint = $state("");
-  let participantShare = $state("");
-  let joinPublicKeysLoading = $state(false);
+  let copyingJoinResponse = $state(false)
+  let actionBusy = $state(false)
+  let participantRequest = $state('')
+  let sessionParticipantRequest = $state('')
+  let generatedParticipantResponse = $state('')
+  let generatedParticipantFingerprint = $state('')
+  let participantShare = $state('')
+  let joinPublicKeysLoading = $state(false)
 
   const generatedParticipantResponseLink = $derived(
     (() => {
       const linkArgs: Parameters<
         typeof sentinelGenesisBrowser.buildSentinelGenesisParticipantResponseLink
-      >[0] = { responseJson: generatedParticipantResponse };
+      >[0] = { responseJson: generatedParticipantResponse }
       return sentinelGenesisBrowser.buildSentinelGenesisParticipantResponseLink(
         linkArgs,
-      );
+      )
     })(),
-  );
+  )
 
   $effect(() => {
-    const invitation = sentinelInvitationRequest.trim();
-    if (!invitation) return;
-    participantRequest = invitation;
-  });
+    const invitation = sentinelInvitationRequest.trim()
+    if (!invitation) return
+    participantRequest = invitation
+  })
 
   $effect(() => {
-    const deviceProtectionReady = vault.deviceProtectionReady;
-    const invitationPending = sentinelInvitationRequest.trim().length > 0;
+    const deviceProtectionReady = vault.deviceProtectionReady
+    const invitationPending = sentinelInvitationRequest.trim().length > 0
     if (
       invitationPending &&
       sentinelParticipantResponsePending &&
@@ -72,94 +75,107 @@
       !isBusy &&
       onCreateParticipantResponse
     ) {
-      void loadJoinPublicKeys();
+      void loadJoinPublicKeys()
     }
-  });
+  })
 
   async function loadJoinPublicKeys() {
-    const requestPayload = participantRequest.trim();
+    const requestPayload = participantRequest.trim()
     if (
       joinPublicKeysLoading ||
       generatedParticipantResponse ||
       !requestPayload ||
       !onCreateParticipantResponse
     ) {
-      return;
+      return
     }
-    joinPublicKeysLoading = true;
+    joinPublicKeysLoading = true
     try {
-      generatedParticipantResponse =
-        await onCreateParticipantResponse(requestPayload);
-      if (!generatedParticipantResponse && !vault.deviceProtectionReady) {
-        return;
+      const response = await onCreateParticipantResponse(requestPayload)
+      if (response.isErr()) {
+        vault.errorMsg = vault.t(response.error.translationKey)
+        return
       }
-      generatedParticipantFingerprint =
-        sentinel_genesis_participant_fingerprint(generatedParticipantResponse);
-    } catch (error) {
-      generatedParticipantResponse = "";
-      generatedParticipantFingerprint = "";
-      vault.errorMsg =
-        error instanceof Error
-          ? error.message
-          : vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed);
+      generatedParticipantResponse = response.value
+      try {
+        generatedParticipantFingerprint = sentinel_genesis_participant_fingerprint(
+          generatedParticipantResponse,
+        )
+      } catch {
+        generatedParticipantResponse = ''
+        generatedParticipantFingerprint = ''
+        vault.errorMsg = vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed)
+      }
     } finally {
-      joinPublicKeysLoading = false;
+      joinPublicKeysLoading = false
     }
   }
 
   async function copyJoinResponse() {
-    if (!generatedParticipantResponseLink) return;
+    if (!generatedParticipantResponseLink) return
     try {
-      await navigator.clipboard.writeText(generatedParticipantResponseLink);
-      copyingJoinResponse = true;
+      await navigator.clipboard.writeText(generatedParticipantResponseLink)
+      copyingJoinResponse = true
       setTimeout(() => {
-        copyingJoinResponse = false;
-      }, 1500);
+        copyingJoinResponse = false
+      }, 1500)
     } catch {
-      vault.errorMsg = vault.t(I18N_KEYS.LoginSentinelGenesisCopyFailed);
+      vault.errorMsg = vault.t(I18N_KEYS.LoginSentinelGenesisCopyFailed)
     }
   }
 
   async function createParticipantResponse() {
-    const requestPayload = sessionParticipantRequest.trim();
-    if (!requestPayload || actionBusy || !onCreateParticipantResponse) return;
-    actionBusy = true;
+    const requestPayload = sessionParticipantRequest.trim()
+    if (!requestPayload || actionBusy || !onCreateParticipantResponse) return
+    actionBusy = true
     try {
-      generatedParticipantResponse =
-        await onCreateParticipantResponse(requestPayload);
-      generatedParticipantFingerprint =
-        sentinel_genesis_participant_fingerprint(generatedParticipantResponse);
-    } catch (error) {
-      generatedParticipantResponse = "";
-      generatedParticipantFingerprint = "";
-      vault.errorMsg =
-        error instanceof Error
-          ? error.message
-          : vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed);
+      const response = await onCreateParticipantResponse(requestPayload)
+      if (response.isErr()) {
+        vault.errorMsg = vault.t(response.error.translationKey)
+        return
+      }
+      generatedParticipantResponse = response.value
+      try {
+        generatedParticipantFingerprint = sentinel_genesis_participant_fingerprint(
+          generatedParticipantResponse,
+        )
+      } catch {
+        generatedParticipantResponse = ''
+        generatedParticipantFingerprint = ''
+        vault.errorMsg = vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed)
+      }
     } finally {
-      actionBusy = false;
+      actionBusy = false
     }
   }
 
   function refreshJoinPublicKeys() {
-    generatedParticipantResponse = "";
-    generatedParticipantFingerprint = "";
-    void loadJoinPublicKeys();
+    generatedParticipantResponse = ''
+    generatedParticipantFingerprint = ''
+    void loadJoinPublicKeys()
   }
 
   async function receiveParticipantShare() {
-    const sharePayload = participantShare.trim();
-    if (!sharePayload || actionBusy || !onReceiveShare) return;
-    actionBusy = true;
+    const sharePayload = participantShare.trim()
+    if (!sharePayload || actionBusy || !onReceiveShare) return
+    actionBusy = true
     try {
-      const requestPayload = participantRequest.trim();
+      const requestPayload = participantRequest.trim()
       if (requestPayload && onRememberRequest) {
-        await onRememberRequest(requestPayload);
+        const remembered = await onRememberRequest(requestPayload)
+        if (remembered.isErr()) {
+          vault.errorMsg = vault.t(remembered.error.translationKey)
+          return
+        }
       }
-      await onReceiveShare(sharePayload);
-      participantShare = "";
+      const received = await onReceiveShare(sharePayload)
+      if (received.isErr()) {
+        vault.errorMsg = vault.t(received.error.translationKey)
+        return
+      }
+      participantShare = ''
     } finally {
-      actionBusy = false;
+      actionBusy = false
     }
   }
 </script>
@@ -191,8 +207,7 @@
         class="mt-4 w-full sm:w-auto"
         data-testid="sentinel-accept-onboarding"
         disabled={isBusy || actionBusy}
-        onclick={() =>
-          void onAcceptOnboardingPackage?.(sentinelOnboardingPackage)}
+        onclick={() => void onAcceptOnboardingPackage?.(sentinelOnboardingPackage)}
       >
         <ShieldCheck class="size-4" />
         {vault.t(I18N_KEYS.LoginSentinelOnboardingMemberAction)}
@@ -229,9 +244,7 @@
               data-testid="sentinel-genesis-generated-fingerprint"
             >
               {vault.t(I18N_KEYS.LoginSentinelGenesisFingerprint)}:
-              <code class="text-foreground"
-                >{generatedParticipantFingerprint}</code
-              >
+              <code class="text-foreground">{generatedParticipantFingerprint}</code>
             </p>
           {/if}
           <Button
@@ -307,9 +320,7 @@
         id="sentinel-participant-request"
         class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
         data-testid="sentinel-genesis-join-request-input"
-        placeholder={vault.t(
-          I18N_KEYS.LoginSentinelGenesisJoinRequestPlaceholder,
-        )}
+        placeholder={vault.t(I18N_KEYS.LoginSentinelGenesisJoinRequestPlaceholder)}
         bind:value={sessionParticipantRequest}
         disabled={isBusy || actionBusy}></textarea>
       <Button
@@ -365,9 +376,7 @@
         id="sentinel-received-share"
         class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
         data-testid="sentinel-genesis-receive-share-input"
-        placeholder={vault.t(
-          I18N_KEYS.LoginSentinelGenesisReceiveSharePlaceholder,
-        )}
+        placeholder={vault.t(I18N_KEYS.LoginSentinelGenesisReceiveSharePlaceholder)}
         bind:value={participantShare}
         disabled={isBusy || actionBusy}></textarea>
       <Button

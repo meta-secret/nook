@@ -1,25 +1,27 @@
 <script lang="ts">
+  import type { PasswordOperationResult } from '$lib/vault/password-unlock'
+  import type { EnrollmentCodeIssueResult } from '$lib/vault/enrollment-issue-failure'
   type VaultPasswordPanelSelection = {
-    readonly target: VaultPasswordPanel;
-    readonly selection: ActivePasswordEntry;
-  };
+    readonly target: VaultPasswordPanel
+    readonly selection: ActivePasswordEntry
+  }
 
   type VaultPasswordCreation = {
-    readonly label: string;
-    readonly password: string;
-  };
+    readonly label: string
+    readonly password: string
+  }
 
   type VaultPasswordEntryUpdate = {
-    readonly entryId: PasswordEntryId;
-    readonly password: string;
-  };
+    readonly entryId: PasswordEntryId
+    readonly password: string
+  }
 
   type EnrollmentCodeIssue = {
-    readonly entryId: PasswordEntryId;
-    readonly password: string;
-  };
+    readonly entryId: PasswordEntryId
+    readonly password: string
+  }
 
-  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     KeyRound,
     Lock,
@@ -30,24 +32,24 @@
     Trash2,
     Plus,
     UserRound,
-  } from "@lucide/svelte";
-  import EnrollmentOnboardResult from "$lib/components/EnrollmentOnboardResult.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { enrollmentBrowser } from "$lib/enrollment/code";
+  } from '@lucide/svelte'
+  import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
+  import { Button } from '$lib/components/ui/button'
+  import { enrollmentBrowser } from '$lib/enrollment/code'
   import {
     is_vault_password_long_enough,
     peek_enrollment_issued_at,
     type NookPasswordEntrySummary,
     type PasswordEntryId,
-  } from "$app-wasm";
-  import type { VaultState } from "$lib/vault.svelte";
+  } from '$app-wasm'
+  import type { VaultState } from '$lib/vault.svelte'
   import {
     ActivePasswordEntryKind,
     ResolvedPasswordEntryKind,
     VaultPasswordPanel,
     type ActivePasswordEntry,
     type ResolvedPasswordEntry,
-  } from "./vault-password-card-state";
+  } from './vault-password-card-state'
 
   let {
     vault,
@@ -66,73 +68,75 @@
     initialPanel = VaultPasswordPanel.Idle,
     showWarningBanner = true,
   }: {
-    vault: VaultState;
-    passwordEntries: NookPasswordEntrySummary[];
-    isBusy: boolean;
-    passwordError: string;
-    enrollmentCode: string;
-    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>;
-    onUpdatePassword: (args: VaultPasswordEntryUpdate) => void | Promise<void>;
-    onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>;
-    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>;
-    onClearCode: () => void;
-    embedded?: boolean;
-    allowIssueCode?: boolean;
-    canManageExistingPasswords?: boolean;
-    initialPanel?: VaultPasswordPanel;
-    showWarningBanner?: boolean;
-  } = $props();
+    vault: VaultState
+    passwordEntries: NookPasswordEntrySummary[]
+    isBusy: boolean
+    passwordError: string
+    enrollmentCode: string
+    onAddPassword: (args: VaultPasswordCreation) => Promise<PasswordOperationResult>
+    onUpdatePassword: (
+      args: VaultPasswordEntryUpdate,
+    ) => Promise<PasswordOperationResult>
+    onRemovePassword: (entryId: PasswordEntryId) => Promise<PasswordOperationResult>
+    onIssueCode: (args: EnrollmentCodeIssue) => Promise<EnrollmentCodeIssueResult>
+    onClearCode: () => void
+    embedded?: boolean
+    allowIssueCode?: boolean
+    canManageExistingPasswords?: boolean
+    initialPanel?: VaultPasswordPanel
+    showWarningBanner?: boolean
+  } = $props()
 
   function resolveInitialPanel() {
-    return initialPanel;
+    return initialPanel
   }
 
-  let panel = $state<VaultPasswordPanel>(resolveInitialPanel());
+  let panel = $state<VaultPasswordPanel>(resolveInitialPanel())
   let activeEntryId = $state<ActivePasswordEntry>({
     kind: ActivePasswordEntryKind.None,
-  });
+  })
 
-  let labelInput = $state("");
-  let passwordInput = $state("");
-  let confirmInput = $state("");
-  let showPassword = $state(false);
-  let localError = $state("");
+  let labelInput = $state('')
+  let passwordInput = $state('')
+  let confirmInput = $state('')
+  let showPassword = $state(false)
+  let localError = $state('')
 
-  const hasPasswords = $derived(passwordEntries.length > 0);
+  const hasPasswords = $derived(passwordEntries.length > 0)
   const activeEntry: ResolvedPasswordEntry = $derived.by(() => {
     if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) {
-      return { kind: ResolvedPasswordEntryKind.Unavailable } as const;
+      return { kind: ResolvedPasswordEntryKind.Unavailable } as const
     }
-    const selectedEntryId = activeEntryId.entryId;
+    const selectedEntryId = activeEntryId.entryId
     const entry = passwordEntries.find((candidate) => {
-      return candidate.id === selectedEntryId;
-    });
+      return candidate.id === selectedEntryId
+    })
     return entry
       ? { kind: ResolvedPasswordEntryKind.Available, entry }
-      : { kind: ResolvedPasswordEntryKind.Unavailable };
-  });
+      : { kind: ResolvedPasswordEntryKind.Unavailable }
+  })
 
   const issuedAt = $derived.by(() => {
-    if (!enrollmentCode) return "";
-    return peek_enrollment_issued_at(enrollmentCode);
-  });
+    if (!enrollmentCode) return ''
+    return peek_enrollment_issued_at(enrollmentCode)
+  })
   const enrollmentLink = $derived.by(() => {
-    if (!enrollmentCode) return "";
+    if (!enrollmentCode) return ''
     const enrollmentLinkRequest: Parameters<
       typeof enrollmentBrowser.buildEnrollmentLink
     >[0] = {
       code: enrollmentCode,
       baseUrl: enrollmentBrowser.getEnrollmentLinkBase(),
-    };
-    return enrollmentBrowser.buildEnrollmentLink(enrollmentLinkRequest);
-  });
+    }
+    return enrollmentBrowser.buildEnrollmentLink(enrollmentLinkRequest)
+  })
   const issuedAgo = $derived.by(() => {
-    if (!issuedAt) return "";
-    const ms = Date.parse(issuedAt);
-    if (!Number.isFinite(ms)) return "";
-    const delta = Date.now() - ms;
-    if (delta < 60_000) return vault.t(I18N_KEYS.VaultPasswordsIssuedJustNow);
-    const minutes = Math.round(delta / 60_000);
+    if (!issuedAt) return ''
+    const ms = Date.parse(issuedAt)
+    if (!Number.isFinite(ms)) return ''
+    const delta = Date.now() - ms
+    if (delta < 60_000) return vault.t(I18N_KEYS.VaultPasswordsIssuedJustNow)
+    const minutes = Math.round(delta / 60_000)
     if (minutes < 60)
       return (() => {
         const tArgs: Parameters<typeof vault.t>[0] = {
@@ -140,136 +144,133 @@
           replacements: {
             mins: String(minutes),
           },
-        };
-        return vault.t(tArgs);
-      })();
-    const hours = Math.round(minutes / 60);
+        }
+        return vault.t(tArgs)
+      })()
+    const hours = Math.round(minutes / 60)
     const tArgs2: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.VaultPasswordsIssuedHoursAgo,
       replacements: {
         hours: String(hours),
       },
-    };
-    return vault.t(tArgs2);
-  });
+    }
+    return vault.t(tArgs2)
+  })
 
   function openPanel({ target, selection }: VaultPasswordPanelSelection) {
-    panel = target;
-    activeEntryId = selection;
-    labelInput = "";
-    passwordInput = "";
-    confirmInput = "";
-    localError = "";
-    onClearCode();
+    panel = target
+    activeEntryId = selection
+    labelInput = ''
+    passwordInput = ''
+    confirmInput = ''
+    localError = ''
+    onClearCode()
   }
 
   function closePanel() {
-    panel = VaultPasswordPanel.Idle;
-    activeEntryId = { kind: ActivePasswordEntryKind.None };
-    labelInput = "";
-    passwordInput = "";
-    confirmInput = "";
-    localError = "";
-    showPassword = false;
+    panel = VaultPasswordPanel.Idle
+    activeEntryId = { kind: ActivePasswordEntryKind.None }
+    labelInput = ''
+    passwordInput = ''
+    confirmInput = ''
+    localError = ''
+    showPassword = false
   }
 
   async function submitAddPassword() {
-    localError = "";
+    localError = ''
     if (!labelInput.trim()) {
-      localError = vault.t(I18N_KEYS.VaultPasswordsEnterLabelError);
-      return;
+      localError = vault.t(I18N_KEYS.VaultPasswordsEnterLabelError)
+      return
     }
     if (!is_vault_password_long_enough(passwordInput)) {
-      localError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError);
-      return;
+      localError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError)
+      return
     }
     if (passwordInput !== confirmInput) {
-      localError = vault.t(I18N_KEYS.VaultPasswordsMismatchError);
-      return;
+      localError = vault.t(I18N_KEYS.VaultPasswordsMismatchError)
+      return
     }
-    try {
-      const onAddPasswordArgs: Parameters<typeof onAddPassword>[0] = {
-        label: labelInput.trim(),
-        password: passwordInput,
-      };
-      await onAddPassword(onAddPasswordArgs);
-      closePanel();
-    } catch {
-      // VaultState surfaces details via passwordError prop.
+    const onAddPasswordArgs: Parameters<typeof onAddPassword>[0] = {
+      label: labelInput.trim(),
+      password: passwordInput,
     }
+    const changed = await onAddPassword(onAddPasswordArgs)
+    if (changed.isErr()) {
+      localError = vault.t(changed.error.translationKey)
+      return
+    }
+    closePanel()
   }
 
   async function submitRotatePassword() {
-    localError = "";
+    localError = ''
     if (
       !canManageExistingPasswords ||
       activeEntryId.kind !== ActivePasswordEntryKind.Selected
     )
-      return;
+      return
     if (!is_vault_password_long_enough(passwordInput)) {
-      localError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError);
-      return;
+      localError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError)
+      return
     }
     if (passwordInput !== confirmInput) {
-      localError = vault.t(I18N_KEYS.VaultPasswordsMismatchError);
-      return;
+      localError = vault.t(I18N_KEYS.VaultPasswordsMismatchError)
+      return
     }
-    try {
-      const onUpdatePasswordArgs: Parameters<typeof onUpdatePassword>[0] = {
-        entryId: activeEntryId.entryId,
-        password: passwordInput,
-      };
-      await onUpdatePassword(onUpdatePasswordArgs);
-      closePanel();
-    } catch {
-      // surfaced via prop
+    const onUpdatePasswordArgs: Parameters<typeof onUpdatePassword>[0] = {
+      entryId: activeEntryId.entryId,
+      password: passwordInput,
     }
+    const changed = await onUpdatePassword(onUpdatePasswordArgs)
+    if (changed.isErr()) {
+      localError = vault.t(changed.error.translationKey)
+      return
+    }
+    closePanel()
   }
 
   async function submitRemove() {
-    localError = "";
+    localError = ''
     if (
       !canManageExistingPasswords ||
       activeEntryId.kind !== ActivePasswordEntryKind.Selected
     )
-      return;
-    try {
-      await onRemovePassword(activeEntryId.entryId);
-      closePanel();
-    } catch {
-      // surfaced via prop
+      return
+    const changed = await onRemovePassword(activeEntryId.entryId)
+    if (changed.isErr()) {
+      localError = vault.t(changed.error.translationKey)
+      return
     }
+    closePanel()
   }
 
   async function submitIssueCode() {
-    localError = "";
-    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return;
+    localError = ''
+    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     if (!passwordInput) {
-      localError = vault.t(I18N_KEYS.VaultPasswordsEnterPwError);
-      return;
+      localError = vault.t(I18N_KEYS.VaultPasswordsEnterPwError)
+      return
     }
-    try {
-      const issueRequest: Parameters<typeof onIssueCode>[0] = {
-        entryId: activeEntryId.entryId,
-        password: passwordInput,
-      };
-      await onIssueCode(issueRequest);
-      passwordInput = "";
-      confirmInput = "";
-    } catch (e) {
-      localError =
-        e instanceof Error
-          ? e.message
-          : vault.t(I18N_KEYS.VaultPasswordsFailedIssueError);
+    const issueRequest: Parameters<typeof onIssueCode>[0] = {
+      entryId: activeEntryId.entryId,
+      password: passwordInput,
     }
+    const issued = await onIssueCode(issueRequest)
+    if (issued.isErr()) {
+      localError = vault.t(issued.error.translationKey)
+      return
+    }
+    passwordInput = ''
+    confirmInput = ''
   }
 </script>
 
 <svelte:element
-  this={embedded ? "div" : "section"}
+  this={embedded ? 'div' : 'section'}
   class={embedded
-    ? ""
-    : "rounded-xl border border-dashed border-border/70 bg-muted/15 p-4 sm:p-5"}
+    ? ''
+    : 'rounded-xl border border-dashed border-border/70 bg-muted/15 p-4 sm:p-5'}
   data-testid="vault-password-card"
 >
   {#if !embedded}
@@ -341,8 +342,8 @@
                         replacements: {
                           date: entry.createdAt.slice(0, 10),
                         },
-                      };
-                      return vault.t(tArgs3);
+                      }
+                      return vault.t(tArgs3)
                     })()}
                   </p>
                 {/if}
@@ -351,7 +352,7 @@
             <div class="flex shrink-0 items-center gap-1">
               <Button
                 {...entry.id === passwordEntries[0]?.id
-                  ? { "data-testid": "rotate-vault-password-btn" }
+                  ? { 'data-testid': 'rotate-vault-password-btn' }
                   : {}}
                 type="button"
                 variant="ghost"
@@ -369,8 +370,8 @@
                         kind: ActivePasswordEntryKind.Selected,
                         entryId: entry.id,
                       },
-                    };
-                    return openPanel(openPanelArgs);
+                    }
+                    return openPanel(openPanelArgs)
                   })()}
               >
                 <RefreshCw class="size-4" />
@@ -378,7 +379,7 @@
               {#if allowIssueCode}
                 <Button
                   {...entry.id === passwordEntries[0]?.id
-                    ? { "data-testid": "issue-enrollment-code-btn" }
+                    ? { 'data-testid': 'issue-enrollment-code-btn' }
                     : {}}
                   type="button"
                   variant="ghost"
@@ -393,8 +394,8 @@
                           kind: ActivePasswordEntryKind.Selected,
                           entryId: entry.id,
                         },
-                      };
-                      return openPanel(openPanelArgs2);
+                      }
+                      return openPanel(openPanelArgs2)
                     })()}
                 >
                   <QrCode class="size-4" />
@@ -405,7 +406,7 @@
               {/if}
               <Button
                 {...entry.id === passwordEntries[0]?.id
-                  ? { "data-testid": "remove-vault-password-btn" }
+                  ? { 'data-testid': 'remove-vault-password-btn' }
                   : {}}
                 type="button"
                 variant="ghost"
@@ -423,8 +424,8 @@
                         kind: ActivePasswordEntryKind.Selected,
                         entryId: entry.id,
                       },
-                    };
-                    return openPanel(openPanelArgs3);
+                    }
+                    return openPanel(openPanelArgs3)
                   })()}
               >
                 <Trash2 class="size-4" />
@@ -447,8 +448,8 @@
             selection: {
               kind: ActivePasswordEntryKind.None,
             },
-          };
-          return openPanel(openPanelArgs4);
+          }
+          return openPanel(openPanelArgs4)
         })()}
     >
       <Plus class="size-4" />
@@ -462,10 +463,10 @@
     <form
       class="space-y-4"
       onsubmit={(event) => {
-        event.preventDefault();
+        event.preventDefault()
         void (panel === VaultPasswordPanel.Add
           ? submitAddPassword()
-          : submitRotatePassword());
+          : submitRotatePassword())
       }}
     >
       {#if panel === VaultPasswordPanel.Add}
@@ -500,7 +501,7 @@
         </label>
         <input
           id="vault-pw"
-          type={showPassword ? "text" : "password"}
+          type={showPassword ? 'text' : 'password'}
           class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           bind:value={passwordInput}
           autocomplete="new-password"
@@ -516,7 +517,7 @@
         </label>
         <input
           id="vault-pw-confirm"
-          type={showPassword ? "text" : "password"}
+          type={showPassword ? 'text' : 'password'}
           class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           bind:value={confirmInput}
           autocomplete="new-password"
@@ -609,29 +610,25 @@
         <form
           class="space-y-4"
           onsubmit={(event) => {
-            event.preventDefault();
-            void submitIssueCode();
+            event.preventDefault()
+            void submitIssueCode()
           }}
         >
           <p class="text-xs text-muted-foreground text-pretty">
             {vault.t(I18N_KEYS.VaultPasswordsIssueDescPrefix)}<span
-              class="font-medium text-foreground"
-              >{activeEntry.entry.label}</span
+              class="font-medium text-foreground">{activeEntry.entry.label}</span
             >{vault.t(I18N_KEYS.VaultPasswordsIssueDescSuffix)}
           </p>
           <div class="space-y-1.5">
-            <label
-              for="issue-pw"
-              class="text-sm font-medium text-muted-foreground"
-            >
+            <label for="issue-pw" class="text-sm font-medium text-muted-foreground">
               {(() => {
                 const tArgs4: Parameters<typeof vault.t>[0] = {
                   key: I18N_KEYS.VaultPasswordsPasswordFor,
                   replacements: {
                     label: activeEntry.entry.label,
                   },
-                };
-                return vault.t(tArgs4);
+                }
+                return vault.t(tArgs4)
               })()}
             </label>
             <input
@@ -649,12 +646,7 @@
             </p>
           {/if}
           <div class="flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onclick={closePanel}
-            >
+            <Button type="button" variant="ghost" size="sm" onclick={closePanel}>
               {vault.t(I18N_KEYS.CommonCancel)}
             </Button>
             <Button
@@ -678,7 +670,7 @@
           {vault}
           {enrollmentLink}
           instruction={vault.t(I18N_KEYS.VaultPasswordsScanQrDesc)}
-          issuedSuffix={issuedAgo ? `(${issuedAgo})` : ""}
+          issuedSuffix={issuedAgo ? `(${issuedAgo})` : ''}
           linkTitle={vault.t(I18N_KEYS.VaultPasswordsLinkTitle)}
           linkDescription={vault.t(I18N_KEYS.VaultPasswordsLinkDesc)}
           passwordReminder={vault.t(I18N_KEYS.VaultPasswordsSharePassword)}
@@ -694,8 +686,8 @@
             variant="ghost"
             size="sm"
             onclick={() => {
-              onClearCode();
-              closePanel();
+              onClearCode()
+              closePanel()
             }}
           >
             {vault.t(I18N_KEYS.CommonDone)}

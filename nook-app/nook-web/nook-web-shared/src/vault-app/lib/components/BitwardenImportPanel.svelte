@@ -1,4 +1,8 @@
 <script lang="ts">
+  import {
+    SecretFailurePresentation,
+    type SecretOperationResult,
+  } from '$lib/vault/secret-operation-failure'
   type BitwardenVaultImport = { readonly json: string; readonly password: string }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
@@ -24,7 +28,9 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onImport: (args: BitwardenVaultImport) => Promise<NookImportResult>
+    onImport: (
+      args: BitwardenVaultImport,
+    ) => Promise<SecretOperationResult<NookImportResult>>
     onClose?: () => void
     embedded?: boolean
   } = $props()
@@ -48,21 +54,30 @@
   }
 
   async function importFile() {
-    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy)
-      return
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy) return
     const file = selectedFile.file
     error = ''
     result = { kind: ImportOutcomeKind.NotRun }
     isImporting = true
     try {
-      const onImportArgs: Parameters<typeof onImport>[0] = { json: await file.text(), password };
+      let json: string
+      try {
+        json = await file.text()
+      } catch {
+        error = vault.t(I18N_KEYS.BitwardenImportFailed)
+        return
+      }
+      const onImportArgs: Parameters<typeof onImport>[0] = { json, password }
+      const imported = await onImport(onImportArgs)
+      if (imported.isErr()) {
+        error = new SecretFailurePresentation(vault).message(imported.error)
+        return
+      }
       result = {
         kind: ImportOutcomeKind.Completed,
-        result: await onImport(onImportArgs),
+        result: imported.value,
       }
       password = ''
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : String(cause)
     } finally {
       isImporting = false
     }
@@ -141,8 +156,7 @@
 
       <Button
         data-testid="bitwarden-import-submit"
-        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
-          busy}
+        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected || busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -156,10 +170,7 @@
       {/if}
 
       {#if error}
-        <p
-          class="text-sm text-destructive"
-          data-testid="bitwarden-import-error"
-        >
+        <p class="text-sm text-destructive" data-testid="bitwarden-import-error">
           {error}
         </p>
       {/if}
@@ -170,15 +181,27 @@
           data-testid="bitwarden-import-result"
         >
           <p class="font-medium">
-            {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.BitwardenImportResultImported, replacements: {
-              count: String(result.result.imported),
-            } }; return vault.t(tArgs); })()}
+            {(() => {
+              const tArgs: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.BitwardenImportResultImported,
+                replacements: {
+                  count: String(result.result.imported),
+                },
+              }
+              return vault.t(tArgs)
+            })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {(() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.BitwardenImportResultSkipped, replacements: {
-              unsupported: String(result.result.skippedUnsupported),
-              duplicates: String(result.result.skippedDuplicates),
-            } }; return vault.t(tArgs2); })()}
+            {(() => {
+              const tArgs2: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.BitwardenImportResultSkipped,
+                replacements: {
+                  unsupported: String(result.result.skippedUnsupported),
+                  duplicates: String(result.result.skippedDuplicates),
+                },
+              }
+              return vault.t(tArgs2)
+            })()}
           </p>
         </div>
       {/if}

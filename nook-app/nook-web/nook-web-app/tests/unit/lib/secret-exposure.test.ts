@@ -1,3 +1,8 @@
+import { ok, err } from 'neverthrow'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
 import { describe, expect, test, vi } from 'vitest'
 import type { NookSecretRecord } from '$lib/nook'
 import { SecretExposure } from '$lib/vault/secret-exposure'
@@ -11,7 +16,7 @@ function fakeRecord(value: string) {
 
 describe('secret exposure lifecycle', () => {
   test('does not decrypt until reveal is requested', async () => {
-    const load = vi.fn(async () => fakeRecord('credential'))
+    const load = vi.fn(async () => ok(fakeRecord('credential')))
     expect(load).not.toHaveBeenCalled()
 
     const records = await new SecretExposure({}).toggle({
@@ -20,7 +25,9 @@ describe('secret exposure lifecycle', () => {
     })
 
     expect(load).toHaveBeenCalledOnce()
-    expect(records['secret-1']?.primaryCredential).toBe('credential')
+    expect(
+      records.isOk() ? records.value['secret-1']?.primaryCredential : records.error,
+    ).toBe('credential')
   })
 
   test('hiding a revealed secret frees and removes plaintext', async () => {
@@ -31,7 +38,9 @@ describe('secret exposure lifecycle', () => {
     })
 
     expect(record.free).toHaveBeenCalledOnce()
-    expect(Object.hasOwn(records, 'secret-1')).toBe(false)
+    expect(
+      records.isOk() ? Object.hasOwn(records.value, 'secret-1') : records.error,
+    ).toBe(false)
   })
 
   test('copy decrypts a hidden record for one action then frees it', async () => {
@@ -40,8 +49,11 @@ describe('secret exposure lifecycle', () => {
 
     await new SecretExposure({}).withRecord({
       id: 'secret-1',
-      load: async () => record,
-      action: (secret) => copied(secret.primaryCredential),
+      load: async () => ok(record),
+      action: (secret) => {
+        copied(secret.primaryCredential)
+        return ok(undefined)
+      },
     })
 
     expect(copied).toHaveBeenCalledWith('credential')
@@ -55,7 +67,7 @@ describe('secret exposure lifecycle', () => {
     await new SecretExposure({ 'secret-1': record }).withRecord({
       id: 'secret-1',
       load: load,
-      action: () => {},
+      action: () => ok(undefined),
     })
 
     expect(load).not.toHaveBeenCalled()
@@ -65,15 +77,13 @@ describe('secret exposure lifecycle', () => {
   test('failed hidden-record actions still free plaintext', async () => {
     const record = fakeRecord('credential')
 
-    await expect(
-      new SecretExposure({}).withRecord({
-        id: 'secret-1',
-        load: async () => record,
-        action: () => {
-          throw new Error('clipboard denied')
-        },
-      }),
-    ).rejects.toThrow('clipboard denied')
+    const copied = await new SecretExposure({}).withRecord({
+      id: 'secret-1',
+      load: async () => ok(record),
+      action: () =>
+        err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+    })
+    expect(copied.isErr()).toBe(true)
     expect(record.free).toHaveBeenCalledOnce()
   })
 

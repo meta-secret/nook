@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow'
 import { describe, expect, test, vi } from 'vitest'
 import { NookSecretTypeFilter } from '$app-wasm'
 import { VaultSecretActions } from '$lib/vault/secrets'
@@ -41,6 +42,7 @@ describe('loadSecretPage', () => {
     const state = {
       hasManager: true,
       requireManager: () => manager,
+      admitManager: () => ok(manager),
       enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
       secretPageGeneration: 0,
       secretTypeFilter: NookSecretTypeFilter.All,
@@ -85,6 +87,7 @@ describe('loadSecretPage', () => {
     const state = {
       hasManager: true,
       requireManager: () => manager,
+      admitManager: () => ok(manager),
       enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
       secretPageGeneration: 0,
       secretTypeFilter: NookSecretTypeFilter.All,
@@ -110,12 +113,10 @@ describe('loadSecretPage', () => {
     pagination.resolve(paginatedPage.page)
     await paginationRequest
 
-    expect(manager.query_prepared_secret_page_js.mock.calls[1]?.[0]).toBe(
-      'vault',
-    )
-    expect(
-      manager.query_prepared_secret_page_js.mock.calls[1]?.slice(2),
-    ).toEqual([25, 25])
+    expect(manager.query_prepared_secret_page_js.mock.calls[1]?.[0]).toBe('vault')
+    expect(manager.query_prepared_secret_page_js.mock.calls[1]?.slice(2)).toEqual([
+      25, 25,
+    ])
     expect(state.secrets).toEqual([refreshedPage.record])
     expect(state.secretPageOffset).toBe(25)
     expect(paginatedPage.record.free).toHaveBeenCalledOnce()

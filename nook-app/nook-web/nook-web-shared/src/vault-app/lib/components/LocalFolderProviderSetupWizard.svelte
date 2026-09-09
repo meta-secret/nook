@@ -1,36 +1,36 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { FolderOpen, RefreshCw, ShieldCheck } from "@lucide/svelte";
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { FolderOpen, RefreshCw, ShieldCheck } from '@lucide/svelte'
   import {
     localFolderDirectoryValue,
     LocalFolderPresentation,
     LocalFolderHandleKind,
-  } from "$lib/auth/providers";
-  import { Button } from "$lib/components/ui/button";
-  import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { LocalFolderDraftKind } from "$lib/vault/state/provider.svelte";
+  } from '$lib/auth/providers'
+  import { Button } from '$lib/components/ui/button'
+  import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { LocalFolderDraftKind } from '$lib/vault/state/provider.svelte'
 
   let {
     vault,
-    idPrefix = "local-folder",
+    idPrefix = 'local-folder',
     isVerifying,
     isInitializing,
     onCancelSetup,
     onConnect,
   }: {
-    vault: VaultState;
-    idPrefix?: string;
-    isVerifying: boolean;
-    isInitializing: boolean;
-    onCancelSetup: () => void;
-    onConnect: () => void | Promise<void>;
-  } = $props();
+    vault: VaultState
+    idPrefix?: string
+    isVerifying: boolean
+    isInitializing: boolean
+    onCancelSetup: () => void
+    onConnect: () => void | Promise<void>
+  } = $props()
 
-  let folderBusy = $state(false);
-  let folderError = $state("");
-  let connectionOpen = $state(true);
-  let syncOpen = $state(false);
+  let folderBusy = $state(false)
+  let folderError = $state('')
+  let connectionOpen = $state(true)
+  let syncOpen = $state(false)
 
   const folderHandle = $derived(
     vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
@@ -38,48 +38,29 @@
           vault.localFolderDraft.config,
         ).localFolderHandle()
       : { kind: LocalFolderHandleKind.Unselected },
-  );
-  const hasFolder = $derived(
-    folderHandle.kind === LocalFolderHandleKind.Selected,
-  );
+  )
+  const hasFolder = $derived(folderHandle.kind === LocalFolderHandleKind.Selected)
   const selectedDirectoryName = $derived(
     vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
       ? localFolderDirectoryValue(vault.localFolderDraft.config.directoryName)
-      : "",
-  );
-  const localFolderUnavailable = $derived(!vault.localFolderBackupSupported);
+      : '',
+  )
+  const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
 
   $effect(() => {
     if (hasFolder) {
-      syncOpen = true;
+      syncOpen = true
     }
-  });
+  })
 
   async function chooseFolder() {
-    folderBusy = true;
-    folderError = "";
+    folderBusy = true
+    folderError = ''
     try {
-      await vault.chooseLocalFolderBackupDirectory();
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : vault.t(I18N_KEYS.AuthStorageLocalFolderChooseErr);
-      if (message.includes("Page.setInterceptFileChooserDialog")) {
-        folderError = vault.t(
-          I18N_KEYS.ProviderSetupLocalFolderAutomatedBrowserError,
-        );
-      } else if (
-        message.includes("Local folder backup is not supported in this browser")
-      ) {
-        folderError = vault.t(
-          I18N_KEYS.ProviderSetupLocalFolderUnsupportedBrowser,
-        );
-      } else {
-        folderError = message;
-      }
+      const selected = await vault.chooseLocalFolderBackupDirectory()
+      if (selected.isErr()) folderError = vault.t(selected.error.translationKey)
     } finally {
-      folderBusy = false;
+      folderBusy = false
     }
   }
 </script>

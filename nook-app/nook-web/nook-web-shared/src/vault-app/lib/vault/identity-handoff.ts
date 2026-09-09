@@ -1,71 +1,113 @@
 import type {
   NookAdoptedExtensionIdentityHandoff,
   NookVaultManager,
-} from "$app-wasm";
+} from '$app-wasm'
+import { err, ok, type Result } from 'neverthrow'
+import {
+  NativeVaultStorageFailure,
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
 
 export enum BrowserIdentityHandoffKind {
-  Inactive = "inactive",
-  Adopted = "adopted",
+  Inactive = 'inactive',
+  Adopted = 'adopted',
 }
-
 export type BrowserIdentityHandoff =
   | { readonly kind: BrowserIdentityHandoffKind.Inactive }
   | {
-      readonly kind: BrowserIdentityHandoffKind.Adopted;
-      readonly adoption: AdoptedBrowserIdentity;
-    };
+      readonly kind: BrowserIdentityHandoffKind.Adopted
+      readonly adoption: AdoptedBrowserIdentity
+    }
 
 /** Owns the Rust capability while browser initialization or vault creation awaits. */
 export class AdoptedBrowserIdentity {
-  private handle: BrowserAdoptionHandle;
-  private constructor(handle: NookAdoptedExtensionIdentityHandoff) {
-    this.handle = { kind: BrowserAdoptionHandleKind.Live, handle };
+  private handle: BrowserAdoptionHandle
+  constructor(handle: NookAdoptedExtensionIdentityHandoff) {
+    this.handle = { kind: BrowserAdoptionHandleKind.Live, handle }
   }
-  static async adopt(request: {
-    manager: NookVaultManager;
-    operation: (
-      manager: NookVaultManager,
-    ) => Promise<NookAdoptedExtensionIdentityHandoff>;
-  }): Promise<AdoptedBrowserIdentity> {
-    return new AdoptedBrowserIdentity(await request.operation(request.manager));
+  private admit(): Result<NookAdoptedExtensionIdentityHandoff, VaultStorageFailure> {
+    return this.handle.kind === BrowserAdoptionHandleKind.Live
+      ? ok(this.handle.handle)
+      : err(new VaultStorageFailure(VaultStorageFailureKind.IdentityHandoffConsumed))
   }
-  private require(): NookAdoptedExtensionIdentityHandoff {
-    if (this.handle.kind !== BrowserAdoptionHandleKind.Live)
-      throw new Error("Identity adoption was consumed");
-    return this.handle.handle;
+  private take(): Result<NookAdoptedExtensionIdentityHandoff, VaultStorageFailure> {
+    const handle = this.admit()
+    if (handle.isErr()) return err(handle.error)
+    this.handle = { kind: BrowserAdoptionHandleKind.Consumed }
+    return handle
   }
-  private take(): NookAdoptedExtensionIdentityHandoff {
-    const handle = this.require();
-    this.handle = { kind: BrowserAdoptionHandleKind.Consumed };
-    return handle;
+  requiresConnect(manager: NookVaultManager): Result<boolean, VaultStorageFailure> {
+    const handle = this.admit()
+    if (handle.isErr()) return err(handle.error)
+    try {
+      return ok(handle.value.requires_connect(manager))
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure))
+    }
   }
-  requiresConnect(manager: NookVaultManager): boolean {
-    return this.require().requires_connect(manager);
+  markExistingVaultImport(
+    manager: NookVaultManager,
+  ): Result<void, VaultStorageFailure> {
+    const handle = this.admit()
+    if (handle.isErr()) return err(handle.error)
+    try {
+      handle.value.mark_existing_vault_import(manager)
+      return ok(undefined)
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure))
+    }
   }
-  markExistingVaultImport(manager: NookVaultManager): void {
-    this.require().mark_existing_vault_import(manager);
+  async commit(
+    manager: NookVaultManager,
+  ): Promise<Result<void, VaultStorageFailure>> {
+    const handle = this.take()
+    if (handle.isErr()) return err(handle.error)
+    try {
+      const committed = await handle.value.commit(manager)
+      committed.confirm(manager)
+      return ok(undefined)
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure))
+    }
   }
-  async commit(manager: NookVaultManager): Promise<void> {
-    const committed = await this.take().commit(manager);
-    committed.confirm(manager);
+  afterVerifiedConnect(
+    manager: NookVaultManager,
+  ): Result<void, VaultStorageFailure> {
+    const handle = this.take()
+    if (handle.isErr()) return err(handle.error)
+    try {
+      const committed = handle.value.after_verified_connect(manager)
+      committed.confirm(manager)
+      return ok(undefined)
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure))
+    }
   }
-  afterVerifiedConnect(manager: NookVaultManager): void {
-    const committed = this.take().after_verified_connect(manager);
-    committed.confirm(manager);
-  }
-  rollback(manager: NookVaultManager): void {
+  rollback(manager: NookVaultManager): Result<void, VaultStorageFailure> {
     // A failed consuming Rust transition already performs its existing cleanup.
-    if (this.handle.kind === BrowserAdoptionHandleKind.Consumed) return;
-    this.take().rollback(manager);
+    if (this.handle.kind === BrowserAdoptionHandleKind.Consumed) return ok(undefined)
+    const handle = this.take()
+    if (handle.isErr()) return err(handle.error)
+    try {
+      handle.value.rollback(manager)
+      return ok(undefined)
+    } catch {
+      return err(
+        new VaultStorageFailure(
+          VaultStorageFailureKind.IdentityHandoffCleanupFailed,
+        ),
+      )
+    }
   }
 }
 enum BrowserAdoptionHandleKind {
-  Live = "live",
-  Consumed = "consumed",
+  Live = 'live',
+  Consumed = 'consumed',
 }
 type BrowserAdoptionHandle =
   | {
-      kind: BrowserAdoptionHandleKind.Live;
-      handle: NookAdoptedExtensionIdentityHandoff;
+      kind: BrowserAdoptionHandleKind.Live
+      handle: NookAdoptedExtensionIdentityHandoff
     }
-  | { kind: BrowserAdoptionHandleKind.Consumed };
+  | { kind: BrowserAdoptionHandleKind.Consumed }

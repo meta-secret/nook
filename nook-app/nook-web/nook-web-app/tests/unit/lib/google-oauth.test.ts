@@ -27,13 +27,13 @@ describe('google-oauth', () => {
       existing: oauthConfigurationNotApplicable(),
     }
     const expired = googleOAuthSession.oauthTokensToConfig(configurationUpdate)
+    expect(expired.isOk()).toBe(true)
+    if (expired.isErr()) return
     const expiryAssessment: GoogleOAuthExpiryAssessment = {
-      config: expired,
+      config: expired.value,
       skewMs: 60_000,
     }
-    expect(googleOAuthSession.isOAuthAccessTokenExpired(expiryAssessment)).toBe(
-      true,
-    )
+    expect(googleOAuthSession.isOAuthAccessTokenExpired(expiryAssessment)).toBe(true)
   })
 
   it('settles concurrent token requests independently by scope', async () => {
@@ -75,8 +75,7 @@ describe('google-oauth', () => {
       scope: GoogleDriveOAuthScope.AppData,
       prompt: GoogleOAuthPrompt.Default,
     }
-    const appdataToken =
-      googleOAuthSession.requestGoogleAccessToken(appDataRequest)
+    const appdataToken = googleOAuthSession.requestGoogleAccessToken(appDataRequest)
     const sharedScope = `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`
     const sharedRequest: GoogleAccessTokenRequest = {
       scope: GoogleDriveOAuthScope.Shared,
@@ -104,11 +103,12 @@ describe('google-oauth', () => {
       expires_in: 3600,
     })
 
-    await expect(fileToken).resolves.toMatchObject({
-      accessToken: 'file-token',
-    })
-    await expect(appdataToken).resolves.toMatchObject({
-      accessToken: 'appdata-token',
-    })
+    const file = await fileToken
+    const appData = await appdataToken
+    expect(file.isOk()).toBe(true)
+    expect(appData.isOk()).toBe(true)
+    if (file.isErr() || appData.isErr()) return
+    expect(file.value.accessToken).toBe('file-token')
+    expect(appData.value.accessToken).toBe('appdata-token')
   })
 })

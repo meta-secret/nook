@@ -1,19 +1,13 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { SentinelVaultUnlockState } from "$app-wasm";
-  import {
-    Copy,
-    KeyRound,
-    RefreshCw,
-    ShieldCheck,
-    Users,
-  } from "@lucide/svelte";
-  import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
-  import SentinelUnlockParticipantHelper from "$lib/components/login/SentinelUnlockParticipantHelper.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Separator } from "$lib/components/ui/separator";
-  import type { VaultState } from "$lib/vault.svelte";
-  import * as sentinelUnlockActions from "$lib/vault/sentinel-unlock";
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { SentinelVaultUnlockState } from '$app-wasm'
+  import { Copy, KeyRound, RefreshCw, ShieldCheck, Users } from '@lucide/svelte'
+  import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
+  import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
+  import { Button } from '$lib/components/ui/button'
+  import { Separator } from '$lib/components/ui/separator'
+  import type { VaultState } from '$lib/vault.svelte'
+  import * as sentinelUnlockActions from '$lib/vault/sentinel-unlock'
 
   let {
     vault,
@@ -21,84 +15,88 @@
     isInitializing,
     onUnlocked,
   }: {
-    vault: VaultState;
-    isVerifying: boolean;
-    isInitializing: boolean;
-    onUnlocked?: () => void | Promise<void>;
-  } = $props();
+    vault: VaultState
+    isVerifying: boolean
+    isInitializing: boolean
+    onUnlocked?: () => void | Promise<void>
+  } = $props()
 
-  let actionBusy = $state(false);
-  let responseInput = $state("");
-  let copied = $state(false);
+  let actionBusy = $state(false)
+  let responseInput = $state('')
+  let copied = $state(false)
 
-  const isBusy = $derived(isVerifying || isInitializing || actionBusy);
+  const isBusy = $derived(isVerifying || isInitializing || actionBusy)
   const awaitingShares = $derived(
     vault.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares,
-  );
-  const session = $derived(vault.sentinelUnlockSession);
+  )
+  const session = $derived(vault.sentinelUnlockSession)
 
   async function runAction(action: () => void | Promise<void>) {
-    if (actionBusy) return;
-    actionBusy = true;
-    vault.errorMsg = "";
+    if (actionBusy) return
+    actionBusy = true
+    vault.errorMsg = ''
     try {
-      await action();
-    } catch (error) {
-      vault.errorMsg =
-        error instanceof Error
-          ? vault.resolveErrorMessage(error.message)
-          : vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockFailed);
+      await action()
     } finally {
-      actionBusy = false;
+      actionBusy = false
     }
   }
 
   async function startUnlock() {
-    await runAction(() =>
-      new sentinelUnlockActions.SentinelUnlockActions(
+    await runAction(async () => {
+      const started = await new sentinelUnlockActions.SentinelUnlockActions(
         vault,
-      ).startSentinelUnlock(),
-    );
+      ).startSentinelUnlock()
+      if (started.isErr()) vault.errorMsg = vault.t(started.error.translationKey)
+    })
   }
 
   async function addResponse() {
-    const payload = responseInput.trim();
-    if (!payload) return;
+    const payload = responseInput.trim()
+    if (!payload) return
     await runAction(async () => {
       const responseRequest: Parameters<
-        sentinelUnlockActions.SentinelUnlockActions["addSentinelUnlockResponse"]
-      >[0] = { response: payload };
-      await new sentinelUnlockActions.SentinelUnlockActions(
+        sentinelUnlockActions.SentinelUnlockActions['addSentinelUnlockResponse']
+      >[0] = { response: payload }
+      const added = await new sentinelUnlockActions.SentinelUnlockActions(
         vault,
-      ).addSentinelUnlockResponse(responseRequest);
-      responseInput = "";
-    });
+      ).addSentinelUnlockResponse(responseRequest)
+      if (added.isErr()) {
+        vault.errorMsg = vault.t(added.error.translationKey)
+        return
+      }
+      responseInput = ''
+    })
   }
 
   async function finalizeUnlock() {
-    if (!session.ready) return;
+    if (!session.ready) return
     await runAction(async () => {
-      await new sentinelUnlockActions.SentinelUnlockActions(
+      const finalized = await new sentinelUnlockActions.SentinelUnlockActions(
         vault,
-      ).finalizeSentinelUnlock();
-      if (vault.isAuthenticated) {
-        await onUnlocked?.();
+      ).finalizeSentinelUnlock()
+      if (finalized.isErr()) {
+        new sentinelUnlockActions.SentinelUnlockActions(
+          vault,
+        ).presentFinalizationFailure(finalized.error)
+        return
       }
-    });
+      if (vault.isAuthenticated) {
+        await onUnlocked?.()
+      }
+    })
   }
 
   async function copyRequest(value: string) {
-    if (!value.trim()) return;
+    if (!value.trim()) return
     try {
-      await navigator.clipboard.writeText(value);
-      copied = true;
+      await navigator.clipboard.writeText(value)
+      copied = true
       setTimeout(() => {
-        copied = false;
-      }, 1500);
+        copied = false
+      }, 1500)
     } catch {
-      vault.errorMsg = vault.t(
-        I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed,
-      );
+      vault.errorMsg = vault.t(I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed)
     }
   }
 </script>
@@ -148,9 +146,7 @@
         role="status"
         data-testid="sentinel-unlock-progress"
       >
-        <span
-          class="flex items-center gap-2 text-sm font-medium text-foreground"
-        >
+        <span class="flex items-center gap-2 text-sm font-medium text-foreground">
           <Users class="size-4 text-primary" />
           {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockProgress)}
         </span>

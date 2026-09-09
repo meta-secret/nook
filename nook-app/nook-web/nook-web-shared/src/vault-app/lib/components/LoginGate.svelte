@@ -1,18 +1,19 @@
 <script lang="ts">
+  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   type EnrollmentCodeUnlock = {
-    readonly code: string;
-    readonly password: string;
-  };
+    readonly code: string
+    readonly password: string
+  }
 
   type VaultPasswordUnlock = {
-    readonly entryId: string;
-    readonly password: string;
-  };
+    readonly entryId: string
+    readonly password: string
+  }
 
-  import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { KeyRound, RefreshCw, ShieldCheck } from "@lucide/svelte";
-  import { onMount, tick, untrack } from "svelte";
-  import type { VaultState } from "$lib/vault.svelte";
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { KeyRound, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { onMount, tick, untrack } from 'svelte'
+  import type { VaultState } from '$lib/vault.svelte'
   import {
     type DevicesAccessHostMount,
     DevicesAccessHostMountKind,
@@ -21,61 +22,61 @@
     StoredDevicesAccessNudge,
     DevicesAccessNudgeStorage,
     DevicesAccessNudgePresentation,
-  } from "./devices-access-dashboard-state";
-  import { type StartSentinelGenesisArgs } from "$app-wasm";
-  import { Button } from "$lib/components/ui/button";
+  } from './devices-access-dashboard-state'
+  import { type StartSentinelGenesisArgs } from '$app-wasm'
+  import { Button } from '$lib/components/ui/button'
   import type {
     ProviderSetupRequest,
     StorageProvider,
     StorageProviderType,
-  } from "$lib/auth/providers";
+  } from '$lib/auth/providers'
   import {
     DEFAULT_GITHUB_REPO,
     LocalFolderPresentation,
     LocalFolderHandleKind,
     oauthAccessToken,
-  } from "$lib/auth/providers";
+  } from '$lib/auth/providers'
   import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-  } from "$lib/components/ui/card";
-  import ProductIntro from "$lib/components/ProductIntro.svelte";
-  import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
+  } from '$lib/components/ui/card'
+  import ProductIntro from '$lib/components/ProductIntro.svelte'
+  import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
   import {
     WorkspaceRoute,
     WorkspaceRouteLookupKind,
     WorkspacePath,
-  } from "$lib/app/workspace-route";
-  import { VaultWorkspaceActions } from "$lib/vault/ui";
-  import ProviderSetupFields from "$lib/components/ProviderSetupFields.svelte";
-  import OAuthProviderSetupWizard from "$lib/components/OAuthProviderSetupWizard.svelte";
-  import GitHubProviderSetupWizard from "$lib/components/GitHubProviderSetupWizard.svelte";
-  import LocalFolderProviderSetupWizard from "$lib/components/LocalFolderProviderSetupWizard.svelte";
-  import LoginUnlockStep from "$lib/components/login/LoginUnlockStep.svelte";
+  } from '$lib/app/workspace-route'
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
+  import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
+  import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
+  import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
+  import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
+  import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
   import {
     LoginVaultEntryKind,
     type LoginVaultEntry,
-  } from "$lib/components/login/login-unlock-state";
-  import LoginCreateVaultChooser from "$lib/components/login/LoginCreateVaultChooser.svelte";
-  import LoginVaultPicker from "$lib/components/login/LoginVaultPicker.svelte";
-  import LoginProviderManagement from "$lib/components/login/LoginProviderManagement.svelte";
-  import { LoginProviderManagementVariant } from "$lib/components/login/login-provider-management-state";
-  import LoginEnrollmentPanel from "$lib/components/login/LoginEnrollmentPanel.svelte";
-  import EnrollmentQrOnboardCard from "$lib/components/login/EnrollmentQrOnboardCard.svelte";
-  import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
-  import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
-  import RemoteVaultRecoveryPanel from "$lib/components/login/RemoteVaultRecoveryPanel.svelte";
-  import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
+  } from '$lib/components/login/login-unlock-state'
+  import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
+  import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
+  import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
+  import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
+  import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
+  import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
+  import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
+  import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
+  import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
+  import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import {
     peek_enrollment_entry_id,
     peek_enrollment_entry_label,
     NookEnrollmentEntryLabelState,
     SentinelGenesisPhase,
     type VaultApplication,
-  } from "$app-wasm";
+  } from '$app-wasm'
   import {
     ActiveVaultKind,
     LocalFolderDraftKind,
@@ -85,14 +86,14 @@
     OAuthSetupPresetKind,
     RecoveryDiscoveryKind,
     type LoginSetup,
-  } from "$lib/vault/state/provider.svelte";
+  } from '$lib/vault/state/provider.svelte'
 
   let {
     vault,
     appKind,
     providers,
     loginSetup,
-    githubPat = $bindable(""),
+    githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
     isInitializing,
@@ -112,88 +113,83 @@
     onCreateSentinelGenesisPublicKeyAnnouncement,
     onCreateSentinelGenesisParticipantResponse,
     onRemoveProvider,
-    prefillEnrollmentCode = "",
+    prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
     deviceAuthorizationPending = false,
     usesExtensionDeviceIdentity = false,
-    sentinelInvitationRequest = "",
+    sentinelInvitationRequest = '',
     sentinelParticipantResponsePending = false,
-    sentinelParticipantResponse = "",
-    sentinelOnboardingPackage = "",
+    sentinelParticipantResponse = '',
+    sentinelOnboardingPackage = '',
     onAcceptSentinelOnboardingPackage,
   }: {
-    vault: VaultState;
-    appKind: VaultApplication;
-    providers: StorageProvider[];
-    loginSetup: LoginSetup;
-    githubPat: string;
-    githubRepo: string;
-    isVerifying: boolean;
-    isInitializing: boolean;
-    addProviderOpen?: boolean;
-    onUnlock: () => void | Promise<void>;
-    onBeginAddProvider?: () => void;
-    onCancelAddProvider?: () => void;
-    onBeginSetup: (request: ProviderSetupRequest) => void;
-    onCancelSetup: () => void;
-    onOpenHelp?: () => void;
-    onUseEnrollmentCode?: (args: EnrollmentCodeUnlock) => void | Promise<void>;
-    onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>;
-    onSwitchVault: () => void | Promise<void>;
-    onSentinelUnlocked?: () => void | Promise<void>;
-    onCreateDeviceVault: (label: string) => void | Promise<void>;
-    onStartSentinelGenesis: (
-      args: StartSentinelGenesisArgs,
-    ) => Promise<boolean>;
-    onCreateSentinelGenesisPublicKeyAnnouncement?: () =>
-      string | Promise<string>;
+    vault: VaultState
+    appKind: VaultApplication
+    providers: StorageProvider[]
+    loginSetup: LoginSetup
+    githubPat: string
+    githubRepo: string
+    isVerifying: boolean
+    isInitializing: boolean
+    addProviderOpen?: boolean
+    onUnlock: () => void | Promise<void>
+    onBeginAddProvider?: () => void
+    onCancelAddProvider?: () => void
+    onBeginSetup: (request: ProviderSetupRequest) => void
+    onCancelSetup: () => void
+    onOpenHelp?: () => void
+    onUseEnrollmentCode?: (args: EnrollmentCodeUnlock) => void | Promise<void>
+    onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>
+    onSwitchVault: () => void | Promise<void>
+    onSentinelUnlocked?: () => void | Promise<void>
+    onCreateDeviceVault: (label: string) => void | Promise<void>
+    onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
+    onCreateSentinelGenesisPublicKeyAnnouncement?: () => Promise<
+      SentinelActionResult<string>
+    >
     onCreateSentinelGenesisParticipantResponse?: (
       requestPayload: string,
-    ) => string | Promise<string>;
-    onRemoveProvider?: (id: string) => void | Promise<void>;
-    prefillEnrollmentCode?: string;
-    enrollmentFromUrlPending?: boolean;
-    deviceAuthorizationPending?: boolean;
-    usesExtensionDeviceIdentity?: boolean;
-    sentinelInvitationRequest?: string;
-    sentinelParticipantResponsePending?: boolean;
-    sentinelParticipantResponse?: string;
-    sentinelOnboardingPackage?: string;
-    onAcceptSentinelOnboardingPackage?: (
-      packageJson: string,
-    ) => void | Promise<void>;
-  } = $props();
+    ) => Promise<SentinelActionResult<string>>
+    onRemoveProvider?: (id: string) => void | Promise<void>
+    prefillEnrollmentCode?: string
+    enrollmentFromUrlPending?: boolean
+    deviceAuthorizationPending?: boolean
+    usesExtensionDeviceIdentity?: boolean
+    sentinelInvitationRequest?: string
+    sentinelParticipantResponsePending?: boolean
+    sentinelParticipantResponse?: string
+    sentinelOnboardingPackage?: string
+    onAcceptSentinelOnboardingPackage?: (packageJson: string) => void | Promise<void>
+  } = $props()
 
-  let enrollmentPanelOpen = $state(false);
-  let showProviderSetupLink = $state(false);
+  let enrollmentPanelOpen = $state(false)
+  let showProviderSetupLink = $state(false)
   function loginDevicesAccessRouteOpen(): boolean {
-    if (!("window" in globalThis)) return false;
-    const route = new WorkspacePath(window.location.pathname).route;
+    if (!('window' in globalThis)) return false
+    const route = new WorkspacePath(window.location.pathname).route
     return (
       route.kind === WorkspaceRouteLookupKind.Workspace &&
       route.route === WorkspaceRoute.DevicesAccess
-    );
+    )
   }
 
-  let devicesAccessOpen = $state(loginDevicesAccessRouteOpen());
-  let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header);
-  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault);
+  let devicesAccessOpen = $state(loginDevicesAccessRouteOpen())
+  let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header)
+  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault)
   let devicesAccessHost = $state<DevicesAccessHostMount>({
     kind: DevicesAccessHostMountKind.Unmounted,
-  });
-  let devicesAccessNudgePreference = $state(
-    DevicesAccessNudgePreference.Visible,
-  );
-  const devicesAccessNudgeStorageKey = "nook.devices-access.nudge-dismissed.v1";
+  })
+  let devicesAccessNudgePreference = $state(DevicesAccessNudgePreference.Visible)
+  const devicesAccessNudgeStorageKey = 'nook.devices-access.nudge-dismissed.v1'
 
   function dismissDevicesAccessNudge(): void {
-    focusHostButton("login-devices-access");
-    devicesAccessNudgePreference = DevicesAccessNudgePreference.Dismissed;
+    focusHostButton('login-devices-access')
+    devicesAccessNudgePreference = DevicesAccessNudgePreference.Dismissed
     try {
       localStorage.setItem(
         devicesAccessNudgeStorageKey,
         DevicesAccessNudgePreference.Dismissed,
-      );
+      )
     } catch {
       // Browser preference only. Private browsing may reject local storage.
     }
@@ -203,46 +199,42 @@
     devicesAccessHost = {
       kind: DevicesAccessHostMountKind.Mounted,
       element,
-    };
+    }
     return {
       destroy() {
-        devicesAccessHost = { kind: DevicesAccessHostMountKind.Unmounted };
+        devicesAccessHost = { kind: DevicesAccessHostMountKind.Unmounted }
       },
-    };
+    }
   }
 
   function focusHostButton(testId: string): void {
-    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return;
+    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
     devicesAccessHost.element
       .querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
-      ?.focus();
+      ?.focus()
   }
 
   async function focusIdentityContextWhenAvailable(): Promise<void> {
     for (let frame = 0; frame < 30; frame += 1) {
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve()),
-      );
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
-      const activeElement = document.activeElement;
+      const activeElement = document.activeElement
       if (
         activeElement !== document.body &&
         activeElement !== document.documentElement
       ) {
-        return;
+        return
       }
 
-      if (
-        document.querySelector('[data-testid="login-vault-identity-loading"]')
-      ) {
-        continue;
+      if (document.querySelector('[data-testid="login-vault-identity-loading"]')) {
+        continue
       }
       const remountedButton = document.querySelector<HTMLButtonElement>(
         '[data-testid="login-review-identities"]',
-      );
+      )
       if (remountedButton) {
-        remountedButton.focus();
-        return;
+        remountedButton.focus()
+        return
       }
     }
   }
@@ -250,100 +242,93 @@
   async function openDevicesAccess(
     trigger: DevicesAccessTriggerKind,
   ): Promise<void> {
-    const currentRoute = new WorkspacePath(window.location.pathname).route;
+    const currentRoute = new WorkspacePath(window.location.pathname).route
     devicesAccessReturnRoute =
       currentRoute.kind === WorkspaceRouteLookupKind.Workspace
         ? currentRoute.route
-        : WorkspaceRoute.Vault;
-    devicesAccessTrigger = trigger;
-    devicesAccessOpen = true;
-    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.DevicesAccess);
+        : WorkspaceRoute.Vault
+    devicesAccessTrigger = trigger
+    devicesAccessOpen = true
+    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.DevicesAccess)
     const applyWorkspaceRouteArgs: Parameters<
-      VaultWorkspaceActions["applyWorkspaceRoute"]
+      VaultWorkspaceActions['applyWorkspaceRoute']
     >[0] = {
       route: WorkspaceRoute.DevicesAccess,
-    };
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
-      applyWorkspaceRouteArgs,
-    );
-    await tick();
-    focusHostButton("devices-access-back");
+    }
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(applyWorkspaceRouteArgs)
+    await tick()
+    focusHostButton('devices-access-back')
   }
 
   async function closeDevicesAccess(): Promise<void> {
-    devicesAccessOpen = false;
-    VaultWorkspaceActions.pushWorkspaceRoute(devicesAccessReturnRoute);
+    devicesAccessOpen = false
+    VaultWorkspaceActions.pushWorkspaceRoute(devicesAccessReturnRoute)
     const applyWorkspaceRouteArgs2: Parameters<
-      VaultWorkspaceActions["applyWorkspaceRoute"]
+      VaultWorkspaceActions['applyWorkspaceRoute']
     >[0] = {
       route: devicesAccessReturnRoute,
-    };
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
-      applyWorkspaceRouteArgs2,
-    );
-    await tick();
+    }
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(applyWorkspaceRouteArgs2)
+    await tick()
     const testId =
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
-        ? "devices-access-nudge-review"
+        ? 'devices-access-nudge-review'
         : devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext
-          ? "login-review-identities"
-          : "login-devices-access";
-    focusHostButton(testId);
+          ? 'login-review-identities'
+          : 'login-devices-access'
+    focusHostButton(testId)
     if (devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext) {
-      await focusIdentityContextWhenAvailable();
+      await focusIdentityContextWhenAvailable()
     }
   }
 
   onMount(() => {
     const syncDevicesAccessRoute = () => {
-      devicesAccessOpen = loginDevicesAccessRouteOpen();
-    };
-    window.addEventListener("popstate", syncDevicesAccessRoute);
+      devicesAccessOpen = loginDevicesAccessRouteOpen()
+    }
+    window.addEventListener('popstate', syncDevicesAccessRoute)
     try {
       const readDevicesAccessNudgeStorageArgs: ConstructorParameters<
         typeof DevicesAccessNudgeStorage
       >[0] = {
         storage: localStorage,
         storageKey: devicesAccessNudgeStorageKey,
-      };
+      }
       devicesAccessNudgePreference = new StoredDevicesAccessNudge(
         new DevicesAccessNudgeStorage(readDevicesAccessNudgeStorageArgs).state,
-      ).preference;
+      ).preference
     } catch {
-      devicesAccessNudgePreference = DevicesAccessNudgePreference.Visible;
+      devicesAccessNudgePreference = DevicesAccessNudgePreference.Visible
     }
-    return () => window.removeEventListener("popstate", syncDevicesAccessRoute);
-  });
+    return () => window.removeEventListener('popstate', syncDevicesAccessRoute)
+  })
 
   const prefillEnrollmentEntryLabel = $derived.by(() => {
-    if (!prefillEnrollmentCode) return "";
-    const label = peek_enrollment_entry_label(prefillEnrollmentCode);
+    if (!prefillEnrollmentCode) return ''
+    const label = peek_enrollment_entry_label(prefillEnrollmentCode)
     try {
-      return label.state === NookEnrollmentEntryLabelState.Labeled
-        ? label.value
-        : "";
+      return label.state === NookEnrollmentEntryLabelState.Labeled ? label.value : ''
     } finally {
-      label.free();
+      label.free()
     }
-  });
+  })
 
-  const hasProviders = $derived(providers.length > 0);
-  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active);
+  const hasProviders = $derived(providers.length > 0)
+  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
   function setupIs(type: StorageProviderType): boolean {
     return (
-      loginSetup.kind === LoginSetupKind.Active &&
-      loginSetup.providerType === type
-    );
+      loginSetup.kind === LoginSetupKind.Active && loginSetup.providerType === type
+    )
   }
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
-  );
+  )
   const showSentinelCeremony = $derived(
     new SentinelUnlockActions(vault).sentinelCeremonyIsVisible(),
-  );
+  )
   const hasKnownLocalVault = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,
-  );
+  )
   const showLocalUnlock = $derived(
     !devicesAccessOpen &&
       hasKnownLocalVault &&
@@ -352,29 +337,29 @@
       !addProviderOpen &&
       !showProviderSetupLink &&
       !showVaultPicker,
-  );
+  )
   const activeLoginVault = $derived.by((): LoginVaultEntry => {
     const selectedStoreId =
       vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
         ? vault.selectedLoginVault.storeId
         : vault.activeVault.kind === ActiveVaultKind.Open
           ? vault.activeVault.storeId
-          : "";
+          : ''
     for (const entry of vault.localVaults) {
       if (entry.storeId === selectedStoreId) {
-        return { kind: LoginVaultEntryKind.Available, entry };
+        return { kind: LoginVaultEntryKind.Available, entry }
       }
     }
     for (const entry of vault.localVaults) {
-      return { kind: LoginVaultEntryKind.Available, entry };
+      return { kind: LoginVaultEntryKind.Available, entry }
     }
-    return { kind: LoginVaultEntryKind.Unavailable };
-  });
+    return { kind: LoginVaultEntryKind.Unavailable }
+  })
   const showQrOnboarding = $derived(
     Boolean(
       enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,
     ),
-  );
+  )
   const showCreateVault = $derived(
     (vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares ||
       (!vault.localVaultPresent &&
@@ -385,7 +370,7 @@
       !addProviderOpen &&
       !showProviderSetupLink &&
       !showVaultPicker,
-  );
+  )
   const showProviderSetup = $derived(
     (showProviderSetupLink ||
       addProviderOpen ||
@@ -393,44 +378,44 @@
       !showSetup &&
       !showLocalUnlock &&
       !showCreateVault,
-  );
+  )
   const isUnlocking = $derived(
     isVerifying && (showLocalUnlock || showSetup) && !showSetup,
-  );
+  )
   const showEnrollmentAccess = $derived(
     Boolean(onUseEnrollmentCode) &&
       !showQrOnboarding &&
       (showProviderSetup || showSetup),
-  );
+  )
 
   const setupCanConnect = $derived(
-    setupIs("local") ||
-      (setupIs("local-folder") &&
+    setupIs('local') ||
+      (setupIs('local-folder') &&
         vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
         new LocalFolderPresentation(
           vault.localFolderDraft.config,
         ).localFolderHandle().kind === LocalFolderHandleKind.Selected) ||
-      (setupIs("oauth-file") &&
+      (setupIs('oauth-file') &&
         vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        oauthAccessToken(vault.oauthFileDraft.config).kind === "available") ||
-      (setupIs("github") && Boolean(githubPat.trim())),
-  );
+        oauthAccessToken(vault.oauthFileDraft.config).kind === 'available') ||
+      (setupIs('github') && Boolean(githubPat.trim())),
+  )
   const recoveryPasswordEntries = $derived(
     vault.recoveryDiscovery.kind === RecoveryDiscoveryKind.Found
       ? vault.recoveryDiscovery.summary.passwordEntries
       : [],
-  );
+  )
   const oauthPreset = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? vault.oauthFileDraft.config.preset
       : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
         ? vault.oauthSetupSelection.preset
-        : "google-drive",
-  );
+        : 'google-drive',
+  )
 
   function handleFirstConnectSubmit(e: Event) {
-    e.preventDefault();
-    void onUnlock();
+    e.preventDefault()
+    void onUnlock()
   }
 
   $effect(() => {
@@ -440,26 +425,26 @@
       !showSetup &&
       !addProviderOpen
     ) {
-      showProviderSetupLink = false;
+      showProviderSetupLink = false
     }
     if (showLocalUnlock && !vault.isInitializing) {
-      untrack(() => void vault.prepareLocalLogin());
+      untrack(() => void vault.prepareLocalLogin())
     }
     if (
       !deviceAuthorizationPending &&
       !vault.isAuthenticated &&
       (vault.syncProviders.length > 0 || vault.localVaultPresent)
     ) {
-      untrack(() => void vault.refreshSentinelUnlockStatus());
+      untrack(() => void vault.refreshSentinelUnlockStatus())
     }
-  });
+  })
 </script>
 
 <div
   use:captureDevicesAccessHost
   class="w-full space-y-3 animate-in fade-in duration-300"
   data-testid="login-gate"
-  data-local-vault={vault.localVaultPresent ? "true" : "false"}
+  data-local-vault={vault.localVaultPresent ? 'true' : 'false'}
 >
   {#if devicesAccessOpen && !isInitializing}
     <DevicesAccessDashboard {vault} onBack={() => void closeDevicesAccess()} />
@@ -478,8 +463,8 @@
     </div>
 
     {#if (() => {
-      const shouldShowDevicesAccessNudgeArgs: ConstructorParameters<typeof DevicesAccessNudgePresentation>[0] = { hasActiveLocalVault: vault.localVaultPresent, localVaultCount: vault.localVaults.length, preference: devicesAccessNudgePreference };
-      return new DevicesAccessNudgePresentation(shouldShowDevicesAccessNudgeArgs).visible;
+      const shouldShowDevicesAccessNudgeArgs: ConstructorParameters<typeof DevicesAccessNudgePresentation>[0] = { hasActiveLocalVault: vault.localVaultPresent, localVaultCount: vault.localVaults.length, preference: devicesAccessNudgePreference }
+      return new DevicesAccessNudgePresentation(shouldShowDevicesAccessNudgeArgs).visible
     })()}
       <aside
         class="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/8 p-4 sm:flex-row sm:items-center sm:justify-between"
@@ -499,8 +484,7 @@
             variant="outline"
             class="min-h-11"
             data-testid="devices-access-nudge-review"
-            onclick={() =>
-              void openDevicesAccess(DevicesAccessTriggerKind.Nudge)}
+            onclick={() => void openDevicesAccess(DevicesAccessTriggerKind.Nudge)}
           >
             {vault.t(I18N_KEYS.DevicesAccessReviewAction)}
           </Button>
@@ -512,7 +496,7 @@
               class="size-4 rounded border-input accent-primary"
               data-testid="devices-access-dont-show-again"
               onchange={(event) => {
-                if (event.currentTarget.checked) dismissDevicesAccessNudge();
+                if (event.currentTarget.checked) dismissDevicesAccessNudge()
               }}
             />
             {vault.t(I18N_KEYS.DevicesAccessDontShowAgain)}
@@ -541,8 +525,8 @@
         onSubmit={(password) => {
           const enrollmentRequest: Parameters<
             NonNullable<typeof onUseEnrollmentCode>
-          >[0] = { code: prefillEnrollmentCode, password };
-          return onUseEnrollmentCode!(enrollmentRequest);
+          >[0] = { code: prefillEnrollmentCode, password }
+          return onUseEnrollmentCode!(enrollmentRequest)
         }}
       />
     {:else if showCreateVault || sentinelInvitationRequest.trim()}
@@ -554,19 +538,16 @@
         {usesExtensionDeviceIdentity}
         {onCreateDeviceVault}
         {onStartSentinelGenesis}
-        onAddSentinelGenesisParticipantResponse={({
-          payload,
-          participantLabel,
-        }) => {
+        onAddSentinelGenesisParticipantResponse={({ payload, participantLabel }) => {
           const participantRequest: Parameters<
-            sentinelGenesisActions.SentinelGenesisActions["addParticipantResponse"]
+            sentinelGenesisActions.SentinelGenesisActions['addParticipantResponse']
           >[0] = {
             payload,
-            participantLabel: ((v) => (v ? v : ""))(participantLabel),
-          };
+            participantLabel: ((v) => (v ? v : ''))(participantLabel),
+          }
           return new sentinelGenesisActions.SentinelGenesisActions(
             vault,
-          ).addParticipantResponse(participantRequest);
+          ).addParticipantResponse(participantRequest)
         }}
         onFinalizeSentinelGenesis={() =>
           new sentinelGenesisActions.SentinelGenesisActions(vault).finalize()}
@@ -575,11 +556,11 @@
             v = (payload) =>
               (() => {
                 const createParticipantResponseArgs: Parameters<
-                  sentinelGenesisActions.SentinelGenesisActions["createParticipantResponse"]
-                >[0] = { requestPayload: payload };
+                  sentinelGenesisActions.SentinelGenesisActions['createParticipantResponse']
+                >[0] = { requestPayload: payload }
                 return new sentinelGenesisActions.SentinelGenesisActions(
                   vault,
-                ).createParticipantResponse(createParticipantResponseArgs);
+                ).createParticipantResponse(createParticipantResponseArgs)
               })(),
           ]
         ) => v)(onCreateSentinelGenesisParticipantResponse)}
@@ -594,20 +575,20 @@
         onRememberSentinelGenesisRequest={(payload) =>
           (() => {
             const rememberRequestArgs: Parameters<
-              sentinelGenesisActions.SentinelGenesisActions["rememberRequest"]
-            >[0] = { requestPayload: payload };
+              sentinelGenesisActions.SentinelGenesisActions['rememberRequest']
+            >[0] = { requestPayload: payload }
             return new sentinelGenesisActions.SentinelGenesisActions(
               vault,
-            ).rememberRequest(rememberRequestArgs);
+            ).rememberRequest(rememberRequestArgs)
           })()}
         onReceiveSentinelGenesisShare={(payload) =>
           (() => {
             const acceptShareDeliveryArgs: Parameters<
-              sentinelGenesisActions.SentinelGenesisActions["acceptShareDelivery"]
-            >[0] = { payload };
+              sentinelGenesisActions.SentinelGenesisActions['acceptShareDelivery']
+            >[0] = { payload }
             return new sentinelGenesisActions.SentinelGenesisActions(
               vault,
-            ).acceptShareDelivery(acceptShareDeliveryArgs);
+            ).acceptShareDelivery(acceptShareDeliveryArgs)
           })()}
         onCompleteSentinelGenesisDelivery={() =>
           new sentinelGenesisActions.SentinelGenesisActions(
@@ -624,8 +605,8 @@
         {onAcceptSentinelOnboardingPackage}
         onFinishSentinelInvitation={onSentinelUnlocked}
         onConnectStorage={() => {
-          vault.beginExistingVaultOpen();
-          showProviderSetupLink = true;
+          vault.beginExistingVaultOpen()
+          showProviderSetupLink = true
         }}
       />
 
@@ -658,9 +639,7 @@
       >
         <CardHeader class="border-b border-border/60 px-6 pb-4 pt-5">
           <div class="space-y-1">
-            <CardTitle
-              class="text-lg font-semibold tracking-tight text-foreground"
-            >
+            <CardTitle class="text-lg font-semibold tracking-tight text-foreground">
               {#if showVaultPicker}
                 {vault.t(I18N_KEYS.LoginVaultPickerTitle)}
               {:else if showLocalUnlock}
@@ -670,14 +649,14 @@
                   const tArgs: Parameters<typeof vault.t>[0] = {
                     key: I18N_KEYS.OnboardingConnectTo,
                     replacements: {
-                      provider: setupIs("github")
-                        ? "GitHub"
-                        : setupIs("local-folder")
+                      provider: setupIs('github')
+                        ? 'GitHub'
+                        : setupIs('local-folder')
                           ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
                           : vault.t(I18N_KEYS.OnboardingLocalStorage),
                     },
-                  };
-                  return vault.t(tArgs);
+                  }
+                  return vault.t(tArgs)
                 })()}
               {:else if addProviderOpen}
                 {vault.t(I18N_KEYS.OnboardingAddProvider)}
@@ -697,7 +676,7 @@
               <CardDescription class="text-pretty">
                 {vault.t(I18N_KEYS.LoginOpenVaultSubtitle)}
               </CardDescription>
-            {:else if showSetup && setupIs("github")}
+            {:else if showSetup && setupIs('github')}
               <CardDescription class="text-pretty">
                 {vault.t(I18N_KEYS.OnboardingGithubDescription)}
               </CardDescription>
@@ -730,8 +709,8 @@
               onChooseVault={(storeId) => vault.chooseLoginVault(storeId)}
               onCreateVault={onCreateDeviceVault}
               onConnectStorage={() => {
-                vault.beginExistingVaultOpen();
-                showProviderSetupLink = true;
+                vault.beginExistingVaultOpen()
+                showProviderSetupLink = true
               }}
             />
           {:else if showLocalUnlock}
@@ -744,7 +723,7 @@
                 : recoveryPasswordEntries}
               selectedPasswordEntry={vault.selectedPasswordEntry}
               onSelectPasswordEntry={(selection) => {
-                vault.selectedPasswordEntry = selection;
+                vault.selectedPasswordEntry = selection
               }}
               {isVerifying}
               {isInitializing}
@@ -756,15 +735,15 @@
               {onSwitchVault}
               onCreateAnotherVault={onCreateDeviceVault}
               onImportFromSync={() => {
-                vault.beginExistingVaultOpen();
-                showProviderSetupLink = true;
+                vault.beginExistingVaultOpen()
+                showProviderSetupLink = true
               }}
             />
             <p class="mt-4 text-center text-xs text-muted-foreground">
               {vault.t(I18N_KEYS.LoginSyncAfterUnlock)}
             </p>
           {:else if showSetup}
-            {#if setupIs("oauth-file")}
+            {#if setupIs('oauth-file')}
               <OAuthProviderSetupWizard
                 {vault}
                 bind:githubRepo
@@ -775,7 +754,7 @@
                 {onCancelSetup}
                 onConnect={onUnlock}
               />
-            {:else if setupIs("github")}
+            {:else if setupIs('github')}
               <GitHubProviderSetupWizard
                 {vault}
                 bind:githubPat
@@ -796,14 +775,13 @@
                       state={vault.remoteVaultRecoveryState}
                       isBusy={isVerifying}
                       onRecover={() => vault.confirmRecoverRemoteVault()}
-                      onCreateFresh={() =>
-                        vault.confirmCreateFreshRemoteVault()}
+                      onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
                       onDismiss={() => vault.clearRemoteVaultRecovery()}
                     />
                   {/if}
                 {/snippet}
               </GitHubProviderSetupWizard>
-            {:else if setupIs("local-folder")}
+            {:else if setupIs('local-folder')}
               <LocalFolderProviderSetupWizard
                 {vault}
                 idPrefix="login"
@@ -813,11 +791,7 @@
                 onConnect={onUnlock}
               />
             {:else}
-              <form
-                novalidate
-                onsubmit={handleFirstConnectSubmit}
-                class="space-y-4"
-              >
+              <form novalidate onsubmit={handleFirstConnectSubmit} class="space-y-4">
                 <ProviderSetupFields {vault} {onCancelSetup} />
                 <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
                   <Button
@@ -847,8 +821,8 @@
                 class="mb-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
                 data-testid="login-back-to-get-started"
                 onclick={() => {
-                  vault.cancelExistingVaultOpen();
-                  showProviderSetupLink = false;
+                  vault.cancelExistingVaultOpen()
+                  showProviderSetupLink = false
                 }}
               >
                 {vault.t(I18N_KEYS.LoginBackToGetStarted)}

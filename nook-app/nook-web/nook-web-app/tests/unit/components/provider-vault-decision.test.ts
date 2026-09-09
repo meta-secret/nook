@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { describe, expect, test, vi } from 'vitest'
 import {
@@ -50,6 +51,9 @@ function panelVault(
   } as unknown as NookVaultManager
   return {
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
+    admitManager() {
+      return ok(this.requireManager())
+    },
     requireManager: () => manager,
     t: (request: string | { readonly key: string }) =>
       typeof request === 'string' ? request : request.key,
@@ -111,9 +115,7 @@ describe('provider vault decision panel', () => {
     const radio = await view.findByRole('radio')
     expect((radio as HTMLInputElement).checked).toBe(true)
 
-    await fireEvent.click(
-      view.getByTestId('sync-conflict-import-new-vault-btn'),
-    )
+    await fireEvent.click(view.getByTestId('sync-conflict-import-new-vault-btn'))
     expect(onImport).toHaveBeenCalledWith({
       kind: ProviderVaultIdentitySelectionKind.Selected,
       identityId: 'personal',
@@ -159,6 +161,9 @@ test('selected local target survives loading the selected identity providers', a
     providersLoaded: false,
     openActiveVault,
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
+    admitManager() {
+      return ok(this.requireManager())
+    },
     requireManager: () => ({
       load_auth_providers_snapshot: async () => ({
         providers: [identityProvider],
@@ -186,6 +191,9 @@ test('completed import transitions to the selected locked identity', async () =>
     devicePublicKey: 'outgoing-key',
     errorMsg: '',
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
+    admitManager() {
+      return ok(this.requireManager())
+    },
     requireManager: () => ({
       activate_local_identity: async () => {
         calls.push('activate')
@@ -202,21 +210,13 @@ test('completed import transitions to the selected locked identity', async () =>
   const request: Parameters<
     SyncConflictActions['activateImportedProviderVaultIdentity']
   >[0] = {
-    state,
     identityId: 'identity-personal',
     importedStoreId: 'store-a',
   }
 
-  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(
-    request,
-  )
+  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(request)
 
-  expect(calls).toEqual([
-    'activate',
-    'clear-session',
-    'select:store-a',
-    'status',
-  ])
+  expect(calls).toEqual(['activate', 'clear-session', 'select:store-a', 'status'])
   expect(state.deviceProtectionStatus).toBe(DeviceProtectionStatus.Pin)
   expect(state.deviceProtectionLockedStatus).toBe(DeviceProtectionStatus.Pin)
   expect(state.deviceId).toBe('')
@@ -228,7 +228,10 @@ test('activation failure preserves the completed import session', async () => {
   const selectLoginVault = vi.fn()
   const state = {
     errorMsg: '',
-    enqueueStorage: (operation: () => Promise<void>) => operation(),
+    enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
+    admitManager() {
+      return ok(this.requireManager())
+    },
     requireManager: () => ({
       activate_local_identity: async () => {
         throw new Error('identity activation failed')
@@ -245,9 +248,7 @@ test('activation failure preserves the completed import session', async () => {
     importedStoreId: 'store-a',
   }
 
-  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(
-    request,
-  )
+  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(request)
 
   expect(clearIdentityProviderSession).not.toHaveBeenCalled()
   expect(selectLoginVault).not.toHaveBeenCalled()
@@ -263,6 +264,9 @@ test('status failure keeps the activated identity transition fail closed', async
     devicePublicKey: 'outgoing-key',
     errorMsg: '',
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
+    admitManager() {
+      return ok(this.requireManager())
+    },
     requireManager: () => ({
       activate_local_identity: async () => {},
       device_protection_status: async () => {

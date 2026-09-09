@@ -1,3 +1,5 @@
+import { err, ok, type Result } from 'neverthrow'
+import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
 import { expect, type Page } from '@playwright/test'
 import {
   type ActiveVaultScope,
@@ -43,16 +45,24 @@ export function unselectedAuthProviderSeedScope(): AuthProviderSeedScope {
   return { kind: AuthProviderSeedScopeKind.Unselected }
 }
 
-export function activeAuthProviderSeedScope(
-  storeId: string,
-): AuthProviderSeedScope {
+export function activeAuthProviderSeedScope(storeId: string): AuthProviderSeedScope {
   return { kind: AuthProviderSeedScopeKind.ActiveVault, storeId }
+}
+
+export enum AuthProviderHookFailure {
+  Unavailable = 'unavailable',
+  ReadFailed = 'read-failed',
+  WriteFailed = 'write-failed',
 }
 
 type AuthProviderBrowserHooks = {
   activeVaultScope(storeId: string): ActiveVaultScope
-  loadAuthProviders: () => Promise<AuthProvidersSnapshot>
-  saveAuthProviders: (snapshot: AuthProvidersSnapshot) => Promise<void>
+  loadAuthProviders: () => Promise<
+    Result<AuthProvidersSnapshot, VaultStorageFailure>
+  >
+  saveAuthProviders: (
+    snapshot: AuthProvidersSnapshot,
+  ) => Promise<Result<void, VaultStorageFailure>>
   unselectedVaultScope(): ActiveVaultScope
 }
 
@@ -153,9 +163,7 @@ export async function appendAuthProviders(
           const store = tx.objectStore('auth')
           const getRequest = store.get('providers')
           getRequest.onerror = () =>
-            reject(
-              ((v) => (v ? v : new Error('idb read failed')))(getRequest.error),
-            )
+            reject(((v) => (v ? v : new Error('idb read failed')))(getRequest.error))
           getRequest.onsuccess = () => {
             const rawSnapshot = getRequest.result as unknown
             const snapshot =
@@ -177,9 +185,7 @@ export async function appendAuthProviders(
             const putRequest = store.put(snapshot, 'providers')
             putRequest.onerror = () =>
               reject(
-                ((v) => (v ? v : new Error('idb write failed')))(
-                  putRequest.error,
-                ),
+                ((v) => (v ? v : new Error('idb write failed')))(putRequest.error),
               )
           }
           tx.oncomplete = () => {
@@ -202,22 +208,31 @@ async function appendSealedAuthProviders(
   const storedAdditions = providers.map((provider) =>
     storedProvider(provider, seedScope),
   )
-  await page.evaluate(
-    async ({ providers: additions }) => {
+  const stored = await page.evaluate(
+    async ({ providers: additions, failures }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
         }
       ).__nookAuthProviders
-      if (!hook) throw new Error('E2E auth provider hooks are unavailable')
+      if (!hook) return { ok: false as const, failure: failures.Unavailable }
       const snapshot = await hook.loadAuthProviders()
-      snapshot.providers.push(...additions)
-      await hook.saveAuthProviders(snapshot)
+      if (snapshot.isErr())
+        return { ok: false as const, failure: failures.ReadFailed }
+      const persisted = await hook.saveAuthProviders({
+        ...snapshot.value,
+        providers: [...snapshot.value.providers, ...additions],
+      })
+      return persisted.isErr()
+        ? { ok: false as const, failure: failures.WriteFailed }
+        : { ok: true as const }
     },
     {
       providers: storedAdditions,
+      failures: AuthProviderHookFailure,
     },
   )
+  expect(stored).toEqual({ ok: true })
 }
 
 export async function waitForAuthProviderIds(
@@ -457,18 +472,20 @@ export async function waitForAuthProvidersE2eHook(page: Page) {
 }
 
 /** Load decrypted sync providers via wasm in the browser. */
-export async function loadDecryptedAuthProvidersInBrowser(page: Page) {
-  return page.evaluate(async () => {
+export async function loadDecryptedAuthProvidersInBrowser(
+  page: Page,
+): Promise<Result<AuthProvidersSnapshot, AuthProviderHookFailure>> {
+  const loaded = await page.evaluate(async (failures) => {
     const hook = (
-      window as Window & {
-        __nookAuthProviders?: AuthProviderBrowserHooks
-      }
+      window as Window & { __nookAuthProviders?: AuthProviderBrowserHooks }
     ).__nookAuthProviders
-    if (hook?.loadAuthProviders) {
-      return hook.loadAuthProviders()
-    }
-    throw new Error('E2E auth provider hooks are unavailable')
-  })
+    if (!hook) return { ok: false as const, failure: failures.Unavailable }
+    const snapshot = await hook.loadAuthProviders()
+    return snapshot.isErr()
+      ? { ok: false as const, failure: failures.ReadFailed }
+      : { ok: true as const, value: snapshot.value }
+  }, AuthProviderHookFailure)
+  return loaded.ok ? ok(loaded.value) : err(loaded.failure)
 }
 
 /** Save sync providers through wasm (plaintext in → sealed in IndexedDB). */
@@ -480,14 +497,14 @@ export async function saveAuthProvidersInBrowser(
   const providers = snapshot.providers.map((provider) =>
     storedProvider(provider, seedScope),
   )
-  await page.evaluate(
-    async ({ providers, seedScope, activeVaultKind }) => {
+  const stored = await page.evaluate(
+    async ({ providers, seedScope, activeVaultKind, failures }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
         }
       ).__nookAuthProviders
-      if (!hook) throw new Error('E2E auth provider hooks are unavailable')
+      if (!hook) return { ok: false as const, failure: failures.Unavailable }
       const activeVaultStoreId =
         seedScope.kind === activeVaultKind
           ? hook.activeVaultScope(seedScope.storeId)
@@ -496,14 +513,19 @@ export async function saveAuthProvidersInBrowser(
         providers,
         activeVaultStoreId,
       }
-      await hook.saveAuthProviders(authProvidersSnapshot)
+      const persisted = await hook.saveAuthProviders(authProvidersSnapshot)
+      return persisted.isErr()
+        ? { ok: false as const, failure: failures.WriteFailed }
+        : { ok: true as const }
     },
     {
       providers,
       seedScope,
       activeVaultKind: AuthProviderSeedScopeKind.ActiveVault,
+      failures: AuthProviderHookFailure,
     },
   )
+  expect(stored).toEqual({ ok: true })
 }
 
 export function expectSealedCredential(stored: unknown, plaintext: string) {

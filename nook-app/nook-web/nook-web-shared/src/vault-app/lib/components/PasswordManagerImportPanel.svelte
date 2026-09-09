@@ -1,15 +1,16 @@
 <script lang="ts">
-  import type { PasswordImportMessageKeys } from "../../../generated/i18n-keys";
-  import { Archive, FileSpreadsheet, Upload } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Card, CardContent } from "$lib/components/ui/card";
-  import ImportProgress from "$lib/components/ImportProgress.svelte";
+  import { SecretFailurePresentation } from '$lib/vault/secret-operation-failure'
+  import type { PasswordImportMessageKeys } from '../../../generated/i18n-keys'
+  import { Archive, FileSpreadsheet, Upload } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
+  import { Card, CardContent } from '$lib/components/ui/card'
+  import ImportProgress from '$lib/components/ImportProgress.svelte'
   import {
     BinaryVaultFileImport,
     TextVaultFileImport,
     ImportAttemptKind,
     type ImportPanelProps,
-  } from "$lib/components/import-panel";
+  } from '$lib/components/import-panel'
   import {
     ImportFileSelectionKind,
     PasswordImportFormat,
@@ -17,92 +18,87 @@
     PasswordImportOutcomeKind,
     type ImportFileSelection,
     type PasswordImportOutcome,
-  } from "./password-manager-import-state";
+  } from './password-manager-import-state'
 
   type CommonProps = {
-    messages: PasswordImportMessageKeys;
-    panelTestId: string;
-    fileTestId: string;
-    submitTestId: string;
-    errorTestId: string;
-    resultTestId: string;
-    accept: string;
-    icon: PasswordImportIcon;
-  };
+    messages: PasswordImportMessageKeys
+    panelTestId: string
+    fileTestId: string
+    submitTestId: string
+    errorTestId: string
+    resultTestId: string
+    accept: string
+    icon: PasswordImportIcon
+  }
   type Props = CommonProps &
     (
       | (ImportPanelProps<string> & { format: PasswordImportFormat.Text })
       | (ImportPanelProps<Uint8Array> & {
-          format: PasswordImportFormat.Binary;
+          format: PasswordImportFormat.Binary
         })
-    );
+    )
 
   // eslint-disable-next-line svelte/no-unused-props -- The discriminated props object preserves the format/onImport relationship.
-  let props: Props = $props();
+  let props: Props = $props()
   let selectedFile = $state<ImportFileSelection>({
     kind: ImportFileSelectionKind.NotSelected,
-  });
+  })
   let result = $state<PasswordImportOutcome>({
     kind: PasswordImportOutcomeKind.NotRun,
-  });
-  let error = $state("");
-  let isImporting = $state(false);
-  const busy = $derived(isImporting || props.isSaving);
+  })
+  let error = $state('')
+  let isImporting = $state(false)
+  const busy = $derived(isImporting || props.isSaving)
 
   function selectFile(event: Event) {
-    const file = (event.currentTarget as HTMLInputElement).files?.[0];
+    const file = (event.currentTarget as HTMLInputElement).files?.[0]
     selectedFile = file
       ? { kind: ImportFileSelectionKind.Selected, file }
-      : { kind: ImportFileSelectionKind.NotSelected };
-    result = { kind: PasswordImportOutcomeKind.NotRun };
-    error = "";
+      : { kind: ImportFileSelectionKind.NotSelected }
+    result = { kind: PasswordImportOutcomeKind.NotRun }
+    error = ''
   }
 
   async function importFile() {
-    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy)
-      return;
-    const file = selectedFile.file;
-    result = { kind: PasswordImportOutcomeKind.NotRun };
-    error = "";
-    isImporting = true;
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy) return
+    const file = selectedFile.file
+    result = { kind: PasswordImportOutcomeKind.NotRun }
+    error = ''
+    isImporting = true
     try {
       if (props.format === PasswordImportFormat.Text) {
-        const importRequest: ConstructorParameters<
-          typeof TextVaultFileImport
-        >[0] = {
+        const importRequest: ConstructorParameters<typeof TextVaultFileImport>[0] = {
           file,
           isSaving: false,
           onImport: props.onImport,
-        };
-        const imported = await new TextVaultFileImport(importRequest).execute();
+        }
+        const imported = await new TextVaultFileImport(importRequest).execute()
         if (imported.kind === ImportAttemptKind.Completed) {
           result = {
             kind: PasswordImportOutcomeKind.Completed,
             result: imported.result,
-          };
+          }
         } else if (imported.kind === ImportAttemptKind.Failed) {
-          error = imported.error;
+          error = new SecretFailurePresentation(props.vault).message(imported.error)
         }
-        return;
+        return
       }
-      const importRequest: ConstructorParameters<
-        typeof BinaryVaultFileImport
-      >[0] = {
+      const importRequest: ConstructorParameters<typeof BinaryVaultFileImport>[0] = {
         file,
         isSaving: false,
         onImport: props.onImport,
-      };
-      const imported = await new BinaryVaultFileImport(importRequest).execute();
+      }
+      const imported = await new BinaryVaultFileImport(importRequest).execute()
       if (imported.kind === ImportAttemptKind.Completed) {
         result = {
           kind: PasswordImportOutcomeKind.Completed,
           result: imported.result,
-        };
+        }
       } else if (imported.kind === ImportAttemptKind.Failed) {
-        error = imported.error;
+        error = new SecretFailurePresentation(props.vault).message(imported.error)
       }
     } finally {
-      isImporting = false;
+      isImporting = false
     }
   }
 </script>
@@ -155,8 +151,7 @@
 
       <Button
         data-testid={props.submitTestId}
-        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
-          busy}
+        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected || busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -190,8 +185,8 @@
                 replacements: {
                   count: String(result.result.imported),
                 },
-              };
-              return props.vault.t(translationRequest);
+              }
+              return props.vault.t(translationRequest)
             })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
@@ -202,8 +197,8 @@
                   unsupported: String(result.result.skippedUnsupported),
                   duplicates: String(result.result.skippedDuplicates),
                 },
-              };
-              return props.vault.t(translationRequest2);
+              }
+              return props.vault.t(translationRequest2)
             })()}
           </p>
         </div>

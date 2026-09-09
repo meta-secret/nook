@@ -1,11 +1,16 @@
-import { I18N_KEYS } from "../../../generated/i18n-keys";
+import { ok, err, type Result } from 'neverthrow'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+  NativeVaultStorageFailure,
+} from '$lib/runtime/storage-failure'
 import {
   activeVaultScope,
   storedLocalFolderDirectory,
   storedLocalFolderHandle,
   unselectedVaultScope,
   type StorageProvider,
-} from "$lib/auth/providers";
+} from '$lib/auth/providers'
 import {
   active_vault_providers,
   choose_local_folder_backup_directory,
@@ -15,108 +20,120 @@ import {
   NookManagerStoreScope,
   NookProviderSelectionState,
   sync_providers_for_active_vault,
-} from "$app-wasm";
-import type { ProviderActionsContext } from "$lib/vault/action-contexts";
+} from '$app-wasm'
+import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import {
   ActiveVaultKind,
   LocalProviderLookupKind,
   LoginSetupKind,
   type LocalProviderLookup,
-} from "$lib/vault/state/provider.svelte";
+} from '$lib/vault/state/provider.svelte'
 
 /** Owns browser orchestration for one provider selection.svelte context. */
 export class ProviderSelectionActions {
   constructor(private readonly state: ProviderActionsContext) {}
 
   private providerSnapshot() {
-    const state = this.state;
+    const state = this.state
     const snapshotArgs: Parameters<typeof $state.snapshot>[0] = {
       providers: state.providers,
       activeVaultStoreId:
         state.activeVault.kind === ActiveVaultKind.Open
           ? activeVaultScope(state.activeVault.storeId)
           : unselectedVaultScope(),
-    };
-    return $state.snapshot(snapshotArgs);
+    }
+    return $state.snapshot(snapshotArgs)
   }
 
-  async chooseLocalFolder(): Promise<void> {
-    const state = this.state;
-    this.refreshLocalFolderBackupSupport();
+  async chooseLocalFolder(): Promise<Result<void, VaultStorageFailure>> {
+    const state = this.state
+    this.refreshLocalFolderBackupSupport()
     if (!state.localFolderBackupSupported) {
-      throw new Error(
-        state.t(I18N_KEYS.ProviderSetupLocalFolderUnsupportedBrowser),
-      );
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.LocalFolderUnsupported),
+      )
     }
-    const folder = await choose_local_folder_backup_directory();
+    let folder: Awaited<ReturnType<typeof choose_local_folder_backup_directory>>
+    try {
+      folder = await choose_local_folder_backup_directory()
+    } catch (failure) {
+      if (
+        failure instanceof Error &&
+        failure.message.includes('Page.setInterceptFileChooserDialog')
+      )
+        return err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.LocalFolderAutomationUnavailable,
+          ),
+        )
+      return err(new NativeVaultStorageFailure(failure))
+    }
     try {
       const request: Parameters<typeof state.configureLocalFolder>[0] = {
         directoryName: storedLocalFolderDirectory(folder.directoryName),
         handleId: storedLocalFolderHandle(folder.handleId),
-      };
-      state.configureLocalFolder(request);
+      }
+      state.configureLocalFolder(request)
+      return ok(undefined)
     } finally {
-      folder.free();
+      folder.free()
     }
   }
 
   refreshLocalFolderBackupSupport(): void {
-    const state = this.state;
+    const state = this.state
     state.localFolderBackupSupported =
-      "window" in globalThis && is_local_folder_backup_supported();
+      'window' in globalThis && is_local_folder_backup_supported()
   }
 
   localProvider(): LocalProviderLookup {
-    const state = this.state;
+    const state = this.state
     const scope = state.hasActiveVaultStore
       ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
-      : NookManagerStoreScope.unscoped();
-    const selection = local_provider_for_active_vault(
-      this.providerSnapshot(),
-      scope,
-    );
-    scope.free();
+      : NookManagerStoreScope.unscoped()
+    const selection = local_provider_for_active_vault(this.providerSnapshot(), scope)
+    scope.free()
     if (selection.state === NookProviderSelectionState.Selected) {
       const provider = state.providers.find(
         (candidate) => candidate.id === selection.providerId,
-      );
-      selection.free();
+      )
+      selection.free()
       return provider
         ? { kind: LocalProviderLookupKind.Found, provider }
-        : { kind: LocalProviderLookupKind.Missing };
+        : { kind: LocalProviderLookupKind.Missing }
     }
-    selection.free();
-    return { kind: LocalProviderLookupKind.Missing };
+    selection.free()
+    return { kind: LocalProviderLookupKind.Missing }
   }
 
   activeProviders(): StorageProvider[] {
-    const state = this.state;
+    const state = this.state
     const scope = state.hasActiveVaultStore
       ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
-      : NookManagerStoreScope.unscoped();
+      : NookManagerStoreScope.unscoped()
     const providers = active_vault_providers(
       this.providerSnapshot(),
       scope,
-    ).providers;
-    scope.free();
-    return providers;
+    ).providers
+    scope.free()
+    return providers
   }
 
   syncProviders(): StorageProvider[] {
-    const state = this.state;
+    const state = this.state
     const scope = state.hasActiveVaultStore
       ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
-      : NookManagerStoreScope.unscoped();
+      : NookManagerStoreScope.unscoped()
     const providers = sync_providers_for_active_vault(
       this.providerSnapshot(),
       scope,
-    ).providers;
-    scope.free();
-    return providers;
+    ).providers
+    scope.free()
+    return providers
   }
 
   showLoginVaultPicker(): boolean {
-    const state = this.state;
+    const state = this.state
     return state.clientPolicy.should_show_login_vault_picker(
       state.isAuthenticated,
       state.localVaults.length,
@@ -124,6 +141,6 @@ export class ProviderSelectionActions {
       state.loginSetup.kind === LoginSetupKind.Active,
       state.addProviderOpen,
       is_vault_session_locked(),
-    );
+    )
   }
 }

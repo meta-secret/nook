@@ -1,3 +1,5 @@
+import { ok, err } from 'neverthrow'
+import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
 import { cloudKitAuthTokenStore } from '$lib/auth/icloud/cloudkit-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -8,12 +10,8 @@ import {
   iCloudOAuthSession,
 } from '$lib/auth/icloud/oauth'
 import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
-import { CloudKitAuthErrorTranslationKey } from '$lib/auth/icloud/auth-errors'
-import {
-  ICLOUD_CONTAINER_ID,
-  ICLOUD_ENVIRONMENT,
-} from '$lib/auth/icloud/config'
-import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
+
+import { ICLOUD_CONTAINER_ID, ICLOUD_ENVIRONMENT } from '$lib/auth/icloud/config'
 
 function resolvedCloudKitEffect() {
   return vi.fn(async (): Promise<void> => {})
@@ -39,9 +37,7 @@ function nativeICloudWebAuthTokenRequest(): ICloudWebAuthTokenRequest {
   }
 }
 
-function iCloudTokensWithoutAccountName(
-  accessToken: string,
-): ICloudOAuthTokens {
+function iCloudTokensWithoutAccountName(accessToken: string): ICloudOAuthTokens {
   return {
     accessToken,
     accountName: { kind: ICloudAccountNameKind.Unavailable },
@@ -92,17 +88,19 @@ describe('icloud-oauth', () => {
       },
       existing: oauthConfigurationNotApplicable(),
     })
-    expect(config.preset).toBe('icloud')
-    expect(config.accessToken).toEqual({
+    expect(config.isOk()).toBe(true)
+    if (config.isErr()) return
+    expect(config.value.preset).toBe('icloud')
+    expect(config.value.accessToken).toEqual({
       state: 'accessToken',
       value: 'ck-web-auth-token',
     })
-    expect(config.accountEmail).toEqual({
+    expect(config.value.accountEmail).toEqual({
       state: 'email',
       value: 'Apple User',
     })
-    expect(config.driveMode).toBe('private')
-    expect(config.iCloudMode).toBe('private')
+    expect(config.value.driveMode).toBe('private')
+    expect(config.value.iCloudMode).toBe('private')
   })
 
   describe('shared CloudKit target', () => {
@@ -148,8 +146,7 @@ describe('icloud-oauth', () => {
         },
       })
 
-      const target =
-        await iCloudOAuthSession.createICloudSharedVault('nook-events')
+      const target = await iCloudOAuthSession.createICloudSharedVault('nook-events')
 
       expect(saveRecordZones).toHaveBeenCalledWith([
         {
@@ -172,12 +169,14 @@ describe('icloud-oauth', () => {
           supportedPermissions: ['READ_WRITE'],
         }),
       )
-      expect(target).toMatchObject({
-        role: 'owner',
-        ownerRecordName: 'owner-record',
-        rootRecordName: 'nook-root-11111111-1111-4111-8111-111111111111',
-        shortGuid: 'share-guid',
-      })
+      expect(target).toMatchObject(
+        ok({
+          role: 'owner',
+          ownerRecordName: 'owner-record',
+          rootRecordName: 'nook-root-11111111-1111-4111-8111-111111111111',
+          shortGuid: 'share-guid',
+        }),
+      )
       expect(target.storageTargetId).toContain('icloud-share-v1:')
       expect(target.storageTargetId).not.toContain('ck-web-auth-token')
     })
@@ -197,7 +196,9 @@ describe('icloud-oauth', () => {
 
       await expect(
         iCloudOAuthSession.createICloudSharedVault('nook-events'),
-      ).rejects.toThrow(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst)
+      ).resolves.toEqual(
+        err(new OAuthFailure(OAuthFailureKind.SharedSignInRequired)),
+      )
       expect(saveRecordZones).not.toHaveBeenCalled()
     })
 
@@ -229,13 +230,15 @@ describe('icloud-oauth', () => {
 
       expect(fetchRecordInfos).toHaveBeenCalledWith(['share-guid'])
       expect(acceptShares).toHaveBeenCalledWith(['share-guid'])
-      expect(target).toMatchObject({
-        role: 'participant',
-        zoneName: 'shared-zone',
-        ownerRecordName: 'owner-record',
-        rootRecordName: 'shared-root',
-        shortGuid: 'share-guid',
-      })
+      expect(target).toMatchObject(
+        ok({
+          role: 'participant',
+          zoneName: 'shared-zone',
+          ownerRecordName: 'owner-record',
+          rootRecordName: 'shared-root',
+          shortGuid: 'share-guid',
+        }),
+      )
       expect(target.storageTargetId).toContain('icloud-share-v1:')
       expect(target.storageTargetId).not.toContain('ck-web-auth-token')
     })
@@ -263,11 +266,13 @@ describe('icloud-oauth', () => {
 
       await expect(
         iCloudOAuthSession.acceptICloudSharedVault('share-guid'),
-      ).resolves.toMatchObject({
-        role: 'participant',
-        zoneName: 'shared-zone',
-        rootRecordName: 'shared-root',
-      })
+      ).resolves.toMatchObject(
+        ok({
+          role: 'participant',
+          zoneName: 'shared-zone',
+          rootRecordName: 'shared-root',
+        }),
+      )
       expect(acceptShares).not.toHaveBeenCalled()
     })
 
@@ -288,13 +293,15 @@ describe('icloud-oauth', () => {
         'icloud-share-v1:{"role":"owner","zoneName":"shared-zone","ownerRecordName":"owner-record","rootRecordName":"shared-root","shortGuid":"share-guid"}',
       )
 
-      expect(target).toMatchObject({
-        role: 'owner',
-        zoneName: 'shared-zone',
-        ownerRecordName: 'owner-record',
-        rootRecordName: 'shared-root',
-        shortGuid: 'share-guid',
-      })
+      expect(target).toMatchObject(
+        ok({
+          role: 'owner',
+          zoneName: 'shared-zone',
+          ownerRecordName: 'owner-record',
+          rootRecordName: 'shared-root',
+          shortGuid: 'share-guid',
+        }),
+      )
       expect(acceptShares).not.toHaveBeenCalled()
     })
   })
@@ -333,7 +340,7 @@ describe('icloud-oauth', () => {
       const request = defaultICloudWebAuthTokenRequest()
       await expect(
         iCloudOAuthSession.requestICloudWebAuthToken(request),
-      ).resolves.toEqual(iCloudTokensWithoutAccountName('existing-token'))
+      ).resolves.toEqual(ok(iCloudTokensWithoutAccountName('existing-token')))
       expect(setUpAuth).toHaveBeenCalledWith({
         grabAuthToken: true,
         persist: true,
@@ -369,7 +376,7 @@ describe('icloud-oauth', () => {
       })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithAccountName('fresh-token', 'Fresh User'),
+        ok(iCloudTokensWithAccountName('fresh-token', 'Fresh User')),
       )
     })
 
@@ -394,7 +401,7 @@ describe('icloud-oauth', () => {
       })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('store-token'),
+        ok(iCloudTokensWithoutAccountName('store-token')),
       )
     })
 
@@ -409,8 +416,7 @@ describe('icloud-oauth', () => {
 
       await iCloudOAuthSession.prepareICloudSignInControl()
       const request = defaultICloudWebAuthTokenRequest()
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
 
       expect(clickSpy).toHaveBeenCalledOnce()
       expect(setUpAuth).toHaveBeenCalledTimes(1)
@@ -423,7 +429,7 @@ describe('icloud-oauth', () => {
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('fresh-token'),
+        ok(iCloudTokensWithoutAccountName('fresh-token')),
       )
     })
 
@@ -439,8 +445,7 @@ describe('icloud-oauth', () => {
 
       await iCloudOAuthSession.prepareICloudSignInControl()
       const request = defaultICloudWebAuthTokenRequest()
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
 
       expect(clickSpy).toHaveBeenCalledOnce()
 
@@ -451,7 +456,7 @@ describe('icloud-oauth', () => {
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('cloudkit-div-token'),
+        ok(iCloudTokensWithoutAccountName('cloudkit-div-token')),
       )
     })
 
@@ -474,8 +479,7 @@ describe('icloud-oauth', () => {
 
       await iCloudOAuthSession.prepareICloudSignInControl()
       const request = nativeICloudWebAuthTokenRequest()
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
 
       expect(clickSpy).not.toHaveBeenCalled()
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
@@ -487,7 +491,7 @@ describe('icloud-oauth', () => {
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('visible-control-token'),
+        ok(iCloudTokensWithoutAccountName('visible-control-token')),
       )
     })
 
@@ -515,15 +519,14 @@ describe('icloud-oauth', () => {
         resolveSignIn({ lookupInfo: {} })
       })
       const request = nativeICloudWebAuthTokenRequest()
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
       await vi.waitFor(() => {
         expect(whenUserSignsIn).toHaveBeenCalledOnce()
       })
       signInButton?.click()
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('native-click-token'),
+        ok(iCloudTokensWithoutAccountName('native-click-token')),
       )
       expect(setUpAuth).toHaveBeenCalledTimes(1)
     })
@@ -540,8 +543,7 @@ describe('icloud-oauth', () => {
 
       await iCloudOAuthSession.prepareICloudSignInControl()
       const request = nativeICloudWebAuthTokenRequest()
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
       await vi.waitFor(() => {
         expect(whenUserSignsIn).toHaveBeenCalledOnce()
       })
@@ -552,7 +554,7 @@ describe('icloud-oauth', () => {
       })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('opaque-callback-token'),
+        ok(iCloudTokensWithoutAccountName('opaque-callback-token')),
       )
     })
 
@@ -587,8 +589,7 @@ describe('icloud-oauth', () => {
       await iCloudOAuthSession.prepareICloudSignInControl()
       // Programmatic click path may open the direct Web Services window.
       const request = timedICloudWebAuthTokenRequest(5000)
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
 
       await vi.waitFor(() => {
         expect(open).toHaveBeenCalledWith(
@@ -605,7 +606,7 @@ describe('icloud-oauth', () => {
       )
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('direct-web-auth-token'),
+        ok(iCloudTokensWithoutAccountName('direct-web-auth-token')),
       )
       expect(close).toHaveBeenCalledOnce()
     })
@@ -636,8 +637,7 @@ describe('icloud-oauth', () => {
         clickSignInControl: false,
         signInTimeoutMs: 5000,
       }
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
 
       await vi.waitFor(() => {
         expect(whenUserSignsIn).toHaveBeenCalledOnce()
@@ -652,7 +652,7 @@ describe('icloud-oauth', () => {
       )
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('native-window-token'),
+        ok(iCloudTokensWithoutAccountName('native-window-token')),
       )
       expect(open).not.toHaveBeenCalled()
     })
@@ -693,8 +693,7 @@ describe('icloud-oauth', () => {
 
       await iCloudOAuthSession.prepareICloudSignInControl()
       const request = timedICloudWebAuthTokenRequest(5000)
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
 
       await vi.waitFor(() => {
         expect(open).toHaveBeenCalledWith(
@@ -714,7 +713,7 @@ describe('icloud-oauth', () => {
       )
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('brave-direct-token'),
+        ok(iCloudTokensWithoutAccountName('brave-direct-token')),
       )
       expect(close).toHaveBeenCalledOnce()
     })
@@ -748,7 +747,9 @@ describe('icloud-oauth', () => {
       const request = timedICloudWebAuthTokenRequest(5000)
       await expect(
         iCloudOAuthSession.requestPreparedICloudWebAuthToken(request),
-      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.UnknownError)
+      ).resolves.toEqual(
+        err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication)),
+      )
     })
 
     it('fails when CloudKit sign-in never completes', async () => {
@@ -762,7 +763,7 @@ describe('icloud-oauth', () => {
       const request = timedICloudWebAuthTokenRequest(1)
       await expect(
         iCloudOAuthSession.requestICloudWebAuthToken(request),
-      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.SignInFailed)
+      ).resolves.toEqual(err(new OAuthFailure(OAuthFailureKind.TimedOut)))
       expect(whenUserSignsIn).toHaveBeenCalled()
     })
 
@@ -778,9 +779,9 @@ describe('icloud-oauth', () => {
         whenUserSignsIn,
       })
 
-      await expect(
-        iCloudOAuthSession.prepareICloudSignInControl(),
-      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.SignInRequired)
+      await expect(iCloudOAuthSession.prepareICloudSignInControl()).resolves.toEqual(
+        err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication)),
+      )
       expect(whenUserSignsIn).not.toHaveBeenCalled()
     })
 
@@ -790,13 +791,11 @@ describe('icloud-oauth', () => {
         serverErrorCode: 'AUTHENTICATION_REQUIRED',
         status: 421,
       })
-      const { resolveSignIn, whenUserSignsIn } =
-        mockPendingCloudKitSignIn(setUpAuth)
+      const { resolveSignIn, whenUserSignsIn } = mockPendingCloudKitSignIn(setUpAuth)
 
       await iCloudOAuthSession.prepareICloudSignInControl()
       const request = nativeICloudWebAuthTokenRequest()
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
       const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'auth-required-token',
@@ -804,7 +803,7 @@ describe('icloud-oauth', () => {
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('auth-required-token'),
+        ok(iCloudTokensWithoutAccountName('auth-required-token')),
       )
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
     })
@@ -813,13 +812,11 @@ describe('icloud-oauth', () => {
       const setUpAuth = vi.fn().mockRejectedValue({
         _reason: 'UNKNOWN_ERROR',
       })
-      const { resolveSignIn, whenUserSignsIn } =
-        mockPendingCloudKitSignIn(setUpAuth)
+      const { resolveSignIn, whenUserSignsIn } = mockPendingCloudKitSignIn(setUpAuth)
 
       await iCloudOAuthSession.prepareICloudSignInControl()
       const request = nativeICloudWebAuthTokenRequest()
-      const pending =
-        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
+      const pending = iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
       const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'opaque-setup-token',
@@ -827,7 +824,7 @@ describe('icloud-oauth', () => {
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('opaque-setup-token'),
+        ok(iCloudTokensWithoutAccountName('opaque-setup-token')),
       )
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
     })
@@ -843,9 +840,9 @@ describe('icloud-oauth', () => {
         whenUserSignsIn,
       })
 
-      await expect(
-        iCloudOAuthSession.prepareICloudSignInControl(),
-      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.UnknownError)
+      await expect(iCloudOAuthSession.prepareICloudSignInControl()).resolves.toEqual(
+        err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication)),
+      )
       expect(whenUserSignsIn).not.toHaveBeenCalled()
     })
 
@@ -871,7 +868,7 @@ describe('icloud-oauth', () => {
       )
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('cookie-fallback-token'),
+        ok(iCloudTokensWithoutAccountName('cookie-fallback-token')),
       )
     })
 
@@ -896,7 +893,7 @@ describe('icloud-oauth', () => {
       })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('alt-format-token'),
+        ok(iCloudTokensWithoutAccountName('alt-format-token')),
       )
     })
 
@@ -912,7 +909,7 @@ describe('icloud-oauth', () => {
       const firstRequest = timedICloudWebAuthTokenRequest(1)
       await expect(
         iCloudOAuthSession.requestICloudWebAuthToken(firstRequest),
-      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.SignInFailed)
+      ).resolves.toEqual(err(new OAuthFailure(OAuthFailureKind.TimedOut)))
 
       // Second attempt should re-run setUpAuth (not reuse stale promise).
       let resolveSignIn: (value: unknown) => void = () => {}
@@ -934,7 +931,7 @@ describe('icloud-oauth', () => {
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
-        iCloudTokensWithoutAccountName('retry-token'),
+        ok(iCloudTokensWithoutAccountName('retry-token')),
       )
     })
   })
@@ -946,18 +943,13 @@ describe('CloudKit token transport decoding', () => {
       token: ' accepted ',
       unrelated: 'not-persisted',
     })
-    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBe(
-      'accepted',
-    )
+    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBe('accepted')
     expect(
       sessionStorage.getItem('nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID),
     ).toBe(JSON.stringify('accepted'))
   })
   it('rejects malformed persisted JSON and invalid token shapes', () => {
-    sessionStorage.setItem(
-      'nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID,
-      '{',
-    )
+    sessionStorage.setItem('nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID, '{')
     expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBeUndefined()
     cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, { token: 42 })
     expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBeUndefined()

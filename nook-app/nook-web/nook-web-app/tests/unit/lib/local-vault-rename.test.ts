@@ -1,3 +1,5 @@
+import { ok } from 'neverthrow'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const wasmMocks = vi.hoisted(() => ({
@@ -19,6 +21,8 @@ vi.mock('$app-wasm', () => ({
   set_local_vault_label: wasmMocks.setLocalVaultLabel,
   set_vault_session_locked: wasmMocks.setVaultSessionLocked,
   NookVaultSwitchState: { Switch: 'Switch' },
+  VaultRecoveryErrorKind: { Other: 'Other' },
+  classify_vault_recovery_error: () => 'Other',
 }))
 
 vi.mock('$lib/runtime/log', () => ({
@@ -46,9 +50,7 @@ describe('renameLocalVaultLabel', () => {
 
   test('keeps a committed manager rename when catalog refresh fails', async () => {
     const setVaultName = vi.fn().mockImplementation(async () => {})
-    wasmMocks.listLocalVaults.mockRejectedValue(
-      new Error('catalog refresh failed'),
-    )
+    wasmMocks.listLocalVaults.mockRejectedValue(new Error('catalog refresh failed'))
     const state = {
       activeVault: {
         kind: ActiveVaultKind.Open,
@@ -56,6 +58,7 @@ describe('renameLocalVaultLabel', () => {
       },
       localVaults: [{ storeId: 'store-1', label: 'Old name' }],
       requireManager: () => ({ set_vault_name: setVaultName }),
+      admitManager: () => ok({ set_vault_name: setVaultName }),
       enqueueStorage: <T>(operation: () => T | Promise<T>) =>
         Promise.resolve(operation()),
       dismissSuccess: vi.fn(),
@@ -71,13 +74,10 @@ describe('renameLocalVaultLabel', () => {
     })
 
     expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledOnce()
-    expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledWith(
-      'store-1',
-      'New name',
-    )
+    expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledWith('store-1', 'New name')
     expect(setVaultName).toHaveBeenCalledOnce()
     expect(setVaultName).toHaveBeenCalledWith('New name')
-    expect(state.errorMsg).toBe('catalog refresh failed')
+    expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
     expect(state.isVerifying).toBe(false)
   })
 })

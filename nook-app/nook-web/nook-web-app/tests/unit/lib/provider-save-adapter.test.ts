@@ -1,3 +1,8 @@
+import { ok, err } from 'neverthrow'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
 import { describe, expect, test, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
@@ -42,7 +47,7 @@ type AdapterState = Omit<
   ProviderSaveContext,
   'persistProviders' | 'clearLoginSetup' | 'applyActiveProviderCredentials'
 > & {
-  persistProviders: Mock<() => Promise<void>>
+  persistProviders: Mock<ProviderSaveContext['persistProviders']>
   clearLoginSetup: Mock<() => void>
   applyActiveProviderCredentials: Mock<() => void>
 }
@@ -55,9 +60,9 @@ function providerState(providerType: StorageProviderType): AdapterState {
     requireActiveVaultStoreId: () => 'vault-1',
     selectedLoginVault: { kind: LoginVaultSelectionKind.NotSelected },
     hasManager: false,
-    requireManager: () => {
-      throw new Error('provider save adapter fixture has no manager')
-    },
+    requireManager: vi.fn(),
+    admitManager: () =>
+      err(new VaultStorageFailure(VaultStorageFailureKind.ManagerUnavailable)),
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
     loginSetup: { kind: LoginSetupKind.Active, providerType },
     storageMode: providerType,
@@ -75,7 +80,7 @@ function providerState(providerType: StorageProviderType): AdapterState {
     configureOauthFile: vi.fn(),
     clearLoginSetup: vi.fn(),
     applyActiveProviderCredentials: vi.fn(),
-    persistProviders: vi.fn(async () => {}),
+    persistProviders: vi.fn(async () => ok(undefined)),
   }
 }
 
@@ -181,37 +186,39 @@ describe('provider save web adapter', () => {
     const state = providerState(GITHUB_PROVIDER_TYPE)
     state.providers = [githubProvider()]
 
-    const saved = await new ProviderPersistenceActions(
-      state,
-    ).ensureProviderSaved()
+    const saved = await new ProviderPersistenceActions(state).ensureProviderSaved()
 
-    expect(saved).toBe(false)
-    expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageDuplicateSyncProvider)
+    expect(saved.isErr()).toBe(true)
+    if (saved.isOk()) return
+    expect(saved.error.translationKey).toBe(
+      I18N_KEYS.AuthStorageDuplicateSyncProvider,
+    )
     expect(state.persistProviders).not.toHaveBeenCalled()
   })
 
   test('maps a missing local folder to translated state', async () => {
     const state = providerState(LOCAL_FOLDER_PROVIDER_TYPE)
 
-    const saved = await new ProviderPersistenceActions(
-      state,
-    ).ensureProviderSaved()
+    const saved = await new ProviderPersistenceActions(state).ensureProviderSaved()
 
     expect(saved).toBe(false)
-    expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageLocalFolderChooseErr)
+    expect(saved.error.translationKey).toBe(
+      I18N_KEYS.AuthStorageLocalFolderChooseErr,
+    )
     expect(state.persistProviders).not.toHaveBeenCalled()
   })
 
   test('applies and persists a successful provider snapshot', async () => {
     const state = providerState(GITHUB_PROVIDER_TYPE)
 
-    const saved = await new ProviderPersistenceActions(
-      state,
-    ).ensureProviderSaved()
+    const saved = await new ProviderPersistenceActions(state).ensureProviderSaved()
 
-    expect(saved).toBe(true)
-    expect(state.providers).toHaveLength(1)
-    expect(state.providers[0]?.type).toBe(GITHUB_PROVIDER_TYPE)
+    expect(saved.isOk()).toBe(true)
+    expect(state.persistProviders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: [expect.objectContaining({ type: GITHUB_PROVIDER_TYPE })],
+      }),
+    )
     expect(state.clearLoginSetup).toHaveBeenCalledOnce()
     expect(state.applyActiveProviderCredentials).toHaveBeenCalledOnce()
     expect(state.persistProviders).toHaveBeenCalledOnce()

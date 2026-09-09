@@ -1,3 +1,7 @@
+import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
+import { ok, err } from 'neverthrow'
+import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/svelte'
 import {
@@ -36,13 +40,9 @@ class SentinelFinalizationFixture {
   readonly openVault = vi.fn()
   readonly manager = {
     vaultStoreId: '',
-    finalize_sentinel_unlock: vi.fn(
-      async (): Promise<NookSecretRecord[]> => [],
-    ),
+    finalize_sentinel_unlock: vi.fn(async (): Promise<NookSecretRecord[]> => []),
     sentinel_unlock_session_status: vi.fn(() => this.current),
-    sentinel_unlock_status: vi.fn(
-      () => SentinelVaultUnlockState.AwaitingShares,
-    ),
+    sentinel_unlock_status: vi.fn(() => SentinelVaultUnlockState.AwaitingShares),
     list_sentinel_genesis_share_deliveries: vi.fn(async () => []),
     start_sentinel_unlock: vi.fn(),
     connect: vi.fn(),
@@ -73,21 +73,31 @@ class SentinelFinalizationFixture {
     oauthSetupSelection: { kind: OAuthSetupPresetKind.NotSelected },
     prepareLocalLogin: vi.fn(),
     refreshSentinelUnlockStatus: vi.fn(),
+    admitManager: () =>
+      ok(this.manager as unknown as ReturnType<VaultState['requireManager']>),
     requireManager: () =>
       this.manager as unknown as ReturnType<VaultState['requireManager']>,
     enqueueStorage: async <Value>(operation: () => Value | Promise<Value>) =>
       operation(),
     dismissSuccess: vi.fn(),
-    loadSecretPage: vi.fn(async () => {}),
-    ensureProviderSaved: vi.fn(async () => {}),
-    loadProviders: vi.fn(async () => {}),
-    refreshPasswordEntriesList: vi.fn(async () => {}),
-    hydrateMultiDeviceState: vi.fn(async () => {}),
-    markVaultUnlocked: vi.fn(),
+    loadSecretPage: vi.fn<() => Promise<SentinelActionResult<void>>>(async () =>
+      ok(undefined),
+    ),
+    ensureProviderSaved: vi.fn<() => Promise<SentinelActionResult<void>>>(async () =>
+      ok(undefined),
+    ),
+    loadProviders: vi.fn<() => Promise<SentinelActionResult<void>>>(async () =>
+      ok(undefined),
+    ),
+    refreshPasswordEntriesList: vi.fn<() => Promise<SentinelActionResult<void>>>(
+      async () => ok(undefined),
+    ),
+    hydrateMultiDeviceState: vi.fn(async () => ok(undefined)),
+    markVaultUnlocked: vi.fn(() => ok(undefined)),
     showSuccess: vi.fn(),
     startIdleSessionTracking: vi.fn(),
     startVaultSync: vi.fn(),
-    initDeviceIdentity: vi.fn(),
+    initDeviceIdentity: vi.fn(async () => ok(undefined)),
     syncFromStorage: vi.fn(),
     connectStorageArgs: vi.fn(),
     refreshVaultArchitectureFromManager: vi.fn(),
@@ -101,9 +111,9 @@ class SentinelFinalizationFixture {
   }
 
   async finalize(): Promise<void> {
-    await new SentinelUnlockActions(
-      this.state as unknown as VaultState,
-    ).finalizeSentinelUnlock()
+    const actions = new SentinelUnlockActions(this.state as unknown as VaultState)
+    const result = await actions.finalizeSentinelUnlock()
+    if (result.isErr()) actions.presentFinalizationFailure(result.error)
   }
 
   renderLogin(surface: LoginSurface) {
@@ -164,16 +174,14 @@ describe('Sentinel quorum completion presentation', () => {
 
     await fixture.finalize()
 
-    expect(
-      fixture.manager.sentinel_unlock_session_status,
-    ).toHaveBeenCalledOnce()
+    expect(fixture.manager.sentinel_unlock_session_status).toHaveBeenCalledOnce()
     expect(fixture.previousFree).toHaveBeenCalledOnce()
     expect(fixture.currentFree).not.toHaveBeenCalled()
     expect(fixture.state.sentinelUnlockSession).toBe(fixture.current)
     expect(fixture.state.sentinelUnlockSession.active).toBe(false)
     expect(fixture.state.sentinelUnlockSession.ready).toBe(false)
     expect(fixture.state.sentinelUnlockRequest).toBe('')
-    expect(fixture.state.errorMsg).toBe('terminal reconstruction failed')
+    expect(fixture.state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
     expect(fixture.state.sentinelUnlockStatus).toBe(
       SentinelVaultUnlockState.AwaitingShares,
     )
@@ -186,9 +194,7 @@ describe('Sentinel quorum completion presentation', () => {
       fixture.openVault.mockClear()
       const view = fixture.renderLogin(surface)
       expect(view.queryAllByTestId('sentinel-ceremony-panel')).toHaveLength(0)
-      expect(
-        view.queryAllByTestId('login-unlock-method-password'),
-      ).toHaveLength(0)
+      expect(view.queryAllByTestId('login-unlock-method-password')).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()
       const open = view.getByTestId('unlock-vault-btn') as HTMLButtonElement
       expect(open.disabled).toBe(false)
@@ -214,9 +220,7 @@ describe('Sentinel quorum completion presentation', () => {
 
     await fixture.finalize()
 
-    expect(
-      fixture.manager.sentinel_unlock_session_status,
-    ).toHaveBeenCalledOnce()
+    expect(fixture.manager.sentinel_unlock_session_status).toHaveBeenCalledOnce()
     expect(fixture.previousFree).toHaveBeenCalledOnce()
     expect(fixture.state.sentinelUnlockSession).toBe(fixture.current)
     expect(fixture.state.sentinelUnlockSession.active).toBe(true)
@@ -262,11 +266,7 @@ describe('Sentinel quorum completion presentation', () => {
     fixture.dispose()
   })
 
-  test.each([
-    'loadSecretPage',
-    'ensureProviderSaved',
-    'loadProviders',
-  ] as const)(
+  test.each(['loadSecretPage', 'ensureProviderSaved', 'loadProviders'] as const)(
     'keeps Rust unlocked and the ceremony closed when %s rejects after finalization',
     async (operation) => {
       const fixture = new SentinelFinalizationFixture()
@@ -274,8 +274,8 @@ describe('Sentinel quorum completion presentation', () => {
       fixture.manager.sentinel_unlock_status.mockReturnValue(
         SentinelVaultUnlockState.Unlocked,
       )
-      fixture.state[operation].mockRejectedValue(
-        new Error('SentinelCeremonyRequired'),
+      fixture.state[operation].mockResolvedValue(
+        err(new NativeVaultStorageFailure(new Error('SentinelCeremonyRequired'))),
       )
 
       await fixture.finalize()
@@ -290,7 +290,7 @@ describe('Sentinel quorum completion presentation', () => {
       )
       expect(fixture.state.sentinelCeremonyPrompt).toBe(false)
       expect(fixture.state.sentinelUnlockRequest).toBe('')
-      expect(fixture.state.errorMsg).toBe('SentinelCeremonyRequired')
+      expect(fixture.state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
       expect(fixture.state.isVerifying).toBe(false)
       expect(fixture.state.isAuthenticated).toBe(false)
       expect(fixture.state.markVaultUnlocked).not.toHaveBeenCalled()
@@ -301,12 +301,8 @@ describe('Sentinel quorum completion presentation', () => {
       for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
         const view = fixture.renderLogin(surface)
         expect(view.queryAllByTestId('sentinel-ceremony-panel')).toHaveLength(0)
-        expect(view.queryAllByTestId('sentinel-unlock-start-btn')).toHaveLength(
-          0,
-        )
-        expect(
-          view.queryAllByTestId('login-unlock-method-password'),
-        ).toHaveLength(0)
+        expect(view.queryAllByTestId('sentinel-unlock-start-btn')).toHaveLength(0)
+        expect(view.queryAllByTestId('login-unlock-method-password')).toHaveLength(0)
         expect(fixture.openVault).not.toHaveBeenCalled()
         view.unmount()
       }
@@ -319,9 +315,7 @@ describe('Sentinel quorum completion presentation', () => {
 
     await fixture.finalize()
 
-    expect(
-      fixture.manager.sentinel_unlock_session_status,
-    ).not.toHaveBeenCalled()
+    expect(fixture.manager.sentinel_unlock_session_status).not.toHaveBeenCalled()
     expect(fixture.manager.sentinel_unlock_status).not.toHaveBeenCalled()
     expect(fixture.previousFree).toHaveBeenCalledOnce()
     expect(fixture.state.sentinelUnlockSession.active).toBe(false)

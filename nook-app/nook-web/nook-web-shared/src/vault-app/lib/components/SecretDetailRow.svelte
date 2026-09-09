@@ -1,5 +1,13 @@
 <script lang="ts">
-  type SecretFieldCopy = { readonly text: string; readonly id: string; readonly field: string }
+  import {
+    SecretFailurePresentation,
+    type SecretOperationResult,
+  } from '$lib/vault/secret-operation-failure'
+  type SecretFieldCopy = {
+    readonly text: string
+    readonly id: string
+    readonly field: string
+  }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
@@ -62,10 +70,8 @@
     onToggleExpand: (id: string) => void
     onToggleReveal: (id: string) => Promise<void>
     onEditItem: (item: NookSecretListItem) => Promise<void>
-    onDeleteSecret: (id: string) => Promise<void>
-    onCopyToClipboard: (
-      args: SecretFieldCopy,
-    ) => Promise<void>
+    onDeleteSecret: (id: string) => Promise<SecretOperationResult<void>>
+    onCopyToClipboard: (args: SecretFieldCopy) => Promise<void>
     onCopySecret: (id: string) => Promise<void>
     vault: VaultState
     editRestriction?: VaultEditRestriction
@@ -96,7 +102,10 @@
       const words = item.seedWordCount
       const label = name || vault.t(I18N_KEYS.VaultFieldsUnnamedSeedPhrase)
       if (words === 12 || words === 24) {
-        const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultFieldsWordsCount, replacements: { count: String(words) } };
+        const tArgs: Parameters<typeof vault.t>[0] = {
+          key: I18N_KEYS.VaultFieldsWordsCount,
+          replacements: { count: String(words) },
+        }
         return `${label} · ${vault.t(tArgs)}`
       }
       return label
@@ -149,9 +158,7 @@
   const accountSubtitle = $derived(
     item.type === SecretType.Login
       ? item.username.trim()
-      : item.type === SecretType.CreditCard &&
-          item.title.trim() &&
-          item.last4.trim()
+      : item.type === SecretType.CreditCard && item.title.trim() && item.last4.trim()
         ? `•••• ${item.last4.trim()}`
         : '',
   )
@@ -190,7 +197,7 @@
     }
     const BlobArgs: ConstructorParameters<typeof Blob>[1] = {
       type: reveal.record.mimeType || 'application/octet-stream',
-    };
+    }
     const blob = new Blob([bytes], BlobArgs)
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -295,14 +302,11 @@
             {/if}
           </span>
           {#if !expanded}
-            <span class="truncate text-xs text-muted-foreground">{summary}</span
-            >
+            <span class="truncate text-xs text-muted-foreground">{summary}</span>
           {/if}
         {/if}
       </button>
-      <div
-        class="flex shrink-0 items-center gap-0.5 {titleAsHeader ? 'pr-1' : ''}"
-      >
+      <div class="flex shrink-0 items-center gap-0.5 {titleAsHeader ? 'pr-1' : ''}">
         {#if item.type !== SecretType.Passkey}
           <button
             type="button"
@@ -334,7 +338,11 @@
         {/if}
         <button
           type="button"
-          onclick={() => void onDeleteSecret(item.id)}
+          onclick={async () => {
+            const result = await onDeleteSecret(item.id)
+            if (result.isErr())
+              new SecretFailurePresentation(vault).show(result.error)
+          }}
           aria-label={vault.t(I18N_KEYS.CommonDelete)}
           data-testid="delete-secret-btn"
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-destructive/10 hover:text-destructive transition-colors"
@@ -362,7 +370,12 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void (() => { const onCopyToClipboardArgs: Parameters<typeof onCopyToClipboard>[0] = { text: item.websiteUrl, id: item.id, field: 'website' }; return onCopyToClipboard(onCopyToClipboardArgs); })()}
+                    void (() => {
+                      const onCopyToClipboardArgs: Parameters<
+                        typeof onCopyToClipboard
+                      >[0] = { text: item.websiteUrl, id: item.id, field: 'website' }
+                      return onCopyToClipboard(onCopyToClipboardArgs)
+                    })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -388,7 +401,12 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void (() => { const onCopyToClipboardArgs2: Parameters<typeof onCopyToClipboard>[0] = { text: item.username, id: item.id, field: 'username' }; return onCopyToClipboard(onCopyToClipboardArgs2); })()}
+                    void (() => {
+                      const onCopyToClipboardArgs2: Parameters<
+                        typeof onCopyToClipboard
+                      >[0] = { text: item.username, id: item.id, field: 'username' }
+                      return onCopyToClipboard(onCopyToClipboardArgs2)
+                    })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyUsername)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -455,7 +473,12 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void (() => { const onCopyToClipboardArgs3: Parameters<typeof onCopyToClipboard>[0] = { text: item.websiteUrl, id: item.id, field: 'website' }; return onCopyToClipboard(onCopyToClipboardArgs3); })()}
+                    void (() => {
+                      const onCopyToClipboardArgs3: Parameters<
+                        typeof onCopyToClipboard
+                      >[0] = { text: item.websiteUrl, id: item.id, field: 'website' }
+                      return onCopyToClipboard(onCopyToClipboardArgs3)
+                    })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -509,7 +532,12 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void (() => { const onCopyToClipboardArgs4: Parameters<typeof onCopyToClipboard>[0] = { text: item.expiresAt, id: item.id, field: 'expires' }; return onCopyToClipboard(onCopyToClipboardArgs4); })()}
+                    void (() => {
+                      const onCopyToClipboardArgs4: Parameters<
+                        typeof onCopyToClipboard
+                      >[0] = { text: item.expiresAt, id: item.id, field: 'expires' }
+                      return onCopyToClipboard(onCopyToClipboardArgs4)
+                    })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyExpirationDate)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -535,7 +563,12 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void (() => { const onCopyToClipboardArgs5: Parameters<typeof onCopyToClipboard>[0] = { text: item.name, id: item.id, field: 'name' }; return onCopyToClipboard(onCopyToClipboardArgs5); })()}
+                    void (() => {
+                      const onCopyToClipboardArgs5: Parameters<
+                        typeof onCopyToClipboard
+                      >[0] = { text: item.name, id: item.id, field: 'name' }
+                      return onCopyToClipboard(onCopyToClipboardArgs5)
+                    })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyAccountName)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -615,9 +648,7 @@
               <div
                 class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
               >
-                <span class="truncate text-foreground"
-                  >{item.passkeyUserName}</span
-                >
+                <span class="truncate text-foreground">{item.passkeyUserName}</span>
               </div>
             </div>
           {/if}
@@ -653,9 +684,16 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void (() => { const onCopyToClipboardArgs6: Parameters<typeof onCopyToClipboard>[0] = { text: item.cardholderName, id: item.id, field: 'cardholder' }; return onCopyToClipboard(
-                      onCopyToClipboardArgs6,
-                    ); })()}
+                    void (() => {
+                      const onCopyToClipboardArgs6: Parameters<
+                        typeof onCopyToClipboard
+                      >[0] = {
+                        text: item.cardholderName,
+                        id: item.id,
+                        field: 'cardholder',
+                      }
+                      return onCopyToClipboard(onCopyToClipboardArgs6)
+                    })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCardholderName)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -688,9 +726,16 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void (() => { const onCopyToClipboardArgs7: Parameters<typeof onCopyToClipboard>[0] = { text: reveal.record.cardNumber, id: item.id, field: 'card-number' }; return onCopyToClipboard(
-                      onCopyToClipboardArgs7,
-                    ); })()}
+                    void (() => {
+                      const onCopyToClipboardArgs7: Parameters<
+                        typeof onCopyToClipboard
+                      >[0] = {
+                        text: reveal.record.cardNumber,
+                        id: item.id,
+                        field: 'card-number',
+                      }
+                      return onCopyToClipboard(onCopyToClipboardArgs7)
+                    })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCardNumber)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
@@ -716,9 +761,16 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void (() => { const onCopyToClipboardArgs8: Parameters<typeof onCopyToClipboard>[0] = { text: cardExpiration, id: item.id, field: 'expiration' }; return onCopyToClipboard(
-                      onCopyToClipboardArgs8,
-                    ); })()}
+                    void (() => {
+                      const onCopyToClipboardArgs8: Parameters<
+                        typeof onCopyToClipboard
+                      >[0] = {
+                        text: cardExpiration,
+                        id: item.id,
+                        field: 'expiration',
+                      }
+                      return onCopyToClipboard(onCopyToClipboardArgs8)
+                    })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyExpiration)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -749,7 +801,12 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void (() => { const onCopyToClipboardArgs9: Parameters<typeof onCopyToClipboard>[0] = { text: reveal.record.cvv, id: item.id, field: 'cvv' }; return onCopyToClipboard(onCopyToClipboardArgs9); })()}
+                    void (() => {
+                      const onCopyToClipboardArgs9: Parameters<
+                        typeof onCopyToClipboard
+                      >[0] = { text: reveal.record.cvv, id: item.id, field: 'cvv' }
+                      return onCopyToClipboard(onCopyToClipboardArgs9)
+                    })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCvv)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
@@ -847,9 +904,8 @@
                   <MarkdownContent source={reveal.record.note} />
                 </div>
               {:else}
-                <span
-                  class="font-mono text-foreground"
-                  data-testid="revealed-secret">••••••••••••••••</span
+                <span class="font-mono text-foreground" data-testid="revealed-secret"
+                  >••••••••••••••••</span
                 >
               {/if}
               <button

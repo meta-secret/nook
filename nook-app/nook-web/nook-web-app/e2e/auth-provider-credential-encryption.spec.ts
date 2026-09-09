@@ -8,6 +8,7 @@ import {
   flushNookLogPersistQueue,
   fetchAppLogs,
   loadDecryptedAuthProvidersInBrowser,
+  AuthProviderHookFailure,
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
   UI_TIMEOUT_MS,
@@ -52,10 +53,12 @@ test.describe('sync provider credential encryption', () => {
     expectSealedCredential(raw.providers[0]?.githubPat, pat)
 
     const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
-    expect(decrypted.providers[0]?.githubPat).toEqual({
-      state: 'token',
-      value: pat,
-    })
+    expect(decrypted.isOk()).toBe(true)
+    if (decrypted.isOk())
+      expect(decrypted.value.providers[0]?.githubPat).toEqual({
+        state: 'token',
+        value: pat,
+      })
   })
 
   test('replacement conflict refresh avoids recursive wasm closure use', async ({
@@ -84,9 +87,7 @@ test.describe('sync provider credential encryption', () => {
           entry.message.includes(
             'closure invoked recursively or after being dropped',
           ) ||
-          entry.data?.includes(
-            'closure invoked recursively or after being dropped',
-          ),
+          entry.data?.includes('closure invoked recursively or after being dropped'),
       ),
     ).toBe(false)
   })
@@ -104,19 +105,16 @@ test.describe('sync provider credential encryption', () => {
       },
     ])
 
-    await expect(loadDecryptedAuthProvidersInBrowser(page)).rejects.toThrow(
-      'Provider credential is not age-encrypted.',
-    )
+    const admission = await loadDecryptedAuthProvidersInBrowser(page)
+    expect(admission.isErr()).toBe(true)
+    if (admission.isErr())
+      expect(admission.error).toBe(AuthProviderHookFailure.ReadFailed)
 
     const raw = await readRawAuthProvidersFromIdb(page)
-    expect(raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat).toBe(
-      pat,
-    )
+    expect(raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat).toBe(pat)
   })
 
-  test('OAuth access and refresh tokens are sealed at rest', async ({
-    page,
-  }) => {
+  test('OAuth access and refresh tokens are sealed at rest', async ({ page }) => {
     const access = 'ya29.e2e-oauth-access-token'
     const refresh = '1//e2e-refresh-token-secret'
     await saveAuthProvidersInBrowser(
@@ -149,15 +147,16 @@ test.describe('sync provider credential encryption', () => {
     expectSealedCredential(oauth?.refreshToken, refresh)
 
     const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
-    const decryptedOauth = decrypted.providers[0]?.oauthFile
-    expect(decryptedOauth).toEqual(
-      expect.objectContaining({
-        state: 'configured',
-        config: expect.objectContaining({
-          accessToken: { state: 'accessToken', value: access },
-          refreshToken: { state: 'token', value: refresh },
+    expect(decrypted.isOk()).toBe(true)
+    if (decrypted.isOk())
+      expect(decrypted.value.providers[0]?.oauthFile).toEqual(
+        expect.objectContaining({
+          state: 'configured',
+          config: expect.objectContaining({
+            accessToken: { state: 'accessToken', value: access },
+            refreshToken: { state: 'token', value: refresh },
+          }),
         }),
-      }),
-    )
+      )
   })
 })

@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { onMount } from "svelte";
-  import { Copy, KeyRound, RefreshCw, Users } from "@lucide/svelte";
-  import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import * as Select from "$lib/components/ui/select";
-  import type { VaultState } from "$lib/vault.svelte";
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { onMount } from 'svelte'
+  import { Copy, KeyRound, RefreshCw, Users } from '@lucide/svelte'
+  import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
+  import { Button } from '$lib/components/ui/button'
+  import * as Select from '$lib/components/ui/select'
+  import type { VaultState } from '$lib/vault.svelte'
   import {
     GenesisDeliverySelectionKind,
     type GenesisDeliverySelection,
-  } from "./sentinel-unlock-participant-state";
-  import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
+  } from './sentinel-unlock-participant-state'
+  import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
 
   let {
     vault,
@@ -18,72 +18,73 @@
     expanded = false,
     showWhenEmpty = false,
   }: {
-    vault: VaultState;
-    disabled?: boolean;
-    expanded?: boolean;
-    showWhenEmpty?: boolean;
-  } = $props();
+    vault: VaultState
+    disabled?: boolean
+    expanded?: boolean
+    showWhenEmpty?: boolean
+  } = $props()
 
-  let actionBusy = $state(false);
-  let loaded = $state(false);
-  let open = $state(false);
+  let actionBusy = $state(false)
+  let loaded = $state(false)
+  let open = $state(false)
   let selectedDelivery = $state<GenesisDeliverySelection>({
     kind: GenesisDeliverySelectionKind.NotSelected,
-  });
-  let request = $state("");
-  let response = $state("");
-  let copied = $state(false);
+  })
+  let request = $state('')
+  let response = $state('')
+  let copied = $state(false)
 
   const visible = $derived(
     showWhenEmpty || (loaded && vault.sentinelStoredDeliveries.length > 0),
-  );
+  )
   const selectedSummary = $derived(
     vault.sentinelStoredDeliveries.find(
       (delivery) =>
         selectedDelivery.kind === GenesisDeliverySelectionKind.Selected &&
         delivery.storeId === selectedDelivery.storeId,
     ),
-  );
+  )
 
   $effect(() => {
-    if (expanded) open = true;
-  });
+    if (expanded) open = true
+  })
 
   onMount(() => {
-    void refreshDeliveries();
-  });
+    void refreshDeliveries()
+  })
 
   async function refreshDeliveries() {
     try {
-      const deliveries = await new SentinelUnlockActions(
+      const listed = await new SentinelUnlockActions(
         vault,
-      ).listSentinelStoredDeliveries();
+      ).listSentinelStoredDeliveries()
+      if (listed.isErr()) {
+        vault.errorMsg = vault.t(listed.error.translationKey)
+        return
+      }
+      const deliveries = listed.value
       if (selectedDelivery.kind !== GenesisDeliverySelectionKind.Selected) {
-        const firstDelivery = deliveries[0];
+        const firstDelivery = deliveries[0]
         selectedDelivery = firstDelivery
           ? {
               kind: GenesisDeliverySelectionKind.Selected,
               storeId: firstDelivery.storeId,
             }
-          : { kind: GenesisDeliverySelectionKind.NotSelected };
-        return;
+          : { kind: GenesisDeliverySelectionKind.NotSelected }
+        return
       }
-      const selectedStoreId = selectedDelivery.storeId;
-      if (
-        !deliveries.some((delivery) => delivery.storeId === selectedStoreId)
-      ) {
-        const firstDelivery = deliveries[0];
+      const selectedStoreId = selectedDelivery.storeId
+      if (!deliveries.some((delivery) => delivery.storeId === selectedStoreId)) {
+        const firstDelivery = deliveries[0]
         selectedDelivery = firstDelivery
           ? {
               kind: GenesisDeliverySelectionKind.Selected,
               storeId: firstDelivery.storeId,
             }
-          : { kind: GenesisDeliverySelectionKind.NotSelected };
+          : { kind: GenesisDeliverySelectionKind.NotSelected }
       }
-    } catch {
-      // A missing device identity or empty list simply hides the first-vault helper.
     } finally {
-      loaded = true;
+      loaded = true
     }
   }
 
@@ -91,41 +92,39 @@
     const storeId =
       selectedDelivery.kind === GenesisDeliverySelectionKind.Selected
         ? selectedDelivery.storeId.trim()
-        : "";
-    const payload = request.trim();
-    if (!storeId || !payload || actionBusy) return;
-    actionBusy = true;
-    vault.errorMsg = "";
+        : ''
+    const payload = request.trim()
+    if (!storeId || !payload || actionBusy) return
+    actionBusy = true
+    vault.errorMsg = ''
     try {
       const responseRequest: Parameters<
-        SentinelUnlockActions["createSentinelUnlockResponse"]
+        SentinelUnlockActions['createSentinelUnlockResponse']
       >[0] = {
         storeId,
         request: payload,
-      };
-      response = await new SentinelUnlockActions(
+      }
+      const created = await new SentinelUnlockActions(
         vault,
-      ).createSentinelUnlockResponse(responseRequest);
-    } catch (error) {
-      vault.errorMsg =
-        error instanceof Error
-          ? vault.resolveErrorMessage(error.message)
-          : vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockFailed);
+      ).createSentinelUnlockResponse(responseRequest)
+      if (created.isErr()) {
+        vault.errorMsg = vault.t(created.error.translationKey)
+        return
+      }
+      response = created.value
     } finally {
-      actionBusy = false;
+      actionBusy = false
     }
   }
 
   async function copyResponse() {
-    if (!response.trim()) return;
+    if (!response.trim()) return
     try {
-      await navigator.clipboard.writeText(response);
-      copied = true;
-      setTimeout(() => (copied = false), 1500);
+      await navigator.clipboard.writeText(response)
+      copied = true
+      setTimeout(() => (copied = false), 1500)
     } catch {
-      vault.errorMsg = vault.t(
-        I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed,
-      );
+      vault.errorMsg = vault.t(I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed)
     }
   }
 </script>
@@ -139,21 +138,19 @@
       aria-expanded={open}
       {disabled}
       onclick={() => {
-        open = !open;
-        if (open) void refreshDeliveries();
+        open = !open
+        if (open) void refreshDeliveries()
       }}
     >
       <span class="flex items-center gap-2">
         <Users class="size-4 text-primary" />
         {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockHelpTitle)}
       </span>
-      <span class="text-xs text-muted-foreground">{open ? "−" : "+"}</span>
+      <span class="text-xs text-muted-foreground">{open ? '−' : '+'}</span>
     </button>
 
     {#if open}
-      <div
-        class="space-y-4 rounded-md border border-border/60 bg-background/40 p-3"
-      >
+      <div class="space-y-4 rounded-md border border-border/60 bg-background/40 p-3">
         <p class="text-sm leading-snug text-pretty text-muted-foreground">
           {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockHelpDescription)}
         </p>
@@ -183,8 +180,7 @@
             </label>
             <Select.Root
               type="single"
-              value={selectedDelivery.kind ===
-              GenesisDeliverySelectionKind.Selected
+              value={selectedDelivery.kind === GenesisDeliverySelectionKind.Selected
                 ? selectedDelivery.storeId
                 : GenesisDeliverySelectionKind.NotSelected}
               onValueChange={(value) => {
@@ -194,7 +190,7 @@
                     : {
                         kind: GenesisDeliverySelectionKind.Selected,
                         storeId: value,
-                      };
+                      }
               }}
             >
               <Select.Trigger
@@ -245,8 +241,7 @@
               data-testid="sentinel-unlock-create-response-btn"
               disabled={disabled ||
                 actionBusy ||
-                selectedDelivery.kind !==
-                  GenesisDeliverySelectionKind.Selected ||
+                selectedDelivery.kind !== GenesisDeliverySelectionKind.Selected ||
                 !request.trim()}
               onclick={() => void createResponse()}
             >
@@ -295,9 +290,7 @@
                   <Copy class="size-4" />
                   {copied
                     ? vault.t(I18N_KEYS.ArchitectureModesSentinelCeremonyCopied)
-                    : vault.t(
-                        I18N_KEYS.ArchitectureModesSentinelUnlockCopyResponse,
-                      )}
+                    : vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockCopyResponse)}
                 </Button>
               </div>
             </div>

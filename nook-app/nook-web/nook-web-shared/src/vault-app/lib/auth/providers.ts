@@ -1,4 +1,10 @@
-import { I18N_KEYS } from "../../../generated/i18n-keys";
+import { provider_wasm_args, type NookStorageConnectArgs } from '$app-wasm'
+import { err, ok, type Result } from 'neverthrow'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
+import { I18N_KEYS } from '../../../generated/i18n-keys'
 import {
   GITHUB_PROVIDER_TYPE,
   GOOGLE_DRIVE_OAUTH_FILE_PRESET,
@@ -6,7 +12,7 @@ import {
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
-} from "./provider-types";
+} from './provider-types'
 import {
   bind_google_drive_shared_folder,
   delete_auth_providers_db,
@@ -58,9 +64,9 @@ import {
   type DuplicateSyncProvider,
   missing_oauth_access_token,
   type NookVaultManager,
-} from "$app-wasm";
+} from '$app-wasm'
 
-await initNookWasm();
+await initNookWasm()
 
 export type {
   AuthProvidersSnapshot,
@@ -87,7 +93,7 @@ export type {
   StoredOAuthRemoteFileName,
   StoredOAuthTokenExpiry,
   ProviderVaultScope,
-} from "$app-wasm";
+} from '$app-wasm'
 
 export {
   bind_google_drive_shared_folder,
@@ -96,37 +102,37 @@ export {
   set_google_drive_provider_mode,
   set_icloud_provider_mode,
   wasm_storage_mode_for_provider,
-};
+}
 
-export type { OAuthAccessToken, DuplicateSyncProvider } from "$app-wasm";
+export type { OAuthAccessToken, DuplicateSyncProvider } from '$app-wasm'
 export {
   oauth_access_token as oauthAccessToken,
   missing_oauth_access_token as missingOAuthAccessToken,
-};
+}
 
 export enum DriveFileIdentityKind {
-  New = "new",
-  Existing = "existing",
+  New = 'new',
+  Existing = 'existing',
 }
 
 export type DriveFileIdentity =
   | { kind: DriveFileIdentityKind.New }
-  | { kind: DriveFileIdentityKind.Existing; fileId: string };
+  | { kind: DriveFileIdentityKind.Existing; fileId: string }
 
 export type DriveStorageReference = {
-  readonly identity: DriveFileIdentity;
-  readonly fileName: string;
-};
+  readonly identity: DriveFileIdentity
+  readonly fileName: string
+}
 
 export type VaultProviderMembership = {
-  readonly provider: StorageProvider;
-  readonly storeId: string;
-};
+  readonly provider: StorageProvider
+  readonly storeId: string
+}
 
 export type OAuthFileDefaults = {
-  readonly preset: OAuthFilePreset;
-  readonly fileName: string;
-};
+  readonly preset: OAuthFilePreset
+  readonly fileName: string
+}
 
 export function formatDriveStorageRef({
   identity,
@@ -134,7 +140,7 @@ export function formatDriveStorageRef({
 }: DriveStorageReference): string {
   return identity.kind === DriveFileIdentityKind.Existing
     ? format_drive_storage_ref(identity.fileId, fileName)
-    : format_new_drive_storage_ref(fileName);
+    : format_new_drive_storage_ref(fileName)
 }
 
 export {
@@ -144,200 +150,184 @@ export {
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
-};
+}
 
 export type ProviderSetupRequest =
   | {
-      readonly type: typeof OAUTH_FILE_PROVIDER_TYPE;
-      readonly oauthPreset: OAuthFilePreset;
+      readonly type: typeof OAUTH_FILE_PROVIDER_TYPE
+      readonly oauthPreset: OAuthFilePreset
     }
   | {
       readonly type:
         | typeof LOCAL_PROVIDER_TYPE
         | typeof LOCAL_FOLDER_PROVIDER_TYPE
-        | typeof GITHUB_PROVIDER_TYPE;
-    };
+        | typeof GITHUB_PROVIDER_TYPE
+    }
 
-export const DEFAULT_GITHUB_REPO = default_github_repo();
-export const DEFAULT_DRIVE_BACKUP_NAME = default_drive_backup_name();
+export const DEFAULT_GITHUB_REPO = default_github_repo()
+export const DEFAULT_DRIVE_BACKUP_NAME = default_drive_backup_name()
 
 export function unselectedVaultScope(): ActiveVaultScope {
-  return { state: "unselected" };
+  return { state: 'unselected' }
 }
 
 export function activeVaultScope(storeId: string): ActiveVaultScope {
-  return { state: "storeId", value: storeId };
+  return { state: 'storeId', value: storeId }
 }
 
 export function unscopedProviderVault(): ProviderVaultScope {
-  return { state: "unscoped" };
+  return { state: 'unscoped' }
 }
 
 export function scopedProviderVault(storeId: string): ProviderVaultScope {
-  return { state: "storeId", value: storeId };
+  return { state: 'storeId', value: storeId }
 }
 
 export function providerBelongsToVault({
   provider,
   storeId,
 }: VaultProviderMembership): boolean {
-  return (
-    provider.storeId.state === "unscoped" || provider.storeId.value === storeId
-  );
+  return provider.storeId.state === 'unscoped' || provider.storeId.value === storeId
 }
 
 export function missingGithubPat(): StoredGithubPat {
-  return { state: "missing" };
+  return { state: 'missing' }
 }
 
 export function storedGithubPat(token: string): StoredGithubPat {
-  return { state: "token", value: token };
+  return { state: 'token', value: token }
 }
 
 export function githubPatValue(pat: StoredGithubPat): string {
-  return pat.state === "token" ? pat.value.trim() : "";
+  return pat.state === 'token' ? pat.value.trim() : ''
 }
 
 export function defaultGithubRepository(): StoredGithubRepository {
-  return { state: "defaultRepository" };
+  return { state: 'defaultRepository' }
 }
 
-export function storedGithubRepository(
-  repository: string,
-): StoredGithubRepository {
-  return { state: "repository", value: repository };
+export function storedGithubRepository(repository: string): StoredGithubRepository {
+  return { state: 'repository', value: repository }
 }
 
-export function githubRepositoryValue(
-  repository: StoredGithubRepository,
-): string {
-  return repository.state === "repository" ? repository.value.trim() : "";
+export function githubRepositoryValue(repository: StoredGithubRepository): string {
+  return repository.state === 'repository' ? repository.value.trim() : ''
 }
 
 export function signedOutOAuthCredential(): StoredOAuthAccessCredential {
-  return { state: "signedOut" };
+  return { state: 'signedOut' }
 }
 
 export function storedOAuthCredential(
   accessToken: string,
 ): StoredOAuthAccessCredential {
-  return { state: "accessToken", value: accessToken };
+  return { state: 'accessToken', value: accessToken }
 }
 
 export function oauthRefreshCredentialNotIssued(): StoredOAuthRefreshCredential {
-  return { state: "notIssued" };
+  return { state: 'notIssued' }
 }
 
 export function storedOAuthRefreshCredential(
   refreshToken: string,
 ): StoredOAuthRefreshCredential {
-  return { state: "token", value: refreshToken };
+  return { state: 'token', value: refreshToken }
 }
 
 export function unknownOAuthTokenExpiry(): StoredOAuthTokenExpiry {
-  return { state: "unknown" };
+  return { state: 'unknown' }
 }
 
-export function storedOAuthTokenExpiry(
-  expiresAt: string,
-): StoredOAuthTokenExpiry {
-  return { state: "expiresAt", value: expiresAt };
+export function storedOAuthTokenExpiry(expiresAt: string): StoredOAuthTokenExpiry {
+  return { state: 'expiresAt', value: expiresAt }
 }
 
 export function unresolvedOAuthRemoteFileId(): StoredOAuthRemoteFileId {
-  return { state: "unresolved" };
+  return { state: 'unresolved' }
 }
 
-export function storedOAuthRemoteFileId(
-  fileId: string,
-): StoredOAuthRemoteFileId {
-  return { state: "fileId", value: fileId };
+export function storedOAuthRemoteFileId(fileId: string): StoredOAuthRemoteFileId {
+  return { state: 'fileId', value: fileId }
 }
 
 export function unresolvedOAuthRemoteFileName(): StoredOAuthRemoteFileName {
-  return { state: "unresolved" };
+  return { state: 'unresolved' }
 }
 
 export function storedOAuthRemoteFileName(
   fileName: string,
 ): StoredOAuthRemoteFileName {
-  return { state: "fileName", value: fileName };
+  return { state: 'fileName', value: fileName }
 }
 
 export function unknownOAuthAccountIdentity(): StoredOAuthAccountIdentity {
-  return { state: "unknown" };
+  return { state: 'unknown' }
 }
 
-export function storedOAuthAccountEmail(
-  email: string,
-): StoredOAuthAccountIdentity {
-  return { state: "email", value: email };
+export function storedOAuthAccountEmail(email: string): StoredOAuthAccountIdentity {
+  return { state: 'email', value: email }
 }
 
 export function rootGoogleDriveFolder(): StoredGoogleDriveFolder {
-  return { state: "root" };
+  return { state: 'root' }
 }
 
-export function storedGoogleDriveFolder(
-  folderId: string,
-): StoredGoogleDriveFolder {
-  return { state: "folderId", value: folderId };
+export function storedGoogleDriveFolder(folderId: string): StoredGoogleDriveFolder {
+  return { state: 'folderId', value: folderId }
 }
 
 export function personalICloudShareTarget(): StoredICloudShareTarget {
-  return { state: "personal" };
+  return { state: 'personal' }
 }
 
 export function storedICloudShareTarget(
   storageTargetId: string,
 ): StoredICloudShareTarget {
-  return { state: "sharedTarget", value: storageTargetId };
+  return { state: 'sharedTarget', value: storageTargetId }
 }
 
 export function oauthConfigurationNotApplicable(): StoredOAuthFileConfiguration {
-  return { state: "notApplicable" };
+  return { state: 'notApplicable' }
 }
 
 export function configuredOAuthFile(
   config: OAuthFileConfig,
 ): StoredOAuthFileConfiguration {
-  return { state: "configured", config };
+  return { state: 'configured', config }
 }
 
 export function localFolderConfigurationNotApplicable(): StoredLocalFolderConfiguration {
-  return { state: "notApplicable" };
+  return { state: 'notApplicable' }
 }
 
 export function configuredLocalFolder(
   config: LocalFolderConfig,
 ): StoredLocalFolderConfiguration {
-  return { state: "configured", config };
+  return { state: 'configured', config }
 }
 
 export function unnamedLocalFolderDirectory(): StoredLocalFolderDirectory {
-  return { state: "unnamed" };
+  return { state: 'unnamed' }
 }
 
 export function storedLocalFolderDirectory(
   directoryName: string,
 ): StoredLocalFolderDirectory {
-  return { state: "directoryName", value: directoryName };
+  return { state: 'directoryName', value: directoryName }
 }
 
 export function localFolderDirectoryValue(
   directory: StoredLocalFolderDirectory,
 ): string {
-  return directory.state === "directoryName" ? directory.value.trim() : "";
+  return directory.state === 'directoryName' ? directory.value.trim() : ''
 }
 
 export function unboundLocalFolderHandle(): StoredLocalFolderHandle {
-  return { state: "unbound" };
+  return { state: 'unbound' }
 }
 
-export function storedLocalFolderHandle(
-  handleId: string,
-): StoredLocalFolderHandle {
-  return { state: "handleId", value: handleId };
+export function storedLocalFolderHandle(handleId: string): StoredLocalFolderHandle {
+  return { state: 'handleId', value: handleId }
 }
 
 export function defaultOAuthFileConfig({
@@ -352,16 +342,16 @@ export function defaultOAuthFileConfig({
     fileId: unresolvedOAuthRemoteFileId(),
     fileName: storedOAuthRemoteFileName(fileName),
     accountEmail: unknownOAuthAccountIdentity(),
-    driveMode: "private",
+    driveMode: 'private',
     folderId: rootGoogleDriveFolder(),
-    iCloudMode: "private",
+    iCloudMode: 'private',
     iCloudShareTarget: personalICloudShareTarget(),
-  };
+  }
 }
 
 export function providerPersistenceDefaults(): Pick<
   StorageProvider,
-  "githubPat" | "githubRepo" | "oauthFile" | "localFolder" | "storeId"
+  'githubPat' | 'githubRepo' | 'oauthFile' | 'localFolder' | 'storeId'
 > {
   return {
     githubPat: missingGithubPat(),
@@ -369,28 +359,28 @@ export function providerPersistenceDefaults(): Pick<
     oauthFile: oauthConfigurationNotApplicable(),
     localFolder: localFolderConfigurationNotApplicable(),
     storeId: unscopedProviderVault(),
-  };
+  }
 }
 
 export enum OAuthFileNameKind {
-  Unresolved = "unresolved",
-  Resolved = "resolved",
+  Unresolved = 'unresolved',
+  Resolved = 'resolved',
 }
 
 export type OAuthFileName =
   | { kind: OAuthFileNameKind.Unresolved }
-  | { kind: OAuthFileNameKind.Resolved; fileName: string };
+  | { kind: OAuthFileNameKind.Resolved; fileName: string }
 
 export enum LocalFolderHandleKind {
-  Unselected = "unselected",
-  Selected = "selected",
+  Unselected = 'unselected',
+  Selected = 'selected',
 }
 
 export type LocalFolderHandle =
   | { kind: LocalFolderHandleKind.Unselected }
-  | { kind: LocalFolderHandleKind.Selected; handleId: string };
+  | { kind: LocalFolderHandleKind.Selected; handleId: string }
 
-export { NookStoredOAuthFileConfigurationState };
+export { NookStoredOAuthFileConfigurationState }
 
 export function isConfiguredOAuthFile(
   configuration: StoredOAuthFileConfiguration,
@@ -401,10 +391,10 @@ export function isConfiguredOAuthFile(
   return (
     stored_oauth_file_configuration_state(configuration) ===
     NookStoredOAuthFileConfigurationState.Configured
-  );
+  )
 }
 
-export { NookStoredLocalFolderConfigurationState };
+export { NookStoredLocalFolderConfigurationState }
 
 export function isConfiguredLocalFolder(
   configuration: StoredLocalFolderConfiguration,
@@ -415,50 +405,50 @@ export function isConfiguredLocalFolder(
   return (
     stored_local_folder_configuration_state(configuration) ===
     NookStoredLocalFolderConfigurationState.Configured
-  );
+  )
 }
 
 export enum LocalFolderProviderConfigurationKind {
-  Missing = "missing",
-  Configured = "configured",
+  Missing = 'missing',
+  Configured = 'configured',
 }
 
 export type LocalFolderProviderConfiguration =
   | { kind: LocalFolderProviderConfigurationKind.Missing }
   | {
-      kind: LocalFolderProviderConfigurationKind.Configured;
-      config: LocalFolderConfig;
-    };
+      kind: LocalFolderProviderConfigurationKind.Configured
+      config: LocalFolderConfig
+    }
 
 export type SyncProviderCandidateSet = {
-  readonly providers: StorageProvider[];
-  readonly candidate: StorageProvider;
-};
+  readonly providers: StorageProvider[]
+  readonly candidate: StorageProvider
+}
 
 export type SyncProviderCandidateExclusion = SyncProviderCandidateSet & {
-  readonly excludeId: string;
-};
+  readonly excludeId: string
+}
 
 export type AuthProviderPersistence = {
-  readonly manager: NookVaultManager;
-  readonly snapshot: AuthProvidersSnapshot;
-};
+  readonly manager: NookVaultManager
+  readonly snapshot: AuthProvidersSnapshot
+}
 
 export type ProviderLabelRequest = {
-  readonly type: StorageProviderType;
-  readonly detail: string;
-  readonly oauthPreset: OAuthFilePreset;
-};
+  readonly type: StorageProviderType
+  readonly detail: string
+  readonly oauthPreset: OAuthFilePreset
+}
 
 export type ProviderLabelWithoutDetailRequest = {
-  readonly type: StorageProviderType;
-  readonly oauthPreset: OAuthFilePreset;
-};
+  readonly type: StorageProviderType
+  readonly oauthPreset: OAuthFilePreset
+}
 
 export type ProviderLabelLocalization = {
-  readonly label: string;
-  readonly t: (key: string) => string;
-};
+  readonly label: string
+  readonly t: (key: string) => string
+}
 
 export function findDuplicateSyncProvider({
   providers,
@@ -466,11 +456,8 @@ export function findDuplicateSyncProvider({
 }: SyncProviderCandidateSet): DuplicateSyncProvider {
   const findDuplicateSyncProviderWasmArgs: Parameters<
     typeof find_duplicate_sync_provider
-  >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
-  return find_duplicate_sync_provider(
-    findDuplicateSyncProviderWasmArgs,
-    candidate,
-  );
+  >[0] = { providers, activeVaultStoreId: unselectedVaultScope() }
+  return find_duplicate_sync_provider(findDuplicateSyncProviderWasmArgs, candidate)
 }
 
 export function findDuplicateSyncProviderExcluding({
@@ -480,19 +467,24 @@ export function findDuplicateSyncProviderExcluding({
 }: SyncProviderCandidateExclusion): DuplicateSyncProvider {
   const findDuplicateSyncProviderExcludingWasmArgs: Parameters<
     typeof find_duplicate_sync_provider_excluding
-  >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
+  >[0] = { providers, activeVaultStoreId: unselectedVaultScope() }
   return find_duplicate_sync_provider_excluding(
     findDuplicateSyncProviderExcludingWasmArgs,
     candidate,
     excludeId,
-  );
+  )
 }
 
 export async function saveAuthProviders({
   manager,
   snapshot,
-}: AuthProviderPersistence): Promise<void> {
-  await manager.save_auth_providers_snapshot(snapshot);
+}: AuthProviderPersistence): Promise<Result<void, VaultStorageFailure>> {
+  try {
+    await manager.save_auth_providers_snapshot(snapshot)
+    return ok(undefined)
+  } catch {
+    return err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed))
+  }
 }
 
 export function providerDefaultLabel({
@@ -500,14 +492,14 @@ export function providerDefaultLabel({
   detail,
   oauthPreset,
 }: ProviderLabelRequest): string {
-  return provider_default_label(type, detail, oauthPreset);
+  return provider_default_label(type, detail, oauthPreset)
 }
 
 export function providerLabelWithoutDetail({
   type,
   oauthPreset,
 }: ProviderLabelWithoutDetailRequest): string {
-  return provider_default_label_without_detail(type, oauthPreset);
+  return provider_default_label_without_detail(type, oauthPreset)
 }
 
 export function localizeProviderLabel({
@@ -521,61 +513,56 @@ export function localizeProviderLabel({
     t(I18N_KEYS.ProviderPickerLocalFolder),
     t(I18N_KEYS.ProviderPickerGoogleDrive),
     t(I18N_KEYS.ProviderPickerIcloud),
-  );
+  )
 }
 
 /** Safe PAT hint for provider lists — never shows the full token. */
 export enum GithubPatDisplayKind {
-  NoToken = "no-token",
-  Stored = "stored",
+  NoToken = 'no-token',
+  Stored = 'stored',
 }
 
 export type GithubPatDisplay =
   | { kind: GithubPatDisplayKind.NoToken }
-  | { kind: GithubPatDisplayKind.Stored; pat: string };
+  | { kind: GithubPatDisplayKind.Stored; pat: string }
 
 export type GithubPatHintRequest = {
-  readonly state: GithubPatDisplay;
-};
+  readonly state: GithubPatDisplay
+}
 
 export type ProviderStorageDescriptionRequest = {
-  readonly provider: StorageProvider;
-};
+  readonly provider: StorageProvider
+}
 
 export type LocalizedProviderStorageDescriptionRequest =
   ProviderStorageDescriptionRequest & {
-    readonly t: (key: string) => string;
-  };
+    readonly t: (key: string) => string
+  }
 
 type GithubPatHintRendering = {
-  readonly state: GithubPatDisplay;
-  readonly missingLabel: string;
-};
+  readonly state: GithubPatDisplay
+  readonly missingLabel: string
+}
 
-function githubPatHint({
-  state,
-  missingLabel,
-}: GithubPatHintRendering): string {
+function githubPatHint({ state, missingLabel }: GithubPatHintRendering): string {
   const hint = mask_github_pat_hint(
     state.kind === GithubPatDisplayKind.Stored
       ? storedGithubPat(state.pat)
       : missingGithubPat(),
-  );
+  )
   try {
-    return hint.state === NookGithubPatHintState.Missing
-      ? missingLabel
-      : hint.value;
+    return hint.state === NookGithubPatHintState.Missing ? missingLabel : hint.value
   } finally {
-    hint.free();
+    hint.free()
   }
 }
 
 export function maskGithubPat({ state }: GithubPatHintRequest): string {
   const githubPatHintRequest: Parameters<typeof githubPatHint>[0] = {
     state,
-    missingLabel: "No token saved",
-  };
-  return githubPatHint(githubPatHintRequest);
+    missingLabel: 'No token saved',
+  }
+  return githubPatHint(githubPatHintRequest)
 }
 
 export function providerStorageDetail({
@@ -583,14 +570,14 @@ export function providerStorageDetail({
 }: ProviderStorageDescriptionRequest): string {
   return provider_storage_detail(
     provider,
-    "Vault in browser storage on this device",
-    "No token saved",
-    "Signed in with Google",
-    "Signed in with iCloud",
-    "Not signed in",
-    "Not signed in with iCloud",
-    "Choose folder",
-  );
+    'Vault in browser storage on this device',
+    'No token saved',
+    'Signed in with Google',
+    'Signed in with iCloud',
+    'Not signed in',
+    'Not signed in with iCloud',
+    'Choose folder',
+  )
 }
 
 /** Secondary line for provider rows in management / picker UIs. */
@@ -607,68 +594,71 @@ export function localizedProviderStorageDetail({
     t(I18N_KEYS.AuthStorageGoogleNotSignedIn),
     t(I18N_KEYS.AuthStorageIcloudNotSignedIn),
     t(I18N_KEYS.AuthStorageLocalFolderNeedsReconnect),
-  );
+  )
 }
 
 export class OAuthFilePresentation {
   constructor(private readonly value: OAuthFileConfig) {}
   oauthFileName(): OAuthFileName {
-    const config = this.value;
+    const config = this.value
     const fileName =
-      config.fileName.state === "fileName" ? config.fileName.value.trim() : "";
+      config.fileName.state === 'fileName' ? config.fileName.value.trim() : ''
     return fileName.length > 0
       ? { kind: OAuthFileNameKind.Resolved, fileName }
-      : { kind: OAuthFileNameKind.Unresolved };
+      : { kind: OAuthFileNameKind.Unresolved }
   }
 
   oauthAccountLabel(): string {
-    const config = this.value;
-    return config.accountEmail.state === "email"
+    const config = this.value
+    return config.accountEmail.state === 'email'
       ? config.accountEmail.value.trim()
-      : "";
+      : ''
   }
 
   hasGoogleDriveFolder(): boolean {
-    const config = this.value;
-    return config.folderId.state === "folderId";
+    const config = this.value
+    return config.folderId.state === 'folderId'
   }
 
   hasICloudShareTarget(): boolean {
-    const config = this.value;
-    return config.iCloudShareTarget.state === "sharedTarget";
+    const config = this.value
+    return config.iCloudShareTarget.state === 'sharedTarget'
   }
 }
 
 export class LocalFolderPresentation {
   constructor(private readonly value: LocalFolderConfig) {}
   localFolderHandle(): LocalFolderHandle {
-    const config = this.value;
+    const config = this.value
     const handleId =
-      config.handleId.state === "handleId" ? config.handleId.value.trim() : "";
+      config.handleId.state === 'handleId' ? config.handleId.value.trim() : ''
     return handleId.length > 0
       ? { kind: LocalFolderHandleKind.Selected, handleId }
-      : { kind: LocalFolderHandleKind.Unselected };
+      : { kind: LocalFolderHandleKind.Unselected }
   }
 }
 
 export class StorageProviderPresentation {
   constructor(private readonly value: StorageProvider) {}
+  storageArgs(): NookStorageConnectArgs {
+    return provider_wasm_args(this.value)
+  }
   isICloudProvider(): boolean {
-    const provider = this.value;
-    const configuration = provider.oauthFile;
+    const provider = this.value
+    const configuration = provider.oauthFile
     return (
       isConfiguredOAuthFile(configuration) &&
-      configuration.config.preset === "icloud"
-    );
+      configuration.config.preset === 'icloud'
+    )
   }
 
   localFolderProviderConfiguration(): LocalFolderProviderConfiguration {
-    const provider = this.value;
-    return provider.localFolder.state === "configured"
+    const provider = this.value
+    return provider.localFolder.state === 'configured'
       ? {
           kind: LocalFolderProviderConfigurationKind.Configured,
           config: provider.localFolder.config,
         }
-      : { kind: LocalFolderProviderConfigurationKind.Missing };
+      : { kind: LocalFolderProviderConfigurationKind.Missing }
   }
 }
