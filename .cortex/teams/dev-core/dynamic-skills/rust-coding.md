@@ -270,6 +270,33 @@ When you see `Option<T>`, ask:
   parameter or return.
 - Do not use `void` as a serialized field-state escape hatch.
 
+## Standard conversions
+
+Use standard conversion traits when converting one value into another has an
+obvious meaning. A one-input signature alone does not make an operation a
+conversion.
+
+### Required actions
+
+- Prefer `From<T>` for an infallible, value-preserving conversion from one
+  input value.
+- Prefer `TryFrom<T>` for the corresponding fallible conversion. Return a
+  concrete error that describes the failure.
+- Implement `From` or `TryFrom` on the destination type. Use their provided
+  `Into` or `TryInto` implementations at suitable call sites.
+- Preserve private validated construction inside conversion implementations.
+- Keep named methods for context-dependent policy or ambiguous interpretations.
+- Keep named operations for external effects or authorization-sensitive
+  capability transitions. Preserve their runtime freshness checks.
+
+### Prohibited actions
+
+- Do not convert every unary function into a conversion trait.
+- Do not panic or substitute a default to make a fallible conversion fit
+  `From<T>`.
+- Do not discard meaningful information to claim a value-preserving conversion.
+- Do not use a conversion trait to bypass validation or forge an advanced state.
+
 ## Enums instead of booleans
 
 Do not use `bool` as an authored domain value by default. Use a named enum even

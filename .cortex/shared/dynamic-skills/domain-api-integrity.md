@@ -20,6 +20,8 @@ placing domain decisions on these types.
 - Use a nominal newtype, opaque type, enum, or value object when a primitive
   representation has domain meaning.
 - Use an enum or discriminated union for a closed set or named state.
+- Use semantic enums for domain-state, policy, mode, and command parameters,
+  even when they currently have only two cases.
 - Put state-specific data on the state or variant that owns it.
 - Keep independent state dimensions in independent types.
 - Match evolving domain alternatives exhaustively.
@@ -96,6 +98,11 @@ placing domain decisions on these types.
 Raw primitives and untyped transport values may exist only in private
 representation storage or at required serialization, database, FFI, generated
 ABI, browser, and host edges. Validate and convert them immediately.
+
+An externally fixed boolean field retains its transport shape. Convert it to
+the semantic enum before domain policy reads it. An actual predicate may return
+a boolean for immediate control flow. Do not pass that result onward as a
+domain-state, policy, mode, or command parameter.
 
 Compiler-required signatures, traits, generated bindings, and externally fixed
 callbacks may retain their owned shape. Keep adapters thin and delegate to an
