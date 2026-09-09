@@ -1,4 +1,5 @@
-import { vaultApplicationRuntime } from "$lib/runtime/wasm-bootstrap";
+import { VaultManagerStartup, VaultEngineFailure } from "$lib/runtime/wasm-bootstrap";
+import { err, type Result } from "neverthrow";
 import type { NookStorageConnectArgs } from "$app-wasm";
 type StoredVaultSynchronization = NookStorageConnectArgs & {
   readonly manager: NookVaultManager;
@@ -16,7 +17,6 @@ import type {
 import {
   authenticator_setup_key_changed,
   default_password_generation_options,
-  default as initNookWasm,
   generate_id,
   configured_vault_application,
   NookSecretFormFields,
@@ -28,8 +28,6 @@ import {
 } from "$app-wasm";
 import { browserLogRuntime } from "$lib/runtime/log";
 
-await initNookWasm();
-browserLogRuntime.initWasmLogging();
 
 export type {
   NookImportResult,
@@ -65,31 +63,18 @@ export function isoTimestamp(): string {
   return new Date().toISOString();
 }
 
-export async function getVaultManager(): Promise<NookVaultManager> {
-  const loadWasm = async () => {
-    const ready = await vaultApplicationRuntime.ensureAppWasm(
-      configured_vault_application(),
-    );
-    browserLogRuntime.initWasmLogging();
-    const manager = ready.createManager();
-    drainWasmStatusIntoLog(manager);
-    return manager;
-  };
-
-  // eslint-disable-next-line max-params -- Promise owns this positional executor signature.
-  const timeout = new Promise<never>((_, reject) => {
-    setTimeout(
-      () =>
-        reject(
-          new Error(
-            "Vault engine timed out while loading. Refresh and try again.",
-          ),
-        ),
-      15_000,
-    );
-  });
-
-  return Promise.race([loadWasm(), timeout]);
+export async function getVaultManager(): Promise<Result<NookVaultManager, VaultEngineFailure>> {
+  const manager = await new VaultManagerStartup(configured_vault_application()).open();
+  if (manager.isOk()) {
+    try {
+      browserLogRuntime.initWasmLogging();
+      drainWasmStatusIntoLog(manager.value);
+    } catch {
+      manager.value.free();
+      return err(VaultEngineFailure.ManagerCreation);
+    }
+  }
+  return manager;
 }
 
 /** Narrow the generated wasm transport result at its API boundary. */

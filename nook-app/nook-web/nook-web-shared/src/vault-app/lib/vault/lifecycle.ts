@@ -102,7 +102,13 @@ export class VaultInitializationActions {
       };
       await state.updateLocale(initialLocaleArgs);
       await state.refreshLocalVaultCatalog();
-      state.openManager(await getVaultManager());
+      const manager = await getVaultManager();
+      if (manager.isErr()) {
+        state.deviceProtectionStatus = DeviceProtectionStatus.Error;
+        state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
+        return;
+      }
+      state.openManager(manager.value);
       const configuredApplication = configured_vault_application();
       if (state.requireManager().vaultApplication !== configuredApplication) {
         const tArgs: Parameters<typeof state.t>[0] = {
@@ -112,7 +118,9 @@ export class VaultInitializationActions {
             wasm: String(state.requireManager().vaultApplication),
           },
         };
-        throw new Error(state.t(tArgs));
+        state.errorMsg = state.t(tArgs);
+        state.deviceProtectionStatus = DeviceProtectionStatus.Error;
+        return;
       }
       const updateLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
         newLocale: locale,

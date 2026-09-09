@@ -1,8 +1,8 @@
 import { VaultApplication } from "$app-wasm";
 import { configureVaultExtensionConnectScopeRuntime } from "$vault-shared/extension-connect-runtime";
-import { mountVaultApp } from "$vault-shared/main";
+import { vaultApplicationEntrypoint } from "$vault-shared/main";
 
 configureVaultExtensionConnectScopeRuntime();
-await mountVaultApp(VaultApplication.Simple);
+await vaultApplicationEntrypoint.start(VaultApplication.Simple);
 
 export default {};

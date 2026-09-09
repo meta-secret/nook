@@ -21,7 +21,7 @@ export class VaultStartupShell {
   private readonly status: HTMLElement;
   private readonly message: HTMLParagraphElement;
   private readonly messages: (typeof BOOTSTRAP_MESSAGES)[BootstrapLocale];
-  private static storedValue(key: string): string {
+  private storedValue(key: string): string {
     try {
       return ((v) => (v ? v : ""))(localStorage.getItem(key));
     } catch {
@@ -29,8 +29,8 @@ export class VaultStartupShell {
     }
   }
 
-  private static startupLocale(): BootstrapLocale {
-    const savedLocale = VaultStartupShell.storedValue(LOCALE_STORAGE_KEY);
+  private startupLocale(): BootstrapLocale {
+    const savedLocale = this.storedValue(LOCALE_STORAGE_KEY);
     if (Object.hasOwn(BOOTSTRAP_MESSAGES, savedLocale)) {
       return savedLocale as BootstrapLocale;
     }
@@ -42,8 +42,8 @@ export class VaultStartupShell {
       : "en";
   }
 
-  private static applyStartupColorMode(): void {
-    const storedMode = VaultStartupShell.storedValue(COLOR_MODE_STORAGE_KEY);
+  private applyStartupColorMode(): void {
+    const storedMode = this.storedValue(COLOR_MODE_STORAGE_KEY);
     const colorMode =
       storedMode === ColorMode.Light || storedMode === ColorMode.Dark
         ? storedMode
@@ -54,14 +54,14 @@ export class VaultStartupShell {
     );
   }
 
-  private static faviconUrl(): string {
+  private faviconUrl(): string {
     return ((v) => (v ? v : ""))(
       document.querySelector<HTMLLinkElement>('link[rel~="icon"]')?.href,
     );
   }
   constructor({ target }: VaultStartupShellOptions) {
-    VaultStartupShell.applyStartupColorMode();
-    const locale = VaultStartupShell.startupLocale();
+    this.applyStartupColorMode();
+    const locale = this.startupLocale();
     document.documentElement.lang = locale;
     this.messages = BOOTSTRAP_MESSAGES[locale];
     const messages = this.messages;
@@ -77,7 +77,7 @@ export class VaultStartupShell {
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
 
-    const iconUrl = VaultStartupShell.faviconUrl();
+    const iconUrl = this.faviconUrl();
     if (iconUrl) {
       const icon = document.createElement("img");
       icon.className = "vault-startup-icon";
