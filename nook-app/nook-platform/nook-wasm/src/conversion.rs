@@ -67,7 +67,9 @@ pub(crate) struct LoadedVaultUnlockRequest<'a> {
 impl LoadedVault {
     pub(crate) fn unlock(request: LoadedVaultUnlockRequest<'_>) -> Result<Self, NookError> {
         let LoadedVaultUnlockRequest { content, identity } = request;
-        let loaded = nook_core::VaultContent::new(content).unlock(identity)?;
+        let loaded = nook_core::VaultContent::new(content)
+            .unlock(identity)?
+            .into_material();
         Ok(Self {
             meta: loaded.meta,
             secrets_key: loaded.secrets_key,

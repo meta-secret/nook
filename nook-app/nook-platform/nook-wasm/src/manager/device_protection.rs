@@ -13,12 +13,18 @@ use crate::manager::session::ExtensionHandoffState;
 use nook_companion_core::CompanionIdentityHandoffContext;
 #[path = "device_protection_recovery.rs"]
 mod device_protection_recovery;
+pub(in crate::manager) mod handoff_stages;
+mod handoff_transition;
 use crate::storage::device_access;
 use crate::storage::device_access::PasskeyCreationCeremony;
 use crate::storage::{event_db, identity_record};
 use crate::{DeviceProtectionDeviceModeState, NookDeviceAccessSnapshotRequest};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
 use crate::{passkey_browser, passkey_observation};
+pub use handoff_stages::{
+    NookAdoptedExtensionIdentityHandoff, NookCommittedExtensionIdentityHandoff,
+    NookPendingExtensionIdentityHandoff,
+};
 use nook_core::{
     AgeArmoredCiphertext, AppId, DeviceId, DeviceIdentity, DeviceIdentityProtection,
     DeviceIdentitySecret, DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus,
@@ -297,6 +303,7 @@ impl NookVaultManager {
     /// Require passkey authorization again before any device-key operation.
     #[wasm_bindgen]
     pub fn lock_device_identity(&mut self) {
+        self.device.handoff_generation = Default::default();
         self.device.identity_private_key.zeroize();
         self.device.identity_private_key.clear();
         self.device.extension_handoff_private_key.zeroize();
@@ -308,12 +315,18 @@ impl NookVaultManager {
     /// Create a one-time age recipient for an extension identity handoff.
     /// The matching private key remains inside this manager's Rust state.
     #[wasm_bindgen]
-    pub fn begin_extension_identity_handoff(&mut self) -> Result<String, JsError> {
+    pub fn begin_extension_identity_handoff(
+        &mut self,
+    ) -> Result<NookPendingExtensionIdentityHandoff, JsError> {
+        self.device.handoff_generation = Default::default();
         self.device.extension_handoff_private_key.zeroize();
         let recipient = DeviceIdentity::generate()?;
         self.device.extension_handoff_private_key =
             ExtensionHandoffState::Recipient((recipient.secret_string().into_inner()).into());
-        Ok(recipient.public_key().into_inner())
+        Ok(NookPendingExtensionIdentityHandoff::new(
+            self,
+            recipient.public_key().into_inner(),
+        ))
     }
 
     /// Seal the currently unlocked extension identity to a one-time website
@@ -335,201 +348,6 @@ impl NookVaultManager {
         }
         .seal()?
         .into_inner())
-    }
-
-    /// Open and validate an extension identity handoff, then adopt both the age
-    /// identity and its matching event-signing seed for this in-memory session.
-    #[wasm_bindgen]
-    pub async fn finish_extension_identity_handoff(
-        &mut self,
-        envelope: &str,
-        nonce: &str,
-        expected_device_id: &str,
-        expected_device_public_key: &str,
-        expected_device_signing_public_key: &str,
-        context: &NookExtensionIdentityHandoffContext,
-    ) -> Result<(), JsError> {
-        let Some(private_key) =
-            mem::take(&mut self.device.extension_handoff_private_key).into_recipient()
-        else {
-            return Err(NookError::Decryption(
-                "Extension identity handoff was not initialized.".to_owned(),
-            )
-            .into());
-        };
-        let recipient =
-            DeviceIdentity::from_secret_str(&DeviceIdentitySecret::parse(&private_key)?)?;
-        let expected_signing_public_key =
-            DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
-        let material = nook_core::ExtensionIdentityHandoffOpen {
-            recipient_identity: &recipient,
-            envelope: &AgeArmoredCiphertext::parse(envelope)?,
-            expected_nonce: nonce,
-            expected_device_id: &DeviceId::parse(expected_device_id)?,
-            expected_device_public_key: &DevicePublicKey::parse(expected_device_public_key)?,
-            expected_device_signing_public_key: &expected_signing_public_key,
-        }
-        .open()?;
-        let (identity, handoff_signing_seed) = material.into_parts();
-        let authorizer = if self.device.identity_private_key.is_empty() {
-            None
-        } else {
-            let app_key = self.device_identity()?;
-            let signing_public_key = self.ensure_signing_identity().await?.public_key();
-            Some((app_key, signing_public_key))
-        };
-        let enrollment = (context)
-            .pending_extension_enrollment(authorizer.as_ref().map(|(app_key, _)| app_key))?;
-
-        // Age identity may come from a reinstalled extension. Keep any durable
-        // authorized signer when the vault already has events so Approve does
-        // not append JoinApproved as an unauthorized actor.
-        let stored_seed = NookDatabase::load_signing_seed().await?;
-        let has_events = self.event_log_has_events().await?;
-        let pending_handoff_signing_seed = handoff_signing_seed.clone();
-        let importing_existing_vault = matches!(
-            &enrollment,
-            PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
-        );
-        let choice = if importing_existing_vault {
-            HandoffSigningSeedChoice::AdoptHandoff {
-                seed: handoff_signing_seed,
-                persist: false,
-            }
-        } else {
-            nook_core::HandoffSigningSeedSelection {
-                handoff_seed: handoff_signing_seed,
-                stored_seed,
-                event_log: if has_events {
-                    nook_core::HandoffEventLog::ExistingEvents
-                } else {
-                    nook_core::HandoffEventLog::Empty
-                },
-            }
-            .choose()
-        };
-        let persist_signing_seed = importing_existing_vault
-            || matches!(
-                &choice,
-                HandoffSigningSeedChoice::AdoptHandoff { persist: true, .. }
-            );
-
-        let previous_session_signing_seed = mem::take(&mut self.event_log.signing_seed);
-        self.device.identity_private_key.zeroize();
-        self.device.id = identity.device_id().as_str().to_owned();
-        self.device.identity_private_key = identity.secret_string().into_inner();
-        self.event_log.signing_seed.zeroize();
-        match choice {
-            HandoffSigningSeedChoice::KeepStored { seed } => {
-                self.event_log.signing_seed = seed;
-            }
-            HandoffSigningSeedChoice::AdoptHandoff { seed, persist } => {
-                self.event_log.signing_seed = seed;
-                debug_assert_eq!(persist, persist_signing_seed);
-            }
-        }
-        self.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
-            enrollment,
-            authorizer_signing: authorizer.map(|(app_key, signing_public_key)| {
-                (app_key.app_id().clone(), signing_public_key)
-            }),
-            signing_public_key: expected_signing_public_key,
-            handoff_signing_seed: pending_handoff_signing_seed,
-            persist_signing_seed,
-            previous_session_signing_seed,
-        });
-        Ok(())
-    }
-
-    /// Whether durable identity publication must wait for a verified connect.
-    #[wasm_bindgen]
-    pub fn extension_identity_handoff_requires_connect(&self) -> bool {
-        self.device
-            .pending_extension_handoff
-            .as_ref()
-            .is_some_and(|pending| {
-                matches!(
-                    &pending.enrollment,
-                    PendingExtensionIdentityEnrollment::VaultCreation { .. }
-                        | PendingExtensionIdentityEnrollment::PairedVault { .. }
-                        | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
-                        | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
-                )
-            })
-    }
-
-    /// Reclassify a deferred handoff after staged provider discovery has bound
-    /// the manager to the existing vault that must be verified before publish.
-    #[wasm_bindgen]
-    pub fn mark_extension_identity_handoff_existing_vault_import(&mut self) -> Result<(), JsError> {
-        let store_id = StoreId::parse(&self.vault.store_id)?;
-        let pending = self
-            .device
-            .pending_extension_handoff
-            .as_mut()
-            .ok_or_else(|| JsError::new("Extension identity handoff is not pending."))?;
-        pending.enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id };
-        pending.authorizer_signing = None;
-        pending.persist_signing_seed = true;
-        self.event_log.signing_seed.zeroize();
-        self.event_log
-            .signing_seed
-            .clone_from(&pending.handoff_signing_seed);
-        Ok(())
-    }
-
-    /// Atomically persist identity membership and its matching signing seed
-    /// after the caller's complete initialization flow succeeds.
-    #[wasm_bindgen]
-    pub async fn commit_extension_identity_handoff(&mut self) -> Result<(), JsError> {
-        let pending = self
-            .device
-            .pending_extension_handoff
-            .as_ref()
-            .ok_or_else(|| JsError::new("Extension identity handoff is not pending."))?;
-        if !matches!(
-            &pending.enrollment,
-            PendingExtensionIdentityEnrollment::PairedVault { .. }
-        ) {
-            return Err(JsError::new(
-                "This extension identity handoff must be finalized by verified connect.",
-            ));
-        }
-        let app_key = self.device_identity()?;
-        let signing_seed = pending
-            .persist_signing_seed
-            .then_some(self.event_log.signing_seed.as_str());
-        identity_record::IdentityHandoffCommit {
-            app_key: &app_key,
-            signing_public_key: &pending.signing_public_key,
-            authorizer_signing: pending.authorizer_signing.as_ref(),
-            enrollment: &pending.enrollment,
-            signing_seed,
-            existing_vault: None,
-        }
-        .commit()
-        .await?;
-        Ok(())
-    }
-
-    /// Accept a committed handoff after the complete caller-owned operation,
-    /// including fresh vault genesis, has succeeded.
-    #[wasm_bindgen]
-    pub fn confirm_extension_identity_handoff(&mut self) {
-        self.device.pending_extension_handoff = None;
-    }
-
-    /// Clear every secret installed by a failed external identity
-    /// authorization, including the event-log signing seed.
-    #[wasm_bindgen]
-    pub fn rollback_extension_identity_handoff(&mut self) {
-        if let Some(mut pending) = self.device.pending_extension_handoff.take() {
-            self.event_log.signing_seed.zeroize();
-            self.event_log.signing_seed = mem::take(&mut pending.previous_session_signing_seed);
-        }
-        self.device.id.clear();
-        self.lock_device_identity();
-        self.reset_vault_session();
     }
 
     #[wasm_bindgen]

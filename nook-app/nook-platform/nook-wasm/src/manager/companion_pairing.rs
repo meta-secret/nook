@@ -36,7 +36,7 @@ impl NookCompanionPairingExtensionEndpoint {
             .map_err(|error| JsError::new(&error.to_string()))
     }
 
-    pub fn take_authority(&mut self) -> Result<NookCompanionPairingApprovalAuthority, JsError> {
+    pub fn take_authority(self) -> Result<NookCompanionPairingApprovalAuthority, JsError> {
         Ok(NookCompanionPairingApprovalAuthority {
             inner: self
                 .inner
@@ -230,7 +230,7 @@ mod tests {
             self,
         ) -> anyhow::Result<Result<NookPrevalidatedCompanionPairingApproval, CompanionPairingFailure>>
         {
-            let mut endpoint = CompanionExtensionPairingEndpoint::issue(self.request)?;
+            let endpoint = CompanionExtensionPairingEndpoint::issue(self.request)?;
             let authority = endpoint.take_authority()?;
             Ok(
                 NookCompanionPairingApprovalAuthority { inner: authority }.prevalidate_inner(
@@ -276,7 +276,7 @@ mod tests {
             },
             scopes: vec![ExtensionConnectScope::VaultAccess],
         };
-        let mut endpoint = NookCompanionPairingExtensionEndpoint::new(request.clone())
+        let endpoint = NookCompanionPairingExtensionEndpoint::new(request.clone())
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(
             endpoint
@@ -287,10 +287,7 @@ mod tests {
         let _authority = endpoint
             .take_authority()
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        assert!(matches!(
-            endpoint.inner.take_authority(),
-            Err(CompanionPairingError::AuthorityUnavailable)
-        ));
+        // Consuming the endpoint makes a second authority request unrepresentable.
         Ok(())
     }
 
@@ -298,7 +295,7 @@ mod tests {
     fn real_manager_prevalidates_exact_empty_and_sealed_provider_approvals() -> anyhow::Result<()> {
         for with_provider in [false, true] {
             let fixture = PairingFixture::new(with_provider)?;
-            let mut endpoint = NookCompanionPairingExtensionEndpoint::new(fixture.request.clone())
+            let endpoint = NookCompanionPairingExtensionEndpoint::new(fixture.request.clone())
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let authority = endpoint
                 .take_authority()

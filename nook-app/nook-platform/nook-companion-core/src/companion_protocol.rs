@@ -1,6 +1,5 @@
 use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
 use serde::{Deserialize, Serialize};
-use std::mem;
 use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -604,87 +603,61 @@ impl CompanionIssuedIdentityDiscovery {
     }
 }
 
-#[derive(Debug)]
-enum CompanionDiscoveryTransactionState {
-    Inactive,
-    Pending(Box<CompanionIssuedIdentityDiscovery>),
-    Consumed,
-}
-
-impl CompanionDiscoveryTransactionState {
-    fn observe(
-        &mut self,
-        discovery: &CompanionIdentityDiscoveryObservation,
-    ) -> Result<(), CompanionProtocolError> {
-        match self {
-            Self::Inactive => Ok(()),
-            Self::Pending(current) if &current.discovery == discovery => Ok(()),
-            Self::Pending(_) => {
-                *self = Self::Consumed;
-                Err(CompanionProtocolError::RequestMismatch)
-            }
-            Self::Consumed => Err(CompanionProtocolError::NonceUnavailable),
-        }
-    }
-
-    fn issue(
-        &mut self,
-        issued: CompanionIssuedIdentityDiscovery,
-    ) -> Result<(), CompanionProtocolError> {
-        match self {
-            Self::Inactive => {
-                *self = Self::Pending(Box::new(issued));
-                Ok(())
-            }
-            Self::Pending(current) if current.as_ref() == &issued => Ok(()),
-            Self::Pending(_) => {
-                *self = Self::Consumed;
-                Err(CompanionProtocolError::RequestMismatch)
-            }
-            Self::Consumed => Err(CompanionProtocolError::NonceUnavailable),
-        }
-    }
-
-    fn consume(&mut self) -> Result<Box<CompanionIssuedIdentityDiscovery>, CompanionProtocolError> {
-        match mem::replace(self, Self::Consumed) {
-            Self::Pending(issued) => Ok(issued),
-            Self::Inactive | Self::Consumed => Err(CompanionProtocolError::NonceUnavailable),
-        }
-    }
-}
-
+/// An endpoint awaiting one discovery observation.
 #[derive(Debug)]
 pub struct CompanionExtensionHandoffEndpoint {
     protocol: CompanionExtensionProtocol,
-    transaction: CompanionDiscoveryTransactionState,
 }
-
 impl CompanionExtensionHandoffEndpoint {
     pub fn new(presence: CompanionExtensionPresence) -> Result<Self, CompanionProtocolError> {
         Ok(Self {
             protocol: CompanionExtensionProtocol::new(presence)?,
-            transaction: CompanionDiscoveryTransactionState::Inactive,
         })
     }
-
     pub fn discover(
-        &mut self,
+        self,
         discovery: CompanionIdentityDiscoveryObservation,
-    ) -> Result<CompanionIdentityStatus, CompanionProtocolError> {
-        self.transaction.observe(&discovery)?;
+    ) -> Result<DiscoveredCompanionHandoffEndpoint, CompanionProtocolError> {
         let status = self.protocol.discover(discovery.clone())?;
-        self.transaction.issue(CompanionIssuedIdentityDiscovery {
-            discovery,
-            status: status.clone(),
-        })?;
-        Ok(status)
+        Ok(DiscoveredCompanionHandoffEndpoint {
+            protocol: self.protocol,
+            issued: CompanionIssuedIdentityDiscovery { discovery, status },
+        })
     }
-
+}
+/// Only a discovered endpoint can authorize a handoff, once.
+///
+/// ```compile_fail,E0382
+/// use nook_companion_core::{DiscoveredCompanionHandoffEndpoint, CompanionIdentityHandoffAuthorization};
+/// let replay = |ready: DiscoveredCompanionHandoffEndpoint, auth: CompanionIdentityHandoffAuthorization| {
+///     ready.authorize_handoff(auth.clone());
+///     ready.authorize_handoff(auth)
+/// };
+/// ```
+#[derive(Debug)]
+pub struct DiscoveredCompanionHandoffEndpoint {
+    protocol: CompanionExtensionProtocol,
+    issued: CompanionIssuedIdentityDiscovery,
+}
+impl DiscoveredCompanionHandoffEndpoint {
+    pub fn status(&self) -> CompanionIdentityStatus {
+        self.issued.status.clone()
+    }
+    /// Idempotent observation retains ownership; a different observation consumes it.
+    pub fn observe(
+        self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<Self, CompanionProtocolError> {
+        if self.issued.discovery != discovery {
+            return Err(CompanionProtocolError::RequestMismatch);
+        }
+        Ok(self)
+    }
     pub fn authorize_handoff(
-        &mut self,
+        self,
         authorization: CompanionIdentityHandoffAuthorization,
     ) -> Result<AuthorizedCompanionIdentityHandoff, CompanionProtocolError> {
-        let issued = self.transaction.consume()?;
+        let issued = self.issued;
         authorization.validate()?;
         if !issued.matches(&authorization.request.transaction) {
             return Err(CompanionProtocolError::RequestMismatch);

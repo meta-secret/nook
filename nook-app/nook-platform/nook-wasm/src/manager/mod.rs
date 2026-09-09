@@ -66,11 +66,15 @@ pub use companion_pairing::{
     NookPrevalidatedCompanionPairingApproval, NookStoredCompanionPairingActivationCandidate,
 };
 pub use companion_protocol::{
-    NookCompanionExtensionEndpoint, admit_companion_handoff_response,
+    NookCompanionExtensionEndpoint, NookDiscoveredCompanionExtensionEndpoint,
+    NookPendingCompanionIdentityHandoff, admit_companion_handoff_response,
     admit_companion_identity_status,
 };
-pub use device_protection::NookExtensionIdentityHandoffContext;
 pub(crate) use device_protection::PendingExtensionIdentityEnrollment;
+pub use device_protection::{
+    NookAdoptedExtensionIdentityHandoff, NookCommittedExtensionIdentityHandoff,
+    NookExtensionIdentityHandoffContext, NookPendingExtensionIdentityHandoff,
+};
 pub use secrets::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExternalEventLogRecords,

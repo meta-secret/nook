@@ -50,7 +50,7 @@ fn device_protection_contexts_and_manager_state_project_in_wasm() -> Result<(), 
     let mut manager = NookVaultManager::new();
     assert!(!manager.extension_identity_handoff_requires_connect());
     let public_key = manager.begin_extension_identity_handoff()?;
-    assert!(!public_key.is_empty());
+    assert!(!public_key.recipient_public_key().is_empty());
     let _request = manager.device_access_snapshot_request()?;
     manager.quiesce_for_local_recovery();
     manager.confirm_extension_identity_handoff();

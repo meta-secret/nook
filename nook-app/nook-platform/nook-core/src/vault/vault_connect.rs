@@ -71,7 +71,20 @@ pub struct LoadedVault {
 }
 
 /// Unlocked vault material without a hydrated plaintext secret database.
+/// ```compile_fail,E0451
+/// use nook_core::{UnlockedVault, VaultMetaState, SymmetricKey};
+/// let forge = |meta: VaultMetaState, secrets_key: SymmetricKey, members_key: SymmetricKey| {
+///     UnlockedVault { meta, secrets_key, members_key }
+/// };
+/// ```
 pub struct UnlockedVault {
+    meta: VaultMetaState,
+    secrets_key: crate::SymmetricKey,
+    members_key: crate::SymmetricKey,
+}
+
+/// Extracted session data; this DTO cannot invoke hydration or mint an unlocked capability.
+pub struct UnlockedVaultMaterial {
     pub meta: VaultMetaState,
     pub secrets_key: crate::SymmetricKey,
     pub members_key: crate::SymmetricKey,
@@ -244,6 +257,14 @@ impl<'a> VaultContent<'a> {
 }
 
 impl UnlockedVault {
+    pub fn into_material(self) -> UnlockedVaultMaterial {
+        UnlockedVaultMaterial {
+            meta: self.meta,
+            secrets_key: self.secrets_key,
+            members_key: self.members_key,
+        }
+    }
+
     /// Consume resolved keys into a hydrated plaintext session database.
     pub fn hydrate(self) -> VaultResult<LoadedVault> {
         let crypto = VaultCrypto::new(&self.secrets_key)?;

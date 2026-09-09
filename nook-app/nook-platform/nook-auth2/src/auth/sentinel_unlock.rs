@@ -127,11 +127,11 @@ pub enum SentinelUnlockReadiness {
 ///
 /// ```
 /// use nook_auth2::{SentinelUnlockSession, SentinelUnlockResponse, DeviceIdentity,
-///     MultiDeviceResult, VaultKeys};
+///     MultiDeviceResult, VaultKeys, StoreId, SentinelUnlockPolicy};
 /// let complete = |session: SentinelUnlockSession, response: SentinelUnlockResponse,
-///     identity: &DeviceIdentity| -> MultiDeviceResult<VaultKeys> {
+///     identity: &DeviceIdentity, store_id: &StoreId, policy: SentinelUnlockPolicy| -> MultiDeviceResult<VaultKeys> {
 ///     let session = session.collect(response).map_err(|rejected| rejected.into_parts().1)?;
-///     session.into_quorum(identity).map_err(|rejected| rejected.into_parts().1)?.finalize()
+///     session.into_quorum(identity).map_err(|rejected| rejected.into_parts().1)?.check_context(store_id, policy)?.finalize()
 /// };
 /// ```
 ///
@@ -190,49 +190,16 @@ impl SentinelUnlockRejection {
     }
 }
 
-/// A quorum bound to the requester identity checked during admission.
-/// Fields are private; callers cannot substitute the borrowed identity.
-/// Finalization consumes the quorum and uses its originally borrowed identity.
-///
-/// ```
-/// use nook_auth2::SentinelUnlockQuorum;
-/// let finalize = |quorum: SentinelUnlockQuorum<'_>| quorum.finalize();
-/// ```
-///
-/// ```compile_fail,E0382
-/// use nook_auth2::{SentinelUnlockQuorum, MultiDeviceResult, VaultKeys};
-/// let repeat = |quorum: SentinelUnlockQuorum<'_>| -> MultiDeviceResult<VaultKeys> {
-///     quorum.finalize()?;
-///     quorum.finalize()
-/// };
-/// ```
+/// A quorum awaiting binding to the live vault context before key reconstruction.
 ///
 /// ```compile_fail,E0599
 /// use nook_auth2::SentinelUnlockQuorum;
-/// let duplicate = |quorum: SentinelUnlockQuorum<'_>| quorum.clone();
+/// let premature = |quorum: SentinelUnlockQuorum<'_>| quorum.finalize();
 /// ```
 ///
 /// ```compile_fail,E0277
 /// use nook_auth2::SentinelUnlockQuorum;
 /// let decode = |json: &str| serde_json::from_str::<SentinelUnlockQuorum<'_>>(json);
-/// ```
-///
-/// ```compile_fail,E0451
-/// use nook_auth2::{SentinelUnlockQuorum, SentinelUnlockSession, DeviceIdentity};
-/// struct Probe;
-/// impl Probe {
-///     fn forge<'a>(session: SentinelUnlockSession, requester_identity: &'a DeviceIdentity)
-///         -> SentinelUnlockQuorum<'a> {
-///         SentinelUnlockQuorum { session, requester_identity }
-///     }
-/// }
-/// ```
-///
-/// ```compile_fail,E0061
-/// use nook_auth2::{SentinelUnlockQuorum, DeviceIdentity};
-/// let substitute = |quorum: SentinelUnlockQuorum<'_>, identity: &DeviceIdentity| {
-///     quorum.finalize(identity)
-/// };
 /// ```
 pub struct SentinelUnlockQuorum<'a> {
     session: SentinelUnlockSession,
@@ -360,25 +327,48 @@ impl SentinelUnlockSession {
     }
 }
 
-impl SentinelUnlockQuorum<'_> {
+impl<'a> SentinelUnlockQuorum<'a> {
     pub fn check_context(
-        &self,
+        self,
         store_id: &StoreId,
         policy: SentinelUnlockPolicy,
-    ) -> MultiDeviceResult<()> {
+    ) -> MultiDeviceResult<ContextBoundSentinelUnlock<'a>> {
         if &self.session.request.store_id != store_id || self.session.request.policy != policy {
             return Err(MultiDeviceError::InvalidSentinelUnlockSession);
         }
-        Ok(())
+        Ok(ContextBoundSentinelUnlock { quorum: self })
     }
+}
 
+/// Context-admitted, single-use reconstruction capability. No public constructor,
+/// clone or deserializer can skip quorum and live-context admission.
+///
+/// ```compile_fail,E0382
+/// use nook_auth2::{ContextBoundSentinelUnlock, MultiDeviceResult, VaultKeys};
+/// let twice = |ready: ContextBoundSentinelUnlock<'_>| -> MultiDeviceResult<VaultKeys> {
+///     ready.finalize()?;
+///     ready.finalize()
+/// };
+/// ```
+///
+/// ```compile_fail,E0451
+/// use nook_auth2::{ContextBoundSentinelUnlock, SentinelUnlockQuorum};
+/// let forge = |quorum: SentinelUnlockQuorum<'_>| ContextBoundSentinelUnlock { quorum };
+/// ```
+pub struct ContextBoundSentinelUnlock<'a> {
+    quorum: SentinelUnlockQuorum<'a>,
+}
+
+impl ContextBoundSentinelUnlock<'_> {
     pub fn finalize(self) -> MultiDeviceResult<VaultKeys> {
-        self.session
-            .validate_quorum_identity(self.requester_identity)?;
-        let Self {
+        let quorum = self.quorum;
+        quorum
+            .session
+            .validate_quorum_identity(quorum.requester_identity)?;
+        let SentinelUnlockQuorum {
             session,
             requester_identity,
-        } = self;
+        } = quorum;
         let SentinelUnlockSession {
             request,
             records,
@@ -495,6 +485,7 @@ mod tests {
             session
                 .into_quorum(&fixture.requester)
                 .map_err(|rejected| rejected.into_parts().1)?
+                .check_context(&fixture.store_id, fixture.policy)?
                 .finalize()?,
             fixture.keys
         );
@@ -534,6 +525,7 @@ mod tests {
             session
                 .into_quorum(&fixture.requester)
                 .map_err(|rejected| rejected.into_parts().1)?
+                .check_context(&fixture.store_id, fixture.policy)?
                 .finalize()?,
             fixture.keys
         );
@@ -738,23 +730,41 @@ mod tests {
             let quorum = session
                 .into_quorum(&fixture.requester)
                 .map_err(|rejected| rejected.into_parts().1)?;
-            quorum.check_context(&fixture.store_id, fixture.policy)?;
+            assert_eq!(
+                quorum
+                    .check_context(&fixture.store_id, fixture.policy)?
+                    .finalize()?,
+                fixture.keys
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn context_admission_rejects_wrong_store_and_policy() -> anyhow::Result<()> {
+        let fixture = Fixture::new()?;
+        for (store_id, policy) in [
+            (StoreId::parse("store_BBBBBBBBBBB")?, fixture.policy),
+            (
+                fixture.store_id.clone(),
+                SentinelUnlockPolicy {
+                    threshold: 3.into(),
+                    ..fixture.policy
+                },
+            ),
+        ] {
+            let mut session = fixture.session()?;
+            let request = session.request();
+            for index in [0, 1] {
+                session = Fixture::collect(session, fixture.response(&request, index)?)?;
+            }
+            let quorum = session
+                .into_quorum(&fixture.requester)
+                .map_err(|rejected| rejected.into_parts().1)?;
             assert!(matches!(
-                quorum.check_context(&StoreId::parse("store_BBBBBBBBBBB")?, fixture.policy),
+                quorum.check_context(&store_id, policy),
                 Err(MultiDeviceError::InvalidSentinelUnlockSession)
             ));
-            assert!(
-                quorum
-                    .check_context(
-                        &fixture.store_id,
-                        SentinelUnlockPolicy {
-                            threshold: 3.into(),
-                            ..fixture.policy
-                        }
-                    )
-                    .is_err()
-            );
-            assert_eq!(quorum.finalize()?, fixture.keys);
         }
         Ok(())
     }
@@ -776,7 +786,12 @@ mod tests {
         let quorum = session
             .into_quorum(&fixture.requester)
             .map_err(|rejected| rejected.into_parts().1)?;
-        assert!(quorum.finalize().is_err());
+        assert!(
+            quorum
+                .check_context(&fixture.store_id, fixture.policy)?
+                .finalize()
+                .is_err()
+        );
         Ok(())
     }
 

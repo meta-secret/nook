@@ -12,6 +12,7 @@ use nook_companion_core::{
     CompanionWebsiteHandoffBegin,
 };
 use nook_core::{DeviceIdentity, SigningIdentity, VaultApplication};
+use std::mem;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 fn epoch_milliseconds(
@@ -23,7 +24,7 @@ fn epoch_milliseconds(
 struct DirectHandoffScenario {
     website: NookVaultManager,
     extension: NookVaultManager,
-    endpoint: NookCompanionExtensionEndpoint,
+    endpoint: ReplayEndpoint,
     presence: CompanionExtensionPresence,
 }
 
@@ -57,7 +58,7 @@ impl DirectHandoffScenario {
         Ok(Self {
             website: NookVaultManager::new(),
             extension,
-            endpoint: NookCompanionExtensionEndpoint::from_presence(presence.clone())?,
+            endpoint: ReplayEndpoint::new(presence.clone())?,
             presence,
         })
     }
@@ -341,4 +342,64 @@ fn real_manager_rejects_an_installation_app_key_mismatch() -> Result<(), Compani
         ))
     ));
     Ok(())
+}
+
+// Runtime holder exists only in replay tests: the production stages are consuming.
+struct ReplayEndpoint {
+    phase: ReplayEndpointPhase,
+}
+enum ReplayEndpointPhase {
+    Awaiting(CompanionExtensionHandoffEndpoint),
+    Discovered(DiscoveredCompanionHandoffEndpoint),
+    Consumed,
+}
+impl ReplayEndpoint {
+    fn new(presence: CompanionExtensionPresence) -> Result<Self, CompanionProtocolError> {
+        Ok(Self {
+            phase: ReplayEndpointPhase::Awaiting(CompanionExtensionHandoffEndpoint::new(presence)?),
+        })
+    }
+    fn discover(
+        &mut self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<CompanionIdentityStatus, CompanionProtocolError> {
+        let ready = match mem::replace(&mut self.phase, ReplayEndpointPhase::Consumed) {
+            ReplayEndpointPhase::Awaiting(endpoint) => endpoint.discover(discovery)?,
+            ReplayEndpointPhase::Discovered(endpoint) => endpoint.observe(discovery)?,
+            ReplayEndpointPhase::Consumed => return Err(CompanionProtocolError::NonceUnavailable),
+        };
+        let status = ready.status();
+        self.phase = ReplayEndpointPhase::Discovered(ready);
+        Ok(status)
+    }
+    fn authorize_handoff(
+        &mut self,
+        auth: CompanionIdentityHandoffAuthorization,
+    ) -> Result<AuthorizedCompanionIdentityHandoff, CompanionProtocolError> {
+        match mem::replace(&mut self.phase, ReplayEndpointPhase::Consumed) {
+            ReplayEndpointPhase::Discovered(endpoint) => endpoint.authorize_handoff(auth),
+            ReplayEndpointPhase::Awaiting(_) | ReplayEndpointPhase::Consumed => {
+                Err(CompanionProtocolError::NonceUnavailable)
+            }
+        }
+    }
+}
+
+impl ReplayEndpoint {
+    fn discover_inner(
+        &mut self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<CompanionIdentityStatus, CompanionOperationError> {
+        Ok(self.discover(discovery)?)
+    }
+    fn authorize_and_seal_loaded(
+        &mut self,
+        operation: CompanionExtensionSealOperation<'_>,
+    ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
+        let authorized = self.authorize_handoff(operation.authorization)?;
+        NookCompanionExtensionEndpoint::seal_authorized_loaded(CompanionAuthorizedSealOperation {
+            manager: operation.manager,
+            authorized,
+        })
+    }
 }

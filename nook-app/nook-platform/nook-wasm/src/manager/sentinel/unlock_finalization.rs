@@ -75,14 +75,14 @@ impl<'a> PendingUnlockCompletion<'a> {
         }
         let store_id = StoreId::parse(&self.manager.vault.store_id)?;
         let policy = self.manager.vault.architecture.sentinel.policy()?;
-        quorum.check_context(
+        let ready = quorum.check_context(
             &store_id,
             SentinelUnlockPolicy {
                 threshold: policy.threshold,
                 required_participants: policy.required_participants,
             },
         )?;
-        let keys = quorum.finalize()?;
+        let keys = ready.finalize()?;
         let records = self.manager.stored_records_snapshot();
         let meta = VaultMetaState::from_stored_records(&records)?;
         self.manager

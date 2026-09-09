@@ -1,5 +1,8 @@
+use super::device_protection::handoff_stages::HandoffBinding;
 use super::session::ExtensionHandoffState;
-use super::{NookExtensionIdentityHandoffContext, NookVaultManager};
+use super::{
+    NookAdoptedExtensionIdentityHandoff, NookExtensionIdentityHandoffContext, NookVaultManager,
+};
 use crate::NookError;
 use nook_companion_core::{
     AuthorizedCompanionIdentityHandoff, CompanionExtensionHandoffEndpoint,
@@ -8,7 +11,7 @@ use nook_companion_core::{
     CompanionIdentityHandoffContext, CompanionIdentityHandoffRequest,
     CompanionIdentityHandoffResponse, CompanionIdentityHandoffSealer, CompanionIdentityStatus,
     CompanionIdentityStatusAdmission, CompanionIdentityStatusAdmissionRequest,
-    CompanionProtocolError, CompanionWebsiteHandoffBegin,
+    CompanionProtocolError, CompanionWebsiteHandoffBegin, DiscoveredCompanionHandoffEndpoint,
 };
 use nook_core::{
     DeviceId, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey, SigningIdentity,
@@ -86,27 +89,6 @@ impl NookCompanionExtensionEndpoint {
         })
     }
 
-    #[cfg(test)]
-    fn authorize_and_seal_loaded(
-        &mut self,
-        operation: CompanionExtensionSealOperation<'_>,
-    ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
-        let authorized = self.inner.authorize_handoff(operation.authorization)?;
-        // A valid nonce is consumed even if sealing fails: callers must perform
-        // fresh discovery rather than replay an authorization after ambiguity.
-        Self::seal_authorized_loaded(CompanionAuthorizedSealOperation {
-            manager: operation.manager,
-            authorized,
-        })
-    }
-
-    fn discover_inner(
-        &mut self,
-        discovery: CompanionIdentityDiscoveryObservation,
-    ) -> Result<CompanionIdentityStatus, CompanionOperationError> {
-        Ok(self.inner.discover(discovery)?)
-    }
-
     fn seal_authorized_loaded(
         operation: CompanionAuthorizedSealOperation<'_>,
     ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
@@ -137,16 +119,54 @@ impl NookCompanionExtensionEndpoint {
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn discover(
-        &mut self,
+        self,
         discovery: CompanionIdentityDiscoveryObservation,
-    ) -> Result<CompanionIdentityStatus, JsError> {
-        self.discover_inner(discovery)
-            .map_err(|error| NookVaultManager::companion_js_error(&error))
+    ) -> Result<NookDiscoveredCompanionExtensionEndpoint, JsError> {
+        let inner = self
+            .inner
+            .discover(discovery)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        Ok(NookDiscoveredCompanionExtensionEndpoint { inner })
+    }
+}
+
+/// Private, non-cloneable state; external data is admitted through its predecessor.
+///
+/// ```compile_fail,E0277
+/// use nook_wasm::NookDiscoveredCompanionExtensionEndpoint;
+/// let decode = |json: &str| serde_json::from_str::<NookDiscoveredCompanionExtensionEndpoint>(json);
+/// ```
+///
+/// ```compile_fail,E0599
+/// use nook_wasm::NookDiscoveredCompanionExtensionEndpoint;
+/// let clone = |phase: NookDiscoveredCompanionExtensionEndpoint| phase.clone();
+/// ```
+#[wasm_bindgen]
+pub struct NookDiscoveredCompanionExtensionEndpoint {
+    inner: DiscoveredCompanionHandoffEndpoint,
+}
+
+#[wasm_bindgen]
+impl NookDiscoveredCompanionExtensionEndpoint {
+    #[wasm_bindgen(getter)]
+    pub fn status(&self) -> CompanionIdentityStatus {
+        self.inner.status()
+    }
+
+    pub fn rediscover(
+        self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<Self, JsError> {
+        let inner = self
+            .inner
+            .observe(discovery)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        Ok(Self { inner })
     }
 
     #[allow(clippy::needless_pass_by_value)]
     pub async fn authorize_and_seal(
-        &mut self,
+        self,
         manager: &mut NookVaultManager,
         authorization: CompanionIdentityHandoffAuthorization,
     ) -> Result<CompanionIdentityHandoffResponse, JsError> {
@@ -159,7 +179,7 @@ impl NookCompanionExtensionEndpoint {
         manager.ensure_signing_identity().await.map_err(|error| {
             NookVaultManager::companion_js_error(&CompanionOperationError::Manager(error))
         })?;
-        Self::seal_authorized_loaded(CompanionAuthorizedSealOperation {
+        NookCompanionExtensionEndpoint::seal_authorized_loaded(CompanionAuthorizedSealOperation {
             manager,
             authorized,
         })
@@ -248,6 +268,7 @@ impl NookVaultManager {
         self.device.extension_handoff_private_key.zeroize();
         self.device.extension_handoff_private_key.clear();
         begin.validate()?;
+        self.device.handoff_generation = Default::default();
         let recipient = DeviceIdentity::generate().map_err(NookError::from)?;
         let context = begin.context.clone();
         let request = begin.prepare(recipient.public_key().into_inner())?;
@@ -267,16 +288,23 @@ impl NookVaultManager {
     pub fn begin_companion_identity_handoff(
         &mut self,
         begin: CompanionWebsiteHandoffBegin,
-    ) -> Result<CompanionIdentityHandoffRequest, JsError> {
-        self.begin_companion_identity_handoff_inner(begin)
-            .map_err(|error| NookVaultManager::companion_js_error(&error))
+    ) -> Result<NookPendingCompanionIdentityHandoff, JsError> {
+        let request = self
+            .begin_companion_identity_handoff_inner(begin)
+            .map_err(|error| NookVaultManager::companion_js_error(&error))?;
+        Ok(NookPendingCompanionIdentityHandoff {
+            binding: HandoffBinding::new(self),
+            request,
+        })
     }
+}
 
+impl NookVaultManager {
     #[allow(clippy::needless_pass_by_value)]
-    pub async fn finish_companion_identity_handoff(
+    async fn finish_companion_identity_handoff(
         &mut self,
         response: CompanionIdentityHandoffResponse,
-    ) -> Result<(), JsError> {
+    ) -> Result<NookAdoptedExtensionIdentityHandoff, JsError> {
         let mut pending = self
             .consume_companion_website_handoff(&response)
             .map_err(|error| NookVaultManager::companion_js_error(&error))?;
@@ -299,10 +327,55 @@ impl NookVaultManager {
             &expected.signing_public_key,
             &context,
         )
-        .await
+        .await?;
+        Ok(NookAdoptedExtensionIdentityHandoff::new(self))
     }
 }
 
 #[cfg(test)]
 #[path = "companion_protocol_tests.rs"]
 mod tests;
+
+/// A one-use website transaction awaiting its correlated encrypted response.
+/// Private, non-cloneable state; external data is admitted through its predecessor.
+///
+/// ```compile_fail,E0277
+/// use nook_wasm::NookPendingCompanionIdentityHandoff;
+/// let decode = |json: &str| serde_json::from_str::<NookPendingCompanionIdentityHandoff>(json);
+/// ```
+///
+/// ```compile_fail,E0599
+/// use nook_wasm::NookPendingCompanionIdentityHandoff;
+/// let clone = |phase: NookPendingCompanionIdentityHandoff| phase.clone();
+/// ```
+#[wasm_bindgen]
+pub struct NookPendingCompanionIdentityHandoff {
+    binding: HandoffBinding,
+    request: CompanionIdentityHandoffRequest,
+}
+#[wasm_bindgen]
+impl NookPendingCompanionIdentityHandoff {
+    #[wasm_bindgen(getter)]
+    pub fn request(&self) -> CompanionIdentityHandoffRequest {
+        self.request.clone()
+    }
+    pub async fn finish(
+        self,
+        manager: &mut NookVaultManager,
+        response: CompanionIdentityHandoffResponse,
+    ) -> Result<NookAdoptedExtensionIdentityHandoff, JsError> {
+        self.binding.check(manager)?;
+        match manager.finish_companion_identity_handoff(response).await {
+            Ok(adopted) => Ok(adopted),
+            Err(error) => {
+                manager.rollback_extension_identity_handoff();
+                Err(error)
+            }
+        }
+    }
+    pub fn cancel(self, manager: &mut NookVaultManager) -> Result<(), JsError> {
+        self.binding.check(manager)?;
+        manager.rollback_extension_identity_handoff();
+        Ok(())
+    }
+}

@@ -118,10 +118,10 @@ pub use lastpass_import::{LastPassCsvInput, LastPassImportError, LastPassImportP
 pub use nook_app_common::AppLocale;
 pub use nook_app_common::i18n_keys;
 pub use nook_auth2::{
-    LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
-    SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection,
-    SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus,
-    SentinelUnlockVersion,
+    ContextBoundSentinelUnlock, LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring,
+    LocalIdentityKeyringEntry, SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness,
+    SentinelUnlockRejection, SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession,
+    SentinelUnlockStatus, SentinelUnlockVersion,
 };
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
@@ -314,7 +314,8 @@ pub use vault_client_policy::{
     VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
-    LoadedVault, UnlockedVault, VaultAccessStatus, VaultContent, VaultContentMetadata,
+    LoadedVault, UnlockedVault, UnlockedVaultMaterial, VaultAccessStatus, VaultContent,
+    VaultContentMetadata,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch_crypto::{

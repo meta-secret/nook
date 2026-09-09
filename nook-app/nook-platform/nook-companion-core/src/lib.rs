@@ -138,7 +138,7 @@ pub use companion_protocol::{
     CompanionIdentityHandoffSealer, CompanionIdentityStatus, CompanionIdentityStatusAdmission,
     CompanionIdentityStatusAdmissionRequest, CompanionIdentityUnlockRequest,
     CompanionInstallationAppKey, CompanionProtocolError, CompanionProtocolFailure,
-    CompanionUnlockedAppKey, CompanionWebsiteHandoffBegin,
+    CompanionUnlockedAppKey, CompanionWebsiteHandoffBegin, DiscoveredCompanionHandoffEndpoint,
 };
 pub use domain_numbers::{
     AuthenticationFieldCount, AuthenticationOutcomeElapsedMilliseconds,

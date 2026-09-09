@@ -6,7 +6,6 @@
 
 use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::mem;
 use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -369,23 +368,8 @@ pub struct CompanionPairingApprovalAttempt {
 }
 
 #[derive(Debug)]
-enum PairingAuthorityState {
-    Pending(Box<CompanionPairingRequest>),
-    Consumed,
-}
-
-impl PairingAuthorityState {
-    fn consume(&mut self) -> Result<Box<CompanionPairingRequest>, CompanionPairingError> {
-        match mem::replace(self, Self::Consumed) {
-            Self::Pending(request) => Ok(request),
-            Self::Consumed => Err(CompanionPairingError::AuthorityUnavailable),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct CompanionWebsitePairingEndpoint {
-    authority: PairingAuthorityState,
+    request: Box<CompanionPairingRequest>,
     admitted_at: CompanionPairingEpochMilliseconds,
 }
 
@@ -395,23 +379,20 @@ impl CompanionWebsitePairingEndpoint {
     ) -> Result<Self, CompanionPairingError> {
         observation.validate()?;
         Ok(Self {
-            authority: PairingAuthorityState::Pending(Box::new(observation.request)),
+            request: Box::new(observation.request),
             admitted_at: observation.observed_at,
         })
     }
 
     pub fn request(&self) -> Result<CompanionPairingRequest, CompanionPairingError> {
-        match &self.authority {
-            PairingAuthorityState::Pending(request) => Ok(request.as_ref().clone()),
-            PairingAuthorityState::Consumed => Err(CompanionPairingError::AuthorityUnavailable),
-        }
+        Ok(self.request.as_ref().clone())
     }
 
     pub fn authorize(
-        mut self,
+        self,
         authorization: CompanionPairingWebsiteAuthorization,
     ) -> Result<AuthorizedCompanionWebsitePairing, CompanionPairingError> {
-        let expected = self.authority.consume()?;
+        let expected = self.request;
         if authorization.observed_at < self.admitted_at {
             return Err(CompanionPairingError::InvalidValue);
         }
@@ -454,30 +435,36 @@ impl AuthorizedCompanionWebsitePairing {
     }
 }
 
+/// Taking approval authority consumes this endpoint.
+///
+/// ```compile_fail,E0382
+/// use nook_companion_core::CompanionExtensionPairingEndpoint;
+/// let replay = |endpoint: CompanionExtensionPairingEndpoint| {
+///     endpoint.take_authority();
+///     endpoint.take_authority()
+/// };
+/// ```
 #[derive(Debug)]
 pub struct CompanionExtensionPairingEndpoint {
-    authority: PairingAuthorityState,
+    request: Box<CompanionPairingRequest>,
 }
 
 impl CompanionExtensionPairingEndpoint {
     pub fn issue(request: CompanionPairingRequest) -> Result<Self, CompanionPairingError> {
         request.validate_at(request.issued_at)?;
         Ok(Self {
-            authority: PairingAuthorityState::Pending(Box::new(request)),
+            request: Box::new(request),
         })
     }
 
     pub fn request(&self) -> Result<CompanionPairingRequest, CompanionPairingError> {
-        match &self.authority {
-            PairingAuthorityState::Pending(request) => Ok(request.as_ref().clone()),
-            PairingAuthorityState::Consumed => Err(CompanionPairingError::AuthorityUnavailable),
-        }
+        Ok(self.request.as_ref().clone())
     }
 
     pub fn take_authority(
-        &mut self,
+        self,
     ) -> Result<ConsumedCompanionPairingAuthority, CompanionPairingError> {
-        Ok(ConsumedCompanionPairingAuthority(self.authority.consume()?))
+        Ok(ConsumedCompanionPairingAuthority(self.request))
     }
 }
 
@@ -678,13 +665,9 @@ mod tests {
             CompanionPairingFailure::InstallationMismatch,
             CompanionPairingFailure::ScopeMismatch,
         ] {
-            let mut endpoint =
-                CompanionExtensionPairingEndpoint::issue(PairingFixture::request()?)?;
+            let endpoint = CompanionExtensionPairingEndpoint::issue(PairingFixture::request()?)?;
             let authority = endpoint.take_authority()?;
-            assert!(matches!(
-                endpoint.take_authority(),
-                Err(CompanionPairingError::AuthorityUnavailable)
-            ));
+            // Taking authority consumes the endpoint; replay is a compile-time error.
             let mut attempt = CompanionPairingApprovalAttempt {
                 approval: PairingFixture::approval()?,
                 observed_at: PairingFixture::epoch("175")?,
@@ -715,12 +698,9 @@ mod tests {
 
     #[test]
     fn dropped_consumed_authority_cannot_be_recovered() -> anyhow::Result<()> {
-        let mut endpoint = CompanionExtensionPairingEndpoint::issue(PairingFixture::request()?)?;
+        let endpoint = CompanionExtensionPairingEndpoint::issue(PairingFixture::request()?)?;
         drop(endpoint.take_authority()?);
-        assert!(matches!(
-            endpoint.take_authority(),
-            Err(CompanionPairingError::AuthorityUnavailable)
-        ));
+        // Taking authority consumes the endpoint; replay is a compile-time error.
         Ok(())
     }
 

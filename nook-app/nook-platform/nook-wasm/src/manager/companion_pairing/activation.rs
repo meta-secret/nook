@@ -275,7 +275,7 @@ mod tests {
                     providers.companion_pairing_manifest_digest()?.as_str(),
                 )?,
             };
-            let mut endpoint = NookCompanionPairingExtensionEndpoint::new(request)
+            let endpoint = NookCompanionPairingExtensionEndpoint::new(request)
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let authority = endpoint
                 .take_authority()

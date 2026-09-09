@@ -95,8 +95,8 @@ pub use auth::sentinel_genesis::{
     SentinelGenesisShareDelivery, SentinelGenesisVersion,
 };
 pub use auth::sentinel_unlock::{
-    CheckedSentinelUnlockRequest, SentinelUnlockPolicy, SentinelUnlockQuorum,
-    SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
+    CheckedSentinelUnlockRequest, ContextBoundSentinelUnlock, SentinelUnlockPolicy,
+    SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
     SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
 };
 pub use crypto::vault_crypto::VaultCrypto;

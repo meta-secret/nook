@@ -4,6 +4,7 @@ use nook_core::{
     DriveEventParent, ICloudEventTarget, SentinelGenesisPhase, StorageMode, VaultArchitecture,
     VaultMetaState, VaultUnlock,
 };
+use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -230,6 +231,7 @@ impl VaultSessionState {
 
 #[derive(Default)]
 pub(in crate::manager) struct DeviceSessionState {
+    pub(in crate::manager) handoff_generation: Rc<()>,
     pub(in crate::manager) id: String,
     pub(in crate::manager) identity_private_key: String,
     pub(in crate::manager) extension_handoff_private_key: ExtensionHandoffState,

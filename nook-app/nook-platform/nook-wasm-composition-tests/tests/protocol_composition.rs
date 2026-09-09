@@ -152,12 +152,13 @@ fn companion_wasm_protocol_accepts_core_presence_and_discovery() -> Result<()> {
 
 #[test]
 fn nook_wasm_endpoint_accepts_the_same_core_presence_and_discovery() -> Result<()> {
-    let mut endpoint =
+    let endpoint =
         nook_wasm::NookCompanionExtensionEndpoint::new(ProtocolComposition::unlocked_presence())
             .map_err(|_| anyhow::anyhow!("vault WASM rejected valid core presence"))?;
     let status = endpoint
         .discover(ProtocolComposition::discovery()?)
-        .map_err(|_| anyhow::anyhow!("vault WASM rejected valid core discovery"))?;
+        .map_err(|_| anyhow::anyhow!("vault WASM rejected valid core discovery"))?
+        .status();
     assert!(matches!(status, CompanionIdentityStatus::Unlocked { .. }));
     Ok(())
 }
@@ -201,9 +202,10 @@ fn both_wasm_adapters_reject_mismatched_status_correlation() -> Result<()> {
 #[test]
 fn handoff_endpoint_consumes_authorization_nonce_once() -> Result<()> {
     let presence = ProtocolComposition::unlocked_presence();
-    let mut endpoint = CompanionExtensionHandoffEndpoint::new(presence.clone())?;
+    let endpoint = CompanionExtensionHandoffEndpoint::new(presence.clone())?;
     let discovery = ProtocolComposition::discovery()?;
-    let status = endpoint.discover(discovery.clone())?;
+    let endpoint = endpoint.discover(discovery.clone())?;
+    let status = endpoint.status();
     let admission =
         CompanionIdentityStatusAdmission::admit(CompanionIdentityStatusAdmissionRequest {
             discovery,
@@ -225,11 +227,8 @@ fn handoff_endpoint_consumes_authorization_nonce_once() -> Result<()> {
         observed_at: ProtocolComposition::epoch(120)?,
         presence,
     };
-    assert!(endpoint.authorize_handoff(authorization.clone()).is_ok());
-    assert!(matches!(
-        endpoint.authorize_handoff(authorization),
-        Err(CompanionProtocolError::NonceUnavailable)
-    ));
+    assert!(endpoint.authorize_handoff(authorization).is_ok());
+    // Replay is rejected by ownership; the core API has a compile-fail example.
     Ok(())
 }
 
