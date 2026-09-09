@@ -1,3 +1,4 @@
+import { ok } from "neverthrow";
 import {
   OvhRecoveryMarkerObservation,
   RecoveryMarkerCompatibilityKind,
@@ -11,6 +12,7 @@ import {
   OvhTaskStatus,
   OvhReinstallIntent,
   ReinstallDecision,
+  ReinstallAuthorization,
 } from "./ovh-dedicated";
 
 describe("OVH dedicated provider", () => {
@@ -30,7 +32,7 @@ describe("OVH dedicated provider", () => {
 
   test("reinstalls a blank server and converges the declared OS", () => {
     const blankInput = {
-      allowReinstall: false,
+      allowReinstall: ReinstallAuthorization.Preserve,
       currentOperatingSystem: "none_64",
       desiredOperatingSystem: "debian13_64",
     };
@@ -38,34 +40,28 @@ describe("OVH dedicated provider", () => {
       ...blankInput,
       currentOperatingSystem: "debian13_64",
     };
-    expect(new OvhReinstallIntent(blankInput).decision()).toBe(
-      ReinstallDecision.Required,
-    );
-    expect(new OvhReinstallIntent(convergedInput).decision()).toBe(
-      ReinstallDecision.Converged,
-    );
+    expect(new OvhReinstallIntent(blankInput).decision()).toEqual(ok(ReinstallDecision.Required));
+    expect(new OvhReinstallIntent(convergedInput).decision()).toEqual(ok(ReinstallDecision.Converged));
   });
 
   test("refuses to replace an installed OS without disaster recovery", () => {
     const input = {
-      allowReinstall: false,
+      allowReinstall: ReinstallAuthorization.Preserve,
       currentOperatingSystem: "debian12_64",
       desiredOperatingSystem: "debian13_64",
     };
-    expect(() => new OvhReinstallIntent(input).decision()).toThrow(
-      "refusing to replace",
-    );
+    const decision = new OvhReinstallIntent(input).decision();
+    expect(decision.isErr()).toBe(true);
+    if (decision.isErr()) expect(decision.error.message).toContain("refusing to replace");
   });
 
   test("honors an explicit same-OS disaster-recovery reinstall", () => {
     const input = {
-      allowReinstall: true,
+      allowReinstall: ReinstallAuthorization.Replace,
       currentOperatingSystem: "debian13_64",
       desiredOperatingSystem: "debian13_64",
     };
-    expect(new OvhReinstallIntent(input).decision()).toBe(
-      ReinstallDecision.Required,
-    );
+    expect(new OvhReinstallIntent(input).decision()).toEqual(ok(ReinstallDecision.Required));
   });
 
   test("recognizes every OVH terminal reinstall failure", () => {
@@ -95,7 +91,6 @@ describe("OVH dedicated provider", () => {
       serviceName: "ns513432.ip-167-114-158.net",
       sshPublicKeyFile: "~/.ssh/id_ed25519.pub",
       sshUser: "debian",
-      sshPublicKeyFile: "unused-public-key.pub",
     } as const;
     const marker = {
       hostname: "nook-rise-s-2",

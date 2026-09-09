@@ -59,14 +59,6 @@ export interface IncompatibleDeclaredServer {
   kind: ServerAdmissionKind.Incompatible;
 }
 export type ServerAdmission = ReadyDeclaredServer | IncompatibleDeclaredServer;
-export class OvhServerAdmissionError extends Error {
-  readonly kind = ServerAdmissionKind.Incompatible;
-  constructor() {
-    super(
-      "OVH server does not match the declared identity and ready-state contract",
-    );
-  }
-}
 export class OvhServerObservation {
   private constructor(private readonly server: Readonly<OvhServer>) {}
   static fromRecord(server: OvhServer): OvhServerObservation {

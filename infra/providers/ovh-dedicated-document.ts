@@ -1,3 +1,5 @@
+import { err, ok, type Result } from "neverthrow";
+import { OvhFailure, OvhFailureKind } from "./ovh-dedicated-failure";
 import {
   OvhRecoveryMarkerObservation,
   OvhServerObservation,
@@ -13,66 +15,67 @@ import {
   type OvhTask,
 } from "./ovh-dedicated-contracts";
 
-export enum OvhDocumentFailureKind {
-  InvalidSchema = "invalid-schema",
-}
-export class OvhDocumentError extends Error {
-  readonly kind = OvhDocumentFailureKind.InvalidSchema;
-  constructor(schema: string) {
-    super(`OVH ${schema} has an invalid schema`);
-  }
-}
-
 /** Decodes the fields owned by each OVH contract without exposing credential values. */
 export class OvhDocument {
-  private static record(value: unknown): value is Record<string, unknown> {
+  constructor(private readonly input: unknown) {}
+  private failure(schema: string): OvhFailure {
+    return new OvhFailure(OvhFailureKind.Schema, `OVH ${schema} has an invalid schema`);
+  }
+  private record(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && !!value && !Array.isArray(value);
   }
-  private static parse(text: string): unknown {
+  private parse(): Result<unknown, OvhFailure> {
+    if (typeof this.input !== "string") return err(new OvhFailure(OvhFailureKind.Schema, "OVH JSON document has an invalid schema"));
     try {
-      return JSON.parse(text);
+      return ok(JSON.parse(this.input));
     } catch {
-      throw new OvhDocumentError("JSON document");
+      return err(this.failure("JSON document"));
     }
   }
-  static credentials(text: string): OvhCredentials {
-    const value = OvhDocument.parse(text);
+  credentials(): Result<OvhCredentials, OvhFailure> {
+    const parsed = this.parse();
+    if (parsed.isErr()) return err(parsed.error);
+    const value = parsed.value;
     if (
-      !OvhDocument.record(value) ||
+      !this.record(value) ||
       typeof value.applicationKey !== "string" ||
       typeof value.applicationSecret !== "string" ||
       typeof value.consumerKey !== "string" ||
       typeof value.endpoint !== "string"
     )
-      throw new OvhDocumentError("credentials");
-    return {
+      return err(this.failure("credentials"));
+    return ok({
       applicationKey: value.applicationKey,
       applicationSecret: value.applicationSecret,
       consumerKey: value.consumerKey,
       endpoint: value.endpoint,
-    };
+    });
   }
-  static recoveryMarker(text: string): OvhRecoveryMarkerObservation {
-    const value = OvhDocument.parse(text);
+  recoveryMarker(): Result<OvhRecoveryMarkerObservation, OvhFailure> {
+    const parsed = this.parse();
+    if (parsed.isErr()) return err(parsed.error);
+    const value = parsed.value;
     if (
-      !OvhDocument.record(value) ||
+      !this.record(value) ||
       value.version !== 1 ||
       typeof value.hostname !== "string" ||
       typeof value.operatingSystem !== "string" ||
       typeof value.serviceName !== "string"
     )
-      throw new OvhDocumentError("recovery marker");
-    return OvhRecoveryMarkerObservation.fromRecord({
+      return err(this.failure("recovery marker"));
+    return ok(OvhRecoveryMarkerObservation.fromRecord({
       version: value.version,
       hostname: value.hostname,
       operatingSystem: value.operatingSystem,
       serviceName: value.serviceName,
-    });
+    }));
   }
-  static server(text: string): OvhServerObservation {
-    const value = OvhDocument.parse(text);
+  server(): Result<OvhServerObservation, OvhFailure> {
+    const parsed = this.parse();
+    if (parsed.isErr()) return err(parsed.error);
+    const value = parsed.value;
     if (
-      !OvhDocument.record(value) ||
+      !this.record(value) ||
       typeof value.commercialRange !== "string" ||
       typeof value.datacenter !== "string" ||
       typeof value.ip !== "string" ||
@@ -80,62 +83,69 @@ export class OvhDocument {
       typeof value.os !== "string" ||
       typeof value.state !== "string"
     )
-      throw new OvhDocumentError("server");
-    return OvhServerObservation.fromRecord({
+      return err(this.failure("server"));
+    return ok(OvhServerObservation.fromRecord({
       commercialRange: value.commercialRange,
       datacenter: value.datacenter,
       ip: value.ip,
       name: value.name,
       os: value.os,
       state: value.state,
-    });
+    }));
   }
-  static compatibleTemplates(text: string): CompatibleTemplates {
-    const value = OvhDocument.parse(text);
+  compatibleTemplates(): Result<CompatibleTemplates, OvhFailure> {
+    const parsed = this.parse();
+    if (parsed.isErr()) return err(parsed.error);
+    const value = parsed.value;
     if (
-      !OvhDocument.record(value) ||
+      !this.record(value) ||
       !Array.isArray(value.ovh) ||
       !value.ovh.every((item): item is string => typeof item === "string")
     )
-      throw new OvhDocumentError("compatible templates");
-    return { ovh: value.ovh };
+      return err(this.failure("compatible templates"));
+    return ok({ ovh: value.ovh });
   }
-  static task(text: string): OvhTask {
-    const value = OvhDocument.parse(text);
+  task(): Result<OvhTask, OvhFailure> {
+    const parsed = this.parse();
+    if (parsed.isErr()) return err(parsed.error);
+    const value = parsed.value;
     if (
-      !OvhDocument.record(value) ||
+      !this.record(value) ||
       typeof value.taskId !== "number" ||
       !Number.isSafeInteger(value.taskId)
     )
-      throw new OvhDocumentError("task");
+      return err(this.failure("task"));
     const status = Object.values(OvhTaskStatus).find(
       (status): status is OvhTaskStatus =>
         typeof status === "string" && status === value.status,
     );
-    if (!status) throw new OvhDocumentError("task status");
-    return { taskId: value.taskId, status };
+    if (!status) return err(this.failure("task status"));
+    return ok({ taskId: value.taskId, status });
   }
-  static credentialValidation(text: string): void {
+  credentialValidation(): Result<void, OvhFailure> {
     // This endpoint confirms authorization; its provider-owned record is not used internally.
-    const value = OvhDocument.parse(text);
-    if (!OvhDocument.record(value))
-      throw new OvhDocumentError("credential validation");
+    const parsed = this.parse();
+    if (parsed.isErr()) return err(parsed.error);
+    const value = parsed.value;
+    if (!this.record(value))
+      return err(this.failure("credential validation"));
+    return ok();
   }
-  static inventory(value: unknown): DedicatedServerInventory {
-    if (!OvhDocument.record(value) || !OvhDocument.record(value.servers))
-      throw new OvhDocumentError("server inventory");
-    return {
-      servers: Object.fromEntries(
-        Object.entries(value.servers).map(([name, definition]) => [
-          name,
-          OvhDocument.definition(definition),
-        ]),
-      ),
-    };
+  inventory(): Result<DedicatedServerInventory, OvhFailure> {
+    const value = this.input;
+    if (!this.record(value) || !this.record(value.servers))
+      return err(this.failure("server inventory"));
+    const servers: Array<[string, DedicatedServerDefinition]> = [];
+    for (const [name, definitionValue] of Object.entries(value.servers)) {
+      const admitted = this.definition(definitionValue);
+      if (admitted.isErr()) return err(admitted.error);
+      servers.push([name, admitted.value]);
+    }
+    return ok({ servers: Object.fromEntries(servers) });
   }
-  private static definition(value: unknown): DedicatedServerDefinition {
+  private definition(value: unknown): Result<DedicatedServerDefinition, OvhFailure> {
     if (
-      !OvhDocument.record(value) ||
+      !this.record(value) ||
       typeof value.expectedCommercialRange !== "string" ||
       typeof value.expectedDatacenter !== "string" ||
       typeof value.meshAddress !== "string" ||
@@ -145,7 +155,7 @@ export class OvhDocument {
       typeof value.sshPublicKeyFile !== "string" ||
       typeof value.sshUser !== "string"
     )
-      throw new OvhDocumentError("server definition");
+      return err(this.failure("server definition"));
     const arcTier = Object.values(ArcTier).find(
       (tier) => tier === value.arcTier,
     );
@@ -153,8 +163,8 @@ export class OvhDocument {
       (mode) => mode === value.endpointMode,
     );
     if (!arcTier || !endpointMode)
-      throw new OvhDocumentError("server definition mode");
-    return {
+      return err(this.failure("server definition mode"));
+    return ok({
       arcTier,
       endpointMode,
       expectedCommercialRange: value.expectedCommercialRange,
@@ -165,6 +175,6 @@ export class OvhDocument {
       serviceName: value.serviceName,
       sshPublicKeyFile: value.sshPublicKeyFile,
       sshUser: value.sshUser,
-    };
+    });
   }
 }

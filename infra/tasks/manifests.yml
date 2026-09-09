@@ -3,7 +3,7 @@ version: '3'
 # manifests infrastructure operations.
 tasks:
   k0s:manifests:check:
-    deps: [tooling:install]
+    deps: [":tooling:install"]
     desc: Validate Hive isolation and TLS invariants in repository manifests.
     cmds:
       - bun test infra/operator-ssh.test.ts

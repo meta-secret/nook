@@ -106,7 +106,7 @@ export interface DedicatedServerInventory {
 
 export interface CliArguments {
   action: CliAction;
-  allowReinstall: boolean;
+  allowReinstall: ReinstallAuthorization;
   field: DedicatedServerField;
   inventoryFile: string;
   node: string;
@@ -137,7 +137,7 @@ export interface ReinstallRequest {
 }
 
 export interface ProvisionContext {
-  allowReinstall: boolean;
+  allowReinstall: ReinstallAuthorization;
   credentials: OvhCredentials;
   definition: DedicatedServerDefinition;
   hostname: string;
@@ -150,7 +150,7 @@ export interface HostIdentity {
 }
 
 export interface HostIdentityInput {
-  allowCreate: boolean;
+  allowCreate: HostIdentityCreation;
   hostname: string;
 }
 
@@ -193,3 +193,6 @@ export namespace OvhTaskStatus {
     }
   }
 }
+
+export enum ReinstallAuthorization { Preserve = "preserve", Replace = "replace" }
+export enum HostIdentityCreation { Existing = "existing", Create = "create" }
