@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import { readFileSync } from 'node:fs';
 
 import path from 'node:path';
@@ -19,7 +20,7 @@ import {
 
 import { ValidationCycleHistory } from './agent-stats-validation-cycles.ts';
 
-import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
+import { LoomFailureCode } from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
 
@@ -28,131 +29,13 @@ import type { RunCommandArgs } from './run.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 
 export class AgentStatisticsAssembly {
-  private constructor(private readonly request: AssembleOptions) {}
+  constructor(private readonly request: AssembleOptions) {}
 
-  static loadScratchEventLog(scratchPath: string): ScratchEventLog {
-    let parsed: UntrustedYamlNode;
-    try {
-      parsed = UntrustedYamlBoundary.fromHost(
-        JSON.parse(readFileSync(scratchPath, 'utf8')) as UntrustedYamlNode,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const loomFailureDetailArgs14: LoomFailureDetailArgs = {
-        code: LoomFailureCode.ScratchLogInvalid,
-        text: `Failed to read scratch event log: ${message}`,
-      };
-      LoomFailure.detail(loomFailureDetailArgs14);
-    }
-    if (!UntrustedYamlBoundary.isRecord(parsed)) {
-      const loomFailureDetailArgs13: LoomFailureDetailArgs = {
-        code: LoomFailureCode.ScratchLogInvalid,
-        text: 'Scratch event log must be a JSON object',
-      };
-      LoomFailure.detail(loomFailureDetailArgs13);
-    }
-    const startedAtArgs = {
-      record: parsed,
-      key: 'started_at',
-      failure: 'scratch.started_at must be a non-empty string',
-    };
-    const startedAt =
-      AgentStatisticsAssembly.requireExternalString(startedAtArgs);
-    const changeSurfaceArgs = {
-      record: parsed,
-      key: 'change_surface',
-      failure: 'scratch.change_surface must be a non-empty string',
-    };
-    const changeSurface =
-      AgentStatisticsAssembly.requireExternalString(changeSurfaceArgs);
-    const localExecutionsArgs = {
-      record: parsed,
-      key: 'local_executions',
-      failure: 'scratch.local_executions must be an array',
-    };
-    const localExecutions =
-      AgentStatisticsAssembly.requireExternalArray(localExecutionsArgs);
-    const prRetriggersArgs = {
-      record: parsed,
-      key: 'pr_retriggers',
-      failure: 'scratch.pr_retriggers must be an array',
-    };
-    const prRetriggers =
-      AgentStatisticsAssembly.requireExternalArray(prRetriggersArgs);
-    const mergeAttemptsArgs = {
-      record: parsed,
-      key: 'merge_attempts',
-      failure: 'scratch.merge_attempts must be an array',
-    };
-    const mergeAttempts =
-      AgentStatisticsAssembly.requireExternalArray(mergeAttemptsArgs);
-    const comparisonArgs = {
-      record: parsed,
-      key: 'comparison',
-      failure: 'scratch.comparison must be an object',
-    };
-    const comparison =
-      AgentStatisticsAssembly.requireUntrustedYamlMap(comparisonArgs);
-    const wasteAssessmentArgs = {
-      record: parsed,
-      key: 'waste_assessment',
-      failure: 'scratch.waste_assessment must be an object',
-    };
-    const wasteAssessment =
-      AgentStatisticsAssembly.requireUntrustedYamlMap(wasteAssessmentArgs);
-    const cacheTelemetryPropertyArgs: UntrustedYamlPropertyArgs = {
-      record: parsed,
-      key: 'cache_telemetry',
-    };
-    const cacheTelemetryProperty = UntrustedYamlBoundary.property(
-      cacheTelemetryPropertyArgs,
-    );
-    const testInventoryPropertyArgs: UntrustedYamlPropertyArgs = {
-      record: parsed,
-      key: 'test_inventory',
-    };
-    const testInventoryProperty = UntrustedYamlBoundary.property(
-      testInventoryPropertyArgs,
-    );
-
-    return {
-      started_at: startedAt,
-      change_surface: changeSurface,
-      local_executions: localExecutions.filter(UntrustedYamlBoundary.isRecord),
-      pr_retriggers: prRetriggers.filter(UntrustedYamlBoundary.isRecord),
-      merge_attempts: mergeAttempts.filter(UntrustedYamlBoundary.isRecord),
-      comparison,
-      waste_assessment: wasteAssessment,
-      cache_telemetry:
-        cacheTelemetryProperty.presence ===
-          UntrustedYamlPropertyPresence.Present &&
-        UntrustedYamlBoundary.isRecord(cacheTelemetryProperty.value)
-          ? {
-              kind: OptionalRecordKind.Present,
-              value: cacheTelemetryProperty.value,
-            }
-          : { kind: OptionalRecordKind.Missing },
-      test_inventory:
-        testInventoryProperty.presence ===
-          UntrustedYamlPropertyPresence.Present &&
-        UntrustedYamlBoundary.isRecord(testInventoryProperty.value)
-          ? {
-              kind: OptionalRecordKind.Present,
-              value: testInventoryProperty.value,
-            }
-          : { kind: OptionalRecordKind.Missing },
-    };
-  }
-
-  static assembleAgentStats(options: AssembleOptions): Promise<AssembledStats> {
-    return new AgentStatisticsAssembly(options).execute();
-  }
-
-  private async execute(): Promise<AssembledStats> {
+  async execute(): Promise<Result<AssembledStats, StatisticsAssemblyFailure>> {
     const options = this.request;
-    const scratch = AgentStatisticsAssembly.loadScratchEventLog(
-      options.scratchPath,
-    );
+    const scratchResult = new ScratchEventLogFile(options.scratchPath).read();
+    if (scratchResult.isErr()) return err(scratchResult.error);
+    const scratch = scratchResult.value;
 
     const prJsonArgs: RunCommandArgs = {
       command: 'gh',
@@ -171,30 +54,29 @@ export class AgentStatisticsAssembly {
         code: LoomFailureCode.CommandFailed,
         text: `gh pr view failed: ${prJson.stderr || prJson.stdout}`,
       };
-      LoomFailure.detail(loomFailureDetailArgs12);
+      return err({
+        code: loomFailureDetailArgs12.code,
+        message: loomFailureDetailArgs12.text,
+      });
     }
 
-    let pr: UntrustedYamlMap;
+    let parsed: UntrustedYamlNode;
     try {
-      const parsed = UntrustedYamlBoundary.fromHost(
+      parsed = UntrustedYamlBoundary.fromHost(
         JSON.parse(prJson.stdout) as UntrustedYamlNode,
       );
-      if (!UntrustedYamlBoundary.isRecord(parsed)) {
-        const loomFailureDetailArgs11: LoomFailureDetailArgs = {
-          code: LoomFailureCode.PrMetadataInvalid,
-          text: 'gh pr view returned a non-object',
-        };
-        LoomFailure.detail(loomFailureDetailArgs11);
-      }
-      pr = parsed;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const loomFailureDetailArgs10: LoomFailureDetailArgs = {
+    } catch {
+      return err({
         code: LoomFailureCode.PrMetadataInvalid,
-        text: `Failed to parse gh pr view JSON: ${message}`,
-      };
-      LoomFailure.detail(loomFailureDetailArgs10);
+        message: 'Failed to parse gh pr view JSON',
+      });
     }
+    if (!UntrustedYamlBoundary.isRecord(parsed))
+      return err({
+        code: LoomFailureCode.PrMetadataInvalid,
+        message: 'gh pr view returned a non-object',
+      });
+    const pr = parsed;
 
     const statePropertyArgs: UntrustedYamlPropertyArgs = {
       record: pr,
@@ -209,7 +91,10 @@ export class AgentStatisticsAssembly {
         code: LoomFailureCode.PrMetadataInvalid,
         text: 'AI-agent stats require a merged source PR',
       };
-      LoomFailure.detail(loomFailureDetailArgs9);
+      return err({
+        code: loomFailureDetailArgs9.code,
+        message: loomFailureDetailArgs9.text,
+      });
     }
     const mergedAtArgs = {
       record: pr,
@@ -217,16 +102,22 @@ export class AgentStatisticsAssembly {
       failure: 'Merged PR is missing mergedAt',
       code: LoomFailureCode.PrMetadataInvalid,
     };
-    const mergedAt =
-      AgentStatisticsAssembly.requireExternalString(mergedAtArgs);
+    const mergedAtResult = new StatisticsRequiredField(
+      mergedAtArgs,
+    ).requireExternalString();
+    if (mergedAtResult.isErr()) return err(mergedAtResult.error);
+    const mergedAt = mergedAtResult.value;
     const headShaArgs = { record: pr, key: 'headRefOid' };
-    const headSha = AgentStatisticsAssembly.optionalExternalString(headShaArgs);
+    const headSha = this.optionalExternalString(headShaArgs);
     if (!/^[0-9a-f]{40}$/.test(headSha)) {
       const loomFailureDetailArgs8: LoomFailureDetailArgs = {
         code: LoomFailureCode.PrMetadataInvalid,
         text: 'Merged PR is missing headRefOid',
       };
-      LoomFailure.detail(loomFailureDetailArgs8);
+      return err({
+        code: loomFailureDetailArgs8.code,
+        message: loomFailureDetailArgs8.text,
+      });
     }
 
     const mergeCommitPropertyArgs: UntrustedYamlPropertyArgs = {
@@ -242,14 +133,13 @@ export class AgentStatisticsAssembly {
         ? mergeCommitProperty.value
         : {};
     const mergeShaArgs = { record: mergeCommit, key: 'oid' };
-    const mergeSha =
-      AgentStatisticsAssembly.optionalExternalString(mergeShaArgs);
+    const mergeSha = this.optionalExternalString(mergeShaArgs);
     if (!/^[0-9a-f]{40}$/.test(mergeSha)) {
       const mergeShaFailure: LoomFailureDetailArgs = {
         code: LoomFailureCode.PrMetadataInvalid,
         text: 'Merged PR is missing mergeCommit.oid',
       };
-      LoomFailure.detail(mergeShaFailure);
+      return err({ code: mergeShaFailure.code, message: mergeShaFailure.text });
     }
 
     let inventory: UntrustedYamlMap;
@@ -257,7 +147,7 @@ export class AgentStatisticsAssembly {
       inventory = scratch.test_inventory.value;
     } else if (options.includeInventory) {
       const inventoryArgs = { repoRoot: options.repoRoot, headSha };
-      inventory = AgentStatisticsAssembly.countTestInventory(inventoryArgs);
+      inventory = this.countTestInventory(inventoryArgs);
     } else {
       inventory = {
         measured_at: new Date().toISOString(),
@@ -297,13 +187,13 @@ export class AgentStatisticsAssembly {
         ? createdAtProperty.value
         : scratch.started_at;
     const branchArgs = { record: pr, key: 'headRefName' };
-    const branch = AgentStatisticsAssembly.optionalExternalString(branchArgs);
+    const branch = this.optionalExternalString(branchArgs);
     if (branch.length === 0) {
       const branchFailure: LoomFailureDetailArgs = {
         code: LoomFailureCode.PrMetadataInvalid,
         text: 'Merged PR is missing headRefName',
       };
-      LoomFailure.detail(branchFailure);
+      return err({ code: branchFailure.code, message: branchFailure.text });
     }
     const evidenceRequest: AgentStatsGitHubEvidenceRequest = {
       repoRoot: options.repoRoot,
@@ -318,9 +208,8 @@ export class AgentStatisticsAssembly {
       GithubAgentEvidence.collectAgentStatsGitHubEvidence(evidenceRequest);
     const runs = evidence.githubActionsRuns;
     const localExecutions = scratch.local_executions;
-    const localSeconds =
-      AgentStatisticsAssembly.sumDurationSeconds(localExecutions);
-    const actionsSeconds = AgentStatisticsAssembly.sumDurationSeconds(runs);
+    const localSeconds = this.sumDurationSeconds(localExecutions);
+    const actionsSeconds = this.sumDurationSeconds(runs);
     const startedMs = Date.parse(scratch.started_at);
     const openedMs = Date.parse(openedAt);
     const mergedMs = Date.parse(mergedAt);
@@ -333,13 +222,16 @@ export class AgentStatisticsAssembly {
         code: LoomFailureCode.PrMetadataInvalid,
         text: 'Could not parse started_at / opened_at / merged_at timestamps',
       };
-      LoomFailure.detail(loomFailureDetailArgs7);
+      return err({
+        code: loomFailureDetailArgs7.code,
+        message: loomFailureDetailArgs7.text,
+      });
     }
 
     const urlArgs = { record: pr, key: 'url' };
-    const url = AgentStatisticsAssembly.optionalExternalString(urlArgs);
+    const url = this.optionalExternalString(urlArgs);
     const titleArgs = { record: pr, key: 'title' };
-    const title = AgentStatisticsAssembly.optionalExternalString(titleArgs);
+    const title = this.optionalExternalString(titleArgs);
     const countByCategoryArgs = {
       items: localExecutions,
       category: 'combined',
@@ -354,12 +246,9 @@ export class AgentStatisticsAssembly {
     };
     const sealUntrustedYamlMapArgs2 = {
       local_execution_count: localExecutions.length,
-      local_check_count:
-        AgentStatisticsAssembly.countByCategory(countByCategoryArgs3),
-      local_test_count:
-        AgentStatisticsAssembly.countByCategory(countByCategoryArgs2),
-      local_combined_count:
-        AgentStatisticsAssembly.countByCategory(countByCategoryArgs),
+      local_check_count: this.countByCategory(countByCategoryArgs3),
+      local_test_count: this.countByCategory(countByCategoryArgs2),
+      local_combined_count: this.countByCategory(countByCategoryArgs),
       local_execution_seconds: localSeconds,
       github_actions_run_count: runs.length,
       github_actions_seconds: actionsSeconds,
@@ -429,15 +318,19 @@ export class AgentStatisticsAssembly {
     };
     const record = UntrustedYamlBoundary.seal(recordBuilder);
 
-    return {
-      yaml: Bun.YAML.stringify(record),
-      record,
-    };
+    let yaml: string;
+    try {
+      yaml = Bun.YAML.stringify(record);
+    } catch {
+      return err({
+        code: LoomFailureCode.YamlStringifyFailed,
+        message: 'Failed to stringify agent statistics YAML',
+      });
+    }
+    return ok({ yaml, record });
   }
 
-  private static countTestInventory(
-    args: CountTestInventoryArgs,
-  ): UntrustedYamlMap {
+  private countTestInventory(args: CountTestInventoryArgs): UntrustedYamlMap {
     const { repoRoot, headSha } = args;
 
     const measuredAt = new Date().toISOString();
@@ -446,11 +339,11 @@ export class AgentStatisticsAssembly {
       filter:
         'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)',
     };
-    const rust = AgentStatisticsAssembly.countNextest(rustArgs);
+    const rust = this.countNextest(rustArgs);
     const preflightArgs = { repoRoot, filter: 'package(preflight)' };
-    const preflight = AgentStatisticsAssembly.countNextest(preflightArgs);
-    const webUnit = AgentStatisticsAssembly.countVitest(repoRoot);
-    const e2e = AgentStatisticsAssembly.countPlaywright(repoRoot);
+    const preflight = this.countNextest(preflightArgs);
+    const webUnit = this.countVitest(repoRoot);
+    const e2e = this.countPlaywright(repoRoot);
     const byType = {
       rust,
       preflight,
@@ -465,7 +358,7 @@ export class AgentStatisticsAssembly {
     };
   }
 
-  private static countNextest(args: CountNextestArgs): number {
+  private countNextest(args: CountNextestArgs): number {
     const { repoRoot, filter } = args;
 
     const listedArgs3: RunCommandArgs = {
@@ -484,7 +377,7 @@ export class AgentStatisticsAssembly {
     return matches.length;
   }
 
-  private static countVitest(repoRoot: string): number {
+  private countVitest(repoRoot: string): number {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
     const listedArgs2: RunCommandArgs = {
       command: 'bunx',
@@ -502,7 +395,7 @@ export class AgentStatisticsAssembly {
     return lines.length;
   }
 
-  private static countPlaywright(repoRoot: string): number {
+  private countPlaywright(repoRoot: string): number {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
     const listedArgs: RunCommandArgs = {
       command: 'bunx',
@@ -520,9 +413,7 @@ export class AgentStatisticsAssembly {
     return matches.length;
   }
 
-  private static sumDurationSeconds(
-    items: AgentStatisticsDurationEntries,
-  ): number {
+  private sumDurationSeconds(items: AgentStatisticsDurationEntries): number {
     let total = 0;
     for (const item of items) {
       const durationArgs: UntrustedYamlPropertyArgs = {
@@ -540,7 +431,7 @@ export class AgentStatisticsAssembly {
     return total;
   }
 
-  private static countByCategory(args: CountByCategoryArgs): number {
+  private countByCategory(args: CountByCategoryArgs): number {
     const { items, category } = args;
 
     return items.filter((item) => {
@@ -556,74 +447,7 @@ export class AgentStatisticsAssembly {
     }).length;
   }
 
-  private static requireExternalString(
-    args: RequireExternalStringArgs,
-  ): string {
-    const propertyArgs3: UntrustedYamlPropertyArgs = {
-      record: args.record,
-      key: args.key,
-    };
-    const property = UntrustedYamlBoundary.property(propertyArgs3);
-    if (
-      property.presence === UntrustedYamlPropertyPresence.Absent ||
-      typeof property.value !== 'string' ||
-      property.value.length === 0
-    ) {
-      const [defaulted1 = LoomFailureCode.ScratchLogInvalid] = [args.code];
-      const loomFailureDetailArgs3: LoomFailureDetailArgs = {
-        code: defaulted1,
-        text: args.failure,
-      };
-      LoomFailure.detail(loomFailureDetailArgs3);
-    }
-    return property.value;
-  }
-
-  private static requireExternalArray(
-    args: RequireExternalArrayArgs,
-  ): readonly UntrustedYamlNode[] {
-    const propertyArgs2: UntrustedYamlPropertyArgs = {
-      record: args.record,
-      key: args.key,
-    };
-    const property = UntrustedYamlBoundary.property(propertyArgs2);
-    if (
-      property.presence === UntrustedYamlPropertyPresence.Absent ||
-      !Array.isArray(property.value)
-    ) {
-      const loomFailureDetailArgs2: LoomFailureDetailArgs = {
-        code: LoomFailureCode.ScratchLogInvalid,
-        text: args.failure,
-      };
-      LoomFailure.detail(loomFailureDetailArgs2);
-    }
-    return property.value;
-  }
-
-  private static requireUntrustedYamlMap(
-    args: RequireUntrustedYamlMapArgs,
-  ): UntrustedYamlMap {
-    const propertyArgs: UntrustedYamlPropertyArgs = {
-      record: args.record,
-      key: args.key,
-    };
-    const property = UntrustedYamlBoundary.property(propertyArgs);
-    if (
-      property.presence === UntrustedYamlPropertyPresence.Absent ||
-      !UntrustedYamlBoundary.isRecord(property.value)
-    ) {
-      const loomFailureDetailArgs: LoomFailureDetailArgs = {
-        code: LoomFailureCode.ScratchLogInvalid,
-        text: args.failure,
-      };
-      LoomFailure.detail(loomFailureDetailArgs);
-    }
-    return property.value;
-  }
-
-  private static optionalExternalString(
-    args: OptionalExternalFieldArgs,
-  ): string {
+  private optionalExternalString(args: OptionalExternalFieldArgs): string {
     const property = UntrustedYamlBoundary.property(args);
     if (
       property.presence === UntrustedYamlPropertyPresence.Present &&
@@ -695,19 +519,233 @@ type RequireExternalStringArgs = {
   readonly code?: LoomFailureCode;
 };
 
-type RequireExternalArrayArgs = {
-  readonly record: UntrustedYamlMap;
-  readonly key: string;
-  readonly failure: string;
-};
-
-type RequireUntrustedYamlMapArgs = {
-  readonly record: UntrustedYamlMap;
-  readonly key: string;
-  readonly failure: string;
-};
-
 type OptionalExternalFieldArgs = {
   readonly record: UntrustedYamlMap;
   readonly key: string;
 };
+
+export type StatisticsAssemblyFailure = {
+  readonly code: LoomFailureCode;
+  readonly message: string;
+};
+class ScratchEventLogFile {
+  constructor(private readonly scratchPath: string) {}
+  read(): Result<ScratchEventLog, StatisticsAssemblyFailure> {
+    const scratchPath = this.scratchPath;
+    let parsed: UntrustedYamlNode;
+    try {
+      parsed = UntrustedYamlBoundary.fromHost(
+        JSON.parse(readFileSync(scratchPath, 'utf8')) as UntrustedYamlNode,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const loomFailureDetailArgs14: LoomFailureDetailArgs = {
+        code: LoomFailureCode.ScratchLogInvalid,
+        text: `Failed to read scratch event log: ${message}`,
+      };
+      return err({
+        code: loomFailureDetailArgs14.code,
+        message: loomFailureDetailArgs14.text,
+      });
+    }
+    if (!UntrustedYamlBoundary.isRecord(parsed)) {
+      const loomFailureDetailArgs13: LoomFailureDetailArgs = {
+        code: LoomFailureCode.ScratchLogInvalid,
+        text: 'Scratch event log must be a JSON object',
+      };
+      return err({
+        code: loomFailureDetailArgs13.code,
+        message: loomFailureDetailArgs13.text,
+      });
+    }
+    const startedAtArgs = {
+      record: parsed,
+      key: 'started_at',
+      failure: 'scratch.started_at must be a non-empty string',
+    };
+    const startedAtResult = new StatisticsRequiredField(
+      startedAtArgs,
+    ).requireExternalString();
+    if (startedAtResult.isErr()) return err(startedAtResult.error);
+    const startedAt = startedAtResult.value;
+    const changeSurfaceArgs = {
+      record: parsed,
+      key: 'change_surface',
+      failure: 'scratch.change_surface must be a non-empty string',
+    };
+    const changeSurfaceResult = new StatisticsRequiredField(
+      changeSurfaceArgs,
+    ).requireExternalString();
+    if (changeSurfaceResult.isErr()) return err(changeSurfaceResult.error);
+    const changeSurface = changeSurfaceResult.value;
+    const localExecutionsArgs = {
+      record: parsed,
+      key: 'local_executions',
+      failure: 'scratch.local_executions must be an array',
+    };
+    const localExecutionsResult = new StatisticsRequiredField(
+      localExecutionsArgs,
+    ).requireExternalArray();
+    if (localExecutionsResult.isErr()) return err(localExecutionsResult.error);
+    const localExecutions = localExecutionsResult.value;
+    const prRetriggersArgs = {
+      record: parsed,
+      key: 'pr_retriggers',
+      failure: 'scratch.pr_retriggers must be an array',
+    };
+    const prRetriggersResult = new StatisticsRequiredField(
+      prRetriggersArgs,
+    ).requireExternalArray();
+    if (prRetriggersResult.isErr()) return err(prRetriggersResult.error);
+    const prRetriggers = prRetriggersResult.value;
+    const mergeAttemptsArgs = {
+      record: parsed,
+      key: 'merge_attempts',
+      failure: 'scratch.merge_attempts must be an array',
+    };
+    const mergeAttemptsResult = new StatisticsRequiredField(
+      mergeAttemptsArgs,
+    ).requireExternalArray();
+    if (mergeAttemptsResult.isErr()) return err(mergeAttemptsResult.error);
+    const mergeAttempts = mergeAttemptsResult.value;
+    const comparisonArgs = {
+      record: parsed,
+      key: 'comparison',
+      failure: 'scratch.comparison must be an object',
+    };
+    const comparisonResult = new StatisticsRequiredField(
+      comparisonArgs,
+    ).requireUntrustedYamlMap();
+    if (comparisonResult.isErr()) return err(comparisonResult.error);
+    const comparison = comparisonResult.value;
+    const wasteAssessmentArgs = {
+      record: parsed,
+      key: 'waste_assessment',
+      failure: 'scratch.waste_assessment must be an object',
+    };
+    const wasteAssessmentResult = new StatisticsRequiredField(
+      wasteAssessmentArgs,
+    ).requireUntrustedYamlMap();
+    if (wasteAssessmentResult.isErr()) return err(wasteAssessmentResult.error);
+    const wasteAssessment = wasteAssessmentResult.value;
+    const cacheTelemetryPropertyArgs: UntrustedYamlPropertyArgs = {
+      record: parsed,
+      key: 'cache_telemetry',
+    };
+    const cacheTelemetryProperty = UntrustedYamlBoundary.property(
+      cacheTelemetryPropertyArgs,
+    );
+    const testInventoryPropertyArgs: UntrustedYamlPropertyArgs = {
+      record: parsed,
+      key: 'test_inventory',
+    };
+    const testInventoryProperty = UntrustedYamlBoundary.property(
+      testInventoryPropertyArgs,
+    );
+
+    return ok({
+      started_at: startedAt,
+      change_surface: changeSurface,
+      local_executions: localExecutions.filter(UntrustedYamlBoundary.isRecord),
+      pr_retriggers: prRetriggers.filter(UntrustedYamlBoundary.isRecord),
+      merge_attempts: mergeAttempts.filter(UntrustedYamlBoundary.isRecord),
+      comparison,
+      waste_assessment: wasteAssessment,
+      cache_telemetry:
+        cacheTelemetryProperty.presence ===
+          UntrustedYamlPropertyPresence.Present &&
+        UntrustedYamlBoundary.isRecord(cacheTelemetryProperty.value)
+          ? {
+              kind: OptionalRecordKind.Present,
+              value: cacheTelemetryProperty.value,
+            }
+          : { kind: OptionalRecordKind.Missing },
+      test_inventory:
+        testInventoryProperty.presence ===
+          UntrustedYamlPropertyPresence.Present &&
+        UntrustedYamlBoundary.isRecord(testInventoryProperty.value)
+          ? {
+              kind: OptionalRecordKind.Present,
+              value: testInventoryProperty.value,
+            }
+          : { kind: OptionalRecordKind.Missing },
+    });
+  }
+}
+class StatisticsRequiredField {
+  constructor(private readonly args: RequireExternalStringArgs) {}
+  requireExternalString(): Result<string, StatisticsAssemblyFailure> {
+    const args = this.args;
+    const propertyArgs3: UntrustedYamlPropertyArgs = {
+      record: args.record,
+      key: args.key,
+    };
+    const property = UntrustedYamlBoundary.property(propertyArgs3);
+    if (
+      property.presence === UntrustedYamlPropertyPresence.Absent ||
+      typeof property.value !== 'string' ||
+      property.value.length === 0
+    ) {
+      const [defaulted1 = LoomFailureCode.ScratchLogInvalid] = [args.code];
+      const loomFailureDetailArgs3: LoomFailureDetailArgs = {
+        code: defaulted1,
+        text: args.failure,
+      };
+      return err({
+        code: loomFailureDetailArgs3.code,
+        message: loomFailureDetailArgs3.text,
+      });
+    }
+    return ok(property.value);
+  }
+  requireExternalArray(): Result<
+    readonly UntrustedYamlNode[],
+    StatisticsAssemblyFailure
+  > {
+    const args = this.args;
+    const propertyArgs2: UntrustedYamlPropertyArgs = {
+      record: args.record,
+      key: args.key,
+    };
+    const property = UntrustedYamlBoundary.property(propertyArgs2);
+    if (
+      property.presence === UntrustedYamlPropertyPresence.Absent ||
+      !Array.isArray(property.value)
+    ) {
+      const loomFailureDetailArgs2: LoomFailureDetailArgs = {
+        code: LoomFailureCode.ScratchLogInvalid,
+        text: args.failure,
+      };
+      return err({
+        code: loomFailureDetailArgs2.code,
+        message: loomFailureDetailArgs2.text,
+      });
+    }
+    return ok(property.value);
+  }
+  requireUntrustedYamlMap(): Result<
+    UntrustedYamlMap,
+    StatisticsAssemblyFailure
+  > {
+    const args = this.args;
+    const propertyArgs: UntrustedYamlPropertyArgs = {
+      record: args.record,
+      key: args.key,
+    };
+    const property = UntrustedYamlBoundary.property(propertyArgs);
+    if (
+      property.presence === UntrustedYamlPropertyPresence.Absent ||
+      !UntrustedYamlBoundary.isRecord(property.value)
+    ) {
+      const loomFailureDetailArgs: LoomFailureDetailArgs = {
+        code: LoomFailureCode.ScratchLogInvalid,
+        text: args.failure,
+      };
+      return err({
+        code: loomFailureDetailArgs.code,
+        message: loomFailureDetailArgs.text,
+      });
+    }
+    return ok(property.value);
+  }
+}

@@ -54,14 +54,18 @@ export class AgentStatisticsCommand {
       scratchPath,
       includeInventory: request.includeTestInventory,
     };
-    const assembled =
-      await AgentStatisticsAssembly.assembleAgentStats(assembledArgs);
+    const assembled = await new AgentStatisticsAssembly(
+      assembledArgs,
+    ).execute();
+    if (assembled.isErr()) return err(assembled.error);
 
-    const written = new AgentStatisticsDocument(outPath).write(assembled.yaml);
+    const written = new AgentStatisticsDocument(outPath).write(
+      assembled.value.yaml,
+    );
     if (written.isErr()) return err(written.error);
 
     const validationArgs3: ValidateAgentStatsYamlArgs = {
-      content: assembled.yaml,
+      content: assembled.value.yaml,
       expectedPrNumber: request.prNumber,
     };
     const validation = AgentStatisticsSchema.validate(validationArgs3);
