@@ -57,12 +57,12 @@ const authenticationSurfaceRefreshFailureResponse: MessageResponse = {
   reason: 'authentication-surface-refresh-failed',
 }
 
-export function routeExternalCompanionMessage({
+export async function routeExternalCompanionMessage({
   dependencies,
   message,
   sender,
   sendResponse,
-}: ExternalCompanionRoutingArgs): boolean {
+}: ExternalCompanionRoutingArgs): Promise<boolean> {
   const {
     createIdentityHandoff,
     createPairedIdentityHandoff,
@@ -85,7 +85,7 @@ export function routeExternalCompanionMessage({
   if (
     launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
   ) {
-    if (!isNokeySender(sender)) {
+    if (!(await isNokeySender(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -96,7 +96,7 @@ export function routeExternalCompanionMessage({
   }
 
   if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
-    if (!isNokeySender(sender)) {
+    if (!(await isNokeySender(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -105,7 +105,7 @@ export function routeExternalCompanionMessage({
   }
 
   if (isExtensionPairedVaultUnlockRequestMessage(message)) {
-    if (!isNokeySender(sender)) {
+    if (!(await isNokeySender(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -124,7 +124,7 @@ export function routeExternalCompanionMessage({
   }
 
   if (isExtensionIdentityHandoffRequestMessage(message)) {
-    if (!isNokeySender(sender)) {
+    if (!(await isNokeySender(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -133,7 +133,7 @@ export function routeExternalCompanionMessage({
   }
 
   if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
-    if (!isNokeySender(sender)) {
+    if (!(await isNokeySender(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -141,7 +141,7 @@ export function routeExternalCompanionMessage({
     return true
   }
 
-  if (!hasPairingApprovedType(message) || !isNokeySender(sender)) {
+  if (!hasPairingApprovedType(message) || !(await isNokeySender(sender))) {
     sendResponse(invalidPairingGrantResponse)
     return false
   }

@@ -318,66 +318,74 @@ export function routeExtensionLifecycleMessage({
   }
 
   if (ExtensionLocalEventLogUpdatedMessageSchema.is(message)) {
-    if (!isExtensionRuntimeSender(sender) || !isNokeySender(sender)) {
+    if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
-      vaultStoreId: message.payload.vaultStoreId,
-      eventLogRecords: message.payload.eventLogRecords,
-    }
-    void beginAccountPickerAuthorizationCleanup()
-      .then(async (cleanupStart) => {
-        const cleanupArgs: ClearAuthorizationStateArgs = {
-          beginAccountPickerAuthorizationCleanup,
-          clearPendingAccountPickers,
-          clearStagedAuthenticatorEnrollments,
-          closeExtensionSessionDocument,
-          completeAccountPickerAuthorizationCleanup,
-          releaseAccountPickerAuthorizationCleanup,
-          closeSession: true,
-          cleanupStart: {
-            kind: AuthorizationCleanupStartKind.Existing,
-            cleanup: cleanupStart,
-          },
+    void isNokeySender(sender)
+      .then(async (trusted) => {
+        if (!trusted) {
+          sendResponse(forbiddenSenderResponse)
+          return
         }
-        try {
-          const response = await importLocalEventLogUpdate(importArgs)
-          if (
-            !response.ok &&
-            response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
-          ) {
-            try {
-              await clearAuthorizationState(cleanupArgs)
-            } catch {
-              // Authorization remains invalid while browser cleanup is retried.
+        const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
+          vaultStoreId: message.payload.vaultStoreId,
+          eventLogRecords: message.payload.eventLogRecords,
+        }
+        void beginAccountPickerAuthorizationCleanup()
+          .then(async (cleanupStart) => {
+            const cleanupArgs: ClearAuthorizationStateArgs = {
+              beginAccountPickerAuthorizationCleanup,
+              clearPendingAccountPickers,
+              clearStagedAuthenticatorEnrollments,
+              closeExtensionSessionDocument,
+              completeAccountPickerAuthorizationCleanup,
+              releaseAccountPickerAuthorizationCleanup,
+              closeSession: true,
+              cleanupStart: {
+                kind: AuthorizationCleanupStartKind.Existing,
+                cleanup: cleanupStart,
+              },
             }
-          } else {
-            rebindStagedAuthenticatorEnrollmentsAuthorization(
-              cleanupStart.authorizationGeneration,
-            )
-            const outcome = await completeAccountPickerAuthorizationCleanup(
-              cleanupStart.authorizationGeneration,
-              CleanupEvidence.Partial,
-            )
-            // Preserve the import outcome without refreshing a rejected generation.
-            if ('error' in outcome) return response
-            if (response.ok) await refreshAuthenticationSurfaces()
-          }
-          return response
-        } catch {
-          try {
-            await clearAuthorizationState(cleanupArgs)
-          } catch {
-            // The persisted marker keeps authorization invalid if cleanup fails.
-          }
-          return {
-            ok: false,
-            reason: LocalEventLogUpdateFailure.EventLogImportFailed,
-          }
-        }
+            try {
+              const response = await importLocalEventLogUpdate(importArgs)
+              if (
+                !response.ok &&
+                response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
+              ) {
+                try {
+                  await clearAuthorizationState(cleanupArgs)
+                } catch {
+                  // Authorization remains invalid while browser cleanup is retried.
+                }
+              } else {
+                rebindStagedAuthenticatorEnrollmentsAuthorization(
+                  cleanupStart.authorizationGeneration,
+                )
+                const outcome = await completeAccountPickerAuthorizationCleanup(
+                  cleanupStart.authorizationGeneration,
+                  CleanupEvidence.Partial,
+                )
+                // Preserve the import outcome without refreshing a rejected generation.
+                if ('error' in outcome) return response
+                if (response.ok) await refreshAuthenticationSurfaces()
+              }
+              return response
+            } catch {
+              try {
+                await clearAuthorizationState(cleanupArgs)
+              } catch {
+                // The persisted marker keeps authorization invalid if cleanup fails.
+              }
+              return {
+                ok: false,
+                reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+              }
+            }
+          })
+          .then(sendResponse)
       })
-      .then(sendResponse)
+      .catch(() => sendResponse(forbiddenSenderResponse))
     return true
   }
 

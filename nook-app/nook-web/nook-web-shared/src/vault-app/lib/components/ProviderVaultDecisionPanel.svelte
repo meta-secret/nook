@@ -17,9 +17,7 @@
   import type { VaultState } from "$lib/vault.svelte";
   import {
     ProviderVaultEvidenceReader,
-    PreparedProviderVaultIdentities,
     ProviderVaultEvidenceKind,
-    ProviderVaultIdentityCurrentKind,
     ProviderVaultIdentitySelectionKind,
     type ProviderVaultEvidence,
     type ProviderVaultIdentitySelection,
@@ -54,7 +52,11 @@
 
   const preparedIdentities = $derived(
     evidence.kind === ProviderVaultEvidenceKind.Ready
-      ? new PreparedProviderVaultIdentities(evidence.identities).identities
+      ? evidence.identities.filter(
+          (identity) =>
+            identity.eligibility ===
+            ProviderVaultIdentityEligibility.LinkedAndPrepared,
+        )
       : [],
   );
   const identitySelectionRequired = $derived(preparedIdentities.length > 1);
@@ -117,6 +119,7 @@
   }
 
   onMount(() => {
+    let mounted = true;
     void vault
       .enqueueStorage(() => {
         const request: ConstructorParameters<
@@ -128,11 +131,18 @@
         return new ProviderVaultEvidenceReader(request).execute();
       })
       .then((result) => {
-        evidence = result;
+        if (mounted) evidence = result;
+        else ProviderVaultEvidenceReader.release(result);
       })
       .catch(() => {
-        evidence = { kind: ProviderVaultEvidenceKind.Failed };
+        if (mounted) evidence = { kind: ProviderVaultEvidenceKind.Failed };
       });
+    return () => {
+      mounted = false;
+      const released = evidence;
+      evidence = { kind: ProviderVaultEvidenceKind.Loading };
+      ProviderVaultEvidenceReader.release(released);
+    };
   });
 </script>
 
@@ -156,26 +166,27 @@
     </div>
   {:else}
     <div
-      class="rounded-md border p-3 {evidence.decision ===
+      class="rounded-md border p-3 {evidence.projection.decision ===
       ProviderVaultDecision.AdoptProviderVault
         ? 'border-primary/40 bg-primary/5'
         : 'border-border bg-muted/20'}"
       data-testid="provider-vault-recommendation"
     >
       <div class="flex items-start gap-2">
-        {#if evidence.decision === ProviderVaultDecision.AdoptProviderVault}
+        {#if evidence.projection.decision === ProviderVaultDecision.AdoptProviderVault}
           <CheckCircle2 class="mt-0.5 size-4 shrink-0 text-primary" />
         {:else}
           <CircleHelp class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         {/if}
         <div>
           <p class="text-sm font-semibold text-foreground">
-            {evidence.decision === ProviderVaultDecision.AdoptProviderVault
+            {evidence.projection.decision ===
+            ProviderVaultDecision.AdoptProviderVault
               ? vault.t(I18N_KEYS.AuthStorageProviderVaultUseRecommended)
               : vault.t(I18N_KEYS.AuthStorageProviderVaultKeepBothRecommended)}
           </p>
           <p class="mt-1 text-sm text-muted-foreground">
-            {vault.t(reasonKey(evidence.reason))}
+            {vault.t(reasonKey(evidence.projection.reason))}
           </p>
         </div>
       </div>
@@ -219,9 +230,9 @@
                 <span class="min-w-0 flex-1">
                   <span class="flex flex-wrap items-center gap-x-2">
                     <span class="font-medium text-foreground"
-                      >{identity.label}</span
+                      >{identity.identityLabel}</span
                     >
-                    {#if identity.currentKind === ProviderVaultIdentityCurrentKind.Current}
+                    {#if identity.isCurrentApp}
                       <span class="text-xs text-primary">
                         {vault.t(
                           I18N_KEYS.AuthStorageProviderVaultCurrentIdentity,
@@ -305,7 +316,7 @@
         <RefreshCw class="size-4 animate-spin" />
       {/if}
       {evidence.kind === ProviderVaultEvidenceKind.Ready &&
-      evidence.decision === ProviderVaultDecision.AdoptProviderVault
+      evidence.projection.decision === ProviderVaultDecision.AdoptProviderVault
         ? vault.t(I18N_KEYS.AuthStorageProviderVaultUseProvider)
         : vault.t(I18N_KEYS.AuthStorageSyncConflictImportNewVault)}
     </Button>

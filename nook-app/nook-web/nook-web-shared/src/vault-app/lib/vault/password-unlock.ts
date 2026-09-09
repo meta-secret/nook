@@ -6,7 +6,6 @@ import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
 
 export {
   findSharedGrantProvider,
-  SharedGrantProviderKind,
   SharedStorageTargetKind,
   shouldFlushSharedDriveGrant,
   type SharedGrantProvider,

@@ -1,10 +1,14 @@
-export function toNumbers(value: Uint8Array): number[] {
-  return Array.from(value)
-}
+import {
+  admit_passkey_byte_material,
+  type PasskeyByteMaterial,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-export function toBytes(value: unknown): Uint8Array {
-  if (!Array.isArray(value) || !value.every((byte) => Number.isInteger(byte))) {
-    throw new Error('Extension session received invalid key material.')
+/** Browser representation conversion follows canonical Rust octet admission. */
+export class PasskeyBrowserBytes {
+  static fromWire(value: unknown): Uint8Array {
+    return new Uint8Array(admit_passkey_byte_material(value))
   }
-  return new Uint8Array(value)
+  static toWire(value: Uint8Array): PasskeyByteMaterial {
+    return Array.from(value)
+  }
 }

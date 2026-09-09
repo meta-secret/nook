@@ -253,7 +253,7 @@ class ExtensionPairingIdentity {
     }
     await this.issueIdentityHandoff(nookTypedArgs0_1)
     const url = new URL(
-      simpleVaultRuntime.runtimeSimpleVaultUrl('extension-connect'),
+      await simpleVaultRuntime.runtimeSimpleVaultUrl('extension-connect'),
     )
     url.searchParams.set('device_id', device.deviceId)
     url.searchParams.set('device_public_key', device.devicePublicKey)

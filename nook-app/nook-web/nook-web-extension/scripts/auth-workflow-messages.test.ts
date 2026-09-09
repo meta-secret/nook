@@ -1,9 +1,14 @@
-import { describe, expect, test } from 'bun:test'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import type { AuthenticationPasskeyControlObservation } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AuthenticationWorkflowApproval as AuthenticationWorkflowApprovalSchema,
-  AuthenticationWorkflowSnapshotMessage as AuthenticationWorkflowSnapshotMessageSchema,
+  AuthenticationWorkflowSnapshotIngress as AuthenticationWorkflowSnapshotMessageSchema,
 } from '../src/lib/auth-workflow-messages'
+
+beforeAll(async () => {
+  await companionWasmReady
+})
 
 const passkeyControlPresent =
   'present' satisfies AuthenticationPasskeyControlObservation
@@ -41,6 +46,7 @@ const validMessage = {
           matchingPasskeyAccountCount: 0,
           detailedPasskeyControl: { kind: 'absent' },
         },
+        credentialSubmission: { kind: 'absent' },
         detailedAdvanceControl: { kind: 'absent' },
       },
     ],

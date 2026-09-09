@@ -2,16 +2,13 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
 import {
-  enrollmentOauthState,
   findSharedGrantProvider,
-  SharedGrantProviderKind,
   SharedStorageTargetKind,
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 
 export {
   findSharedGrantProvider,
-  SharedGrantProviderKind,
   SharedStorageTargetKind,
   shouldFlushSharedDriveGrant,
   type SharedGrantProvider,
@@ -43,7 +40,6 @@ import {
   providerPersistenceDefaults,
   storedGoogleDriveFolder,
   storedICloudShareTarget,
-  storedOAuthCredential,
   storedOAuthRemoteFileName,
   type OAuthFilePreset,
   type OAuthFileConfig,
@@ -213,8 +209,7 @@ export class PasswordEnrollmentActions {
         let sharedProvider = providerSelection;
         let sharedProviderNeedsSave = false;
         if (
-          sharedProvider.kind ===
-            SharedGrantProviderKind.AuthorizationRequired &&
+          sharedProvider.kind === "authorizationRequired" &&
           preset === "google-drive"
         ) {
           if (!googleOAuthSession.isGoogleOAuthConfigured()) {
@@ -246,7 +241,7 @@ export class PasswordEnrollmentActions {
             oauthTokensToConfigArgs,
           );
           sharedProvider = {
-            kind: SharedGrantProviderKind.Existing,
+            kind: "existing",
             provider: {
               ...providerPersistenceDefaults(),
               id: "enrollment-shared-oauth",
@@ -261,7 +256,7 @@ export class PasswordEnrollmentActions {
         if (preset === "icloud") {
           const existingProvider = sharedProvider;
           const existingConfiguration =
-            existingProvider.kind === SharedGrantProviderKind.Existing
+            existingProvider.kind === "existing"
               ? existingProvider.provider.oauthFile
               : oauthConfigurationNotApplicable();
           const existingConfig = isConfiguredOAuthFile(existingConfiguration)
@@ -314,12 +309,12 @@ export class PasswordEnrollmentActions {
           const provider: StorageProvider = {
             ...providerPersistenceDefaults(),
             id:
-              existingProvider.kind === SharedGrantProviderKind.Existing
+              existingProvider.kind === "existing"
                 ? existingProvider.provider.id
                 : "enrollment-shared-icloud",
             type: OAUTH_FILE_PROVIDER_TYPE,
             label:
-              existingProvider.kind === SharedGrantProviderKind.Existing
+              existingProvider.kind === "existing"
                 ? existingProvider.provider.label
                 : state.t(I18N_KEYS.ProviderPickerIcloud),
             oauthFile: configuredOAuthFile(
@@ -328,19 +323,17 @@ export class PasswordEnrollmentActions {
               ),
             ),
             createdAt:
-              existingProvider.kind === SharedGrantProviderKind.Existing
+              existingProvider.kind === "existing"
                 ? existingProvider.provider.createdAt
                 : isoTimestamp(),
           };
           sharedProvider = {
-            kind: SharedGrantProviderKind.Existing,
+            kind: "existing",
             provider,
           };
           sharedProviderNeedsSave = provider.id === "enrollment-shared-icloud";
         }
-        if (
-          sharedProvider.kind === SharedGrantProviderKind.AuthorizationRequired
-        ) {
+        if (sharedProvider.kind === "authorizationRequired") {
           throw new Error(
             state.t(I18N_KEYS.ErrorsSharedProviderAccessRequired),
           );
@@ -378,20 +371,15 @@ export class PasswordEnrollmentActions {
         }
         enrollmentStorageArgs = state.providerWasmArgs(provider);
       } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
-        const enrollmentState = enrollmentOauthState(enrollmentProvider);
         const defaultOAuthFileConfigArgs: Parameters<
           typeof defaultOAuthFileConfig
         >[0] = {
           preset: enrollmentProvider.oauthPreset as OAuthFilePreset,
           fileName: DEFAULT_DRIVE_BACKUP_NAME,
         };
-        const oauthFile: OAuthFileConfig = {
-          ...defaultOAuthFileConfig(defaultOAuthFileConfigArgs),
-          accessToken: storedOAuthCredential(
-            enrollmentProvider.oauthAccessToken,
-          ),
-          ...enrollmentState,
-        };
+        const oauthFile = enrollmentProvider.oauth_configuration(
+          defaultOAuthFileConfig(defaultOAuthFileConfigArgs),
+        );
         const oauthProvider: StorageProvider = {
           ...providerPersistenceDefaults(),
           id: "enrollment-oauth",

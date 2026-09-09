@@ -33,7 +33,6 @@ import {
   oauthConfigurationNotApplicable,
   personalICloudShareTarget,
   rootGoogleDriveFolder,
-  saveAuthProviders,
   signedOutOAuthCredential,
   storedOAuthRemoteFileName,
   scopedProviderVault,
@@ -417,19 +416,7 @@ export class VaultProviderActions {
     const snapshot = await state
       .requireManager()
       .ensure_local_auth_provider_snapshot(ensureLocalAuthProviderSnapshotArgs);
-    if (snapshot.providers.length !== state.providers.length) {
-      state.providers = snapshot.providers;
-      await state.enqueueStorage(() =>
-        (() => {
-          const saveAuthProvidersArgs: Parameters<typeof saveAuthProviders>[0] =
-            {
-              manager: state.requireManager(),
-              snapshot,
-            };
-          return saveAuthProviders(saveAuthProvidersArgs);
-        })(),
-      );
-    }
+    state.providers = snapshot.providers;
     state.localVaultPresent = await has_local_vault();
     if (state.localVaultPresent) {
       state.storageMode = LOCAL_PROVIDER_TYPE;
@@ -441,33 +428,24 @@ export class VaultProviderActions {
 
   async persistProviders({ opts }: ProviderPersistence) {
     const state = this.state;
-    if (!opts.replace && state.localVaultPresent) {
-      const snapshot = await state.enqueueStorage(() =>
-        state.requireManager().load_auth_providers_snapshot(),
-      );
-      const memoryIds = state.providers.map((p) => p.id);
-      const extraSync = snapshot.providers.filter(
-        (p) => p.type !== "local" && !memoryIds.includes(p.id),
-      );
-      if (extraSync.length > 0) {
-        state.providers = [...state.providers, ...extraSync];
-      }
-    }
-    await state.enqueueStorage(() =>
-      (() => {
-        const saveAuthProvidersArgs2: Parameters<typeof saveAuthProviders>[0] =
-          {
-            manager: state.requireManager(),
-            snapshot: {
-              providers: state.providers,
-              activeVaultStoreId: state.hasActiveVaultStore
-                ? activeVaultScope(state.requireActiveVaultStoreId())
-                : unselectedVaultScope(),
-            },
-          };
-        return saveAuthProviders(saveAuthProvidersArgs2);
-      })(),
+    const request: Parameters<
+      ReturnType<typeof state.requireManager>["persist_auth_providers_snapshot"]
+    >[0] = {
+      snapshot: {
+        providers: state.providers,
+        activeVaultStoreId: state.hasActiveVaultStore
+          ? activeVaultScope(state.requireActiveVaultStoreId())
+          : unselectedVaultScope(),
+      },
+      mode:
+        !opts.replace && state.localVaultPresent
+          ? "preserveUnlistedSyncProviders"
+          : "replace",
+    };
+    const snapshot = await state.enqueueStorage(() =>
+      state.requireManager().persist_auth_providers_snapshot(request),
     );
+    state.providers = snapshot.providers;
   }
 
   beginProviderSetup({ request }: ProviderSetup) {

@@ -14,7 +14,6 @@ import {
 } from '$lib/auth/providers'
 import {
   findSharedGrantProvider,
-  SharedGrantProviderKind,
   SharedStorageTargetKind,
   shouldFlushSharedDriveGrant,
 } from '$lib/vault/password-unlock'
@@ -56,7 +55,7 @@ describe('shared enrollment provider selection', () => {
           storageTargetId: 'folder-required',
         },
       }),
-    ).toEqual({ kind: SharedGrantProviderKind.AuthorizationRequired })
+    ).toEqual({ kind: 'authorizationRequired' })
   })
 
   test('reuses only the provider saved for the granted target', () => {
@@ -72,7 +71,7 @@ describe('shared enrollment provider selection', () => {
         },
       }),
     ).toEqual({
-      kind: SharedGrantProviderKind.Existing,
+      kind: 'existing',
       provider: matchingDrive,
     })
   })

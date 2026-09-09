@@ -140,10 +140,10 @@ class AuthenticatorEnrollmentInteraction {
   private holdEnrollmentWidgetAfterSave = false
   private enrollmentSavePending = false
   detectEnrollmentHints(): EnrollmentPageHints {
-    const [copy, backupCodes] =
+    const { copy, hint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
     const hints = this.detectEnrollmentHintsFromRecoveryCopy(copy)
-    hints.backupCodes = backupCodes
+    hints.backupCodes = hint === 'present'
     return hints
   }
 

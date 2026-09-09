@@ -1,11 +1,24 @@
-import { describe, expect, test } from 'bun:test'
+import initNookWasm, {
+  decode_passkey_setup_material_response,
+  decode_passkey_unlock_material_response,
+} from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import {
   type PasskeySetupMaterial,
   type PasskeySetupResponse,
   type PasskeyUnlockResponse,
-  PasskeySetupResponse as PasskeySetupResponseSchema,
-  PasskeyUnlockResponse as PasskeyUnlockResponseSchema,
 } from '../src/lib/passkey-session-response'
+
+beforeAll(async () => {
+  await initNookWasm({
+    module_or_path: await Bun.file(
+      new URL(
+        '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+        import.meta.url,
+      ),
+    ).arrayBuffer(),
+  })
+})
 
 const fixedByteArrayArgs: { length: number } = { length: 32 }
 const fixedBytes = Array.from(fixedByteArrayArgs, () => 7)
@@ -20,9 +33,7 @@ describe('passkey session response decoding', () => {
       userHandle: fixedBytes,
       prfInput: fixedBytes,
     }
-    expect(
-      PasskeySetupResponseSchema.decodePasskeySetupResponse(response),
-    ).toEqual(expected)
+    expect(decode_passkey_setup_material_response(response)).toEqual(expected)
   })
 
   test('leaves setup key-material policy to the Rust option builder', () => {
@@ -34,12 +45,10 @@ describe('passkey session response decoding', () => {
     }
 
     expect(
-      PasskeySetupResponseSchema.decodePasskeySetupResponse(emptyResponse)
-        .userHandle,
+      decode_passkey_setup_material_response(emptyResponse).userHandle,
     ).toEqual([])
     expect(
-      PasskeySetupResponseSchema.decodePasskeySetupResponse(shortResponse)
-        .prfInput,
+      decode_passkey_setup_material_response(shortResponse).prfInput,
     ).toEqual([1])
   })
 
@@ -52,12 +61,10 @@ describe('passkey session response decoding', () => {
     }
 
     expect(
-      PasskeyUnlockResponseSchema.decodePasskeyUnlockResponse(emptyCredential)
-        .credentialId,
+      decode_passkey_unlock_material_response(emptyCredential).credentialId,
     ).toEqual([])
     expect(
-      PasskeyUnlockResponseSchema.decodePasskeyUnlockResponse(shortPrfInput)
-        .prfInput,
+      decode_passkey_unlock_material_response(shortPrfInput).prfInput,
     ).toEqual([2])
   })
 })

@@ -101,7 +101,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   isExtensionSessionLockMessage: mock(() => false),
   openCompanionLauncher,
   openExtensionPairing: unusedAsyncDependency,
-  openSimpleVault: mock(() => {}),
+  openSimpleVault: mock(() => Promise.resolve()),
   releaseAccountPickerAuthorizationCleanup,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
   refreshAuthenticationSurfaces,
@@ -533,7 +533,7 @@ describe('service worker routing', () => {
       sendResponse,
     }
 
-    expect(routeExternalCompanionMessage(routingArgs)).toBe(false)
+    expect(await routeExternalCompanionMessage(routingArgs)).toBe(false)
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,
       reason: 'forbidden-sender',
@@ -583,7 +583,7 @@ describe('service worker routing', () => {
     const sendResponse = mock(() => {})
 
     expect(
-      routeExternalCompanionMessage({
+      await routeExternalCompanionMessage({
         dependencies,
         message: { type: 'nook:extension-pairing-approved' },
         sender: {

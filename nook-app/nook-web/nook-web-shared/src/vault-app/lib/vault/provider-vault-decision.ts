@@ -2,9 +2,6 @@ import {
   type NookProviderVaultDecisionProjection,
   type NookProviderVaultIdentityProjection,
   type NookVaultManager,
-  ProviderVaultDecision,
-  ProviderVaultDecisionReason,
-  ProviderVaultIdentityEligibility,
 } from "$app-wasm";
 
 export enum ProviderVaultEvidenceKind {
@@ -18,11 +15,6 @@ export enum ProviderVaultIdentitySelectionKind {
   Selected = "selected",
 }
 
-export enum ProviderVaultIdentityCurrentKind {
-  Current = "current",
-  Other = "other",
-}
-
 export type ProviderVaultIdentitySelection =
   | { readonly kind: ProviderVaultIdentitySelectionKind.NotSelected }
   | {
@@ -30,21 +22,13 @@ export type ProviderVaultIdentitySelection =
       readonly identityId: string;
     };
 
-export type ProviderVaultIdentityView = {
-  readonly identityId: string;
-  readonly label: string;
-  readonly currentKind: ProviderVaultIdentityCurrentKind;
-  readonly eligibility: ProviderVaultIdentityEligibility;
-};
-
 export type ProviderVaultEvidence =
   | { readonly kind: ProviderVaultEvidenceKind.Loading }
   | { readonly kind: ProviderVaultEvidenceKind.Failed }
   | {
       readonly kind: ProviderVaultEvidenceKind.Ready;
-      readonly decision: ProviderVaultDecision;
-      readonly reason: ProviderVaultDecisionReason;
-      readonly identities: readonly ProviderVaultIdentityView[];
+      readonly projection: NookProviderVaultDecisionProjection;
+      readonly identities: readonly NookProviderVaultIdentityProjection[];
     };
 
 type LoadProviderVaultEvidenceRequest = {
@@ -52,24 +36,6 @@ type LoadProviderVaultEvidenceRequest = {
   readonly providerStoreId: string;
 };
 
-export class ProviderVaultProjectionReader {
-  constructor(private readonly request: NookProviderVaultDecisionProjection) {}
-  read(): ProviderVaultEvidence {
-    const projection = this.request;
-    try {
-      return {
-        kind: ProviderVaultEvidenceKind.Ready,
-        decision: projection.decision,
-        reason: projection.reason,
-        identities: projection.identities.map(
-          ProviderVaultEvidenceReader.readProviderVaultIdentity,
-        ),
-      };
-    } finally {
-      projection.free();
-    }
-  }
-}
 export class ProviderVaultEvidenceReader {
   constructor(private readonly request: LoadProviderVaultEvidenceRequest) {}
   async execute(): Promise<ProviderVaultEvidence> {
@@ -77,36 +43,23 @@ export class ProviderVaultEvidenceReader {
     try {
       const projection =
         await manager.provider_vault_decision_request(providerStoreId);
-      return new ProviderVaultProjectionReader(projection).read();
+      try {
+        return {
+          kind: ProviderVaultEvidenceKind.Ready,
+          projection,
+          identities: projection.identities,
+        };
+      } catch (error) {
+        projection.free();
+        throw error;
+      }
     } catch {
       return { kind: ProviderVaultEvidenceKind.Failed };
     }
   }
-  static readProviderVaultIdentity(
-    identity: NookProviderVaultIdentityProjection,
-  ): ProviderVaultIdentityView {
-    try {
-      return {
-        identityId: identity.identityId,
-        label: identity.identityLabel,
-        currentKind: identity.isCurrentApp
-          ? ProviderVaultIdentityCurrentKind.Current
-          : ProviderVaultIdentityCurrentKind.Other,
-        eligibility: identity.eligibility,
-      };
-    } finally {
-      identity.free();
-    }
-  }
-}
-export class PreparedProviderVaultIdentities {
-  constructor(private readonly request: readonly ProviderVaultIdentityView[]) {}
-  get identities(): readonly ProviderVaultIdentityView[] {
-    const identities = this.request;
-    return identities.filter(
-      (identity) =>
-        identity.eligibility ===
-        ProviderVaultIdentityEligibility.LinkedAndPrepared,
-    );
+  static release(evidence: ProviderVaultEvidence): void {
+    if (evidence.kind !== ProviderVaultEvidenceKind.Ready) return;
+    for (const identity of evidence.identities) identity.free();
+    evidence.projection.free();
   }
 }

@@ -23,7 +23,7 @@ import {
   openPasskeyVault,
   withActivatedExtensionIdentity,
 } from './session-vault-operations'
-import { toBytes, toNumbers } from './session-key-material'
+import { PasskeyBrowserBytes } from './session-key-material'
 import { extensionVaultGrant } from './session-vault-grant'
 import {
   type WebsitePasskeyOperationArgs,
@@ -143,18 +143,18 @@ export async function handleSessionMessage({
       return {
         ok: true,
         setup: {
-          userHandle: toNumbers(userHandle),
-          prfInput: toNumbers(prfInput),
+          userHandle: PasskeyBrowserBytes.toWire(userHandle),
+          prfInput: PasskeyBrowserBytes.toWire(prfInput),
         } satisfies PasskeySetup,
       }
     }
     case ExtensionSessionMessageType.FinishPasskeySetup: {
       const payload = message.payload
       const activeManager = await getManager()
-      const credentialId = toBytes(payload.credentialId)
-      const userHandle = toBytes(payload.userHandle)
-      const prfInput = toBytes(payload.prfInput)
-      const prfOutput = toBytes(payload.prfOutput)
+      const credentialId = PasskeyBrowserBytes.fromWire(payload.credentialId)
+      const userHandle = PasskeyBrowserBytes.fromWire(payload.userHandle)
+      const prfInput = PasskeyBrowserBytes.fromWire(payload.prfInput)
+      const prfOutput = PasskeyBrowserBytes.fromWire(payload.prfOutput)
       const deviceMode = payload.deviceMode as DeviceMode
       if (
         deviceMode !== DeviceMode.Standard &&
@@ -181,9 +181,9 @@ export async function handleSessionMessage({
     case ExtensionSessionMessageType.RecoverPasskey: {
       const payload = message.payload
       const activeManager = await getManager()
-      const credentialId = toBytes(payload.credentialId)
-      const userHandle = toBytes(payload.userHandle)
-      const prfOutput = toBytes(payload.prfOutput)
+      const credentialId = PasskeyBrowserBytes.fromWire(payload.credentialId)
+      const userHandle = PasskeyBrowserBytes.fromWire(payload.userHandle)
+      const prfOutput = PasskeyBrowserBytes.fromWire(payload.prfOutput)
       try {
         await activeManager.recover_device_protection_with_passkey_material(
           credentialId,
@@ -203,8 +203,8 @@ export async function handleSessionMessage({
         return {
           ok: true,
           material: {
-            credentialId: toNumbers(options.credentialId),
-            prfInput: toNumbers(options.prfInput),
+            credentialId: PasskeyBrowserBytes.toWire(options.credentialId),
+            prfInput: PasskeyBrowserBytes.toWire(options.prfInput),
           } satisfies PasskeyUnlockMaterial,
         }
       } finally {
@@ -212,7 +212,7 @@ export async function handleSessionMessage({
       }
     }
     case ExtensionSessionMessageType.UnlockPasskey: {
-      const prfOutput = toBytes(message.payload.prfOutput)
+      const prfOutput = PasskeyBrowserBytes.fromWire(message.payload.prfOutput)
       try {
         await (await getManager()).unlock_device_identity(prfOutput)
       } finally {

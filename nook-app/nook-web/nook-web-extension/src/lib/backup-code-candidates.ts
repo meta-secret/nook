@@ -4,13 +4,11 @@ void companionWasmReady
 
 import {
   classify_authentication_backup_codes_observation,
-  contains_backup_code_candidate,
+  authentication_recovery_copy_evidence,
   extract_backup_code_candidates,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 import { authenticationSubmissionControls } from '../../../nook-web-shared/src/extension/password-form-submission-controls'
-
-const MAX_RECOVERY_COPY_CODE_POINTS = 128
 
 const MAX_RECOVERY_SOURCE_TEXT_UNITS = 256
 
@@ -18,7 +16,9 @@ const MAX_RECOVERY_COPY_ELEMENTS = 128
 
 type RecoveryCopyTexts = string[]
 
-type RecoveryCopyEvidence = readonly [copy: string, hint: boolean]
+type RecoveryCopyEvidence = ReturnType<
+  typeof authentication_recovery_copy_evidence
+>
 
 export type DocumentBackupCodeCandidates = string[]
 
@@ -39,45 +39,13 @@ class RecoveryCopyObservation {
     return true
   }
 
-  private boundedRecoveryCopy(texts: RecoveryCopyTexts): RecoveryCopyEvidence {
-    const candidatePresent = texts.some(contains_backup_code_candidate)
-    const safeTexts = texts.filter(
-      (text) => !contains_backup_code_candidate(text),
-    )
-    const recoveryCopy = safeTexts.filter(
-      (text) =>
-        classify_authentication_backup_codes_observation(text, false) ===
-        'present',
-    )
-    if (candidatePresent) {
-      recoveryCopy.push(
-        ...safeTexts.filter(
-          (text) =>
-            !recoveryCopy.includes(text) &&
-            classify_authentication_backup_codes_observation(text, true) ===
-              'present',
-        ),
-      )
-    }
-    let boundedCopy = ''
-    for (const text of recoveryCopy) {
-      const separator = boundedCopy.length > 0 ? ' ' : ''
-      const remaining =
-        MAX_RECOVERY_COPY_CODE_POINTS -
-        Array.from(boundedCopy + separator).length
-      if (remaining <= 0) break
-      boundedCopy += separator + Array.from(text).slice(0, remaining).join('')
-    }
-    return [boundedCopy, recoveryCopy.length > 0]
-  }
-
   authenticationRecoveryEvidence(): RecoveryCopyEvidence {
     if (typeof this.browser.document.querySelectorAll !== 'function') {
-      return this.boundedRecoveryCopy(
-        ((v) => (v ? v : ''))(this.browser.document.body?.innerText).split(
-          /[\r\n]+/,
-        ),
-      )
+      return authentication_recovery_copy_evidence({
+        texts: ((v) => (v ? v : ''))(
+          this.browser.document.body?.innerText,
+        ).split(/[\r\n]+/),
+      })
     }
     const texts: RecoveryCopyTexts = []
     const elements = this.browser.document.querySelectorAll<HTMLElement>(
@@ -90,11 +58,11 @@ class RecoveryCopyObservation {
       if (text.length > MAX_RECOVERY_SOURCE_TEXT_UNITS) continue
       texts.push(text)
     }
-    return this.boundedRecoveryCopy(texts)
+    return authentication_recovery_copy_evidence({ texts })
   }
 
   authenticationRecoveryCopy(): string {
-    return this.authenticationRecoveryEvidence()[0]
+    return this.authenticationRecoveryEvidence().copy
   }
 
   recoveryCopyHasBackupCodeHint(recoveryCopy: string): boolean {
@@ -105,7 +73,7 @@ class RecoveryCopyObservation {
   }
 
   pageHasDocumentBackupCodeHint(): boolean {
-    return this.authenticationRecoveryEvidence()[1]
+    return this.authenticationRecoveryEvidence().hint === 'present'
   }
 
   extractDocumentBackupCodeCandidates(sourceText?: string): string[] {

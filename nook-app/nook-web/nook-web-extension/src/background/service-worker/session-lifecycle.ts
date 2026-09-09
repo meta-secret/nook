@@ -156,9 +156,9 @@ class ExtensionSessionLifecycle {
     )
   }
 
-  openSimpleVault(path = ''): void {
+  async openSimpleVault(path = ''): Promise<void> {
     const nookTypedArgs0_1: Parameters<typeof chrome.tabs.create>[0] = {
-      url: simpleVaultRuntime.runtimeSimpleVaultUrl(path),
+      url: await simpleVaultRuntime.runtimeSimpleVaultUrl(path),
     }
     void chrome.tabs.create(nookTypedArgs0_1)
   }
@@ -174,12 +174,14 @@ class ExtensionSessionLifecycle {
     )
   }
 
-  private authenticationSurfaceTabId(tab: chrome.tabs.Tab): number | false {
+  private async authenticationSurfaceTabId(
+    tab: chrome.tabs.Tab,
+  ): Promise<number | false> {
     if (
       typeof tab.id !== 'number' ||
       !Number.isInteger(tab.id) ||
       typeof tab.url !== 'string' ||
-      simpleVaultRuntime.isRuntimeNookVaultAppUrl(tab.url)
+      (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(tab.url))
     ) {
       return false
     }
@@ -211,7 +213,7 @@ class ExtensionSessionLifecycle {
     })
     const eligibleTabIds: number[] = []
     for (const tab of tabs) {
-      const tabId = this.authenticationSurfaceTabId(tab)
+      const tabId = await this.authenticationSurfaceTabId(tab)
       if (tabId !== false) eligibleTabIds.push(tabId)
     }
     const deliveries = await Promise.allSettled(

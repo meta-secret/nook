@@ -79,13 +79,13 @@ async function performScanAndRender(): Promise<void> {
     loginSaveInteraction.beginPendingSaveWatch(pendingOffer.offer)
     return
   }
-  const [recoveryCopy, backupCodesHint] =
+  const { copy: recoveryCopy, hint: backupCodesHint } =
     recoveryCopyObservation.authenticationRecoveryEvidence()
   const enrollmentHints =
     authenticatorEnrollmentInteraction.detectEnrollmentHintsFromRecoveryCopy(
       recoveryCopy,
     )
-  enrollmentHints.backupCodes = backupCodesHint
+  enrollmentHints.backupCodes = backupCodesHint === 'present'
   const workflowForms = passwordFormInteraction
     .summarizeAuthenticationWorkflowForms()
     .slice(0, MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS)
@@ -323,8 +323,8 @@ function handleViewportChange(): void {
 
 scanState.schedule = scheduleScan
 
-void companionWasmReady.then(() => {
-  if (simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
+void companionWasmReady.then(async () => {
+  if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
     return
   }
   document.addEventListener(

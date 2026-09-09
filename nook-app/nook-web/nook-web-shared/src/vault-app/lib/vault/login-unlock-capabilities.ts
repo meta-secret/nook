@@ -1,4 +1,11 @@
-import { VaultAccessStatus, type NookPasswordEntrySummary } from "$app-wasm";
+import {
+  VaultAccessStatus,
+  login_unlock_decision,
+  PasswordEntryPresence,
+  LoginDeviceKeyAvailability,
+  LoginPasswordPromptUpdate,
+  type NookPasswordEntrySummary,
+} from "$app-wasm";
 
 type VaultConnectAssessment = [string, string, string];
 
@@ -29,14 +36,19 @@ export class LoginUnlockPresentation {
         "",
         "",
       ]);
-      if (
-        accessStatus === VaultAccessStatus.NeedsEnrollment ||
-        accessStatus === VaultAccessStatus.JoinPending
-      ) {
-        state.loginDeviceKeysCapable = false;
-        if (state.passwordEntries.length > 0) {
+      const decision = login_unlock_decision(
+        accessStatus,
+        state.passwordEntries.length > 0
+          ? PasswordEntryPresence.Present
+          : PasswordEntryPresence.Absent,
+      );
+      try {
+        state.loginDeviceKeysCapable =
+          decision.device_keys === LoginDeviceKeyAvailability.Enabled;
+        if (decision.password_prompt === LoginPasswordPromptUpdate.Offer)
           state.loginPasswordPrompt = true;
-        }
+      } finally {
+        decision.free();
       }
     } catch {
       // Device identity may be locked; keep device-keys enabled until unlock

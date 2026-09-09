@@ -1,29 +1,13 @@
 import {
-  NookOAuthAccountIdentityState,
-  NookOAuthRefreshCredentialState,
-  NookOAuthRemoteFileState,
-  NookOAuthTokenExpiryState,
-  NookProviderSelectionState,
-  shared_grant_provider_id,
+  select_shared_grant_provider,
   should_flush_shared_storage_grant,
-  type NookEnrollmentProvider,
   type SharedStorageGrantCredential,
+  type SharedGrantProviderSelection,
 } from "$app-wasm";
 import {
   oauthAccessToken,
   OAuthAccessTokenKind,
-  oauthRefreshCredentialNotIssued,
-  storedOAuthAccountEmail,
-  storedOAuthRefreshCredential,
-  storedOAuthRemoteFileId,
-  storedOAuthRemoteFileName,
-  storedOAuthTokenExpiry,
   unselectedVaultScope,
-  unknownOAuthAccountIdentity,
-  unknownOAuthTokenExpiry,
-  unresolvedOAuthRemoteFileId,
-  unresolvedOAuthRemoteFileName,
-  type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
 } from "$lib/auth/providers";
@@ -38,14 +22,7 @@ export type SharedStorageTarget =
   | { kind: SharedStorageTargetKind.NotBound }
   | { kind: SharedStorageTargetKind.Bound; storageTargetId: string };
 
-export enum SharedGrantProviderKind {
-  Existing = "existing",
-  AuthorizationRequired = "authorization-required",
-}
-
-export type SharedGrantProvider =
-  | { kind: SharedGrantProviderKind.Existing; provider: StorageProvider }
-  | { kind: SharedGrantProviderKind.AuthorizationRequired };
+export type SharedGrantProvider = SharedGrantProviderSelection;
 
 export type SharedGrantProviderSearch = {
   readonly providers: StorageProvider[];
@@ -63,28 +40,14 @@ export function findSharedGrantProvider({
   preset,
   target,
 }: SharedGrantProviderSearch): SharedGrantProvider {
-  const snapshot: Parameters<typeof shared_grant_provider_id>[0] = {
-    providers,
-    activeVaultStoreId: unselectedVaultScope(),
-  };
-  const storageTarget: Parameters<typeof shared_grant_provider_id>[2] =
-    target.kind === SharedStorageTargetKind.Bound
-      ? { state: "existing", storageTargetId: target.storageTargetId }
-      : { state: "create" };
-  const selection = shared_grant_provider_id(snapshot, preset, storageTarget);
-  try {
-    if (selection.state !== NookProviderSelectionState.Selected) {
-      return { kind: SharedGrantProviderKind.AuthorizationRequired };
-    }
-    const provider = providers.find(
-      (candidate) => candidate.id === selection.providerId,
-    );
-    return provider
-      ? { kind: SharedGrantProviderKind.Existing, provider }
-      : { kind: SharedGrantProviderKind.AuthorizationRequired };
-  } finally {
-    selection.free();
-  }
+  return select_shared_grant_provider({
+    snapshot: { providers, activeVaultStoreId: unselectedVaultScope() },
+    preset,
+    target:
+      target.kind === SharedStorageTargetKind.Bound
+        ? { state: "existing", storageTargetId: target.storageTargetId }
+        : { state: "create" },
+  });
 }
 
 export function shouldFlushSharedDriveGrant({
@@ -96,47 +59,4 @@ export function shouldFlushSharedDriveGrant({
       ? { state: "accessToken", accessToken: accessCredential.token }
       : { state: "unavailable" };
   return should_flush_shared_storage_grant(grant, credential);
-}
-
-export function enrollmentOauthState(
-  provider: NookEnrollmentProvider,
-): Pick<
-  OAuthFileConfig,
-  "refreshToken" | "expiresAt" | "fileId" | "fileName" | "accountEmail"
-> {
-  const refresh = provider.oauthRefresh;
-  const expiry = provider.oauthExpiry;
-  const remoteFile = provider.oauthRemoteFile;
-  const account = provider.oauthAccount;
-  try {
-    return {
-      refreshToken:
-        refresh.state === NookOAuthRefreshCredentialState.Token
-          ? storedOAuthRefreshCredential(refresh.value)
-          : oauthRefreshCredentialNotIssued(),
-      expiresAt:
-        expiry.state === NookOAuthTokenExpiryState.ExpiresAt
-          ? storedOAuthTokenExpiry(expiry.value)
-          : unknownOAuthTokenExpiry(),
-      fileId:
-        remoteFile.state === NookOAuthRemoteFileState.FileId ||
-        remoteFile.state === NookOAuthRemoteFileState.Identified
-          ? storedOAuthRemoteFileId(remoteFile.fileIdValue)
-          : unresolvedOAuthRemoteFileId(),
-      fileName:
-        remoteFile.state === NookOAuthRemoteFileState.FileName ||
-        remoteFile.state === NookOAuthRemoteFileState.Identified
-          ? storedOAuthRemoteFileName(remoteFile.fileNameValue)
-          : unresolvedOAuthRemoteFileName(),
-      accountEmail:
-        account.state === NookOAuthAccountIdentityState.Email
-          ? storedOAuthAccountEmail(account.value)
-          : unknownOAuthAccountIdentity(),
-    };
-  } finally {
-    refresh.free();
-    expiry.free();
-    remoteFile.free();
-    account.free();
-  }
 }

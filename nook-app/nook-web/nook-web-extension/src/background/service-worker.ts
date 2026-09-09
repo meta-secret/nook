@@ -7,7 +7,10 @@ import {
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
-import { AuthenticationWorkflowSnapshotMessage as AuthenticationWorkflowSnapshotMessageSchema } from '../lib/auth-workflow-messages'
+import {
+  AuthenticationWorkflowSnapshotIngress,
+  AuthenticationWorkflowSnapshotMessageType,
+} from '../lib/auth-workflow-messages'
 import {
   AuthenticatorPickerCancelMessage as AuthenticatorPickerCancelMessageSchema,
   AuthenticatorPickerQueryMessage as AuthenticatorPickerQueryMessageSchema,
@@ -362,51 +365,69 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (AuthenticationWorkflowSnapshotMessageSchema.is(message)) {
-    const nookTypedArgs0_1: Parameters<
-      typeof extensionPairingIdentity.isAuthorizedWebsiteSender
-    >[0] = {
-      sender,
-      origin: message.payload.origin,
-    }
-    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_1)) {
-      const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'workflow-forbidden-origin',
-      }
-      sendResponse(nookTypedArgs0_2)
-      return false
-    }
-    const workflowDependencies: Parameters<
-      typeof authenticationWorkflowMessageResponse
-    >[0]['dependencies'] = {
-      companionWasmReady,
-      authenticationPasskeyEvidenceIsSafe,
-      authenticationWorkflowSnapshot:
-        backgroundVaultRuntime.authenticationWorkflowSnapshot.bind(
-          backgroundVaultRuntime,
-        ),
-      authenticationWorkflowRequiresLoginMatchAvailability,
-      authenticationWorkflowSavedLoginCapability,
-      matchingPasskeyAvailabilityForOriginSafe:
-        websitePasskeyRequests.matchingPasskeyAvailabilityForOriginSafe.bind(
-          websitePasskeyRequests,
-        ),
-      websiteLoginMatchAvailability:
-        accountPickerSessions.websiteLoginMatchAvailability.bind(
-          accountPickerSessions,
-        ),
-    }
-    const workflowRequest: Parameters<
-      typeof authenticationWorkflowMessageResponse
-    >[0] = {
-      message,
-      sender,
-      dependencies: workflowDependencies,
-    }
-    void authenticationWorkflowMessageResponse(workflowRequest).then(
-      sendResponse,
-    )
+  if (
+    'type' in message &&
+    message.type ===
+      AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot
+  ) {
+    void companionWasmReady
+      .then(async () => {
+        const admission = AuthenticationWorkflowSnapshotIngress.admit(message)
+        if (admission.kind !== 'accepted') {
+          sendResponse({ ok: false, reason: 'workflow-invalid-observation' })
+          return
+        }
+        const decoded = admission.message
+        const nookTypedArgs0_1: Parameters<
+          typeof extensionPairingIdentity.isAuthorizedWebsiteSender
+        >[0] = {
+          sender,
+          origin: decoded.payload.origin,
+        }
+        if (
+          !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_1)
+        ) {
+          const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = {
+            ok: false,
+            reason: 'workflow-forbidden-origin',
+          }
+          sendResponse(nookTypedArgs0_2)
+          return false
+        }
+        const workflowDependencies: Parameters<
+          typeof authenticationWorkflowMessageResponse
+        >[0]['dependencies'] = {
+          companionWasmReady,
+          authenticationPasskeyEvidenceIsSafe,
+          authenticationWorkflowSnapshot:
+            backgroundVaultRuntime.authenticationWorkflowSnapshot.bind(
+              backgroundVaultRuntime,
+            ),
+          authenticationWorkflowRequiresLoginMatchAvailability,
+          authenticationWorkflowSavedLoginCapability,
+          matchingPasskeyAvailabilityForOriginSafe:
+            websitePasskeyRequests.matchingPasskeyAvailabilityForOriginSafe.bind(
+              websitePasskeyRequests,
+            ),
+          websiteLoginMatchAvailability:
+            accountPickerSessions.websiteLoginMatchAvailability.bind(
+              accountPickerSessions,
+            ),
+        }
+        const workflowRequest: Parameters<
+          typeof authenticationWorkflowMessageResponse
+        >[0] = {
+          message: decoded,
+          sender,
+          dependencies: workflowDependencies,
+        }
+        sendResponse(
+          await authenticationWorkflowMessageResponse(workflowRequest),
+        )
+      })
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'workflow-invalid-observation' }),
+      )
     return true
   }
 
@@ -817,6 +838,9 @@ chrome.runtime.onMessageExternal.addListener(
       sender,
       sendResponse,
     }
-    return routeExternalCompanionMessage(externalRoutingArgs)
+    void routeExternalCompanionMessage(externalRoutingArgs).catch(() =>
+      sendResponse({ ok: false, reason: 'forbidden-sender' }),
+    )
+    return true
   },
 )

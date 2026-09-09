@@ -1,13 +1,13 @@
 import {
   type PasskeySetupResponse,
   type PasskeyUnlockResponse,
-  PasskeySetupResponse as PasskeySetupResponseSchema,
-  PasskeyUnlockResponse as PasskeyUnlockResponseSchema,
 } from './passkey-session-response'
 import { ExtensionRuntimeRequestType } from './extension-runtime-request-type'
 import { ExtensionSessionMessageType } from './extension-session-message-type'
 import {
   default as initNookWasm,
+  decode_passkey_setup_material_response,
+  decode_passkey_unlock_material_response,
   build_passkey_creation_options,
   build_passkey_prf_request_options,
   build_passkey_recovery_request_options,
@@ -474,7 +474,7 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.BeginPasskeySetup,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const setup = PasskeySetupResponseSchema.decodePasskeySetupResponse(
+    const setup = decode_passkey_setup_material_response(
       await this.sessionResponse(beginRequest),
     )
     const creationOptions = build_passkey_creation_options(
@@ -529,7 +529,7 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.UnlockOptions,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const material = PasskeyUnlockResponseSchema.decodePasskeyUnlockResponse(
+    const material = decode_passkey_unlock_material_response(
       await this.sessionResponse(optionsRequest),
     )
     const options = build_passkey_prf_request_options(

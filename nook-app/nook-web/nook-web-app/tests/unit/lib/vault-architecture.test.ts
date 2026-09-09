@@ -394,7 +394,14 @@ describe('vault architecture adapter', () => {
       'persisted-shared-folder',
     )
     expect(() => enrollmentProvider.oauthAccessToken).toThrow()
-    expect(() => enrollmentProvider.oauthRefresh).toThrow()
+    expect(() =>
+      enrollmentProvider.oauth_configuration(
+        defaultOAuthFileConfig({
+          preset: 'google-drive',
+          fileName: 'nook-events',
+        }),
+      ),
+    ).toThrow()
   })
 
   test('shared iCloud enrollment sends only the CloudKit target', () => {
