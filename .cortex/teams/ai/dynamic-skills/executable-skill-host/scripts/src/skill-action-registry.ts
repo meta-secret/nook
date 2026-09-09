@@ -1,3 +1,9 @@
+import { ok, type Result } from 'neverthrow';
+import type { CompileCortexContractsRequest } from '../../../cortex-consistency/scripts/src/domain.ts';
+import type { RenderDelegationVisualizationRequest } from '../../../delegation-visualization/scripts/src/domain.ts';
+import type { AuditCortexArticleStructureRequest } from '../../../cortex-article-structure/scripts/src/domain.ts';
+import type { AuditCortexDocumentMapRequest } from '../../../cortex-document-map/scripts/src/domain.ts';
+import type { DelegationVisualizationResultVerificationError } from '../../../delegation-visualization/scripts/src/result-codec.ts';
 import {
   CortexArticleFindingCode,
   CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
@@ -22,7 +28,6 @@ import {
 
 import {
   CORTEX_CONSISTENCY_ACTION_DEFINITION,
-  CortexConsistencyRequestDecodeError,
   decodeCortexConsistencyActionPayload,
   executeCortexConsistencyAction,
 } from '../../../cortex-consistency/scripts/src/action.ts';
@@ -34,7 +39,6 @@ import { CortexContractFindingCode } from '../../../cortex-consistency/scripts/s
 import {
   DELEGATION_VISUALIZATION_ACTION_DEFINITION,
   decodeDelegationVisualizationActionPayload,
-  DelegationVisualizationRequestDecodeError,
   executeDelegationVisualizationAction,
 } from '../../../delegation-visualization/scripts/src/action.ts';
 
@@ -375,26 +379,25 @@ export class ExecutableSkillActions {
         message: validation.message,
       });
     }
-    try {
-      return {
-        ok: true,
-        request: {
-          family: SkillRequestFamily.CortexConsistency,
-          operation: CortexConsistencyOperation.Compile,
-          request: decodeCortexConsistencyActionPayload(
-            JSON.stringify(compile.value),
-          ),
-        },
-      };
-    } catch (error) {
-      const suffix =
-        error instanceof CortexConsistencyRequestDecodeError ? error.path : '';
+    const decoded = decodeCortexConsistencyActionPayload(
+      JSON.stringify(compile.value),
+    );
+    if (decoded.isErr()) {
+      const suffix = decoded.error.path;
       const separator = suffix.startsWith('[') ? '' : '.';
       return ExecutableSkillActions.invalidRequest({
         path: `cortexConsistency.compile${suffix ? `${separator}${suffix}` : ''}`,
-        message: error instanceof Error ? error.message : String(error),
+        message: decoded.error.message,
       });
     }
+    return {
+      ok: true,
+      request: {
+        family: SkillRequestFamily.CortexConsistency,
+        operation: CortexConsistencyOperation.Compile,
+        request: decoded.value,
+      },
+    };
   }
 
   private static decodeDelegationVisualizationAction(
@@ -442,28 +445,25 @@ export class ExecutableSkillActions {
         message: validation.message,
       });
     }
-    try {
-      return {
-        ok: true,
-        request: {
-          family: SkillRequestFamily.DelegationVisualization,
-          operation: DelegationVisualizationOperation.Render,
-          request: decodeDelegationVisualizationActionPayload(
-            JSON.stringify(render.value),
-          ),
-        },
-      };
-    } catch (error) {
-      const suffix =
-        error instanceof DelegationVisualizationRequestDecodeError
-          ? error.path
-          : '';
+    const decoded = decodeDelegationVisualizationActionPayload(
+      JSON.stringify(render.value),
+    );
+    if (decoded.isErr()) {
+      const suffix = decoded.error.path;
       const separator = suffix.startsWith('[') ? '' : '.';
       return ExecutableSkillActions.invalidRequest({
         path: `delegationVisualization.render${suffix ? `${separator}${suffix}` : ''}`,
-        message: error instanceof Error ? error.message : String(error),
+        message: decoded.error.message,
       });
     }
+    return {
+      ok: true,
+      request: {
+        family: SkillRequestFamily.DelegationVisualization,
+        operation: DelegationVisualizationOperation.Render,
+        request: decoded.value,
+      },
+    };
   }
 
   private static invalidRequest(
@@ -591,28 +591,22 @@ export type SkillActionRequest =
   | {
       readonly family: SkillRequestFamily.CortexArticleStructure;
       readonly operation: CortexArticleStructureOperation.Audit;
-      readonly request: ReturnType<
-        typeof CortexArticleActionDecoder.decodeCortexArticleActionPayload
-      >;
+      readonly request: AuditCortexArticleStructureRequest;
     }
   | {
       readonly family: SkillRequestFamily.CortexDocumentMap;
       readonly operation: CortexDocumentMapOperation.Audit;
-      readonly request: ReturnType<
-        typeof CortexDocumentMapActionDecoder.decodeCortexDocumentMapActionPayload
-      >;
+      readonly request: AuditCortexDocumentMapRequest;
     }
   | {
       readonly family: SkillRequestFamily.CortexConsistency;
       readonly operation: CortexConsistencyOperation.Compile;
-      readonly request: ReturnType<typeof decodeCortexConsistencyActionPayload>;
+      readonly request: CompileCortexContractsRequest;
     }
   | {
       readonly family: SkillRequestFamily.DelegationVisualization;
       readonly operation: DelegationVisualizationOperation.Render;
-      readonly request: ReturnType<
-        typeof decodeDelegationVisualizationActionPayload
-      >;
+      readonly request: RenderDelegationVisualizationRequest;
     };
 
 export type SkillActionResult =
@@ -665,19 +659,22 @@ export class AdmittedSkillAction {
   get operation(): SkillActionRequest['operation'] {
     return this.request.operation;
   }
-  execute(): SkillActionResult {
+  execute(): Result<
+    SkillActionResult,
+    DelegationVisualizationResultVerificationError
+  > {
     const request = this.request;
     if (request.family === SkillRequestFamily.ToolsList) {
-      return ExecutableSkillActions.listDiscoverableSkillActions();
+      return ok(ExecutableSkillActions.listDiscoverableSkillActions());
     }
     if (request.family === SkillRequestFamily.CortexArticleStructure) {
-      return executeCortexArticleAction(request.request);
+      return ok(executeCortexArticleAction(request.request));
     }
     if (request.family === SkillRequestFamily.CortexDocumentMap) {
-      return executeCortexDocumentMapAction(request.request);
+      return ok(executeCortexDocumentMapAction(request.request));
     }
     return request.family === SkillRequestFamily.CortexConsistency
-      ? executeCortexConsistencyAction(request.request)
+      ? ok(executeCortexConsistencyAction(request.request))
       : executeDelegationVisualizationAction(request.request);
   }
 }

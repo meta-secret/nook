@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow';
 import { expect, test } from 'bun:test';
 import {
   AdmittedSkillAction,
@@ -9,11 +10,13 @@ test('only a decoded action exposes execution', () => {
   const yaml = ExecutableSkillYaml.from(
     ExecutableSkillActions.defaultSkillBlueprint(),
   ).execute();
-  if (!yaml.ok) throw new Error('Tools-list example must parse.');
+  expect(yaml.ok).toBe(true);
+  if (!yaml.ok) return;
   const decoded = ExecutableSkillActions.decodeSkillActionRequest(yaml.value);
-  if (!decoded.ok) throw new Error(decoded.message);
+  expect(decoded.ok).toBe(true);
+  if (!decoded.ok) return;
   expect(decoded.request.execute()).toEqual(
-    ExecutableSkillActions.listDiscoverableSkillActions(),
+    ok(ExecutableSkillActions.listDiscoverableSkillActions()),
   );
   expect(
     ExecutableSkillActions.decodeSkillActionRequest({ invented: {} }).ok,
@@ -21,7 +24,7 @@ test('only a decoded action exposes execution', () => {
 });
 
 export class ForbiddenSkillAdmission {
-  static uncheckedConstruction(): void {
+  uncheckedConstruction(): void {
     // @ts-expect-error Request DTOs do not carry executable admission.
     new AdmittedSkillAction({});
   }

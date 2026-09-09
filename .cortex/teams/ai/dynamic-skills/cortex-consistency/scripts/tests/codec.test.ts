@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow';
 import { expect, test } from 'bun:test';
 import { CortexConsistencyRequestDecoder } from '../src/codec.ts';
 import { CortexConsistencyContractKind } from '../src/domain.ts';
@@ -15,8 +16,10 @@ test('decodes the strict consistency request', () => {
           },
         ],
       }),
-    ).execute().documents,
-  ).toHaveLength(1);
+    )
+      .execute()
+      .map((request) => request.documents.length),
+  ).toEqual(ok(1));
 });
 
 test('rejects duplicate documents and extra fields', () => {
@@ -25,21 +28,25 @@ test('rejects duplicate documents and extra fields', () => {
     references: [],
     commands: [],
   };
-  expect(() =>
+  expect(
     CortexConsistencyRequestDecoder.from(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [document, document],
       }),
-    ).execute(),
-  ).toThrow();
-  expect(() =>
+    )
+      .execute()
+      .isErr(),
+  ).toBe(true);
+  expect(
     CortexConsistencyRequestDecoder.from(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [],
         extra: true,
       }),
-    ).execute(),
-  ).toThrow();
+    )
+      .execute()
+      .isErr(),
+  ).toBe(true);
 });

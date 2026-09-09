@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow';
 import { describe, expect, test } from 'bun:test';
 import { DelegationVisualizationRequestDecoder } from '../src/codec.ts';
 import {
@@ -30,65 +31,67 @@ describe('delegation visualization codec', () => {
     expect(
       DelegationVisualizationRequestDecoder.from(
         JSON.stringify(new DelegationVisualizationRequestFixture().value),
-      ).execute().tasks,
-    ).toHaveLength(2);
+      )
+        .execute()
+        .map((request) => request.tasks.length),
+    ).toEqual(ok(2));
   });
 
   test('rejects duplicate, missing, forward, and self dependencies', () => {
     const duplicateId = new DelegationVisualizationRequestFixture().value;
     duplicateId.tasks[1]!.id = 'first';
-    expect(() =>
-      DelegationVisualizationRequestDecoder.from(
-        JSON.stringify(duplicateId),
-      ).execute(),
-    ).toThrow();
+    expect(
+      DelegationVisualizationRequestDecoder.from(JSON.stringify(duplicateId))
+        .execute()
+        .isErr(),
+    ).toBe(true);
 
     for (const dependency of ['missing', 'second']) {
       const invalid = new DelegationVisualizationRequestFixture().value;
       invalid.tasks[0]!.dependencies = [dependency];
-      expect(() =>
-        DelegationVisualizationRequestDecoder.from(
-          JSON.stringify(invalid),
-        ).execute(),
-      ).toThrow();
+      expect(
+        DelegationVisualizationRequestDecoder.from(JSON.stringify(invalid))
+          .execute()
+          .isErr(),
+      ).toBe(true);
     }
   });
 
   test('rejects unknown teams, duplicate edges, and unknown fields', () => {
     const unknownTeam = new DelegationVisualizationRequestFixture().value;
     Object.assign(unknownTeam.tasks[0]!, { team: 'product' });
-    expect(() =>
-      DelegationVisualizationRequestDecoder.from(
-        JSON.stringify(unknownTeam),
-      ).execute(),
-    ).toThrow();
+    expect(
+      DelegationVisualizationRequestDecoder.from(JSON.stringify(unknownTeam))
+        .execute()
+        .isErr(),
+    ).toBe(true);
 
     const duplicateEdge = new DelegationVisualizationRequestFixture().value;
     duplicateEdge.tasks[1]!.dependencies = ['first', 'first'];
-    expect(() =>
-      DelegationVisualizationRequestDecoder.from(
-        JSON.stringify(duplicateEdge),
-      ).execute(),
-    ).toThrow();
+    expect(
+      DelegationVisualizationRequestDecoder.from(JSON.stringify(duplicateEdge))
+        .execute()
+        .isErr(),
+    ).toBe(true);
 
     const extra = new DelegationVisualizationRequestFixture().value;
     Object.assign(extra.tasks[0]!, { admission: true });
-    expect(() =>
-      DelegationVisualizationRequestDecoder.from(
-        JSON.stringify(extra),
-      ).execute(),
-    ).toThrow();
+    expect(
+      DelegationVisualizationRequestDecoder.from(JSON.stringify(extra))
+        .execute()
+        .isErr(),
+    ).toBe(true);
   });
 
   test('rejects YAML-non-printable C1 description characters', () => {
     for (const character of ['\u0080', '\u0086', '\u009f']) {
       const invalid = new DelegationVisualizationRequestFixture().value;
       invalid.tasks[0]!.description = `blocked${character}`;
-      expect(() =>
-        DelegationVisualizationRequestDecoder.from(
-          JSON.stringify(invalid),
-        ).execute(),
-      ).toThrow();
+      expect(
+        DelegationVisualizationRequestDecoder.from(JSON.stringify(invalid))
+          .execute()
+          .isErr(),
+      ).toBe(true);
     }
   });
 });

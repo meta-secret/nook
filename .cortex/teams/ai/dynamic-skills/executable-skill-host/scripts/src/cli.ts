@@ -79,11 +79,19 @@ export class ExecutableSkillCli {
       return ExecutableSkillCli.errorOutcome(outcomeRequest);
     }
     try {
+      const execution = decoded.request.execute();
+      if (execution.isErr()) {
+        return ExecutableSkillCli.errorOutcome({
+          phase: SkillCommandPhase.Execute,
+          issue: SkillCommandIssue.InvalidRequest,
+          message: 'Executable skill action failed validation or verification.',
+        });
+      }
       const response: SkillSuccessResponse = {
         ok: true,
         family: decoded.request.family,
         operation: decoded.request.operation,
-        result: decoded.request.execute(),
+        result: execution.value,
       };
       const finalRequest: FinalSkillCliResponseRequest = {
         exitCode: 0,

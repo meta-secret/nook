@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import {
   CortexConsistencyContractKind,
   CORTEX_CONSISTENCY_DOCUMENT_LIMIT,
@@ -9,7 +10,7 @@ import {
 } from './domain.ts';
 
 export class CortexConsistencyRequestDecoder {
-  private static isTransportRecord(
+  private isTransportRecord(
     value: unknown,
   ): value is { readonly [key: string]: unknown } {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
@@ -21,50 +22,53 @@ export class CortexConsistencyRequestDecoder {
     return new CortexConsistencyRequestDecoder(serialized);
   }
 
-  public execute(): CompileCortexContractsRequest {
+  public execute(): Result<
+    CompileCortexContractsRequest,
+    CortexConsistencyRequestDecodeError
+  > {
     const serialized = this.request;
     if (
       UTF8_ENCODER.encode(serialized).byteLength >
       CORTEX_CONSISTENCY_REQUEST_BYTE_LIMIT
     ) {
-      throw new CortexConsistencyRequestDecodeError('');
+      return err(new CortexConsistencyRequestDecodeError(''));
     }
     let transport: unknown;
     try {
       transport = JSON.parse(serialized);
     } catch {
-      throw new CortexConsistencyRequestDecodeError('');
+      return err(new CortexConsistencyRequestDecodeError(''));
     }
     if (
-      !CortexConsistencyRequestDecoder.isTransportRecord(transport) ||
-      !CortexConsistencyRequestDecoder.exactKeys({
+      !this.isTransportRecord(transport) ||
+      !this.exactKeys({
         value: transport,
         expected: REQUEST_KEYS,
       })
     ) {
-      throw new CortexConsistencyRequestDecodeError('');
+      return err(new CortexConsistencyRequestDecodeError(''));
     }
     if (transport.kind !== CortexConsistencyContractKind.Request) {
-      throw new CortexConsistencyRequestDecodeError('kind');
+      return err(new CortexConsistencyRequestDecodeError('kind'));
     }
     if (
       !Array.isArray(transport.documents) ||
       transport.documents.length > CORTEX_CONSISTENCY_DOCUMENT_LIMIT
     ) {
-      throw new CortexConsistencyRequestDecodeError('documents');
+      return err(new CortexConsistencyRequestDecodeError('documents'));
     }
     const documents: CortexContractDocument[] = [];
     const paths = new Set<string>();
     for (const [index, candidate] of transport.documents.entries()) {
       const path = `documents[${index}]`;
       if (
-        !CortexConsistencyRequestDecoder.isTransportRecord(candidate) ||
-        !CortexConsistencyRequestDecoder.exactKeys({
+        !this.isTransportRecord(candidate) ||
+        !this.exactKeys({
           value: candidate,
           expected: DOCUMENT_KEYS,
         })
       ) {
-        throw new CortexConsistencyRequestDecodeError(path);
+        return err(new CortexConsistencyRequestDecodeError(path));
       }
       if (
         typeof candidate.relativePath !== 'string' ||
@@ -72,7 +76,9 @@ export class CortexConsistencyRequestDecoder {
         candidate.relativePath.length > CORTEX_CONSISTENCY_PATH_LIMIT ||
         paths.has(candidate.relativePath)
       ) {
-        throw new CortexConsistencyRequestDecodeError(`${path}.relativePath`);
+        return err(
+          new CortexConsistencyRequestDecodeError(`${path}.relativePath`),
+        );
       }
       if (
         !Array.isArray(candidate.references) ||
@@ -83,7 +89,9 @@ export class CortexConsistencyRequestDecoder {
             reference.length <= CORTEX_CONSISTENCY_PATH_LIMIT,
         )
       ) {
-        throw new CortexConsistencyRequestDecodeError(`${path}.references`);
+        return err(
+          new CortexConsistencyRequestDecodeError(`${path}.references`),
+        );
       }
       if (
         !Array.isArray(candidate.commands) ||
@@ -94,7 +102,7 @@ export class CortexConsistencyRequestDecoder {
             command.length <= CORTEX_CONSISTENCY_PATH_LIMIT,
         )
       ) {
-        throw new CortexConsistencyRequestDecodeError(`${path}.commands`);
+        return err(new CortexConsistencyRequestDecodeError(`${path}.commands`));
       }
       paths.add(candidate.relativePath);
       documents.push({
@@ -103,15 +111,14 @@ export class CortexConsistencyRequestDecoder {
         commands: candidate.commands,
       });
     }
-    return {
+    return ok({
       kind: CortexConsistencyContractKind.Request,
       documents,
-    };
+    });
   }
 
-  private static exactKeys(request: ExactKeysRequest): boolean {
-    if (!CortexConsistencyRequestDecoder.isTransportRecord(request.value))
-      return false;
+  private exactKeys(request: ExactKeysRequest): boolean {
+    if (!this.isTransportRecord(request.value)) return false;
     const keys = Object.keys(request.value);
     return (
       keys.length === request.expected.length &&
@@ -132,11 +139,13 @@ const DOCUMENT_KEYS = Object.values(CortexConsistencyDocumentField);
 
 const UTF8_ENCODER = new TextEncoder();
 
-export class CortexConsistencyRequestDecodeError extends Error {
+export class CortexConsistencyRequestDecodeError {
   readonly path: string;
+  readonly message: string;
+  readonly name: string;
 
   constructor(path: string) {
-    super('Invalid Cortex consistency request.');
+    this.message = 'Invalid Cortex consistency request.';
     this.name = 'CortexConsistencyRequestDecodeError';
     this.path = path;
   }

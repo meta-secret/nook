@@ -1,3 +1,4 @@
+import type { Result } from 'neverthrow';
 import {
   DelegationVisualizationContractKind,
   type DelegationVisualizationResult,
@@ -6,7 +7,10 @@ import {
 
 import { DelegationVisualization } from './renderer.ts';
 
-import { DelegationVisualizationVerifier } from './result-codec.ts';
+import {
+  DelegationVisualizationVerifier,
+  type DelegationVisualizationResultVerificationError,
+} from './result-codec.ts';
 
 export class DelegationVisualizationApplication {
   private constructor(
@@ -19,7 +23,10 @@ export class DelegationVisualizationApplication {
     return new DelegationVisualizationApplication(request);
   }
 
-  public execute(): DelegationVisualizationResult {
+  public execute(): Result<
+    DelegationVisualizationResult,
+    DelegationVisualizationResultVerificationError
+  > {
     const request = this.request;
     const candidate: DelegationVisualizationResult = {
       kind: DelegationVisualizationContractKind.Result,

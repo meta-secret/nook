@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import {
   DelegationVisualizationContractKind,
   DelegationVisualizationDocument,
@@ -18,16 +19,19 @@ export class DelegationVisualizationVerifier {
     return new DelegationVisualizationVerifier(input);
   }
 
-  public execute(): DelegationVisualizationResult {
+  public execute(): Result<
+    DelegationVisualizationResult,
+    DelegationVisualizationResultVerificationError
+  > {
     const input = this.request;
     if (
       input.result.kind !== DelegationVisualizationContractKind.Result ||
-      !DelegationVisualizationVerifier.hasExactKeys({
+      !this.hasExactKeys({
         value: input.result,
         expected: Object.values(DelegationVisualizationResultField),
       }) ||
       !(input.result.document instanceof DelegationVisualizationDocument) ||
-      !DelegationVisualizationVerifier.hasExactKeys({
+      !this.hasExactKeys({
         value: input.result.document,
         expected: Object.values(DelegationVisualizationDocumentField),
       }) ||
@@ -35,41 +39,41 @@ export class DelegationVisualizationVerifier {
         input.result.document.gizmo instanceof
         DelegationVisualizationGizmoDocument
       ) ||
-      !DelegationVisualizationVerifier.hasExactKeys({
+      !this.hasExactKeys({
         value: input.result.document.gizmo,
         expected: Object.values(DelegationVisualizationGizmoField),
       })
     ) {
-      throw new DelegationVisualizationResultVerificationError();
+      return err(new DelegationVisualizationResultVerificationError());
     }
     const actualTasks = input.result.document.gizmo.tasks;
     if (actualTasks.length !== input.request.tasks.length) {
-      throw new DelegationVisualizationResultVerificationError();
+      return err(new DelegationVisualizationResultVerificationError());
     }
     const actualTaskIterator = actualTasks.values();
     for (const expected of input.request.tasks) {
       const actual = actualTaskIterator.next().value;
       if (
         !(actual instanceof DelegationVisualizationDocumentTask) ||
-        !DelegationVisualizationVerifier.hasExactKeys({
+        !this.hasExactKeys({
           value: actual,
           expected: Object.values(DelegationVisualizationDocumentTaskField),
         }) ||
         actual.id !== expected.id ||
         actual.team !== expected.team ||
         actual.description !== expected.description ||
-        !DelegationVisualizationVerifier.sameDependencies({
+        !this.sameDependencies({
           actual: actual.depends_on,
           expected: expected.dependencies,
         })
       ) {
-        throw new DelegationVisualizationResultVerificationError();
+        return err(new DelegationVisualizationResultVerificationError());
       }
     }
-    return input.result;
+    return ok(input.result);
   }
 
-  private static sameDependencies(input: SameDependenciesInput): boolean {
+  private sameDependencies(input: SameDependenciesInput): boolean {
     if (input.actual.length !== input.expected.length) return false;
     const actualDependencyIterator = input.actual.values();
     for (const dependency of input.expected) {
@@ -78,7 +82,7 @@ export class DelegationVisualizationVerifier {
     return true;
   }
 
-  private static hasExactKeys(input: ExactKeysInput): boolean {
+  private hasExactKeys(input: ExactKeysInput): boolean {
     const keys = Object.keys(input.value);
     return (
       keys.length === input.expected.length &&
@@ -118,9 +122,11 @@ type ExactKeysInput = {
   readonly expected: readonly string[];
 };
 
-export class DelegationVisualizationResultVerificationError extends Error {
+export class DelegationVisualizationResultVerificationError {
+  readonly message: string;
+  readonly name: string;
   constructor() {
-    super('Invalid delegation visualization result.');
+    this.message = 'Invalid delegation visualization result.';
     this.name = 'DelegationVisualizationResultVerificationError';
   }
 }
