@@ -95,9 +95,20 @@ struct ProtonPassField {
     #[serde(rename = "type", default)]
     field_type: String,
     #[serde(default)]
-    data: ProtonPassFieldData,
+    data: ProtonPassFieldContent,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ProtonPassFieldContent {
+    Object(ProtonPassFieldData),
+    Unsupported(IgnoredAny),
+}
+impl Default for ProtonPassFieldContent {
+    fn default() -> Self {
+        Self::Unsupported(IgnoredAny)
+    }
+}
 /// Only recognized scalar field content enters imported metadata.
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -132,10 +143,13 @@ impl ProtonPassFieldScalar {
 }
 impl ProtonPassField {
     fn value(&self) -> Option<String> {
+        let ProtonPassFieldContent::Object(data) = &self.data else {
+            return None;
+        };
         match self.field_type.as_str() {
-            "totp" => self.data.totp_uri.text(),
-            "timestamp" => self.data.timestamp.text(),
-            "text" | "hidden" => self.data.content.text(),
+            "totp" => data.totp_uri.text(),
+            "timestamp" => data.timestamp.text(),
+            "text" | "hidden" => data.content.text(),
             _ => None,
         }
     }
@@ -397,6 +411,11 @@ mod tests {
             ),
             (r#"{"type":"unknown","data":{"content":"secret"}}"#, None),
             (r#"{"type":"text","data":{"content":false}}"#, None),
+            (r#"{"type":"text","data":null}"#, None),
+            (r#"{"type":"text","data":42}"#, None),
+            (r#"{"type":"text","data":true}"#, None),
+            (r#"{"type":"text","data":"ignored"}"#, None),
+            (r#"{"type":"text","data":[]}"#, None),
             (r#"{"type":"text","data":{"content":" "}}"#, None),
         ] {
             let field: ProtonPassField = serde_json::from_str(json)?;
@@ -450,5 +469,18 @@ mod tests {
                 (month.to_owned(), year.to_owned())
             );
         }
+    }
+    #[test]
+    fn unsupported_custom_data_does_not_discard_valid_export_items() -> anyhow::Result<()> {
+        let plan = ProtonPassExport::parse(r#"{"vaults":{"a":{"items":[{"data":{"type":"note","metadata":{"name":"Kept"},"extraFields":[{"fieldName":"ignored","type":"text","data":null},{"fieldName":"array","type":"text","data":[1]},{"fieldName":"scalar","type":"text","data":true},{"fieldName":"known","type":"text","data":{"content":"retained"}}]}}]}}}"#)?.plan();
+        let [SecretValue::SecureNote(note)] = plan.items.as_slice() else {
+            anyhow::bail!("expected retained note")
+        };
+        assert_eq!(note.title, "Kept");
+        assert!(note.note.contains("retained"));
+        assert!(!note.note.contains("ignored"));
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
+        Ok(())
     }
 }

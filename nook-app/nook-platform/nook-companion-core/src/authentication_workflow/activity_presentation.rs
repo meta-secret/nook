@@ -64,25 +64,90 @@ pub struct PasswordWorkflowActivityPresentation {
     pub kind: AuthenticationWorkflowKind,
     pub generation_progress: AuthenticationDisplayProgress,
 }
+/// One classification owns both title and progress; they cannot disagree.
+enum PasswordActivityWorkflow {
+    Login,
+    Signup,
+    PasswordChange,
+}
+impl From<PasswordWorkflowActivityEvidence> for PasswordActivityWorkflow {
+    fn from(evidence: PasswordWorkflowActivityEvidence) -> Self {
+        if evidence.new_password_field_count.is_nonzero() {
+            if evidence.current_password_field_count.is_nonzero() {
+                Self::PasswordChange
+            } else {
+                Self::Signup
+            }
+        } else {
+            Self::Login
+        }
+    }
+}
+impl From<PasswordActivityWorkflow> for PasswordWorkflowActivityPresentation {
+    fn from(workflow: PasswordActivityWorkflow) -> Self {
+        let (kind, progress) = match workflow {
+            PasswordActivityWorkflow::Login => (
+                AuthenticationWorkflowKind::Login,
+                AuthenticationWorkflowProgress::LoginCredentials,
+            ),
+            PasswordActivityWorkflow::Signup => (
+                AuthenticationWorkflowKind::Signup,
+                AuthenticationWorkflowProgress::SignupCredentials,
+            ),
+            PasswordActivityWorkflow::PasswordChange => (
+                AuthenticationWorkflowKind::PasswordChange,
+                AuthenticationWorkflowProgress::PasswordChangeCredentials,
+            ),
+        };
+        Self {
+            kind,
+            generation_progress: progress.into(),
+        }
+    }
+}
 impl PasswordWorkflowActivityEvidence {
     pub fn project(self) -> PasswordWorkflowActivityPresentation {
-        let kind = if self.current_password_field_count.is_nonzero()
-            && self.new_password_field_count.is_nonzero()
-        {
-            AuthenticationWorkflowKind::PasswordChange
-        } else if self.new_password_field_count.is_nonzero() {
-            AuthenticationWorkflowKind::Signup
-        } else {
-            AuthenticationWorkflowKind::Login
-        };
-        let generation = if self.current_password_field_count.is_nonzero() {
-            AuthenticationWorkflowProgress::PasswordChangeCredentials
-        } else {
-            AuthenticationWorkflowProgress::SignupCredentials
-        };
-        PasswordWorkflowActivityPresentation {
-            kind,
-            generation_progress: generation.into(),
+        PasswordActivityWorkflow::from(self).into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn password_field_evidence_keeps_kind_and_progress_coherent() {
+        for current in [0, 1, 2] {
+            for new in [0, 1, 2] {
+                let presentation = PasswordWorkflowActivityEvidence {
+                    current_password_field_count: current.into(),
+                    new_password_field_count: new.into(),
+                }
+                .project();
+                let (kind, progress) = match (current, new) {
+                    (_, 0) => (
+                        AuthenticationWorkflowKind::Login,
+                        AuthenticationWorkflowProgress::LoginCredentials,
+                    ),
+                    (0, _) => (
+                        AuthenticationWorkflowKind::Signup,
+                        AuthenticationWorkflowProgress::SignupCredentials,
+                    ),
+                    _ => (
+                        AuthenticationWorkflowKind::PasswordChange,
+                        AuthenticationWorkflowProgress::PasswordChangeCredentials,
+                    ),
+                };
+                assert_eq!(presentation.kind, kind);
+                assert_eq!(
+                    presentation.generation_progress.current_step,
+                    progress.current_step()
+                );
+                assert_eq!(
+                    presentation.generation_progress.total_steps,
+                    progress.total_steps()
+                );
+            }
         }
     }
 }

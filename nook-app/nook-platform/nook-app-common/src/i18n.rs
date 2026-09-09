@@ -53,27 +53,31 @@ pub struct TranslationCatalog {
     document: TranslationNode,
 }
 
-/// Catalogs contain translation text or named groups, never arbitrary JSON values.
+/// Typed recursive catalog wire nodes preserve scalar and array merge semantics.
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum TranslationNode {
     Text(String),
+    Number(serde_json::Number),
+    Boolean(bool),
+    Array(Vec<TranslationNode>),
+    Null,
     Group(BTreeMap<String, TranslationNode>),
 }
 impl TranslationNode {
-    fn overlay(&mut self, overlay: Self) {
+    fn overlay(self, overlay: Self) -> Self {
         match (self, overlay) {
-            (Self::Group(base), Self::Group(overlay)) => {
+            (Self::Group(mut base), Self::Group(overlay)) => {
                 for (key, value) in overlay {
-                    match base.get_mut(&key) {
+                    let updated = match base.remove(&key) {
                         Some(existing) => existing.overlay(value),
-                        None => {
-                            base.insert(key, value);
-                        }
-                    }
+                        None => value,
+                    };
+                    base.insert(key, updated);
                 }
+                Self::Group(base)
             }
-            (base, overlay) => *base = overlay,
+            (_, overlay) => overlay,
         }
     }
 }
@@ -149,7 +153,11 @@ impl TranslationCatalog {
         }
         match current {
             TranslationNode::Text(text) => Some(text.clone()),
-            TranslationNode::Group(_) => None,
+            TranslationNode::Group(_)
+            | TranslationNode::Number(_)
+            | TranslationNode::Boolean(_)
+            | TranslationNode::Array(_)
+            | TranslationNode::Null => None,
         }
     }
 }
@@ -334,9 +342,11 @@ impl TranslationCatalog {
             base_json,
             overlay_json,
         } = request;
-        let mut base = Self::parse(base_json)?;
+        let base = Self::parse(base_json)?;
         let overlay = Self::parse(overlay_json)?;
-        base.document.overlay(overlay.document);
+        let base = Self {
+            document: base.document.overlay(overlay.document),
+        };
         serde_json::to_string(&base)
     }
 }
@@ -729,5 +739,28 @@ mod tests {
             AppLocale::resolve_app_locale_from_tags(["en-US", "ru-RU"]),
             "en"
         );
+    }
+    #[test]
+    fn heterogeneous_catalog_merge_preserves_unrelated_translation_nodes() -> serde_json::Result<()>
+    {
+        let merged = TranslationCatalog::merge_translation_catalogs(
+            MergeTranslationCatalogsRequest {
+                base_json: r#"{"custom":{"text":"kept","array":[1,true,null]},"number":1,"flag":false,"empty":null,"replace":{"old":"value"}}"#,
+                overlay_json: r#"{"custom":{"added":"new"},"number":2,"flag":true,"replace":["replacement"],"text":"visible"}"#,
+            },
+        )?;
+        let catalog = TranslationCatalog::parse(&merged)?;
+        assert_eq!(catalog.lookup("custom.text").as_deref(), Some("kept"));
+        assert_eq!(catalog.lookup("custom.added").as_deref(), Some("new"));
+        for key in ["number", "flag", "empty", "replace", "custom.array"] {
+            assert_eq!(catalog.lookup(key), None);
+        }
+        // The exact wire round trip proves non-text nodes were preserved,
+        // rather than merely ignored by lookup.
+        assert_eq!(
+            serde_json::to_string(&catalog)?,
+            r#"{"custom":{"added":"new","array":[1,true,null],"text":"kept"},"empty":null,"flag":true,"number":2,"replace":["replacement"],"text":"visible"}"#
+        );
+        Ok(())
     }
 }

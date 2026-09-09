@@ -86,3 +86,31 @@ impl AuthenticationControlTransportability {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::AuthenticationControlTransportability;
+    use crate::PageControlSubmissionMethod;
+
+    #[test]
+    fn transport_admission_obeys_submission_method_and_username_count() {
+        for count in [0, 1, 2] {
+            for (method, expected) in [
+                (PageControlSubmissionMethod::Dialog, false),
+                (PageControlSubmissionMethod::Get, count == 1),
+                (PageControlSubmissionMethod::Post, true),
+                (PageControlSubmissionMethod::Absent, true),
+            ] {
+                assert_eq!(
+                    AuthenticationControlTransportability {
+                        submission_method: method,
+                        username_field_count: count.into(),
+                    }
+                    .is_transportable(),
+                    expected,
+                    "method {method:?}, usernames {count}"
+                );
+            }
+        }
+    }
+}

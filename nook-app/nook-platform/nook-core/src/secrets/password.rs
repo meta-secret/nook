@@ -19,18 +19,38 @@ pub const MAX_PASSWORD_LENGTH: PasswordCharacterCount = PasswordCharacterCount::
 pub struct PasswordGenerationOptions {
     #[tsify(type = "number")]
     pub length: PasswordCharacterCount,
+    #[tsify(type = "boolean")]
     pub lowercase: PasswordCharacterSet,
+    #[tsify(type = "boolean")]
     pub uppercase: PasswordCharacterSet,
+    #[tsify(type = "boolean")]
     pub numbers: PasswordCharacterSet,
+    #[tsify(type = "boolean")]
     pub symbols: PasswordCharacterSet,
 }
 
 /// Whether a named password alphabet participates in generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
+#[serde(from = "bool", into = "bool")]
 pub enum PasswordCharacterSet {
     Included,
     Excluded,
+}
+
+impl From<bool> for PasswordCharacterSet {
+    fn from(included: bool) -> Self {
+        if included {
+            Self::Included
+        } else {
+            Self::Excluded
+        }
+    }
+}
+impl From<PasswordCharacterSet> for bool {
+    fn from(selection: PasswordCharacterSet) -> Self {
+        matches!(selection, PasswordCharacterSet::Included)
+    }
 }
 
 /// A validated alphabet and length. Only validated options can construct it.
@@ -137,7 +157,7 @@ mod tests {
         let encoded = serde_json::to_string(&options)?;
         assert_eq!(
             encoded,
-            r#"{"length":20,"lowercase":"Included","uppercase":"Included","numbers":"Included","symbols":"Included"}"#
+            r#"{"length":20,"lowercase":true,"uppercase":true,"numbers":true,"symbols":true}"#
         );
         assert_eq!(
             serde_json::from_str::<PasswordGenerationOptions>(&encoded)?,
@@ -253,6 +273,21 @@ mod tests {
             symbols: PasswordCharacterSet::Included,
         })?;
         assert!(password.chars().all(|c| SYMBOLS.contains(c)));
+        Ok(())
+    }
+    #[test]
+    fn mixed_character_selections_preserve_boolean_wire() -> anyhow::Result<()> {
+        let json =
+            r#"{"length":20,"lowercase":true,"uppercase":false,"numbers":true,"symbols":false}"#;
+        let options: PasswordGenerationOptions = serde_json::from_str(json)?;
+        assert_eq!(options.lowercase, PasswordCharacterSet::Included);
+        assert_eq!(options.uppercase, PasswordCharacterSet::Excluded);
+        assert_eq!(options.numbers, PasswordCharacterSet::Included);
+        assert_eq!(options.symbols, PasswordCharacterSet::Excluded);
+        assert_eq!(serde_json::to_string(&options)?, json);
+        assert!(serde_json::from_str::<PasswordGenerationOptions>(
+        r#"{"length":20,"lowercase":"Included","uppercase":false,"numbers":true,"symbols":false}"#
+    ).is_err());
         Ok(())
     }
 }

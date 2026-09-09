@@ -8,7 +8,7 @@
 
 use nook_core::GenesisImportRequest;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::IgnoredAny};
 use std::str;
 
 use super::checked_event_write::CheckedEventWrite;
@@ -24,7 +24,7 @@ pub(crate) struct DriveEventStore<'a> {
 #[serde(rename_all = "camelCase")]
 struct DriveEventListResponse {
     #[serde(default)]
-    files: Vec<DriveEventFile>,
+    files: Vec<DriveEventListRow>,
     next_page_token: Option<String>,
 }
 #[derive(Default, Deserialize)]
@@ -34,7 +34,30 @@ struct DriveEventFile {
     name: Option<String>,
     app_properties: Option<DriveEventProperties>,
 }
+/// Drive listings can contain unrelated or malformed files. Only admitted rows
+/// participate; strict write metadata below remains a separate contract.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum DriveEventListRow {
+    File(DriveEventFile),
+    Unrelated(IgnoredAny),
+}
+impl DriveEventListRow {
+    fn file(&self) -> Option<&DriveEventFile> {
+        match self {
+            Self::File(file) => Some(file),
+            Self::Unrelated(_) => None,
+        }
+    }
+    fn file_id(self) -> Option<String> {
+        match self {
+            Self::File(file) => file.id,
+            Self::Unrelated(_) => None,
+        }
+    }
+}
 #[derive(Deserialize, Serialize)]
+
 struct DriveEventProperties {
     event_id: String,
 }
@@ -77,7 +100,8 @@ impl DriveEventStore<'_> {
     fn list_event_ids_from_response(body: &DriveEventListResponse) -> Vec<String> {
         body.files
             .iter()
-            .filter_map(|file| {
+            .filter_map(|row| {
+                let file = row.file()?;
                 Self::drive_listed_event_id(
                     file.name.as_deref()?,
                     file.app_properties
@@ -267,7 +291,11 @@ impl DriveEventStore<'_> {
             .json()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        Ok(body.files.into_iter().filter_map(|file| file.id).collect())
+        Ok(body
+            .files
+            .into_iter()
+            .filter_map(DriveEventListRow::file_id)
+            .collect())
     }
 
     async fn download_drive_event_file(
@@ -657,5 +685,32 @@ mod tests {
             DriveEventStore::drive_listed_event_id(&format!("{digest}.json"), Some("ignored")),
             None
         );
+    }
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
+    fn malformed_listing_rows_preserve_valid_event_siblings() -> anyhow::Result<()> {
+        let digest = "q".repeat(SHA256_BASE64URL_LEN);
+        let event_id = format!("sha256u:{digest}");
+        let json = format!(
+            r#"{{"files":[{{"id":"valid","name":"{digest}.yaml","appProperties":{{"event_id":"{event_id}"}}}},{{"name":"{digest}.yaml","appProperties":{{}}}},{{"name":"{digest}.yaml","appProperties":{{"event_id":4}}}},{{"name":"{digest}.yaml","appProperties":null}},{{"name":3}},{{"appProperties":[]}},null,{{"name":"unrelated.yaml"}}],"nextPageToken":"next"}}"#
+        );
+        let response: DriveEventListResponse = serde_json::from_str(&json)?;
+        assert_eq!(
+            DriveEventStore::list_event_ids_from_response(&response),
+            vec![event_id.clone()]
+        );
+        assert_eq!(
+            DriveEventStore::list_page_token(&response).as_deref(),
+            Some("next")
+        );
+        let properties = DriveEventProperties { event_id };
+        assert_eq!(
+            serde_json::to_string(&properties)?,
+            format!(r#"{{"event_id":"sha256u:{digest}"}}"#)
+        );
+        Ok(())
     }
 }

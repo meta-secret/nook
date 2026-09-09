@@ -9,16 +9,51 @@ mod items;
 use crate::SecretValue;
 use encryption::EncryptedBitwardenExport;
 use items::BitwardenItems;
-use serde::Deserialize;
+use serde::{Deserialize, de::IgnoredAny};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BitwardenExportHeader {
     #[serde(default)]
-    encrypted: bool,
-    password_protected: Option<bool>,
+    encrypted: BitwardenHeaderFlag,
+    #[serde(default)]
+    password_protected: BitwardenHeaderFlag,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BitwardenHeaderFlag {
+    Boolean(bool),
+    Unsupported(IgnoredAny),
+}
+impl Default for BitwardenHeaderFlag {
+    fn default() -> Self {
+        Self::Unsupported(IgnoredAny)
+    }
+}
+impl BitwardenHeaderFlag {
+    fn encryption(&self) -> BitwardenEncryption {
+        match self {
+            Self::Boolean(true) => BitwardenEncryption::Encrypted,
+            _ => BitwardenEncryption::Plaintext,
+        }
+    }
+    fn restriction(&self) -> BitwardenRestriction {
+        match self {
+            Self::Boolean(false) => BitwardenRestriction::AccountRestricted,
+            _ => BitwardenRestriction::PasswordProtected,
+        }
+    }
+}
+enum BitwardenEncryption {
+    Plaintext,
+    Encrypted,
+}
+enum BitwardenRestriction {
+    AccountRestricted,
+    PasswordProtected,
 }
 use thiserror::Error;
+
 #[derive(Debug, Error)]
 pub enum BitwardenImportError {
     #[error("Bitwarden returned invalid JSON: {0}")]
@@ -76,10 +111,16 @@ pub struct BitwardenExport<'a> {
 impl BitwardenExport<'_> {
     pub fn plan(self) -> Result<BitwardenImportPlan, BitwardenImportError> {
         let header: BitwardenExportHeader = serde_json::from_str(self.json)?;
-        if !header.encrypted {
+        if matches!(
+            header.encrypted.encryption(),
+            BitwardenEncryption::Plaintext
+        ) {
             return Ok(BitwardenItems::parse(self.json)?.plan());
         }
-        if header.password_protected == Some(false) {
+        if matches!(
+            header.password_protected.restriction(),
+            BitwardenRestriction::AccountRestricted
+        ) {
             return Err(BitwardenImportError::AccountRestrictedExport);
         }
         EncryptedBitwardenExport::parse(self.json)?
@@ -103,6 +144,11 @@ mod tests {
             r#"{"items":[]}"#,
             r#"{"encrypted":false,"items":[]}"#,
             r#"{"encrypted":"true","items":[]}"#,
+            r#"{"encrypted":null,"items":[]}"#,
+            r#"{"encrypted":1,"items":[]}"#,
+            r#"{"encrypted":[],"items":[]}"#,
+            r#"{"encrypted":{},"items":[]}"#,
+            r#"{"encrypted":false,"passwordProtected":{},"items":[]}"#,
         ] {
             assert!(
                 BitwardenExport {
