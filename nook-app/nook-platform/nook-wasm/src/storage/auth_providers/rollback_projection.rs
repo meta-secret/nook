@@ -107,7 +107,9 @@ impl AuthProviderDatabase {
         }
         let mut snapshot = NormalizedAuthSnapshot::from_wire(legacy).snapshot;
         let sealed = snapshot.clone();
-        snapshot.open_credentials(identity).is_ok() && snapshot != sealed
+        snapshot
+            .open_credentials(identity)
+            .is_ok_and(|opened| opened != sealed)
     }
 }
 
@@ -151,8 +153,12 @@ impl AuthProviderDatabase {
         )?;
         if scoped.is_null() && !legacy.is_null() {
             let mut snapshot = NormalizedAuthSnapshot::from_wire(&legacy).snapshot;
-            snapshot.open_credentials(identity)?;
-            snapshot.seal_credentials(identity)?;
+            snapshot = snapshot
+                .open_credentials(identity)
+                .map_err(|rejection| rejection.into_cause())?;
+            snapshot = snapshot
+                .seal_credentials(identity)
+                .map_err(|rejection| rejection.into_cause())?;
             ProviderSnapshotStore {
                 store: &store,
                 state_key: &state_key,

@@ -762,11 +762,12 @@ mod tests {
             file_name: "events",
         }
         .build();
-        private
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| IoError::other("private OAuth config must exist"))?
-            .drive_mode = GoogleDriveMode::Private;
+        (match &mut private.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| IoError::other("private OAuth config must exist"))?
+        .drive_mode = GoogleDriveMode::Private;
         let mut shared = OAuthCatalogFixture {
             id: "drive-shared",
             preset: OauthFilePreset::GoogleDrive,
@@ -774,10 +775,11 @@ mod tests {
             file_name: "events",
         }
         .build();
-        let shared_oauth = shared
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| IoError::other("shared OAuth config must exist"))?;
+        let shared_oauth = (match &mut shared.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| IoError::other("shared OAuth config must exist"))?;
         shared_oauth.drive_mode = GoogleDriveMode::Shared;
         shared_oauth.folder_id = StoredGoogleDriveFolder::FolderId("folder-team".to_owned());
         let providers = vec![private.clone(), shared.clone()];

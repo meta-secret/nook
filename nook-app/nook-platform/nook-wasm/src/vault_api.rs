@@ -266,7 +266,9 @@ pub fn seal_auth_providers_for_device_public_key(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let public_key = DevicePublicKey::parse(device_public_key)?;
-    snapshot.seal_credentials_for(&public_key)?;
+    snapshot = snapshot
+        .seal_credentials_for(&public_key)
+        .map_err(|rejection| rejection.into_cause())?;
     Ok(snapshot)
 }
 

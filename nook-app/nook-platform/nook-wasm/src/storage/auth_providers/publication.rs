@@ -23,7 +23,7 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_wasm_bindgen::Serializer;
 
-/// Normal publication seals a clone before observing the keyring or database.
+/// Normal publication derives encrypted credentials before observing storage.
 pub(crate) struct ProviderSnapshotPublication<'a> {
     pub(crate) identity: &'a DeviceIdentity,
     pub(crate) snapshot: &'a AuthProvidersSnapshotData,
@@ -35,8 +35,7 @@ impl ProviderSnapshotPublication<'_> {
     async fn prepare(self) -> Result<PreparedProviderSnapshotWrite, NookError> {
         let Self { identity, snapshot } = self;
 
-        let mut sealed = snapshot.clone();
-        sealed.seal_credentials(identity)?;
+        let sealed = snapshot.sealed_credentials_projection(identity)?;
         let state_key = AuthProviderDatabase::state_key_for_app_id(identity.app_id());
         let schema_key = AuthProviderDatabase::schema_key_for_app_id(identity.app_id());
         let refresh_legacy =
@@ -443,9 +442,10 @@ mod tests {
     #[wasm_bindgen_test]
     async fn dropping_presealed_preparation_publishes_no_rows() -> anyhow::Result<()> {
         let mut fixture = PublicationFixture::new("github_pat_import_prepare_only").await?;
-        fixture
+        fixture.snapshot = fixture
             .snapshot
-            .seal_credentials_for(&fixture.identity.public_key())?;
+            .seal_credentials_for(&fixture.identity.public_key())
+            .map_err(|rejection| rejection.into_cause())?;
         let original = fixture.snapshot.clone();
         let prepared = fixture.import().prepare().await?;
         assert_eq!(prepared.snapshot, original);
@@ -579,8 +579,12 @@ mod tests {
             pat: "github_pat_second",
         }
         .snapshot();
-        first_existing.seal_credentials(&first)?;
-        second_existing.seal_credentials(&second)?;
+        first_existing = first_existing
+            .seal_credentials(&first)
+            .map_err(|rejection| rejection.into_cause())?;
+        second_existing = second_existing
+            .seal_credentials(&second)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(first.app_id()),
             schema_key: &AuthProviderDatabase::schema_key_for_app_id(first.app_id()),
@@ -598,7 +602,9 @@ mod tests {
             pat: "github_pat_first_new",
         }
         .snapshot();
-        incoming.seal_credentials(&first)?;
+        incoming = incoming
+            .seal_credentials(&first)
+            .map_err(|rejection| rejection.into_cause())?;
 
         PresealedProviderSnapshotPublication {
             app_id: first.app_id(),
@@ -648,7 +654,9 @@ mod tests {
         retained.store_id = ProviderVaultScope::StoreId("store-other".to_owned());
         existing.providers.push(retained);
         existing.active_vault_store_id = ActiveVaultScope::StoreId("store-incoming".to_owned());
-        existing.seal_credentials(&identity)?;
+        existing = existing
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
             schema_key: &AuthProviderDatabase::schema_key_for_app_id(identity.app_id()),
@@ -662,7 +670,9 @@ mod tests {
         }
         .snapshot();
         incoming.active_vault_store_id = ActiveVaultScope::StoreId("store-incoming".to_owned());
-        incoming.seal_credentials(&identity)?;
+        incoming = incoming
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         PresealedProviderSnapshotPublication {
             app_id: identity.app_id(),
             snapshot: &incoming,
@@ -719,7 +729,9 @@ mod tests {
             pat: "github_pat_incoming",
         }
         .snapshot();
-        incoming.seal_credentials(&identity)?;
+        incoming = incoming
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         let result = PresealedProviderSnapshotPublication {
             app_id: identity.app_id(),
             snapshot: &incoming,
@@ -772,7 +784,9 @@ mod tests {
         retained.store_id = ProviderVaultScope::StoreId("store-other".to_owned());
         existing.providers.push(retained);
         existing.active_vault_store_id = ActiveVaultScope::StoreId("store-incoming".to_owned());
-        existing.seal_credentials(&identity)?;
+        existing = existing
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
             schema_key: &AuthProviderDatabase::schema_key_for_app_id(identity.app_id()),

@@ -191,7 +191,9 @@ mod tests {
                 );
                 provider.store_id = ProviderVaultScope::StoreId("store-1".to_owned());
                 providers.providers.push(provider);
-                providers.seal_credentials_for(&identity.public_key())?;
+                providers = providers
+                    .seal_credentials_for(&identity.public_key())
+                    .map_err(|rejection| rejection.into_cause())?;
                 scopes.push(ExtensionConnectScope::SyncProviderCredentials);
             }
             let request = CompanionPairingRequest {
@@ -443,7 +445,9 @@ mod tests {
             active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
         };
         replacement.providers[0].store_id = ProviderVaultScope::StoreId("store-1".to_owned());
-        replacement.seal_credentials_for(&other.public_key())?;
+        replacement = replacement
+            .seal_credentials_for(&other.public_key())
+            .map_err(|rejection| rejection.into_cause())?;
         fixture.providers = replacement;
         fixture.refresh_manifest()?;
         assert!(matches!(

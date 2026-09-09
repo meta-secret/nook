@@ -189,7 +189,9 @@ impl AuthProviderDatabase {
         };
         let normalized = NormalizedAuthSnapshot::from_wire(&raw);
         let mut snapshot = normalized.snapshot;
-        snapshot.open_credentials(identity)?;
+        snapshot = snapshot
+            .open_credentials(identity)
+            .map_err(|rejection| rejection.into_cause())?;
         Ok(NormalizedAuthSnapshot {
             snapshot,
             changed: normalized.changed,
@@ -470,7 +472,9 @@ mod wasm_idb_tests {
         AuthProviderDatabase::clear_auth_providers_db().await?;
         let identity = DeviceIdentity::generate()?;
         let mut owned = github_snapshot("github_pat_owned");
-        owned.seal_credentials(&identity)?;
+        owned = owned
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
             schema_key: &AuthProviderDatabase::schema_key_for_app_id(identity.app_id()),
@@ -497,7 +501,9 @@ mod wasm_idb_tests {
         })
         .await?;
         let mut competing = github_snapshot("github_pat_competing");
-        competing.seal_credentials(&identity)?;
+        competing = competing
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot(&competing).await?;
 
         AuthProviderDatabase::delete_auth_providers_for_app_id(identity.app_id()).await?;
@@ -555,14 +561,18 @@ mod wasm_idb_tests {
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let mut legacy = github_snapshot("github_pat_legacy_first");
-        legacy.seal_credentials(&first)?;
+        legacy = legacy
+            .seal_credentials(&first)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot(&legacy).await?;
 
         AuthProviderDatabase::migrate_legacy_auth_providers_for_identity(&first).await?;
         let mut rollback =
             NormalizedAuthSnapshot::from_wire(&AuthProviderDatabase::read_raw_snapshot().await?)
                 .snapshot;
-        rollback.open_credentials(&first)?;
+        rollback = rollback
+            .open_credentials(&first)
+            .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
             rollback.providers[0].github_pat.as_deref(),
             Some("github_pat_legacy_first")
@@ -603,7 +613,9 @@ mod wasm_idb_tests {
         NookDatabase::clear_identity_directory_for_test().await?;
         let identity = DeviceIdentity::generate()?;
         let mut legacy = github_snapshot("github_pat_legacy");
-        legacy.seal_credentials(&identity)?;
+        legacy = legacy
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot(&legacy).await?;
         let newer = github_snapshot("github_pat_newer");
 
@@ -631,7 +643,9 @@ mod wasm_idb_tests {
         let mut rollback =
             NormalizedAuthSnapshot::from_wire(&AuthProviderDatabase::read_raw_snapshot().await?)
                 .snapshot;
-        rollback.open_credentials(&identity)?;
+        rollback = rollback
+            .open_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
             rollback.providers[0].github_pat.as_deref(),
             Some("github_pat_newer")
@@ -651,7 +665,9 @@ mod wasm_idb_tests {
         .save()
         .await?;
         let mut legacy = github_snapshot("github_pat_legacy_competing");
-        legacy.seal_credentials(&identity)?;
+        legacy = legacy
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot(&legacy).await?;
 
         let result =
@@ -680,7 +696,9 @@ mod wasm_idb_tests {
         NookDatabase::clear_identity_directory_for_test().await?;
         let identity = DeviceIdentity::generate()?;
         let mut legacy = github_snapshot("github_pat_must_survive");
-        legacy.seal_credentials(&identity)?;
+        legacy = legacy
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot(&legacy).await?;
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: identity_record::LOCAL_IDENTITY_KEYRING_KEY,
@@ -723,7 +741,9 @@ mod wasm_idb_tests {
         })
         .await?;
         let mut legacy = github_snapshot("github_pat_locked_legacy");
-        legacy.seal_credentials(&first)?;
+        legacy = legacy
+            .seal_credentials(&first)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot(&legacy).await?;
 
         AuthProviderDatabase::migrate_legacy_auth_providers_for_selected_identity().await?;
@@ -731,7 +751,9 @@ mod wasm_idb_tests {
         let mut rollback =
             NormalizedAuthSnapshot::from_wire(&AuthProviderDatabase::read_raw_snapshot().await?)
                 .snapshot;
-        rollback.open_credentials(&first)?;
+        rollback = rollback
+            .open_credentials(&first)
+            .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
             rollback.providers[0].github_pat.as_deref(),
             Some("github_pat_locked_legacy")
@@ -773,7 +795,9 @@ mod wasm_idb_tests {
         .save()
         .await?;
         let mut legacy = github_snapshot("github_pat_legacy_competing");
-        legacy.seal_credentials(&identity)?;
+        legacy = legacy
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot(&legacy).await?;
 
         let result =
@@ -814,13 +838,17 @@ mod wasm_idb_tests {
         let mut legacy = github_snapshot_with_id("gh-legacy", "github_pat_legacy");
         legacy.providers[0].store_id = ProviderVaultScope::StoreId("store-legacy".to_owned());
         legacy.active_vault_store_id = ActiveVaultScope::StoreId("store-legacy".to_owned());
-        legacy.seal_credentials(&identity)?;
+        legacy = legacy
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot(&legacy).await?;
 
         let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
         incoming.providers[0].store_id = ProviderVaultScope::StoreId("store-incoming".to_owned());
         incoming.active_vault_store_id = ActiveVaultScope::StoreId("store-incoming".to_owned());
-        incoming.seal_credentials(&identity)?;
+        incoming = incoming
+            .seal_credentials(&identity)
+            .map_err(|rejection| rejection.into_cause())?;
 
         PresealedProviderSnapshotPublication {
             app_id: identity.app_id(),

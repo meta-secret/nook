@@ -30,14 +30,6 @@ impl StoredOAuthRefreshCredential {
     }
 
     #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
-        match self {
-            Self::NotIssued => None,
-            Self::Token(value) => Some(value),
-        }
-    }
-
-    #[must_use]
     pub fn into_option(self) -> Option<String> {
         match self {
             Self::NotIssued => None,
@@ -66,14 +58,6 @@ impl StoredOAuthAccessCredential {
 
     #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::SignedOut => None,
-            Self::AccessToken(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
         match self {
             Self::SignedOut => None,
             Self::AccessToken(value) => Some(value),
@@ -116,14 +100,6 @@ impl StoredOAuthTokenExpiry {
     }
 
     #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
-        match self {
-            Self::Unknown => None,
-            Self::ExpiresAt(value) => Some(value),
-        }
-    }
-
-    #[must_use]
     pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unknown => None,
@@ -152,14 +128,6 @@ impl StoredOAuthRemoteFileId {
 
     #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unresolved => None,
-            Self::FileId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
         match self {
             Self::Unresolved => None,
             Self::FileId(value) => Some(value),
@@ -202,14 +170,6 @@ impl StoredOAuthRemoteFileName {
     }
 
     #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
-        match self {
-            Self::Unresolved => None,
-            Self::FileName(value) => Some(value),
-        }
-    }
-
-    #[must_use]
     pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unresolved => None,
@@ -238,14 +198,6 @@ impl StoredOAuthAccountIdentity {
 
     #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unknown => None,
-            Self::Email(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
         match self {
             Self::Unknown => None,
             Self::Email(value) => Some(value),
@@ -288,14 +240,6 @@ impl StoredGoogleDriveFolder {
     }
 
     #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
-        match self {
-            Self::Root => None,
-            Self::FolderId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
     pub fn into_option(self) -> Option<String> {
         match self {
             Self::Root => None,
@@ -324,14 +268,6 @@ impl StoredICloudShareTarget {
 
     #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Personal => None,
-            Self::SharedTarget(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
         match self {
             Self::Personal => None,
             Self::SharedTarget(value) => Some(value),
@@ -374,14 +310,6 @@ impl StoredLocalFolderDirectory {
     }
 
     #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
-        match self {
-            Self::Unnamed => None,
-            Self::DirectoryName(value) => Some(value),
-        }
-    }
-
-    #[must_use]
     pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unnamed => None,
@@ -410,14 +338,6 @@ impl StoredLocalFolderHandle {
 
     #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unbound => None,
-            Self::HandleId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
         match self {
             Self::Unbound => None,
             Self::HandleId(value) => Some(value),
@@ -460,14 +380,6 @@ impl StoredGithubPat {
     }
 
     #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
-        match self {
-            Self::Missing => None,
-            Self::Token(value) => Some(value),
-        }
-    }
-
-    #[must_use]
     pub fn into_option(self) -> Option<String> {
         match self {
             Self::Missing => None,
@@ -496,14 +408,6 @@ impl StoredGithubRepository {
 
     #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::DefaultRepository => None,
-            Self::Repository(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
         match self {
             Self::DefaultRepository => None,
             Self::Repository(value) => Some(value),
@@ -546,14 +450,6 @@ impl ProviderVaultScope {
     }
 
     #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
-        match self {
-            Self::Unscoped => None,
-            Self::StoreId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
     pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unscoped => None,
@@ -589,14 +485,6 @@ impl ActiveVaultScope {
     }
 
     #[must_use]
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
-        match self {
-            Self::Unselected => None,
-            Self::StoreId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
     pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unselected => None,
@@ -622,14 +510,6 @@ impl StoredOAuthFileConfiguration {
 
     #[must_use]
     pub fn as_ref(&self) -> Option<&OAuthFileConfig> {
-        match self {
-            Self::NotApplicable => None,
-            Self::Configured(config) => Some(config),
-        }
-    }
-
-    #[must_use]
-    pub fn as_mut(&mut self) -> Option<&mut OAuthFileConfig> {
         match self {
             Self::NotApplicable => None,
             Self::Configured(config) => Some(config),

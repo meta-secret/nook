@@ -260,7 +260,8 @@ pub use session::{
     ReplaceSecretInput, VerifiedAuthenticatorReplacementInput,
 };
 pub use sync_provider_credentials::{
-    AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialStorageAdmission,
+    AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialRejection,
+    ProviderCredentialStorageAdmission,
 };
 pub use sync_provider_store::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,

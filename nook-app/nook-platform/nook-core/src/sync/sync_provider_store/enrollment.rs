@@ -438,10 +438,11 @@ mod tests {
         );
 
         let mut shared_drive = drive;
-        let oauth = shared_drive
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
+        let oauth = (match &mut shared_drive.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.drive_mode = GoogleDriveMode::Shared;
         oauth.folder_id = StoredGoogleDriveFolder::FolderId("persisted-shared-folder".to_owned());
         assert_eq!(
@@ -507,11 +508,12 @@ mod tests {
             "nook.yaml",
         )
         .provider;
-        other
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("configured provider required"))?
-            .folder_id = StoredGoogleDriveFolder::FolderId("folder-other".to_owned());
+        (match &mut other.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("configured provider required"))?
+        .folder_id = StoredGoogleDriveFolder::FolderId("folder-other".to_owned());
         let mut matching = ProviderEnrollmentFixture::oauth(
             "matching",
             OauthFilePreset::GoogleDrive,
@@ -519,11 +521,12 @@ mod tests {
             "nook.yaml",
         )
         .provider;
-        matching
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("configured provider required"))?
-            .folder_id = StoredGoogleDriveFolder::FolderId("folder-required".to_owned());
+        (match &mut matching.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("configured provider required"))?
+        .folder_id = StoredGoogleDriveFolder::FolderId("folder-required".to_owned());
         let providers = vec![private, other, matching];
 
         assert_eq!(
@@ -631,11 +634,12 @@ mod tests {
         let mut provider =
             ProviderEnrollmentFixture::oauth("drive", OauthFilePreset::GoogleDrive, None, "events")
                 .provider;
-        provider
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth fixture"))?
-            .folder_id = StoredGoogleDriveFolder::FolderId(" persisted ".to_owned());
+        (match &mut provider.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth fixture"))?
+        .folder_id = StoredGoogleDriveFolder::FolderId(" persisted ".to_owned());
         let architecture = VaultArchitecture {
             replication_type: ReplicationType::Shared,
             ..VaultArchitecture::default()
@@ -662,11 +666,12 @@ mod tests {
             );
         }
         assert_eq!(provider, before);
-        provider
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth fixture"))?
-            .folder_id = StoredGoogleDriveFolder::Root;
+        (match &mut provider.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth fixture"))?
+        .folder_id = StoredGoogleDriveFolder::Root;
         for (target, expected) in [
             (None, ValidationError::SharedStorageTargetRequired),
             (
@@ -694,20 +699,22 @@ mod tests {
         let mut first =
             ProviderEnrollmentFixture::oauth("first", OauthFilePreset::GoogleDrive, None, "events")
                 .provider;
-        let config = first
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth fixture"))?;
+        let config = (match &mut first.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth fixture"))?;
         config.folder_id = StoredGoogleDriveFolder::FolderId("folder".to_owned());
         let second = StorageProviderData {
             id: "second".to_owned(),
             ..first.clone()
         };
-        first
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth fixture"))?
-            .access_token = StoredOAuthAccessCredential::AccessToken(" ".to_owned());
+        (match &mut first.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth fixture"))?
+        .access_token = StoredOAuthAccessCredential::AccessToken(" ".to_owned());
         let providers = [first, second];
         for (preset, target, expected) in [
             (OauthFilePreset::GoogleDrive, "folder", Some("second")),

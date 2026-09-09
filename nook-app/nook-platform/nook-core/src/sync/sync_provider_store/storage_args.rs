@@ -522,20 +522,22 @@ mod tests {
             None,
             "events",
         );
-        let oauth = provider
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
+        let oauth = (match &mut provider.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.drive_mode = GoogleDriveMode::Shared;
         assert_eq!(
             provider.connection_args(),
             Err(ValidationError::SharedStorageTargetRequired)
         );
-        provider
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth config must exist"))?
-            .folder_id = StoredGoogleDriveFolder::FolderId("folder-1".to_owned());
+        (match &mut provider.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth config must exist"))?
+        .folder_id = StoredGoogleDriveFolder::FolderId("folder-1".to_owned());
         assert_eq!(provider.connection_args()?.repo, "shared:folder-1\tevents");
         Ok(())
     }
@@ -692,10 +694,11 @@ mod tests {
             None,
             "nook-events",
         );
-        let oauth = icloud
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
+        let oauth = (match &mut icloud.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.icloud_mode = ICloudMode::Private;
         assert!(
             (icloud)
@@ -706,10 +709,11 @@ mod tests {
             (icloud).validate_replication(ReplicationType::Shared),
             Err(ValidationError::SharedStorageTargetRequired)
         );
-        let oauth = icloud
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
+        let oauth = (match &mut icloud.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.icloud_mode = ICloudMode::Shared;
         oauth.icloud_share_target =
             StoredICloudShareTarget::SharedTarget("not-a-cloudkit-share-target".to_owned());
@@ -731,10 +735,11 @@ mod tests {
             None,
             "nook-events",
         );
-        let oauth = icloud
-            .oauth_file
-            .as_mut()
-            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
+        let oauth = (match &mut icloud.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Some(config),
+            StoredOAuthFileConfiguration::NotApplicable => None,
+        })
+        .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.icloud_mode = ICloudMode::Shared;
         oauth.icloud_share_target = StoredICloudShareTarget::SharedTarget(target.clone());
 
