@@ -33,9 +33,9 @@ export class CortexArticleStructureSupportScenario {
   }
 
   static audit(request: MakeAuditRequest): CortexArticleFinding[] {
-    return CortexArticleAudit.auditCortexArticleStructure(
+    return CortexArticleAudit.from(
       CortexArticleStructureSupportScenario.makeAuditRequest(request),
-    );
+    ).execute();
   }
 }
 

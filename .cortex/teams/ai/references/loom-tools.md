@@ -75,9 +75,9 @@ Loom follows [typescript-domain-structure.md](../../web-dev/dynamic-skills/types
 - nested same-prefix families (`agentStats`, `prLand`) plus operation enums
 - field-name enums passed into deny-unknown checks (never string sets)
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation only
-- runtime failures throw `LoomFailure` with `LoomFailureCode`
-- forbidden: generic TypeScript `Result<T>` / `Maybe<T>`, and
-  `new Set(['field', ...])` allow-lists
+- runtime failures return `neverthrow` Result values with concrete `LoomFailure` errors
+- authored operations use instances; static methods are narrow builders
+- raw `new Set(['field', ...])` allow-lists remain prohibited
 
 Loom also follows
 [typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md),
@@ -124,8 +124,8 @@ Use one domain root family and descriptive fields. Same-prefix operations nest:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: '{agentTempDir}/pr-123-scratch.json'
-    outputPath: '{agentTempDir}/123.yaml'
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: true
 ```
 

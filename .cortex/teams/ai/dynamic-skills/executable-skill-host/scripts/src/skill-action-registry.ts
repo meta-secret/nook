@@ -230,7 +230,7 @@ export class ExecutableSkillActions {
       value: audit.value,
     };
     const validation =
-      ExecutableSkillInputSchema.validateSkillInput(validationRequest);
+      ExecutableSkillInputSchema.from(validationRequest).execute();
     if (!validation.ok) {
       const request: InvalidSkillRequest = {
         path: validation.path,
@@ -244,9 +244,9 @@ export class ExecutableSkillActions {
         request: {
           family: SkillRequestFamily.CortexArticleStructure,
           operation: CortexArticleStructureOperation.Audit,
-          request: CortexArticleActionDecoder.decodeCortexArticleActionPayload(
+          request: CortexArticleActionDecoder.from(
             JSON.stringify(audit.value),
-          ),
+          ).execute(),
         },
       };
     } catch (error) {
@@ -295,11 +295,11 @@ export class ExecutableSkillActions {
         message: 'Expected the audit action.',
       });
     }
-    const validation = ExecutableSkillInputSchema.validateSkillInput({
+    const validation = ExecutableSkillInputSchema.from({
       path: 'cortexDocumentMap.audit',
       schema: CORTEX_DOCUMENT_MAP_ACTION_DEFINITION.inputSchema,
       value: audit.value,
-    });
+    }).execute();
     if (!validation.ok) {
       return ExecutableSkillActions.invalidRequest({
         path: validation.path,
@@ -312,10 +312,9 @@ export class ExecutableSkillActions {
         request: {
           family: SkillRequestFamily.CortexDocumentMap,
           operation: CortexDocumentMapOperation.Audit,
-          request:
-            CortexDocumentMapActionDecoder.decodeCortexDocumentMapActionPayload(
-              JSON.stringify(audit.value),
-            ),
+          request: CortexDocumentMapActionDecoder.from(
+            JSON.stringify(audit.value),
+          ).execute(),
         },
       };
     } catch (error) {
@@ -365,11 +364,11 @@ export class ExecutableSkillActions {
         message: 'Expected the compile action.',
       });
     }
-    const validation = ExecutableSkillInputSchema.validateSkillInput({
+    const validation = ExecutableSkillInputSchema.from({
       path: 'cortexConsistency.compile',
       schema: CORTEX_CONSISTENCY_ACTION_DEFINITION.inputSchema,
       value: compile.value,
-    });
+    }).execute();
     if (!validation.ok) {
       return ExecutableSkillActions.invalidRequest({
         path: validation.path,
@@ -432,11 +431,11 @@ export class ExecutableSkillActions {
         message: 'Expected the render action.',
       });
     }
-    const validation = ExecutableSkillInputSchema.validateSkillInput({
+    const validation = ExecutableSkillInputSchema.from({
       path: 'delegationVisualization.render',
       schema: DELEGATION_VISUALIZATION_ACTION_DEFINITION.inputSchema,
       value: render.value,
-    });
+    }).execute();
     if (!validation.ok) {
       return ExecutableSkillActions.invalidRequest({
         path: validation.path,

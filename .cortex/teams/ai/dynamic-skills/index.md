@@ -110,7 +110,7 @@ Harness profile directories must not mirror or redefine these cards.
     - Nest same-prefix closed vocabularies into parent objects plus operation
       enums.
     - Use field enums instead of string sets.
-    - Ban hand-rolled TypeScript `Result` / `Maybe` utilities.
+    - Use shared `neverthrow` Result values; prohibit competing local wrappers.
 - **[typescript-single-parameter.md](../../web-dev/dynamic-skills/typescript-single-parameter.md)**
   - Purpose: Limit authored functions to one parameter
 - **[typescript-no-unknown.md](../../web-dev/dynamic-skills/typescript-no-unknown.md)**

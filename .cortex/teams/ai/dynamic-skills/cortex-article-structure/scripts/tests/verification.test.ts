@@ -36,16 +36,16 @@ export class CortexArticleStructureVerificationScenario {
     request: VerifyCortexArticleStructureResultRequest,
   ): void {
     expect(() =>
-      CortexArticleResultVerifier.verifyCortexArticleStructureResult(request),
+      CortexArticleResultVerifier.from(request).execute(),
     ).not.toThrow();
   }
 
   static expectRejected(
     request: VerifyCortexArticleStructureResultRequest,
   ): void {
-    expect(() =>
-      CortexArticleResultVerifier.verifyCortexArticleStructureResult(request),
-    ).toThrow('semantic verification failed');
+    expect(() => CortexArticleResultVerifier.from(request).execute()).toThrow(
+      'semantic verification failed',
+    );
   }
 }
 
@@ -123,7 +123,7 @@ const EXPECTED_FINDINGS: CortexArticleFinding[] = [
 ];
 
 test('independently accepts the audit result across every diagnostic branch', () => {
-  expect(CortexArticleAudit.auditCortexArticleStructure(AUDIT_REQUEST)).toEqual(
+  expect(CortexArticleAudit.from(AUDIT_REQUEST).execute()).toEqual(
     EXPECTED_FINDINGS,
   );
   const verificationRequest: VerifyCortexArticleStructureResultRequest = {
@@ -205,9 +205,7 @@ test('treats semantic separators and visible ordered lists as policy inputs', ()
     auditRequest: structuredRequest,
     result: CortexArticleStructureVerificationScenario.resultWith([]),
   };
-  expect(
-    CortexArticleAudit.auditCortexArticleStructure(structuredRequest),
-  ).toEqual([]);
+  expect(CortexArticleAudit.from(structuredRequest).execute()).toEqual([]);
   CortexArticleStructureVerificationScenario.expectVerified(
     verificationRequest,
   );
@@ -241,7 +239,7 @@ test('continues independent density verification below nested headings', () => {
     ],
   };
   const result = CortexArticleStructureVerificationScenario.resultWith(
-    CortexArticleAudit.auditCortexArticleStructure(auditRequest),
+    CortexArticleAudit.from(auditRequest).execute(),
   );
   const verificationRequest: VerifyCortexArticleStructureResultRequest = {
     auditRequest,

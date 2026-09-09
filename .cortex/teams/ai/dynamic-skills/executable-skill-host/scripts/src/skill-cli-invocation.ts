@@ -3,13 +3,13 @@ export class ExecutableSkillInvocation {
     private readonly request: ParseSkillCliInvocationRequest,
   ) {}
 
-  static parseSkillCliInvocation(
+  static from(
     request: ParseSkillCliInvocationRequest,
-  ): SkillCliInvocation {
-    return new ExecutableSkillInvocation(request).execute();
+  ): ExecutableSkillInvocation {
+    return new ExecutableSkillInvocation(request);
   }
 
-  private execute(): SkillCliInvocation {
+  public execute(): SkillCliInvocation {
     const request = this.request;
     const token = request.argv.at(0);
     if (typeof token !== 'string' || token === '--tools-list') {

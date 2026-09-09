@@ -30,11 +30,11 @@ export class CortexArticleActionDecoder {
     } as const;
   }
 
-  static decodeCortexArticleActionPayload(serialized: string) {
-    return new CortexArticleActionDecoder(serialized).execute();
+  static from(serialized: string): CortexArticleActionDecoder {
+    return new CortexArticleActionDecoder(serialized);
   }
 
-  private execute() {
+  public execute() {
     const serialized = this.request;
     return CortexArticleTransport.decodeCortexArticleRequest(serialized);
   }
@@ -160,8 +160,9 @@ export const CORTEX_ARTICLE_ACTION_DEFINITION = Object.freeze(
   CORTEX_ARTICLE_ACTION,
 );
 
-export const executeCortexArticleAction =
-  CortexArticleApplication.executeCortexArticleStructureApplication;
+export const executeCortexArticleAction = (
+  request: Parameters<typeof CortexArticleApplication.from>[0],
+) => CortexArticleApplication.from(request).execute();
 
 export { CortexArticleRequestDecodeError };
 

@@ -12,13 +12,13 @@ export class DelegationVisualizationVerifier {
     private readonly request: VerifyDelegationVisualizationResultRequest,
   ) {}
 
-  static verifyDelegationVisualizationResult(
+  static from(
     input: VerifyDelegationVisualizationResultRequest,
-  ): DelegationVisualizationResult {
-    return new DelegationVisualizationVerifier(input).execute();
+  ): DelegationVisualizationVerifier {
+    return new DelegationVisualizationVerifier(input);
   }
 
-  private execute(): DelegationVisualizationResult {
+  public execute(): DelegationVisualizationResult {
     const input = this.request;
     if (
       input.result.kind !== DelegationVisualizationContractKind.Result ||

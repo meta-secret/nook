@@ -75,8 +75,10 @@ also needs depth, so it remains on the block.
   domain, application, infrastructure, fixture, or framework owner.
 - Use an instance method when the operation depends on owned state or
   capability.
-- Use an associated or static method for construction and cohesive stateless
-  behavior.
+- Use Rust associated methods for construction and cohesive stateless behavior.
+- Reserve authored TypeScript static methods for narrow construction builders.
+- Put TypeScript execution, validation, formatting, and dispatch on instances.
+- Give those instances the request, state, or capability that their behavior owns.
 - Use a real trait, interface, or equivalent abstraction only when it expresses
   a shared contract.
 - Keep closures local only when they express an immediately used operation.
@@ -113,9 +115,9 @@ also needs depth, so it remains on the block.
 - Do not keep a nested helper function when its behavior belongs to an existing
   owner.
 - Do not use a closure to bypass ownership for reusable behavior.
-- Do not invent object identity, lifecycle phases, or a generic framework for a
-  pure operation. Use a cohesive associated or static operation on its
-  meaningful owner.
+- Do not invent identity, lifecycle phases, or a generic framework for a pure operation.
+- Do not rename TypeScript execution to a builder merely to retain a static method.
+- Do not create an empty instance that serves only as a container for former statics.
 
 ## Narrow boundaries
 

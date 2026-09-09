@@ -71,9 +71,7 @@ const validFinding = {
 
 test('round-trips the exact bounded result contract', () => {
   const result =
-    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
-      invalidRootRequest,
-    );
+    CortexDocumentMapApplication.from(invalidRootRequest).execute();
   expect(
     CortexDocumentMapTransport.decodeCortexDocumentMapResult(
       CortexDocumentMapTransport.encodeCortexDocumentMapResult(result),
@@ -141,9 +139,7 @@ test('rejects oversized serialized results', () => {
 
 test('acceptance rejects removal, reordering, duplication, and mutation', () => {
   const result =
-    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
-      invalidRootRequest,
-    );
+    CortexDocumentMapApplication.from(invalidRootRequest).execute();
   const [first = false, second = false] = result.findings;
   expect(first).not.toBe(false);
   expect(second).not.toBe(false);
@@ -184,9 +180,7 @@ test('acceptance rejects removal, reordering, duplication, and mutation', () => 
 
 test('acceptance binds findings to the exact admitted request', () => {
   const result =
-    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
-      invalidRootRequest,
-    );
+    CortexDocumentMapApplication.from(invalidRootRequest).execute();
   const cleanRequest: AuditCortexDocumentMapRequest = {
     ...invalidRootRequest,
     documents: [
@@ -206,9 +200,7 @@ test('acceptance binds findings to the exact admitted request', () => {
 
 test('acceptance rejects an omitted transient-link diagnostic', () => {
   const result =
-    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
-      transientLinkRequest,
-    );
+    CortexDocumentMapApplication.from(transientLinkRequest).execute();
   expect(result.findings.map((finding) => finding.code)).toEqual([
     CortexStructureFindingCode.InvalidIndexEntry,
   ]);

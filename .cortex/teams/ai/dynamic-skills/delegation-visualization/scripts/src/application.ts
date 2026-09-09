@@ -13,21 +13,21 @@ export class DelegationVisualizationApplication {
     private readonly request: RenderDelegationVisualizationRequest,
   ) {}
 
-  static executeDelegationVisualizationApplication(
+  static from(
     request: RenderDelegationVisualizationRequest,
-  ): DelegationVisualizationResult {
-    return new DelegationVisualizationApplication(request).execute();
+  ): DelegationVisualizationApplication {
+    return new DelegationVisualizationApplication(request);
   }
 
-  private execute(): DelegationVisualizationResult {
+  public execute(): DelegationVisualizationResult {
     const request = this.request;
     const candidate: DelegationVisualizationResult = {
       kind: DelegationVisualizationContractKind.Result,
-      document: DelegationVisualization.renderDelegationVisualization(request),
+      document: DelegationVisualization.from(request).execute(),
     };
-    return DelegationVisualizationVerifier.verifyDelegationVisualizationResult({
+    return DelegationVisualizationVerifier.from({
       request,
       result: candidate,
-    });
+    }).execute();
   }
 }

@@ -4,7 +4,7 @@ import { CortexConsistencyContractKind } from '../src/domain.ts';
 
 test('decodes the strict consistency request', () => {
   expect(
-    CortexConsistencyRequestDecoder.decodeCortexConsistencyRequest(
+    CortexConsistencyRequestDecoder.from(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [
@@ -15,7 +15,7 @@ test('decodes the strict consistency request', () => {
           },
         ],
       }),
-    ).documents,
+    ).execute().documents,
   ).toHaveLength(1);
 });
 
@@ -26,20 +26,20 @@ test('rejects duplicate documents and extra fields', () => {
     commands: [],
   };
   expect(() =>
-    CortexConsistencyRequestDecoder.decodeCortexConsistencyRequest(
+    CortexConsistencyRequestDecoder.from(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [document, document],
       }),
-    ),
+    ).execute(),
   ).toThrow();
   expect(() =>
-    CortexConsistencyRequestDecoder.decodeCortexConsistencyRequest(
+    CortexConsistencyRequestDecoder.from(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [],
         extra: true,
       }),
-    ),
+    ).execute(),
   ).toThrow();
 });

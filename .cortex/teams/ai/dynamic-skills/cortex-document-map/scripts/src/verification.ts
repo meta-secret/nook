@@ -22,13 +22,13 @@ export class CortexDocumentMapVerifier {
     private readonly request: VerifyCortexDocumentMapResultRequest,
   ) {}
 
-  static verifyCortexDocumentMapResult(
+  static from(
     request: VerifyCortexDocumentMapResultRequest,
-  ): void {
-    return new CortexDocumentMapVerifier(request).execute();
+  ): CortexDocumentMapVerifier {
+    return new CortexDocumentMapVerifier(request);
   }
 
-  private execute(): void {
+  public execute(): void {
     const request = this.request;
     if (
       request.auditRequest.kind !== CortexDocumentMapContractKind.Request ||

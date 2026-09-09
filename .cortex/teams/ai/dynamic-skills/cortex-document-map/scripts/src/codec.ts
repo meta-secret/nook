@@ -44,13 +44,11 @@ export class CortexDocumentMapTransport {
     return serialized;
   }
 
-  static decodeCortexDocumentMapRequest(
-    serialized: string,
-  ): AuditCortexDocumentMapRequest {
-    return new CortexDocumentMapTransport(serialized).execute();
+  static from(serialized: string): CortexDocumentMapTransport {
+    return new CortexDocumentMapTransport(serialized);
   }
 
-  private execute(): AuditCortexDocumentMapRequest {
+  public execute(): AuditCortexDocumentMapRequest {
     const serialized = this.request;
     if (
       UTF8_ENCODER.encode(serialized).byteLength >

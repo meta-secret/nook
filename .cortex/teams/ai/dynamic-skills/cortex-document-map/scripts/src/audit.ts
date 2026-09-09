@@ -12,13 +12,11 @@ export class CortexDocumentMapAudit {
     private readonly request: AuditCortexDocumentMapRequest,
   ) {}
 
-  static auditCortexDocumentMap(
-    request: AuditCortexDocumentMapRequest,
-  ): CortexStructureFinding[] {
-    return new CortexDocumentMapAudit(request).execute();
+  static from(request: AuditCortexDocumentMapRequest): CortexDocumentMapAudit {
+    return new CortexDocumentMapAudit(request);
   }
 
-  private execute(): CortexStructureFinding[] {
+  public execute(): CortexStructureFinding[] {
     const request = this.request;
     const rawDocuments = request.documents.map(
       CortexDocumentMapAudit.toDocumentSource,
@@ -44,12 +42,11 @@ export class CortexDocumentMapAudit {
         ...document,
         content: CortexDocumentStructure.normalizedCortexMarkdown(document),
       }));
-    const structureFindings =
-      CortexDocumentStructure.auditCortexDocumentStructure({
-        documents: structureDocuments,
-        excludedDocumentPaths: invalidSyntaxPaths,
-        repoRoot: '.',
-      });
+    const structureFindings = CortexDocumentStructure.from({
+      documents: structureDocuments,
+      excludedDocumentPaths: invalidSyntaxPaths,
+      repoRoot: '.',
+    }).execute();
     return [...syntaxFindings, ...structureFindings];
   }
 

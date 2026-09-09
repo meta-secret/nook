@@ -13,11 +13,11 @@ import {
 export class ExecutableSkillYaml {
   private constructor(private readonly request: string) {}
 
-  static parseSkillYamlText(text: string): SkillYamlParseOutcome {
-    return new ExecutableSkillYaml(text).execute();
+  static from(text: string): ExecutableSkillYaml {
+    return new ExecutableSkillYaml(text);
   }
 
-  private execute(): SkillYamlParseOutcome {
+  public execute(): SkillYamlParseOutcome {
     const text = this.request;
     try {
       const normalizedText = text.replace(/\r\n?/gu, '\n');
@@ -262,8 +262,7 @@ export type UntrustedSkillYamlMap = {
 };
 
 type SkillYamlContainer =
-  | readonly UntrustedSkillYamlNode[]
-  | UntrustedSkillYamlMap;
+  readonly UntrustedSkillYamlNode[] | UntrustedSkillYamlMap;
 
 export type SkillYamlParseSuccess = {
   readonly ok: true;
@@ -276,8 +275,7 @@ export type SkillYamlParseFailure = {
 };
 
 export type SkillYamlParseOutcome =
-  | SkillYamlParseFailure
-  | SkillYamlParseSuccess;
+  SkillYamlParseFailure | SkillYamlParseSuccess;
 
 const YAML_REFERENCE_FAILURE =
   'YAML anchors and aliases are not supported by executable skills.';

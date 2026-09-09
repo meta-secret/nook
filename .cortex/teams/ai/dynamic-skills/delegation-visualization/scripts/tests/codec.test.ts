@@ -28,9 +28,9 @@ class DelegationVisualizationRequestFixture {
 describe('delegation visualization codec', () => {
   test('decodes the exact ordered plan', () => {
     expect(
-      DelegationVisualizationRequestDecoder.decodeDelegationVisualizationRequest(
+      DelegationVisualizationRequestDecoder.from(
         JSON.stringify(new DelegationVisualizationRequestFixture().value),
-      ).tasks,
+      ).execute().tasks,
     ).toHaveLength(2);
   });
 
@@ -38,18 +38,18 @@ describe('delegation visualization codec', () => {
     const duplicateId = new DelegationVisualizationRequestFixture().value;
     duplicateId.tasks[1]!.id = 'first';
     expect(() =>
-      DelegationVisualizationRequestDecoder.decodeDelegationVisualizationRequest(
+      DelegationVisualizationRequestDecoder.from(
         JSON.stringify(duplicateId),
-      ),
+      ).execute(),
     ).toThrow();
 
     for (const dependency of ['missing', 'second']) {
       const invalid = new DelegationVisualizationRequestFixture().value;
       invalid.tasks[0]!.dependencies = [dependency];
       expect(() =>
-        DelegationVisualizationRequestDecoder.decodeDelegationVisualizationRequest(
+        DelegationVisualizationRequestDecoder.from(
           JSON.stringify(invalid),
-        ),
+        ).execute(),
       ).toThrow();
     }
   });
@@ -58,25 +58,25 @@ describe('delegation visualization codec', () => {
     const unknownTeam = new DelegationVisualizationRequestFixture().value;
     Object.assign(unknownTeam.tasks[0]!, { team: 'product' });
     expect(() =>
-      DelegationVisualizationRequestDecoder.decodeDelegationVisualizationRequest(
+      DelegationVisualizationRequestDecoder.from(
         JSON.stringify(unknownTeam),
-      ),
+      ).execute(),
     ).toThrow();
 
     const duplicateEdge = new DelegationVisualizationRequestFixture().value;
     duplicateEdge.tasks[1]!.dependencies = ['first', 'first'];
     expect(() =>
-      DelegationVisualizationRequestDecoder.decodeDelegationVisualizationRequest(
+      DelegationVisualizationRequestDecoder.from(
         JSON.stringify(duplicateEdge),
-      ),
+      ).execute(),
     ).toThrow();
 
     const extra = new DelegationVisualizationRequestFixture().value;
     Object.assign(extra.tasks[0]!, { admission: true });
     expect(() =>
-      DelegationVisualizationRequestDecoder.decodeDelegationVisualizationRequest(
+      DelegationVisualizationRequestDecoder.from(
         JSON.stringify(extra),
-      ),
+      ).execute(),
     ).toThrow();
   });
 
@@ -85,9 +85,9 @@ describe('delegation visualization codec', () => {
       const invalid = new DelegationVisualizationRequestFixture().value;
       invalid.tasks[0]!.description = `blocked${character}`;
       expect(() =>
-        DelegationVisualizationRequestDecoder.decodeDelegationVisualizationRequest(
+        DelegationVisualizationRequestDecoder.from(
           JSON.stringify(invalid),
-        ),
+        ).execute(),
       ).toThrow();
     }
   });

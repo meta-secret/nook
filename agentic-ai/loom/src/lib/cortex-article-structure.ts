@@ -37,11 +37,7 @@ export class CortexMarkdownArticle {
       kind: CortexArticleContractKind.Request,
       documents,
     };
-    return [
-      ...CortexArticleApplication.executeCortexArticleStructureApplication(
-        request,
-      ).findings,
-    ];
+    return [...CortexArticleApplication.from(request).execute().findings];
   }
 
   private semanticDocument(

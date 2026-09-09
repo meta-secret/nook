@@ -26,15 +26,13 @@ export class CortexDocumentMapActionDecoder {
     } as const;
   }
 
-  static decodeCortexDocumentMapActionPayload(serialized: string) {
-    return new CortexDocumentMapActionDecoder(serialized).execute();
+  static from(serialized: string): CortexDocumentMapActionDecoder {
+    return new CortexDocumentMapActionDecoder(serialized);
   }
 
-  private execute() {
+  public execute() {
     const serialized = this.request;
-    return CortexDocumentMapTransport.decodeCortexDocumentMapRequest(
-      serialized,
-    );
+    return CortexDocumentMapTransport.from(serialized).execute();
   }
 }
 
@@ -99,7 +97,8 @@ export const CORTEX_DOCUMENT_MAP_ACTION_DEFINITION = Object.freeze({
   inputSchema: CORTEX_DOCUMENT_MAP_AUDIT_SCHEMA,
 });
 
-export const executeCortexDocumentMapAction =
-  CortexDocumentMapApplication.executeCortexDocumentMapApplication;
+export const executeCortexDocumentMapAction = (
+  request: Parameters<typeof CortexDocumentMapApplication.from>[0],
+) => CortexDocumentMapApplication.from(request).execute();
 
 export { CortexDocumentMapRequestDecodeError };

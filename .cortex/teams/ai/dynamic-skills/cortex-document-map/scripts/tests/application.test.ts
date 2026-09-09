@@ -43,12 +43,11 @@ type MakeRequest = {
 };
 
 test('audits supplied documents without repository I/O', () => {
-  const result =
-    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
-      CortexDocumentMapApplicationScenario.request({
-        content: '# Cortex Context Router\n',
-      }),
-    );
+  const result = CortexDocumentMapApplication.from(
+    CortexDocumentMapApplicationScenario.request({
+      content: '# Cortex Context Router\n',
+    }),
+  ).execute();
   expect(result).toEqual({
     kind: CortexDocumentMapContractKind.Result,
     findings: [],
@@ -56,12 +55,11 @@ test('audits supplied documents without repository I/O', () => {
 });
 
 test('rejects HTML before topology and preserves the syntax diagnostic', () => {
-  const result =
-    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
-      CortexDocumentMapApplicationScenario.request({
-        content: '# Cortex Context Router\n\n<div>hidden</div>\n',
-      }),
-    );
+  const result = CortexDocumentMapApplication.from(
+    CortexDocumentMapApplicationScenario.request({
+      content: '# Cortex Context Router\n\n<div>hidden</div>\n',
+    }),
+  ).execute();
   expect(result.findings.map((finding) => finding.code)).toEqual([
     CortexStructureFindingCode.ProhibitedHtml,
     CortexStructureFindingCode.MissingIndex,
@@ -82,9 +80,7 @@ test('keeps excluded transient documents in syntax enforcement only', () => {
     excludedDocumentPaths: [excluded],
   };
   expect(
-    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
-      auditRequest,
-    ).findings,
+    CortexDocumentMapApplication.from(auditRequest).execute().findings,
   ).toEqual([]);
 });
 
@@ -102,9 +98,7 @@ test('does not suppress persistent links to excluded transient documents', () =>
     excludedDocumentPaths: [excluded],
   };
   expect(
-    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
-      auditRequest,
-    ).findings,
+    CortexDocumentMapApplication.from(auditRequest).execute().findings,
   ).toEqual([
     {
       code: CortexStructureFindingCode.InvalidIndexEntry,
@@ -132,8 +126,8 @@ test('fails closed for unknown keys, unsafe paths, and missing exclusions', () =
     }),
   ];
   for (const serialized of cases) {
-    expect(() =>
-      CortexDocumentMapTransport.decodeCortexDocumentMapRequest(serialized),
-    ).toThrow(CortexDocumentMapRequestDecodeError);
+    expect(() => CortexDocumentMapTransport.from(serialized).execute()).toThrow(
+      CortexDocumentMapRequestDecodeError,
+    );
   }
 });

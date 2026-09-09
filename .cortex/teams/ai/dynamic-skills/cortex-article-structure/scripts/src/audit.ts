@@ -35,13 +35,11 @@ export class CortexArticleAudit {
     return `${TABLE_MESSAGE_PREFIX}${boundedPath}${TABLE_MESSAGE_SUFFIX}`;
   }
 
-  static auditCortexArticleStructure(
-    request: AuditCortexArticleStructureRequest,
-  ): CortexArticleFinding[] {
-    return new CortexArticleAudit(request).execute();
+  static from(request: AuditCortexArticleStructureRequest): CortexArticleAudit {
+    return new CortexArticleAudit(request);
   }
 
-  private execute(): CortexArticleFinding[] {
+  public execute(): CortexArticleFinding[] {
     const request = this.request;
     const findings: CortexArticleFinding[] = [];
     for (const document of request.documents) {

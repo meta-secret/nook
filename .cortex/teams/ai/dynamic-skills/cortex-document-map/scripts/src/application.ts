@@ -18,20 +18,20 @@ export class CortexDocumentMapApplication {
     private readonly request: AuditCortexDocumentMapRequest,
   ) {}
 
-  static executeCortexDocumentMapApplication(
+  static from(
     request: AuditCortexDocumentMapRequest,
-  ): CortexDocumentMapResult {
-    return new CortexDocumentMapApplication(request).execute();
+  ): CortexDocumentMapApplication {
+    return new CortexDocumentMapApplication(request);
   }
 
-  private execute(): CortexDocumentMapResult {
+  public execute(): CortexDocumentMapResult {
     const request = this.request;
-    const admitted = CortexDocumentMapTransport.decodeCortexDocumentMapRequest(
+    const admitted = CortexDocumentMapTransport.from(
       CortexDocumentMapTransport.encodeCortexDocumentMapRequest(request),
-    );
+    ).execute();
     const result: CortexDocumentMapResult = {
       kind: CortexDocumentMapContractKind.Result,
-      findings: CortexDocumentMapAudit.auditCortexDocumentMap(admitted),
+      findings: CortexDocumentMapAudit.from(admitted).execute(),
     };
     return CortexDocumentMapApplication.acceptCortexDocumentMapResult({
       auditRequest: admitted,
@@ -46,9 +46,7 @@ export class CortexDocumentMapApplication {
       auditRequest: request.auditRequest,
       result: request.result,
     };
-    CortexDocumentMapVerifier.verifyCortexDocumentMapResult(
-      verificationRequest,
-    );
+    CortexDocumentMapVerifier.from(verificationRequest).execute();
     return CortexDocumentMapTransport.decodeCortexDocumentMapResult(
       CortexDocumentMapTransport.encodeCortexDocumentMapResult(request.result),
     );

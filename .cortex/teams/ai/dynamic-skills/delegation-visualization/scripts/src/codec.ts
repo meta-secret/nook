@@ -18,13 +18,11 @@ export class DelegationVisualizationRequestDecoder {
 
   private constructor(private readonly request: string) {}
 
-  static decodeDelegationVisualizationRequest(
-    serialized: string,
-  ): RenderDelegationVisualizationRequest {
-    return new DelegationVisualizationRequestDecoder(serialized).execute();
+  static from(serialized: string): DelegationVisualizationRequestDecoder {
+    return new DelegationVisualizationRequestDecoder(serialized);
   }
 
-  private execute(): RenderDelegationVisualizationRequest {
+  public execute(): RenderDelegationVisualizationRequest {
     const serialized = this.request;
     if (
       UTF8_ENCODER.encode(serialized).byteLength >

@@ -78,8 +78,10 @@ export const CORTEX_CONSISTENCY_ACTION_DEFINITION = Object.freeze({
   inputSchema: CORTEX_CONSISTENCY_COMPILE_SCHEMA,
 } as const);
 
-export const decodeCortexConsistencyActionPayload =
-  CortexConsistencyRequestDecoder.decodeCortexConsistencyRequest;
-export const executeCortexConsistencyAction =
-  CortexConsistencyApplication.executeCortexConsistencyApplication;
+export const decodeCortexConsistencyActionPayload = (
+  request: Parameters<typeof CortexConsistencyRequestDecoder.from>[0],
+) => CortexConsistencyRequestDecoder.from(request).execute();
+export const executeCortexConsistencyAction = (
+  request: Parameters<typeof CortexConsistencyApplication.from>[0],
+) => CortexConsistencyApplication.from(request).execute();
 export { CortexConsistencyRequestDecodeError } from './codec.ts';

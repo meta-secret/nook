@@ -18,13 +18,13 @@ export class CortexArticleApplication {
     private readonly request: AuditCortexArticleStructureRequest,
   ) {}
 
-  static executeCortexArticleStructureApplication(
+  static from(
     request: AuditCortexArticleStructureRequest,
-  ): CortexArticleStructureResult {
-    return new CortexArticleApplication(request).execute();
+  ): CortexArticleApplication {
+    return new CortexArticleApplication(request);
   }
 
-  private execute(): CortexArticleStructureResult {
+  public execute(): CortexArticleStructureResult {
     const request = this.request;
     const serializedRequest =
       CortexArticleTransport.encodeCortexArticleRequest(request);
@@ -32,8 +32,7 @@ export class CortexArticleApplication {
       CortexArticleTransport.decodeCortexArticleRequest(serializedRequest);
     const result: CortexArticleStructureResult = {
       kind: CortexArticleContractKind.Result,
-      findings:
-        CortexArticleAudit.auditCortexArticleStructure(validatedRequest),
+      findings: CortexArticleAudit.from(validatedRequest).execute(),
     };
     const acceptanceRequest: AcceptCortexArticleStructureResultRequest = {
       auditRequest: validatedRequest,
@@ -51,9 +50,7 @@ export class CortexArticleApplication {
       auditRequest: request.auditRequest,
       result: request.result,
     };
-    CortexArticleResultVerifier.verifyCortexArticleStructureResult(
-      verificationRequest,
-    );
+    CortexArticleResultVerifier.from(verificationRequest).execute();
     const serializedResult = CortexArticleTransport.encodeCortexArticleResult(
       request.result,
     );

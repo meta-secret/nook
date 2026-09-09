@@ -28,13 +28,13 @@ export class CortexArticleResultVerifier {
     private readonly request: VerifyCortexArticleStructureResultRequest,
   ) {}
 
-  static verifyCortexArticleStructureResult(
+  static from(
     request: VerifyCortexArticleStructureResultRequest,
-  ): void {
-    return new CortexArticleResultVerifier(request).execute();
+  ): CortexArticleResultVerifier {
+    return new CortexArticleResultVerifier(request);
   }
 
-  private execute(): void {
+  public execute(): void {
     const request = this.request;
     if (
       request.auditRequest.kind !== CortexArticleContractKind.Request ||

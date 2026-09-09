@@ -97,8 +97,10 @@ export const DELEGATION_VISUALIZATION_ACTION_DEFINITION = Object.freeze({
   inputSchema: DELEGATION_VISUALIZATION_RENDER_SCHEMA,
 } as const);
 
-export const decodeDelegationVisualizationActionPayload =
-  DelegationVisualizationRequestDecoder.decodeDelegationVisualizationRequest;
-export const executeDelegationVisualizationAction =
-  DelegationVisualizationApplication.executeDelegationVisualizationApplication;
+export const decodeDelegationVisualizationActionPayload = (
+  request: Parameters<typeof DelegationVisualizationRequestDecoder.from>[0],
+) => DelegationVisualizationRequestDecoder.from(request).execute();
+export const executeDelegationVisualizationAction = (
+  request: Parameters<typeof DelegationVisualizationApplication.from>[0],
+) => DelegationVisualizationApplication.from(request).execute();
 export { DelegationVisualizationRequestDecodeError };

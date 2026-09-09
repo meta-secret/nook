@@ -106,11 +106,11 @@ export class CortexNavigationIndex {
     return entries;
   }
 
-  static parseDocumentIndex(args: ParseDocumentIndexArgs): CortexDocumentIndex {
-    return new CortexNavigationIndex(args).execute();
+  static from(args: ParseDocumentIndexArgs): CortexNavigationIndex {
+    return new CortexNavigationIndex(args);
   }
 
-  private execute(): CortexDocumentIndex {
+  public execute(): CortexDocumentIndex {
     const args = this.request;
     const root = fromMarkdown(args.source.content);
     const headings = root.children.filter(
@@ -235,7 +235,7 @@ export class CortexNavigationIndex {
         source,
         repoRoot: args.repoRoot,
       };
-      const parsed = CortexNavigationIndex.parseDocumentIndex(parseArgs);
+      const parsed = CortexNavigationIndex.from(parseArgs).execute();
       parsedMap.set(parsed.relativePath, parsed);
     }
 

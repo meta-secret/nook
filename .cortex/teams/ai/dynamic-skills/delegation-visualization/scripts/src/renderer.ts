@@ -9,13 +9,13 @@ export class DelegationVisualization {
     private readonly request: RenderDelegationVisualizationRequest,
   ) {}
 
-  static renderDelegationVisualization(
+  static from(
     request: RenderDelegationVisualizationRequest,
-  ): DelegationVisualizationDocument {
-    return new DelegationVisualization(request).execute();
+  ): DelegationVisualization {
+    return new DelegationVisualization(request);
   }
 
-  private execute(): DelegationVisualizationDocument {
+  public execute(): DelegationVisualizationDocument {
     const request = this.request;
     const tasks = request.tasks.map(
       (task) =>

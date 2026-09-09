@@ -34,11 +34,7 @@ export class CortexContractDocuments {
       kind: CortexConsistencyContractKind.Request,
       documents,
     };
-    return [
-      ...CortexConsistencyApplication.executeCortexConsistencyApplication(
-        request,
-      ).findings,
-    ];
+    return [...CortexConsistencyApplication.from(request).execute().findings];
   }
 
   static adaptCortexContractDocuments(

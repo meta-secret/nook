@@ -144,10 +144,10 @@ type ArticleRequestInput = {
 describe('provider-neutral executable skill YAML host', () => {
   test('discovers the closed executable action catalog', async () => {
     const request: RunSkillCliRequest = { argv: [] };
-    const outcome = await ExecutableSkillCli.runSkillCli(request);
+    const outcome = await ExecutableSkillCli.from(request).execute();
     const response = ExecutableSkillHostCliScenario.parseResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(0);
-    expect(ExecutableSkillYaml.parseSkillYamlText(outcome.yaml).ok).toBe(true);
+    expect(ExecutableSkillYaml.from(outcome.yaml).execute().ok).toBe(true);
     expect(response.ok).toBe(true);
     const actions = response.result?.actions;
     if (!actions) throw new Error('Missing discovered actions.');
@@ -173,7 +173,7 @@ describe('provider-neutral executable skill YAML host', () => {
     for (const argv of [[], ['--tools-list']]) {
       const invocationRequest: RunSkillCliRequest = { argv };
       expect(
-        (await ExecutableSkillCli.runSkillCli(invocationRequest)).exitCode,
+        (await ExecutableSkillCli.from(invocationRequest).execute()).exitCode,
       ).toBe(0);
     }
   });
@@ -389,7 +389,7 @@ describe('provider-neutral executable skill YAML host', () => {
       value: accepted,
     };
     expect(
-      ExecutableSkillInputSchema.validateSkillInput(validationRequest).ok,
+      ExecutableSkillInputSchema.from(validationRequest).execute().ok,
     ).toBe(true);
     expect(() =>
       CortexArticleTransport.decodeCortexArticleRequest(
@@ -429,9 +429,9 @@ describe('provider-neutral executable skill YAML host', () => {
         schema: action.inputSchema,
         value: request,
       };
-      const validation = ExecutableSkillInputSchema.validateSkillInput(
+      const validation = ExecutableSkillInputSchema.from(
         rejectedValidationRequest,
-      );
+      ).execute();
       expect(validation.ok).toBe(false);
       if (validation.ok) throw new Error('Expected schema rejection.');
       expect(validation.path).toBe(schemaPath);
@@ -459,7 +459,7 @@ describe('provider-neutral executable skill YAML host', () => {
     const request: RunSkillCliRequest = {
       argv: ['audit', '--path', '.cortex'],
     };
-    expect((await ExecutableSkillCli.runSkillCli(request)).exitCode).toBe(2);
+    expect((await ExecutableSkillCli.from(request).execute()).exitCode).toBe(2);
   });
   test('reports canonical paths without echoing unknown keys or values', () => {
     const cases = [
@@ -575,9 +575,7 @@ describe('provider-neutral executable skill YAML host', () => {
         ExecutableSkillHostCliScenario.parseResponse(outcome.yaml).errors?.at(0)
           ?.issue,
       ).toBe(SkillCommandIssue.InvalidResponse);
-      expect(ExecutableSkillYaml.parseSkillYamlText(outcome.yaml).ok).toBe(
-        true,
-      );
+      expect(ExecutableSkillYaml.from(outcome.yaml).execute().ok).toBe(true);
       expect(outcome.yaml).not.toMatch(/\.nan|\.inf/iu);
       expect(outcome.yaml.length).toBeLessThan(1_024 * 1_024);
     }

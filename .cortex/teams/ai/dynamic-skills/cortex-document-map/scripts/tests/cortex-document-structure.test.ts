@@ -39,16 +39,15 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
       excludedDocumentPaths: new Set(),
       repoRoot: REPO_ROOT,
     };
-    const expected = CortexDocumentStructure.auditCortexDocumentStructure(args);
-    const result =
-      CortexDocumentMapApplication.executeCortexDocumentMapApplication({
-        kind: CortexDocumentMapContractKind.Request,
-        documents: documents.map((document) => ({
-          relativePath: document.relativePath,
-          content: document.content,
-        })),
-        excludedDocumentPaths: [],
-      });
+    const expected = CortexDocumentStructure.from(args).execute();
+    const result = CortexDocumentMapApplication.from({
+      kind: CortexDocumentMapContractKind.Request,
+      documents: documents.map((document) => ({
+        relativePath: document.relativePath,
+        content: document.content,
+      })),
+      excludedDocumentPaths: [],
+    }).execute();
     expect(result.findings).toEqual(expected);
     return expected;
   }

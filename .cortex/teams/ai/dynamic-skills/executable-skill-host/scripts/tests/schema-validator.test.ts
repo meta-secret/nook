@@ -31,7 +31,7 @@ export class ExecutableSkillHostSchemaValidatorScenario {
       schema: rejection.schema,
       value: rejection.value,
     };
-    const result = ExecutableSkillInputSchema.validateSkillInput(request);
+    const result = ExecutableSkillInputSchema.from(request).execute();
     if (result.ok) throw new Error('Expected schema rejection.');
     return result.path;
   }
@@ -124,7 +124,7 @@ test('uses bracket grammar for known hyphenated fields', () => {
     field: 'known-field',
     parent: 'root',
   };
-  expect(ExecutableSkillCommandPath.skillCommandPath(request)).toBe(
+  expect(ExecutableSkillCommandPath.from(request).execute()).toBe(
     'root["known-field"]',
   );
 });
@@ -143,9 +143,9 @@ test('counts string limits in UTF-16 code units', () => {
       schema,
       value: accepted,
     };
-    expect(
-      ExecutableSkillInputSchema.validateSkillInput(acceptedRequest).ok,
-    ).toBe(true);
+    expect(ExecutableSkillInputSchema.from(acceptedRequest).execute().ok).toBe(
+      true,
+    );
     const rejection: RejectionRequest = { schema, value: rejected };
     expect(ExecutableSkillHostSchemaValidatorScenario.reject(rejection)).toBe(
       'blocks[4]',
@@ -165,9 +165,7 @@ test('accepts only safe integer values', () => {
       schema,
       value,
     };
-    expect(ExecutableSkillInputSchema.validateSkillInput(request).ok).toBe(
-      true,
-    );
+    expect(ExecutableSkillInputSchema.from(request).execute().ok).toBe(true);
   }
   for (const value of [
     Number.MIN_SAFE_INTEGER - 1,

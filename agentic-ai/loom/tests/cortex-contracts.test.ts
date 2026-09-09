@@ -53,11 +53,11 @@ export class CortexContractsScenario {
       { relativePath: AUTHORITY, content },
       { relativePath: POLICY, content: '# Policy\n' },
     ];
-    return CortexConsistencyContract.compileCortexContracts({
+    return CortexConsistencyContract.from({
       registry: CortexContractsScenario.registry([POLICY]),
       documents:
         CortexContractDocuments.adaptCortexContractDocuments(documents),
-    });
+    }).execute();
   }
 }
 
@@ -81,11 +81,11 @@ test('accepts the reviewed repository contract registry', () => {
     content: readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
   }));
   expect(
-    CortexConsistencyContract.compileCortexContracts({
+    CortexConsistencyContract.from({
       registry: CORTEX_CONTRACT_REGISTRY,
       documents:
         CortexContractDocuments.adaptCortexContractDocuments(documents),
-    }),
+    }).execute(),
   ).toEqual([]);
 });
 

@@ -44,12 +44,26 @@ placing domain decisions on these types.
 - Recheck runtime authorization or freshness at the effect boundary when
   external state can change.
 
+### Owned Rust updates
+
+- Consume owned Rust state when an update replaces its value.
+- Use `mut self` internally and return `Self`, a next state, or a typed result.
+- Retain `&mut self` only for required traits or externally owned mutation contracts.
+- Keep those exceptions at their exact boundary.
+- Introduce channels only for a real high-level actor or concurrent owner.
+- Do not add actor infrastructure merely to avoid an owned update.
+
 ### API inputs and failures
 
 - Give each authored function or method at most one non-receiver parameter.
 - Use one named domain or operation request when an API needs multiple values.
 - Construct independent request values with named fields.
-- Return or throw a domain-specific failure with a stable kind or code.
+- Return a domain-specific failure with a stable kind or code.
+- Use `neverthrow` `Result<T, E>` for authored TypeScript failure-capable APIs.
+- Use `Promise<Result<T, E>>` or `ResultAsync<T, E>` for asynchronous failures.
+- Handle or propagate both alternatives explicitly at every caller.
+- Translate foreign exceptions into concrete failures at the narrow adapter.
+- Retain Rust's standard `Result<T, E>` for fallible operations.
 - Preserve a typed source when one operation fails because another operation
   failed.
 - Distinguish validation, authorization, unavailable-state, conflict, and
@@ -91,9 +105,10 @@ placing domain decisions on these types.
   equivalent escape hatch to manufacture a valid state.
 - Do not use multiple positional parameters, tuples, arrays, or collections to
   hide independent request values.
-- Do not introduce a repository-defined generic result, optional-value, or
-  catch-all error wrapper that erases domain failure meaning. A language
-  built-in remains valid when its success and failure types are concrete.
+- Do not throw to propagate authored TypeScript domain or application failures.
+- Do not use unchecked Result extraction or convert an error into a fake success.
+- Do not duplicate the shared `neverthrow` convention with local Result wrappers.
+- Do not introduce generic optional-value or catch-all error wrappers that erase meaning.
 - Do not catch or convert a failure unless the current owner adds domain
   meaning, recovery, or boundary translation.
 - Do not silently accept an unknown schema version.

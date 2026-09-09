@@ -22,13 +22,11 @@ import {
 export class CortexConsistencyContract {
   private constructor(private readonly request: AuditCortexContractsArgs) {}
 
-  static compileCortexContracts(
-    args: AuditCortexContractsArgs,
-  ): CortexContractFinding[] {
-    return new CortexConsistencyContract(args).execute();
+  static from(args: AuditCortexContractsArgs): CortexConsistencyContract {
+    return new CortexConsistencyContract(args);
   }
 
-  private execute(): CortexContractFinding[] {
+  public execute(): CortexContractFinding[] {
     const args = this.request;
     const findings: CortexContractFinding[] = [];
     const documents = new Map(

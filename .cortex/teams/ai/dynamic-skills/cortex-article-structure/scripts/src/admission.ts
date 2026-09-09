@@ -19,7 +19,7 @@ export class CortexArticleRequestCapacity {
   constructor(private readonly request: AuditCortexArticleStructureRequest) {}
   assertWithinBounds(): void {
     const request = this.request;
-    const findings = CortexArticleAudit.auditCortexArticleStructure(request);
+    const findings = CortexArticleAudit.from(request).execute();
     const contributor = this.findingContributorPath(findings);
     if (findings.length > CORTEX_ARTICLE_FINDING_LIMIT) {
       throw new CortexArticleRequestDecodeError({

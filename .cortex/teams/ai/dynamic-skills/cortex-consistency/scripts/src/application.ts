@@ -13,20 +13,20 @@ export class CortexConsistencyApplication {
     private readonly request: CompileCortexContractsRequest,
   ) {}
 
-  static executeCortexConsistencyApplication(
+  static from(
     request: CompileCortexContractsRequest,
-  ): CortexConsistencyResult {
-    return new CortexConsistencyApplication(request).execute();
+  ): CortexConsistencyApplication {
+    return new CortexConsistencyApplication(request);
   }
 
-  private execute(): CortexConsistencyResult {
+  public execute(): CortexConsistencyResult {
     const request = this.request;
     return {
       kind: CortexConsistencyContractKind.Result,
-      findings: CortexConsistencyContract.compileCortexContracts({
+      findings: CortexConsistencyContract.from({
         registry: CORTEX_CONTRACT_REGISTRY,
         documents: request.documents,
-      }),
+      }).execute(),
     };
   }
 }

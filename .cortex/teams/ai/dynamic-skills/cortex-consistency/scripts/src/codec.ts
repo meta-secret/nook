@@ -17,13 +17,11 @@ export class CortexConsistencyRequestDecoder {
 
   private constructor(private readonly request: string) {}
 
-  static decodeCortexConsistencyRequest(
-    serialized: string,
-  ): CompileCortexContractsRequest {
-    return new CortexConsistencyRequestDecoder(serialized).execute();
+  static from(serialized: string): CortexConsistencyRequestDecoder {
+    return new CortexConsistencyRequestDecoder(serialized);
   }
 
-  private execute(): CompileCortexContractsRequest {
+  public execute(): CompileCortexContractsRequest {
     const serialized = this.request;
     if (
       UTF8_ENCODER.encode(serialized).byteLength >

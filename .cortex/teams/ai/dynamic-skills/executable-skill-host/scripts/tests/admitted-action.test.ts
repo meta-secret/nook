@@ -6,9 +6,9 @@ import {
 import { ExecutableSkillYaml } from '../src/skill-yaml-codec.ts';
 
 test('only a decoded action exposes execution', () => {
-  const yaml = ExecutableSkillYaml.parseSkillYamlText(
+  const yaml = ExecutableSkillYaml.from(
     ExecutableSkillActions.defaultSkillBlueprint(),
-  );
+  ).execute();
   if (!yaml.ok) throw new Error('Tools-list example must parse.');
   const decoded = ExecutableSkillActions.decodeSkillActionRequest(yaml.value);
   if (!decoded.ok) throw new Error(decoded.message);

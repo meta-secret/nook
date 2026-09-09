@@ -21,13 +21,13 @@ import {
 export class ExecutableSkillInputSchema {
   private constructor(private readonly request: SkillSchemaValidationRequest) {}
 
-  static validateSkillInput(
+  static from(
     request: SkillSchemaValidationRequest,
-  ): SkillSchemaValidation {
-    return new ExecutableSkillInputSchema(request).execute();
+  ): ExecutableSkillInputSchema {
+    return new ExecutableSkillInputSchema(request);
   }
 
-  private execute(): SkillSchemaValidation {
+  public execute(): SkillSchemaValidation {
     const request = this.request;
     if ('oneOf' in request.schema) {
       let selected: SkillSchemaValidation | false = false;
@@ -40,7 +40,7 @@ export class ExecutableSkillInputSchema {
           value: request.value,
         };
         const result =
-          ExecutableSkillInputSchema.validateSkillInput(variantRequest);
+          ExecutableSkillInputSchema.from(variantRequest).execute();
         if (result.ok) {
           matches += 1;
           continue;
@@ -188,8 +188,7 @@ export class ExecutableSkillInputSchema {
         schema,
         value: property.value,
       };
-      const result =
-        ExecutableSkillInputSchema.validateSkillInput(fieldRequest);
+      const result = ExecutableSkillInputSchema.from(fieldRequest).execute();
       if (!result.ok) return result;
     }
     return { ok: true };
@@ -217,7 +216,7 @@ export class ExecutableSkillInputSchema {
         schema: request.schema.items,
         value,
       };
-      const result = ExecutableSkillInputSchema.validateSkillInput(itemRequest);
+      const result = ExecutableSkillInputSchema.from(itemRequest).execute();
       if (!result.ok) return result;
     }
     return { ok: true };
@@ -303,7 +302,7 @@ export class ExecutableSkillInputSchema {
   private static childPath(parent: string): (child: string) => string {
     return (child: string) => {
       const request: SkillCommandPathRequest = { field: child, parent };
-      return ExecutableSkillCommandPath.skillCommandPath(request);
+      return ExecutableSkillCommandPath.from(request).execute();
     };
   }
 

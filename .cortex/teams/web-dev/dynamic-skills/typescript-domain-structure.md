@@ -11,7 +11,7 @@
 Keep TypeScript domain models typed by meaning, nested, and enum-driven. A raw
 representation does not carry the metadata that makes a domain value safe to
 use. Treat raw domain primitives, inline unions, raw-string field allow-lists,
-and hand-rolled `Result` / `Maybe` utilities as forbidden.
+and local Result or Maybe copies as forbidden. Use the shared `neverthrow` Result convention.
 
 This is the TypeScript form of Rust's domain-newtype rule. A domain type must
 make its meaning visible at the declaration, field, parameter, return, and
@@ -66,8 +66,8 @@ boundary where it is used.
   adapters.
 - Create branded and opaque values through a named parser or validating
   factory. Keep the brand token and unchecked construction private.
-- Return a domain-specific decode outcome or throw a named domain error class
-  when external input cannot become the domain type.
+- Return `Result<T, E>` with a concrete failure when external input cannot become the domain type.
+- Propagate or handle Result errors explicitly; do not throw them.
 - Give actionable failures a stable enum kind or code.
 - Preserve the concrete source error when translating a lower-level failure.
 - Catch a failure only when the current owner adds domain meaning, recovery, or
@@ -75,7 +75,8 @@ boundary where it is used.
 - Put every authored public, private, and nested function on a meaningful
   class, value object, domain object, fixture, or required framework owner.
 - Use an instance method when the operation depends on owned state.
-- Use a static method for cohesive construction or stateless behavior.
+- Reserve static methods for narrow builders that construct an owned value.
+- Put validation, execution, and dispatch on meaningful instances.
 - Keep component handlers on a Svelte component only when they belong to that
   component's state or interaction contract.
 - Follow the repository-wide
@@ -128,8 +129,8 @@ boundary where it is used.
   lifecycle ends.
 - Do not encode a transition by mutating parallel booleans, sentinels, or
   optional fields.
-- Do not invent instance identity or lifecycle when a static operation on the
-  meaningful owner is truthful.
+- Do not invent instance identity or lifecycle for pure behavior.
+- Do not retain a static execution method by renaming it as a builder.
 
 Raw primitives are allowed only in narrow cases.
 
@@ -148,7 +149,7 @@ Do not ship any of these:
 // Forbidden: raw-string field allow-list
 const ALLOWED = new Set(["stageHostUpdates", "fetchOriginMain"]);
 
-// Forbidden: generic Optional / Result clones
+// Forbidden: local Optional / Result copies
 type Result<T> = Ok<T> | Err;
 type Maybe<T> = Present<T> | Absent;
 
@@ -184,14 +185,15 @@ Same-prefix names almost always mean a separate object was flattened. Generic
   `Record<string, string>` or string-set field allow-lists.
 - Closed failure codes are enums. Freeform detail text may accompany an enum
   code at an I/O boundary; the discriminant itself is never a bare string.
-- Do not invent TypeScript `Result<T>` or `Maybe<T>` / Optional clones.
-  Language-provided `Result` in Rust is fine.
+- Use `neverthrow` `Result<T, E>` for TypeScript failure values.
+- Do not invent competing Result or optional-value wrappers.
+- Rust uses its standard Result.
 - YAML decode may accumulate field issues in a **codec-local** type
   (`DecodeOutcome`, `DecodeStatus`, `FieldIssue`). That type must stay in the
   codec layer and must not become a repo-wide Result utility.
-- Command / runtime failures throw domain errors (`LoomFailure` +
-  `LoomFailureCode`) or use a command-specific outcome union. Never
-  `Result<string>`.
+- Command and runtime failures return `Result<T, E>` from `neverthrow`.
+- Keep `E` concrete, with its domain code and context.
+- Catch foreign exceptions only at the adapter that admits them.
 - Optional request fields that mean a named state become domain unions
   (`RemoteTask.Specified` / `RemoteTask.Omitted`), never `Maybe<string>`.
 - Domain unions are declared as named types and referenced by name. Do not

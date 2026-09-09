@@ -22,13 +22,11 @@ export class CortexDocumentStructure {
       : args.content;
   }
 
-  static auditCortexDocumentStructure(
-    args: AuditCortexDocumentStructureArgs,
-  ): CortexStructureFinding[] {
-    return new CortexDocumentStructure(args).execute();
+  static from(args: AuditCortexDocumentStructureArgs): CortexDocumentStructure {
+    return new CortexDocumentStructure(args);
   }
 
-  private execute(): CortexStructureFinding[] {
+  public execute(): CortexStructureFinding[] {
     const args = this.request;
     const findings: CortexStructureFinding[] = [];
     const parsedDocuments = args.documents.map(

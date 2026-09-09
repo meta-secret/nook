@@ -141,15 +141,14 @@ export class CortexAuditCommand {
         );
       })
       .map((document) => document.relativePath);
-    const documentMapResult =
-      CortexDocumentMapApplication.executeCortexDocumentMapApplication({
-        kind: CortexDocumentMapContractKind.Request,
-        documents: syntaxDocuments.map((document) => ({
-          relativePath: document.relativePath,
-          content: document.content,
-        })),
-        excludedDocumentPaths,
-      });
+    const documentMapResult = CortexDocumentMapApplication.from({
+      kind: CortexDocumentMapContractKind.Request,
+      documents: syntaxDocuments.map((document) => ({
+        relativePath: document.relativePath,
+        content: document.content,
+      })),
+      excludedDocumentPaths,
+    }).execute();
     const structureFindings = [...documentMapResult.findings];
     const syntaxInvalidPaths = new Set(
       structureFindings

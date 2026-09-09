@@ -1,11 +1,11 @@
 export class ExecutableSkillCommandPath {
   private constructor(private readonly request: SkillCommandPathRequest) {}
 
-  static skillCommandPath(request: SkillCommandPathRequest): string {
-    return new ExecutableSkillCommandPath(request).execute();
+  static from(request: SkillCommandPathRequest): ExecutableSkillCommandPath {
+    return new ExecutableSkillCommandPath(request);
   }
 
-  private execute(): string {
+  public execute(): string {
     const request = this.request;
     if (SIMPLE_FIELD.test(request.field)) {
       return request.parent.length === 0

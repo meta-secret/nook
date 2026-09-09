@@ -27,17 +27,17 @@ import {
 export class ExecutableSkillCli {
   private constructor(private readonly request: RunSkillCliRequest) {}
 
-  static runSkillCli(request: RunSkillCliRequest): SkillCliOutcome {
-    return new ExecutableSkillCli(request).execute();
+  static from(request: RunSkillCliRequest): ExecutableSkillCli {
+    return new ExecutableSkillCli(request);
   }
 
-  private execute(): SkillCliOutcome {
+  public execute(): SkillCliOutcome {
     const request = this.request;
     const invocationRequest: ParseSkillCliInvocationRequest = {
       argv: request.argv,
     };
     const invocation =
-      ExecutableSkillInvocation.parseSkillCliInvocation(invocationRequest);
+      ExecutableSkillInvocation.from(invocationRequest).execute();
     if (invocation.kind === SkillCliInvocationKind.ToolsList) {
       return ExecutableSkillCli.dispatchSkillYamlText(
         ExecutableSkillActions.defaultSkillBlueprint(),
@@ -57,7 +57,7 @@ export class ExecutableSkillCli {
   static dispatchSkillYamlText(text: string): SkillCliOutcome {
     if (UTF8_ENCODER.encode(text).byteLength > SKILL_HOST_REQUEST_BYTE_LIMIT)
       return ExecutableSkillCli.requestTooLargeOutcome();
-    const parsed = ExecutableSkillYaml.parseSkillYamlText(text);
+    const parsed = ExecutableSkillYaml.from(text).execute();
     if (!parsed.ok) {
       const outcomeRequest: SkillErrorOutcomeRequest = {
         phase: SkillCommandPhase.Decode,
@@ -228,7 +228,7 @@ type SkillErrorOutcomeRequest = {
 
 if (import.meta.main) {
   const request: RunSkillCliRequest = { argv: process.argv.slice(2) };
-  const outcome = ExecutableSkillCli.runSkillCli(request);
+  const outcome = ExecutableSkillCli.from(request).execute();
   process.stdout.write(outcome.yaml);
   process.exitCode = outcome.exitCode;
 }
