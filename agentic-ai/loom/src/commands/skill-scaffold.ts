@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 import path from 'node:path';
@@ -7,120 +8,16 @@ import {
   type SkillScaffoldRequest,
 } from '../codec/args/skill-scaffold.ts';
 
-import { RepositoryRoot } from '../lib/repo.ts';
-
-import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
-
-import type { LoomFailureDetailArgs } from '../loom-failure.ts';
-
 export class SkillScaffoldCommand {
-  private constructor(private readonly request: SkillScaffoldRequest) {}
+  constructor(
+    private readonly input: {
+      readonly request: SkillScaffoldRequest;
+      readonly repoRoot: string;
+    },
+  ) {}
 
-  static renderSkillCard(args: RenderSkillCardArgs): string {
-    const rendered = args.template.replace(
-      /^# Skill name$/m,
-      `# ${args.title}`,
-    );
-    if (rendered === args.template) {
-      const failureArgs: LoomFailureDetailArgs = {
-        code: LoomFailureCode.SkillScaffoldFailed,
-        text: 'Could not find the skill title placeholder in _template.md',
-      };
-      LoomFailure.detail(failureArgs);
-    }
-    return rendered;
-  }
-
-  static markdownPath(filePath: string): string {
-    return filePath.replaceAll('\\', '/');
-  }
-
-  static skillOwnerDynamicSkillsDirectory(
-    args: SkillOwnerDynamicSkillsDirectoryArgs,
-  ): string {
-    if (args.skillOwner === SkillOwner.Shared) {
-      return path.join(args.cortexRoot, 'shared', 'dynamic-skills');
-    }
-    if (args.skillOwner === SkillOwner.Gizmo) {
-      return path.join(args.cortexRoot, SkillOwner.Gizmo, 'dynamic-skills');
-    }
-    return path.join(
-      args.cortexRoot,
-      'teams',
-      args.skillOwner,
-      'dynamic-skills',
-    );
-  }
-
-  static findExistingSkillCard(
-    args: FindExistingSkillCardArgs,
-  ): string | false {
-    const owners = [
-      SkillOwner.Shared,
-      SkillOwner.Gizmo,
-      SkillOwner.Ai,
-      SkillOwner.DevCore,
-      SkillOwner.Security,
-      SkillOwner.Sre,
-      SkillOwner.WebDev,
-    ] as const;
-    const ownerRoots = owners.map((skillOwner) => {
-      const directoryArgs: SkillOwnerDynamicSkillsDirectoryArgs = {
-        cortexRoot: args.cortexRoot,
-        skillOwner,
-      };
-      return SkillScaffoldCommand.skillOwnerDynamicSkillsDirectory(
-        directoryArgs,
-      );
-    });
-    const [defaulted1 = false] = [
-      ownerRoots
-        .flatMap((ownerRoot) => [
-          path.join(ownerRoot, `${args.slug}.md`),
-          path.join(ownerRoot, args.slug),
-        ])
-        .find((candidatePath) => existsSync(candidatePath)),
-    ];
-    return defaulted1;
-  }
-
-  static insertSkillCatalogEntry(args: InsertSkillCatalogEntryArgs): string {
-    if (args.indexContent.includes(`(${args.cardHref})`)) {
-      return args.indexContent;
-    }
-
-    const marker = /\n## How to add one\n/i;
-    const markerMatch = marker.exec(args.indexContent);
-    if (!markerMatch) {
-      const failureArgs: LoomFailureDetailArgs = {
-        code: LoomFailureCode.SkillScaffoldFailed,
-        text: 'Could not find the skill-authoring section in dynamic-skills/index.md',
-      };
-      LoomFailure.detail(failureArgs);
-    }
-
-    const slug = args.cardHref.endsWith('/SKILL.md')
-      ? path.basename(path.dirname(args.cardHref))
-      : path.basename(args.cardHref, '.md');
-    const label = args.cardHref.endsWith('/SKILL.md')
-      ? `${slug}/SKILL.md`
-      : `${slug}.md`;
-    const entry = `- **[${label}](${args.cardHref})**\n  - Purpose: TODO: purpose`;
-    const markerIndex = markerMatch.index;
-    const before = args.indexContent.slice(0, markerIndex).trimEnd();
-    const after = args.indexContent.slice(markerIndex);
-    return `${before}\n${entry}\n${after}`;
-  }
-
-  static runSkillScaffold(
-    request: SkillScaffoldRequest,
-  ): Promise<SkillScaffoldReport> {
-    return new SkillScaffoldCommand(request).execute();
-  }
-
-  private async execute(): Promise<SkillScaffoldReport> {
-    const request = this.request;
-    const repoRoot = RepositoryRoot.find();
+  execute(): Result<SkillScaffoldReport, SkillScaffoldFailure> {
+    const { request, repoRoot } = this.input;
     const slug = request.skillSlug;
 
     const cortexRoot = path.join(repoRoot, '.cortex');
@@ -129,62 +26,68 @@ export class SkillScaffoldCommand {
       cortexRoot,
       skillOwner: request.skillOwner,
     };
-    const skillsDir =
-      SkillScaffoldCommand.skillOwnerDynamicSkillsDirectory(directoryArgs);
+    const skillsDir = new SkillOwnerDirectory(directoryArgs).path();
     const templatePath = path.join(aiSkillsDir, '_template.md');
     const cardPath = path.join(skillsDir, `${slug}.md`);
     const indexPath = path.join(aiSkillsDir, 'index.md');
 
     if (!existsSync(templatePath)) {
-      const loomFailureDetailArgs3: LoomFailureDetailArgs = {
-        code: LoomFailureCode.SkillScaffoldFailed,
-        text: 'Missing .cortex/teams/ai/dynamic-skills/_template.md',
-      };
-      LoomFailure.detail(loomFailureDetailArgs3);
+      return err({
+        kind: SkillScaffoldFailureKind.Admission,
+        message: 'Missing .cortex/teams/ai/dynamic-skills/_template.md',
+      });
     }
     const existingSkillCardArgs: FindExistingSkillCardArgs = {
       cortexRoot,
       slug,
     };
-    const existingSkillCard = SkillScaffoldCommand.findExistingSkillCard(
+    const existingSkillCard = new SkillCardLocation(
       existingSkillCardArgs,
-    );
+    ).existing();
     if (existingSkillCard !== false) {
-      const loomFailureDetailArgs2: LoomFailureDetailArgs = {
-        code: LoomFailureCode.SkillScaffoldFailed,
-        text: `Skill card already exists: ${path.relative(repoRoot, existingSkillCard)}`,
-      };
-      LoomFailure.detail(loomFailureDetailArgs2);
+      return err({
+        kind: SkillScaffoldFailureKind.Admission,
+        message: `Skill card already exists: ${path.relative(repoRoot, existingSkillCard)}`,
+      });
     }
 
     const title = slug
       .split('-')
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
-    const template = readFileSync(templatePath, 'utf8');
+    const templateRead = new SkillScaffoldFile(templatePath).read();
+    if (templateRead.isErr()) return err(templateRead.error);
+    const template = templateRead.value;
     const renderArgs: RenderSkillCardArgs = { template, title };
-    const card = SkillScaffoldCommand.renderSkillCard(renderArgs);
-    const currentIndexContent = readFileSync(indexPath, 'utf8');
+    const rendered = new SkillCardTemplate(renderArgs).render();
+    if (rendered.isErr()) return err(rendered.error);
+    const card = rendered.value;
+    const indexRead = new SkillScaffoldFile(indexPath).read();
+    if (indexRead.isErr()) return err(indexRead.error);
+    const currentIndexContent = indexRead.value;
     const insertArgs: InsertSkillCatalogEntryArgs = {
-      cardHref: SkillScaffoldCommand.markdownPath(
+      cardHref: new SkillMarkdownPath(
         path.relative(aiSkillsDir, cardPath),
-      ),
+      ).value(),
       indexContent: currentIndexContent,
     };
-    const indexContent =
-      SkillScaffoldCommand.insertSkillCatalogEntry(insertArgs);
+    const inserted = new SkillCatalogEntry(insertArgs).insert();
+    if (inserted.isErr()) return err(inserted.error);
+    const indexContent = inserted.value;
     const indexUpdated = indexContent !== currentIndexContent;
 
-    const directoryOptions: { readonly recursive: true } = { recursive: true };
-    mkdirSync(skillsDir, directoryOptions);
-    writeFileSync(cardPath, card, 'utf8');
-    if (indexUpdated) writeFileSync(indexPath, indexContent, 'utf8');
+    const cardWrite = new SkillScaffoldFile(cardPath).write(card);
+    if (cardWrite.isErr()) return err(cardWrite.error);
+    if (indexUpdated) {
+      const indexWrite = new SkillScaffoldFile(indexPath).write(indexContent);
+      if (indexWrite.isErr()) return err(indexWrite.error);
+    }
 
-    return {
+    return ok({
       cardPath: path.relative(repoRoot, cardPath),
       indexUpdated,
       created: true,
-    };
+    });
   }
 }
 
@@ -213,3 +116,148 @@ export type SkillOwnerDynamicSkillsDirectoryArgs = {
   readonly cortexRoot: string;
   readonly skillOwner: SkillOwner;
 };
+
+export class SkillCardTemplate {
+  constructor(private readonly request: RenderSkillCardArgs) {}
+  render(): Result<string, SkillScaffoldFailure> {
+    const args = this.request;
+    const rendered = args.template.replace(
+      /^# Skill name$/m,
+      `# ${args.title}`,
+    );
+    if (rendered === args.template) {
+      return err({
+        kind: SkillScaffoldFailureKind.Template,
+        message: 'Could not find the skill title placeholder in _template.md',
+      });
+    }
+    return ok(rendered);
+  }
+}
+
+export class SkillMarkdownPath {
+  constructor(private readonly request: string) {}
+  value(): string {
+    const filePath = this.request;
+    return filePath.replaceAll('\\', '/');
+  }
+}
+
+export class SkillOwnerDirectory {
+  constructor(private readonly request: SkillOwnerDynamicSkillsDirectoryArgs) {}
+  path(): string {
+    const args = this.request;
+    if (args.skillOwner === SkillOwner.Shared) {
+      return path.join(args.cortexRoot, 'shared', 'dynamic-skills');
+    }
+    if (args.skillOwner === SkillOwner.Gizmo) {
+      return path.join(args.cortexRoot, SkillOwner.Gizmo, 'dynamic-skills');
+    }
+    return path.join(
+      args.cortexRoot,
+      'teams',
+      args.skillOwner,
+      'dynamic-skills',
+    );
+  }
+}
+
+export class SkillCardLocation {
+  constructor(private readonly request: FindExistingSkillCardArgs) {}
+  existing(): string | false {
+    const args = this.request;
+    const owners = [
+      SkillOwner.Shared,
+      SkillOwner.Gizmo,
+      SkillOwner.Ai,
+      SkillOwner.DevCore,
+      SkillOwner.Security,
+      SkillOwner.Sre,
+      SkillOwner.WebDev,
+    ] as const;
+    const ownerRoots = owners.map((skillOwner) => {
+      const directoryArgs: SkillOwnerDynamicSkillsDirectoryArgs = {
+        cortexRoot: args.cortexRoot,
+        skillOwner,
+      };
+      return new SkillOwnerDirectory(directoryArgs).path();
+    });
+    const [defaulted1 = false] = [
+      ownerRoots
+        .flatMap((ownerRoot) => [
+          path.join(ownerRoot, `${args.slug}.md`),
+          path.join(ownerRoot, args.slug),
+        ])
+        .find((candidatePath) => existsSync(candidatePath)),
+    ];
+    return defaulted1;
+  }
+}
+
+export class SkillCatalogEntry {
+  constructor(private readonly request: InsertSkillCatalogEntryArgs) {}
+  insert(): Result<string, SkillScaffoldFailure> {
+    const args = this.request;
+    if (args.indexContent.includes(`(${args.cardHref})`)) {
+      return ok(args.indexContent);
+    }
+
+    const marker = /\n## How to add one\n/i;
+    const markerMatch = marker.exec(args.indexContent);
+    if (!markerMatch) {
+      return err({
+        kind: SkillScaffoldFailureKind.Template,
+        message:
+          'Could not find the skill-authoring section in dynamic-skills/index.md',
+      });
+    }
+
+    const slug = args.cardHref.endsWith('/SKILL.md')
+      ? path.basename(path.dirname(args.cardHref))
+      : path.basename(args.cardHref, '.md');
+    const label = args.cardHref.endsWith('/SKILL.md')
+      ? `${slug}/SKILL.md`
+      : `${slug}.md`;
+    const entry = `- **[${label}](${args.cardHref})**\n  - Purpose: TODO: purpose`;
+    const markerIndex = markerMatch.index;
+    const before = args.indexContent.slice(0, markerIndex).trimEnd();
+    const after = args.indexContent.slice(markerIndex);
+    return ok(`${before}\n${entry}\n${after}`);
+  }
+}
+
+export enum SkillScaffoldFailureKind {
+  Admission = 'admission',
+  Template = 'template',
+  Read = 'read',
+  Write = 'write',
+}
+export type SkillScaffoldFailure = {
+  readonly kind: SkillScaffoldFailureKind;
+  readonly message: string;
+};
+class SkillScaffoldFile {
+  constructor(private readonly filePath: string) {}
+  read(): Result<string, SkillScaffoldFailure> {
+    try {
+      return ok(readFileSync(this.filePath, 'utf8'));
+    } catch {
+      return err({
+        kind: SkillScaffoldFailureKind.Read,
+        message: `Cannot read skill scaffold file: ${this.filePath}`,
+      });
+    }
+  }
+  write(content: string): Result<void, SkillScaffoldFailure> {
+    try {
+      mkdirSync(path.dirname(this.filePath), { recursive: true });
+      writeFileSync(this.filePath, content, 'utf8');
+      return ok(undefined);
+    } catch {
+      return err({
+        kind: SkillScaffoldFailureKind.Write,
+        message: `Cannot write skill scaffold file: ${this.filePath}`,
+      });
+    }
+  }
+}

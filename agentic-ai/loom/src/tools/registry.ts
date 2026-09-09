@@ -1,3 +1,4 @@
+import type { SkillScaffoldFailure } from '../commands/skill-scaffold.ts';
 import type { CortexSessionFailure } from '../commands/cortex-session-clean.ts';
 import { ok, type Result } from 'neverthrow';
 import type { CortexAuditFailure } from '../commands/cortex-audit.ts';
@@ -237,7 +238,10 @@ export class LoomRequestCatalog {
   static async executeRequest(
     request: LoomRequest,
   ): Promise<
-    Result<LoomCommandResult, CortexAuditFailure | CortexSessionFailure>
+    Result<
+      LoomCommandResult,
+      CortexAuditFailure | CortexSessionFailure | SkillScaffoldFailure
+    >
   > {
     switch (request.family) {
       case RequestFamily.PrePush:
@@ -249,9 +253,10 @@ export class LoomRequestCatalog {
           repoRoot: RepositoryRoot.find(),
         }).clean();
       case RequestFamily.SkillScaffold:
-        return ok(
-          await SkillScaffoldCommand.runSkillScaffold(request.skillScaffold),
-        );
+        return new SkillScaffoldCommand({
+          request: request.skillScaffold,
+          repoRoot: RepositoryRoot.find(),
+        }).execute();
       case RequestFamily.AgentStats: {
         switch (request.operation) {
           case AgentStatsOperation.Assemble:
