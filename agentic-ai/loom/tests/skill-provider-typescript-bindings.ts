@@ -45,6 +45,12 @@ export class SkillProviderTypescriptBindingsScenario {
       );
       const match = matches[0];
       if (matches.length !== 1 || !match) return [];
+      if (
+        !ts.isMethodDeclaration(match) ||
+        !ts.isClassDeclaration(match.parent) ||
+        match.parent.name?.text !== exemption.className
+      )
+        return [];
       const digest = createHash('sha256').update(match.getText()).digest('hex');
       return digest === exemption.digest ? [match] : [];
     });
@@ -76,6 +82,12 @@ export class SkillProviderTypescriptBindingsScenario {
       );
       const match = matches[0];
       if (matches.length !== 1 || !match) return [];
+      if (
+        !ts.isMethodDeclaration(match) ||
+        !ts.isClassDeclaration(match.parent) ||
+        match.parent.name?.text !== exemption.className
+      )
+        return [];
       const digest = createHash('sha256').update(match.getText()).digest('hex');
       return digest === exemption.digest ? [match] : [];
     });
@@ -425,6 +437,7 @@ export type DynamicCwdExemptionRequest = {
 
 type DynamicCwdExemption = {
   readonly digest: string;
+  readonly className: string;
   readonly functionName: string;
   readonly path: string;
 };
@@ -432,6 +445,7 @@ type DynamicCwdExemption = {
 const DYNAMIC_CWD_EXEMPTIONS: readonly DynamicCwdExemption[] = [
   {
     digest: '869bd43eef08b1fe97a911f626c0e72d854fc75ebee51c2bdf93f62e413aa700',
+    className: 'ExecutableSkillPackageGate',
     functionName: 'runCommand',
     path: 'agentic-ai/loom/src/executable-skills/package-gate.ts',
   },
@@ -441,7 +455,8 @@ const DYNAMIC_ENVIRONMENT_EXEMPTIONS: readonly DynamicCwdExemption[] = [
   // The exact helper adds only GitHub's authenticated HTTPS header to the
   // trusted host environment for one fixed git push invocation.
   {
-    digest: 'f3b7c182c601b7e552dd5d9f2f4f59c01a5f0cc01b6aa44a5dd3852a47ee94de',
+    digest: '4125c0b8ad204f30f5102367d50239e19d639f18e56a2dd1292210d50cd6b1df',
+    className: 'CiRepository',
     functionName: 'pushAuthenticatedBranch',
     path: 'agentic-ai/ci-agent/src/main/git.ts',
   },
@@ -449,6 +464,7 @@ const DYNAMIC_ENVIRONMENT_EXEMPTIONS: readonly DynamicCwdExemption[] = [
   // calls and receives the runtime contract's audited platform allowlist.
   {
     digest: '625f72c6dbcace56e5832d3621ace71f9a3760991d94fb1b5e5e0eb9bba39bec',
+    className: 'ModuleExpertIsolation',
     functionName: 'captureIsolatedCommand',
     path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
   },
