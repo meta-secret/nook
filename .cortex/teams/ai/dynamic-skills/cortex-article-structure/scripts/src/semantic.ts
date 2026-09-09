@@ -1,4 +1,12 @@
 import {
+  CortexArticleKind,
+  ArticleBodyContribution,
+  ArticleKindDensityRole,
+  ArticleOrderedActionContribution,
+} from './semantic-kind.ts';
+export { ArticleBodyContribution } from './semantic-kind.ts';
+
+import {
   CortexArticleSemanticKind,
   type CortexArticleHeading,
   type CortexArticleSemanticBlock,
@@ -16,11 +24,6 @@ export type ArticleHeadingSelection =
       readonly heading: CortexArticleHeading;
     }
   | { readonly kind: ArticleHeadingSelectionKind.Other };
-
-export enum ArticleBodyContribution {
-  Visible = 'visible',
-  Incidental = 'incidental',
-}
 
 export enum ArticleDensityContribution {
   EndArticle = 'end-article',
@@ -47,7 +50,11 @@ export enum ArticleFindingAgreement {
 
 /** Owns interpretation of an admitted semantic block, retaining its wire record. */
 export class CortexArticleBlock {
-  constructor(private readonly block: CortexArticleSemanticBlock) {}
+  private readonly kind: CortexArticleKind;
+
+  constructor(private readonly block: CortexArticleSemanticBlock) {
+    this.kind = new CortexArticleKind(block.kind);
+  }
 
   articleHeading(): ArticleHeadingSelection {
     if (this.block.kind !== CortexArticleSemanticKind.Heading) {
@@ -75,27 +82,25 @@ export class CortexArticleBlock {
   }
 
   bodyContribution(): ArticleBodyContribution {
-    switch (this.block.kind) {
-      case CortexArticleSemanticKind.Paragraph:
-      case CortexArticleSemanticKind.VisibleOrderedList:
-      case CortexArticleSemanticKind.Structure:
-        return ArticleBodyContribution.Visible;
-      default:
-        return ArticleBodyContribution.Incidental;
-    }
+    return this.kind.bodyContribution();
+  }
+
+  orderedActionContribution(): ArticleOrderedActionContribution {
+    return this.kind.orderedActionContribution();
   }
 
   densityContribution(): ArticleDensityContribution {
-    switch (this.block.kind) {
-      case CortexArticleSemanticKind.Heading:
-        return this.block.depth <= 3
-          ? ArticleDensityContribution.EndArticle
-          : ArticleDensityContribution.Reset;
-      case CortexArticleSemanticKind.Transparent:
+    if (this.block.kind === CortexArticleSemanticKind.Heading) {
+      return this.block.depth <= 3
+        ? ArticleDensityContribution.EndArticle
+        : ArticleDensityContribution.Reset;
+    }
+    switch (this.kind.densityRole()) {
+      case ArticleKindDensityRole.Preserve:
         return ArticleDensityContribution.Preserve;
-      case CortexArticleSemanticKind.Paragraph:
+      case ArticleKindDensityRole.Paragraph:
         return ArticleDensityContribution.Paragraph;
-      default:
+      case ArticleKindDensityRole.Reset:
         return ArticleDensityContribution.Reset;
     }
   }
@@ -132,7 +137,9 @@ export class CortexArticleSection {
     if (!PROCEDURE_HEADING.test(this.heading.text))
       return ArticleProcedureRequirement.Unrestricted;
     return blocks.some(
-      (block) => block.kind === CortexArticleSemanticKind.VisibleOrderedList,
+      (block) =>
+        new CortexArticleBlock(block).orderedActionContribution() ===
+        ArticleOrderedActionContribution.OrderedActions,
     )
       ? ArticleProcedureRequirement.Satisfied
       : ArticleProcedureRequirement.OrderedActions;

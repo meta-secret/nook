@@ -1,20 +1,26 @@
+import {
+  CortexMarkdownNodeKind,
+  MarkdownArticlePresence,
+  MarkdownArticleContentRole,
+  MarkdownProcedureTraversal,
+} from './cortex-markdown-node-kind.ts';
 import type { Nodes } from 'mdast';
 import {
   CortexArticleSemanticKind,
   type CortexArticleSemanticBlock,
 } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/domain.ts';
 
-enum MarkdownArticlePresence {
-  Present = 'present',
-  Absent = 'absent',
-}
 enum MarkdownArticleInspectionMode {
   VisibleBody = 'visible-body',
   ProcedureActions = 'procedure-actions',
 }
 
 export class CortexMarkdownArticleNode {
-  constructor(private readonly node: Nodes) {}
+  private readonly kind: CortexMarkdownNodeKind;
+
+  constructor(private readonly node: Nodes) {
+    this.kind = new CortexMarkdownNodeKind(node.type);
+  }
   semanticBlock(): CortexArticleSemanticBlock {
     const line = this.nodeLine();
     if (this.node.type === 'table') {
@@ -28,7 +34,7 @@ export class CortexMarkdownArticleNode {
         text: this.nodeText(),
       };
     }
-    if (this.transparency() === MarkdownArticlePresence.Present) {
+    if (this.kind.transparency() === MarkdownArticlePresence.Present) {
       return { kind: CortexArticleSemanticKind.Transparent, line };
     }
     if (this.node.type === 'thematicBreak') {
@@ -62,26 +68,16 @@ export class CortexMarkdownArticleNode {
     const node = this.node;
     if (
       node.type === 'heading' ||
-      this.transparency() === MarkdownArticlePresence.Present
+      this.kind.transparency() === MarkdownArticlePresence.Present
     )
       return MarkdownArticlePresence.Absent;
     return this.contentVisibility(MarkdownArticleInspectionMode.VisibleBody);
   }
 
-  private transparency(): MarkdownArticlePresence {
-    const node = this.node;
-    return node.type === 'definition' || node.type === 'footnoteDefinition'
-      ? MarkdownArticlePresence.Present
-      : MarkdownArticlePresence.Absent;
-  }
-
   private orderedActions(): MarkdownArticlePresence {
     const node = this.node;
     if (
-      node.type === 'blockquote' ||
-      node.type === 'code' ||
-      node.type === 'footnoteDefinition' ||
-      node.type === 'html'
+      this.kind.procedureTraversal() === MarkdownProcedureTraversal.Excluded
     ) {
       return MarkdownArticlePresence.Absent;
     }
@@ -107,29 +103,17 @@ export class CortexMarkdownArticleNode {
     mode: MarkdownArticleInspectionMode,
   ): MarkdownArticlePresence {
     const node = this.node;
+    const role = this.kind.contentRole();
     if (
-      mode === MarkdownArticleInspectionMode.ProcedureActions &&
-      (node.type === 'blockquote' || node.type === 'code')
+      role === MarkdownArticleContentRole.Example &&
+      mode === MarkdownArticleInspectionMode.ProcedureActions
     ) {
       return MarkdownArticlePresence.Absent;
     }
-    if (
-      node.type === 'definition' ||
-      node.type === 'footnoteDefinition' ||
-      node.type === 'heading' ||
-      node.type === 'html' ||
-      node.type === 'thematicBreak' ||
-      node.type === 'break'
-    ) {
+    if (role === MarkdownArticleContentRole.Hidden)
       return MarkdownArticlePresence.Absent;
-    }
-    if (
-      node.type === 'image' ||
-      node.type === 'imageReference' ||
-      node.type === 'footnoteReference'
-    ) {
+    if (role === MarkdownArticleContentRole.Intrinsic)
       return MarkdownArticlePresence.Present;
-    }
     if (
       mode === MarkdownArticleInspectionMode.VisibleBody &&
       node.type === 'listItem' &&
@@ -155,17 +139,7 @@ export class CortexMarkdownArticleNode {
 
   private proseVisibility(): MarkdownArticlePresence {
     const node = this.node;
-    if (
-      node.type === 'definition' ||
-      node.type === 'footnoteDefinition' ||
-      node.type === 'footnoteReference' ||
-      node.type === 'heading' ||
-      node.type === 'html' ||
-      node.type === 'image' ||
-      node.type === 'imageReference' ||
-      node.type === 'thematicBreak' ||
-      node.type === 'break'
-    ) {
+    if (this.kind.proseRole() === MarkdownArticleContentRole.Hidden) {
       return MarkdownArticlePresence.Absent;
     }
     if ('value' in node && typeof node.value === 'string') {

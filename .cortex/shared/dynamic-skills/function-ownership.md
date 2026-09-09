@@ -50,6 +50,25 @@ A compound condition is evidence, not a mechanical extraction rule. Conditions
 that relate independent owners belong to the operation that owns that relation.
 An empty wrapper around the original expression does not establish ownership.
 
+### Precise receivers
+
+- Inspect the data used by every helper, including single-field predicates.
+- Treat a parameter used as the operation's subject as a possible receiver.
+- Move behavior to that subject when it owns the required knowledge.
+- Choose the smallest semantic owner that determines the result.
+- Put kind-only classification on the kind's semantic owner.
+- Keep decisions that require payload, depth, or children on their aggregate.
+- Let a meaningful aggregate API delegate to its nested semantic owner.
+- Pass only the related value needed by a comparison or relationship.
+- Use Rust enum receiver methods for enum-owned behavior.
+- Use a concrete kind owner or typed companion for TypeScript enum semantics.
+- Reuse the existing enum or dependency discriminator in that owner.
+- Preserve compiler narrowing where a transport variant exposes its payload.
+
+For example, `block.bodyContribution()` delegates to its kind's
+`bodyContribution()`. Visibility depends on the kind alone. Heading selection
+also needs depth, so it remains on the block.
+
 ### Operation placement
 
 - Put every authored public, private, and nested function on a meaningful
@@ -67,6 +86,15 @@ An empty wrapper around the original expression does not establish ownership.
 - Name the owner for the domain knowledge or capability it holds.
 
 ## Prohibited actions
+
+### Overwide inputs
+
+- Do not pass an entire block to a helper that only reads its kind.
+- Do not move kind-only logic into an aggregate merely to eliminate a helper.
+- Do not mutate primitive or enum prototypes to add TypeScript behavior.
+- Do not duplicate an enum vocabulary to attach methods.
+- Do not introduce a generic wrapper around a discriminator.
+- Do not add forwarding layers without a meaningful aggregate contract.
 
 - Do not reconstruct an owner's domain decision from its getters or variants
   in a caller.

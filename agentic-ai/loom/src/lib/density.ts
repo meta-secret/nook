@@ -1,4 +1,8 @@
-import type { Nodes, Paragraph, TableCell } from 'mdast';
+import {
+  CortexProseNode,
+  CortexProseContext,
+  CortexProseInspection,
+} from './cortex-prose-node.ts';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
@@ -35,8 +39,8 @@ export class CortexProseDensity {
     const inspectArgs: InspectMarkdownNodeArgs = {
       filePath,
       findings,
-      insideBlockquote: false,
-      node: root,
+      context: CortexProseContext.Body,
+      node: new CortexProseNode(root),
     };
     CortexProseDensity.inspectMarkdownNode(inspectArgs);
 
@@ -44,72 +48,31 @@ export class CortexProseDensity {
   }
 
   private static inspectMarkdownNode(args: InspectMarkdownNodeArgs): void {
-    if (args.node.type === 'paragraph' || args.node.type === 'tableCell') {
-      if (
-        args.node.type === 'paragraph' &&
-        args.insideBlockquote &&
-        CortexProseDensity.hasQuotedOutputLabel(args.node)
-      ) {
+    switch (args.node.inspection(args.context)) {
+      case CortexProseInspection.Excluded:
         return;
-      }
-      if (
-        args.node.type === 'tableCell' &&
-        CortexProseDensity.isIndexPointerCell(args.node)
-      )
+      case CortexProseInspection.Inspect:
+        CortexProseDensity.inspectProseBlock({
+          filePath: args.filePath,
+          findings: args.findings,
+          proseBlock: args.node,
+        });
         return;
-      const proseBlockArgs: InspectProseBlockArgs = {
-        filePath: args.filePath,
-        findings: args.findings,
-        proseBlock: args.node,
-      };
-      CortexProseDensity.inspectProseBlock(proseBlockArgs);
-      return;
+      case CortexProseInspection.Descend:
+        for (const child of args.node.children()) {
+          CortexProseDensity.inspectMarkdownNode({
+            ...args,
+            context: args.node.childContext(args.context),
+            node: child,
+          });
+        }
     }
-    if (!('children' in args.node)) return;
-    for (const child of args.node.children) {
-      const childArgs: InspectMarkdownNodeArgs = {
-        ...args,
-        insideBlockquote:
-          args.insideBlockquote || args.node.type === 'blockquote',
-        node: child,
-      };
-      CortexProseDensity.inspectMarkdownNode(childArgs);
-    }
-  }
-
-  private static hasQuotedOutputLabel(paragraph: Paragraph): boolean {
-    const text = CortexProseDensity.markdownText(paragraph)
-      .replace(/\s+/gu, ' ')
-      .trim();
-    return /^(?:command output|log (?:excerpt|output)|stderr|stdout)\s*:/iu.test(
-      text,
-    );
-  }
-
-  private static isIndexPointerCell(tableCell: TableCell): boolean {
-    if (tableCell.position?.start.line !== tableCell.position?.end.line) {
-      return false;
-    }
-    const hasPointer = tableCell.children.some(
-      (child) => child.type === 'link' || child.type === 'linkReference',
-    );
-    if (!hasPointer) return false;
-    const outsidePointerText = tableCell.children
-      .filter(
-        (child) => child.type !== 'link' && child.type !== 'linkReference',
-      )
-      .map(CortexProseDensity.markdownText)
-      .join('')
-      .trim();
-    return outsidePointerText.length === 0;
   }
 
   private static inspectProseBlock(args: InspectProseBlockArgs): void {
-    const text = CortexProseDensity.markdownText(args.proseBlock)
-      .replace(/\s+/gu, ' ')
-      .trim();
+    const text = args.proseBlock.text().replace(/\s+/gu, ' ').trim();
     if (text.length === 0) return;
-    const [line = 1] = [args.proseBlock.position?.start.line];
+    const { line } = args.proseBlock.sourceSpan();
     for (const sentence of text.split(/(?<=[.!?])\s+/u)) {
       const sentenceArgs: AddSentenceFindingsArgs = {
         ...args,
@@ -121,7 +84,7 @@ export class CortexProseDensity {
   }
 
   private static addSentenceFindings(args: AddSentenceFindingsArgs): void {
-    const [endLine = args.line] = [args.proseBlock.position?.end.line];
+    const { endLine } = args.proseBlock.sourceSpan();
     const findingBase = {
       file: args.filePath,
       line: args.line,
@@ -140,14 +103,6 @@ export class CortexProseDensity {
       args.findings.push(joinsFinding);
     }
   }
-
-  private static markdownText(node: Nodes): string {
-    if (node.type === 'image' || node.type === 'imageReference') return '';
-    if (node.type === 'break') return ' ';
-    if ('value' in node && typeof node.value === 'string') return node.value;
-    if (!('children' in node)) return '';
-    return node.children.map(CortexProseDensity.markdownText).join('');
-  }
 }
 
 export type LintProseDensityArgs = {
@@ -158,14 +113,14 @@ export type LintProseDensityArgs = {
 type InspectMarkdownNodeArgs = {
   readonly filePath: string;
   readonly findings: DensityFindingSpan[];
-  readonly insideBlockquote: boolean;
-  readonly node: Nodes;
+  readonly context: CortexProseContext;
+  readonly node: CortexProseNode;
 };
 
 type InspectProseBlockArgs = {
   readonly filePath: string;
   readonly findings: DensityFindingSpan[];
-  readonly proseBlock: Paragraph | TableCell;
+  readonly proseBlock: CortexProseNode;
 };
 
 type AddSentenceFindingsArgs = InspectProseBlockArgs & {

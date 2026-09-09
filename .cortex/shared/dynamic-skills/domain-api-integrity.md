@@ -36,6 +36,9 @@ placing domain decisions on these types.
 - Return a named next state or exhaustive outcome from a state transition.
 - Return semantic outcomes for eligibility, classification, and selection decisions.
 - Put each decision on the owner of the data it interprets.
+- Choose the [precise receiver](function-ownership.md#precise-receivers).
+- Keep kind-only rules with kind semantics, even for a single-field predicate.
+- Keep aggregate APIs meaningful when they delegate to nested owners.
 - Carry the selected data on its outcome instead of requiring another lookup.
 - Apply [decision locality](function-ownership.md#decision-locality) recursively.
 - Recheck runtime authorization or freshness at the effect boundary when
