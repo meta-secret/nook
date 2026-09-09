@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { err, ok, type Result } from "neverthrow";
+
 import { execFileSync } from "node:child_process";
 import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { extname } from "node:path";
@@ -104,24 +106,28 @@ export class AuthoredChangeSummary {
     }
     return summary;
   }
-  addUntracked(paths: readonly string[]): void {
+  addUntracked(paths: readonly string[]): Result<void, AuthoredBudgetFailure> {
     for (const path of paths) {
       if (!path) continue;
-      const status = lstatSync(path);
-      if (!status.isFile() && !status.isSymbolicLink()) {
+      const admitted = new UntrackedAuthoredFile(path).read();
+      if (admitted.isErr()) return err(admitted.error);
+      if (admitted.value.kind === UntrackedFileKind.Unmeasurable) {
         this.unmeasurableAuthoredFiles += 1;
         continue;
       }
-      const content = status.isSymbolicLink()
-        ? Buffer.from(readlinkSync(path, "utf8"))
-        : readFileSync(path);
+      const content = admitted.value.content;
       if (content.includes(0)) {
         this.classify({ path, added: Number.NaN, deleted: Number.NaN });
         continue;
       }
       const text = content.toString("utf8");
-      this.classify({ path, added: SourceText.lineCount(text), deleted: 0 });
+      this.classify({
+        path,
+        added: new SourceText(text).lineCount(),
+        deleted: 0,
+      });
     }
+    return ok();
   }
   private classify({
     path,
@@ -163,45 +169,102 @@ export class AuthoredChangeSummary {
   }
 }
 export class SourceText {
-  static lineCount(text: string): number {
+  constructor(private readonly text: string) {}
+  lineCount(): number {
+    const text = this.text;
     if (text.length === 0) return 0;
     const terminators = [...text.matchAll(/\n/gu)].length;
     return terminators + (text.endsWith("\n") ? 0 : 1);
   }
 }
+export enum AuthoredBudgetFailureKind {
+  Git = "git",
+  Filesystem = "filesystem",
+  MergeBase = "merge-base",
+  Unmeasurable = "unmeasurable",
+  Limit = "limit",
+}
+export interface AuthoredBudgetFailure {
+  readonly kind: AuthoredBudgetFailureKind;
+  readonly message: string;
+}
+export enum AuthoredBudgetMode {
+  NearLimit = "near-limit",
+  AdditionsOnly = "additions-only",
+}
+export type AuthoredBudgetAdmission =
+  | { readonly mode: AuthoredBudgetMode.NearLimit; readonly message: string }
+  | { readonly mode: AuthoredBudgetMode.AdditionsOnly };
+enum UntrackedFileKind {
+  Read = "read",
+  Unmeasurable = "unmeasurable",
+}
+type UntrackedFileAdmission =
+  | { kind: UntrackedFileKind.Read; content: Buffer }
+  | { kind: UntrackedFileKind.Unmeasurable };
+class UntrackedAuthoredFile {
+  constructor(private readonly path: string) {}
+  read(): Result<UntrackedFileAdmission, AuthoredBudgetFailure> {
+    try {
+      const status = lstatSync(this.path);
+      if (!status.isFile() && !status.isSymbolicLink())
+        return ok({ kind: UntrackedFileKind.Unmeasurable });
+      const content = status.isSymbolicLink()
+        ? Buffer.from(readlinkSync(this.path, "utf8"))
+        : readFileSync(this.path);
+      return ok({ kind: UntrackedFileKind.Read, content });
+    } catch {
+      return err({
+        kind: AuthoredBudgetFailureKind.Filesystem,
+        message: "Unable to measure untracked authored file",
+      });
+    }
+  }
+}
 export class AuthoredAdditionBudget {
   constructor(private readonly authoredLines: number) {}
-  evaluate() {
-    const authoredLines = this.authoredLines;
-    if (authoredLines > PR_ADDITION_LIMIT) {
-      return {
-        ok: false,
-        message: `authored additions exceed the 2,000-line limit: ${authoredLines}`,
-      };
-    }
-    if (authoredLines >= PR_ADDITION_WARNING) {
-      return {
-        ok: true,
-        mode: "near-limit",
-        message: `warning: authored additions are near the 2,000-line limit: ${authoredLines}`,
-      };
-    }
-    return { ok: true, mode: "additions-only" };
+  evaluate(): Result<AuthoredBudgetAdmission, AuthoredBudgetFailure> {
+    if (this.authoredLines > PR_ADDITION_LIMIT)
+      return err({
+        kind: AuthoredBudgetFailureKind.Limit,
+        message: `authored additions exceed the 2,000-line limit: ${this.authoredLines}`,
+      });
+    if (this.authoredLines >= PR_ADDITION_WARNING)
+      return ok({
+        mode: AuthoredBudgetMode.NearLimit,
+        message: `warning: authored additions are near the 2,000-line limit: ${this.authoredLines}`,
+      });
+    return ok({ mode: AuthoredBudgetMode.AdditionsOnly });
   }
 }
 class AuthoredBudgetWorkspace {
-  private runGit(args: readonly string[]): string {
-    return execFileSync("git", args, {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-  }
-  main(): void {
-    const mergeBase = this.runGit(["merge-base", "HEAD", "origin/main"]);
-    if (!/^[0-9a-f]{40}$/.test(mergeBase)) {
-      throw new Error("PR merge base is unavailable");
+  private runGit(
+    args: readonly string[],
+  ): Result<string, AuthoredBudgetFailure> {
+    try {
+      return ok(
+        execFileSync("git", args, {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        }),
+      );
+    } catch {
+      return err({
+        kind: AuthoredBudgetFailureKind.Git,
+        message: "Unable to read Git authored-change inventory",
+      });
     }
-    const numstat = execFileSync("git", [
+  }
+  main(): Result<void, AuthoredBudgetFailure> {
+    const merged = this.runGit(["merge-base", "HEAD", "origin/main"]);
+    if (merged.isErr()) return err(merged.error);
+    const mergeBase = merged.value.trim();
+    if (!/^[0-9a-f]{40}$/.test(mergeBase))
+      return err({
+        kind: AuthoredBudgetFailureKind.MergeBase,
+        message: "PR merge base is unavailable",
+      });
+    const numstat = this.runGit([
       "diff",
       "--no-ext-diff",
       "--numstat",
@@ -209,54 +272,50 @@ class AuthoredBudgetWorkspace {
       "--find-renames",
       "-l0",
       mergeBase,
-    ]).toString("utf8");
-    const deletedPaths = new Set(
-      execFileSync("git", [
-        "diff",
-        "--no-ext-diff",
-        "--diff-filter=D",
-        "--name-only",
-        "-z",
-        mergeBase,
-      ])
-        .toString("utf8")
-        .split("\0")
-        .filter(Boolean),
-    );
+    ]);
+    if (numstat.isErr()) return err(numstat.error);
+    const deleted = this.runGit([
+      "diff",
+      "--no-ext-diff",
+      "--diff-filter=D",
+      "--name-only",
+      "-z",
+      mergeBase,
+    ]);
+    if (deleted.isErr()) return err(deleted.error);
+    const deletedPaths = new Set(deleted.value.split("\0").filter(Boolean));
     const summary = AuthoredChangeSummary.fromNumstat({
-      numstat: numstat,
-      deletedPaths: deletedPaths,
+      numstat: numstat.value,
+      deletedPaths,
     });
-    const untracked = execFileSync("git", [
+    const untracked = this.runGit([
       "ls-files",
       "--others",
       "--exclude-standard",
       "-z",
-    ])
-      .toString("utf8")
-      .split("\0");
-    summary.addUntracked(untracked);
-    if (summary.malformedRecords > 0 || summary.unmeasurableAuthoredFiles > 0) {
-      throw new Error(
-        `authored additions are not completely measurable: ${JSON.stringify(summary)}`,
-      );
-    }
+    ]);
+    if (untracked.isErr()) return err(untracked.error);
+    const measured = summary.addUntracked(untracked.value.split("\0"));
+    if (measured.isErr()) return err(measured.error);
+    if (summary.malformedRecords > 0 || summary.unmeasurableAuthoredFiles > 0)
+      return err({
+        kind: AuthoredBudgetFailureKind.Unmeasurable,
+        message: `authored additions are not completely measurable: ${JSON.stringify(summary)}`,
+      });
     console.log(`Authored PR additions: ${summary.authoredLines} lines`);
     console.log(`Reported-only diff: ${JSON.stringify(summary)}`);
-    const result = new AuthoredAdditionBudget(
-      { authoredLines: summary.authoredLines }.authoredLines,
-    ).evaluate();
-    if (!result.ok) throw new Error(result.message);
-    if (result.mode === "near-limit") console.warn(result.message);
+    const result = new AuthoredAdditionBudget(summary.authoredLines).evaluate();
+    if (result.isErr()) return err(result.error);
+    if (result.value.mode === AuthoredBudgetMode.NearLimit)
+      console.warn(result.value.message);
     console.log("PR authored-addition budget passed");
+    return ok();
   }
 }
-
 if (import.meta.main) {
-  try {
-    new AuthoredBudgetWorkspace().main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+  const outcome = new AuthoredBudgetWorkspace().main();
+  if (outcome.isErr()) {
+    console.error(outcome.error.message);
+    process.exitCode = 1;
   }
 }

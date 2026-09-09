@@ -8,39 +8,32 @@ import {
   AuthoredChangeSummary,
   SourceText,
   AuthoredAdditionBudget,
+  AuthoredBudgetMode,
+  AuthoredBudgetFailureKind,
 } from "./pr-authored-budget.ts";
 
 test("keeps delivery at or below 2,000 authored additions", () => {
-  assert.match(
-    new AuthoredAdditionBudget(
-      { authoredLines: 2_000 }.authoredLines,
-    ).evaluate().message,
-    /warning: authored additions are near the 2,000-line limit/,
-  );
+  const admitted = new AuthoredAdditionBudget(2_000).evaluate();
+  assert(admitted.isOk());
+  assert.equal(admitted.value.mode, AuthoredBudgetMode.NearLimit);
+  if (admitted.value.mode === AuthoredBudgetMode.NearLimit)
+    assert.match(
+      admitted.value.message,
+      /warning: authored additions are near the 2,000-line limit/,
+    );
 });
-
 test("warns when authored additions reach 1,500", () => {
-  assert.equal(
-    new AuthoredAdditionBudget(
-      { authoredLines: 1_500 }.authoredLines,
-    ).evaluate().mode,
-    "near-limit",
-  );
-  assert.equal(
-    new AuthoredAdditionBudget(
-      { authoredLines: 1_499 }.authoredLines,
-    ).evaluate().mode,
-    "additions-only",
-  );
+  const near = new AuthoredAdditionBudget(1_500).evaluate();
+  assert(near.isOk());
+  assert.equal(near.value.mode, AuthoredBudgetMode.NearLimit);
+  const below = new AuthoredAdditionBudget(1_499).evaluate();
+  assert(below.isOk());
+  assert.equal(below.value.mode, AuthoredBudgetMode.AdditionsOnly);
 });
-
 test("blocks above 2,000 authored additions", () => {
-  assert.match(
-    new AuthoredAdditionBudget(
-      { authoredLines: 2_001 }.authoredLines,
-    ).evaluate().message,
-    /authored additions exceed the 2,000-line limit/,
-  );
+  const denied = new AuthoredAdditionBudget(2_001).evaluate();
+  assert(denied.isErr());
+  assert.equal(denied.error.kind, AuthoredBudgetFailureKind.Limit);
 });
 
 test("counts only authored additions and reports excluded rows separately", () => {
@@ -81,10 +74,10 @@ test("fails closed when a binary source rename hides line counts", () => {
 });
 
 test("counts newline-terminated untracked text like Git numstat", () => {
-  assert.equal(SourceText.lineCount("x\n"), 1);
-  assert.equal(SourceText.lineCount("x"), 1);
-  assert.equal(SourceText.lineCount("x\r\ny\r\n"), 2);
-  assert.equal(SourceText.lineCount("x\ry\r"), 1);
+  assert.equal(new SourceText("x\n").lineCount(), 1);
+  assert.equal(new SourceText("x").lineCount(), 1);
+  assert.equal(new SourceText("x\r\ny\r\n").lineCount(), 2);
+  assert.equal(new SourceText("x\ry\r").lineCount(), 1);
 });
 
 test("counts an untracked symlink blob without following its target", () => {
@@ -93,7 +86,7 @@ test("counts an untracked symlink blob without following its target", () => {
   try {
     symlinkSync("../missing-large-file", link);
     const summary = AuthoredChangeSummary.fromNumstat({ numstat: "" });
-    summary.addUntracked([link]);
+    assert(summary.addUntracked([link]).isOk());
     assert.equal(summary.authoredLines, 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
