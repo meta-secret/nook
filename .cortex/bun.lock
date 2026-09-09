@@ -8,6 +8,9 @@
     "teams/ai/dynamic-skills/cortex-article-structure/scripts": {
       "name": "@nook/cortex-article-structure-skill",
       "version": "0.1.0",
+      "dependencies": {
+        "zod": "4.4.3",
+      },
       "devDependencies": {
         "@eslint/js": "10.0.1",
         "@types/bun": "1.3.14",
@@ -69,6 +72,8 @@
         "yaml": "2.9.0",
       },
     },
+
+    "zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
   },
   "packages": {
     "@eslint-community/eslint-utils": ["@eslint-community/eslint-utils@4.10.1", "", { "dependencies": { "eslint-visitor-keys": "^3.4.3" }, "peerDependencies": { "eslint": "^6.0.0 || ^7.0.0 || >=8.0.0" } }, "sha512-cuadcxVFE8sDK6iWJbs8Sn0av2Nrh2QSGQhVlBW9AaAHqHwjWsZHT8LJ4hFGPh7ASBV2deFdM7H/DPjulmh8rg=="],
