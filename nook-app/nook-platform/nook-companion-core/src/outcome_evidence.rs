@@ -181,7 +181,7 @@ impl AuthenticationOutcomeObservation {
             observation.in_iframe,
         );
 
-        if observation.elapsed_ms.raw() >= timeout_ms.raw() {
+        if observation.elapsed_ms.has_reached(timeout_ms) {
             return AuthenticationOutcomeVerdict::Timeout;
         }
 

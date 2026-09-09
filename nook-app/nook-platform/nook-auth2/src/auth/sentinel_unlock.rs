@@ -68,10 +68,8 @@ pub struct SentinelUnlockPolicy {
 
 impl SentinelUnlockPolicy {
     pub fn validate(self) -> MultiDeviceResult<()> {
-        if u8::from(self.threshold) < 2
-            || u8::from(self.required_participants) < 2
-            || u8::from(self.threshold) > u8::from(self.required_participants)
-            || u8::from(self.required_participants) > 16
+        if !self.threshold.is_valid_for(self.required_participants)
+            || !self.required_participants.is_supported_quorum()
         {
             return Err(MultiDeviceError::InvalidSentinelThreshold);
         }

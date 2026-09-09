@@ -252,7 +252,7 @@ impl ExtensionPairingRecord {
                     || grant.vault_name.trim().is_empty()
                     || grant.approved_at.trim().is_empty()
                     || grant.scopes.is_empty()
-                    || grant.event_count.raw() == 0
+                    || grant.event_count.is_zero()
                     || grant.event_log_heads.is_empty()
                     || grant
                         .event_log_heads
@@ -273,7 +273,7 @@ impl ExtensionPairingRecord {
                         .any(|vault| vault.trim().is_empty())
                     || setup.selected_vault_store_id.trim().is_empty()
                     || setup.selected_vault_name.trim().is_empty()
-                    || setup.event_count.raw() == 0
+                    || setup.event_count.is_zero()
                     || setup.event_log_heads.is_empty()
                     || setup
                         .event_log_heads
@@ -847,3 +847,19 @@ impl From<bool> for ImportedExtensionAccess {
         if granted { Self::Granted } else { Self::Denied }
     }
 }
+
+impl ImportedExtensionEventLog {
+    pub fn admit(self) -> Result<Self, ImportedExtensionEventLogError> {
+        if matches!(
+            ImportedExtensionAccess::from(self.access_granted),
+            ImportedExtensionAccess::Granted
+        ) && (self.event_count.is_zero() || self.heads.is_empty())
+        {
+            return Err(ImportedExtensionEventLogError);
+        }
+        Ok(self)
+    }
+}
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("imported extension event-log evidence is inconsistent")]
+pub struct ImportedExtensionEventLogError;

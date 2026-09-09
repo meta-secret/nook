@@ -227,9 +227,12 @@ impl VersionedAuthenticationDisclosureControlObservation {
             return false;
         };
         body.observation.is_bounded()
-            && body.generic_password_field_count.raw() <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
-            && body.generic_password_field_count.raw()
-                <= body.observation.password_field_count.raw()
+            && body
+                .generic_password_field_count
+                .is_within_observation_limit()
+            && body
+                .generic_password_field_count
+                .fits_within(body.observation.password_field_count)
     }
 
     fn is_exact_owned_omitted_method_login_activation(&self) -> bool {
@@ -251,11 +254,11 @@ impl VersionedAuthenticationDisclosureControlObservation {
                 control.authentication_username,
                 AuthenticationUsernameEvidence::Explicit
             )
-            || control.password_field_count.raw() != 1
-            || body.generic_password_field_count.raw() != 0
-            || control.new_password_field_count.raw() != 0
-            || control.one_time_code_field_count.raw() != 0
-            || control.semantic_submit_control_count.raw() != 0
+            || !control.password_field_count.is_single()
+            || body.generic_password_field_count.is_nonzero()
+            || control.new_password_field_count.is_nonzero()
+            || control.one_time_code_field_count.is_nonzero()
+            || control.semantic_submit_control_count.is_nonzero()
             || !control.form_identity.is_empty()
             || !control.machine_identity.is_empty()
             || AuthenticationControlText::new(&control.label).expand_identity_text() != "sign in"

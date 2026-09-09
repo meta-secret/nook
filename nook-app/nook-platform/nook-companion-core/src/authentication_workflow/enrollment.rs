@@ -20,57 +20,69 @@ impl AuthenticationWorkflowEvidence {
             observation.backup_codes_hint,
             AuthenticationBackupCodesObservation::Present
         )) {
-            let current_step = if matches!(
+            let enrollment_progress = if matches!(
                 observation.backup_codes_hint,
                 AuthenticationBackupCodesObservation::Present
-            ) && observation.one_time_code_field_count.raw() == 0
+            ) && observation.one_time_code_field_count.is_zero()
             {
-                4
-            } else if observation.one_time_code_field_count.raw() > 0 {
-                3
+                super::AuthenticatorEnrollmentProgress::Recovery
+            } else if observation.one_time_code_field_count.is_nonzero() {
+                super::AuthenticatorEnrollmentProgress::Verification
             } else {
-                2
+                super::AuthenticatorEnrollmentProgress::Setup
             };
             return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::TotpEnrollment,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-                current_step,
-                5,
+                super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::TotpEnrollment,
+                    stage: AuthenticationWorkflowStage::Manual,
+                    action: AuthenticationWorkflowAction::TakeOver,
+                    progress: super::AuthenticationWorkflowProgress::Enrollment(
+                        enrollment_progress,
+                    ),
+                },
             ));
         }
         if matches!(
             observation.backup_codes_hint,
             AuthenticationBackupCodesObservation::Present
-        ) && observation.one_time_code_field_count.raw() == 0
+        ) && observation.one_time_code_field_count.is_zero()
         {
             return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::TotpEnrollment,
-                AuthenticationWorkflowStage::Recovery,
-                AuthenticationWorkflowAction::SaveBackupCodes,
-                4,
-                5,
+                super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::TotpEnrollment,
+                    stage: AuthenticationWorkflowStage::Recovery,
+                    action: AuthenticationWorkflowAction::SaveBackupCodes,
+                    progress: super::AuthenticationWorkflowProgress::Enrollment(
+                        super::AuthenticatorEnrollmentProgress::Recovery,
+                    ),
+                },
             ));
         }
         if matches!(
             observation.authenticator_setup_hint,
             AuthenticationAuthenticatorSetupObservation::Present
         ) {
-            if observation.one_time_code_field_count.raw() > 0 {
+            if observation.one_time_code_field_count.is_nonzero() {
                 return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-                    AuthenticationWorkflowKind::TotpEnrollment,
-                    AuthenticationWorkflowStage::Verification,
-                    AuthenticationWorkflowAction::FillTotp,
-                    3,
-                    5,
+                    super::AuthenticationWorkflowSnapshotDraft {
+                        kind: AuthenticationWorkflowKind::TotpEnrollment,
+                        stage: AuthenticationWorkflowStage::Verification,
+                        action: AuthenticationWorkflowAction::FillTotp,
+                        progress: super::AuthenticationWorkflowProgress::Enrollment(
+                            super::AuthenticatorEnrollmentProgress::Verification,
+                        ),
+                    },
                 ));
             }
             return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::TotpEnrollment,
-                AuthenticationWorkflowStage::Setup,
-                AuthenticationWorkflowAction::EnrollAuthenticator,
-                2,
-                5,
+                super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::TotpEnrollment,
+                    stage: AuthenticationWorkflowStage::Setup,
+                    action: AuthenticationWorkflowAction::EnrollAuthenticator,
+                    progress: super::AuthenticationWorkflowProgress::Enrollment(
+                        super::AuthenticatorEnrollmentProgress::Setup,
+                    ),
+                },
             ));
         }
         AuthenticationWorkflowMatch::NoMatch

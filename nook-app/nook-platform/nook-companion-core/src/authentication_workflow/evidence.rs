@@ -53,19 +53,16 @@ impl From<bool> for AuthenticationPasskeyControlObservation {
 impl AuthenticationWorkflowEvidence {
     #[must_use]
     pub(super) const fn password_field_count(self) -> AuthenticationFieldCount {
-        AuthenticationFieldCount(
-            self.current_password_field_count
-                .raw()
-                .saturating_add(self.new_password_field_count.raw())
-                .saturating_add(self.generic_password_field_count.raw()),
-        )
+        self.current_password_field_count
+            .saturating_add(self.new_password_field_count)
+            .saturating_add(self.generic_password_field_count)
     }
 
     #[must_use]
     pub(super) const fn has_authentication_fields(self) -> bool {
-        self.username_field_count.raw() > 0
-            || self.password_field_count().raw() > 0
-            || self.one_time_code_field_count.raw() > 0
+        self.username_field_count.is_nonzero()
+            || self.password_field_count().is_nonzero()
+            || self.one_time_code_field_count.is_nonzero()
             || matches!(
                 self.authenticator_setup_hint,
                 AuthenticationAuthenticatorSetupObservation::Present
@@ -78,6 +75,6 @@ impl AuthenticationWorkflowEvidence {
                 self.passkey_control_present,
                 AuthenticationPasskeyControlObservation::Present
             )
-            || self.matching_passkey_account_count.raw() > 0
+            || self.matching_passkey_account_count.is_nonzero()
     }
 }

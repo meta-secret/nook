@@ -213,3 +213,53 @@ mod tests {
         Ok(())
     }
 }
+
+impl SentinelParticipantCount {
+    pub const MIN_QUORUM: Self = Self(2);
+    pub const MAX_QUORUM: Self = Self(16);
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+    pub const fn is_supported_quorum(self) -> bool {
+        self.0 >= Self::MIN_QUORUM.0 && self.0 <= Self::MAX_QUORUM.0
+    }
+    pub const fn has_reached(self, required: Self) -> bool {
+        self.0 >= required.0
+    }
+    pub const fn fits_within(self, required: Self) -> bool {
+        self.0 <= required.0
+    }
+    pub fn matches_share_count(self, actual: SentinelShareCount) -> bool {
+        usize::from(self.0) == actual.0
+    }
+    pub fn supported_quorums() -> Vec<Self> {
+        (Self::MIN_QUORUM.0..=Self::MAX_QUORUM.0)
+            .map(Self)
+            .collect()
+    }
+}
+impl SentinelThreshold {
+    pub const fn is_valid_for(self, participants: SentinelParticipantCount) -> bool {
+        self.0 >= SentinelParticipantCount::MIN_QUORUM.0 && self.0 <= participants.0
+    }
+    pub fn supported_for(participants: SentinelParticipantCount) -> Vec<Self> {
+        if participants.is_supported_quorum() {
+            (SentinelParticipantCount::MIN_QUORUM.0..=participants.0)
+                .map(Self)
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+}
+impl SentinelShareIndex {
+    pub const fn belongs_to(self, participants: SentinelParticipantCount) -> bool {
+        self.0 != 0 && self.0 <= participants.0
+    }
+}
+impl TryFrom<usize> for SentinelParticipantCount {
+    type Error = TryFromIntError;
+    fn try_from(count: usize) -> Result<Self, Self::Error> {
+        u8::try_from(count).map(Self)
+    }
+}

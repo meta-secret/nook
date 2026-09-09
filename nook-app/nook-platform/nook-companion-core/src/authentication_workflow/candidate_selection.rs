@@ -60,13 +60,13 @@ impl AuthenticationPageObservation {
     /// Rank one browser form observation before the host applies its bounded scan.
     #[must_use]
     pub const fn form_priority(self) -> AuthenticationFormObservationPriority {
-        if self.one_time_code_field_count.raw() > 0 {
+        if self.one_time_code_field_count.is_nonzero() {
             AuthenticationFormObservationPriority::ONE_TIME_CODE
-        } else if self.current_password_field_count.raw() > 0 {
+        } else if self.current_password_field_count.is_nonzero() {
             AuthenticationFormObservationPriority::CURRENT_PASSWORD
-        } else if self.generic_password_field_count.raw() == 1 {
+        } else if self.generic_password_field_count.is_single() {
             AuthenticationFormObservationPriority::GENERIC_PASSWORD
-        } else if self.password_field_count().raw() > 0 {
+        } else if self.password_field_count().is_nonzero() {
             AuthenticationFormObservationPriority::PASSWORD_FORM
         } else {
             AuthenticationFormObservationPriority::USERNAME_OR_PASSKEY_ONLY

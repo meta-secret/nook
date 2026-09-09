@@ -223,30 +223,7 @@ impl AuthenticationWorkflowRuntimeResponse {
     > {
         let workflow = AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(wire.workflow)
         .map_err(|_| AuthenticationWorkflowRuntimeResponseDecodeError)?;
-        let login_matches = match wire.login_matches {
-            WebsiteLoginMatchAvailabilityWire::WithCount(
-                WebsiteLoginMatchAvailabilityWithCountWire {
-                    kind: WebsiteLoginMatchAvailabilityKind::Ready,
-                    count,
-                },
-            ) => WebsiteLoginMatchAvailability::Ready {
-                count: count.into(),
-            },
-            WebsiteLoginMatchAvailabilityWire::WithoutCount(
-                WebsiteLoginMatchAvailabilityWithoutCountWire {
-                    kind: WebsiteLoginMatchAvailabilityKind::Locked,
-                },
-            ) => WebsiteLoginMatchAvailability::Locked,
-            WebsiteLoginMatchAvailabilityWire::WithoutCount(
-                WebsiteLoginMatchAvailabilityWithoutCountWire {
-                    kind: WebsiteLoginMatchAvailabilityKind::Unavailable,
-                },
-            ) => WebsiteLoginMatchAvailability::Unavailable,
-            WebsiteLoginMatchAvailabilityWire::WithCount(_)
-            | WebsiteLoginMatchAvailabilityWire::WithoutCount(_) => {
-                return Err(AuthenticationWorkflowRuntimeResponseDecodeError);
-            }
-        };
+        let login_matches = WebsiteLoginMatchAvailability::try_from(wire.login_matches)?;
         let login_matches_match_workflow = match (login_matches, &workflow) {
             (
                 WebsiteLoginMatchAvailability::Ready {
@@ -485,5 +462,60 @@ mod tests {
             assert!(AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(consistent).is_ok());
         }
         Ok(())
+    }
+}
+
+impl TryFrom<WebsiteLoginMatchAvailabilityWire> for WebsiteLoginMatchAvailability {
+    type Error = AuthenticationWorkflowRuntimeResponseDecodeError;
+    fn try_from(wire: WebsiteLoginMatchAvailabilityWire) -> Result<Self, Self::Error> {
+        Ok(match wire {
+            WebsiteLoginMatchAvailabilityWire::WithCount(
+                WebsiteLoginMatchAvailabilityWithCountWire {
+                    kind: WebsiteLoginMatchAvailabilityKind::Ready,
+                    count,
+                },
+            ) => WebsiteLoginMatchAvailability::Ready {
+                count: count.into(),
+            },
+            WebsiteLoginMatchAvailabilityWire::WithoutCount(
+                WebsiteLoginMatchAvailabilityWithoutCountWire {
+                    kind: WebsiteLoginMatchAvailabilityKind::Locked,
+                },
+            ) => WebsiteLoginMatchAvailability::Locked,
+            WebsiteLoginMatchAvailabilityWire::WithoutCount(
+                WebsiteLoginMatchAvailabilityWithoutCountWire {
+                    kind: WebsiteLoginMatchAvailabilityKind::Unavailable,
+                },
+            ) => WebsiteLoginMatchAvailability::Unavailable,
+            WebsiteLoginMatchAvailabilityWire::WithCount(_)
+            | WebsiteLoginMatchAvailabilityWire::WithoutCount(_) => {
+                return Err(AuthenticationWorkflowRuntimeResponseDecodeError);
+            }
+        })
+    }
+}
+impl WebsiteLoginMatchAvailability {
+    pub fn supports_alternative_saved_login(self, action: AuthenticationWorkflowAction) -> bool {
+        matches!(
+            action,
+            AuthenticationWorkflowAction::UsePasskey | AuthenticationWorkflowAction::CreatePasskey
+        ) && match self {
+            Self::Ready { count } => count.is_nonzero(),
+            Self::Locked => true,
+            Self::Unavailable => false,
+        }
+    }
+}
+#[derive(Debug, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct SavedLoginActionPresentationRequest {
+    pub action: AuthenticationWorkflowAction,
+    pub login_matches: WebsiteLoginMatchAvailabilityWire,
+}
+impl SavedLoginActionPresentationRequest {
+    pub fn is_available(self) -> bool {
+        WebsiteLoginMatchAvailability::try_from(self.login_matches)
+            .is_ok_and(|availability| availability.supports_alternative_saved_login(self.action))
     }
 }

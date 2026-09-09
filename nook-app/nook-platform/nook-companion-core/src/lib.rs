@@ -241,3 +241,14 @@ pub use page_field_classification::{
     AuthenticationRouteControlPresence, AuthenticationRoutePasswordPresence,
     AuthenticationRouteScope, AuthenticationRouteUsernamePresence, PageLoginContext,
 };
+
+mod authentication_navigation_path;
+pub use authentication_navigation_path::AuthenticationNavigationPath;
+pub use authentication_workflow::{
+    AuthenticationDisplayProgress, AuthenticationWorkflowActivity, AuthenticationWorkflowProgress,
+    AuthenticatorEnrollmentProgress, PasswordWorkflowActivityEvidence,
+    PasswordWorkflowActivityPresentation,
+};
+pub use authentication_workflow_response::SavedLoginActionPresentationRequest;
+pub use extension_pairing_state::ImportedExtensionEventLogError;
+pub use page_field_classification::AuthenticationControlTransportability;

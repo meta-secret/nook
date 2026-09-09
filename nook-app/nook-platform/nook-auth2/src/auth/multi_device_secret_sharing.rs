@@ -47,7 +47,7 @@ impl IndexedShare {
             threshold,
             required_participants,
         } = request;
-        if threshold <= 1 || required_participants == 0 || threshold > required_participants {
+        if !crate::SentinelThreshold::from(threshold).is_valid_for(required_participants.into()) {
             return Err(MultiDeviceError::InvalidSentinelThreshold);
         }
         Ok(())

@@ -66,43 +66,41 @@ impl AuthenticationWorkflowEvidence {
             return AuthenticationWorkflowMatch::Matched(enrollment);
         }
 
-        if observation.current_password_field_count.raw() > 0
-            && observation.new_password_field_count.raw() > 0
+        if observation.current_password_field_count.is_nonzero()
+            && observation.new_password_field_count.is_nonzero()
         {
             return AuthenticationWorkflowMatch::Matched(
-                AuthenticationWorkflowSnapshot::new(
-                    AuthenticationWorkflowKind::PasswordChange,
-                    AuthenticationWorkflowStage::credentials_or_manual(
+                AuthenticationWorkflowSnapshot::new(super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::PasswordChange,
+                    stage: AuthenticationWorkflowStage::credentials_or_manual(
                         observation.manual_checkpoint_present,
                     ),
-                    AuthenticationWorkflowAction::generate_or_takeover(
+                    action: AuthenticationWorkflowAction::generate_or_takeover(
                         observation.manual_checkpoint_present,
                     ),
-                    2,
-                    4,
-                )
+                    progress: super::AuthenticationWorkflowProgress::PasswordChangeCredentials,
+                })
                 .with_passkey_proposal(observation),
             );
         }
 
-        if observation.new_password_field_count.raw() > 0 {
+        if observation.new_password_field_count.is_nonzero() {
             return AuthenticationWorkflowMatch::Matched(
-                AuthenticationWorkflowSnapshot::new(
-                    AuthenticationWorkflowKind::Signup,
-                    AuthenticationWorkflowStage::credentials_or_manual(
+                AuthenticationWorkflowSnapshot::new(super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::Signup,
+                    stage: AuthenticationWorkflowStage::credentials_or_manual(
                         observation.manual_checkpoint_present,
                     ),
-                    AuthenticationWorkflowAction::generate_or_takeover(
+                    action: AuthenticationWorkflowAction::generate_or_takeover(
                         observation.manual_checkpoint_present,
                     ),
-                    2,
-                    5,
-                )
+                    progress: super::AuthenticationWorkflowProgress::SignupCredentials,
+                })
                 .with_passkey_proposal(observation),
             );
         }
 
-        if observation.one_time_code_field_count.raw() > 0 {
+        if observation.one_time_code_field_count.is_nonzero() {
             let (stage, action) = if matches!(
                 observation.manual_checkpoint_present,
                 AuthenticationManualCheckpoint::Present
@@ -111,7 +109,7 @@ impl AuthenticationWorkflowEvidence {
                     AuthenticationWorkflowStage::Manual,
                     AuthenticationWorkflowAction::TakeOver,
                 )
-            } else if observation.password_field_count().raw() == 0 {
+            } else if observation.password_field_count().is_zero() {
                 (
                     AuthenticationWorkflowStage::SecondFactor,
                     AuthenticationWorkflowAction::FillTotp,
@@ -123,58 +121,58 @@ impl AuthenticationWorkflowEvidence {
                 )
             };
             return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::TotpChallenge,
-                stage,
-                action,
-                2,
-                3,
+                super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::TotpChallenge,
+                    stage: stage,
+                    action: action,
+                    progress: super::AuthenticationWorkflowProgress::Challenge,
+                },
             ));
         }
 
-        if (observation.current_password_field_count.raw() > 0
-            && observation.generic_password_field_count.raw() > 0)
-            || observation.generic_password_field_count.raw() > 1
+        if (observation.current_password_field_count.is_nonzero()
+            && observation.generic_password_field_count.is_nonzero())
+            || observation.generic_password_field_count.is_multiple()
         {
             return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::Manual,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-                1,
-                1,
+                super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::Manual,
+                    stage: AuthenticationWorkflowStage::Manual,
+                    action: AuthenticationWorkflowAction::TakeOver,
+                    progress: super::AuthenticationWorkflowProgress::Manual,
+                },
             ));
         }
 
-        if observation.password_field_count().raw() > 0 {
+        if observation.password_field_count().is_nonzero() {
             return AuthenticationWorkflowMatch::Matched(
-                AuthenticationWorkflowSnapshot::new(
-                    AuthenticationWorkflowKind::Login,
-                    AuthenticationWorkflowStage::credentials_or_manual(
+                AuthenticationWorkflowSnapshot::new(super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::Login,
+                    stage: AuthenticationWorkflowStage::credentials_or_manual(
                         observation.manual_checkpoint_present,
                     ),
-                    AuthenticationWorkflowAction::continue_or_takeover(
+                    action: AuthenticationWorkflowAction::continue_or_takeover(
                         observation.manual_checkpoint_present,
                     ),
-                    1,
-                    3,
-                )
+                    progress: super::AuthenticationWorkflowProgress::LoginCredentials,
+                })
                 .with_saved_login_capability()
                 .with_passkey_proposal(observation),
             );
         }
 
-        if observation.username_field_count.raw() > 0 {
+        if observation.username_field_count.is_nonzero() {
             return AuthenticationWorkflowMatch::Matched(
-                AuthenticationWorkflowSnapshot::new(
-                    AuthenticationWorkflowKind::Login,
-                    AuthenticationWorkflowStage::credentials_or_manual(
+                AuthenticationWorkflowSnapshot::new(super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::Login,
+                    stage: AuthenticationWorkflowStage::credentials_or_manual(
                         observation.manual_checkpoint_present,
                     ),
-                    AuthenticationWorkflowAction::continue_or_takeover(
+                    action: AuthenticationWorkflowAction::continue_or_takeover(
                         observation.manual_checkpoint_present,
                     ),
-                    1,
-                    3,
-                )
+                    progress: super::AuthenticationWorkflowProgress::LoginCredentials,
+                })
                 .with_saved_login_capability()
                 .with_passkey_proposal(observation),
             );
@@ -183,15 +181,15 @@ impl AuthenticationWorkflowEvidence {
         if matches!(
             observation.passkey_control_present,
             AuthenticationPasskeyControlObservation::Present
-        ) || observation.matching_passkey_account_count.raw() > 0
+        ) || observation.matching_passkey_account_count.is_nonzero()
         {
             return AuthenticationWorkflowMatch::Matched(
-                AuthenticationWorkflowSnapshot::new(
-                    AuthenticationWorkflowKind::Login,
-                    AuthenticationWorkflowStage::credentials_or_manual(
+                AuthenticationWorkflowSnapshot::new(super::AuthenticationWorkflowSnapshotDraft {
+                    kind: AuthenticationWorkflowKind::Login,
+                    stage: AuthenticationWorkflowStage::credentials_or_manual(
                         observation.manual_checkpoint_present,
                     ),
-                    if matches!(
+                    action: if matches!(
                         observation.manual_checkpoint_present,
                         AuthenticationManualCheckpoint::Present
                     ) {
@@ -199,19 +197,19 @@ impl AuthenticationWorkflowEvidence {
                     } else {
                         AuthenticationWorkflowAction::ContinueWithNook
                     },
-                    1,
-                    3,
-                )
+                    progress: super::AuthenticationWorkflowProgress::LoginCredentials,
+                })
                 .with_passkey_proposal(observation),
             );
         }
 
         AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::Manual,
-            AuthenticationWorkflowStage::Manual,
-            AuthenticationWorkflowAction::TakeOver,
-            1,
-            1,
+            super::AuthenticationWorkflowSnapshotDraft {
+                kind: AuthenticationWorkflowKind::Manual,
+                stage: AuthenticationWorkflowStage::Manual,
+                action: AuthenticationWorkflowAction::TakeOver,
+                progress: super::AuthenticationWorkflowProgress::Manual,
+            },
         ))
     }
 }

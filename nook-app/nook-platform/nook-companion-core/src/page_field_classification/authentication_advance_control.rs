@@ -161,10 +161,10 @@ impl AuthenticationAdvanceControlObservation {
                 self.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
             )
-            && self.password_field_count.raw() == 0
-            && self.new_password_field_count.raw() == 0
-            && self.one_time_code_field_count.raw() == 0
-            && self.semantic_submit_control_count.raw() == 1
+            && self.password_field_count.is_zero()
+            && self.new_password_field_count.is_zero()
+            && self.one_time_code_field_count.is_zero()
+            && self.semantic_submit_control_count.is_single()
             && (AuthenticationControlText::new(&self.label).expand_identity_text() == "next"
                 || AuthenticationControlIdentity::new(&self.label).is_explicit_advance())
     }
@@ -178,13 +178,15 @@ impl AuthenticationAdvanceControlObservation {
             && self.label.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && self.machine_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && [
-                self.password_field_count.raw(),
-                self.new_password_field_count.raw(),
-                self.one_time_code_field_count.raw(),
-                self.semantic_submit_control_count.raw(),
+                self.password_field_count,
+                self.new_password_field_count,
+                self.one_time_code_field_count,
             ]
             .into_iter()
-            .all(|count| count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
+            .all(AuthenticationFieldCount::is_within_observation_limit)
+            && self
+                .semantic_submit_control_count
+                .is_within_observation_limit()
     }
 
     /// Decide whether this DOM-extracted control can advance the observed ceremony.
@@ -238,7 +240,7 @@ struct CheckedAuthenticationControl<'a> {
 
 impl CheckedAuthenticationControl<'_> {
     fn credential_update_destination(&self) -> bool {
-        self.observation.new_password_field_count.raw() > 0
+        self.observation.new_password_field_count.is_nonzero()
             && (AuthenticationRouteIdentity::new(&self.destination.route_identity)
                 .indicates_registration()
                 || AuthenticationRouteIdentity::new(&self.destination.route_identity)
@@ -256,7 +258,7 @@ impl CheckedAuthenticationControl<'_> {
         }
         let non_authentication_label =
             AuthenticationAdvanceControlObservation::looks_like_non_authentication_submit_control_label(&self.observation.label);
-        let contextual_password_update = self.observation.new_password_field_count.raw() > 0
+        let contextual_password_update = self.observation.new_password_field_count.is_nonzero()
             && AuthenticationAdvanceControlObservation::looks_like_password_update_submit_control_label(&self.observation.label);
         let credential_update_destination = self.credential_update_destination();
         if self.has_unconditional_veto_identity() {
@@ -265,8 +267,8 @@ impl CheckedAuthenticationControl<'_> {
         if self.one_time_code_control_lacks_authentication_context() {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.observation.new_password_field_count.raw() == 0
-            && self.observation.one_time_code_field_count.raw() == 0
+        if self.observation.new_password_field_count.is_zero()
+            && self.observation.one_time_code_field_count.is_zero()
             && AuthenticationRouteIdentity::new(&self.observation.form_identity)
                 .indicates_account_management()
             && !AuthenticationRouteIdentity::new(&self.observation.form_identity)
@@ -277,9 +279,9 @@ impl CheckedAuthenticationControl<'_> {
         if non_authentication_label && !contextual_password_update {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        let current_password_only = self.observation.password_field_count.raw() > 0
-            && self.observation.new_password_field_count.raw() == 0
-            && self.observation.one_time_code_field_count.raw() == 0;
+        let current_password_only = self.observation.password_field_count.is_nonzero()
+            && self.observation.new_password_field_count.is_zero()
+            && self.observation.one_time_code_field_count.is_zero();
         if current_password_only && !self.has_positive_login_identity() {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -288,7 +290,7 @@ impl CheckedAuthenticationControl<'_> {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.observation.new_password_field_count.raw() == 0
+        if self.observation.new_password_field_count.is_zero()
             && (AuthenticationControlIdentity::new(&self.observation.label).is_registration()
                 || AuthenticationControlText::new(
                     &AuthenticationControlText::new(&self.observation.label).expand_identity_text(),
@@ -300,12 +302,12 @@ impl CheckedAuthenticationControl<'_> {
         if AuthenticationControlIdentity::new(&self.observation.label).is_auxiliary() {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.observation.one_time_code_field_count.raw() > 0
+        if self.observation.one_time_code_field_count.is_nonzero()
             && AuthenticationControlIdentity::new(&self.observation.label).is_one_time_code_resend()
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.observation.new_password_field_count.raw() == 0
+        if self.observation.new_password_field_count.is_zero()
             && AuthenticationControlIdentity::new(&self.observation.label).is_password_recovery()
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
@@ -316,7 +318,7 @@ impl CheckedAuthenticationControl<'_> {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.observation.new_password_field_count.raw() == 0
+        if self.observation.new_password_field_count.is_zero()
             && AuthenticationRouteIdentity::new(&self.observation.form_identity)
                 .indicates_non_authentication()
         {

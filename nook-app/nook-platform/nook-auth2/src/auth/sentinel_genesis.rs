@@ -252,8 +252,10 @@ impl SentinelGenesisShareDelivery {
         }
         if delivery.share.threshold != delivery.policy.threshold
             || delivery.share.required_participants != delivery.policy.participant_count
-            || u8::from(delivery.share.share_index) == 0
-            || u8::from(delivery.share.share_index) > u8::from(delivery.policy.participant_count)
+            || !delivery
+                .share
+                .share_index
+                .belongs_to(delivery.policy.participant_count)
         {
             return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         }

@@ -69,3 +69,20 @@ impl From<PageLoginContext> for bool {
         matches!(context, PageLoginContext::Authentication)
     }
 }
+
+#[derive(Debug, serde::Deserialize, tsify::Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct AuthenticationControlTransportability {
+    pub submission_method: crate::PageControlSubmissionMethod,
+    pub username_field_count: crate::AuthenticationFieldCount,
+}
+impl AuthenticationControlTransportability {
+    pub fn is_transportable(self) -> bool {
+        match self.submission_method {
+            crate::PageControlSubmissionMethod::Dialog => false,
+            crate::PageControlSubmissionMethod::Get => self.username_field_count.is_single(),
+            _ => true,
+        }
+    }
+}

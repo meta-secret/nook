@@ -290,3 +290,10 @@ pub fn select_shared_grant_provider(
 ) -> nook_core::SharedGrantProviderOutcome {
     request.select()
 }
+
+#[wasm_bindgen]
+pub fn evaluate_sentinel_policy_draft(
+    draft: nook_core::SentinelPolicyDraft,
+) -> nook_core::SentinelPolicyDraftEvaluation {
+    draft.evaluate()
+}

@@ -91,8 +91,9 @@ impl AuthenticationAuthenticatorObservationFacts {
 
     pub(super) fn is_bounded(&self) -> bool {
         self.backup_codes_copy.len() <= crate::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && self.matching_passkey_account_count.raw()
-                <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+            && self
+                .matching_passkey_account_count
+                .is_within_observation_limit()
             && self.detailed_passkey_control.is_bounded()
     }
 

@@ -154,23 +154,20 @@ pub struct AuthenticationPageObservation {
 impl AuthenticationPageObservation {
     #[must_use]
     pub const fn password_field_count(self) -> AuthenticationFieldCount {
-        AuthenticationFieldCount(
-            self.current_password_field_count
-                .raw()
-                .saturating_add(self.new_password_field_count.raw())
-                .saturating_add(self.generic_password_field_count.raw()),
-        )
+        self.current_password_field_count
+            .saturating_add(self.new_password_field_count)
+            .saturating_add(self.generic_password_field_count)
     }
 
     #[must_use]
     pub const fn has_authentication_fields(self) -> bool {
-        self.username_field_count.raw() > 0
-            || self.password_field_count().raw() > 0
-            || self.one_time_code_field_count.raw() > 0
+        self.username_field_count.is_nonzero()
+            || self.password_field_count().is_nonzero()
+            || self.one_time_code_field_count.is_nonzero()
             || self.authenticator_setup_hint
             || self.backup_codes_hint
             || self.passkey_control_present
-            || self.matching_passkey_account_count.raw() > 0
+            || self.matching_passkey_account_count.is_nonzero()
     }
 }
 
@@ -225,20 +222,14 @@ pub enum AuthenticationWorkflowSnapshotError {
 }
 
 impl AuthenticationWorkflowSnapshot {
-    const fn new(
-        kind: AuthenticationWorkflowKind,
-        stage: AuthenticationWorkflowStage,
-        action: AuthenticationWorkflowAction,
-        current_step: u8,
-        total_steps: u8,
-    ) -> Self {
+    const fn new(draft: AuthenticationWorkflowSnapshotDraft) -> Self {
         Self {
-            kind,
-            stage,
-            action,
-            current_step: AuthenticationWorkflowCurrentStep(current_step),
-            total_steps: AuthenticationWorkflowTotalSteps(total_steps),
-            approval_requirement: AuthenticationApprovalRequirement::for_action(action),
+            kind: draft.kind,
+            stage: draft.stage,
+            action: draft.action,
+            current_step: draft.progress.current_step(),
+            total_steps: draft.progress.total_steps(),
+            approval_requirement: AuthenticationApprovalRequirement::for_action(draft.action),
             saved_login_capability: AuthenticationSavedLoginCapability::Unavailable,
             observation_index: AuthenticationWorkflowObservationIndex(0),
         }
@@ -349,11 +340,12 @@ mod tests {
     #[test]
     fn workflow_roundtrips_generated_numeric_enums() -> anyhow::Result<()> {
         let workflow = AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::ContinueWithNook,
-            1,
-            3,
+            AuthenticationWorkflowSnapshotDraft {
+                kind: AuthenticationWorkflowKind::Login,
+                stage: AuthenticationWorkflowStage::Credentials,
+                action: AuthenticationWorkflowAction::ContinueWithNook,
+                progress: AuthenticationWorkflowProgress::LoginCredentials,
+            },
         ));
         let serialized = serde_json::to_string(&workflow)?;
         let roundtrip: AuthenticationWorkflowMatch = serde_json::from_str(&serialized)?;
@@ -394,13 +386,12 @@ mod tests {
             (password_login)
                 .classify_authentication_workflow()
                 .snapshot()?,
-            AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::ContinueWithNook,
-                1,
-                3,
-            )
+            AuthenticationWorkflowSnapshot::new(AuthenticationWorkflowSnapshotDraft {
+                kind: AuthenticationWorkflowKind::Login,
+                stage: AuthenticationWorkflowStage::Credentials,
+                action: AuthenticationWorkflowAction::ContinueWithNook,
+                progress: AuthenticationWorkflowProgress::LoginCredentials
+            })
             .with_saved_login_capability()
         );
         Ok(())
@@ -866,3 +857,13 @@ pub use observation_facts::AuthenticationBackupCodesEvidence;
 
 mod evidence;
 use evidence::AuthenticationWorkflowEvidence;
+
+mod progress;
+use progress::AuthenticationWorkflowSnapshotDraft;
+pub use progress::{AuthenticationWorkflowProgress, AuthenticatorEnrollmentProgress};
+
+mod activity_presentation;
+pub use activity_presentation::{
+    AuthenticationDisplayProgress, AuthenticationWorkflowActivity,
+    PasswordWorkflowActivityEvidence, PasswordWorkflowActivityPresentation,
+};

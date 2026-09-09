@@ -55,8 +55,18 @@ pub struct NookExtensionEventLogImportStatus(ExtensionEventLogImportStatus);
 #[wasm_bindgen]
 impl NookExtensionEventLogImportStatus {
     #[wasm_bindgen]
-    pub fn to_object(&self) -> Result<js_sys::Object, JsError> {
-        Ok(serde_wasm_bindgen::to_value(&self.0)?.unchecked_into())
+    pub fn to_object(&self) -> Result<nook_core::ImportedExtensionEventLog, JsError> {
+        let evidence = nook_core::ImportedExtensionEventLog {
+            vault_store_id: self.0.vault_store_id.clone(),
+            event_count: u32::try_from(self.0.event_count)
+                .map_err(|_| JsError::new("imported event count exceeds the browser contract"))?
+                .into(),
+            heads: self.0.heads.clone(),
+            access_granted: self.0.access_granted,
+        };
+        evidence
+            .admit()
+            .map_err(|error| JsError::new(&error.to_string()))
     }
 }
 

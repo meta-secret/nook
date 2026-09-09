@@ -93,11 +93,11 @@ impl AuthenticationCeremonyContextObservation {
     }
 
     pub(super) fn is_authenticated(&self, fields: AuthenticationFieldObservationFacts) -> bool {
-        fields.one_time_code_field_count.raw() > 0
-            && fields.current_password_field_count.raw() == 0
-            && fields.new_password_field_count.raw() == 0
-            && fields.generic_password_field_count.raw() == 0
-            && (fields.username_field_count.raw() > 0)
+        fields.one_time_code_field_count.is_nonzero()
+            && fields.current_password_field_count.is_zero()
+            && fields.new_password_field_count.is_zero()
+            && fields.generic_password_field_count.is_zero()
+            && (fields.username_field_count.is_nonzero())
                 != matches!(
                     self.authentication_username,
                     AuthenticationUsernameEvidence::Absent
@@ -167,11 +167,11 @@ impl AuthenticationCeremonyObservationFacts {
         if !matches!(
             self.implicit_submission_method,
             PageControlSubmissionMethod::Get
-        ) || fields.username_field_count.raw() != 1
-            || fields.current_password_field_count.raw() != 0
-            || fields.generic_password_field_count.raw() != 0
-            || fields.new_password_field_count.raw() != 0
-            || fields.one_time_code_field_count.raw() != 0
+        ) || !fields.username_field_count.is_single()
+            || fields.current_password_field_count.is_nonzero()
+            || fields.generic_password_field_count.is_nonzero()
+            || fields.new_password_field_count.is_nonzero()
+            || fields.one_time_code_field_count.is_nonzero()
             || !matches!(
                 self.authentication_context.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
@@ -245,22 +245,22 @@ impl AuthenticationCeremonyObservationFacts {
             self.advance_control,
             AuthenticationAdvanceControlEvidence::ImplicitSubmission
         ) && !(self).password_implicit_submission_uses_get(fields)
-            && fields.one_time_code_field_count.raw() == 0
+            && fields.one_time_code_field_count.is_zero()
             && [
-                fields.current_password_field_count.raw(),
-                fields.generic_password_field_count.raw(),
-                fields.new_password_field_count.raw(),
-                fields.username_field_count.raw(),
+                fields.current_password_field_count,
+                fields.generic_password_field_count,
+                fields.new_password_field_count,
+                fields.username_field_count,
             ]
             .into_iter()
-            .any(|count| count > 0)
-            && (fields.username_field_count.raw() > 0)
+            .any(crate::AuthenticationFieldCount::is_nonzero)
+            && (fields.username_field_count.is_nonzero())
                 != matches!(
                     self.authentication_context.authentication_username,
                     AuthenticationUsernameEvidence::Absent
                 )
             && self.authentication_context.is_bounded()
-            && if fields.new_password_field_count.raw() > 0 {
+            && if fields.new_password_field_count.is_nonzero() {
                 AuthenticationAdvanceControlObservation::has_safe_credential_update_route_identity(
                     CredentialUpdateRouteEvidence {
                         source_origin: &self.authentication_context.source_origin,
@@ -286,10 +286,9 @@ impl AuthenticationCeremonyObservationFacts {
         fields: AuthenticationFieldObservationFacts,
     ) -> bool {
         let ceremony = self;
-        (fields.current_password_field_count.raw()
-            + fields.generic_password_field_count.raw()
-            + fields.new_password_field_count.raw())
-            > 0
+        (fields.current_password_field_count.is_nonzero()
+            || fields.generic_password_field_count.is_nonzero()
+            || fields.new_password_field_count.is_nonzero())
             && matches!(
                 ceremony.implicit_submission_method,
                 PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog

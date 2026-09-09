@@ -16,17 +16,20 @@ impl AuthenticationPageObservation {
             && observations.len() <= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
             && observations.iter().all(|observation| {
                 [
-                    observation.username_field_count.raw(),
-                    observation.current_password_field_count.raw(),
-                    observation.new_password_field_count.raw(),
-                    observation.generic_password_field_count.raw(),
-                    observation.one_time_code_field_count.raw(),
-                    observation.matching_passkey_account_count.raw(),
+                    observation.username_field_count,
+                    observation.current_password_field_count,
+                    observation.new_password_field_count,
+                    observation.generic_password_field_count,
+                    observation.one_time_code_field_count,
                 ]
                 .into_iter()
-                .all(|count| count <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
-                    && observation.password_field_count().raw()
-                        <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+                .all(crate::AuthenticationFieldCount::is_within_observation_limit)
+                    && observation
+                        .matching_passkey_account_count
+                        .is_within_observation_limit()
+                    && observation
+                        .password_field_count()
+                        .is_within_observation_limit()
             })
     }
 }

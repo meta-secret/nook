@@ -81,10 +81,10 @@ impl AuthenticationAdvanceControlObservation {
                         )
                 }
             }
-            && self.password_field_count.raw() == 0
-            && self.new_password_field_count.raw() == 0
-            && self.one_time_code_field_count.raw() == 0
-            && self.semantic_submit_control_count.raw() == 1
+            && self.password_field_count.is_zero()
+            && self.new_password_field_count.is_zero()
+            && self.one_time_code_field_count.is_zero()
+            && self.semantic_submit_control_count.is_single()
     }
 
     fn is_mixed_phone_or_email_identifier_advance(&self) -> bool {
@@ -103,10 +103,10 @@ impl AuthenticationAdvanceControlObservation {
                 self.submission_destination_source,
                 PageControlSubmissionDestinationSource::Omitted
             )
-            || self.password_field_count.raw() != 0
-            || self.new_password_field_count.raw() != 0
-            || self.one_time_code_field_count.raw() != 0
-            || self.semantic_submit_control_count.raw() != 1
+            || self.password_field_count.is_nonzero()
+            || self.new_password_field_count.is_nonzero()
+            || self.one_time_code_field_count.is_nonzero()
+            || !self.semantic_submit_control_count.is_single()
         {
             return false;
         }
@@ -125,10 +125,10 @@ impl AuthenticationAdvanceControlObservation {
                 self.authentication_username,
                 AuthenticationUsernameEvidence::Absent
             )
-            && self.password_field_count.raw() == 0
-            && self.new_password_field_count.raw() == 0
-            && self.one_time_code_field_count.raw() == 0
-            && self.semantic_submit_control_count.raw() > 1
+            && self.password_field_count.is_zero()
+            && self.new_password_field_count.is_zero()
+            && self.one_time_code_field_count.is_zero()
+            && self.semantic_submit_control_count.is_multiple()
     }
 }
 
@@ -182,7 +182,7 @@ impl CheckedAuthenticationControl<'_> {
                     | AuthenticationUsernameEvidence::WebAuthnEmail
                     | AuthenticationUsernameEvidence::Explicit
             )
-            && (observation.password_field_count.raw() > 0 || webauthn_identifier_advance)
+            && (observation.password_field_count.is_nonzero() || webauthn_identifier_advance)
             && primary_oauth_login_label
             && !AuthenticationControlIdentity::new(&observation.label).label_names_provider()
             && AuthenticationRouteIdentity::new(&self.destination.route_identity)
@@ -235,9 +235,9 @@ impl CheckedAuthenticationControl<'_> {
             AuthenticationRouteIdentity::new(&observation.form_identity).indicates_authentication()
                 || AuthenticationRouteIdentity::new(&self.destination.path_identity)
                     .indicates_authentication();
-        observation.password_field_count.raw() > 0
-            || observation.new_password_field_count.raw() > 0
-            || observation.one_time_code_field_count.raw() > 0
+        observation.password_field_count.is_nonzero()
+            || observation.new_password_field_count.is_nonzero()
+            || observation.one_time_code_field_count.is_nonzero()
             || ((matches!(
                 observation.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
@@ -260,7 +260,7 @@ impl CheckedAuthenticationControl<'_> {
         let accepted_semantic_submit = authentication_scope_owns_control
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
             && semantic_submit_ceremony_present
-            && (observation.semantic_submit_control_count.raw() == 1
+            && (observation.semantic_submit_control_count.is_single()
                 || AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(
                     &observation.label,
                 )
@@ -282,7 +282,7 @@ impl CheckedAuthenticationControl<'_> {
 
     pub(super) fn one_time_code_control_lacks_authentication_context(&self) -> bool {
         let observation = self.observation;
-        observation.one_time_code_field_count.raw() > 0
+        observation.one_time_code_field_count.is_nonzero()
             && !OneTimeCodeContext {
                 authentication_username: observation.authentication_username,
                 form_identity: &observation.form_identity,

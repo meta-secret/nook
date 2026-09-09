@@ -499,3 +499,9 @@ pub use device_access::DeviceSessionLockState;
 pub use vault_connect::VaultGenesisIntent;
 pub use vault_runtime_policy::RuntimeTestCapabilityExposure;
 pub use vault_sync_session::YamlSyncBacking;
+
+pub use vault_architecture::{
+    SentinelPolicyDraft, SentinelPolicyDraftAdmission, SentinelPolicyDraftEvaluation,
+};
+
+pub use nook_companion_core::ImportedExtensionEventLog;

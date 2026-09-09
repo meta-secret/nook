@@ -192,22 +192,19 @@ impl Default for SentinelPolicy {
 impl SentinelPolicy {
     #[must_use]
     pub fn is_ready(self) -> bool {
-        let threshold = u8::from(self.threshold);
-        let required = u8::from(self.required_participants);
-        threshold > 1 && threshold <= required && u8::from(self.ready_participants) >= required
+        self.threshold.is_valid_for(self.required_participants)
+            && self
+                .ready_participants
+                .has_reached(self.required_participants)
     }
 
     pub fn validate(self) -> ValidationResult<()> {
-        let threshold = u8::from(self.threshold);
-        let required = u8::from(self.required_participants);
-        let ready = u8::from(self.ready_participants);
-        if threshold <= 1 || threshold > required {
-            return Err(ValidationError::InvalidSentinelPolicy);
-        }
-        if required > 16 {
-            return Err(ValidationError::InvalidSentinelPolicy);
-        }
-        if ready > required {
+        if !self.threshold.is_valid_for(self.required_participants)
+            || !self.required_participants.is_supported_quorum()
+            || !self
+                .ready_participants
+                .fits_within(self.required_participants)
+        {
             return Err(ValidationError::InvalidSentinelPolicy);
         }
         Ok(())
@@ -340,7 +337,7 @@ impl VaultArchitecture {
                     return Err(ValidationError::SentinelVaultHasFullKeyEnvelopes);
                 }
                 if shares.is_empty() {
-                    return if u8::from(self.sentinel.policy()?.ready_participants) == 0 {
+                    return if self.sentinel.policy()?.ready_participants.is_zero() {
                         Ok(())
                     } else {
                         Err(ValidationError::InvalidSentinelShareSet)
@@ -348,13 +345,14 @@ impl VaultArchitecture {
                 }
 
                 let policy = self.sentinel.policy()?;
-                if shares.len() != usize::from(u8::from(policy.required_participants))
+                if !policy
+                    .required_participants
+                    .matches_share_count(shares.len().into())
                     || policy.ready_participants != policy.required_participants
                     || shares.iter().any(|share| {
                         share.threshold != policy.threshold
                             || share.required_participants != policy.required_participants
-                            || u8::from(share.share_index) == 0
-                            || u8::from(share.share_index) > u8::from(policy.required_participants)
+                            || !share.share_index.belongs_to(policy.required_participants)
                     })
                 {
                     return Err(ValidationError::InvalidSentinelShareSet);
@@ -679,3 +677,8 @@ mod tests {
         );
     }
 }
+
+mod sentinel_projection;
+pub use sentinel_projection::{
+    SentinelPolicyDraft, SentinelPolicyDraftAdmission, SentinelPolicyDraftEvaluation,
+};

@@ -71,7 +71,7 @@ impl WebsitePasskeyProposal {
                 return WebsitePasskeyProposal::None;
             }
         }
-        if matching_passkey_account_count.raw() > 0 {
+        if matching_passkey_account_count.is_nonzero() {
             return WebsitePasskeyProposal::UsePasskey {
                 account_count: matching_passkey_account_count,
             };

@@ -345,8 +345,8 @@ impl AuthenticationAdvanceControlObservation {
         ) else {
             return false;
         };
-        let has_authentication_context = observation.password_field_count.raw() > 0
-            || observation.one_time_code_field_count.raw() > 0
+        let has_authentication_context = observation.password_field_count.is_nonzero()
+            || observation.one_time_code_field_count.is_nonzero()
             || matches!(
                 observation.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
@@ -372,7 +372,7 @@ impl AuthenticationAdvanceControlObservation {
         destination: &CanonicalControlDestination,
     ) -> bool {
         let observation = self;
-        observation.new_password_field_count.raw() > 0
+        observation.new_password_field_count.is_nonzero()
             && !RouteIdentity::new(&destination.path_identity).indicates_login()
             && !RouteIdentity::new(&destination.route_identity).indicates_login()
     }

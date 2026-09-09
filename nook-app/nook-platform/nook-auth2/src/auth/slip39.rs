@@ -92,10 +92,11 @@ impl<'a> SentinelSecretSplitRequest<'a> {
     }
 
     fn validate_policy(threshold: u8, share_count: u8) -> MultiDeviceResult<()> {
-        if threshold < 2 || threshold > share_count || share_count > 16 {
-            return Err(MultiDeviceError::InvalidSentinelThreshold);
+        crate::SentinelUnlockPolicy {
+            threshold: threshold.into(),
+            required_participants: share_count.into(),
         }
-        Ok(())
+        .validate()
     }
 }
 

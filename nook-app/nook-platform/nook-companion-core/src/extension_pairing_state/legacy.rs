@@ -135,7 +135,9 @@ impl ExtensionPairingState {
             });
         }
         let selected = selected.ok_or(ExtensionPairingStateError::InvalidLegacyState)?;
-        if setup.sync_provider_count != selected.sync_provider_count.raw() {
+        if crate::ExtensionSyncProviderCount::from(setup.sync_provider_count)
+            != selected.sync_provider_count
+        {
             return Err(ExtensionPairingStateError::InvalidLegacyState);
         }
         let migrated_vault_names: HashSet<_> = entries

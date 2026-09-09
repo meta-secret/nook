@@ -7,6 +7,7 @@ use super::{
 use crate::AuthenticationPageObservation;
 use crate::AuthenticationWorkflowMatch;
 
+#[cfg(test)]
 const MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE: u32 = 20;
 
 impl AuthenticationWorkflowSnapshot {
@@ -45,95 +46,63 @@ impl AuthenticationWorkflowSnapshot {
     const fn classifier_tuple_matches_contract(self) -> bool {
         let snapshot = self;
         matches!(
-            (
-                snapshot.kind,
-                snapshot.stage,
-                snapshot.action,
-                snapshot.current_step.raw(),
-                snapshot.total_steps.raw(),
-            ),
+            (snapshot.kind, snapshot.stage, snapshot.action,),
             (
                 AuthenticationWorkflowKind::Login,
                 AuthenticationWorkflowStage::Credentials,
                 AuthenticationWorkflowAction::ContinueWithNook
                     | AuthenticationWorkflowAction::UsePasskey
                     | AuthenticationWorkflowAction::CreatePasskey,
-                1,
-                3,
             ) | (
                 AuthenticationWorkflowKind::Login,
                 AuthenticationWorkflowStage::Manual,
                 AuthenticationWorkflowAction::TakeOver,
-                1,
-                3,
             ) | (
                 AuthenticationWorkflowKind::Signup,
                 AuthenticationWorkflowStage::Credentials,
                 AuthenticationWorkflowAction::GeneratePassword
                     | AuthenticationWorkflowAction::UsePasskey
                     | AuthenticationWorkflowAction::CreatePasskey,
-                2,
-                5,
             ) | (
                 AuthenticationWorkflowKind::Signup,
                 AuthenticationWorkflowStage::Manual,
                 AuthenticationWorkflowAction::TakeOver,
-                2,
-                5,
             ) | (
                 AuthenticationWorkflowKind::PasswordChange,
                 AuthenticationWorkflowStage::Credentials,
                 AuthenticationWorkflowAction::GeneratePassword,
-                2,
-                4,
             ) | (
                 AuthenticationWorkflowKind::PasswordChange,
                 AuthenticationWorkflowStage::Manual,
                 AuthenticationWorkflowAction::TakeOver,
-                2,
-                4,
             ) | (
                 AuthenticationWorkflowKind::TotpChallenge,
                 AuthenticationWorkflowStage::SecondFactor,
                 AuthenticationWorkflowAction::FillTotp | AuthenticationWorkflowAction::TakeOver,
-                2,
-                3,
             ) | (
                 AuthenticationWorkflowKind::TotpChallenge,
                 AuthenticationWorkflowStage::Manual,
                 AuthenticationWorkflowAction::TakeOver,
-                2,
-                3,
             ) | (
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Setup,
                 AuthenticationWorkflowAction::EnrollAuthenticator,
-                2,
-                5,
             ) | (
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Verification,
                 AuthenticationWorkflowAction::FillTotp,
-                3,
-                5,
             ) | (
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Recovery,
                 AuthenticationWorkflowAction::SaveBackupCodes,
-                4,
-                5,
             ) | (
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Manual,
                 AuthenticationWorkflowAction::TakeOver,
-                2..=4,
-                5,
             ) | (
                 AuthenticationWorkflowKind::Manual,
                 AuthenticationWorkflowStage::Manual,
                 AuthenticationWorkflowAction::TakeOver,
-                1,
-                1,
             )
         )
     }
@@ -143,13 +112,10 @@ impl AuthenticationWorkflowSnapshot {
     /// Whether this snapshot is one of the complete tuples emitted by the classifier.
     #[must_use]
     pub const fn matches_classifier_contract(self) -> bool {
-        if self.current_step.raw() == 0
-            || self.total_steps.raw() == 0
-            || self.current_step.raw() > self.total_steps.raw()
-            || !self.approval_requirement_matches_action()
-            || !(self).saved_login_capability_matches_contract()
-            || self.observation_index.raw()
-                >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE
+        if !self.approval_requirement_matches_action()
+            || !self.saved_login_capability_matches_contract()
+            || !self.observation_index.is_within_classifier_batch()
+            || super::AuthenticationWorkflowProgress::admit(self).is_none()
         {
             return false;
         }

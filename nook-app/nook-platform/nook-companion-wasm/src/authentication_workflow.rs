@@ -174,3 +174,32 @@ mod tests {
         }
     }
 }
+
+#[wasm_bindgen]
+pub fn project_password_workflow_activity(
+    evidence: nook_companion_core::PasswordWorkflowActivityEvidence,
+) -> nook_companion_core::PasswordWorkflowActivityPresentation {
+    evidence.project()
+}
+#[wasm_bindgen]
+pub fn authentication_workflow_activity_progress(
+    activity: nook_companion_core::AuthenticationWorkflowActivity,
+) -> nook_companion_core::AuthenticationDisplayProgress {
+    activity.progress()
+}
+#[wasm_bindgen]
+pub fn saved_login_action_available(
+    request: nook_companion_core::SavedLoginActionPresentationRequest,
+) -> bool {
+    request.is_available()
+}
+#[wasm_bindgen]
+pub fn authentication_control_transportable(
+    request: nook_companion_core::AuthenticationControlTransportability,
+) -> bool {
+    request.is_transportable()
+}
+#[wasm_bindgen]
+pub fn is_authentication_navigation_path(pathname: &str) -> bool {
+    nook_companion_core::AuthenticationNavigationPath::from(pathname).has_authentication_segment()
+}

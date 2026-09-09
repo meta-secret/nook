@@ -5,7 +5,6 @@ use crate::NookError;
 use nook_core::{
     MultiDeviceError, SentinelConfiguration, SentinelVaultUnlockState, VaultMetaState, VaultType,
 };
-use std::collections::BTreeSet;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -44,41 +43,7 @@ impl NookVaultManager {
     pub(super) fn sentinel_policy_from_shares(
         meta: &VaultMetaState,
     ) -> Result<Option<nook_core::SentinelPolicy>, NookError> {
-        if meta.sentinel_shares.is_empty() {
-            return Ok(None);
-        }
-        let mut shares = meta.sentinel_shares.values();
-        let first = shares
-            .next()
-            .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
-        let version = first.version;
-        let threshold = u8::from(first.threshold);
-        let required = u8::from(first.required_participants);
-        let mut indexes = BTreeSet::new();
-        indexes.insert(u8::from(first.share_index));
-        if threshold < 2
-            || threshold > required
-            || required > 16
-            || u8::from(first.share_index) == 0
-            || u8::from(first.share_index) > required
-            || shares.any(|share| {
-                share.version != version
-                    || u8::from(share.threshold) != threshold
-                    || u8::from(share.required_participants) != required
-                    || u8::from(share.share_index) == 0
-                    || u8::from(share.share_index) > required
-                    || !indexes.insert(share.share_index.into())
-            })
-        {
-            return Err(MultiDeviceError::InvalidSentinelShareEncoding.into());
-        }
-        let share_count = u8::try_from(meta.sentinel_shares.len())
-            .map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
-        Ok(Some(nook_core::SentinelPolicy {
-            threshold: threshold.into(),
-            required_participants: required.into(),
-            ready_participants: share_count.into(),
-        }))
+        nook_core::SentinelPolicy::from_share_records(meta).map_err(Into::into)
     }
 
     fn is_sentinel_session(&self) -> bool {

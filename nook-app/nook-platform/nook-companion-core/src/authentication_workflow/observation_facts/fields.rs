@@ -29,7 +29,7 @@ impl AuthenticationFieldObservationFacts {
             PageControlSubmissionMethod::Get
         ) || observation.is_microsoft_consumer_root_identifier_advance()
         {
-            return self.username_field_count.raw() == 1
+            return self.username_field_count.is_single()
                 && matches!(
                     observation.authentication_username,
                     AuthenticationUsernameEvidence::Strong
@@ -38,7 +38,7 @@ impl AuthenticationFieldObservationFacts {
                         | AuthenticationUsernameEvidence::Explicit
                 );
         }
-        (self.username_field_count.raw() > 0)
+        (self.username_field_count.is_nonzero())
             != matches!(
                 observation.authentication_username,
                 AuthenticationUsernameEvidence::Absent
@@ -48,26 +48,24 @@ impl AuthenticationFieldObservationFacts {
     pub(super) fn is_bounded(self) -> bool {
         let password_field_count = self
             .current_password_field_count
-            .raw()
-            .saturating_add(self.new_password_field_count.raw())
-            .saturating_add(self.generic_password_field_count.raw());
+            .saturating_add(self.new_password_field_count)
+            .saturating_add(self.generic_password_field_count);
         let counts_are_bounded = [
-            self.username_field_count.raw(),
-            self.current_password_field_count.raw(),
-            self.new_password_field_count.raw(),
-            self.generic_password_field_count.raw(),
-            self.one_time_code_field_count.raw(),
+            self.username_field_count,
+            self.current_password_field_count,
+            self.new_password_field_count,
+            self.generic_password_field_count,
+            self.one_time_code_field_count,
             password_field_count,
-            self.actionable_password_field_count.raw(),
-            self.readonly_password_field_count.raw(),
+            self.actionable_password_field_count,
+            self.readonly_password_field_count,
         ]
         .into_iter()
-        .all(|count| count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT);
+        .all(crate::AuthenticationFieldCount::is_within_observation_limit);
         counts_are_bounded
             && self
                 .actionable_password_field_count
-                .raw()
-                .saturating_add(self.readonly_password_field_count.raw())
+                .saturating_add(self.readonly_password_field_count)
                 == password_field_count
     }
 
@@ -78,10 +76,9 @@ impl AuthenticationFieldObservationFacts {
         observation: &AuthenticationAdvanceControlObservation,
     ) -> bool {
         self.current_password_field_count
-            .raw()
-            .saturating_add(self.generic_password_field_count.raw())
-            .saturating_add(self.new_password_field_count.raw())
-            == observation.password_field_count.raw()
+            .saturating_add(self.generic_password_field_count)
+            .saturating_add(self.new_password_field_count)
+            == observation.password_field_count
             && self.new_password_field_count == observation.new_password_field_count
             && self.one_time_code_field_count == observation.one_time_code_field_count
             && self.username_fields_match(observation)
