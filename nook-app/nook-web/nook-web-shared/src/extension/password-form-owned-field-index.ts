@@ -79,12 +79,16 @@ export class OwnedAuthenticationFieldIndex {
     if (field.form)
       this.mutableFieldsFor(field.form).oneTimeCodeFields.push(field);
   }
-  private static readonly indexesByPasswordFieldSource = new WeakMap<
+}
+
+/** Owns the page lifetime of cached field indexes. */
+class AuthenticationFieldIndexCatalog {
+  private readonly indexesByPasswordFieldSource = new WeakMap<
     readonly HTMLInputElement[],
     OwnedAuthenticationFieldIndex
   >();
 
-  static fields({
+  fields({
     owner,
     passwordFields,
     usernameFields,
@@ -103,3 +107,5 @@ export class OwnedAuthenticationFieldIndex {
     return index.fieldsFor(owner);
   }
 }
+
+export const authenticationFieldIndexCatalog = new AuthenticationFieldIndexCatalog();

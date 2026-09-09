@@ -59,14 +59,12 @@ export class ApprovedImplicitAuthenticationSubmission<
     const request = this.request;
     const actuationIsSafe = (): boolean => {
       const observation =
-        ApprovedImplicitAuthenticationSubmission.currentOwnedAuthenticationFormObservation(
-          request,
-        );
+        this.currentOwnedAuthenticationFormObservation();
       return Boolean(
         observation &&
-        ApprovedImplicitAuthenticationSubmission.authenticationImplicitSubmitActuationIsSafe(
+        new AuthenticationImplicitActuationEvidence(
           request.factsForObservation(observation),
-        ),
+        ).isSafe(),
       );
     };
     const implicitRequest: Parameters<
@@ -82,13 +80,8 @@ export class ApprovedImplicitAuthenticationSubmission<
       implicitRequest,
     );
   }
-  static currentOwnedAuthenticationFormObservation<
-    Observation extends OwnedFormObservation,
-  >({
-    root,
-    form,
-    observations,
-  }: CurrentOwnedFormObservationRequest<Observation>): Observation | false {
+  private currentOwnedAuthenticationFormObservation(): Observation | false {
+    const { root, form, observations } = this.request;
     const formWithinRoot =
       root === form.ownerDocument ||
       (root instanceof Node && root.contains(form));
@@ -101,9 +94,12 @@ export class ApprovedImplicitAuthenticationSubmission<
       ) || false
     );
   }
-  static authenticationImplicitSubmitActuationIsSafe(
-    facts: AuthenticationPageObservationFacts,
-  ): boolean {
+}
+
+class AuthenticationImplicitActuationEvidence {
+  constructor(private readonly facts: AuthenticationPageObservationFacts) {}
+  isSafe(): boolean {
+    const facts = this.facts;
     const observation: AuthenticationImplicitSubmitActuationObservation = {
       fields: facts.fields,
       ceremony: facts.ceremony,

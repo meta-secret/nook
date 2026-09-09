@@ -17,7 +17,7 @@ import {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
 import { AuthenticationContainerIdentity } from "./password-form-container-identity";
-import { OwnedAuthenticationFieldIndex } from "./password-form-owned-field-index";
+import { authenticationFieldIndexCatalog } from "./password-form-owned-field-index";
 
 void companionWasmReady;
 
@@ -190,7 +190,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       passwordFields: ownedPasswordFields,
       usernameFields: ownedUsernameFields,
       oneTimeCodeFields: ownedOneTimeCodeFields,
-    } = OwnedAuthenticationFieldIndex.fields({
+    } = authenticationFieldIndexCatalog.fields({
       owner,
       passwordFields,
       usernameFields,

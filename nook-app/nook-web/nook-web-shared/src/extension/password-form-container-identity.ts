@@ -21,11 +21,14 @@ export class AuthenticationContainerIdentity {
       .toLowerCase()
       .split(/[^a-z0-9]+/u)
       .filter(Boolean);
-    return AuthenticationContainerIdentity.identityWordsContainAuthentication(
-      words,
-    );
+    return new AuthenticationIdentityWords(words).present;
   }
-  static identityWordsContainAuthentication(words: readonly string[]): boolean {
+}
+
+class AuthenticationIdentityWords {
+  constructor(private readonly words: readonly string[]) {}
+  get present(): boolean {
+    const words = this.words;
     for (let index = 0; index < words.length; index += 1) {
       const word = words[index];
       switch (word) {
