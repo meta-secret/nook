@@ -1,3 +1,5 @@
+import { RepositoryRequestPath } from '../src/lib/repo.ts';
+import assert from 'node:assert/strict';
 import { describe, expect, test } from 'bun:test';
 import {
   DecodeStatus,
@@ -67,19 +69,25 @@ describe('resolveRequestPath', () => {
     const resolveRequestPathArgs: ResolveRequestPathArgs = {
       requestPath: absolute,
     };
-    expect(RepositoryRoot.resolveRequestPath(resolveRequestPathArgs)).toBe(
-      absolute,
-    );
+    const discovery1 = new RepositoryRequestPath(
+      resolveRequestPathArgs,
+    ).resolve();
+    assert(discovery1.isOk());
+    expect(discovery1.value).toBe(absolute);
   });
 
   test('resolves relative paths from repository root', () => {
-    const root = RepositoryRoot.find();
+    const discovery2 = new RepositoryRoot().locate();
+    assert(discovery2.isOk());
+    const root = discovery2.value;
     const relative = 'agentic-ai/loom/package.json';
     const resolvedArgs: ResolveRequestPathArgs = {
       requestPath: relative,
       startDir: `${root}/agentic-ai/loom`,
     };
-    const resolved = RepositoryRoot.resolveRequestPath(resolvedArgs);
+    const discovery3 = new RepositoryRequestPath(resolvedArgs).resolve();
+    assert(discovery3.isOk());
+    const resolved = discovery3.value;
     expect(resolved.endsWith(relative)).toBe(true);
   });
 });

@@ -35,7 +35,9 @@ export class AgentStatisticsCommand {
 
   async execute(): Promise<Result<AgentStatsReport, AgentStatisticsFailure>> {
     const request = this.request;
-    const repoRoot = RepositoryRoot.find();
+    const discovery1 = new RepositoryRoot().locate();
+    if (discovery1.isErr()) return err(discovery1.error);
+    const repoRoot = discovery1.value;
     const scratchPathRequest: ResolveAgentTempPathRequest = {
       repoRoot,
       authoredPath: request.scratchPath,
@@ -98,7 +100,9 @@ export class AgentStatisticsFileCommand {
 
   async validate(): Promise<Result<AgentStatsReport, AgentStatisticsFailure>> {
     const request = this.request;
-    const repoRoot = RepositoryRoot.find();
+    const discovery2 = new RepositoryRoot().locate();
+    if (discovery2.isErr()) return err(discovery2.error);
+    const repoRoot = discovery2.value;
     const statsPathRequest: ResolveAgentTempPathRequest = {
       repoRoot,
       authoredPath: request.statsFile,
@@ -112,7 +116,9 @@ export class AgentStatisticsFileCommand {
 
   async publish(): Promise<Result<AgentStatsReport, AgentStatisticsFailure>> {
     const request = this.request;
-    const repoRoot = RepositoryRoot.find();
+    const discovery3 = new RepositoryRoot().locate();
+    if (discovery3.isErr()) return err(discovery3.error);
+    const repoRoot = discovery3.value;
     const statsPathRequest: ResolveAgentTempPathRequest = {
       repoRoot,
       authoredPath: request.statsFile,

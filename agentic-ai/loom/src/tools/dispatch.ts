@@ -105,8 +105,17 @@ export class LoomRequestDispatch {
     }
 
     if (request.family === RequestFamily.ToolsList) {
+      const discovery = LoomRequestCatalog.listDiscoverableRequests();
+      if (discovery.isErr())
+        return {
+          exitCode: 1,
+          body: LoomRequestDispatch.buildExecuteErrorResponse({
+            request,
+            detail: discovery.error.message,
+          }),
+        };
       const asUntrustedYamlNodeArgs: UntrustedYamlNode = {
-        requests: LoomRequestCatalog.listDiscoverableRequests(),
+        requests: discovery.value,
       };
       const successResponseForFamilyArgs8: SuccessResponseForFamilyArgs = {
         family: RequestFamily.ToolsList,

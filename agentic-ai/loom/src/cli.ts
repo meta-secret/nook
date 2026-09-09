@@ -7,8 +7,7 @@ import {
 } from './codec/example-documents.ts';
 import { YamlDocument } from './codec/yaml.ts';
 import { UntrustedYamlBoundary } from './lib/guards.ts';
-import { RepositoryRoot, BunExecutable } from './lib/repo.ts';
-import { LoomFailure } from './loom-failure.ts';
+import { RepositoryRequestPath, BunExecutable } from './lib/repo.ts';
 import { LoomRequestDispatch } from './tools/dispatch.ts';
 
 import type { ParseCliInvocationArgs } from './cli-invocation.ts';
@@ -42,12 +41,9 @@ export class LoomCli {
 
   private async execute(): Promise<number> {
     const arguments_ = this.request;
-    try {
-      BunExecutable.require();
-    } catch (error) {
-      console.error(
-        error instanceof LoomFailure ? error.message : String(error),
-      );
+    const executable = BunExecutable.discover();
+    if (executable.isErr()) {
+      console.error(executable.error.message);
       return 2;
     }
 
@@ -78,18 +74,15 @@ export class LoomCli {
       return outcome.exitCode;
     }
 
-    let requestPath: string;
-    try {
-      const requestPathArgs: ResolveRequestPathArgs = {
-        requestPath: invocation.requestPath,
-      };
-      requestPath = RepositoryRoot.resolveRequestPath(requestPathArgs);
-    } catch (error) {
-      console.error(
-        error instanceof LoomFailure ? error.message : String(error),
-      );
+    const requestPathArgs: ResolveRequestPathArgs = {
+      requestPath: invocation.requestPath,
+    };
+    const resolved = new RepositoryRequestPath(requestPathArgs).resolve();
+    if (resolved.isErr()) {
+      console.error(resolved.error.message);
       return 2;
     }
+    const requestPath = resolved.value;
 
     const outcome = await LoomRequestDispatch.dispatchRequestFile(requestPath);
     console.log(

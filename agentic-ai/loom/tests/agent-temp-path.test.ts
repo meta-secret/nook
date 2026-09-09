@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -142,7 +143,9 @@ describe('agent temporary paths', () => {
   });
 
   test('resolves the token with the exact task anchor commit', () => {
-    const repoRoot = RepositoryRoot.find();
+    const discovery1 = new RepositoryRoot().locate();
+    assert(discovery1.isOk());
+    const repoRoot = discovery1.value;
     const gitHeadRequest: RunCommandArgs = {
       command: 'git',
       args: ['rev-parse', 'HEAD'],
@@ -182,8 +185,10 @@ describe('agent temporary paths', () => {
   });
 
   test('keeps ordinary paths compatible', () => {
+    const discovery2 = new RepositoryRoot().locate();
+    assert(discovery2.isOk());
     const request: ResolveAgentTempPathRequest = {
-      repoRoot: RepositoryRoot.find(),
+      repoRoot: discovery2.value,
       authoredPath: 'relative/123.yaml',
     };
 

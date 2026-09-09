@@ -1,3 +1,4 @@
+import type { RepositoryDiscoveryFailure } from '../lib/repo.ts';
 import {
   AgentStatisticsFileCommand,
   type AgentStatisticsFailure,
@@ -192,8 +193,13 @@ export class LoomRequestCatalog {
       },
     ];
 
-  static listDiscoverableRequests(): readonly DiscoverableRequest[] {
-    const repoRoot = RepositoryRoot.find();
+  static listDiscoverableRequests(): Result<
+    readonly DiscoverableRequest[],
+    RepositoryDiscoveryFailure
+  > {
+    const discovery1 = new RepositoryRoot().locate();
+    if (discovery1.isErr()) return err(discovery1.error);
+    const repoRoot = discovery1.value;
     const agentTempPathRequest: ResolveAgentTempPathRequest = {
       repoRoot,
       authoredPath: AGENT_TEMP_DIR_TOKEN,
@@ -201,21 +207,27 @@ export class LoomRequestCatalog {
     const agentTempDirectory =
       AgentTemporaryDirectory.resolveAgentTempPath(agentTempPathRequest);
 
-    return LoomRequestCatalog.DISCOVERABLE_DEFINITIONS.map((definition) => {
-      const exampleYaml =
-        LoomRequestCatalog.exampleYamlForDefinition(definition);
-      if (!exampleYaml.includes(AGENT_TEMP_DIR_TOKEN)) {
-        return { ...definition, exampleYaml, resolvedExampleYaml: exampleYaml };
-      }
-      return {
-        ...definition,
-        exampleYaml,
-        resolvedExampleYaml: exampleYaml.replaceAll(
-          AGENT_TEMP_DIR_TOKEN,
-          agentTempDirectory,
-        ),
-      };
-    });
+    return ok(
+      LoomRequestCatalog.DISCOVERABLE_DEFINITIONS.map((definition) => {
+        const exampleYaml =
+          LoomRequestCatalog.exampleYamlForDefinition(definition);
+        if (!exampleYaml.includes(AGENT_TEMP_DIR_TOKEN)) {
+          return {
+            ...definition,
+            exampleYaml,
+            resolvedExampleYaml: exampleYaml,
+          };
+        }
+        return {
+          ...definition,
+          exampleYaml,
+          resolvedExampleYaml: exampleYaml.replaceAll(
+            AGENT_TEMP_DIR_TOKEN,
+            agentTempDirectory,
+          ),
+        };
+      }),
+    );
   }
 
   private static exampleYamlForDefinition(
@@ -263,22 +275,29 @@ export class LoomRequestCatalog {
   > {
     switch (request.family) {
       case RequestFamily.PrePush: {
-        BunExecutable.require();
+        const discovery2 = BunExecutable.discover();
+        if (discovery2.isErr()) return err(discovery2.error);
+        const discovery3 = new RepositoryRoot().locate();
+        if (discovery3.isErr()) return err(discovery3.error);
         return new PrePushCommand({
           request: request.prePush,
-          repoRoot: RepositoryRoot.find(),
+          repoRoot: discovery3.value,
         }).execute();
       }
       case RequestFamily.CortexAudit:
         return CortexAuditCommand.runCortexAudit(request.cortexAudit);
       case RequestFamily.CortexSessionClean:
+        const discovery4 = new RepositoryRoot().locate();
+        if (discovery4.isErr()) return err(discovery4.error);
         return new CortexSessionDirectory({
-          repoRoot: RepositoryRoot.find(),
+          repoRoot: discovery4.value,
         }).clean();
       case RequestFamily.SkillScaffold:
+        const discovery5 = new RepositoryRoot().locate();
+        if (discovery5.isErr()) return err(discovery5.error);
         return new SkillScaffoldCommand({
           request: request.skillScaffold,
-          repoRoot: RepositoryRoot.find(),
+          repoRoot: discovery5.value,
         }).execute();
       case RequestFamily.AgentStats: {
         switch (request.operation) {
@@ -294,23 +313,31 @@ export class LoomRequestCatalog {
       case RequestFamily.PrLand: {
         switch (request.operation) {
           case PrLandOperation.Status:
+            const discovery6 = new RepositoryRoot().locate();
+            if (discovery6.isErr()) return err(discovery6.error);
             return new PullRequestDeliveryCommand({
-              repoRoot: RepositoryRoot.find(),
+              repoRoot: discovery6.value,
               prNumber: request.status.prNumber,
             }).status();
           case PrLandOperation.Validate:
+            const discovery7 = new RepositoryRoot().locate();
+            if (discovery7.isErr()) return err(discovery7.error);
             return new PullRequestValidationCommand({
-              repoRoot: RepositoryRoot.find(),
+              repoRoot: discovery7.value,
               request: request.validate,
             }).execute();
           case PrLandOperation.Ready:
+            const discovery8 = new RepositoryRoot().locate();
+            if (discovery8.isErr()) return err(discovery8.error);
             return new PullRequestDeliveryCommand({
-              repoRoot: RepositoryRoot.find(),
+              repoRoot: discovery8.value,
               prNumber: request.ready.prNumber,
             }).readiness();
           case PrLandOperation.MergeCheck:
+            const discovery9 = new RepositoryRoot().locate();
+            if (discovery9.isErr()) return err(discovery9.error);
             return new PullRequestDeliveryCommand({
-              repoRoot: RepositoryRoot.find(),
+              repoRoot: discovery9.value,
               prNumber: request.mergeCheck.prNumber,
             }).mergeReadiness();
         }

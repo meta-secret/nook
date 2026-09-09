@@ -1,3 +1,4 @@
+import type { RepositoryDiscoveryFailure } from '../lib/repo.ts';
 import type { ExecutableRepositoryFailure } from '../executable-skills/repository.ts';
 import { CortexMarkdownSource } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import { err, ok, type Result } from 'neverthrow';
@@ -103,7 +104,9 @@ export class CortexAuditCommand {
   static async runCortexAuditFromDirectory(
     args: RunCortexAuditFromDirectoryArgs,
   ): Promise<Result<CortexAuditReport, CortexAuditFailure>> {
-    const repoRoot = RepositoryRoot.find(args.startDirectory);
+    const discovery1 = new RepositoryRoot(args.startDirectory).locate();
+    if (discovery1.isErr()) return err(discovery1.error);
+    const repoRoot = discovery1.value;
     const cortexRoot = path.join(repoRoot, '.cortex');
     if (!existsSync(cortexRoot)) {
       const loomFailureDetailArgs: LoomFailureDetailArgs = {
@@ -510,6 +513,7 @@ type IsPersistentCortexMarkdownFileArgs = {
 };
 
 export type CortexAuditFailure =
+  | RepositoryDiscoveryFailure
   | CortexArticleRequestDecodeError
   | CortexDocumentMapFailure
   | ExecutableRepositoryFailure;

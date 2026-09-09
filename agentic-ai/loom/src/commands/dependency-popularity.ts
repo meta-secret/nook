@@ -36,8 +36,10 @@ export class DependencyPopularityCommand {
     const npmPackages: string[] = [];
     const rustCrates: string[] = [];
     if (request.includeRepositoryManifests) {
+      const discovery1 = new RepositoryRoot().locate();
+      if (discovery1.isErr()) return err(discovery1.error);
       const scanned = new RepositoryDependencyInventory(
-        RepositoryRoot.find(),
+        discovery1.value,
       ).scanRepositoryManifests();
       if (scanned.isErr()) return err(scanned.error);
       npmPackages.push(...scanned.value.npmPackages);
