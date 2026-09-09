@@ -4,8 +4,6 @@ use super::{
     AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
 };
-use crate::AuthenticationPageObservation;
-use crate::AuthenticationWorkflowMatch;
 
 #[cfg(test)]
 const MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE: u32 = 20;
@@ -43,7 +41,7 @@ impl AuthenticationWorkflowSnapshot {
 }
 
 impl AuthenticationWorkflowSnapshot {
-    const fn classifier_tuple_matches_contract(self) -> bool {
+    const fn action_matches_workflow_stage(self) -> bool {
         let snapshot = self;
         matches!(
             (snapshot.kind, snapshot.stage, snapshot.action,),
@@ -120,7 +118,7 @@ impl AuthenticationWorkflowSnapshot {
             return false;
         }
 
-        (self).classifier_tuple_matches_contract()
+        (self).action_matches_workflow_stage()
     }
 }
 
@@ -131,9 +129,13 @@ mod tests {
         AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
         AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
         AuthenticationWorkflowStage, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
-        classify_authentication_workflow,
     };
     use super::MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE;
+    use crate::{
+        AuthenticationPilotPresentationCapability, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    };
+    use proptest::prelude::*;
+    use proptest::test_runner::{TestCaseError, TestCaseResult};
 
     #[test]
     fn saved_login_capability_requires_a_complete_login_snapshot() {
@@ -181,157 +183,277 @@ mod tests {
         );
     }
 
-    fn classifier_outputs() -> Vec<(
-        AuthenticationPageObservation,
-        AuthenticationWorkflowSnapshot,
-    )> {
-        let mut outputs = Vec::new();
-        for username_field_count in [0, 1] {
-            for current_password_field_count in [0, 1] {
-                for new_password_field_count in [0, 1] {
-                    for generic_password_field_count in [0, 1, 2] {
-                        for one_time_code_field_count in [0, 1] {
-                            for manual_checkpoint_present in [false, true] {
-                                for authenticator_setup_hint in [false, true] {
-                                    for backup_codes_hint in [false, true] {
-                                        for passkey_control_present in [false, true] {
-                                            for matching_passkey_account_count in [0, 1] {
-                                                let observation = AuthenticationPageObservation {
-                                                    username_field_count: username_field_count
-                                                        .into(),
-                                                    current_password_field_count:
-                                                        current_password_field_count.into(),
-                                                    new_password_field_count:
-                                                        new_password_field_count.into(),
-                                                    generic_password_field_count:
-                                                        generic_password_field_count.into(),
-                                                    one_time_code_field_count:
-                                                        one_time_code_field_count.into(),
-                                                    manual_checkpoint_present,
-                                                    authenticator_setup_hint,
-                                                    backup_codes_hint,
-                                                    passkey_control_present,
-                                                    matching_passkey_account_count:
-                                                        matching_passkey_account_count.into(),
-                                                };
-                                                if let AuthenticationWorkflowMatch::Matched(
-                                                    snapshot,
-                                                ) =
-                                                    (observation).classify_authentication_workflow()
-                                                {
-                                                    outputs.push((observation, snapshot));
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        outputs
+    #[derive(Clone, Debug)]
+    struct WorkflowObservationCase {
+        observation: AuthenticationPageObservation,
     }
 
-    #[test]
-    fn every_classifier_snapshot_satisfies_the_wire_contract() {
-        for (_, snapshot) in classifier_outputs() {
-            assert!(
-                snapshot.matches_classifier_contract(),
-                "classifier produced an invalid snapshot: {snapshot:?}",
+    impl WorkflowObservationCase {
+        fn bounded_strategy() -> BoxedStrategy<Self> {
+            let count = prop_oneof![
+                6 => 0_u32..=2,
+                1 => Just(MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT),
+            ]
+            .boxed();
+            // Generate valid totals independently of the admission code under test.
+            let passwords = prop_oneof![
+                6 => (0_u32..=2, 0_u32..=2, 0_u32..=2),
+                1 => (
+                    0_u32..=MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 3,
+                    0_u32..=MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 3,
+                    0_u32..=MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 3,
+                ),
+                1 => Just((MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, 0, 0)),
+                1 => Just((0, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, 0)),
+                1 => Just((0, 0, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)),
+            ];
+            (
+                count.clone(),
+                passwords,
+                count.clone(),
+                count,
+                (any::<bool>(), any::<bool>(), any::<bool>(), any::<bool>()),
+            )
+                .prop_map(
+                    |(
+                        username,
+                        (current, new, generic),
+                        otp,
+                        accounts,
+                        (manual, setup, backup, passkey),
+                    )| {
+                        Self {
+                            observation: AuthenticationPageObservation {
+                                username_field_count: username.into(),
+                                current_password_field_count: current.into(),
+                                new_password_field_count: new.into(),
+                                generic_password_field_count: generic.into(),
+                                one_time_code_field_count: otp.into(),
+                                matching_passkey_account_count: accounts.into(),
+                                manual_checkpoint_present: manual,
+                                authenticator_setup_hint: setup,
+                                backup_codes_hint: backup,
+                                passkey_control_present: passkey,
+                            },
+                        }
+                    },
+                )
+                .boxed()
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct WorkflowBatchCase {
+        observations: Vec<AuthenticationPageObservation>,
+    }
+
+    impl WorkflowBatchCase {
+        fn strategy(lengths: std::ops::Range<usize>) -> BoxedStrategy<Self> {
+            proptest::collection::vec(WorkflowObservationCase::bounded_strategy(), lengths)
+                .prop_map(|cases| Self {
+                    observations: cases.into_iter().map(|case| case.observation).collect(),
+                })
+                .boxed()
+        }
+
+        fn classify(&self) -> AuthenticationWorkflowMatch {
+            AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+                &self.observations,
+            )
+        }
+
+        fn admit_wire(
+            snapshot: AuthenticationWorkflowSnapshot,
+        ) -> Result<AuthenticationWorkflowSnapshot, String> {
+            let serialized = serde_json::to_value(snapshot).map_err(|error| error.to_string())?;
+            let wire: crate::AuthenticationWorkflowSnapshotWire =
+                serde_json::from_value(serialized).map_err(|error| error.to_string())?;
+            AuthenticationWorkflowSnapshot::try_from(wire).map_err(|error| error.to_string())
+        }
+
+        fn assert_emitted_invariants(&self) -> TestCaseResult {
+            let selected = self.classify();
+            prop_assert!(!matches!(selected, AuthenticationWorkflowMatch::Rejected));
+            let AuthenticationWorkflowMatch::Matched(snapshot) = selected else {
+                return Ok(());
+            };
+            let index = u32::from(snapshot.observation_index) as usize;
+            prop_assert!(index < self.observations.len());
+            let mut source = self.observations[index]
+                .classify_authentication_workflow()
+                .snapshot()
+                .map_err(|error| TestCaseError::fail(error.to_string()))?;
+            source.observation_index = snapshot.observation_index;
+            prop_assert_eq!(snapshot, source);
+            let current = u8::from(snapshot.current_step);
+            let total = u8::from(snapshot.total_steps);
+            prop_assert!(current > 0 && current <= total);
+            match snapshot.action {
+                AuthenticationWorkflowAction::TakeOver => prop_assert_eq!(
+                    snapshot.approval_requirement,
+                    AuthenticationApprovalRequirement::TakeoverRequired
+                ),
+                _ => prop_assert_eq!(
+                    snapshot.approval_requirement,
+                    AuthenticationApprovalRequirement::ExplicitUserApproval
+                ),
+            }
+            let admitted = Self::admit_wire(snapshot).map_err(TestCaseError::fail)?;
+            prop_assert_eq!(admitted, snapshot);
+            Ok(())
+        }
+
+        fn assert_append_stability(&self) -> TestCaseResult {
+            let original = self.classify();
+            prop_assert!(!matches!(original, AuthenticationWorkflowMatch::Rejected));
+            let mut with_empty = self.clone();
+            with_empty
+                .observations
+                .push(AuthenticationPageObservation::default());
+            prop_assert_eq!(with_empty.classify(), original);
+            if let AuthenticationWorkflowMatch::Matched(snapshot) = original {
+                let index = u32::from(snapshot.observation_index) as usize;
+                prop_assert!(index < self.observations.len());
+                let mut with_duplicate = self.clone();
+                with_duplicate.observations.push(self.observations[index]);
+                prop_assert_eq!(with_duplicate.classify(), original);
+            }
+            Ok(())
+        }
+
+        fn assert_invalid_mutations(&self, invalid_index: u32) -> TestCaseResult {
+            let selected = self.classify();
+            prop_assert!(!matches!(selected, AuthenticationWorkflowMatch::Rejected));
+            let AuthenticationWorkflowMatch::Matched(snapshot) = selected else {
+                return Ok(());
+            };
+            // Establish a valid baseline before introducing independently invalid values.
+            prop_assert_eq!(
+                Self::admit_wire(snapshot).map_err(TestCaseError::fail)?,
+                snapshot
             );
+            let mut zero_current = snapshot;
+            zero_current.current_step = 0.into();
+            let mut zero_total = snapshot;
+            zero_total.total_steps = 0.into();
+            let mut outside_batch = snapshot;
+            outside_batch.observation_index = invalid_index.into();
+            let mut opposite_approval = snapshot;
+            opposite_approval.approval_requirement = match snapshot.approval_requirement {
+                AuthenticationApprovalRequirement::ExplicitUserApproval => {
+                    AuthenticationApprovalRequirement::TakeoverRequired
+                }
+                AuthenticationApprovalRequirement::TakeoverRequired => {
+                    AuthenticationApprovalRequirement::ExplicitUserApproval
+                }
+            };
+            for invalid in [zero_current, zero_total, outside_batch, opposite_approval] {
+                prop_assert!(Self::admit_wire(invalid).is_err());
+                prop_assert_eq!(
+                    invalid.saved_login_capability(),
+                    AuthenticationSavedLoginCapability::Unavailable
+                );
+                prop_assert_eq!(
+                    invalid.pilot_presentation_capability(),
+                    AuthenticationPilotPresentationCapability::Hidden
+                );
+            }
+            Ok(())
+        }
+
+        fn overflowing_password_total(current: u32) -> Self {
+            Self {
+                observations: vec![AuthenticationPageObservation {
+                    current_password_field_count: current.into(),
+                    new_password_field_count: (MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT - current
+                        + 1)
+                    .into(),
+                    ..Default::default()
+                }],
+            }
+        }
+
+        fn assert_rejected(&self) -> TestCaseResult {
+            prop_assert_eq!(self.classify(), AuthenticationWorkflowMatch::Rejected);
+            Ok(())
         }
     }
 
-    #[test]
-    fn every_accepted_workflow_tuple_is_classifier_producible() -> anyhow::Result<()> {
-        let outputs = classifier_outputs();
-        let kinds = [
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowKind::Signup,
-            AuthenticationWorkflowKind::PasswordChange,
-            AuthenticationWorkflowKind::TotpChallenge,
-            AuthenticationWorkflowKind::TotpEnrollment,
-            AuthenticationWorkflowKind::Manual,
-        ];
-        let stages = [
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowStage::SecondFactor,
-            AuthenticationWorkflowStage::Verification,
-            AuthenticationWorkflowStage::Setup,
-            AuthenticationWorkflowStage::Recovery,
-            AuthenticationWorkflowStage::Manual,
-        ];
-        let actions = [
-            AuthenticationWorkflowAction::ContinueWithNook,
-            AuthenticationWorkflowAction::GeneratePassword,
-            AuthenticationWorkflowAction::FillTotp,
-            AuthenticationWorkflowAction::EnrollAuthenticator,
-            AuthenticationWorkflowAction::UsePasskey,
-            AuthenticationWorkflowAction::CreatePasskey,
-            AuthenticationWorkflowAction::TakeOver,
-            AuthenticationWorkflowAction::SaveBackupCodes,
-        ];
+    #[derive(Clone, Copy, Debug)]
+    enum OversizedObservationField {
+        Username,
+        CurrentPassword,
+        NewPassword,
+        GenericPassword,
+        OneTimeCode,
+        PasskeyAccounts,
+    }
 
-        for kind in kinds {
-            for stage in stages {
-                for action in actions {
-                    for current_step in 1..=5 {
-                        for total_steps in 1..=5 {
-                            let accepted = AuthenticationWorkflowSnapshot {
-                                kind,
-                                stage,
-                                action,
-                                current_step: current_step.into(),
-                                total_steps: total_steps.into(),
-                                approval_requirement: AuthenticationApprovalRequirement::for_action(
-                                    action,
-                                ),
-                                saved_login_capability: if matches!(
-                                    (kind, stage, action),
-                                    (
-                                        AuthenticationWorkflowKind::Login,
-                                        AuthenticationWorkflowStage::Credentials,
-                                        AuthenticationWorkflowAction::ContinueWithNook,
-                                    )
-                                ) {
-                                    AuthenticationSavedLoginCapability::FillSavedLogin
-                                } else {
-                                    AuthenticationSavedLoginCapability::Unavailable
-                                },
-                                observation_index: 0.into(),
-                            };
-                            if !accepted.matches_classifier_contract() {
-                                continue;
-                            }
-
-                            let Some((observation, _)) =
-                                outputs.iter().find(|(_, produced)| *produced == accepted)
-                            else {
-                                anyhow::bail!(
-                                    "wire contract accepted a tuple the classifier cannot produce: {accepted:?}"
-                                );
-                            };
-
-                            for index in 0..MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS {
-                                let mut observations =
-                                    vec![AuthenticationPageObservation::default(); index];
-                                observations.push(*observation);
-                                let produced =
-                                    AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(&observations)
-                                        .snapshot()?;
-                                let mut expected = accepted;
-                                expected.observation_index = u32::try_from(index)?.into();
-                                assert_eq!(produced, expected);
-                                assert!(produced.matches_classifier_contract());
-                            }
-                        }
-                    }
-                }
-            }
+    impl OversizedObservationField {
+        fn strategy() -> impl Strategy<Value = Self> {
+            prop_oneof![
+                Just(Self::Username),
+                Just(Self::CurrentPassword),
+                Just(Self::NewPassword),
+                Just(Self::GenericPassword),
+                Just(Self::OneTimeCode),
+                Just(Self::PasskeyAccounts)
+            ]
         }
-        Ok(())
+        fn assert_rejected(self, count: u32) -> TestCaseResult {
+            let mut observation = AuthenticationPageObservation::default();
+            match self {
+                Self::Username => observation.username_field_count = count.into(),
+                Self::CurrentPassword => observation.current_password_field_count = count.into(),
+                Self::NewPassword => observation.new_password_field_count = count.into(),
+                Self::GenericPassword => observation.generic_password_field_count = count.into(),
+                Self::OneTimeCode => observation.one_time_code_field_count = count.into(),
+                Self::PasskeyAccounts => observation.matching_passkey_account_count = count.into(),
+            }
+            WorkflowBatchCase {
+                observations: vec![observation],
+            }
+            .assert_rejected()
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn selected_workflows_preserve_source_progress_approval_and_wire_admission(
+            case in WorkflowBatchCase::strategy(1..MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1),
+        ) {
+            case.assert_emitted_invariants()?;
+        }
+
+        #[test]
+        fn irrelevant_or_equal_candidates_do_not_displace_the_first_selection(
+            case in WorkflowBatchCase::strategy(1..MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS),
+        ) {
+            case.assert_append_stability()?;
+        }
+
+        #[test]
+        fn malformed_progress_index_and_approval_cannot_retain_capabilities(
+            case in WorkflowBatchCase::strategy(1..MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1),
+            invalid_index in MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS as u32..=u32::MAX,
+        ) {
+            case.assert_invalid_mutations(invalid_index)?;
+        }
+
+        #[test]
+        fn individually_oversized_observations_are_rejected(
+            field in OversizedObservationField::strategy(),
+            count in MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1..=u32::MAX,
+        ) {
+            field.assert_rejected(count)?;
+        }
+
+        #[test]
+        fn independently_bounded_password_fields_cannot_overflow_the_combined_limit(
+            current in 1_u32..=MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+        ) {
+            WorkflowBatchCase::overflowing_password_total(current).assert_rejected()?;
+        }
     }
 
     #[test]
