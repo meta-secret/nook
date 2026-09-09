@@ -1,3 +1,5 @@
+import { err, type Result } from 'neverthrow'
+import { ExtensionSessionLeaseFailure } from './session-lease'
 import { ActiveExtensionSessionLease } from './session-lease'
 import initNookWasm, {
   configure_vault_application,
@@ -192,14 +194,14 @@ async function activateSession(): Promise<DeviceResult> {
   return deviceResult(activeManager)
 }
 
-function renewSessionExpiry(generation: number): void {
+function renewSessionExpiry(generation: number): Result<void, ExtensionSessionLeaseFailure> {
   if (
     generation !== sessionGeneration ||
     sessionExpirySchedule.kind !== SessionExpiryScheduleKind.Scheduled
   ) {
-    throw new Error(SESSION_LOCKED_ERROR)
+    return err(ExtensionSessionLeaseFailure.Locked)
   }
-  sessionExpirySchedule.lease.renew(generation)
+  return sessionExpirySchedule.lease.renew(generation)
 }
 
 const operationContext: SessionOperationContext = {
@@ -247,7 +249,8 @@ async function handleCompanionIdentityHandoff(
         activeManager,
         message.payload.authorization,
       )
-    renewSessionExpiry(generation)
+    const renewal = renewSessionExpiry(generation)
+    if (renewal.isErr()) return { ok: false, error: renewal.error }
     return { ok: true, response }
   } finally {
     if (!consumed) endpoint.free()

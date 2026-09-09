@@ -1,3 +1,7 @@
+import { err, ok, type Result } from 'neverthrow'
+
+export enum ExtensionSessionLeaseFailure { Locked = 'EXTENSION_SESSION_LOCKED' }
+
 enum ExtensionSessionLeaseKind {
   Active = 'active',
   Expired = 'expired',
@@ -24,16 +28,17 @@ export class ActiveExtensionSessionLease {
   }): ActiveExtensionSessionLease {
     return new ActiveExtensionSessionLease(request)
   }
-  renew(generation: number): void {
+  renew(generation: number): Result<void, ExtensionSessionLeaseFailure> {
     if (
       this.state !== ExtensionSessionLeaseKind.Active ||
       generation !== this.request.generation ||
       Date.now() >= this.deadline
     )
-      throw new Error('EXTENSION_SESSION_LOCKED')
+      return err(ExtensionSessionLeaseFailure.Locked)
     clearTimeout(this.timer)
     this.deadline = Date.now() + this.request.durationMs
     this.timer = setTimeout(() => this.expire(), this.request.durationMs)
+    return ok(undefined)
   }
   stop(): void {
     this.state = ExtensionSessionLeaseKind.Expired

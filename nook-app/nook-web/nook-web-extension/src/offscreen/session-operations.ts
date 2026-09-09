@@ -1,3 +1,5 @@
+import type { Result } from 'neverthrow'
+import type { ExtensionSessionLeaseFailure } from './session-lease'
 import {
   DeviceMode,
   DeviceProtectionStatus,
@@ -55,7 +57,7 @@ export type SessionOperationContext = {
   activateSession: () => Promise<DeviceResult>
   deviceResult: (activeManager: NookVaultManager) => Promise<DeviceResult>
   currentGeneration: () => number
-  renewSessionExpiry: (generation: number) => void
+  renewSessionExpiry: (generation: number) => Result<void, ExtensionSessionLeaseFailure>
   resetOperations: (error: Error) => void
 }
 
@@ -256,7 +258,8 @@ export async function handleSessionMessage({
         expectedDevicePublicKey: payload.expectedDevicePublicKey,
         expectedDeviceSigningPublicKey: payload.expectedDeviceSigningPublicKey,
       })
-      renewSessionExpiry(generation)
+      const renewal = renewSessionExpiry(generation)
+      if (renewal.isErr()) return { ok: false, error: renewal.error }
       return { ok: true, envelope }
     }
     case ExtensionSessionMessageType.ImportVault: {
