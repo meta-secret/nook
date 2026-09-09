@@ -1,3 +1,12 @@
+import { err, ok, type Result } from "neverthrow";
+import { z } from "zod";
+import {
+  OperationalContractSource,
+  OperationalYamlDocument,
+  OperationalShellProbe,
+  OperationalContractFailureKind,
+  type OperationalContractFailure,
+} from "./operational-contract";
 import { resolve } from "node:path";
 
 import { TextContract } from "./text-contract";
@@ -13,136 +22,126 @@ enum DockerCacheSelection {
   WebE2e = "web-e2e",
 }
 
-interface DefaultedDockerActionInput {
-  default: string;
-  description: string;
-  required: false;
-}
-
-interface DockerCacheSelectionInput extends DefaultedDockerActionInput {
-  default: DockerCacheSelection;
-}
-
-interface RequiredDockerActionInput {
-  description: string;
-  required: true;
-}
-
-interface DockerSetupActionInputs {
-  "cache-selection": DockerCacheSelectionInput;
-  "cache-write": DefaultedDockerActionInput;
-  "isolated-cache-write": DefaultedDockerActionInput;
-  "main-cache-only": DefaultedDockerActionInput;
-  "monitor-buildkit-storage": DefaultedDockerActionInput;
-  "registry-host": DefaultedDockerActionInput;
-  "registry-password": RequiredDockerActionInput;
-  "registry-username": RequiredDockerActionInput;
-  "require-e2e-cache": DefaultedDockerActionInput;
-  "sccache-access-key": DefaultedDockerActionInput;
-  "sccache-bucket": DefaultedDockerActionInput;
-  "sccache-endpoint": DefaultedDockerActionInput;
-  "sccache-secret-key": DefaultedDockerActionInput;
-}
-
+const cacheActionSchema = z.object({
+  inputs: z.object({
+    "cache-selection": z.object({ default: z.enum(DockerCacheSelection) }),
+  }),
+  runs: z.object({
+    steps: z.array(
+      z.union([
+        z.object({ name: z.string(), run: z.string() }),
+        z.object({ name: z.string(), uses: z.string() }),
+      ]),
+    ),
+  }),
+});
+type DockerSetupActionRuns = z.infer<typeof cacheActionSchema>["runs"];
 interface DockerSetupRunStep {
   name: string;
   run: string;
 }
 
-interface DockerSetupUsesStep {
-  name: string;
-  uses: string;
-}
-
-type DockerSetupStep = DockerSetupRunStep | DockerSetupUsesStep;
-
-interface DockerSetupActionRuns {
-  steps: DockerSetupStep[];
-  using: "composite";
-}
-
-interface DockerCacheSelectionAction {
-  inputs: DockerSetupActionInputs;
-  runs: DockerSetupActionRuns;
-}
-
 export class DockerCacheSelectionContract {
-  static async assert(root: string): Promise<void> {
-    const action = Bun.YAML.parse(
-      await Bun.file(
-        resolve(root, ".github/actions/nook-docker-setup/action.yml"),
-      ).text(),
-    ) as DockerCacheSelectionAction;
+  constructor(private readonly root: string) {}
+  async assert(): Promise<Result<void, OperationalContractFailure>> {
+    const root = this.root;
+    const source = await new OperationalContractSource(
+      resolve(root, ".github/actions/nook-docker-setup/action.yml"),
+    ).read();
+    if (source.isErr()) return err(source.error);
+    const decoded = new OperationalYamlDocument(source.value).decode(
+      cacheActionSchema,
+    );
+    if (decoded.isErr()) return err(decoded.error);
+    const action = decoded.value;
     const selection = action.inputs["cache-selection"];
     if (selection.default !== DockerCacheSelection.General) {
-      throw new Error("Docker cache selection must default to general");
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "Docker cache selection must default to general",
+      });
     }
-    const script = DockerCacheSelectionContract.selectionStep(action.runs);
-    DockerCacheSelectionContract.assertClosedSet(script.run);
-    DockerCacheSelectionContract.assertHiveProfile(script.run);
+    const script = this.selectionStep(action.runs);
+    if (script.isErr()) return err(script.error);
+    const closed = this.assertClosedSet(script.value.run);
+    if (closed.isErr()) return err(closed.error);
+    return this.assertHiveProfile(script.value.run);
   }
 
-  private static selectionStep(
+  private selectionStep(
     runs: DockerSetupActionRuns,
-  ): DockerSetupRunStep {
+  ): Result<DockerSetupRunStep, OperationalContractFailure> {
     for (const step of runs.steps) {
       if (step.name === "Select hosted BuildKit cache" && "run" in step) {
-        return step;
+        return ok(step);
       }
     }
-    throw new Error("Docker cache selection step is missing");
+    return err({
+      kind: OperationalContractFailureKind.Requirement,
+      message: "Docker cache selection step is missing",
+    });
   }
 
-  private static assertClosedSet(source: string): void {
+  private assertClosedSet(
+    source: string,
+  ): Result<void, OperationalContractFailure> {
     const values = Object.values(DockerCacheSelection);
     const contract = new TextContract({
       label: "Docker cache selection",
       source,
     });
-    contract.requireAll([
+    const admitted = contract.requireAll([
       `general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only) ;;`,
       "cache-selection must be general, native, wasm, wasm-proof, preflight, web-e2e, hive, or connection-only",
     ]);
+    if (admitted.isErr()) return err(admitted.error);
     const start = source.indexOf(
       'cache_selection="${{ inputs.cache-selection }}"',
     );
     const end = source.indexOf('test -n "$NOOK_SELECTED_BUILDER"', start);
     if (start < 0 || end < 0)
-      throw new Error("cache selection validation is missing");
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "cache selection validation is missing",
+      });
     const validation = source.slice(start, end);
     for (const value of [...values, "unknown-cache-selection"]) {
       const probe = validation.replace(
         'cache_selection="${{ inputs.cache-selection }}"',
         `cache_selection=${value}`,
       );
-      const result = Bun.spawnSync({
-        cmd: ["bash"],
-        stdin: new Blob([probe]),
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      const probed = new OperationalShellProbe(probe).execute();
+      if (probed.isErr()) return err(probed.error);
+      const result = probed.value;
       const accepted = result.exitCode === 0;
       if (accepted !== values.includes(value as DockerCacheSelection)) {
-        throw new Error(
-          `Docker cache selection validation failed for ${value}`,
-        );
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `Docker cache selection validation failed for ${value}`,
+        });
       }
     }
+    return ok();
   }
 
-  private static assertHiveProfile(source: string): void {
+  private assertHiveProfile(
+    source: string,
+  ): Result<void, OperationalContractFailure> {
     const profileEnd = source.indexOf(
       'echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1"',
     );
     const hiveStart = source.indexOf('if [ -n "$hive_remote_ref" ]; then');
     if (profileEnd < 0 || hiveStart < profileEnd) {
-      throw new Error("Hive probe must follow bounded profile probes");
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "Hive probe must follow bounded profile probes",
+      });
     }
     const profile = new TextContract({
       label: "Docker non-Hive cache profiles",
       source: source.slice(0, profileEnd),
     });
-    profile.requireAll([
+    const admitted = profile.requireAll([
       "general|native|wasm|wasm-proof)",
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "wasm" ]; then',
@@ -150,6 +149,7 @@ export class DockerCacheSelectionContract {
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then',
       "general|native|wasm|preflight|web-e2e)",
     ]);
+    if (admitted.isErr()) return err(admitted.error);
     const hive = source.slice(hiveStart);
     for (const probe of [
       "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE",
@@ -161,8 +161,12 @@ export class DockerCacheSelectionContract {
       "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE",
     ]) {
       if (hive.includes(probe)) {
-        throw new Error(`Hive cache profile consumes unrelated probe ${probe}`);
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `Hive cache profile consumes unrelated probe ${probe}`,
+        });
       }
     }
+    return ok();
   }
 }

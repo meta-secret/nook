@@ -1,3 +1,10 @@
+import { err, ok, type Result } from "neverthrow";
+import {
+  OperationalContractSource,
+  OperationalCommandProbe,
+  OperationalContractFailureKind,
+  type OperationalContractFailure,
+} from "./operational-contract";
 import { resolve } from "node:path";
 
 import { TextContract } from "./text-contract";
@@ -62,23 +69,29 @@ enum WorkerTokenCleanupCase {
 }
 
 class WorkerTokenCleanupContract {
-  static assert(source: string): void {
+  constructor(private readonly source: string) {}
+  assert(): Result<void, OperationalContractFailure> {
+    const source = this.source;
     const sessionStart = source.indexOf(
       "        {\n          printf '%s\\n' \"$worker_mesh_address\"",
     );
     const sessionEnd = source.indexOf("        token=\n", sessionStart);
     if (sessionStart < 0 || sessionEnd < 0) {
-      throw new Error("k0s worker token-bearing SSH session is missing");
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "k0s worker token-bearing SSH session is missing",
+      });
     }
     const session = new TextContract({
       label: "k0s worker token-bearing SSH session",
       source: source.slice(sessionStart, sessionEnd),
     });
-    session.count({
+    const contractAdmission1 = session.count({
       fragment: 'ssh -o BatchMode=yes -J "$controller_target" "$worker_target"',
       expected: 1,
     });
-    session.requireAll([
+    if (contractAdmission1.isErr()) return err(contractAdmission1.error);
+    const contractAdmission2 = session.requireAll([
       "printf '%s' \"$token\"",
       "IFS= read -r worker_mesh_address",
       'token_temp="$(mktemp)"',
@@ -89,10 +102,14 @@ class WorkerTokenCleanupContract {
       "sudo -n rm -f /etc/k0s/worker-token",
       "sudo -n test ! -e /etc/k0s/worker-token",
     ]);
+    if (contractAdmission2.isErr()) return err(contractAdmission2.error);
     const start = source.indexOf("        cleanup_worker_token() {");
     const end = source.indexOf("        trap cleanup_worker_token EXIT", start);
     if (start < 0 || end < 0) {
-      throw new Error("k0s worker token cleanup function is missing");
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "k0s worker token cleanup function is missing",
+      });
     }
     const cleanupFunction = source.slice(start, end);
     const cases = [
@@ -138,12 +155,14 @@ token_temp=/tmp/nook-worker-token-contract
 trap cleanup_worker_token EXIT
 exit ${scenario.commandStatus}
 `;
-      const result = Bun.spawnSync({
+      const resultResult = new OperationalCommandProbe({
         cmd: ["bash"],
         stdin: new Blob([program]),
         stdout: "pipe",
         stderr: "pipe",
-      });
+      }).execute();
+      if (resultResult.isErr()) return err(resultResult.error);
+      const result = resultResult.value;
       if (
         result.exitCode !== scenario.expectedStatus ||
         result.stdout.toString() !==
@@ -151,7 +170,10 @@ exit ${scenario.commandStatus}
             "remote-delete-attempted\n" +
             "remote-delete-attempted\n"
       ) {
-        throw new Error(`k0s worker token cleanup failed: ${scenario.kind}`);
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `k0s worker token cleanup failed: ${scenario.kind}`,
+        });
       }
       const error = result.stderr.toString();
       if (
@@ -160,24 +182,31 @@ exit ${scenario.commandStatus}
           `token cleanup failed after command status ${scenario.commandStatus}`,
         )
       ) {
-        throw new Error("k0s worker token cleanup failure is not actionable");
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: "k0s worker token cleanup failure is not actionable",
+        });
       }
     }
+    return ok();
   }
 }
 
 class WorkerPreparingTaintContract {
-  static assert(source: string): void {
+  constructor(private readonly source: string) {}
+  assert(): Result<void, OperationalContractFailure> {
+    const source = this.source;
     const contract = new TextContract({
       label: "k0s worker preparing taint",
       source,
     });
-    contract.requireAll([
+    const contractAdmission3 = contract.requireAll([
       'preparing_taint_state="$(jq -r',
       'select(.key == "nook.nokey.sh/arc-build")',
       '.value == "preparing" and .effect == "NoSchedule"',
       "test \"$preparing_taint_state\" = $'1\\t1'",
     ]);
+    if (contractAdmission3.isErr()) return err(contractAdmission3.error);
     const fixtures = new Map([
       [
         PreparingTaintCase.Exact,
@@ -231,7 +260,7 @@ class WorkerPreparingTaintContract {
       [length, map(select(.value == "preparing" and .effect == "NoSchedule")) |
       length] | @tsv`;
     for (const [label, taints] of fixtures) {
-      const result = Bun.spawnSync({
+      const resultResult = new OperationalCommandProbe({
         cmd: [
           "jq",
           "-nr",
@@ -242,18 +271,25 @@ class WorkerPreparingTaintContract {
         ],
         stdout: "pipe",
         stderr: "pipe",
-      });
+      }).execute();
+      if (resultResult.isErr()) return err(resultResult.error);
+      const result = resultResult.value;
       const accepted =
         result.exitCode === 0 && result.stdout.toString().trim() === "1\t1";
       if (accepted !== (label === PreparingTaintCase.Exact)) {
-        throw new Error(`k0s worker preparing taint accepted ${label}`);
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `k0s worker preparing taint accepted ${label}`,
+        });
       }
     }
+    return ok();
   }
 }
 
 class WorkerServiceStateContract {
-  private static readonly resolutions: Record<
+  constructor(private readonly source: string) {}
+  private readonly resolutions: Record<
     WorkerServiceInputState,
     WorkerServiceState
   > = {
@@ -262,7 +298,7 @@ class WorkerServiceStateContract {
     [WorkerServiceInputState.MissingActive]: WorkerServiceState.Invalid,
     [WorkerServiceInputState.MissingInactive]: WorkerServiceState.Fresh,
   };
-  private static readonly reclaimOutcomes: Record<
+  private readonly reclaimOutcomes: Record<
     WorkerReclaimInputState,
     WorkerReclaimOutcome
   > = {
@@ -272,7 +308,8 @@ class WorkerServiceStateContract {
     [WorkerReclaimInputState.ResumedExisting]: WorkerReclaimOutcome.Accepted,
   };
 
-  static assert(source: string): void {
+  assert(): Result<void, OperationalContractFailure> {
+    const source = this.source;
     const fixtures = [
       {
         expected: WorkerServiceState.Active,
@@ -292,9 +329,12 @@ class WorkerServiceStateContract {
       },
     ] as const;
     for (const fixture of fixtures) {
-      const observed = WorkerServiceStateContract.resolve(fixture.input);
+      const observed = this.resolve(fixture.input);
       if (observed !== fixture.expected) {
-        throw new Error("k0s worker service-state transition is unsafe");
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: "k0s worker service-state transition is unsafe",
+        });
       }
     }
     for (const input of [
@@ -302,27 +342,27 @@ class WorkerServiceStateContract {
       WorkerReclaimInputState.FreshExisting,
       WorkerReclaimInputState.ResumedExisting,
     ]) {
-      if (
-        WorkerServiceStateContract.reclaimOutcomes[input] !==
-        WorkerReclaimOutcome.Accepted
-      ) {
-        throw new Error(`k0s worker reclaim rejected ${input}`);
+      if (this.reclaimOutcomes[input] !== WorkerReclaimOutcome.Accepted) {
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `k0s worker reclaim rejected ${input}`,
+        });
       }
     }
     if (
-      WorkerServiceStateContract.reclaimOutcomes[
-        WorkerReclaimInputState.ActiveWithoutUnit
-      ] !== WorkerReclaimOutcome.Rejected
+      this.reclaimOutcomes[WorkerReclaimInputState.ActiveWithoutUnit] !==
+      WorkerReclaimOutcome.Rejected
     ) {
-      throw new Error(
-        "k0s worker reclaim accepted active service without unit",
-      );
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "k0s worker reclaim accepted active service without unit",
+      });
     }
     const contract = new TextContract({
       label: "k0s worker service-state transition",
       source,
     });
-    contract.requireAll([
+    const contractAdmission4 = contract.requireAll([
       "sudo -n systemctl cat k0sworker.service",
       "sudo -n systemctl start k0sworker.service",
       "printf resumed",
@@ -334,20 +374,25 @@ class WorkerServiceStateContract {
       '.metadata.labels["nook.nokey.sh/arc-build"]',
       'if test "$worker_service_state" != fresh; then',
     ]);
-    contract.requireBefore({
+    if (contractAdmission4.isErr()) return err(contractAdmission4.error);
+    const contractAdmission5 = contract.requireBefore({
       first: 'test -n "$node"',
       second:
         "Timed out waiting for $active_workloads terminating ARC workload(s) on $node",
     });
+    if (contractAdmission5.isErr()) return err(contractAdmission5.error);
+    return ok();
   }
 
-  private static resolve(input: WorkerServiceInputState): WorkerServiceState {
-    return WorkerServiceStateContract.resolutions[input];
+  private resolve(input: WorkerServiceInputState): WorkerServiceState {
+    return this.resolutions[input];
   }
 }
 
 class ArcWorkloadDrainContract {
-  static decode(source: string): SelectorDecodeOutcome {
+  constructor(private readonly source: string) {}
+  private decode(): SelectorDecodeOutcome {
+    const source = this.source;
     const selectors = Array.from(
       source.matchAll(/active_workloads=.*?\| jq '([^']+)'/gs),
       (match) => match[1],
@@ -356,10 +401,14 @@ class ArcWorkloadDrainContract {
     return { kind: SelectorDecodeKind.Found, selectors };
   }
 
-  static assert(source: string): void {
-    const outcome = ArcWorkloadDrainContract.decode(source);
+  assert(): Result<void, OperationalContractFailure> {
+    const source = this.source;
+    const outcome = this.decode();
     if (outcome.kind === SelectorDecodeKind.Missing) {
-      throw new Error("k0s worker install workload selectors are missing");
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "k0s worker install workload selectors are missing",
+      });
     }
     const [nonTerminating, allActive] = outcome.selectors;
     const scaleSetPod = {
@@ -404,7 +453,7 @@ class ArcWorkloadDrainContract {
       [RunnerDrainCase.Disappeared, { expected: [0, 0], pods: [] }],
     ] as const);
     for (const [label, fixture] of fixtures) {
-      const selection = Bun.spawnSync({
+      const selectionResult = new OperationalCommandProbe({
         cmd: [
           "jq",
           "-c",
@@ -416,90 +465,120 @@ class ArcWorkloadDrainContract {
         ],
         stdout: "pipe",
         stderr: "pipe",
-      });
+      }).execute();
+      if (selectionResult.isErr()) return err(selectionResult.error);
+      const selection = selectionResult.value;
       if (
         selection.exitCode !== 0 ||
         selection.stdout.toString().trim() !== JSON.stringify(fixture.expected)
       ) {
-        throw new Error(`k0s worker ${label} drain selector failed`);
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `k0s worker ${label} drain selector failed`,
+        });
       }
     }
+    return ok();
   }
 }
 
 export class ArcWorkerRestoreContract {
-  static async assert(root: string): Promise<void> {
-    const workerTasksSource = await Bun.file(
+  constructor(private readonly root: string) {}
+  async assert(): Promise<Result<void, OperationalContractFailure>> {
+    const root = this.root;
+    const workerTasksSourceResult = await new OperationalContractSource(
       resolve(root, "infra/tasks/k0s-workers.yml"),
-    ).text();
-    const restoreTasksSource = await Bun.file(
+    ).read();
+    if (workerTasksSourceResult.isErr())
+      return err(workerTasksSourceResult.error);
+    const workerTasksSource = workerTasksSourceResult.value;
+    const restoreTasksSourceResult = await new OperationalContractSource(
       resolve(root, "infra/tasks/k0s-worker-restore.yml"),
-    ).text();
+    ).read();
+    if (restoreTasksSourceResult.isErr())
+      return err(restoreTasksSourceResult.error);
+    const restoreTasksSource = restoreTasksSourceResult.value;
     const tasksSource = [workerTasksSource, restoreTasksSource].join("\n");
     const tasks = new TextContract({
       label: "k0s worker tasks",
       source: tasksSource,
     });
-    const sync = ArcWorkerRestoreContract.taskSection(
+    const syncResult = this.taskSection(
       tasksSource,
       "k0s:worker:sync",
       "k0s:mesh:ensure",
     );
-    const installSource = ArcWorkerRestoreContract.taskSource(
+    if (syncResult.isErr()) return err(syncResult.error);
+    const sync = syncResult.value;
+    const installSourceResult = this.taskSource(
       restoreTasksSource,
       "k0s:worker:install",
       "k0s:worker:restore",
     );
+    if (installSourceResult.isErr()) return err(installSourceResult.error);
+    const installSource = installSourceResult.value;
     const install = new TextContract({
       label: "k0s:worker:install",
       source: installSource,
     });
-    const restoreSource = ArcWorkerRestoreContract.finalTaskSource(
+    const restoreSourceResult = this.finalTaskSource(
       restoreTasksSource,
       "k0s:worker:restore",
     );
+    if (restoreSourceResult.isErr()) return err(restoreSourceResult.error);
+    const restoreSource = restoreSourceResult.value;
     const restore = new TextContract({
       label: "k0s:worker:restore",
       source: restoreSource,
     });
-    const status = ArcWorkerRestoreContract.taskSection(
+    const statusResult = this.taskSection(
       tasksSource,
       "k0s:worker:status",
       "k0s:worker:deploy",
     );
+    if (statusResult.isErr()) return err(statusResult.error);
+    const status = statusResult.value;
+    const meshSource = await new OperationalContractSource(
+      resolve(root, "infra/k0s/scripts/k0s-worker-mesh-reconcile"),
+    ).read();
+    if (meshSource.isErr()) return err(meshSource.error);
     const mesh = new TextContract({
       label: "k0s fleet worker mesh reconciliation",
-      source: await Bun.file(
-        resolve(root, "infra/k0s/scripts/k0s-worker-mesh-reconcile"),
-      ).text(),
+      source: meshSource.value,
     });
+    const hookSource = await new OperationalContractSource(
+      resolve(root, "infra/k0s/manifests/arc/container-hook.yaml"),
+    ).read();
+    if (hookSource.isErr()) return err(hookSource.error);
     const containerHook = new TextContract({
       label: "ARC browser job container hook",
-      source: await Bun.file(
-        resolve(root, "infra/k0s/manifests/arc/container-hook.yaml"),
-      ).text(),
+      source: hookSource.value,
     });
-    tasks.requireAll([
+    const contractAdmission6 = tasks.requireAll([
       "10.202.0.1",
       "10.202.0.2",
       "INFRA_WORKER_MESH_ADDRESS",
       "nook.nokey.sh/arc-build=preparing:NoSchedule",
     ]);
-    containerHook.requireAll([
+    if (contractAdmission6.isErr()) return err(contractAdmission6.error);
+    const contractAdmission7 = containerHook.requireAll([
       "namespace: arc-runners",
       "nook.nokey.sh/role: arc-job-container",
     ]);
-    sync.requireAll([
+    if (contractAdmission7.isErr()) return err(contractAdmission7.error);
+    const contractAdmission8 = sync.requireAll([
       'controller_target="{{.INFRA_SSH_TARGET}}"',
       'ssh -n -o BatchMode=yes -J "$controller_target" "$worker_target"',
       'ssh -o BatchMode=yes -J "$controller_target" "$worker_target"',
     ]);
-    tasks.count({
+    if (contractAdmission8.isErr()) return err(contractAdmission8.error);
+    const contractAdmission9 = tasks.count({
       fragment:
         'iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"',
       expected: 2,
     });
-    install.requireAll([
+    if (contractAdmission9.isErr()) return err(contractAdmission9.error);
+    const contractAdmission10 = install.requireAll([
       'worker_ssh_user="$(ssh -n -o BatchMode=yes -J "$controller_target"',
       'ssh -o BatchMode=yes -J "$controller_target" "$worker_target" bash -s --',
       'ssh -n -o BatchMode=yes -J "$controller_target" \\',
@@ -528,7 +607,8 @@ export class ArcWorkerRestoreContract {
       "sudo -n test ! -e /etc/k0s/worker-token",
       "token cleanup failed after command status $original_status",
     ]);
-    install.forbidAll([
+    if (contractAdmission10.isErr()) return err(contractAdmission10.error);
+    const contractAdmission11 = install.forbidAll([
       'bash -c "\\$(printf %s',
       "infra/k0s/scripts/k0s-worker-restore-transport",
       ".github/scripts/k0s-worker-restore-transport.ts",
@@ -539,37 +619,56 @@ export class ArcWorkerRestoreContract {
       "delete_worker_token",
       "worker_token_uploaded",
     ]);
-    ArcWorkloadDrainContract.assert(installSource);
-    WorkerServiceStateContract.assert(installSource);
-    WorkerTokenCleanupContract.assert(installSource);
-    WorkerPreparingTaintContract.assert(installSource);
-    install.requireBefore({
+    if (contractAdmission11.isErr()) return err(contractAdmission11.error);
+    const scenarioAdmission27 = new ArcWorkloadDrainContract(
+      installSource,
+    ).assert();
+    if (scenarioAdmission27.isErr()) return err(scenarioAdmission27.error);
+    const scenarioAdmission28 = new WorkerServiceStateContract(
+      installSource,
+    ).assert();
+    if (scenarioAdmission28.isErr()) return err(scenarioAdmission28.error);
+    const scenarioAdmission29 = new WorkerTokenCleanupContract(
+      installSource,
+    ).assert();
+    if (scenarioAdmission29.isErr()) return err(scenarioAdmission29.error);
+    const scenarioAdmission30 = new WorkerPreparingTaintContract(
+      installSource,
+    ).assert();
+    if (scenarioAdmission30.isErr()) return err(scenarioAdmission30.error);
+    const contractAdmission12 = install.requireBefore({
       first: "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
       second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
     });
-    install.requireBefore({
+    if (contractAdmission12.isErr()) return err(contractAdmission12.error);
+    const contractAdmission13 = install.requireBefore({
       first: "Timed out waiting for $active_workloads ARC workload(s) on $node",
       second: 'worker_service_state="$(',
     });
-    install.requireBefore({
+    if (contractAdmission13.isErr()) return err(contractAdmission13.error);
+    const contractAdmission14 = install.requireBefore({
       first: "printf resumed",
       second:
         "Timed out waiting for $active_workloads terminating ARC workload(s) on $node",
     });
-    install.requireBefore({
+    if (contractAdmission14.isErr()) return err(contractAdmission14.error);
+    const contractAdmission15 = install.requireBefore({
       first:
         "Timed out waiting for $active_workloads terminating ARC workload(s) on $node",
       second: 'token="$(ssh -n -o BatchMode=yes "$controller_target"',
     });
-    install.requireBefore({
+    if (contractAdmission15.isErr()) return err(contractAdmission15.error);
+    const contractAdmission16 = install.requireBefore({
       first: 'test -s "$token_temp"',
       second: "sudo -n k0s install worker",
     });
-    install.requireBefore({
+    if (contractAdmission16.isErr()) return err(contractAdmission16.error);
+    const contractAdmission17 = install.requireBefore({
       first: "trap cleanup_worker_token EXIT",
       second: 'cat > "$token_temp"',
     });
-    restore.requireAll([
+    if (contractAdmission17.isErr()) return err(contractAdmission17.error);
+    const contractAdmission18 = restore.requireAll([
       "- task: k0s:worker:install",
       "test \"$(printf '%s\\n' \"$node\" | sed '/^$/d' | wc -l | tr -d ' ')\" = 1",
       'select(.type == "Ready") | .status',
@@ -581,15 +680,23 @@ export class ArcWorkerRestoreContract {
       ".spec.unschedulable // false",
       "test \"$(jq -c '[.spec.taints[]?] | sort_by(.key, .effect, .value)'",
     ]);
-    WorkerPreparingTaintContract.assert(restoreSource);
+    if (contractAdmission18.isErr()) return err(contractAdmission18.error);
+    const scenarioAdmission31 = new WorkerPreparingTaintContract(
+      restoreSource,
+    ).assert();
+    if (scenarioAdmission31.isErr()) return err(scenarioAdmission31.error);
     for (const first of [
       "- task: k0s:worker:install",
       'select(.type == "Ready") | .status',
       'preserved_taints="$(jq -c',
       "test \"$preparing_taint_state\" = $'1\\t1'",
     ])
-      restore.requireBefore({ first, second: 'kubectl uncordon "$node"' });
-    restore.forbidAll([
+      const contractAdmission19 = restore.requireBefore({
+        first,
+        second: 'kubectl uncordon "$node"',
+      });
+    if (contractAdmission19.isErr()) return err(contractAdmission19.error);
+    const contractAdmission20 = restore.forbidAll([
       "k0s:mesh:ensure",
       "k0s:worker-mesh:reconcile",
       "kata:install",
@@ -597,17 +704,23 @@ export class ArcWorkerRestoreContract {
       "arc:deploy",
       "rollout restart",
     ]);
-    status.requireAll([
+    if (contractAdmission20.isErr()) return err(contractAdmission20.error);
+    const contractAdmission21 = status.requireAll([
       'controller_target="{{.INFRA_SSH_TARGET}}"',
       'ssh -o BatchMode=yes -J "$controller_target" \\',
       "\"{{.INFRA_WORKER_SSH_TARGET}}\" 'bash -s'",
     ]);
-    status.forbid('ssh -o BatchMode=yes "{{.INFRA_WORKER_SSH_TARGET}}"');
-    mesh.count({
+    if (contractAdmission21.isErr()) return err(contractAdmission21.error);
+    const contractAdmission22 = status.forbid(
+      'ssh -o BatchMode=yes "{{.INFRA_WORKER_SSH_TARGET}}"',
+    );
+    if (contractAdmission22.isErr()) return err(contractAdmission22.error);
+    const contractAdmission23 = mesh.count({
       fragment: "sudo -n systemctl restart k0sworker.service",
       expected: 1,
     });
-    mesh.requireAll([
+    if (contractAdmission23.isErr()) return err(contractAdmission23.error);
+    const contractAdmission24 = mesh.requireAll([
       'controller_kubelet_rule=\'    iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"\'',
       "legacy_controller_kubelet_rule='    iifname \"wg-nook\" ip saddr 10.201.0.1 tcp dport 10250 accept'",
       'if test "$controller_kubelet_count" != 1; then',
@@ -630,41 +743,55 @@ export class ArcWorkerRestoreContract {
       "/var/lib/k0s/nook-containerd-auth-clean-invocation",
       'previous_invocation="$invocation"',
     ]);
-    mesh.requireBefore({
+    if (contractAdmission24.isErr()) return err(contractAdmission24.error);
+    const contractAdmission25 = mesh.requireBefore({
       first: 'previous_invocation="$invocation"',
       second: "sudo -n systemctl restart k0sworker.service",
     });
-    mesh.requireBefore({
+    if (contractAdmission25.isErr()) return err(contractAdmission25.error);
+    const contractAdmission26 = mesh.requireBefore({
       first: "sudo -n systemctl restart k0sworker.service",
       second: "k0s worker did not start a clean containerd invocation",
     });
+    if (contractAdmission26.isErr()) return err(contractAdmission26.error);
+    return ok();
   }
 
-  private static taskSection(
+  private taskSection(
     source: string,
     startName: string,
     endName: string,
-  ): TextContract {
-    return new TextContract({
-      label: startName,
-      source: ArcWorkerRestoreContract.taskSource(source, startName, endName),
-    });
+  ): Result<TextContract, OperationalContractFailure> {
+    return this.taskSource(source, startName, endName).map(
+      (section) => new TextContract({ label: startName, source: section }),
+    );
   }
 
-  private static taskSource(
+  private taskSource(
     source: string,
     startName: string,
     endName: string,
-  ): string {
+  ): Result<string, OperationalContractFailure> {
     const start = source.indexOf(`  ${startName}:`);
     const end = source.indexOf(`  ${endName}:`, start);
-    if (start < 0 || end < 0) throw new Error(`${startName} task is missing`);
-    return source.slice(start, end);
+    if (start < 0 || end < 0)
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: `${startName} task is missing`,
+      });
+    return ok(source.slice(start, end));
   }
 
-  private static finalTaskSource(source: string, taskName: string): string {
+  private finalTaskSource(
+    source: string,
+    taskName: string,
+  ): Result<string, OperationalContractFailure> {
     const start = source.indexOf(`  ${taskName}:`);
-    if (start < 0) throw new Error(`${taskName} task is missing`);
-    return source.slice(start);
+    if (start < 0)
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: `${taskName} task is missing`,
+      });
+    return ok(source.slice(start));
   }
 }
