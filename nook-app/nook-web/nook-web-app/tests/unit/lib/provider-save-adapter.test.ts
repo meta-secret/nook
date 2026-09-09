@@ -57,7 +57,6 @@ function providerState(providerType: StorageProviderType): AdapterState {
     providers: [],
     activeVault: { kind: ActiveVaultKind.Open, storeId: 'vault-1' },
     hasActiveVaultStore: true,
-    requireActiveVaultStoreId: () => 'vault-1',
     selectedLoginVault: { kind: LoginVaultSelectionKind.NotSelected },
     hasManager: false,
     requireManager: vi.fn(),

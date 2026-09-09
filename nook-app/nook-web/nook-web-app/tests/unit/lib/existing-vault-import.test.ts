@@ -34,8 +34,6 @@ function lifecycleHarness(authenticated = false) {
     joinEnrollmentPrompt: JoinEnrollmentState.None,
     sentinelCeremonyPrompt: false,
     t: (key: string) => key,
-    requireOauthFileConfig: vi.fn(),
-    requireLocalFolderConfig: vi.fn(),
     clearUnlockedSession: vi.fn(),
     selectVaultForUnlock: vi.fn(async (_storeId: string) => ok(undefined)),
     prepareExistingVaultImportSlot: vi.fn(async () => ok(undefined)),

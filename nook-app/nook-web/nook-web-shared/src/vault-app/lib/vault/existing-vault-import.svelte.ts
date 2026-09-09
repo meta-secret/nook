@@ -10,7 +10,7 @@ import {
   type ExistingVaultImportQueue,
 } from '$lib/vault/creation-queue'
 import type { VaultState } from '$lib/vault.svelte'
-import { prepareExistingVaultProvider } from '$lib/vault/existing-vault-provider.svelte'
+import { ExistingVaultProviderDraft } from '$lib/vault/existing-vault-provider.svelte'
 import {
   ActiveVaultKind,
   LocalVaultCatalogKind,
@@ -56,12 +56,15 @@ export class ExistingVaultImportLifecycle {
 
   remember(storeId: string): void {
     if (this.vault.loginSetup.kind !== LoginSetupKind.Active) return
-    const prepareExistingVaultProviderArgs: Parameters<
-      typeof prepareExistingVaultProvider
-    >[0] = { state: this.vault, setupType: this.vault.loginSetup.providerType }
-    const preparation = prepareExistingVaultProvider(
-      prepareExistingVaultProviderArgs,
-    )
+    const prepared = new ExistingVaultProviderDraft({
+      state: this.vault,
+      setupType: this.vault.loginSetup.providerType,
+    }).prepare()
+    if (prepared.isErr()) {
+      this.vault.errorMsg = this.vault.t(prepared.error.translationKey)
+      return
+    }
+    const preparation = prepared.value
     if (preparation.kind === NookExistingVaultProviderReadiness.MissingOauthFile) {
       this.vault.errorMsg = this.vault.t(I18N_KEYS.ErrorsCloudSyncProviderRequired)
       return

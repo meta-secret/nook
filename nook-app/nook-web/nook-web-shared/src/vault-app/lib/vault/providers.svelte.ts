@@ -435,9 +435,10 @@ export class VaultProviderActions {
     >[0] = {
       snapshot: {
         providers: opts.providers ?? state.providers,
-        activeVaultStoreId: state.hasActiveVaultStore
-          ? activeVaultScope(state.requireActiveVaultStoreId())
-          : unselectedVaultScope(),
+        activeVaultStoreId:
+          state.activeVault.kind === ActiveVaultKind.Open
+            ? activeVaultScope(state.activeVault.storeId)
+            : unselectedVaultScope(),
       },
       mode:
         !opts.replace && state.localVaultPresent
@@ -651,9 +652,10 @@ export class ProviderPersistenceActions {
     const request: ProviderSaveRequest = {
       snapshot: {
         providers: $state.snapshot(state.providers),
-        activeVaultStoreId: state.hasActiveVaultStore
-          ? activeVaultScope(state.requireActiveVaultStoreId())
-          : unselectedVaultScope(),
+        activeVaultStoreId:
+          state.activeVault.kind === ActiveVaultKind.Open
+            ? activeVaultScope(state.activeVault.storeId)
+            : unselectedVaultScope(),
       },
       providerStoreId,
       storageMode: state.storageMode,

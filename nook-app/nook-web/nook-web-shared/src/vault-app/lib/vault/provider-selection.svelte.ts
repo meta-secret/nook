@@ -88,9 +88,10 @@ export class ProviderSelectionActions {
 
   localProvider(): LocalProviderLookup {
     const state = this.state
-    const scope = state.hasActiveVaultStore
-      ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
-      : NookManagerStoreScope.unscoped()
+    const scope =
+      state.activeVault.kind === ActiveVaultKind.Open
+        ? NookManagerStoreScope.scoped(state.activeVault.storeId)
+        : NookManagerStoreScope.unscoped()
     const selection = local_provider_for_active_vault(this.providerSnapshot(), scope)
     scope.free()
     if (selection.state === NookProviderSelectionState.Selected) {
@@ -108,9 +109,10 @@ export class ProviderSelectionActions {
 
   activeProviders(): StorageProvider[] {
     const state = this.state
-    const scope = state.hasActiveVaultStore
-      ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
-      : NookManagerStoreScope.unscoped()
+    const scope =
+      state.activeVault.kind === ActiveVaultKind.Open
+        ? NookManagerStoreScope.scoped(state.activeVault.storeId)
+        : NookManagerStoreScope.unscoped()
     const providers = active_vault_providers(
       this.providerSnapshot(),
       scope,
@@ -121,9 +123,10 @@ export class ProviderSelectionActions {
 
   syncProviders(): StorageProvider[] {
     const state = this.state
-    const scope = state.hasActiveVaultStore
-      ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
-      : NookManagerStoreScope.unscoped()
+    const scope =
+      state.activeVault.kind === ActiveVaultKind.Open
+        ? NookManagerStoreScope.scoped(state.activeVault.storeId)
+        : NookManagerStoreScope.unscoped()
     const providers = sync_providers_for_active_vault(
       this.providerSnapshot(),
       scope,
