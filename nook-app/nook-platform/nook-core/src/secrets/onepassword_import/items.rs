@@ -6,6 +6,7 @@
 //! Ordered vault item conversion and dynamic field interpretation.
 use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{OnePasswordImportError, OnePasswordImportPlan};
+use crate::CreditCardFields;
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
 use serde_json::Value;
@@ -461,15 +462,15 @@ impl OnePasswordVaultItem<'_> {
             primary_url: "",
             policy: OnePasswordMetadataPolicy::OmitCredentials,
         }));
-        CreditCardSecret::from_fields(
-            item.overview.title.trim(),
-            cardholder.trim(),
-            number.trim(),
-            expiration_month.trim(),
-            expiration_year.trim(),
-            cvv.trim(),
-            &notes,
-        )
+        CreditCardSecret::from_fields(CreditCardFields {
+            title: item.overview.title.trim(),
+            cardholder_name: cardholder.trim(),
+            number: number.trim(),
+            expiration_month: expiration_month.trim(),
+            expiration_year: expiration_year.trim(),
+            cvv: cvv.trim(),
+            notes: &notes,
+        })
         .ok()
         .map(SecretValue::CreditCard)
     }

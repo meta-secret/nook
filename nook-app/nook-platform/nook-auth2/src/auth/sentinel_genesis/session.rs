@@ -13,6 +13,10 @@ use super::{
     SentinelGenesisRequest, SentinelGenesisShareDelivery,
 };
 use crate::{
+    BuildMembersRecordsRequest, CreateSentinelRootShareRecordsForRecipientsRequest,
+    SentinelShareEnvelope,
+};
+use crate::{
     DeviceIdentity, DeviceSigningPublicKey, MultiDeviceError, MultiDeviceResult,
     SentinelParticipantCount, SentinelThreshold, StoreId,
 };
@@ -322,9 +326,11 @@ impl ReadySentinelGenesis<'_> {
             })
             .collect::<Vec<_>>();
         let (keys, share_records) =
-            multi_device::create_sentinel_root_share_records_for_recipients(
-                &recipients,
-                session.request.policy.threshold,
+            SentinelShareEnvelope::create_sentinel_root_share_records_for_recipients(
+                CreateSentinelRootShareRecordsForRecipientsRequest {
+                    recipients: &recipients,
+                    threshold: session.request.policy.threshold,
+                },
             )?;
         // Construction is all-or-nothing: only publish the result after every
         // record has parsed and every delivery has been signed.
@@ -369,7 +375,10 @@ impl ReadySentinelGenesis<'_> {
                 })
             })
             .collect::<MultiDeviceResult<Vec<_>>>()?;
-        let mut records = multi_device::build_members_records(&roster, &keys.members_key)?;
+        let mut records = VaultMember::build_members_records(BuildMembersRecordsRequest {
+            roster: &roster,
+            members_key: &keys.members_key,
+        })?;
         records.extend(share_records);
         Ok(SentinelGenesisIssued {
             records,

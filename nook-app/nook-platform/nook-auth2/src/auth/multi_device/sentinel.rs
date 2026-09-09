@@ -1,8 +1,9 @@
+use super::secret_sharing::{IndexedShare, SentinelSecretSplit, SentinelShareThreshold};
+use crate::{AssessConnectAccessRequest, DeviceIsEnrolledRequest, VaultMetaState};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Deserializer, Serialize, de};
 use zeroize::Zeroize;
 
-use super::secret_sharing::{split_secret_bytes, validate_sentinel_threshold};
 use super::{DeviceIdentity, VaultKeys, VaultMetaRecord};
 use crate::auth::slip39;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
@@ -17,9 +18,11 @@ pub use quorum::{SentinelKeyReconstruction, SentinelShareOpening};
 
 pub const SENTINEL_SHARE_RECORD_PREFIX: &str = "sentinel_share:";
 
-#[must_use]
-pub fn sentinel_share_record_key(device_id: &DeviceId) -> String {
-    format!("{SENTINEL_SHARE_RECORD_PREFIX}{device_id}")
+impl DeviceId {
+    #[must_use]
+    pub fn sentinel_share_record_key(device_id: &DeviceId) -> String {
+        format!("{SENTINEL_SHARE_RECORD_PREFIX}{device_id}")
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -94,27 +97,62 @@ struct SentinelVaultKeysPlaintext {
     members_key: String,
 }
 
-pub fn parse_sentinel_share_envelope(value: &str) -> MultiDeviceResult<SentinelShareEnvelope> {
-    serde_json::from_str(value).map_err(MultiDeviceError::SentinelShareJson)
+/// Named values required by SentinelShareEnvelope::create_sentinel_share_records.
+pub struct CreateSentinelShareRecordsRequest<'a> {
+    pub keys: &'a VaultKeys,
+    pub participants: &'a [DeviceIdentity],
+    pub threshold: SentinelThreshold,
 }
 
-pub fn is_sentinel_share_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
-    Ok(matches!(
-        VaultMetaRecord::classify(record)?,
-        VaultMetaRecord::SentinelShare(..)
-    ))
+/// Named values required by SentinelShareEnvelope::create_sentinel_share_records_for_recipients.
+pub struct CreateSentinelShareRecordsForRecipientsRequest<'a> {
+    pub keys: &'a VaultKeys,
+    pub recipients: &'a [(DeviceId, DevicePublicKey)],
+    pub threshold: SentinelThreshold,
 }
 
-pub fn create_sentinel_share_records(
-    keys: &VaultKeys,
-    participants: &[DeviceIdentity],
-    threshold: SentinelThreshold,
-) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
-    let recipients: Vec<(DeviceId, DevicePublicKey)> = participants
-        .iter()
-        .map(|participant| (participant.device_id().clone(), participant.public_key()))
-        .collect();
-    create_sentinel_share_records_for_recipients(keys, &recipients, threshold)
+/// Named values required by SentinelShareEnvelope::create_sentinel_root_share_records_for_recipients.
+pub struct CreateSentinelRootShareRecordsForRecipientsRequest<'a> {
+    pub recipients: &'a [(DeviceId, DevicePublicKey)],
+    pub threshold: SentinelThreshold,
+}
+
+impl SentinelShareEnvelope {
+    pub fn parse_sentinel_share_envelope(value: &str) -> MultiDeviceResult<SentinelShareEnvelope> {
+        serde_json::from_str(value).map_err(MultiDeviceError::SentinelShareJson)
+    }
+}
+
+impl VaultMetaRecord {
+    pub fn is_sentinel_share_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
+        Ok(matches!(
+            VaultMetaRecord::classify(record)?,
+            VaultMetaRecord::SentinelShare(..)
+        ))
+    }
+}
+
+impl SentinelShareEnvelope {
+    pub fn create_sentinel_share_records(
+        request: CreateSentinelShareRecordsRequest<'_>,
+    ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
+        let CreateSentinelShareRecordsRequest {
+            keys,
+            participants,
+            threshold,
+        } = request;
+        let recipients: Vec<(DeviceId, DevicePublicKey)> = participants
+            .iter()
+            .map(|participant| (participant.device_id().clone(), participant.public_key()))
+            .collect();
+        SentinelShareEnvelope::create_sentinel_share_records_for_recipients(
+            CreateSentinelShareRecordsForRecipientsRequest {
+                keys: keys,
+                recipients: &recipients,
+                threshold: threshold,
+            },
+        )
+    }
 }
 
 /// Split vault keys into threshold shares encrypted to each recipient public key.
@@ -122,108 +160,134 @@ pub fn create_sentinel_share_records(
 /// Interim GF(256) Shamir (byte-wise). Product SLIP-0039 mnemonic shares are
 /// owned by #261 and should replace this once wired; do not invent a second
 /// mnemonic format here.
-pub fn create_sentinel_share_records_for_recipients(
-    keys: &VaultKeys,
-    recipients: &[(DeviceId, DevicePublicKey)],
-    threshold: SentinelThreshold,
-) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
-    let required_participants = SentinelParticipantCount::from(
-        u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?,
-    );
-    validate_sentinel_threshold(threshold.into(), required_participants.into())?;
-    let payload = serde_json::to_vec(&SentinelVaultKeysPlaintext {
-        secrets_key: keys.secrets_key.as_str().to_owned(),
-        members_key: keys.members_key.as_str().to_owned(),
-    })
-    .map_err(MultiDeviceError::SentinelSharePayload)?;
-    let shares = split_secret_bytes(&payload, threshold.into(), required_participants.into())?;
-    recipients
-        .iter()
-        .zip(shares)
-        .map(|((device_id, public_key), share)| {
-            let plaintext = SentinelSharePlaintext {
-                version: SentinelShareVersion::LEGACY,
-                threshold,
-                required_participants,
-                share_index: share.index.into(),
-                share: URL_SAFE_NO_PAD.encode(&share.bytes),
-            };
-            let json =
-                serde_json::to_vec(&plaintext).map_err(MultiDeviceError::SentinelSharePayload)?;
-            let envelope = SentinelShareEnvelope {
-                version: SentinelShareVersion::LEGACY,
-                threshold,
-                required_participants,
-                share_index: share.index.into(),
-                ciphertext: public_key.seal_bytes(&json)?,
-            };
-            VaultMetaRecord::SentinelShare(device_id.clone(), envelope).to_stored()
+impl SentinelShareEnvelope {
+    pub fn create_sentinel_share_records_for_recipients(
+        request: CreateSentinelShareRecordsForRecipientsRequest<'_>,
+    ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
+        let CreateSentinelShareRecordsForRecipientsRequest {
+            keys,
+            recipients,
+            threshold,
+        } = request;
+        let required_participants = SentinelParticipantCount::from(
+            u8::try_from(recipients.len())
+                .map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?,
+        );
+        IndexedShare::validate_sentinel_threshold(SentinelShareThreshold {
+            threshold: threshold.into(),
+            required_participants: required_participants.into(),
+        })?;
+        let payload = serde_json::to_vec(&SentinelVaultKeysPlaintext {
+            secrets_key: keys.secrets_key.as_str().to_owned(),
+            members_key: keys.members_key.as_str().to_owned(),
         })
-        .collect()
+        .map_err(MultiDeviceError::SentinelSharePayload)?;
+        let shares = IndexedShare::split_secret_bytes(SentinelSecretSplit {
+            secret: &payload,
+            threshold: threshold.into(),
+            required_participants: required_participants.into(),
+        })?;
+        recipients
+            .iter()
+            .zip(shares)
+            .map(|((device_id, public_key), share)| {
+                let plaintext = SentinelSharePlaintext {
+                    version: SentinelShareVersion::LEGACY,
+                    threshold,
+                    required_participants,
+                    share_index: share.index.into(),
+                    share: URL_SAFE_NO_PAD.encode(&share.bytes),
+                };
+                let json = serde_json::to_vec(&plaintext)
+                    .map_err(MultiDeviceError::SentinelSharePayload)?;
+                let envelope = SentinelShareEnvelope {
+                    version: SentinelShareVersion::LEGACY,
+                    threshold,
+                    required_participants,
+                    share_index: share.index.into(),
+                    ciphertext: public_key.seal_bytes(&json)?,
+                };
+                VaultMetaRecord::SentinelShare(device_id.clone(), envelope).to_stored()
+            })
+            .collect()
+    }
 }
 
 /// Generate one Sentinel root, derive the explicit vault keys with
 /// domain-separated HKDF, and issue encrypted current-format SLIP-0039 shares
 /// atomically. Version 2 is deliberately distinct from legacy version-1 JSON
 /// key bundles, which remain readable.
-pub fn create_sentinel_root_share_records_for_recipients(
-    recipients: &[(DeviceId, DevicePublicKey)],
-    threshold: SentinelThreshold,
-) -> MultiDeviceResult<(VaultKeys, Vec<StoredSecretRecord>)> {
-    let required_participants = SentinelParticipantCount::from(
-        u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?,
-    );
-    validate_sentinel_threshold(threshold.into(), required_participants.into())?;
-    let mut root = [0_u8; 32];
-    getrandom::fill(&mut root).map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
-    let keys = SentinelVaultKeyDerivation::new(&root).derive()?;
-    let shares = slip39::SentinelSecretSplitRequest::new(
-        &root,
-        threshold.into(),
-        required_participants.into(),
-    )
-    .issue()?;
-    root.zeroize();
-    let records = recipients
-        .iter()
-        .zip(shares)
-        .enumerate()
-        .map(|(offset, ((device_id, public_key), share))| {
-            let share_index = SentinelShareIndex::from(
-                u8::try_from(offset + 1).map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?,
-            );
-            let plaintext = SentinelSharePlaintext {
-                version: SentinelShareVersion::CURRENT,
-                threshold,
-                required_participants,
-                share_index,
-                share,
-            };
-            let json =
-                serde_json::to_vec(&plaintext).map_err(MultiDeviceError::SentinelSharePayload)?;
-            let envelope = SentinelShareEnvelope {
-                version: SentinelShareVersion::CURRENT,
-                threshold,
-                required_participants,
-                share_index,
-                ciphertext: public_key.seal_bytes(&json)?,
-            };
-            VaultMetaRecord::SentinelShare(device_id.clone(), envelope).to_stored()
-        })
-        .collect::<MultiDeviceResult<Vec<_>>>()?;
-    Ok((keys, records))
+impl SentinelShareEnvelope {
+    pub fn create_sentinel_root_share_records_for_recipients(
+        request: CreateSentinelRootShareRecordsForRecipientsRequest<'_>,
+    ) -> MultiDeviceResult<(VaultKeys, Vec<StoredSecretRecord>)> {
+        let CreateSentinelRootShareRecordsForRecipientsRequest {
+            recipients,
+            threshold,
+        } = request;
+        let required_participants = SentinelParticipantCount::from(
+            u8::try_from(recipients.len())
+                .map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?,
+        );
+        IndexedShare::validate_sentinel_threshold(SentinelShareThreshold {
+            threshold: threshold.into(),
+            required_participants: required_participants.into(),
+        })?;
+        let mut root = [0_u8; 32];
+        getrandom::fill(&mut root)
+            .map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
+        let keys = SentinelVaultKeyDerivation::new(&root).derive()?;
+        let shares = slip39::SentinelSecretSplitRequest::new(
+            &root,
+            threshold.into(),
+            required_participants.into(),
+        )
+        .issue()?;
+        root.zeroize();
+        let records = recipients
+            .iter()
+            .zip(shares)
+            .enumerate()
+            .map(|(offset, ((device_id, public_key), share))| {
+                let share_index = SentinelShareIndex::from(
+                    u8::try_from(offset + 1)
+                        .map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?,
+                );
+                let plaintext = SentinelSharePlaintext {
+                    version: SentinelShareVersion::CURRENT,
+                    threshold,
+                    required_participants,
+                    share_index,
+                    share,
+                };
+                let json = serde_json::to_vec(&plaintext)
+                    .map_err(MultiDeviceError::SentinelSharePayload)?;
+                let envelope = SentinelShareEnvelope {
+                    version: SentinelShareVersion::CURRENT,
+                    threshold,
+                    required_participants,
+                    share_index,
+                    ciphertext: public_key.seal_bytes(&json)?,
+                };
+                VaultMetaRecord::SentinelShare(device_id.clone(), envelope).to_stored()
+            })
+            .collect::<MultiDeviceResult<Vec<_>>>()?;
+        Ok((keys, records))
+    }
 }
 
-pub fn count_sentinel_share_records(
-    records: &[StoredSecretRecord],
-) -> MultiDeviceResult<SentinelRecordCount> {
-    let mut count = 0;
-    for record in records {
-        if is_sentinel_share_stored_record(record)? {
-            count += 1;
+impl SentinelShareEnvelope {
+    pub fn count_sentinel_share_records(
+        records: &[StoredSecretRecord],
+    ) -> MultiDeviceResult<SentinelRecordCount> {
+        let mut count = 0;
+        for record in records {
+            if VaultMetaRecord::is_sentinel_share_stored_record(record)? {
+                count += 1;
+            }
         }
+        Ok(count.into())
     }
-    Ok(count.into())
 }
 
 #[cfg(test)]
@@ -245,7 +309,13 @@ mod tests {
             DeviceIdentity::generate()?,
             DeviceIdentity::generate()?,
         ];
-        let records = create_sentinel_share_records(&keys, &identities, 2.into())?;
+        let records = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &identities,
+                threshold: 2.into(),
+            },
+        )?;
         Ok((keys, identities, records))
     }
 
@@ -273,7 +343,7 @@ mod tests {
 
         assert_eq!(records.len(), 3);
         for record in &records {
-            assert!(is_sentinel_share_stored_record(record)?);
+            assert!(VaultMetaRecord::is_sentinel_share_stored_record(record)?);
             assert!(!VaultMetaRecord::is_auth(record)?);
         }
         assert!(VaultRecordView::new(&records).secrets_key(&first).is_err());
@@ -315,9 +385,17 @@ mod tests {
         assert_eq!(reconstructed, keys);
 
         // Share-row enrollment counts as Ready without an auth envelope.
-        assert!(device_is_enrolled(&records, &first)?);
+        assert!(VaultMetaState::device_is_enrolled(
+            DeviceIsEnrolledRequest {
+                records: &records,
+                identity: &first
+            }
+        )?);
         assert_eq!(
-            assess_connect_access(&records, &third)?,
+            VaultMetaState::assess_connect_access(AssessConnectAccessRequest {
+                records: &records,
+                identity: &third
+            })?,
             ConnectAccessStatus::Ready
         );
         assert!(VaultRecordView::new(&records).secrets_key(&first).is_err());

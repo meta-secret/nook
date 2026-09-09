@@ -10,6 +10,7 @@ use super::{
     IdentityReconciliationStore, NookError, PendingIdentityReconciliation,
     PendingIdentityReconciliationProgress,
 };
+use crate::{IdbPutStringRequest, NookDatabase};
 use identity_record::LegacyVaultIdentityInput;
 use nook_core::{
     AgeArmoredCiphertext, AppKey, AuthKeyId, IdentityRecord, IdentityVaultDekEpoch,
@@ -65,7 +66,7 @@ impl IdentityReconciliationStore<'_> {
         } = input;
 
         let Some(raw) =
-            indexed_db::idb_get_string(&IdentityReconciliationStore::new(store_id).key()).await?
+            NookDatabase::idb_get_string(&IdentityReconciliationStore::new(store_id).key()).await?
         else {
             if let (
                 Some(previous_key_epoch),
@@ -199,7 +200,7 @@ impl ResolvedIdentityPersistence {
         } = self;
         let consumed_marker = resolution.consumed_marker;
         let directory_store_id = store_id.clone();
-        let record = identity_record::update_identity_directory(move |directory| {
+        let record = NookDatabase::update_identity_directory(move |directory| {
             let identity_id = directory
                 .import_legacy_vault(
                     &label,
@@ -259,8 +260,8 @@ impl IdentityEpochResolution {
 mod browser_tests {
     use super::{IdentityEpochResolution, ResolvedIdentityPersistence};
     use crate::NookError;
+    use crate::storage::identity_record::IDENTITY_DIRECTORY_KEY;
     use crate::storage::identity_record::reconciliation::IdentityReconciliationStore;
-    use crate::storage::identity_record::{IDENTITY_DIRECTORY_KEY, load_identity_directory};
     use crate::storage::indexed_db;
     use nook_core::{AppKey, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -282,11 +283,11 @@ mod browser_tests {
         }
 
         async fn install(&self) -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
-            indexed_db::idb_put_string(
-                &IdentityReconciliationStore::new(&self.store_id).key(),
-                &self.marker,
-            )
+            NookDatabase::clear_vault_db().await?;
+            NookDatabase::idb_put_string(IdbPutStringRequest {
+                key: &IdentityReconciliationStore::new(&self.store_id).key(),
+                value: &self.marker,
+            })
             .await
         }
 
@@ -310,8 +311,10 @@ mod browser_tests {
 
         async fn assert_marker(&self) -> Result<(), NookError> {
             assert_eq!(
-                indexed_db::idb_get_string(&IdentityReconciliationStore::new(&self.store_id).key())
-                    .await?,
+                NookDatabase::idb_get_string(
+                    &IdentityReconciliationStore::new(&self.store_id).key()
+                )
+                .await?,
                 Some(self.marker.clone())
             );
             Ok(())
@@ -331,7 +334,7 @@ mod browser_tests {
         fixture.install().await?;
         let persisted = fixture.resolved()?.persist().await?;
         fixture.assert_marker().await?;
-        let directory = load_identity_directory().await?;
+        let directory = NookDatabase::load_identity_directory().await?;
         assert!(
             directory
                 .identities()
@@ -341,11 +344,13 @@ mod browser_tests {
         let expected = persisted.record.clone();
         assert_eq!(persisted.complete().await?, expected);
         assert!(
-            indexed_db::idb_get_string(&IdentityReconciliationStore::new(&fixture.store_id).key())
-                .await?
-                .is_none()
+            NookDatabase::idb_get_string(
+                &IdentityReconciliationStore::new(&fixture.store_id).key()
+            )
+            .await?
+            .is_none()
         );
-        indexed_db::clear_vault_db().await
+        NookDatabase::clear_vault_db().await
     }
 
     #[cfg_attr(
@@ -359,19 +364,23 @@ mod browser_tests {
     async fn failed_directory_persistence_preserves_selected_marker() -> Result<(), NookError> {
         let fixture = PersistenceFixture::new()?;
         fixture.install().await?;
-        indexed_db::idb_put_string(IDENTITY_DIRECTORY_KEY, "{malformed").await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: IDENTITY_DIRECTORY_KEY,
+            value: "{malformed",
+        })
+        .await?;
         assert!(matches!(
             fixture.resolved()?.persist().await,
             Err(NookError::IndexedDb(_))
         ));
         fixture.assert_marker().await?;
         assert_eq!(
-            indexed_db::idb_get_string(IDENTITY_DIRECTORY_KEY)
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
                 .await?
                 .as_deref(),
             Some("{malformed")
         );
-        indexed_db::clear_vault_db().await
+        NookDatabase::clear_vault_db().await
     }
 
     #[cfg_attr(
@@ -393,7 +402,7 @@ mod browser_tests {
         }
         fixture.assert_marker().await?;
         assert!(
-            indexed_db::idb_get_string(IDENTITY_DIRECTORY_KEY)
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
                 .await?
                 .is_none()
         );
@@ -406,10 +415,10 @@ mod browser_tests {
         }
         fixture.assert_marker().await?;
         assert!(
-            indexed_db::idb_get_string(IDENTITY_DIRECTORY_KEY)
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
                 .await?
                 .is_some()
         );
-        indexed_db::clear_vault_db().await
+        NookDatabase::clear_vault_db().await
     }
 }

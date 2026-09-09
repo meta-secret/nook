@@ -1,4 +1,5 @@
 use super::{wasm_bindgen, window};
+use nook_core::AppLocale;
 use nook_core::{ClientRunMode, RuntimeConfigValue, VaultRuntimePolicy};
 use wasm_bindgen::JsError;
 
@@ -9,26 +10,28 @@ export type StoreId = string;
 export type PasswordEntryId = string;
 "#;
 
-fn browser_language_tags() -> Vec<String> {
-    let navigator = window().navigator();
-    let mut tags = navigator
-        .languages()
-        .iter()
-        .filter_map(|value| value.as_string())
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .collect::<Vec<_>>();
+impl NookBrowserLocale {
+    fn browser_language_tags() -> Vec<String> {
+        let navigator = window().navigator();
+        let mut tags = navigator
+            .languages()
+            .iter()
+            .filter_map(|value| value.as_string())
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>();
 
-    if tags.is_empty()
-        && let Some(language) = navigator.language()
-    {
-        let language = language.trim();
-        if !language.is_empty() {
-            tags.push(language.to_owned());
+        if tags.is_empty()
+            && let Some(language) = navigator.language()
+        {
+            let language = language.trim();
+            if !language.is_empty() {
+                tags.push(language.to_owned());
+            }
         }
-    }
 
-    tags
+        tags
+    }
 }
 
 #[wasm_bindgen]
@@ -42,7 +45,7 @@ impl NookBrowserLocale {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            language_tags: browser_language_tags(),
+            language_tags: NookBrowserLocale::browser_language_tags(),
         }
     }
 
@@ -62,7 +65,7 @@ impl NookBrowserLocale {
     #[wasm_bindgen]
     #[must_use]
     pub fn app_locale(&self) -> String {
-        nook_core::resolve_app_locale_from_tags(self.language_tags.iter().map(String::as_str))
+        AppLocale::resolve_app_locale_from_tags(self.language_tags.iter().map(String::as_str))
             .to_owned()
     }
 }

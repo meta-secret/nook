@@ -5,9 +5,8 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use super::oauth::ConfigurationText;
-use crate::ProviderRows;
-use crate::StoredICloudShareTarget;
 use crate::{DuplicateProviderSelection, LocalProviderRowRequest};
+use crate::{ProviderRows, StoredICloudShareTarget};
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;

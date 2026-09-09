@@ -17,14 +17,21 @@
 //! `ensure_event_log_ready`, device-identity helpers, vault-key application) stays
 //! in this file because every submodule depends on it.
 
-use crate::logger;
+use crate::AuthProviderDatabase;
+use crate::DriveStorageClient;
+use crate::GitHubStorageClient;
+use crate::LoggerState;
+use crate::NookDatabase;
+use crate::VaultMemberProjectionRequest;
 use crate::storage::local_folder::LocalFolderHandles;
 use crate::storage::{auth_providers, indexed_db};
+use crate::{NookError, logger};
 use nook_core::{
     DeviceIdentity, DeviceIdentitySecret, DriveEventParent, ICloudEventTarget, MultiDeviceError,
     SelfRosterSync, SentinelGenesisPhase, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
     VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite, i18n_keys,
 };
+use nook_core::{EnsureSelfInRosterRequest, VaultMember, VaultMetaState};
 use std::mem;
 mod authenticator_enrollment;
 mod authenticator_fill;
@@ -40,6 +47,7 @@ mod identity_handoff;
 mod local_identity;
 mod login_fill;
 mod login_save;
+mod member_lifecycle;
 mod multi_device;
 mod passkeys;
 mod password;
@@ -76,14 +84,6 @@ pub(in crate::manager) use session::{
     VaultSessionState,
 };
 
-use crate::NookError;
-use crate::conversion::{pending_joins_to_vec, vault_members_to_vec};
-use crate::storage::{
-    drive::verify_drive_access,
-    github::{ensure_github_repo_exists, fetch_github_username},
-    indexed_db::{load_from_indexed_db, save_to_indexed_db},
-};
-use crate::types::{members_to_vec, records_to_vec};
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
@@ -181,7 +181,7 @@ impl NookVaultManager {
     pub async fn set_vault_name(&mut self, name: &str) -> Result<(), JsError> {
         let previous_name = self.vault.vault_name.clone();
         let previous_projection = if self.vault.last_synced_content.trim().is_empty() {
-            load_from_indexed_db()
+            NookDatabase::load_from_indexed_db()
                 .await
                 .map_err(|error| JsError::new(&error.to_string()))?
                 .ok_or_else(|| JsError::new("Vault projection is not initialized."))?
@@ -192,7 +192,9 @@ impl NookVaultManager {
         if let Err(error) = self.persist_vault_change(Vec::new()).await {
             self.vault.vault_name = previous_name;
             self.vault.last_synced_content = previous_projection.clone();
-            if let Err(rollback_error) = save_to_indexed_db(&previous_projection).await {
+            if let Err(rollback_error) =
+                NookDatabase::save_to_indexed_db(&previous_projection).await
+            {
                 return Err(JsError::new(&format!(
                     "{error}; vault-name rollback failed: {rollback_error}"
                 )));
@@ -275,16 +277,16 @@ impl NookVaultManager {
         self.device.extension_handoff_private_key.zeroize();
 
         let mut errors = Vec::new();
-        if let Err(error) = logger::clear_logs_db().await {
+        if let Err(error) = LoggerState::clear_logs_db().await {
             errors.push(error.to_string());
         }
         if let Err(error) = LocalFolderHandles::current().clear().await {
             errors.push(error.to_string());
         }
-        if let Err(error) = auth_providers::clear_auth_providers_db().await {
+        if let Err(error) = AuthProviderDatabase::clear_auth_providers_db().await {
             errors.push(error.to_string());
         }
-        if let Err(error) = indexed_db::clear_vault_db().await {
+        if let Err(error) = NookDatabase::clear_vault_db().await {
             errors.push(error.to_string());
         }
         if errors.is_empty() {
@@ -468,7 +470,7 @@ impl NookVaultManager {
     /// Typed secret list for the active decrypted session.
     pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
         let crypto = self.vault.crypto.get()?;
-        records_to_vec(
+        NookSecretRecord::records_to_vec(
             self.vault
                 .meta
                 .secrets
@@ -483,20 +485,22 @@ impl NookVaultManager {
     }
 
     pub(crate) fn pending_joins(&self) -> Result<Vec<NookJoinRequest>, NookError> {
-        pending_joins_to_vec(&self.stored_records_snapshot())
+        NookJoinRequest::pending_joins_to_vec(&self.stored_records_snapshot())
     }
 
     pub(crate) fn vault_members(&self) -> Result<Vec<NookVaultMember>, NookError> {
-        let roster =
-            vault_members_to_vec(&self.stored_records_snapshot(), &self.vault.members_key)?;
+        let roster = NookVaultMember::vault_members_to_vec(VaultMemberProjectionRequest {
+            records: &self.stored_records_snapshot(),
+            members_key: &self.vault.members_key,
+        })?;
         if roster.len() >= self.vault.meta.enrolled_devices.len() {
             return Ok(roster);
         }
         let mut enrolled = Vec::new();
         for join in self.vault.meta.enrolled_devices.values() {
-            enrolled.push(nook_core::member_from_join(join)?);
+            enrolled.push(VaultMember::member_from_join(join)?);
         }
-        Ok(members_to_vec(enrolled))
+        Ok(NookVaultMember::members_to_vec(enrolled))
     }
 
     pub(in crate::manager) fn serialize_current_projection_yaml(
@@ -606,7 +610,7 @@ impl NookVaultManager {
             self.apply_vault_keys(&secrets_key, &members_key)?;
             return Ok(());
         }
-        if let Some(cache) = load_from_indexed_db().await?
+        if let Some(cache) = NookDatabase::load_from_indexed_db().await?
             && !cache.trim().is_empty()
         {
             let (secrets_key, members_key) =
@@ -626,11 +630,13 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         let records = self.stored_records_snapshot();
         let members_key = self.vault.members_key.clone();
-        if let SelfRosterSync::Updated(member_records) = nook_core::ensure_self_in_roster(
-            &records,
-            identity,
-            &SymmetricKey::parse(&members_key)?,
-        )? {
+        if let SelfRosterSync::Updated(member_records) =
+            VaultMetaState::ensure_self_in_roster(EnsureSelfInRosterRequest {
+                records: &records,
+                identity: identity,
+                members_key: &SymmetricKey::parse(&members_key)?,
+            })?
+        {
             self.vault.meta.replace_member_records(&member_records)?;
         }
         Ok(())
@@ -693,7 +699,9 @@ impl NookVaultManager {
                 self.storage.access_token = nook_core::GithubPat::parse(github_pat)?.to_string();
                 let repo_name = nook_core::GithubRepoName::parse(github_repo_name)?;
                 let _ = self.status.tx.send("GITHUB_USER_FETCH".to_owned());
-                let username = fetch_github_username(&self.storage.access_token).await?;
+                let username = GitHubStorageClient::new(&self.storage.access_token)
+                    .fetch_github_username()
+                    .await?;
                 let new_repo = format!("{}/{}", username, repo_name);
                 if self.storage.remote_ref != new_repo {
                     self.storage.github_root_empty = false;
@@ -703,7 +711,8 @@ impl NookVaultManager {
                 self.storage.drive_event_parent = DriveEventParent::AppDataFolder;
                 self.storage.icloud_event_target = ICloudEventTarget::Private;
                 let _ = self.status.tx.send("GITHUB_REPO_ENSURE".to_owned());
-                ensure_github_repo_exists(&self.storage.access_token, &self.storage.remote_ref)
+                GitHubStorageClient::new(&self.storage.access_token)
+                    .ensure_github_repo_exists(&self.storage.remote_ref)
                     .await?;
             }
             StorageMode::GoogleDrive => {
@@ -714,7 +723,9 @@ impl NookVaultManager {
                 self.storage.drive_event_parent = DriveEventParent::from_storage_id(&known_file_id);
                 self.storage.remote_path = file_name.to_string();
                 let _ = self.status.tx.send("DRIVE_VERIFY".to_owned());
-                verify_drive_access(&self.storage.access_token).await?;
+                DriveStorageClient::new(&self.storage.access_token)
+                    .verify_drive_access()
+                    .await?;
                 // Personal: optional vault yaml file id. Shared: folder id for events.
                 self.storage.remote_ref = match &self.storage.drive_event_parent {
                     DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
@@ -790,7 +801,7 @@ impl NookVaultManager {
         let content = match self.storage.mode {
             StorageMode::Local => {
                 let _ = self.status.tx.send("IDB_LOAD_START".to_owned());
-                let stored = load_from_indexed_db().await?;
+                let stored = NookDatabase::load_from_indexed_db().await?;
                 let _ = self.status.tx.send("IDB_LOAD_SUCCESS".to_owned());
                 stored.unwrap_or_default()
             }

@@ -5,6 +5,7 @@
 )]
 //! Transaction-bound persistence for admitted event graphs.
 use crate::NookError;
+use nook_core::GenesisImportRequest;
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
 mod transaction;
 use transaction::{
@@ -431,7 +432,7 @@ mod browser {
 
     impl StoredEvent {
         fn new(event: VaultEvent) -> anyhow::Result<Self> {
-            let bytes = nook_core::serialize_event_storage_yaml(&event)?.into();
+            let bytes = VaultEvent::serialize_event_storage_yaml(&event)?.into();
             Ok(Self { event, bytes })
         }
 
@@ -459,17 +460,21 @@ mod browser {
             let store_id = nook_core::StoreId::generate()?;
             let (signing, _) = SigningIdentity::generate()?;
             let created_at = IsoTimestamp::parse("2026-08-14T00:00:00Z")?;
-            let genesis = StoredEvent::new(nook_core::build_genesis_import_event(
-                &store_id,
-                &signing.actor_id()?,
-                &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-                GenesisImportPayload {
-                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("00".repeat(32)),
-                    secrets: Vec::new(),
-                    password_entries: Vec::new(),
+            let genesis = StoredEvent::new(VaultEvent::build_genesis_import_event(
+                GenesisImportRequest {
+                    store_id: &store_id,
+                    actor_id: &signing.actor_id()?,
+                    key_epoch: &EventId::parse(
+                        "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
+                    )?,
+                    payload: GenesisImportPayload {
+                        source_content_hash: nook_auth2::Sha256Hex::from_trusted("00".repeat(32)),
+                        secrets: Vec::new(),
+                        password_entries: Vec::new(),
+                    },
+                    created_at: &created_at,
+                    signing_key: signing.signing_key(),
                 },
-                &created_at,
-                signing.signing_key(),
             )?)?;
             let trigger = StoredEvent::new(VaultEvent::sign(
                 VaultEventBody {

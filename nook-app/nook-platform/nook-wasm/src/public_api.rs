@@ -1,7 +1,13 @@
 use super::{NookLocalFolderConfig, NookStorageConnectArgs, passkey_browser, wasm_bindgen};
+use crate::BrowserPasskeyRequestOptions;
+use crate::VaultSessionLock;
 use crate::storage::local_folder::LocalFolderHandles;
 use crate::storage::session;
 use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
+use crate::{
+    BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookOAuthRemoteConfigurationUpdate,
+    NookOAuthRemoteStorageReference, NookStagedStorageArgs, NookTotpCode,
+};
 use nook_core::StagedRemoteConnection;
 use nook_core::{
     PasswordGenerationOptions, StorageProviderType, TotpAlgorithm, TotpDigits, TotpPeriod,
@@ -33,12 +39,16 @@ pub use shared_storage_grant::*;
 #[wasm_bindgen]
 #[must_use]
 pub fn is_vault_session_locked() -> bool {
-    session::is_vault_session_locked()
+    VaultSessionLock::is_vault_session_locked()
 }
 
 #[wasm_bindgen]
 pub fn set_vault_session_locked(locked: bool) {
-    session::set_vault_session_locked(locked);
+    VaultSessionLock::set_vault_session_locked(if locked {
+        VaultSessionLock::Locked
+    } else {
+        VaultSessionLock::Unlocked
+    });
 }
 
 #[wasm_bindgen]
@@ -80,7 +90,11 @@ pub fn build_passkey_prf_request_options(
     credential_id: Vec<u8>,
     prf_input: Vec<u8>,
 ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
-    passkey_browser::request_options(rp_id, &credential_id, &prf_input)
+    BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
+        rp_id: rp_id,
+        credential_id: &credential_id,
+        prf_input: &prf_input,
+    })
 }
 
 #[wasm_bindgen]
@@ -99,14 +113,20 @@ pub fn build_passkey_creation_options(
     user_handle: Vec<u8>,
     prf_input: Vec<u8>,
 ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
-    passkey_browser::creation_options(rp_id, rp_name, passkey_label, &user_handle, &prf_input)
+    BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
+        rp_id: rp_id,
+        rp_name: rp_name,
+        passkey_label: passkey_label,
+        user_handle: &user_handle,
+        prf_input: &prf_input,
+    })
 }
 
 #[wasm_bindgen]
 pub fn build_passkey_recovery_request_options(
     rp_id: &str,
 ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
-    passkey_browser::recovery_options(rp_id)
+    BrowserPasskeyClient::recovery_options(rp_id)
 }
 
 #[wasm_bindgen]
@@ -127,7 +147,7 @@ pub fn default_password_generation_options() -> nook_core::PasswordGenerationOpt
 pub fn generate_password(
     options: nook_core::PasswordGenerationOptions,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::generate_password(options)?)
+    Ok(PasswordGenerationOptions::generate(options)?)
 }
 
 /// Generate an RFC 6238 TOTP code from a base32 secret via `nook-core`.
@@ -143,7 +163,7 @@ pub fn generate_totp_code(
     secret: &str,
     unix_seconds: u64,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(authenticator_from_secret(secret)?
+    Ok(NookTotpCode::authenticator_from_secret(secret)?
         .current_code(unix_seconds.into())
         .map_err(|error| JsError::new(&error.to_string()))?
         .code)
@@ -163,7 +183,7 @@ pub fn verify_totp_code(
     code: &str,
     unix_seconds: u64,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    let authenticator = authenticator_from_secret(secret)?;
+    let authenticator = NookTotpCode::authenticator_from_secret(secret)?;
     let trimmed = code.trim();
     if trimmed.len() < 6 || trimmed.len() > 8 || !trimmed.bytes().all(|b| b.is_ascii_digit()) {
         return Ok(false);
@@ -185,19 +205,21 @@ pub fn verify_totp_code(
     Ok(false)
 }
 
-fn authenticator_from_secret(
-    secret: &str,
-) -> Result<nook_core::AuthenticatorSecret, wasm_bindgen::JsError> {
-    Ok(nook_core::AuthenticatorSecret {
-        issuer: "Nook".to_owned(),
-        account: String::new(),
-        website_url: String::new(),
-        secret: TotpSecret::parse(secret).map_err(|error| JsError::new(&error.to_string()))?,
-        algorithm: TotpAlgorithm::Sha1,
-        digits: TotpDigits::default(),
-        period: TotpPeriod::default(),
-        backup_codes: Vec::new(),
-    })
+impl NookTotpCode {
+    fn authenticator_from_secret(
+        secret: &str,
+    ) -> Result<nook_core::AuthenticatorSecret, wasm_bindgen::JsError> {
+        Ok(nook_core::AuthenticatorSecret {
+            issuer: "Nook".to_owned(),
+            account: String::new(),
+            website_url: String::new(),
+            secret: TotpSecret::parse(secret).map_err(|error| JsError::new(&error.to_string()))?,
+            algorithm: TotpAlgorithm::Sha1,
+            digits: TotpDigits::default(),
+            period: TotpPeriod::default(),
+            backup_codes: Vec::new(),
+        })
+    }
 }
 
 #[wasm_bindgen]
@@ -461,10 +483,10 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     fn public_helpers_project_password_totp_and_provider_credentials() {
-        set_vault_session_locked(true);
-        assert!(is_vault_session_locked());
-        set_vault_session_locked(false);
-        assert!(!is_vault_session_locked());
+        VaultSessionLock::set_vault_session_locked(VaultSessionLock::Locked);
+        assert!(VaultSessionLock::is_vault_session_locked());
+        VaultSessionLock::set_vault_session_locked(VaultSessionLock::Unlocked);
+        assert!(!VaultSessionLock::is_vault_session_locked());
         let _ = is_local_folder_backup_supported();
 
         assert!(generate_id().unwrap().len() > 10);

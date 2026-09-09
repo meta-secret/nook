@@ -5,10 +5,8 @@
 )]
 
 use super::{LocalEventStore, RemoteEventLogClassification};
-use crate::{
-    EventError, EventId, EventResult, EventStorageBytes, StoreId, VaultEvent,
-    parse_remote_event_storage_bytes,
-};
+use crate::GenesisImportRequest;
+use crate::{EventError, EventId, EventResult, EventStorageBytes, StoreId, VaultEvent};
 use std::collections::BTreeSet;
 
 /// A remote envelope with a matching content ID, supported schema and actor signature.
@@ -25,7 +23,7 @@ pub struct CheckedRemoteEvent {
 
 impl CheckedRemoteEvent {
     pub fn parse(event_id: &EventId, bytes: &EventStorageBytes) -> EventResult<Self> {
-        let event = parse_remote_event_storage_bytes(bytes)?;
+        let event = VaultEvent::parse_remote_event_storage_bytes(bytes)?;
         if event.id()? != *event_id {
             return Err(EventError::RemoteEventIdMismatch {
                 event_id: event_id.as_str().to_owned(),
@@ -131,7 +129,7 @@ impl<'a> PreparedRemoteUnion<'a> {
             if local.get_bytes(event_id).is_some() || candidate.get_bytes(event_id).is_some() {
                 continue;
             }
-            let event = parse_remote_event_storage_bytes(bytes)?;
+            let event = VaultEvent::parse_remote_event_storage_bytes(bytes)?;
             if event.id()? != *event_id {
                 return Err(EventError::RemoteEventIdMismatch {
                     event_id: event_id.as_str().to_owned(),
@@ -204,10 +202,7 @@ impl LocalEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        Ed25519Signature, GenesisImportPayload, IsoTimestamp, Sha256Hex,
-        build_genesis_import_event, serialize_event_storage_yaml, test_support,
-    };
+    use crate::{Ed25519Signature, GenesisImportPayload, IsoTimestamp, Sha256Hex, test_support};
 
     const STORE: &str = "store_testtoken11";
 
@@ -219,19 +214,22 @@ mod tests {
     impl RemoteFixture {
         fn new() -> EventResult<Self> {
             let key = test_support::signing_key();
-            let event = build_genesis_import_event(
-                &test_support::store()?,
-                &test_support::actor(&key)?,
-                &test_support::epoch()?,
-                GenesisImportPayload {
+            let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &test_support::store()?,
+                actor_id: &test_support::actor(&key)?,
+                key_epoch: &test_support::epoch()?,
+                payload: GenesisImportPayload {
                     source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                     secrets: Vec::new(),
                     password_entries: Vec::new(),
                 },
-                &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-                &key,
-            )?;
-            let records = vec![(event.id()?, serialize_event_storage_yaml(&event)?)];
+                created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+                signing_key: &key,
+            })?;
+            let records = vec![(
+                event.id()?,
+                VaultEvent::serialize_event_storage_yaml(&event)?,
+            )];
             Ok(Self { event, records })
         }
     }
@@ -321,7 +319,7 @@ mod tests {
         let (id, _) = &fixture.records[0];
         fixture.event.signature =
             Ed25519Signature::from_trusted(format!("ed25519:{}", "00".repeat(64)));
-        let bytes = serialize_event_storage_yaml(&fixture.event)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&fixture.event)?;
         let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
         assert!(matches!(
             CheckedRemoteEvent::parse(&wrong_id, &bytes),

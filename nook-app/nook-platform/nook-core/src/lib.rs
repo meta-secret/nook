@@ -1,5 +1,10 @@
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
@@ -8,6 +13,7 @@
     clippy::missing_panics_doc,
     clippy::uninlined_format_args
 )]
+
 mod auth;
 mod crypto;
 mod errors;
@@ -63,16 +69,14 @@ pub use authenticator_issuer_hosts::{
     AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
 };
 pub use bip39::{
-    Bip39MnemonicWordCount, Bip39WordSequenceExpectedCount, Bip39WordSuggestionLimit,
-    bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
-    is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
-    validate_bip39_mnemonic,
+    Bip39MnemonicWordCount, Bip39WordSequence, Bip39WordSequenceExpectedCount,
+    Bip39WordSuggestionLimit, Bip39WordSuggestions,
 };
 pub use bitwarden_import::{BitwardenExport, BitwardenImportError, BitwardenImportPlan};
 pub use chrome_passwords_import::{
     ChromePasswordsCsvInput, ChromePasswordsImportError, ChromePasswordsImportPlan,
 };
-pub use credit_card::CreditCardSecret;
+pub use credit_card::{CreditCardFields, CreditCardSecret};
 pub use dashlane_import::{DashlaneExport, DashlaneImportError, DashlaneImportPlan};
 pub use database::Database;
 pub use device_key_protection::{
@@ -97,7 +101,7 @@ pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
     ExtensionIdentityHandoffError, MultiDeviceError, PasswordError, SecretPayloadError,
     SessionError, ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
-    VaultRecoveryErrorKind, VaultResult, VaultSyncError, classify_vault_recovery_error,
+    VaultRecoveryErrorKind, VaultResult, VaultSyncError,
 };
 pub use extension_identity_handoff::{
     ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen, ExtensionIdentityHandoffSeal,
@@ -111,13 +115,8 @@ pub use import_support::{SecretImportSourceRecordCount, SecretImportUnsupportedR
 pub use keepassxc_import::{KeePassXcCsvInput, KeePassXcImportError, KeePassXcImportPlan};
 pub use keeper_import::{KeeperCsvInput, KeeperImportError, KeeperImportPlan};
 pub use lastpass_import::{LastPassCsvInput, LastPassImportError, LastPassImportPlan};
+pub use nook_app_common::AppLocale;
 pub use nook_app_common::i18n_keys;
-pub use nook_app_common::{
-    AppLocale, get_translation_catalog, lookup_translation, merge_translation_catalogs,
-    parse_app_locale, resolve_app_locale_from_tag, resolve_app_locale_from_tags,
-    resolve_error_message, resolve_translation_catalog, translate, translate_from_catalog,
-    translate_with_replacements,
-};
 pub use nook_auth2::{
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
     SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection,
@@ -146,18 +145,7 @@ pub use nook_companion_core::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     OAuthOriginSupport, OAuthOriginUnsupportedReason, PageInputFieldObservation, PageInputType,
     VaultHostPolicyError, WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
-    WebsiteLoginMatchAvailabilityWire, WebsitePasskeyProposal,
-    authentication_form_observation_priority, authentication_page_observations_are_valid,
-    belongs_to_sentinel_vault, belongs_to_simple_vault,
-    classify_authentication_backup_codes_observation, classify_authentication_outcome,
-    classify_authentication_workflow, classify_authentication_workflow_candidates,
-    expand_identity_text, extract_backup_code_candidates, has_login_context, is_nook_vault_app_url,
-    is_sentinel_vault_hostname, is_simple_vault_hostname, looks_like_email_verification_body,
-    looks_like_login_advance_control_label, looks_like_manual_checkpoint_label,
-    looks_like_one_time_code_field, looks_like_passkey_control_label, looks_like_username_field,
-    matching_sentinel_vault_base_url, nook_vault_app_exclude_match_patterns,
-    normalize_simple_vault_base_url, page_has_backup_code_hint, propose_website_passkey,
-    sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
+    WebsiteLoginMatchAvailabilityWire, WebsitePasskeyEvidence, WebsitePasskeyProposal,
 };
 pub use nook_companion_core::{
     AuthenticationFieldCount, AuthenticationPasskeyAccountCount,
@@ -186,11 +174,11 @@ pub use secret_types::{
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,
     AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm, LoginHostMatchRequest,
-    LoginSecretForm, LoginSiteHostsError, SecretFormFields, SecretGroupKey, SecretListItem,
-    SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount,
-    WebsiteHost, build_secret_yaml, build_secret_yaml_from_form,
+    LoginSecretForm, LoginSiteHostsError, SecretFormFields, SecretFormJson, SecretGroupKey,
+    SecretListItem, SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm,
+    SeedPhraseWordCount, WebsiteHost,
 };
-pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
+pub use vault_security::{VaultSecurityAssessment, VaultSecurityRecommendations};
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingIssuance, SentinelOnboardingPackage,
     SentinelOnboardingRecipient, SentinelOnboardingVersion,
@@ -230,8 +218,7 @@ pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
     AppId, AppKey, IdentityDirectory, IdentityId, IdentityMember, IdentityRecord,
     IdentitySelection, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
-    IdentityVaultDekReconciliation, IdentityVaultEventId, MemberDekEnvelope, identity_fingerprint,
-    identity_vault_genesis_records,
+    IdentityVaultDekReconciliation, IdentityVaultEventId, MemberDekEnvelope,
 };
 
 pub use multi_device::{
@@ -240,30 +227,23 @@ pub use multi_device::{
     MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync,
     SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareEnvelope,
     SentinelShareOpening, SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord,
-    VaultMetaState, VaultRecordView, assess_connect_access, build_members_records,
-    count_sentinel_share_records, create_sentinel_share_records,
-    create_sentinel_share_records_for_recipients, device_is_enrolled, encrypt_member_entry,
-    ensure_self_in_roster, genesis_members_records, is_sentinel_share_stored_record,
-    member_from_identity, member_from_join, parse_sentinel_share_envelope, pending_join_for_device,
-    rename_vault_member, replace_member_records, resolve_member_roster, revoke_vault_member,
-    roster_add_member, sentinel_share_record_key,
+    VaultMetaState, VaultRecordView,
 };
 
 pub use nook_event_log::{
-    AppendEventInput, CanonicalEventBodyBytes, CheckedRemoteEvent, Ed25519Signature,
-    EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, EpochRecord,
+    AppendEventInput, CanonicalEventBodyBytes, CheckedRemoteEvent, ConcurrentEpochRotations,
+    Ed25519Signature, EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, EpochRecord,
     EpochRotationReason, EpochTransition, EventCount, EventGraph, EventGraphVaultArchitecture,
     EventId, EventInsertStatus, EventPendingReason, EventStorageBytes, GenesisImportPayload,
-    KeyEpoch, LocalEventStore, ObservedHeads, ProjectedSecret, ProjectedSecretLifecycle,
-    ProjectedSecretOrigin, ProjectionEpoch, RemoteEventBatch, RemoteEventLogClassification,
-    RemoteEventWrites, SecretFingerprint, SecretReplacementConflict, SecurityConflict,
-    SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
-    VaultEventSchemaVersion, VaultOperation, VaultProjection, build_genesis_import_event,
-    concurrent_epoch_rotations_conflict, operation_starts_epoch, parse_event_storage_bytes,
-    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
+    GenesisImportRequest, KeyEpoch, LocalEventStore, ObservedHeads, ProjectedSecret,
+    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch, RemoteEventBatch,
+    RemoteEventLogClassification, RemoteEventWrites, SecretFingerprint, SecretReplacementConflict,
+    SecurityConflict, SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
+    VaultEventSchemaVersion, VaultOperation, VaultProjection,
 };
 pub use password::{
-    MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,
+    MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
+    PasswordGenerationOptions,
 };
 pub use password_envelope::{
     PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEntryIssuance, PasswordEntryResolution,
@@ -271,7 +251,8 @@ pub use password_envelope::{
     PasswordEnvelopeRewrap, PasswordEnvelopeVersion, PasswordPolicy, PasswordUnlockEntry,
     VaultUnlock,
 };
-pub use secrets::{filter_secrets, validate_secret_data};
+
+pub use secrets::SecretRecordFilter;
 pub use session::{
     EncryptedSecretSession, PlaintextSecretSession, PreparedEncryptedSecretReplacement,
     ReplaceSecretInput, VerifiedAuthenticatorReplacementInput,
@@ -423,10 +404,12 @@ mod test_support {
         let keys = crate::VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
-        records.extend(genesis_members_records(
-            &identity,
-            &keys.members_key,
-            "2026-06-28T00:00:00Z",
+        records.extend(VaultMember::genesis_members_records(
+            GenesisMembersRecordsRequest {
+                identity: &identity,
+                members_key: &keys.members_key,
+                enrolled_at: "2026-06-28T00:00:00Z",
+            },
         )?);
         let store_id = StoreId::generate()?;
         let yaml = VaultRecordSet::serialize_yaml_with_unlock(
@@ -439,3 +422,41 @@ mod test_support {
         Ok((keys, identity, yaml))
     }
 }
+
+pub use nook_auth2::{
+    AssessConnectAccessRequest, BuildMembersRecordsRequest, DecryptMemberEntryRequest,
+    DeviceIsEnrolledRequest, EncryptMemberEntryRequest, EnsureSelfInRosterRequest,
+    GenesisMembersRecordsRequest, IdentityVaultGenesisRecordsRequest, MemberFromIdentityRequest,
+    PendingJoinForDeviceRequest, RenameVaultMemberRequest, ReplaceMemberRecordsRequest,
+    ResolveMemberRosterRequest, RevokeVaultMemberRequest,
+};
+
+pub use nook_auth2::RosterAddMemberRequest;
+
+pub use nook_auth2::{
+    CreateSentinelRootShareRecordsForRecipientsRequest,
+    CreateSentinelShareRecordsForRecipientsRequest, CreateSentinelShareRecordsRequest,
+};
+
+pub use nook_app_common::{
+    LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
+    ResolveTranslationCatalogRequest, TranslateFromCatalogRequest, TranslateRequest,
+    TranslateWithReplacementsRequest, TranslationCatalog,
+};
+
+pub use nook_companion_core::AuthenticationControlText;
+
+pub use nook_companion_core::{
+    AuthenticationRouteActuation, AuthenticationRouteEvidence, AutocompleteTokenQuery,
+    CredentialUpdateRouteEvidence, OneTimeCodeRouteEvidence,
+};
+
+pub use nook_companion_core::PasskeyControlMarking;
+
+pub use nook_companion_core::{
+    AuthenticationBackupCodesEvidence, AuthenticationEnrollmentObservation,
+};
+
+pub use nook_companion_core::BackupCodePageText;
+
+pub use nook_companion_core::{VaultHostObservation, VaultHostPolicy};

@@ -3,6 +3,11 @@
 
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
@@ -20,7 +25,6 @@
 )]
 
 use nook_companion_core::ExtensionConnectScope;
-
 mod application;
 mod conversion;
 mod device_access;
@@ -210,3 +214,116 @@ pub use public_api::*;
 pub use secret_api::*;
 pub use vault_api::*;
 pub use vault_api_local::*;
+
+pub(crate) use storage::NookDatabase;
+
+pub(crate) use storage::indexed_db::{
+    ClearVaultStoreRequest, GuardedKeyringEntryRequest, ReadOptionalStringFromStoreRequest,
+    SecretSearchBucketKeyRequest,
+};
+
+pub(crate) use storage::indexed_db::{
+    IdbPutStringRequest, ImportVaultBlobRequest, PutWrappedDeviceIdentityRequest,
+    ReadStringPreferringRequest, SaveSecretSearchCatalogBucketsRequest, SaveVaultBlobRequest,
+    SaveWrappedDeviceIdentityRequest, SetLocalVaultLabelRequest, UpsertRegistryEntryRequest,
+};
+
+pub(crate) use storage::indexed_db::{
+    IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate,
+};
+
+pub(crate) use conversion::BrowserTimestamp;
+
+pub(crate) use conversion::{
+    LoadedVaultUnlockRequest, SyncResultSessionRequest, VaultMemberProjectionRequest,
+    VaultMemberRecordsRequest,
+};
+
+pub(crate) use storage::event_db::{
+    EventDbAppendOutboxIndex, EventDbEventKey, EventDbLoadLocalEventStoreFromStore,
+    EventDbOutboxKey, EventDbQueueOutboxEntry, EventDbRemoveEventFixture, EventDbRemoveOutboxEntry,
+    EventDbSaveEventBytes, EventDbSaveEventBytesToStore, EventDbSaveHeads, EventDbSaveKeyEpoch,
+    EventDbStoreDelete, EventDbStoreGet, EventDbStorePut, EventDbVaultPut,
+};
+
+pub(crate) use storage::identity_record::{
+    IdentityDbEnsureLocalIdentityForAppKey, IdentityDbEnsureLocalIdentityInDirectory,
+    IdentityDbGenerateVaultDekForIdentity, IdentityDbLocalKeyringEntryForAppIdFromStore,
+    IdentityDbMigrateDirectory, IdentityDbMigrateDirectoryInStore, IdentityDbPersistPendingGenesis,
+    IdentityDbSaveNewProtectedLocalIdentity, IdentityDbSaveProtectedLocalIdentity,
+    IdentityDbSetIdentityMemberSigningPublicKey, IdentityDbValidateVaultIdentityEnrollment,
+    IdentityDbWriteIdentityDirectory,
+};
+
+pub(crate) use storage::identity_record::{
+    KeyringDbEntryForAppIdFromStore, KeyringDbKeyringDeleteKey, KeyringDbKeyringReadString,
+    KeyringDbLoadKeyringForStore, KeyringDbValidateKeyringDirectoryBinding, KeyringDbWriteKeyring,
+};
+
+pub(crate) use storage::indexed_db::{
+    SentinelDbLoadSentinelGenesisShareDelivery, SentinelDbSaveSentinelGenesisShareDelivery,
+    SentinelDbSentinelGenesisShareKey,
+};
+
+pub(crate) use storage::auth_providers::{
+    AuthProviderDatabase, ProviderDbLegacySnapshotBelongsToIdentity, ProviderDbProjectionsMatch,
+    ProviderDbReadRawSnapshotFromStore, ProviderDbRequireCompatibleLegacySnapshot,
+    ProviderDbWriteSnapshotAt,
+};
+
+pub(crate) use passkey_browser::{
+    BrowserPasskeyBytesFromBuffer, BrowserPasskeyClient, BrowserPasskeyCreationOptions,
+    BrowserPasskeyCreationOptionsStruct, BrowserPasskeyCredentialCeremonyError,
+    BrowserPasskeyCredentialCeremonyErrorMessage, BrowserPasskeyCredentialFromPromise,
+    BrowserPasskeyGetOptionalArray, BrowserPasskeyGetOptionalBool, BrowserPasskeyGetOptionalBuffer,
+    BrowserPasskeyGetOptionalObject, BrowserPasskeyGetRequiredObject, BrowserPasskeyJsErrorText,
+    BrowserPasskeyPasskeyLabelWithDeviceId, BrowserPasskeyPasskeyLabelWithPasskeyHandle,
+    BrowserPasskeyPrfExtension, BrowserPasskeyPrfOutput, BrowserPasskeyRecoveryOptionsStruct,
+    BrowserPasskeyRequestOptions, BrowserPasskeyRequestOptionsStruct,
+    BrowserPasskeySetUint8ArrayField, BrowserPasskeySignalCurrentUserDetails,
+    BrowserPasskeyTrySignalCurrentUserDetails,
+};
+
+pub(crate) use passkey_observation::BrowserPasskeyObservation;
+
+pub(crate) use storage::github::{
+    GitHubStorageClient, GitHubStorageClientFetchGithubFileAtPath,
+    GitHubStorageClientFetchGithubVault, GitHubStorageClientGithubDirectoryListing,
+    GitHubStorageClientGithubFileResponse, GitHubStorageClientGithubPutResponse,
+    GitHubStorageClientGithubRepoCheckResult, GitHubStorageClientGithubUsernameResponse,
+    GitHubStorageClientLogGithubApiFailure, GitHubStorageClientWriteGithubTextFile,
+    GitHubVaultFile,
+};
+
+pub(crate) use storage::drive::{DriveStorageClient, DriveStorageClientDriveError};
+
+pub(crate) use storage::drive_shared::{
+    DriveStorageClientCreateFolderProjection, DriveStorageClientShareFolderWithEmail,
+    DriveStorageClientSharedDriveError, DriveStorageClientVerifyFolderProjection,
+};
+
+pub(crate) use storage::extension_state::{
+    ExtensionPairingDatabase, ExtensionPairingReconciliation,
+};
+
+pub(crate) use logger::LoggerState;
+
+pub(crate) use storage::identity_record::LegacyIdentityKeyMigration;
+
+pub(crate) use application::ConfiguredVaultApplication;
+
+pub(crate) use storage::session::VaultSessionLock;
+
+pub(crate) use identity_record::{
+    BrowserDirectorySelectionForSession, BrowserIdentityDirectorySnapshotForSession,
+    BrowserProviderVaultIdentityObservations,
+    BrowserProviderVaultIdentityObservationsFromProjection, BrowserSelectedVaultContextKind,
+    BrowserSelectedVaultCurrentAppGranted,
+};
+
+pub(crate) use device_access::{
+    BrowserDeviceAccessSnapshotForSession, BrowserDeviceAccessSnapshotForSessionWithProtected,
+    BrowserDeviceVaultAccessForIdentity, BrowserVaultAccessRows, BrowserVaultsForIdentity,
+};
+
+pub(crate) use passkey_browser::PasskeyPrfRequirement;

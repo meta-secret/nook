@@ -404,7 +404,7 @@ impl NookWebsiteLoginSavePlan {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use nook_companion_core::{
+    use nook_core::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict,
         AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
         AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,

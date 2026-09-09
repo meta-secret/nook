@@ -1,8 +1,10 @@
+use crate::AuthenticationControlText;
+use crate::CanonicalControlDestination;
+use crate::ControlDestinationEvidence;
 use crate::page_field_classification::{
     AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence,
     PageControlActionability, PageControlOwnership, PageControlSemantics,
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
-    canonicalize_control_destination, expand_identity_text,
 };
 use crate::{
     AuthenticationFieldCount, AuthenticationSemanticSubmitControlCount,
@@ -256,7 +258,7 @@ impl VersionedAuthenticationDisclosureControlObservation {
             || control.semantic_submit_control_count.raw() != 0
             || !control.form_identity.is_empty()
             || !control.machine_identity.is_empty()
-            || expand_identity_text(&control.label) != "sign in"
+            || AuthenticationControlText::new(&control.label).expand_identity_text() != "sign in"
             || !matches!(
                 control.submission_method,
                 PageControlSubmissionMethod::Absent
@@ -268,10 +270,13 @@ impl VersionedAuthenticationDisclosureControlObservation {
         {
             return false;
         }
-        canonicalize_control_destination(&control.source_origin, &control.destination_identity)
-            .is_some_and(|destination| {
-                destination.path_identity == "/login" && destination.route_identity == "/login"
-            })
+        CanonicalControlDestination::canonicalize_control_destination(ControlDestinationEvidence {
+            source_origin: &control.source_origin,
+            destination_identity: &control.destination_identity,
+        })
+        .is_some_and(|destination| {
+            destination.path_identity == "/login" && destination.route_identity == "/login"
+        })
     }
 
     #[cfg(test)]

@@ -4,66 +4,25 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::EventDbAppendOutboxIndex;
+use crate::EventDbQueueOutboxEntry;
+use crate::EventDbRemoveOutboxEntry;
+use crate::EventDbSaveKeyEpoch;
 use crate::storage::event_db::{RemoteEventUnion, VaultEventPersistence};
 use nook_core::{
     CheckedRemoteEvent, EventStorageBytes, MultiDeviceError, ProjectionEpoch, RemoteEventBatch,
-    RemoteEventWrites, StorageMode, VaultCrypto, VaultMetaGraphProjection, VaultType,
+    RemoteEventWrites, StorageMode, VaultCrypto, VaultEvent, VaultMetaGraphProjection, VaultType,
 };
 use std::collections::BTreeSet;
 
 use super::{
     EventId, EventLogStorageRecord, EventLogSyncIssueState, ExternalEventLogRecord,
-    LocalFolderEventWrite, LocalFolderHandles, NookError, NookVaultManager,
-    RemoteEventLogClassification, VaultCryptoState, append_outbox_index, load_from_indexed_db,
-    load_local_event_store, load_outbox, queue_outbox_entry, remove_outbox_entry, save_key_epoch,
+    LocalFolderEventWrite, LocalFolderHandles, NookDatabase, NookError, NookVaultManager,
+    RemoteEventLogClassification, VaultCryptoState,
 };
 
-struct PendingOutboxEvent<'a> {
-    provider_id: &'a str,
-    event_id: EventId,
-    bytes: EventStorageBytes,
-    local_ids: Option<&'a BTreeSet<EventId>>,
-}
-
-struct PublishedOutboxEvent<'a> {
-    provider_id: &'a str,
-    event_id: EventId,
-}
-
-impl PendingOutboxEvent<'_> {
-    fn is_current(&self) -> bool {
-        self.local_ids
-            .is_none_or(|ids| ids.contains(&self.event_id))
-    }
-
-    async fn discard(self) -> Result<(), NookError> {
-        remove_outbox_entry(self.provider_id, self.event_id.as_str()).await
-    }
-}
-
-impl<'a> PendingOutboxEvent<'a> {
-    async fn publish(
-        self,
-        manager: &NookVaultManager,
-    ) -> Result<PublishedOutboxEvent<'a>, NookError> {
-        // Always put-if-absent: a listed remote name may be unreadable junk.
-        manager
-            .put_current_provider_event_if_absent(&self.event_id, self.bytes.as_ref())
-            .await?;
-        Ok(PublishedOutboxEvent {
-            provider_id: self.provider_id,
-            event_id: self.event_id,
-        })
-    }
-}
-
-impl PublishedOutboxEvent<'_> {
-    async fn acknowledge(self) -> Result<EventId, NookError> {
-        remove_outbox_entry(self.provider_id, self.event_id.as_str()).await?;
-        Ok(self.event_id)
-    }
-}
-
+mod outbox;
+use outbox::PendingOutboxEvent;
 impl NookVaultManager {
     async fn persist_projected_key_epoch(
         &mut self,
@@ -73,7 +32,11 @@ impl NookVaultManager {
             return Ok(());
         };
         let next_epoch = key_epoch.as_str().to_owned();
-        save_key_epoch(&self.vault.store_id, &next_epoch).await?;
+        NookDatabase::save_key_epoch(EventDbSaveKeyEpoch {
+            store_id: &self.vault.store_id,
+            epoch: &next_epoch,
+        })
+        .await?;
         self.event_log.key_epoch = next_epoch;
         Ok(())
     }
@@ -126,7 +89,12 @@ impl NookVaultManager {
             }
         };
         let next_epoch = key_epoch.as_str().to_owned();
-        if let Err(error) = save_key_epoch(&self.vault.store_id, &next_epoch).await {
+        if let Err(error) = NookDatabase::save_key_epoch(EventDbSaveKeyEpoch {
+            store_id: &self.vault.store_id,
+            epoch: &next_epoch,
+        })
+        .await
+        {
             self.clear_vault_keys();
             return Err(error);
         }
@@ -150,8 +118,17 @@ impl NookVaultManager {
         } else {
             self.local_cache_ref()
         };
-        queue_outbox_entry(&provider_id, event_id.as_str(), bytes).await?;
-        append_outbox_index(&provider_id, event_id.as_str()).await?;
+        NookDatabase::queue_outbox_entry(EventDbQueueOutboxEntry {
+            provider_id: &provider_id,
+            event_id: event_id.as_str(),
+            bytes: bytes,
+        })
+        .await?;
+        NookDatabase::append_outbox_index(EventDbAppendOutboxIndex {
+            provider_id: &provider_id,
+            event_id: event_id.as_str(),
+        })
+        .await?;
         Ok(())
     }
 
@@ -232,11 +209,12 @@ impl NookVaultManager {
         if self.vault.store_id.trim().is_empty() || remote_ids.is_empty() {
             return Ok(());
         }
-        let local_ids: BTreeSet<EventId> = load_local_event_store(&self.vault.store_id)
-            .await?
-            .event_ids()
-            .into_iter()
-            .collect();
+        let local_ids: BTreeSet<EventId> =
+            NookDatabase::load_local_event_store(&self.vault.store_id)
+                .await?
+                .event_ids()
+                .into_iter()
+                .collect();
         // Already-local remote ids share this store (content-addressed). Only fetch
         // missing ids — foreign-store events never match local ids.
         let missing = remote_ids
@@ -286,14 +264,14 @@ impl NookVaultManager {
             None
         } else {
             Some(
-                load_local_event_store(&self.vault.store_id)
+                NookDatabase::load_local_event_store(&self.vault.store_id)
                     .await?
                     .event_ids()
                     .into_iter()
                     .collect::<BTreeSet<_>>(),
             )
         };
-        let mut pending = load_outbox(&provider_id)
+        let mut pending = NookDatabase::load_outbox(&provider_id)
             .await?
             .into_iter()
             .map(|(event_id, bytes)| Ok((EventId::parse(&event_id)?, bytes.into())))
@@ -315,7 +293,7 @@ impl NookVaultManager {
         }
 
         if !self.vault.store_id.is_empty() {
-            let local = load_local_event_store(&self.vault.store_id).await?;
+            let local = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
             let mut missing = local
                 .missing_event_ids(&remote_ids)
                 .into_iter()
@@ -373,11 +351,12 @@ impl NookVaultManager {
                 .map(|(event_id, bytes, _)| (event_id, bytes))
                 .collect();
         } else {
-            let local_ids: BTreeSet<EventId> = load_local_event_store(&self.vault.store_id)
-                .await?
-                .event_ids()
-                .into_iter()
-                .collect();
+            let local_ids: BTreeSet<EventId> =
+                NookDatabase::load_local_event_store(&self.vault.store_id)
+                    .await?
+                    .event_ids()
+                    .into_iter()
+                    .collect();
             let missing_ids = remote_ids
                 .difference(&local_ids)
                 .cloned()
@@ -396,7 +375,7 @@ impl NookVaultManager {
             }
         }
 
-        let mut local = load_local_event_store(&self.vault.store_id).await?;
+        let mut local = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
         self.persist_merged_remote_events(&mut local, &remote_events, false)
             .await?;
         // Locked sentinel sessions keep share/join meta in memory for ceremony
@@ -469,7 +448,7 @@ impl NookVaultManager {
             .map(|record| {
                 let event_id = EventId::parse(&record.event_id)?;
                 Self::validate_event_record_id(&event_id, &record.event)?;
-                let bytes = nook_core::serialize_event_storage_yaml(&record.event)?;
+                let bytes = VaultEvent::serialize_event_storage_yaml(&record.event)?;
                 Ok((event_id, bytes))
             })
             .collect::<Result<_, nook_core::VaultError>>()?;
@@ -520,7 +499,7 @@ impl NookVaultManager {
         }
 
         if !self.vault.store_id.is_empty() {
-            let mut local = load_local_event_store(&self.vault.store_id).await?;
+            let mut local = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
             self.persist_merged_remote_events(&mut local, &remote_events, true)
                 .await?;
         }
@@ -566,12 +545,13 @@ impl NookVaultManager {
             .await?
             .write_events(&writes)
             .await?;
-        Ok(load_from_indexed_db().await?.unwrap_or_default())
+        Ok(NookDatabase::load_from_indexed_db()
+            .await?
+            .unwrap_or_default())
     }
 }
 
 #[cfg(test)]
-#[allow(clippy::items_after_test_module)]
 mod tests {
     use crate::manager::session::NookEventLogSyncIssueState;
 
@@ -583,17 +563,11 @@ mod tests {
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    struct OutboxFixture {
-        provider_id: String,
-        event_id: EventId,
-        bytes: Vec<u8>,
-    }
-
     #[expect(
         unowned_function,
         reason = "framework boundary: test fixture constructs a signed event for provider export coverage"
     )]
-    fn event_fixture() -> anyhow::Result<(EventId, EventStorageBytes, VaultEvent)> {
+    pub(super) fn event_fixture() -> anyhow::Result<(EventId, EventStorageBytes, VaultEvent)> {
         let signing = SigningIdentity::generate()?.0;
         let event = VaultEvent::sign(
             VaultEventBody {
@@ -609,68 +583,8 @@ mod tests {
             signing.signing_key(),
         )?;
         let event_id = event.id()?;
-        let bytes = nook_core::serialize_event_storage_yaml(&event)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&event)?;
         Ok((event_id, bytes, event))
-    }
-
-    impl OutboxFixture {
-        async fn queue(&self) -> Result<PendingOutboxEvent<'_>, NookError> {
-            queue_outbox_entry(&self.provider_id, self.event_id.as_str(), &self.bytes).await?;
-            append_outbox_index(&self.provider_id, self.event_id.as_str()).await?;
-            Ok(PendingOutboxEvent {
-                provider_id: &self.provider_id,
-                event_id: self.event_id.clone(),
-                bytes: self.bytes.clone().into(),
-                local_ids: None,
-            })
-        }
-    }
-
-    #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-    )]
-    async fn outbox_publication_failure_and_durable_completion() -> anyhow::Result<()> {
-        let fixture = OutboxFixture {
-            provider_id: format!("outbox-lifecycle-{}", nook_core::StoreId::generate()?),
-            event_id: EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?,
-            bytes: b"invalid event fixture".to_vec(),
-        };
-        let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Github;
-        match fixture.queue().await?.publish(&manager).await {
-            Err(NookError::Serialization(message)) => {
-                assert!(message.starts_with("GitHub event parse:"));
-            }
-            Err(_) => anyhow::bail!("unexpected publication failure"),
-            Ok(_) => anyhow::bail!("malformed event was published"),
-        }
-        assert_eq!(
-            load_outbox(&fixture.provider_id).await?,
-            vec![(fixture.event_id.to_string(), fixture.bytes.clone())]
-        );
-        let excluded = BTreeSet::new();
-        let mut pending = fixture.queue().await?;
-        pending.local_ids = Some(&excluded);
-        assert!(!pending.is_current());
-        pending.discard().await?;
-        assert!(load_outbox(&fixture.provider_id).await?.is_empty());
-
-        // Dropping an unpolled publication leaves the durable row intact.
-        drop(fixture.queue().await?.publish(&manager));
-        assert_eq!(
-            load_outbox(&fixture.provider_id).await?,
-            vec![(fixture.event_id.to_string(), fixture.bytes.clone())]
-        );
-        // Exercise durable acknowledgement independently of remote publication.
-        let published = PublishedOutboxEvent {
-            provider_id: &fixture.provider_id,
-            event_id: fixture.event_id.clone(),
-        };
-        assert_eq!(published.acknowledge().await?, fixture.event_id);
-        assert!(load_outbox(&fixture.provider_id).await?.is_empty());
-        Ok(())
     }
 
     #[test]
@@ -683,28 +597,6 @@ mod tests {
         let resolved = NookVaultManager::projected_epoch_keys(&meta, &identity)?;
 
         assert_eq!(resolved, keys);
-        Ok(())
-    }
-
-    #[test]
-    fn durable_outbox_rejects_an_event_removed_from_the_active_index() -> anyhow::Result<()> {
-        let retained = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let quarantined = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
-        let local_ids = BTreeSet::from([retained.clone()]);
-        for (index, event_id, expected) in [
-            (None, retained.clone(), true),
-            (Some(&local_ids), retained, true),
-            (Some(&local_ids), quarantined.clone(), false),
-            (Some(&BTreeSet::new()), quarantined, false),
-        ] {
-            let pending = PendingOutboxEvent {
-                provider_id: "index-fixture",
-                event_id,
-                bytes: Vec::new().into(),
-                local_ids: index,
-            };
-            assert_eq!(pending.is_current(), expected);
-        }
         Ok(())
     }
 
@@ -988,11 +880,19 @@ mod tests {
             .queue_event_outbox_for_current_provider(&event_id, b"queued")
             .await?;
         assert_eq!(
-            load_outbox("local-outbox-test").await?,
+            NookDatabase::load_outbox("local-outbox-test").await?,
             vec![(event_id.to_string(), b"queued".to_vec())]
         );
-        remove_outbox_entry("local-outbox-test", event_id.as_str()).await?;
-        assert!(load_outbox("local-outbox-test").await?.is_empty());
+        NookDatabase::remove_outbox_entry(EventDbRemoveOutboxEntry {
+            provider_id: "local-outbox-test",
+            event_id: event_id.as_str(),
+        })
+        .await?;
+        assert!(
+            NookDatabase::load_outbox("local-outbox-test")
+                .await?
+                .is_empty()
+        );
         Ok(())
     }
 }

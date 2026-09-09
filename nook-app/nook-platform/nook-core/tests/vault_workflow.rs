@@ -1,7 +1,6 @@
 //! End-to-end vault workflows mirroring the WASM session save path.
 
-use nook_core::AgeArmoredCiphertext;
-
+use nook_core::{AgeArmoredCiphertext, SecretRecord, SecretRecordFilter};
 use std::io;
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -9,8 +8,7 @@ use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
     PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId, SecretType,
     SecretValue, StorageMode, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat,
-    VaultFormatDocument, VaultMetaState, VaultRecordSet, filter_secrets, generate_password,
-    validate_secret_data,
+    VaultFormatDocument, VaultMetaState, VaultRecordSet,
 };
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -150,7 +148,7 @@ fn incremental_add_secret_matches_full_reencrypt() -> anyhow::Result<()> {
     let mut armored = armored_cache_from_db(&db, &crypto)?;
 
     let label = SecretId::parse("  secret_SMypl8K0w9Y  ")?;
-    validate_secret_data("generated-secret")?;
+    SecretValue::validate_secret_data("generated-secret")?;
     armored.insert(
         label.clone(),
         encrypted_api_key(&crypto, "generated-secret")?,
@@ -358,12 +356,12 @@ fn incremental_update_secret_replaces_armored_entry() -> anyhow::Result<()> {
 #[test]
 fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
-    let password = generate_password(PasswordGenerationOptions {
+    let password = PasswordGenerationOptions::generate(PasswordGenerationOptions {
         length: 20.into(),
-        lowercase: true,
-        uppercase: true,
-        numbers: true,
-        symbols: true,
+        lowercase: nook_core::PasswordCharacterSet::Included,
+        uppercase: nook_core::PasswordCharacterSet::Included,
+        numbers: nook_core::PasswordCharacterSet::Included,
+        symbols: nook_core::PasswordCharacterSet::Included,
     })?;
 
     let mut armored = HashMap::new();
@@ -400,12 +398,35 @@ fn filter_secrets_on_loaded_vault() -> anyhow::Result<()> {
     let records = db.list();
 
     assert_eq!(
-        filter_secrets(&records, sid("github.com").as_str()).len(),
+        SecretRecord::filter_secrets(SecretRecordFilter {
+            records: &records,
+            query: sid("github.com").as_str()
+        })
+        .len(),
         1
     );
-    assert_eq!(filter_secrets(&records, sid("work-vpn").as_str()).len(), 1);
-    assert!(filter_secrets(&records, "missing").is_empty());
-    assert_eq!(filter_secrets(&records, ""), records);
+    assert_eq!(
+        SecretRecord::filter_secrets(SecretRecordFilter {
+            records: &records,
+            query: sid("work-vpn").as_str()
+        })
+        .len(),
+        1
+    );
+    assert!(
+        SecretRecord::filter_secrets(SecretRecordFilter {
+            records: &records,
+            query: "missing"
+        })
+        .is_empty()
+    );
+    assert_eq!(
+        SecretRecord::filter_secrets(SecretRecordFilter {
+            records: &records,
+            query: ""
+        }),
+        records
+    );
     Ok(())
 }
 

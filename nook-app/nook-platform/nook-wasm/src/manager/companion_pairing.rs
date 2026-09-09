@@ -62,7 +62,7 @@ impl NookCompanionPairingApprovalAuthority {
         providers: AuthProvidersSnapshotData,
     ) -> Result<NookPrevalidatedCompanionPairingApproval, JsError> {
         self.prevalidate_inner(manager, attempt, providers)
-            .map_err(failure_js_error)
+            .map_err(NookVaultManager::failure_js_error)
     }
 }
 
@@ -128,8 +128,10 @@ impl NookCompanionPairingApprovalAuthority {
     }
 }
 
-fn failure_js_error(failure: CompanionPairingFailure) -> JsError {
-    JsError::new(&format!("{failure:?}"))
+impl NookVaultManager {
+    fn failure_js_error(failure: CompanionPairingFailure) -> JsError {
+        JsError::new(&format!("{failure:?}"))
+    }
 }
 
 /// Opaque proof of a manager-bound approval and its sealed provider snapshot.
@@ -143,12 +145,12 @@ pub struct NookPrevalidatedCompanionPairingApproval {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_companion_core::{
+    use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope, StorageProviderData};
+    use nook_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingError,
         CompanionPairingInstallation, CompanionPairingProviderManifestDigest,
         ExtensionPairingVaultType,
     };
-    use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope, StorageProviderData};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     struct PairingFixture {

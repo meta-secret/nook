@@ -6,12 +6,13 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use nook_core::GenesisImportRequest;
 use reqwest::Client;
 use std::str;
 
 use super::checked_event_write::CheckedEventWrite;
 use crate::NookError;
-use nook_core::{DriveEventParent, EventId, VaultEvent, parse_remote_event_storage_bytes};
+use nook_core::{DriveEventParent, EventId, VaultEvent};
 
 pub(crate) struct DriveEventStore<'a> {
     pub(crate) token: &'a str,
@@ -81,7 +82,7 @@ impl DriveEventStore<'_> {
         let mut accepted: Option<(VaultEvent, Vec<u8>)> = None;
         for bytes in candidates {
             let storage_bytes = bytes.clone().into();
-            let Ok(event) = parse_remote_event_storage_bytes(&storage_bytes) else {
+            let Ok(event) = VaultEvent::parse_remote_event_storage_bytes(&storage_bytes) else {
                 continue;
             };
             let Ok(parsed_id) = event.id() else {
@@ -374,7 +375,7 @@ mod tests {
     use super::*;
     use nook_core::{
         Ed25519Signature, EventId, GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId,
-        VaultEvent, build_genesis_import_event, serialize_event_storage_yaml,
+        VaultEvent,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -383,20 +384,20 @@ mod tests {
     impl EventFixture {
         fn new() -> anyhow::Result<Self> {
             let (identity, _seed) = SigningIdentity::generate()?;
-            let event = build_genesis_import_event(
-                &StoreId::parse("store_testtoken11")?,
-                &identity.actor_id()?,
-                &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-                GenesisImportPayload {
+            let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &StoreId::parse("store_testtoken11")?,
+                actor_id: &identity.actor_id()?,
+                key_epoch: &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+                payload: GenesisImportPayload {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                     secrets: vec![],
                     password_entries: vec![],
                 },
-                &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-                identity.signing_key(),
-            )?;
+                created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+                signing_key: identity.signing_key(),
+            })?;
             let event_id = event.id()?;
-            let bytes = serialize_event_storage_yaml(&event)?.into();
+            let bytes = VaultEvent::serialize_event_storage_yaml(&event)?.into();
             Ok(Self(event_id, event, bytes))
         }
     }
@@ -454,7 +455,7 @@ mod tests {
     fn select_matching_rejects_same_id_divergent_envelopes() -> anyhow::Result<()> {
         let EventFixture(event_id, mut event, bytes) = EventFixture::new()?;
         event.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
-        let divergent = serialize_event_storage_yaml(&event)?.into();
+        let divergent = VaultEvent::serialize_event_storage_yaml(&event)?.into();
         let err = DriveEventStore::select_matching_drive_event_bytes(&event_id, [bytes, divergent])
             .err()
             .ok_or_else(|| anyhow::anyhow!("expected divergent duplicate corruption"))?;

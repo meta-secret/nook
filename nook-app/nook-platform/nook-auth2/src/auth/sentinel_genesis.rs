@@ -10,6 +10,7 @@
 //! Sentinel roots are split with the current extendable SLIP-0039 format.
 
 use super::multi_device::{DeviceIdentity, VaultMetaRecord};
+use crate::SentinelShareEnvelope;
 mod links;
 mod session;
 pub use super::sentinel_genesis_types::*;
@@ -896,7 +897,7 @@ mod tests {
                 VaultMetaRecord::Auth(..)
             ));
         }
-        let share_count = multi_device::count_sentinel_share_records(&issued.records)?;
+        let share_count = SentinelShareEnvelope::count_sentinel_share_records(&issued.records)?;
         assert_eq!(usize::from(share_count), 3);
         assert!(
             multi_device::SentinelKeyReconstruction::from_identities(

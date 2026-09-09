@@ -197,7 +197,12 @@ impl IdentityRecord {
             ));
         }
         let keys = VaultKeys::generate()?;
-        let vault_dek = wrap_vault_keys_for_members(&keys, &self.members, store_id)?;
+        let vault_dek =
+            IdentityVaultDek::wrap_vault_keys_for_members(WrapVaultKeysForMembersRequest {
+                keys: &keys,
+                members: &self.members,
+                store_id: store_id,
+            })?;
         self.control_epoch = self.control_epoch.next();
         self.vault_deks.push(vault_dek);
         Ok(keys)
@@ -298,7 +303,11 @@ impl IdentityRecord {
             }
             let key_epoch = self.vault_deks[index].key_epoch.clone();
             let mut replacement =
-                wrap_vault_keys_for_members(keys, &authorized_members, store_id.clone())?;
+                IdentityVaultDek::wrap_vault_keys_for_members(WrapVaultKeysForMembersRequest {
+                    keys: keys,
+                    members: &authorized_members,
+                    store_id: store_id.clone(),
+                })?;
             replacement.key_epoch = key_epoch;
             self.vault_deks[index] = replacement;
         }
@@ -438,7 +447,11 @@ impl IdentityRecord {
             return Ok(());
         }
         let mut rewrapped =
-            wrap_vault_keys_for_members(&keys, &authorized_members, store_id.clone())?;
+            IdentityVaultDek::wrap_vault_keys_for_members(WrapVaultKeysForMembersRequest {
+                keys: &keys,
+                members: &authorized_members,
+                store_id: store_id.clone(),
+            })?;
         rewrapped.key_epoch = next_epoch;
         if *vault_dek != rewrapped {
             self.vault_deks[vault_dek_index] = rewrapped;
@@ -481,7 +494,12 @@ impl IdentityRecord {
                 "importing app key is not authorized for this vault".to_owned(),
             ));
         }
-        let mut vault_dek = wrap_vault_keys_for_members(&keys, &authorized_members, store_id)?;
+        let mut vault_dek =
+            IdentityVaultDek::wrap_vault_keys_for_members(WrapVaultKeysForMembersRequest {
+                keys: &keys,
+                members: &authorized_members,
+                store_id: store_id,
+            })?;
         vault_dek.key_epoch = reconciliation.epoch_update.committed_epoch();
         self.vault_deks.push(vault_dek);
         self.control_epoch = self.control_epoch.next();
@@ -519,40 +537,54 @@ impl IdentityRecord {
     }
 }
 
-fn wrap_vault_keys_for_members(
-    keys: &VaultKeys,
-    members: &[IdentityMember],
+/// Named values required by IdentityVaultDek::wrap_vault_keys_for_members.
+struct WrapVaultKeysForMembersRequest<'a> {
+    keys: &'a VaultKeys,
+    members: &'a [IdentityMember],
     store_id: StoreId,
-) -> MultiDeviceResult<IdentityVaultDek> {
-    let mut secrets_envelopes = Vec::with_capacity(members.len());
-    let mut members_envelopes = Vec::with_capacity(members.len());
-    for member in members {
-        secrets_envelopes.push(MemberDekEnvelope {
-            app_id: member.app_id.clone(),
-            envelope: member
-                .public_key
-                .seal_bytes(keys.secrets_key.as_str().as_bytes())?,
-        });
-        members_envelopes.push(MemberDekEnvelope {
-            app_id: member.app_id.clone(),
-            envelope: member
-                .public_key
-                .seal_bytes(keys.members_key.as_str().as_bytes())?,
-        });
+}
+
+impl IdentityVaultDek {
+    fn wrap_vault_keys_for_members(
+        request: WrapVaultKeysForMembersRequest<'_>,
+    ) -> MultiDeviceResult<IdentityVaultDek> {
+        let WrapVaultKeysForMembersRequest {
+            keys,
+            members,
+            store_id,
+        } = request;
+        let mut secrets_envelopes = Vec::with_capacity(members.len());
+        let mut members_envelopes = Vec::with_capacity(members.len());
+        for member in members {
+            secrets_envelopes.push(MemberDekEnvelope {
+                app_id: member.app_id.clone(),
+                envelope: member
+                    .public_key
+                    .seal_bytes(keys.secrets_key.as_str().as_bytes())?,
+            });
+            members_envelopes.push(MemberDekEnvelope {
+                app_id: member.app_id.clone(),
+                envelope: member
+                    .public_key
+                    .seal_bytes(keys.members_key.as_str().as_bytes())?,
+            });
+        }
+        Ok(IdentityVaultDek {
+            store_id,
+            key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
+            secrets_envelopes,
+            members_envelopes,
+        })
     }
-    Ok(IdentityVaultDek {
-        store_id,
-        key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
-        secrets_envelopes,
-        members_envelopes,
-    })
 }
 
 /// Deterministic identity fingerprint for UI progressive disclosure.
-#[must_use]
-pub fn identity_fingerprint(identity_id: &IdentityId) -> String {
-    let hash = Sha256::digest(identity_id.as_str().as_bytes());
-    hex::encode(&hash[..8])
+impl IdentityId {
+    #[must_use]
+    pub fn identity_fingerprint(identity_id: &IdentityId) -> String {
+        let hash = Sha256::digest(identity_id.as_str().as_bytes());
+        hex::encode(&hash[..8])
+    }
 }
 
 #[cfg(test)]

@@ -4,6 +4,8 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use super::super::secret_sharing::SentinelSecretReconstruction;
+use crate::SentinelShareEnvelope;
 use std::collections::BTreeSet;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -11,10 +13,9 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 use zeroize::Zeroize;
 
-use super::super::secret_sharing::{IndexedShare, reconstruct_secret_bytes};
+use super::super::secret_sharing::IndexedShare;
 use super::{
     OpenedSentinelShare, SentinelSharePlaintext, SentinelShareVersion, SentinelVaultKeysPlaintext,
-    parse_sentinel_share_envelope, sentinel_share_record_key,
 };
 use crate::auth::slip39;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
@@ -43,12 +44,12 @@ impl<'a> SentinelShareOpening<'a> {
             .records
             .iter()
             .find(|entry| {
-                entry.key.as_str() == sentinel_share_record_key(self.identity.device_id())
+                entry.key.as_str() == DeviceId::sentinel_share_record_key(self.identity.device_id())
             })
             .ok_or_else(|| MultiDeviceError::SentinelShareNotFound {
                 device_id: self.identity.device_id().to_string(),
             })?;
-        let envelope = parse_sentinel_share_envelope(record.value.as_str())?;
+        let envelope = SentinelShareEnvelope::parse_sentinel_share_envelope(record.value.as_str())?;
         let plaintext_json = self.identity.open_utf8(&envelope.ciphertext)?;
         let plaintext: SentinelSharePlaintext = serde_json::from_str(&plaintext_json)
             .map_err(MultiDeviceError::SentinelSharePayload)?;
@@ -156,11 +157,12 @@ impl AdmittedSentinelQuorum {
                 DeviceId::parse(&contribution.device_id).map_err(MultiDeviceError::Validation)?;
             let record = records
                 .iter()
-                .find(|entry| entry.key.as_str() == sentinel_share_record_key(&device_id))
+                .find(|entry| entry.key.as_str() == DeviceId::sentinel_share_record_key(&device_id))
                 .ok_or_else(|| MultiDeviceError::SentinelShareNotFound {
                     device_id: contribution.device_id.clone(),
                 })?;
-            let envelope = parse_sentinel_share_envelope(record.value.as_str())?;
+            let envelope =
+                SentinelShareEnvelope::parse_sentinel_share_envelope(record.value.as_str())?;
             if contribution.version != envelope.version
                 || contribution.threshold != envelope.threshold
                 || contribution.required_participants != envelope.required_participants
@@ -235,8 +237,10 @@ impl AdmittedSentinelQuorum {
             root.zeroize();
             return keys;
         }
-        let reconstructed =
-            reconstruct_secret_bytes(&self.legacy_shares[..required], self.threshold.into())?;
+        let reconstructed = IndexedShare::reconstruct_secret_bytes(SentinelSecretReconstruction {
+            shares: &self.legacy_shares[..required],
+            threshold: self.threshold.into(),
+        })?;
         let payload: SentinelVaultKeysPlaintext = serde_json::from_slice(&reconstructed)
             .map_err(MultiDeviceError::SentinelSharePayload)?;
         Ok(VaultKeys {

@@ -7,10 +7,10 @@ use nook_companion_core::{
     CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingError,
     ExtensionConnectScope,
 };
+use nook_core::VaultEvent;
 use nook_core::{
     AuthEnvelopes, AuthProvidersSnapshotData, DeviceIdentity, EventId, EventStorageBytes,
     SigningIdentity, StoreId, SymmetricKey, VaultApplication, VaultType,
-    serialize_event_storage_yaml,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroizing;
@@ -321,7 +321,7 @@ impl NookPreparedCompanionPairingActivation {
                 Ok(PairingActivationEvent {
                     event_id: EventId::parse(&record.event_id)
                         .map_err(|_| CompanionPairingCandidateFailure::Integrity)?,
-                    bytes: serialize_event_storage_yaml(&record.event)
+                    bytes: VaultEvent::serialize_event_storage_yaml(&record.event)
                         .map_err(|_| CompanionPairingCandidateFailure::Integrity)?,
                 })
             })

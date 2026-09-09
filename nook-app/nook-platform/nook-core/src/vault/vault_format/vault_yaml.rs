@@ -3,6 +3,7 @@ use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, PasswordUnlockEntry, SecretId,
     StoredRecordPayload, StoredSecretRecord, VaultArchitecture, VaultMetaRecord, VaultUnlock,
 };
+use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -419,7 +420,13 @@ mod tests {
         let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
+        let shares = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first, second],
+                threshold: 2.into(),
+            },
+        )?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             crate::SentinelPolicy {
@@ -445,7 +452,7 @@ mod tests {
         let parsed = VaultYamlTestData::deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed, shares);
         for record in &parsed {
-            assert!(crate::is_sentinel_share_stored_record(record)?);
+            assert!(VaultMetaRecord::is_sentinel_share_stored_record(record)?);
         }
         Ok(())
     }

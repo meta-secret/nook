@@ -1,20 +1,28 @@
 //! Thin WASM exports for portable auth-companion heuristics and host policy.
 
 use crate::{NookAuthenticationPageObservation, NookAuthenticationPageObservations};
+use nook_core::AuthenticationAdvanceControlObservation;
+use nook_core::AuthenticationControlText;
+use nook_core::AuthenticationPageObservation;
+use nook_core::BackupCodePageText;
+use nook_core::LoginContextObservation;
+use nook_core::PageInputFieldObservation;
+use nook_core::VaultHostObservation;
+use nook_core::VaultHostPolicy;
 use nook_core::{OAuthOriginSupport, OAuthOriginUnsupportedReason, PageInputType};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[must_use]
 pub fn page_has_backup_code_hint(text: &str) -> bool {
-    nook_core::page_has_backup_code_hint(text)
+    BackupCodePageText::new(text).page_has_backup_code_hint()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
-    nook_core::extract_backup_code_candidates(&text)
+    BackupCodePageText::new(&text).extract_backup_code_candidates()
 }
 
 #[wasm_bindgen]
@@ -51,7 +59,7 @@ impl NookPageInputFieldObservation {
 #[wasm_bindgen]
 #[must_use]
 pub fn expand_identity_text(value: &str) -> String {
-    nook_core::expand_identity_text(value)
+    AuthenticationControlText::new(value).expand_identity_text()
 }
 
 #[wasm_bindgen]
@@ -84,43 +92,43 @@ impl NookLoginContextObservation {
 #[wasm_bindgen]
 #[must_use]
 pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
-    nook_core::has_login_context(&observation.inner)
+    (&observation.inner).has_login_context()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
-    nook_core::looks_like_username_field(&field.inner)
+    (&field.inner).looks_like_username_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
-    nook_core::looks_like_one_time_code_field(&field.inner)
+    (&field.inner).looks_like_one_time_code_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
-    nook_core::looks_like_passkey_control_label(label)
+    AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(label)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
-    nook_core::looks_like_manual_checkpoint_label(label)
+    AuthenticationAdvanceControlObservation::looks_like_manual_checkpoint_label(label)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_email_verification_body(body: &str) -> bool {
-    nook_core::looks_like_email_verification_body(body)
+    AuthenticationAdvanceControlObservation::looks_like_email_verification_body(body)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_login_advance_control_label(label: &str) -> bool {
-    nook_core::looks_like_login_advance_control_label(label)
+    AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(label)
 }
 
 #[wasm_bindgen]
@@ -135,7 +143,9 @@ pub fn looks_like_login_advance_control_label(label: &str) -> bool {
 pub fn authentication_form_observation_priority(
     observation: &NookAuthenticationPageObservation,
 ) -> u8 {
-    nook_core::authentication_form_observation_priority(observation.to_core()).into()
+    (observation.to_core())
+        .authentication_form_observation_priority()
+        .into()
 }
 
 #[wasm_bindgen]
@@ -228,47 +238,49 @@ pub fn default_simple_vault_url() -> String {
 
 #[wasm_bindgen]
 pub fn normalize_simple_vault_base_url(value: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::normalize_simple_vault_base_url(value)?)
+    Ok(VaultHostPolicy::new(value).normalize_simple_vault_base_url()?)
 }
 
 #[wasm_bindgen]
 pub fn simple_vault_url(base_url: &str, path: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::simple_vault_url(base_url, path)?)
+    Ok(VaultHostPolicy::new(base_url).simple_vault_url(path)?)
 }
 
 #[wasm_bindgen]
 pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::simple_vault_match_pattern(base_url)?)
+    Ok(VaultHostPolicy::new(base_url).simple_vault_match_pattern()?)
 }
 
 /// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
 #[wasm_bindgen]
 pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::matching_sentinel_vault_base_url(base_url)?.unwrap_or_default())
+    Ok(VaultHostPolicy::new(base_url)
+        .matching_sentinel_vault_base_url()?
+        .unwrap_or_default())
 }
 
 #[wasm_bindgen]
 pub fn sentinel_vault_match_patterns(base_url: &str) -> Result<Vec<String>, wasm_bindgen::JsError> {
-    Ok(nook_core::sentinel_vault_match_patterns(base_url)?)
+    Ok(VaultHostPolicy::new(base_url).sentinel_vault_match_patterns()?)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn is_simple_vault_hostname(hostname: &str) -> bool {
-    nook_core::is_simple_vault_hostname(hostname)
+    VaultHostObservation::new(hostname).is_simple_vault_hostname()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn is_sentinel_vault_hostname(hostname: &str) -> bool {
-    nook_core::is_sentinel_vault_hostname(hostname)
+    VaultHostObservation::new(hostname).is_sentinel_vault_hostname()
 }
 
 #[wasm_bindgen]
 pub fn nook_vault_app_exclude_match_patterns(
     base_url: &str,
 ) -> Result<Vec<String>, wasm_bindgen::JsError> {
-    Ok(nook_core::nook_vault_app_exclude_match_patterns(base_url)?)
+    Ok(VaultHostPolicy::new(base_url).nook_vault_app_exclude_match_patterns()?)
 }
 
 /// `base_url` may be empty when no configured vault base is available.
@@ -282,7 +294,7 @@ pub fn is_nook_vault_app_url(
     } else {
         Some(base_url)
     };
-    Ok(nook_core::is_nook_vault_app_url(candidate_url, base_url)?)
+    Ok(VaultHostObservation::new(candidate_url).is_nook_vault_app_url(base_url)?)
 }
 
 #[wasm_bindgen]
@@ -290,7 +302,7 @@ pub fn belongs_to_simple_vault(
     base_url: &str,
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_core::belongs_to_simple_vault(base_url, candidate_url)?)
+    Ok(VaultHostPolicy::new(base_url).belongs_to_simple_vault(candidate_url)?)
 }
 
 #[wasm_bindgen]
@@ -298,10 +310,7 @@ pub fn belongs_to_sentinel_vault(
     base_url: &str,
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_core::belongs_to_sentinel_vault(
-        base_url,
-        candidate_url,
-    )?)
+    Ok(VaultHostPolicy::new(base_url).belongs_to_sentinel_vault(candidate_url)?)
 }
 
 #[cfg(test)]
@@ -318,9 +327,9 @@ mod tests {
             "This sentence should not become a code.",
         ]
         .join("\n");
-        assert!(page_has_backup_code_hint(&text));
+        assert!(BackupCodePageText::new(&text).page_has_backup_code_hint());
         assert_eq!(
-            extract_backup_code_candidates(text),
+            BackupCodePageText::new(text).extract_backup_code_candidates(),
             vec!["A1B2-C3D4-E5F6".to_owned()]
         );
     }
@@ -367,9 +376,9 @@ mod tests {
         assert!(supported.is_supported());
         assert!(!supported.is_unsupported());
 
-        assert!(is_simple_vault_hostname("simple.dev.nokey.sh"));
-        assert!(is_sentinel_vault_hostname("sentinel.nokey.sh"));
-        match normalize_simple_vault_base_url("https://simple.nokey.sh") {
+        assert!(VaultHostObservation::new("simple.dev.nokey.sh").is_simple_vault_hostname());
+        assert!(VaultHostObservation::new("sentinel.nokey.sh").is_sentinel_vault_hostname());
+        match VaultHostPolicy::new("https://simple.nokey.sh").normalize_simple_vault_base_url() {
             Ok(normalized) => assert_eq!(normalized, "https://simple.nokey.sh/"),
             Err(error) => panic!("normalize failed: {error:?}"),
         }
@@ -400,7 +409,7 @@ mod tests {
 
         let login =
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
-        assert_eq!(authentication_form_observation_priority(&login), 4);
+        assert_eq!((&login).authentication_form_observation_priority(), 4);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&login);
         assert!(authentication_page_observations_are_valid(&observations));
@@ -417,10 +426,11 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     fn companion_heuristic_exports_cover_policy_and_url_paths_in_wasm() {
-        assert!(page_has_backup_code_hint("backup code"));
-        assert!(!page_has_backup_code_hint("nothing useful"));
+        assert!(BackupCodePageText::new("backup code").page_has_backup_code_hint());
+        assert!(!BackupCodePageText::new("nothing useful").page_has_backup_code_hint());
         let candidates =
-            extract_backup_code_candidates("Save your backup codes\nA1B2-C3D4-E5F6\nignore".into());
+            BackupCodePageText::new("Save your backup codes\nA1B2-C3D4-E5F6\nignore".into())
+                .extract_backup_code_candidates();
         assert!(!candidates.is_empty());
         assert_eq!(expand_identity_text("  Login  "), "login");
 
@@ -461,7 +471,8 @@ mod browser_tests {
         );
         assert!(has_login_context(&context));
         for label in ["Use a passkey", "Continue", "Verify manually", "Sign in"] {
-            let _ = looks_like_passkey_control_label(label);
+            let _ =
+                AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(label);
             let _ = looks_like_manual_checkpoint_label(label);
             let _ = looks_like_login_advance_control_label(label);
         }
@@ -472,7 +483,7 @@ mod browser_tests {
 
         let observation =
             NookAuthenticationPageObservation::new(1, 1, 1, 0, 0, true, false, false, false, 0);
-        assert!(authentication_form_observation_priority(&observation) > 0);
+        assert!((&observation).authentication_form_observation_priority() > 0);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
         let _ = authentication_page_observations_are_valid(&observations);
@@ -501,14 +512,32 @@ mod browser_tests {
             nook_core::DEFAULT_SIMPLE_VAULT_URL
         );
         let base = "https://simple.nokey.sh/";
-        let _ = normalize_simple_vault_base_url(base).unwrap();
-        let _ = simple_vault_url(base, "events.json").unwrap();
-        let _ = simple_vault_match_pattern(base).unwrap();
-        let _ = matching_sentinel_vault_base_url(base).unwrap();
-        let _ = sentinel_vault_match_patterns(base).unwrap();
-        let _ = nook_vault_app_exclude_match_patterns(base).unwrap();
-        let _ = is_nook_vault_app_url("https://simple.nokey.sh/", base).unwrap();
-        let _ = belongs_to_simple_vault(base, "https://simple.nokey.sh/events.json").unwrap();
-        let _ = belongs_to_sentinel_vault(base, "https://simple.nokey.sh/events.json").unwrap();
+        let _ = VaultHostPolicy::new(base)
+            .normalize_simple_vault_base_url()
+            .unwrap();
+        let _ = VaultHostPolicy::new(base)
+            .simple_vault_url("events.json")
+            .unwrap();
+        let _ = VaultHostPolicy::new(base)
+            .simple_vault_match_pattern()
+            .unwrap();
+        let _ = VaultHostPolicy::new(base)
+            .matching_sentinel_vault_base_url()
+            .unwrap();
+        let _ = VaultHostPolicy::new(base)
+            .sentinel_vault_match_patterns()
+            .unwrap();
+        let _ = VaultHostPolicy::new(base)
+            .nook_vault_app_exclude_match_patterns()
+            .unwrap();
+        let _ = VaultHostObservation::new("https://simple.nokey.sh/")
+            .is_nook_vault_app_url(base)
+            .unwrap();
+        let _ = VaultHostPolicy::new(base)
+            .belongs_to_simple_vault("https://simple.nokey.sh/events.json")
+            .unwrap();
+        let _ = VaultHostPolicy::new(base)
+            .belongs_to_sentinel_vault("https://simple.nokey.sh/events.json")
+            .unwrap();
     }
 }

@@ -1,6 +1,5 @@
 //! Login-picker response decoding at the content-script boundary.
 
-use super::queue::deserialize_finite_f64;
 use serde::{Deserialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -16,7 +15,7 @@ pub enum LoginPickerOpenAvailableWire {
     Ready {
         ok: bool,
         request_id: String,
-        #[serde(deserialize_with = "deserialize_finite_f64")]
+        #[serde(deserialize_with = "super::queue::QueueDisposition::deserialize_finite_f64")]
         #[cfg_attr(
             dylint_lib = "nook_domain_api",
             expect(
@@ -99,41 +98,42 @@ impl serde::Serialize for LoginPickerOpenResponseKind {
 #[error("login picker open response is malformed")]
 pub struct LoginPickerOpenResponseDecodeError;
 
-pub fn decode_login_picker_open_response(
-    wire: LoginPickerOpenResponseWire,
-) -> Result<LoginPickerOpenResponse, LoginPickerOpenResponseDecodeError> {
-    match wire {
-        LoginPickerOpenResponseWire::Available(LoginPickerOpenAvailableWire::Ready {
-            ok,
-            request_id,
-            expires_at,
-        }) if ok && !request_id.trim().is_empty() => Ok(LoginPickerOpenResponse::Ready {
-            kind: LoginPickerOpenResponseKind::Ready,
-            request_id,
-            expires_at,
-        }),
-        LoginPickerOpenResponseWire::Available(LoginPickerOpenAvailableWire::Locked { ok })
-            if ok =>
-        {
-            Ok(LoginPickerOpenResponse::Locked {
-                kind: LoginPickerOpenResponseKind::Locked,
-            })
-        }
-        LoginPickerOpenResponseWire::Available(LoginPickerOpenAvailableWire::Unavailable {
-            ok,
-        }) if ok => Ok(LoginPickerOpenResponse::Unavailable {
-            kind: LoginPickerOpenResponseKind::Unavailable,
-        }),
-        LoginPickerOpenResponseWire::Failed(LoginPickerOpenFailedWire { ok: false, reason })
-            if !reason.trim().is_empty() =>
-        {
-            Ok(LoginPickerOpenResponse::Failed {
+impl LoginPickerOpenResponse {
+    pub fn decode_login_picker_open_response(
+        wire: LoginPickerOpenResponseWire,
+    ) -> Result<LoginPickerOpenResponse, LoginPickerOpenResponseDecodeError> {
+        match wire {
+            LoginPickerOpenResponseWire::Available(LoginPickerOpenAvailableWire::Ready {
+                ok,
+                request_id,
+                expires_at,
+            }) if ok && !request_id.trim().is_empty() => Ok(LoginPickerOpenResponse::Ready {
+                kind: LoginPickerOpenResponseKind::Ready,
+                request_id,
+                expires_at,
+            }),
+            LoginPickerOpenResponseWire::Available(LoginPickerOpenAvailableWire::Locked { ok })
+                if ok =>
+            {
+                Ok(LoginPickerOpenResponse::Locked {
+                    kind: LoginPickerOpenResponseKind::Locked,
+                })
+            }
+            LoginPickerOpenResponseWire::Available(LoginPickerOpenAvailableWire::Unavailable {
+                ok,
+            }) if ok => Ok(LoginPickerOpenResponse::Unavailable {
+                kind: LoginPickerOpenResponseKind::Unavailable,
+            }),
+            LoginPickerOpenResponseWire::Failed(LoginPickerOpenFailedWire {
+                ok: false,
+                reason,
+            }) if !reason.trim().is_empty() => Ok(LoginPickerOpenResponse::Failed {
                 kind: LoginPickerOpenResponseKind::Failed,
-            })
-        }
-        LoginPickerOpenResponseWire::Available(_)
-        | LoginPickerOpenResponseWire::Failed(LoginPickerOpenFailedWire { .. }) => {
-            Err(LoginPickerOpenResponseDecodeError)
+            }),
+            LoginPickerOpenResponseWire::Available(_)
+            | LoginPickerOpenResponseWire::Failed(LoginPickerOpenFailedWire { .. }) => {
+                Err(LoginPickerOpenResponseDecodeError)
+            }
         }
     }
 }
@@ -148,7 +148,7 @@ mod tests {
             r#"{"ok":true,"status":"ready","requestId":"request","expiresAt":42}"#,
         )?;
         assert_eq!(
-            decode_login_picker_open_response(ready)?,
+            LoginPickerOpenResponse::decode_login_picker_open_response(ready)?,
             LoginPickerOpenResponse::Ready {
                 kind: LoginPickerOpenResponseKind::Ready,
                 request_id: "request".to_owned(),
@@ -190,7 +190,10 @@ mod tests {
             ),
         ] {
             let wire = serde_json::from_str::<LoginPickerOpenResponseWire>(serialized)?;
-            assert_eq!(decode_login_picker_open_response(wire)?, expected);
+            assert_eq!(
+                LoginPickerOpenResponse::decode_login_picker_open_response(wire)?,
+                expected
+            );
         }
 
         for serialized in [
@@ -202,7 +205,7 @@ mod tests {
             r#"{"ok":false,"reason":" "}"#,
         ] {
             let wire = serde_json::from_str::<LoginPickerOpenResponseWire>(serialized)?;
-            assert!(decode_login_picker_open_response(wire).is_err());
+            assert!(LoginPickerOpenResponse::decode_login_picker_open_response(wire).is_err());
         }
         Ok(())
     }

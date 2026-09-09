@@ -5,16 +5,16 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::IdentityDbMigrateDirectory;
 use crate::storage::event_db;
+use crate::{NookDatabase, NookError};
 use nook_core::IdentityDirectory;
 use rexie::TransactionMode;
 
 use super::{
     IDENTITY_DIRECTORY_KEY, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis,
-    SimpleGenesisCompletion, decode_directory_value, map_domain_error, migrate_directory,
-    migrate_staged_genesis_directories,
+    SimpleGenesisCompletion,
 };
-use crate::{NookError, storage::open_nook_database};
 
 impl SimpleGenesisCompletion<'_> {
     async fn publish_staged_identity(
@@ -35,7 +35,7 @@ impl SimpleGenesisCompletion<'_> {
                 let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
                     NookError::IndexedDb(format!("Genesis identity decode error: {error:?}"))
                 })?;
-                decode_directory_value(&raw)
+                NookDatabase::decode_directory_value(&raw)
             })
             .transpose()?
             .unwrap_or_else(IdentityDirectory::empty);
@@ -45,16 +45,21 @@ impl SimpleGenesisCompletion<'_> {
                     .base_directory
                     .has_legacy_duplicate_app_key_ownership()
             });
-        let (current, _) = migrate_directory(current, Some(&pending.identity_id))?;
+        let (current, _) = NookDatabase::migrate_directory(IdentityDbMigrateDirectory {
+            directory: current,
+            preserved_identity_id: Some(&pending.identity_id),
+        })?;
         if migrate_staged {
-            migrate_staged_genesis_directories(pending)?;
+            NookDatabase::migrate_staged_genesis_directories(pending)?;
         }
         let staged = pending.staged_identity().ok_or_else(|| {
             NookError::IndexedDb("Staged genesis identity state disappeared.".to_owned())
         })?;
         let directory = if current == staged.base_directory {
             let candidate = staged.directory.clone();
-            candidate.validate().map_err(map_domain_error)?;
+            candidate
+                .validate()
+                .map_err(NookDatabase::map_domain_error)?;
             candidate
         } else {
             current
@@ -63,7 +68,7 @@ impl SimpleGenesisCompletion<'_> {
                     &staged.directory,
                     &pending.identity_id,
                 )
-                .map_err(map_domain_error)?
+                .map_err(NookDatabase::map_domain_error)?
         };
         let encoded = serde_json::to_string(&directory).map_err(|error| {
             NookError::IndexedDb(format!("Genesis identity encode error: {error}"))
@@ -100,7 +105,7 @@ impl SimpleGenesisCompletion<'_> {
 
     pub(crate) async fn clear_pending(self) -> Result<(), NookError> {
         let completed = self.pending();
-        let rexie = open_nook_database().await?;
+        let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
             .map_err(|error| NookError::IndexedDb(format!("Genesis cleanup error: {error:?}")))?;

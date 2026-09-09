@@ -1,18 +1,21 @@
 //! Regression tests for vault crypto restore after session state is dropped (bf04223).
 
+use nook_auth2::{GenesisMembersRecordsRequest, VaultMember};
 use nook_core::{SymmetricKey, VaultError, VaultStoreIdentityRef, VaultVersionWrite};
 
 use nook_core::{
     DeviceIdentity, StoreId, VaultCrypto, VaultKeys, VaultProjectionCache, VaultRecordSet,
-    VaultResult, VaultUnlock, genesis_members_records,
+    VaultResult, VaultUnlock,
 };
 
 fn genesis_projection_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> VaultResult<String> {
     let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
-    records.extend(genesis_members_records(
-        identity,
-        &keys.members_key,
-        "2026-06-28T00:00:00Z",
+    records.extend(VaultMember::genesis_members_records(
+        GenesisMembersRecordsRequest {
+            identity: identity,
+            members_key: &keys.members_key,
+            enrolled_at: "2026-06-28T00:00:00Z",
+        },
     )?);
     let store_id = StoreId::generate()?;
     Ok(VaultRecordSet::serialize_yaml_with_unlock(

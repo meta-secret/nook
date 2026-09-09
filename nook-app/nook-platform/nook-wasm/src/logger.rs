@@ -140,7 +140,7 @@ impl NookLogEntries {
     }
 }
 
-struct LoggerState {
+pub(crate) struct LoggerState {
     level: LogLevel,
     /// Write-behind queue drained by [`log_flush`].
     pending: Vec<LogEntry>,
@@ -160,22 +160,64 @@ thread_local! {
     static INIT_DONE: Cell<bool> = const { Cell::new(false) };
 }
 
-fn now_iso() -> nook_core::IsoTimestamp {
-    IsoTimestamp::from_trusted(Date::new_0().to_iso_string().into())
+impl LogEntry {
+    fn now_iso() -> nook_core::IsoTimestamp {
+        IsoTimestamp::from_trusted(Date::new_0().to_iso_string().into())
+    }
 }
 
 /// Push an entry onto the write-behind queue.
-fn queue(entry: LogEntry) {
-    LOGGER.with(|logger| logger.borrow_mut().pending.push(entry));
+/// Named values required by LoggerState::console_echo.
+pub(crate) struct LoggerConsoleEcho<'a> {
+    pub(crate) level: &'a str,
+    pub(crate) scope: &'a str,
+    pub(crate) message: &'a str,
+    pub(crate) data: Option<&'a str>,
+}
+
+/// Named values required by LoggerState::dump_entries.
+pub(crate) struct LoggerDumpEntries {
+    pub(crate) min_level: Option<String>,
+    pub(crate) limit: Option<u32>,
+    pub(crate) offset: Option<u32>,
+}
+
+/// Named values required by LoggerState::log_record_entry.
+pub(crate) struct LoggerLogRecordEntry<'a> {
+    pub(crate) level: &'a str,
+    pub(crate) scope: &'a str,
+    pub(crate) message: &'a str,
+    pub(crate) data: Option<String>,
+}
+
+/// Named values required by LoggerState::log_dump_page.
+pub(crate) struct LoggerPage {
+    pub(crate) min_level: String,
+    pub(crate) limit: u32,
+    pub(crate) offset: u32,
+}
+
+impl LoggerState {
+    fn queue(entry: LogEntry) {
+        LOGGER.with(|logger| logger.borrow_mut().pending.push(entry));
+    }
 }
 
 /// Echo one entry to the console via the JS bridge (original console methods).
-fn console_echo(level: &str, scope: &str, message: &str, data: Option<&str>) {
-    let text = match data {
-        Some(data) => format!("[{scope}] {message} {data}"),
-        None => format!("[{scope}] {message}"),
-    };
-    let _ = console_echo_js(level, &text);
+impl LoggerState {
+    fn console_echo(request: LoggerConsoleEcho<'_>) {
+        let LoggerConsoleEcho {
+            level,
+            scope,
+            message,
+            data,
+        } = request;
+        let text = match data {
+            Some(data) => format!("[{scope}] {message} {data}"),
+            None => format!("[{scope}] {message}"),
+        };
+        let _ = console_echo_js(level, &text);
+    }
 }
 
 /// Collects the `message`, an optional `scope` field, and any remaining fields
@@ -237,9 +279,14 @@ impl<S: tracing::Subscriber> Layer<S> for IndexedDbLayer {
             .unwrap_or_else(|| meta.target().to_owned());
         let data = visitor.data_json();
 
-        console_echo(level, &scope, &visitor.message, data.as_deref());
-        queue(LogEntry {
-            ts: now_iso(),
+        LoggerState::console_echo(LoggerConsoleEcho {
+            level: level,
+            scope: &scope,
+            message: &visitor.message,
+            data: data.as_deref(),
+        });
+        LoggerState::queue(LogEntry {
+            ts: LogEntry::now_iso(),
             level: level.to_owned(),
             scope,
             message: visitor.message,
@@ -248,108 +295,118 @@ impl<S: tracing::Subscriber> Layer<S> for IndexedDbLayer {
     }
 }
 
-async fn logs_db() -> Result<rexie::Rexie, NookError> {
-    Rexie::builder(LOG_DB_NAME)
-        .version(1)
-        .add_object_store(ObjectStore::new(LOG_STORE).auto_increment(true))
-        .build()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs db build error: {:?}", e)))
+impl LoggerState {
+    async fn logs_db() -> Result<rexie::Rexie, NookError> {
+        Rexie::builder(LOG_DB_NAME)
+            .version(1)
+            .add_object_store(ObjectStore::new(LOG_STORE).auto_increment(true))
+            .build()
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs db build error: {:?}", e)))
+    }
 }
 
-async fn flush_pending() -> Result<(), NookError> {
-    let batch: Vec<LogEntry> = LOGGER.with(|logger| mem::take(&mut logger.borrow_mut().pending));
-    if batch.is_empty() {
-        return Ok(());
-    }
-
-    let db = logs_db().await?;
-    let transaction = db
-        .transaction(&[LOG_STORE], TransactionMode::ReadWrite)
-        .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
-    let store = transaction
-        .store(LOG_STORE)
-        .map_err(|e| NookError::IndexedDb(format!("logs store error: {:?}", e)))?;
-
-    for entry in &batch {
-        let value = serde_wasm_bindgen::to_value(entry)
-            .map_err(|e| NookError::IndexedDb(format!("logs serialize error: {:?}", e)))?;
-        store
-            .add(&value, None)
-            .await
-            .map_err(|e| NookError::IndexedDb(format!("logs add error: {:?}", e)))?;
-    }
-
-    let count = store
-        .count(None)
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs count error: {:?}", e)))?;
-    if count > LOG_MAX_ENTRIES + LOG_TRIM_SLACK {
-        let excess = count - LOG_MAX_ENTRIES;
-        let keys = store
-            .get_all_keys(None, Some(excess))
-            .await
-            .map_err(|e| NookError::IndexedDb(format!("logs keys error: {:?}", e)))?;
-        for key in keys {
-            store
-                .delete(key)
-                .await
-                .map_err(|e| NookError::IndexedDb(format!("logs delete error: {:?}", e)))?;
+impl LoggerState {
+    async fn flush_pending() -> Result<(), NookError> {
+        let batch: Vec<LogEntry> =
+            LOGGER.with(|logger| mem::take(&mut logger.borrow_mut().pending));
+        if batch.is_empty() {
+            return Ok(());
         }
-    }
 
-    transaction
-        .done()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
-    Ok(())
+        let db = LoggerState::logs_db().await?;
+        let transaction = db
+            .transaction(&[LOG_STORE], TransactionMode::ReadWrite)
+            .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
+        let store = transaction
+            .store(LOG_STORE)
+            .map_err(|e| NookError::IndexedDb(format!("logs store error: {:?}", e)))?;
+
+        for entry in &batch {
+            let value = serde_wasm_bindgen::to_value(entry)
+                .map_err(|e| NookError::IndexedDb(format!("logs serialize error: {:?}", e)))?;
+            store
+                .add(&value, None)
+                .await
+                .map_err(|e| NookError::IndexedDb(format!("logs add error: {:?}", e)))?;
+        }
+
+        let count = store
+            .count(None)
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs count error: {:?}", e)))?;
+        if count > LOG_MAX_ENTRIES + LOG_TRIM_SLACK {
+            let excess = count - LOG_MAX_ENTRIES;
+            let keys = store
+                .get_all_keys(None, Some(excess))
+                .await
+                .map_err(|e| NookError::IndexedDb(format!("logs keys error: {:?}", e)))?;
+            for key in keys {
+                store
+                    .delete(key)
+                    .await
+                    .map_err(|e| NookError::IndexedDb(format!("logs delete error: {:?}", e)))?;
+            }
+        }
+
+        transaction
+            .done()
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
+        Ok(())
+    }
 }
 
-async fn dump_entries(
-    min_level: Option<String>,
-    limit: Option<u32>,
-    offset: Option<u32>,
-) -> Result<Vec<LogEntry>, NookError> {
-    flush_pending().await?;
+impl LoggerState {
+    async fn dump_entries(request: LoggerDumpEntries) -> Result<Vec<LogEntry>, NookError> {
+        let LoggerDumpEntries {
+            min_level,
+            limit,
+            offset,
+        } = request;
+        LoggerState::flush_pending().await?;
 
-    let db = logs_db().await?;
-    let transaction = db
-        .transaction(&[LOG_STORE], TransactionMode::ReadOnly)
-        .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
-    let store = transaction
-        .store(LOG_STORE)
-        .map_err(|e| NookError::IndexedDb(format!("logs store error: {:?}", e)))?;
-    let values = store
-        .get_all(None, None)
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs get_all error: {:?}", e)))?;
-    transaction
-        .done()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
+        let db = LoggerState::logs_db().await?;
+        let transaction = db
+            .transaction(&[LOG_STORE], TransactionMode::ReadOnly)
+            .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
+        let store = transaction
+            .store(LOG_STORE)
+            .map_err(|e| NookError::IndexedDb(format!("logs store error: {:?}", e)))?;
+        let values = store
+            .get_all(None, None)
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs get_all error: {:?}", e)))?;
+        transaction
+            .done()
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
 
-    let max_rank = min_level
-        .as_deref()
-        .and_then(LogLevel::parse)
-        .unwrap_or(LogLevel::Trace)
-        .rank();
+        let max_rank = min_level
+            .as_deref()
+            .and_then(LogLevel::parse)
+            .unwrap_or(LogLevel::Trace)
+            .rank();
 
-    let filtered: Vec<LogEntry> = values
-        .into_iter()
-        .filter_map(|value| from_value::<LogEntry>(value).ok())
-        .filter(|entry| LogLevel::parse(&entry.level).is_none_or(|level| level.rank() <= max_rank))
-        .collect();
+        let filtered: Vec<LogEntry> = values
+            .into_iter()
+            .filter_map(|value| from_value::<LogEntry>(value).ok())
+            .filter(|entry| {
+                LogLevel::parse(&entry.level).is_none_or(|level| level.rank() <= max_rank)
+            })
+            .collect();
 
-    // Paginate from the newest end: `offset` skips the most recent entries,
-    // `limit` caps how many older ones follow.
-    let offset = offset.unwrap_or(0) as usize;
-    let len = filtered.len();
-    let end = len.saturating_sub(offset);
-    let start = match limit {
-        Some(limit) => end.saturating_sub(limit as usize),
-        None => 0,
-    };
-    Ok(filtered[start..end].to_vec())
+        // Paginate from the newest end: `offset` skips the most recent entries,
+        // `limit` caps how many older ones follow.
+        let offset = offset.unwrap_or(0) as usize;
+        let len = filtered.len();
+        let end = len.saturating_sub(offset);
+        let start = match limit {
+            Some(limit) => end.saturating_sub(limit as usize),
+            None => 0,
+        };
+        Ok(filtered[start..end].to_vec())
+    }
 }
 
 /// Install the global `tracing` subscriber (once). Wires a reloadable level
@@ -357,28 +414,33 @@ async fn dump_entries(
 /// and stashes a setter so [`log_set_level`] can move the filter at runtime.
 #[wasm_bindgen]
 pub fn log_init() {
-    if INIT_DONE.with(Cell::get) {
-        return;
-    }
-    INIT_DONE.with(|done| done.set(true));
+    LoggerState::log_init()
+}
+impl LoggerState {
+    fn log_init() {
+        if INIT_DONE.with(Cell::get) {
+            return;
+        }
+        INIT_DONE.with(|done| done.set(true));
 
-    let active = LOGGER.with(|logger| logger.borrow().level);
-    let (filter, handle) = ReloadLayer::new(active.to_filter());
+        let active = LOGGER.with(|logger| logger.borrow().level);
+        let (filter, handle) = ReloadLayer::new(active.to_filter());
 
-    let perf = tracing_web::performance_layer().with_details_from_fields(DefaultFields::new());
+        let perf = tracing_web::performance_layer().with_details_from_fields(DefaultFields::new());
 
-    let subscriber = Registry::default()
-        .with(filter)
-        .with(IndexedDbLayer)
-        .with(perf);
+        let subscriber = Registry::default()
+            .with(filter)
+            .with(IndexedDbLayer)
+            .with(perf);
 
-    // Ignore an existing default (e.g. across HMR reloads); the INIT_DONE guard
-    // already prevents re-entrancy on this thread.
-    if subscriber::set_global_default(subscriber).is_ok() {
-        let setter = Box::new(move |level: LevelFilter| {
-            let _ = handle.modify(|current| *current = level);
-        });
-        LOGGER.with(|logger| logger.borrow_mut().set_filter = Some(setter));
+        // Ignore an existing default (e.g. across HMR reloads); the INIT_DONE guard
+        // already prevents re-entrancy on this thread.
+        if subscriber::set_global_default(subscriber).is_ok() {
+            let setter = Box::new(move |level: LevelFilter| {
+                let _ = handle.modify(|current| *current = level);
+            });
+            LOGGER.with(|logger| logger.borrow_mut().set_filter = Some(setter));
+        }
     }
 }
 
@@ -387,14 +449,19 @@ pub fn log_init() {
 /// Entries below this level are neither echoed nor persisted.
 #[wasm_bindgen]
 pub fn log_set_level(level: &str) {
-    if let Some(level) = LogLevel::parse(level) {
-        LOGGER.with(|logger| {
-            let mut state = logger.borrow_mut();
-            state.level = level;
-            if let Some(set_filter) = state.set_filter.as_ref() {
-                set_filter(level.to_filter());
-            }
-        });
+    LoggerState::log_set_level(level)
+}
+impl LoggerState {
+    fn log_set_level(level: &str) {
+        if let Some(level) = LogLevel::parse(level) {
+            LOGGER.with(|logger| {
+                let mut state = logger.borrow_mut();
+                state.level = level;
+                if let Some(set_filter) = state.set_filter.as_ref() {
+                    set_filter(level.to_filter());
+                }
+            });
+        }
     }
 }
 
@@ -402,7 +469,12 @@ pub fn log_set_level(level: &str) {
 #[wasm_bindgen]
 #[must_use]
 pub fn log_get_level() -> String {
-    LOGGER.with(|logger| logger.borrow().level.as_str().to_owned())
+    LoggerState::log_get_level()
+}
+impl LoggerState {
+    fn log_get_level() -> String {
+        LOGGER.with(|logger| logger.borrow().level.as_str().to_owned())
+    }
 }
 
 /// Record one log entry from the web layer (persist-only). Dropped when below
@@ -410,35 +482,58 @@ pub fn log_get_level() -> String {
 /// here. Otherwise queued for the next [`log_flush`].
 #[wasm_bindgen]
 pub fn log_record(level: &str, scope: &str, message: &str) {
-    log_record_entry(level, scope, message, None);
+    LoggerState::log_record_entry(LoggerLogRecordEntry {
+        level: level,
+        scope: scope,
+        message: message,
+        data: None,
+    });
 }
 
 #[wasm_bindgen]
 pub fn log_record_with_data(level: &str, scope: &str, message: &str, data: String) {
-    log_record_entry(level, scope, message, Some(data));
+    LoggerState::log_record_entry(LoggerLogRecordEntry {
+        level: level,
+        scope: scope,
+        message: message,
+        data: Some(data),
+    });
 }
 
-fn log_record_entry(level: &str, scope: &str, message: &str, data: Option<String>) {
-    let level = LogLevel::parse(level).unwrap_or(LogLevel::Info);
-    let active = LOGGER.with(|logger| logger.borrow().level);
-    if level.rank() > active.rank() {
-        return;
+impl LoggerState {
+    fn log_record_entry(request: LoggerLogRecordEntry<'_>) {
+        let LoggerLogRecordEntry {
+            level,
+            scope,
+            message,
+            data,
+        } = request;
+        let level = LogLevel::parse(level).unwrap_or(LogLevel::Info);
+        let active = LOGGER.with(|logger| logger.borrow().level);
+        if level.rank() > active.rank() {
+            return;
+        }
+        LoggerState::queue(LogEntry {
+            ts: LogEntry::now_iso(),
+            level: level.as_str().to_owned(),
+            scope: scope.to_owned(),
+            message: message.to_owned(),
+            data,
+        });
     }
-    queue(LogEntry {
-        ts: now_iso(),
-        level: level.as_str().to_owned(),
-        scope: scope.to_owned(),
-        message: message.to_owned(),
-        data,
-    });
 }
 
 /// Flush the in-memory queue to `IndexedDB`. Called on an interval by the web
 /// layer; safe to call concurrently (each call drains the current batch).
 #[wasm_bindgen]
 pub async fn log_flush() -> Result<(), wasm_bindgen::JsError> {
-    flush_pending().await?;
-    Ok(())
+    LoggerState::log_flush().await
+}
+impl LoggerState {
+    async fn log_flush() -> Result<(), wasm_bindgen::JsError> {
+        LoggerState::flush_pending().await?;
+        Ok(())
+    }
 }
 
 /// Read persisted entries (oldest first), filtered by minimum level and
@@ -446,8 +541,18 @@ pub async fn log_flush() -> Result<(), wasm_bindgen::JsError> {
 /// `{ ts, level, scope, message, data? }`.
 #[wasm_bindgen]
 pub async fn log_dump() -> Result<NookLogEntries, wasm_bindgen::JsError> {
-    let entries = dump_entries(None, None, None).await?;
-    Ok(NookLogEntries(entries))
+    LoggerState::log_dump().await
+}
+impl LoggerState {
+    async fn log_dump() -> Result<NookLogEntries, wasm_bindgen::JsError> {
+        let entries = LoggerState::dump_entries(LoggerDumpEntries {
+            min_level: None,
+            limit: None,
+            offset: None,
+        })
+        .await?;
+        Ok(NookLogEntries(entries))
+    }
 }
 
 #[wasm_bindgen]
@@ -463,8 +568,28 @@ pub async fn log_dump_page(
     limit: u32,
     offset: u32,
 ) -> Result<NookLogEntries, wasm_bindgen::JsError> {
-    let entries = dump_entries(Some(min_level), Some(limit), Some(offset)).await?;
-    Ok(NookLogEntries(entries))
+    LoggerState::log_dump_page(LoggerPage {
+        min_level: min_level,
+        limit: limit,
+        offset: offset,
+    })
+    .await
+}
+impl LoggerState {
+    async fn log_dump_page(request: LoggerPage) -> Result<NookLogEntries, wasm_bindgen::JsError> {
+        let LoggerPage {
+            min_level,
+            limit,
+            offset,
+        } = request;
+        let entries = LoggerState::dump_entries(LoggerDumpEntries {
+            min_level: Some(min_level),
+            limit: Some(limit),
+            offset: Some(offset),
+        })
+        .await?;
+        Ok(NookLogEntries(entries))
+    }
 }
 
 /// Total number of persisted log entries (after flushing the queue).
@@ -477,62 +602,74 @@ pub async fn log_dump_page(
     )
 )]
 pub async fn log_count() -> Result<u32, wasm_bindgen::JsError> {
-    flush_pending().await?;
-    let db = logs_db().await?;
-    let transaction = db
-        .transaction(&[LOG_STORE], TransactionMode::ReadOnly)
-        .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
-    let store = transaction
-        .store(LOG_STORE)
-        .map_err(|e| NookError::IndexedDb(format!("logs store error: {:?}", e)))?;
-    let count = store
-        .count(None)
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs count error: {:?}", e)))?;
-    transaction
-        .done()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
-    Ok(count)
+    LoggerState::log_count().await
+}
+impl LoggerState {
+    async fn log_count() -> Result<u32, wasm_bindgen::JsError> {
+        LoggerState::flush_pending().await?;
+        let db = LoggerState::logs_db().await?;
+        let transaction = db
+            .transaction(&[LOG_STORE], TransactionMode::ReadOnly)
+            .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
+        let store = transaction
+            .store(LOG_STORE)
+            .map_err(|e| NookError::IndexedDb(format!("logs store error: {:?}", e)))?;
+        let count = store
+            .count(None)
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs count error: {:?}", e)))?;
+        transaction
+            .done()
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
+        Ok(count)
+    }
 }
 
 /// Drop the in-memory queue and clear the persisted log store.
 #[wasm_bindgen]
 pub async fn log_clear() -> Result<(), wasm_bindgen::JsError> {
-    LOGGER.with(|logger| logger.borrow_mut().pending.clear());
-    let db = logs_db().await?;
-    let transaction = db
-        .transaction(&[LOG_STORE], TransactionMode::ReadWrite)
-        .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
-    let store = transaction
-        .store(LOG_STORE)
-        .map_err(|e| NookError::IndexedDb(format!("logs store error: {:?}", e)))?;
-    store
-        .clear()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs clear error: {:?}", e)))?;
-    transaction
-        .done()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
-    Ok(())
+    LoggerState::log_clear().await
+}
+impl LoggerState {
+    async fn log_clear() -> Result<(), wasm_bindgen::JsError> {
+        LOGGER.with(|logger| logger.borrow_mut().pending.clear());
+        let db = LoggerState::logs_db().await?;
+        let transaction = db
+            .transaction(&[LOG_STORE], TransactionMode::ReadWrite)
+            .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
+        let store = transaction
+            .store(LOG_STORE)
+            .map_err(|e| NookError::IndexedDb(format!("logs store error: {:?}", e)))?;
+        store
+            .clear()
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs clear error: {:?}", e)))?;
+        transaction
+            .done()
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
+        Ok(())
+    }
 }
 
-pub(crate) async fn clear_logs_db() -> Result<(), NookError> {
-    LOGGER.with(|logger| logger.borrow_mut().pending.clear());
-    let db = logs_db().await?;
-    let transaction = db
-        .transaction(&[LOG_STORE], TransactionMode::ReadWrite)
-        .map_err(|e| NookError::IndexedDb(format!("logs clear transaction error: {e:?}")))?;
-    transaction
-        .store(LOG_STORE)
-        .map_err(|e| NookError::IndexedDb(format!("logs clear store error: {e:?}")))?
-        .clear()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs clear error: {e:?}")))?;
-    transaction
-        .done()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("logs clear completion error: {e:?}")))?;
-    Ok(())
+impl LoggerState {
+    pub(crate) async fn clear_logs_db() -> Result<(), NookError> {
+        LOGGER.with(|logger| logger.borrow_mut().pending.clear());
+        let db = LoggerState::logs_db().await?;
+        let transaction = db
+            .transaction(&[LOG_STORE], TransactionMode::ReadWrite)
+            .map_err(|e| NookError::IndexedDb(format!("logs clear transaction error: {e:?}")))?;
+        transaction
+            .store(LOG_STORE)
+            .map_err(|e| NookError::IndexedDb(format!("logs clear store error: {e:?}")))?
+            .clear()
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs clear error: {e:?}")))?;
+        transaction
+            .done()
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("logs clear completion error: {e:?}")))?;
+        Ok(())
+    }
 }

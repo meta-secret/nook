@@ -8,7 +8,8 @@
 )]
 
 use crate::NookError;
-use nook_core::{EventId, VaultEvent, parse_remote_event_storage_bytes};
+use nook_core::GenesisImportRequest;
+use nook_core::{EventId, VaultEvent};
 
 pub(super) struct CheckedEventWrite<'a> {
     event_id: &'a EventId,
@@ -22,7 +23,7 @@ impl<'a> CheckedEventWrite<'a> {
         event_id: &'a EventId,
         provider: &str,
     ) -> Result<Self, NookError> {
-        let event = parse_remote_event_storage_bytes(&bytes.to_vec().into())
+        let event = VaultEvent::parse_remote_event_storage_bytes(&bytes.to_vec().into())
             .map_err(|e| NookError::Serialization(format!("{provider} event parse: {e}")))?;
         let actual = event.id()?;
         if actual != *event_id {
@@ -55,7 +56,7 @@ impl<'a> CheckedEventWrite<'a> {
     }
 
     fn matches_event(bytes: &[u8], expected: &VaultEvent) -> bool {
-        parse_remote_event_storage_bytes(&bytes.to_vec().into())
+        VaultEvent::parse_remote_event_storage_bytes(&bytes.to_vec().into())
             .is_ok_and(|event| &event == expected)
     }
 }
@@ -68,8 +69,7 @@ mod tests {
     };
     use nook_core::{
         DriveEventParent, Ed25519Signature, GenesisImportPayload, ICloudEventTarget, IsoTimestamp,
-        SigningIdentity, StoreId, ValidationError, build_genesis_import_event,
-        serialize_event_storage_yaml,
+        SigningIdentity, StoreId, ValidationError,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -82,21 +82,21 @@ mod tests {
     impl EventFixture {
         fn new() -> anyhow::Result<Self> {
             let (identity, _) = SigningIdentity::generate()?;
-            let event = build_genesis_import_event(
-                &StoreId::parse("store_testtoken11")?,
-                &identity.actor_id()?,
-                &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-                GenesisImportPayload {
+            let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &StoreId::parse("store_testtoken11")?,
+                actor_id: &identity.actor_id()?,
+                key_epoch: &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+                payload: GenesisImportPayload {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                     secrets: vec![],
                     password_entries: vec![],
                 },
-                &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-                identity.signing_key(),
-            )?;
+                created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+                signing_key: identity.signing_key(),
+            })?;
             Ok(Self {
                 event_id: event.id()?,
-                bytes: serialize_event_storage_yaml(&event)?.into(),
+                bytes: VaultEvent::serialize_event_storage_yaml(&event)?.into(),
                 event,
             })
         }
@@ -118,7 +118,9 @@ mod tests {
         assert!(!checked.matches(b"invalid event"));
         fixture.event.signature =
             Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
-        assert!(!checked.matches(serialize_event_storage_yaml(&fixture.event)?.as_ref()));
+        assert!(
+            !checked.matches(VaultEvent::serialize_event_storage_yaml(&fixture.event)?.as_ref())
+        );
         Ok(())
     }
 

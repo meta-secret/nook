@@ -3,7 +3,15 @@ use crate::{
     NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch,
     NookVaultSecurityRecommendations,
 };
-use nook_core::AppLocale;
+use nook_core::AuthenticationOutcomeObservation;
+use nook_core::AuthenticationWorkflowMatch;
+use nook_core::VaultSecurityAssessment;
+use nook_core::{AppLocale, VaultRecoveryErrorKind};
+use nook_core::{
+    LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
+    ResolveTranslationCatalogRequest, TranslateFromCatalogRequest, TranslateRequest,
+    TranslateWithReplacementsRequest, TranslationCatalog,
+};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -28,13 +36,16 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[wasm_bindgen]
 #[must_use]
 pub fn translate_key(locale: &str, key: &str) -> String {
-    nook_core::translate(locale, key)
+    TranslationCatalog::translate(TranslateRequest {
+        locale: locale,
+        key: key,
+    })
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn classify_vault_recovery_error(message: &str) -> nook_core::VaultRecoveryErrorKind {
-    nook_core::classify_vault_recovery_error(message)
+    VaultRecoveryErrorKind::classify_vault_recovery_error(message)
 }
 
 #[wasm_bindgen]
@@ -56,10 +67,12 @@ pub fn assess_vault_security(
     sync_provider_count: u32,
     enrolled_device_count: u32,
 ) -> NookVaultSecurityRecommendations {
-    NookVaultSecurityRecommendations::from_core(nook_core::assess_vault_security(
-        (sync_provider_count as usize).into(),
-        (enrolled_device_count as usize).into(),
-    ))
+    NookVaultSecurityRecommendations::from_core(
+        nook_core::VaultSecurityRecommendations::assess_vault_security(VaultSecurityAssessment {
+            sync_provider_count: (sync_provider_count as usize).into(),
+            enrolled_device_count: (enrolled_device_count as usize).into(),
+        }),
+    )
 }
 
 #[wasm_bindgen]
@@ -68,7 +81,9 @@ pub fn authentication_workflow_snapshot(
     observations: &NookAuthenticationPageObservations,
 ) -> NookAuthenticationWorkflowMatch {
     NookAuthenticationWorkflowMatch::from_core(
-        nook_core::classify_authentication_workflow_candidates(observations.as_core()),
+        AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+            observations.as_core(),
+        ),
     )
 }
 
@@ -85,10 +100,9 @@ pub fn classify_authentication_outcome(
     observation: &NookAuthenticationOutcomeObservation,
     timeout_ms: u32,
 ) -> NookAuthenticationOutcomeVerdict {
-    NookAuthenticationOutcomeVerdict::from_core(nook_core::classify_authentication_outcome(
-        observation.to_core(),
-        timeout_ms.into(),
-    ))
+    NookAuthenticationOutcomeVerdict::from_core(
+        (observation.to_core()).classify_authentication_outcome(timeout_ms.into()),
+    )
 }
 
 #[wasm_bindgen]
@@ -96,29 +110,29 @@ pub fn classify_authentication_outcome(
 pub fn classify_authentication_outcome_with_default_timeout(
     observation: &NookAuthenticationOutcomeObservation,
 ) -> NookAuthenticationOutcomeVerdict {
-    NookAuthenticationOutcomeVerdict::from_core(nook_core::classify_authentication_outcome(
-        observation.to_core(),
-        nook_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
-    ))
+    NookAuthenticationOutcomeVerdict::from_core(
+        (observation.to_core())
+            .classify_authentication_outcome(nook_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+    )
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn parse_app_locale(value: &str) -> NookAppLocaleParse {
-    nook_core::parse_app_locale(value).into()
+    AppLocale::parse_app_locale(value).into()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn resolve_app_locale_from_tag(tag: &str) -> NookAppLocaleParse {
-    nook_core::resolve_app_locale_from_tag(tag).into()
+    AppLocale::resolve_app_locale_from_tag(tag).into()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> String {
-    nook_core::resolve_app_locale_from_tags(tags.iter().map(String::as_str)).to_owned()
+    AppLocale::resolve_app_locale_from_tags(tags.iter().map(String::as_str)).to_owned()
 }
 
 #[wasm_bindgen]
@@ -137,19 +151,26 @@ pub fn supported_app_locale_code(
 #[wasm_bindgen]
 #[must_use]
 pub fn get_translation_catalog(locale: &str) -> String {
-    nook_core::get_translation_catalog(locale).to_owned()
+    AppLocale::get_translation_catalog(locale).to_owned()
 }
 
 #[wasm_bindgen]
 pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
-    nook_core::lookup_translation(catalog_json, key)
-        .ok_or_else(|| JsError::new(&format!("missing translation key: {key}")))
+    TranslationCatalog::lookup_translation(LookupTranslationRequest {
+        catalog_json: catalog_json,
+        key: key,
+    })
+    .ok_or_else(|| JsError::new(&format!("missing translation key: {key}")))
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> String {
-    nook_core::translate_from_catalog(catalog_json, locale, key)
+    TranslationCatalog::translate_from_catalog(TranslateFromCatalogRequest {
+        catalog_json: catalog_json,
+        locale: locale,
+        key: key,
+    })
 }
 
 #[wasm_bindgen]
@@ -165,13 +186,22 @@ pub fn translate_with_replacements(
         .into_iter()
         .zip(replacement_values)
         .collect::<Vec<_>>();
-    nook_core::translate_with_replacements(catalog_json, locale, key, &replacements)
+    TranslationCatalog::translate_with_replacements(TranslateWithReplacementsRequest {
+        catalog_json: catalog_json,
+        locale: locale,
+        key: key,
+        replacements: &replacements,
+    })
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) -> String {
-    nook_core::resolve_error_message(catalog_json, locale, message)
+    TranslationCatalog::resolve_error_message(ResolveErrorMessageRequest {
+        catalog_json: catalog_json,
+        locale: locale,
+        message: message,
+    })
 }
 
 #[wasm_bindgen]
@@ -179,19 +209,29 @@ pub fn merge_translation_catalogs(
     base_json: &str,
     overlay_json: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    nook_core::merge_translation_catalogs(base_json, overlay_json).map_err(Into::into)
+    TranslationCatalog::merge_translation_catalogs(MergeTranslationCatalogsRequest {
+        base_json: base_json,
+        overlay_json: overlay_json,
+    })
+    .map_err(Into::into)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> String {
-    nook_core::resolve_translation_catalog(locale, Some(wasm_catalog_json))
+    TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
+        locale: locale,
+        wasm_catalog_json: Some(wasm_catalog_json),
+    })
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn default_translation_catalog(locale: &str) -> String {
-    nook_core::resolve_translation_catalog(locale, None)
+    TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
+        locale: locale,
+        wasm_catalog_json: None,
+    })
 }
 
 #[cfg(test)]

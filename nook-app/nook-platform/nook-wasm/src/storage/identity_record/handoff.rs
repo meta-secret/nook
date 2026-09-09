@@ -6,9 +6,9 @@
 //! Atomic identity handoff persistence and authorization checks.
 
 mod existing_vault;
-use crate::manager;
 use crate::manager::PendingExtensionIdentityEnrollment;
 use crate::storage::event_db;
+use crate::{IdbPutStringRequest, NookDatabase, manager};
 use existing_vault::ExistingVaultHandoff;
 use rexie::TransactionMode;
 
@@ -75,7 +75,7 @@ impl IdentityHandoffCommit<'_> {
     /// Commit identity membership and its matching event signer in one transaction.
     pub(crate) async fn commit(self) -> Result<IdentityHandoffCommitResult, NookError> {
         let input = self;
-        let rexie = storage::open_nook_database().await?;
+        let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(input.store_names(), TransactionMode::ReadWrite)
             .map_err(|error| {
@@ -90,7 +90,7 @@ impl IdentityHandoffCommit<'_> {
             serde_wasm_bindgen::to_value(super::LEGACY_IDENTITY_RECORD_KEY).map_err(|error| {
                 NookError::IndexedDb(format!("Handoff legacy key error: {error:?}"))
             })?;
-        let mut directory = super::load_directory_for_write(&store).await?;
+        let mut directory = NookDatabase::load_directory_for_write(&store).await?;
         let (identity_id, existing_vault_keys) = match input.enrollment {
             PendingExtensionIdentityEnrollment::VaultCreation { .. } => {
                 return Err(NookError::Database(
@@ -103,7 +103,7 @@ impl IdentityHandoffCommit<'_> {
             } => (
                 directory
                     .enroll_app_key_for_owned_vault(authorizer, input.app_key, store_id)
-                    .map_err(identity_record::map_domain_error)?,
+                    .map_err(NookDatabase::map_domain_error)?,
                 None,
             ),
             PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. } => {
@@ -137,15 +137,15 @@ impl IdentityHandoffCommit<'_> {
                 input.app_key.app_id(),
                 input.signing_public_key,
             )
-            .map_err(identity_record::map_domain_error)?;
+            .map_err(NookDatabase::map_domain_error)?;
         if let Some((app_id, signing_public_key)) = input.authorizer_signing {
             directory
                 .set_member_signing_public_key(&identity_id, app_id, signing_public_key)
-                .map_err(identity_record::map_domain_error)?;
+                .map_err(NookDatabase::map_domain_error)?;
         }
         directory
             .validate()
-            .map_err(identity_record::map_domain_error)?;
+            .map_err(NookDatabase::map_domain_error)?;
         let encoded = serde_json::to_string(&directory)
             .map_err(|error| NookError::IndexedDb(format!("Handoff encode error: {error}")))?;
         let encoded_value = serde_wasm_bindgen::to_value(&encoded)
@@ -239,18 +239,18 @@ mod tests {
                 "Existing-vault handoff material is missing.",
             ),
         ] {
-            indexed_db::clear_vault_db().await?;
+            NookDatabase::clear_vault_db().await?;
             let result = fixture.request(&enrollment).commit().await;
             assert!(matches!(result, Err(NookError::Database(message)) if message == expected));
             assert!(
-                identity_record::load_identity_directory()
+                NookDatabase::load_identity_directory()
                     .await?
                     .identities()
                     .is_empty()
             );
-            assert!(event_db::load_signing_seed().await?.is_none());
+            assert!(NookDatabase::load_signing_seed().await?.is_none());
         }
-        indexed_db::clear_vault_db().await
+        NookDatabase::clear_vault_db().await
     }
 
     #[cfg_attr(
@@ -273,15 +273,19 @@ mod tests {
         )?;
         let encoded = serde_json::to_string(&directory)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        indexed_db::clear_vault_db().await?;
-        indexed_db::idb_put_string(identity_record::IDENTITY_DIRECTORY_KEY, &encoded).await?;
+        NookDatabase::clear_vault_db().await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: identity_record::IDENTITY_DIRECTORY_KEY,
+            value: &encoded,
+        })
+        .await?;
         let enrollment = PendingExtensionIdentityEnrollment::PairedVault {
             authorizer,
             store_id: fixture.store_id.clone(),
         };
         let committed = fixture.request(&enrollment).commit().await?;
         assert!(committed.existing_vault_keys.is_none());
-        let persisted = identity_record::load_identity_directory().await?;
+        let persisted = NookDatabase::load_identity_directory().await?;
         let record = persisted
             .identities()
             .iter()
@@ -293,8 +297,8 @@ mod tests {
             .find(|member| member.app_id == *fixture.app_key.app_id())
             .ok_or_else(|| NookError::Database("Handoff member is missing.".to_owned()))?;
         assert_eq!(member.signing_public_key, fixture.signing_public_key);
-        assert_eq!(event_db::load_signing_seed().await?, Some(fixture.seed));
-        indexed_db::clear_vault_db().await
+        assert_eq!(NookDatabase::load_signing_seed().await?, Some(fixture.seed));
+        NookDatabase::clear_vault_db().await
     }
 
     #[cfg_attr(
@@ -310,16 +314,16 @@ mod tests {
         let enrollment = PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
             store_id: fixture.store_id.clone(),
         };
-        indexed_db::clear_vault_db().await?;
+        NookDatabase::clear_vault_db().await?;
         {
             let _commit = fixture.request(&enrollment).commit();
         }
         assert!(
-            indexed_db::idb_get_string(identity_record::IDENTITY_DIRECTORY_KEY)
+            NookDatabase::idb_get_string(identity_record::IDENTITY_DIRECTORY_KEY)
                 .await?
                 .is_none()
         );
-        assert!(event_db::load_signing_seed().await?.is_none());
-        indexed_db::clear_vault_db().await
+        assert!(NookDatabase::load_signing_seed().await?.is_none());
+        NookDatabase::clear_vault_db().await
     }
 }

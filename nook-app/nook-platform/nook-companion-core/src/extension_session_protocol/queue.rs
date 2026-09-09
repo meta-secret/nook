@@ -26,7 +26,7 @@ pub enum PasskeyCeremonyPriority {
 pub enum QueueDisposition {
     MessageDefault {},
     Deadline {
-        #[serde(deserialize_with = "deserialize_finite_f64")]
+        #[serde(deserialize_with = "QueueDisposition::deserialize_finite_f64")]
         expires_at: f64,
         priority: QueuePriority,
     },
@@ -47,21 +47,23 @@ pub enum MessageDefaultQueueDisposition {
 )]
 pub enum PasskeyCeremonyQueueDisposition {
     Deadline {
-        #[serde(deserialize_with = "deserialize_finite_f64")]
+        #[serde(deserialize_with = "QueueDisposition::deserialize_finite_f64")]
         expires_at: f64,
         priority: PasskeyCeremonyPriority,
     },
 }
 
-pub(super) fn deserialize_finite_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = f64::deserialize(deserializer)?;
-    if value.is_finite() {
-        Ok(value)
-    } else {
-        Err(D::Error::custom("queue expiry must be finite"))
+impl QueueDisposition {
+    pub(super) fn deserialize_finite_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = f64::deserialize(deserializer)?;
+        if value.is_finite() {
+            Ok(value)
+        } else {
+            Err(D::Error::custom("queue expiry must be finite"))
+        }
     }
 }
 

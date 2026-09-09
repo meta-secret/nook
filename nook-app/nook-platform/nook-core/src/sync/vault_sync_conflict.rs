@@ -7,6 +7,7 @@
 )]
 
 use crate::{EventCount, IdentityVaultAppGrantKind, VaultOperation};
+use nook_event_log::{GenesisImportRequest, VaultEvent};
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -236,7 +237,6 @@ mod tests {
     use crate::{
         EncryptedSecretPayload, EventGraph, EventId, GenesisImportPayload, IsoTimestamp,
         OpaqueCiphertext, SecretFingerprint, SecretId, SecretType, SigningIdentity, StoreId,
-        build_genesis_import_event,
     };
 
     const TEST_STORE_ID: &str = "store_conflictux1";
@@ -265,20 +265,20 @@ mod tests {
                 .transpose()?
                 .into_iter()
                 .collect();
-            let event = build_genesis_import_event(
-                &StoreId::parse(TEST_STORE_ID)?,
-                &signing.actor_id()?,
-                &EventId::from_sha256_hex(
+            let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &StoreId::parse(TEST_STORE_ID)?,
+                actor_id: &signing.actor_id()?,
+                key_epoch: &EventId::from_sha256_hex(
                     nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
                 )?,
-                GenesisImportPayload {
+                payload: GenesisImportPayload {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets,
                     password_entries: Vec::new(),
                 },
-                &IsoTimestamp::parse("2026-09-01T00:00:00Z")?,
-                signing.signing_key(),
-            )?;
+                created_at: &IsoTimestamp::parse("2026-09-01T00:00:00Z")?,
+                signing_key: signing.signing_key(),
+            })?;
             let event_id = event.id()?;
             let mut graph = EventGraph::new();
             graph.insert(event, TEST_STORE_ID)?;

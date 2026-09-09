@@ -1,7 +1,7 @@
+use crate::CanonicalControlDestination;
+use crate::ControlDestinationEvidence;
 use crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
-use crate::{
-    PageControlActionability, PageControlSubmissionMethod, canonicalize_control_destination,
-};
+use crate::{PageControlActionability, PageControlSubmissionMethod};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -21,8 +21,13 @@ impl AuthenticationCredentialSubmissionFacts {
     pub(super) fn is_bounded(&self) -> bool {
         !matches!(self.method, PageControlSubmissionMethod::Absent)
             && self.form_identity.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && canonicalize_control_destination(&self.source_origin, &self.destination_identity)
-                .is_some()
+            && CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: &self.source_origin,
+                    destination_identity: &self.destination_identity,
+                },
+            )
+            .is_some()
     }
 }
 

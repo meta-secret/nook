@@ -4,8 +4,13 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Selection of the initiating local identity and surviving protected keys.
-use crate::NookError;
 use crate::storage::{device_access, identity_record, indexed_db};
+use crate::{IdbPutStringRequest, NookDatabase, NookError, ReadStringPreferringRequest};
+use crate::{
+    IdentityDbEnsureLocalIdentityForAppKey, IdentityDbGenerateVaultDekForIdentity,
+    IdentityDbSaveNewProtectedLocalIdentity, IdentityDbSaveProtectedLocalIdentity,
+    IdentityDbValidateVaultIdentityEnrollment, KeyringDbLoadKeyringForStore,
+};
 use identity_record::keyring;
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, LocalIdentityKeyring};
 pub(super) struct RecoveryState {
@@ -17,10 +22,9 @@ pub(super) struct RecoveryState {
     pub(super) clear_reconciliation: bool,
 }
 
-struct RecoveryDirectory {
-    value: IdentityDirectory,
-    readable: bool,
-}
+mod directory;
+use directory::RecoveryDirectory;
+
 pub(super) struct RecoveryPlanning<'a> {
     pub(super) store: &'a rexie::Store,
     pub(super) expected_app_id: Option<&'a AppId>,
@@ -40,48 +44,14 @@ impl RecoveryAccessProfile<'_> {
     }
 }
 impl RecoveryPlanning<'_> {
-    async fn directory(&self) -> Result<RecoveryDirectory, NookError> {
-        let store = self.store;
-        let directory_key = serde_wasm_bindgen::to_value(identity_record::IDENTITY_DIRECTORY_KEY)
-            .map_err(|error| {
-            NookError::IndexedDb(format!("Identity reset key error: {error:?}"))
-        })?;
-        let raw = store.get(directory_key).await.map_err(|error| {
-            NookError::IndexedDb(format!("Identity reset read error: {error:?}"))
-        })?;
-        let (mut directory, readable) =
-            match raw.filter(|value| !value.is_undefined() && !value.is_null()) {
-                Some(value) => match serde_wasm_bindgen::from_value::<String>(value)
-                    .ok()
-                    .and_then(|raw| identity_record::decode_directory(&raw).ok())
-                {
-                    Some(directory) => (directory, true),
-                    None => (IdentityDirectory::empty(), false),
-                },
-                // A missing directory cannot prove which identity owns a surviving
-                // keyring entry. Route recovery through the same safe full-reset
-                // path as corrupt or future-incompatible directory metadata.
-                None => (IdentityDirectory::empty(), false),
-            };
-        for app_id in identity_record::load_retired_app_ids(store)
-            .await
-            .unwrap_or_default()
-        {
-            directory.retire_app_id(app_id);
-        }
-        Ok(RecoveryDirectory {
-            value: directory,
-            readable,
-        })
-    }
     async fn legacy_app_id(&self) -> Option<AppId> {
         let store = self.store;
-        indexed_db::read_string_preferring(
-            store,
-            indexed_db::APP_ID_KEY,
-            indexed_db::DEVICE_ID_KEY,
-            "Identity reset app id",
-        )
+        NookDatabase::read_string_preferring(ReadStringPreferringRequest {
+            store: store,
+            preferred_key: indexed_db::APP_ID_KEY,
+            legacy_key: indexed_db::DEVICE_ID_KEY,
+            label: "Identity reset app id",
+        })
         .await
         .ok()
         .flatten()
@@ -137,7 +107,7 @@ impl RecoveryPlanning<'_> {
         let expected_app_id = self.expected_app_id;
         let recovered_directory = self.directory().await?;
         if !recovered_directory.readable {
-            let keyring = keyring::load_persisted_keyring_for_recovery(store).await?;
+            let keyring = NookDatabase::load_persisted_keyring_for_recovery(store).await?;
             return self
                 .full(FullRecovery {
                     directory: recovered_directory.value,
@@ -146,7 +116,11 @@ impl RecoveryPlanning<'_> {
                 .await;
         }
         let mut directory = recovered_directory.value;
-        let mut keyring = keyring::load_keyring_for_store(store, &directory).await?;
+        let mut keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
+            store: store,
+            directory: &directory,
+        })
+        .await?;
         let target_entry = if keyring.entries().is_empty() {
             None
         } else {
@@ -233,6 +207,7 @@ impl RecoveryPlanning<'_> {
 }
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::storage::identity_record;
     use crate::storage::{device_access, event_db, indexed_db};
     use nook_core::{AppKey, DeviceSigningPublicKey, IdentitySelection};
@@ -257,12 +232,16 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn destructive_recovery_forgets_stale_identity_ownership() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        let inaccessible_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let inaccessible_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let wrapped = DeviceIdentityProtection::new(&inaccessible_key.secret_string())
             .with_pin("test-pin")?;
-        identity_record::save_protected_local_identity(&inaccessible_key, &wrapped, "Personal")
-            .await?;
+        NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
+            app_key: &inaccessible_key,
+            record: &wrapped,
+            label: "Personal",
+        })
+        .await?;
         let pending = identity_record::OrdinarySimpleGenesisRequest {
             app_key: &inaccessible_key,
             label: "Personal",
@@ -270,46 +249,72 @@ mod tests {
         .begin_or_resume()
         .await?;
         let store_id = pending.store_id.clone();
-        let _ = identity_record::generate_vault_dek_for_identity(
-            &pending.identity_id,
-            &inaccessible_key,
-            store_id.clone(),
-        )
-        .await?;
+        let _ =
+            NookDatabase::generate_vault_dek_for_identity(IdentityDbGenerateVaultDekForIdentity {
+                identity_id: &pending.identity_id,
+                app_key: &inaccessible_key,
+                store_id: store_id.clone(),
+            })
+            .await?;
         let marker_v2 = format!("pending_identity_reconciliation_v2:{store_id}");
         let marker_v1 = format!("pending_identity_reconciliation_v1:{store_id}");
-        indexed_db::idb_put_string(&marker_v2, "stale-v2").await?;
-        indexed_db::idb_put_string(&marker_v1, "stale-v1").await?;
-        let current_app_id = keyring::load_keyring().await?.entries()[0].app_id().clone();
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: &marker_v2,
+            value: "stale-v2",
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: &marker_v1,
+            value: "stale-v1",
+        })
+        .await?;
+        let current_app_id = NookDatabase::load_keyring().await?.entries()[0]
+            .app_id()
+            .clone();
         let recovery = LocalIdentityRecoveryRequest {
             expected_app_id: Some(current_app_id),
         }
         .execute()
         .await?;
 
-        assert!(indexed_db::idb_get_string(&marker_v2).await?.is_none());
-        assert!(indexed_db::idb_get_string(&marker_v1).await?.is_none());
+        assert!(NookDatabase::idb_get_string(&marker_v2).await?.is_none());
+        assert!(NookDatabase::idb_get_string(&marker_v1).await?.is_none());
 
-        let stale_result =
-            identity_record::ensure_local_identity_for_app_key(&inaccessible_key, "Stale").await;
+        let stale_result = NookDatabase::ensure_local_identity_for_app_key(
+            IdentityDbEnsureLocalIdentityForAppKey {
+                app_key: &inaccessible_key,
+                label: "Stale",
+            },
+        )
+        .await;
         assert!(matches!(
             stale_result,
             Err(NookError::Database(message)) if message.contains("retired")
         ));
 
-        let replacement_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let replacement =
-            identity_record::ensure_local_identity_for_app_key(&replacement_key, "Recovered")
-                .await?;
+        let replacement_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let replacement = NookDatabase::ensure_local_identity_for_app_key(
+            IdentityDbEnsureLocalIdentityForAppKey {
+                app_key: &replacement_key,
+                label: "Recovered",
+            },
+        )
+        .await?;
         assert_ne!(replacement.identity_id, pending.identity_id);
-        identity_record::validate_vault_identity_enrollment(&replacement_key, &store_id).await?;
+        NookDatabase::validate_vault_identity_enrollment(
+            IdentityDbValidateVaultIdentityEnrollment {
+                app_key: &replacement_key,
+                store_id: &store_id,
+            },
+        )
+        .await?;
         assert!(
             PendingSimpleGenesis::load_for_store(store_id.as_str())
                 .await?
                 .is_none()
         );
         recovery.complete().await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -321,26 +326,42 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn destructive_recovery_bypasses_a_corrupt_identity_directory() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        let store_id = nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
-        let stale_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let earlier_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        indexed_db::idb_put_string(
-            RETIRED_APP_IDS_KEY,
-            &serde_json::to_string(&vec![earlier_key.app_id()])
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let store_id = nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?;
+        let stale_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let earlier_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: RETIRED_APP_IDS_KEY,
+            value: &serde_json::to_string(&vec![earlier_key.app_id()])
                 .map_err(|error| NookError::IndexedDb(error.to_string()))?,
-        )
+        })
         .await?;
-        indexed_db::idb_put_string(
-            "vault_registry",
-            &format!(r#"{{"vaults":[{{"store_id":"{store_id}","label":""}}]}}"#),
-        )
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: "vault_registry",
+            value: &format!(r#"{{"vaults":[{{"store_id":"{store_id}","label":""}}]}}"#),
+        })
         .await?;
         let marker = format!("pending_identity_reconciliation_v2:{store_id}");
-        indexed_db::idb_put_string(&marker, "inaccessible-plan").await?;
-        indexed_db::idb_put_string(IDENTITY_DIRECTORY_KEY, "{future-or-corrupt").await?;
-        indexed_db::idb_put_string(indexed_db::APP_ID_KEY, stale_key.app_id().as_str()).await?;
-        indexed_db::idb_put_string(indexed_db::APP_KEY_WRAPPED_KEY, "inaccessible").await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: &marker,
+            value: "inaccessible-plan",
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: IDENTITY_DIRECTORY_KEY,
+            value: "{future-or-corrupt",
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: indexed_db::APP_ID_KEY,
+            value: stale_key.app_id().as_str(),
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: indexed_db::APP_KEY_WRAPPED_KEY,
+            value: "inaccessible",
+        })
+        .await?;
 
         let recovery = LocalIdentityRecoveryRequest {
             expected_app_id: Some(stale_key.app_id().clone()),
@@ -349,25 +370,30 @@ mod tests {
         .await?;
 
         assert!(
-            indexed_db::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
+            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
                 .await?
                 .is_none()
         );
-        assert!(indexed_db::idb_get_string(&marker).await?.is_none());
-        let recovered = identity_record::load_identity_directory().await?;
+        assert!(NookDatabase::idb_get_string(&marker).await?.is_none());
+        let recovered = NookDatabase::load_identity_directory().await?;
         assert!(recovered.identities().is_empty());
         assert!(matches!(
-            identity_record::ensure_local_identity_for_app_key(&stale_key, "Stale").await,
+            NookDatabase::ensure_local_identity_for_app_key(IdentityDbEnsureLocalIdentityForAppKey { app_key: &stale_key, label: "Stale" }).await,
             Err(NookError::Database(message)) if message.contains("retired")
         ));
         assert!(
-            identity_record::ensure_local_identity_for_app_key(&earlier_key, "Earlier")
-                .await
-                .is_err()
+            NookDatabase::ensure_local_identity_for_app_key(
+                IdentityDbEnsureLocalIdentityForAppKey {
+                    app_key: &earlier_key,
+                    label: "Earlier"
+                }
+            )
+            .await
+            .is_err()
         );
         recovery.complete().await?;
-        indexed_db::idb_delete_key("vault_registry").await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::idb_delete_key("vault_registry").await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -380,36 +406,60 @@ mod tests {
     #[wasm_bindgen_test]
     async fn destructive_recovery_bypasses_corrupt_indexes_and_deletes_markers()
     -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        let store_id = nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let store_id = nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?;
         let marker = format!("pending_identity_reconciliation_v2:{store_id}");
-        indexed_db::idb_put_string(IDENTITY_DIRECTORY_KEY, "{corrupt").await?;
-        indexed_db::idb_put_string("vault_registry", "{corrupt").await?;
-        indexed_db::idb_put_string(RETIRED_APP_IDS_KEY, "{corrupt").await?;
-        indexed_db::idb_put_string(&marker, "inaccessible-plan").await?;
-        indexed_db::idb_put_string(indexed_db::APP_KEY_WRAPPED_KEY, "inaccessible").await?;
-        indexed_db::idb_put_string(event_db::SIGNING_SEED_KEY, &"11".repeat(32)).await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: IDENTITY_DIRECTORY_KEY,
+            value: "{corrupt",
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: "vault_registry",
+            value: "{corrupt",
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: RETIRED_APP_IDS_KEY,
+            value: "{corrupt",
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: &marker,
+            value: "inaccessible-plan",
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: indexed_db::APP_KEY_WRAPPED_KEY,
+            value: "inaccessible",
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: event_db::SIGNING_SEED_KEY,
+            value: &"11".repeat(32),
+        })
+        .await?;
         let recovery = LocalIdentityRecoveryRequest {
             expected_app_id: None,
         }
         .execute()
         .await?;
         assert!(
-            indexed_db::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
+            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
                 .await?
                 .is_none()
         );
         assert!(
-            indexed_db::idb_get_string(event_db::SIGNING_SEED_KEY)
+            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY)
                 .await?
                 .is_none()
         );
-        assert!(indexed_db::idb_get_string(&marker).await?.is_none());
-        let recovered = identity_record::load_identity_directory().await?;
+        assert!(NookDatabase::idb_get_string(&marker).await?.is_none());
+        let recovered = NookDatabase::load_identity_directory().await?;
         assert!(recovered.retired_app_ids().is_empty());
         recovery.complete().await?;
-        indexed_db::idb_delete_key("vault_registry").await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::idb_delete_key("vault_registry").await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -422,41 +472,47 @@ mod tests {
     #[wasm_bindgen_test]
     async fn recovery_targets_the_initiating_identity_not_the_shared_selection()
     -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        keyring::clear_keyring_for_test().await?;
-        let first_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let second_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_keyring_for_test().await?;
+        let first_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let second_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let first_wrapped =
             DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         let second_wrapped =
             DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
-        let first = identity_record::save_new_protected_local_identity(
-            &first_key,
-            &first_wrapped,
-            None,
-            "Personal",
+        let first = NookDatabase::save_new_protected_local_identity(
+            IdentityDbSaveNewProtectedLocalIdentity {
+                app_key: &first_key,
+                record: &first_wrapped,
+                prior_app_key: None,
+                label: "Personal",
+            },
         )
         .await?;
-        let second = identity_record::save_new_protected_local_identity(
-            &second_key,
-            &second_wrapped,
-            None,
-            "Work",
+        let second = NookDatabase::save_new_protected_local_identity(
+            IdentityDbSaveNewProtectedLocalIdentity {
+                app_key: &second_key,
+                record: &second_wrapped,
+                prior_app_key: None,
+                label: "Work",
+            },
         )
         .await?;
         let unrelated_store_id =
-            nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
+            nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?;
         let unrelated_marker = format!("pending_identity_reconciliation_v2:{unrelated_store_id}");
-        indexed_db::idb_put_string(&unrelated_marker, "remaining-identity-plan").await?;
-        indexed_db::idb_put_string(
-            device_access::DEVICE_ACCESS_PROFILE_KEY,
-            "companion-access-evidence",
-        )
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: &unrelated_marker,
+            value: "remaining-identity-plan",
+        })
+        .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: device_access::DEVICE_ACCESS_PROFILE_KEY,
+            value: "companion-access-evidence",
+        })
         .await?;
         assert_eq!(
-            identity_record::load_identity_directory()
-                .await?
-                .selection(),
+            NookDatabase::load_identity_directory().await?.selection(),
             &IdentitySelection::Selected(second.identity.identity_id.clone())
         );
 
@@ -479,31 +535,31 @@ mod tests {
         .await?;
         assert_eq!(resumed_after_reload, recovery);
 
-        let directory = identity_record::load_identity_directory().await?;
+        let directory = NookDatabase::load_identity_directory().await?;
         assert_eq!(directory.identities().len(), 1);
         assert_eq!(
             directory.identities()[0].identity_id,
             second.identity.identity_id
         );
         assert!(directory.retired_app_ids().contains(first_key.app_id()));
-        let remaining_keyring = keyring::load_keyring().await?;
+        let remaining_keyring = NookDatabase::load_keyring().await?;
         assert_eq!(remaining_keyring.entries().len(), 1);
         assert_eq!(remaining_keyring.entries()[0].app_id(), second_key.app_id());
         assert_ne!(first.identity.identity_id, second.identity.identity_id);
         assert_eq!(
-            indexed_db::idb_get_string(&unrelated_marker).await?,
+            NookDatabase::idb_get_string(&unrelated_marker).await?,
             Some("remaining-identity-plan".to_owned())
         );
         assert_eq!(
-            indexed_db::idb_get_string(device_access::DEVICE_ACCESS_PROFILE_KEY).await?,
+            NookDatabase::idb_get_string(device_access::DEVICE_ACCESS_PROFILE_KEY).await?,
             Some("companion-access-evidence".to_owned())
         );
 
         recovery.complete().await?;
-        indexed_db::idb_delete_key(&unrelated_marker).await?;
-        indexed_db::idb_delete_key(device_access::DEVICE_ACCESS_PROFILE_KEY).await?;
-        keyring::clear_keyring_for_test().await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::idb_delete_key(&unrelated_marker).await?;
+        NookDatabase::idb_delete_key(device_access::DEVICE_ACCESS_PROFILE_KEY).await?;
+        NookDatabase::clear_keyring_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -515,36 +571,40 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn scoped_recovery_preserves_a_different_surviving_selection() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        keyring::clear_keyring_for_test().await?;
-        let first_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let second_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let third_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_keyring_for_test().await?;
+        let first_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let second_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let third_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let first_wrapped =
             DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         let second_wrapped =
             DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
         let third_wrapped =
             DeviceIdentityProtection::new(&third_key.secret_string()).with_pin("third-secret")?;
-        let first = identity_record::save_new_protected_local_identity(
-            &first_key,
-            &first_wrapped,
-            None,
-            "Personal",
+        let first = NookDatabase::save_new_protected_local_identity(
+            IdentityDbSaveNewProtectedLocalIdentity {
+                app_key: &first_key,
+                record: &first_wrapped,
+                prior_app_key: None,
+                label: "Personal",
+            },
         )
         .await?;
-        identity_record::save_new_protected_local_identity(
-            &second_key,
-            &second_wrapped,
-            None,
-            "Work",
-        )
+        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
+            app_key: &second_key,
+            record: &second_wrapped,
+            prior_app_key: None,
+            label: "Work",
+        })
         .await?;
-        let third = identity_record::save_new_protected_local_identity(
-            &third_key,
-            &third_wrapped,
-            None,
-            "Family",
+        let third = NookDatabase::save_new_protected_local_identity(
+            IdentityDbSaveNewProtectedLocalIdentity {
+                app_key: &third_key,
+                record: &third_wrapped,
+                prior_app_key: None,
+                label: "Family",
+            },
         )
         .await?;
 
@@ -554,7 +614,7 @@ mod tests {
         .execute()
         .await?;
 
-        let directory = identity_record::load_identity_directory().await?;
+        let directory = NookDatabase::load_identity_directory().await?;
         assert_eq!(directory.identities().len(), 2);
         assert_eq!(
             directory.selection(),
@@ -566,108 +626,8 @@ mod tests {
             directory.identities()[0].identity_id
         );
         recovery.complete().await?;
-        keyring::clear_keyring_for_test().await?;
-        identity_record::clear_identity_directory_for_test().await
-    }
-
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    #[wasm_bindgen_test]
-    async fn corrupt_directory_with_valid_keyring_uses_safe_full_reset() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        keyring::clear_keyring_for_test().await?;
-        let first_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let second_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let first_wrapped =
-            DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
-        let second_wrapped =
-            DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
-        identity_record::save_new_protected_local_identity(
-            &first_key,
-            &first_wrapped,
-            None,
-            "Personal",
-        )
-        .await?;
-        identity_record::save_new_protected_local_identity(
-            &second_key,
-            &second_wrapped,
-            None,
-            "Work",
-        )
-        .await?;
-        indexed_db::idb_put_string(IDENTITY_DIRECTORY_KEY, "{future-or-corrupt").await?;
-
-        let recovery = LocalIdentityRecoveryRequest {
-            expected_app_id: Some(first_key.app_id().clone()),
-        }
-        .execute()
-        .await?;
-
-        assert!(!recovery.has_remaining_local_identities);
-        assert!(keyring::load_keyring().await?.entries().is_empty());
-        let directory = identity_record::load_identity_directory().await?;
-        assert!(directory.identities().is_empty());
-        assert!(directory.retired_app_ids().contains(first_key.app_id()));
-        assert!(directory.retired_app_ids().contains(second_key.app_id()));
-        recovery.complete().await?;
-        keyring::clear_keyring_for_test().await?;
-        identity_record::clear_identity_directory_for_test().await
-    }
-
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    #[wasm_bindgen_test]
-    async fn missing_directory_with_valid_keyring_uses_safe_full_reset() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        keyring::clear_keyring_for_test().await?;
-        let first_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let second_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let first_wrapped =
-            DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
-        let second_wrapped =
-            DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
-        identity_record::save_new_protected_local_identity(
-            &first_key,
-            &first_wrapped,
-            None,
-            "Personal",
-        )
-        .await?;
-        identity_record::save_new_protected_local_identity(
-            &second_key,
-            &second_wrapped,
-            None,
-            "Work",
-        )
-        .await?;
-        indexed_db::idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
-
-        let recovery = LocalIdentityRecoveryRequest {
-            expected_app_id: Some(first_key.app_id().clone()),
-        }
-        .execute()
-        .await?;
-
-        assert!(!recovery.has_remaining_local_identities);
-        assert!(keyring::load_keyring().await?.entries().is_empty());
-        let directory = identity_record::load_identity_directory().await?;
-        assert!(directory.identities().is_empty());
-        assert!(directory.retired_app_ids().contains(first_key.app_id()));
-        assert!(directory.retired_app_ids().contains(second_key.app_id()));
-        recovery.complete().await?;
-        keyring::clear_keyring_for_test().await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_keyring_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -680,33 +640,36 @@ mod tests {
     #[wasm_bindgen_test]
     async fn recovery_rejects_a_corrupt_keyring_without_replacing_the_directory()
     -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        keyring::clear_keyring_for_test().await?;
-        let first_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let second_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_keyring_for_test().await?;
+        let first_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let second_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let first_wrapped =
             DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         let second_wrapped =
             DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
-        identity_record::save_new_protected_local_identity(
-            &first_key,
-            &first_wrapped,
-            None,
-            "Personal",
-        )
+        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
+            app_key: &first_key,
+            record: &first_wrapped,
+            prior_app_key: None,
+            label: "Personal",
+        })
         .await?;
-        identity_record::save_new_protected_local_identity(
-            &second_key,
-            &second_wrapped,
-            None,
-            "Work",
-        )
+        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
+            app_key: &second_key,
+            record: &second_wrapped,
+            prior_app_key: None,
+            label: "Work",
+        })
         .await?;
-        let directory_before = indexed_db::idb_get_string(IDENTITY_DIRECTORY_KEY)
+        let directory_before = NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
             .await?
             .ok_or_else(|| NookError::IndexedDb("Identity directory is missing".to_owned()))?;
-        indexed_db::idb_put_string(keyring::LOCAL_IDENTITY_KEYRING_KEY, "{future-or-corrupt")
-            .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: keyring::LOCAL_IDENTITY_KEYRING_KEY,
+            value: "{future-or-corrupt",
+        })
+        .await?;
 
         let result = LocalIdentityRecoveryRequest {
             expected_app_id: Some(second_key.app_id().clone()),
@@ -719,15 +682,15 @@ mod tests {
             Err(NookError::IndexedDb(message)) if message.contains("keyring decode")
         ));
         assert_eq!(
-            indexed_db::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
             Some(directory_before)
         );
         assert_eq!(
-            indexed_db::idb_get_string(keyring::LOCAL_IDENTITY_KEYRING_KEY).await?,
+            NookDatabase::idb_get_string(keyring::LOCAL_IDENTITY_KEYRING_KEY).await?,
             Some("{future-or-corrupt".to_owned())
         );
-        keyring::clear_keyring_for_test().await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_keyring_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -740,27 +703,29 @@ mod tests {
     #[wasm_bindgen_test]
     async fn scoped_recovery_preserves_simple_genesis_owned_by_a_remaining_identity()
     -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        keyring::clear_keyring_for_test().await?;
-        let first_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let second_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_keyring_for_test().await?;
+        let first_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let second_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let first_wrapped =
             DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         let second_wrapped =
             DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
-        let first = identity_record::save_new_protected_local_identity(
-            &first_key,
-            &first_wrapped,
-            None,
-            "Personal",
+        let first = NookDatabase::save_new_protected_local_identity(
+            IdentityDbSaveNewProtectedLocalIdentity {
+                app_key: &first_key,
+                record: &first_wrapped,
+                prior_app_key: None,
+                label: "Personal",
+            },
         )
         .await?;
-        identity_record::save_new_protected_local_identity(
-            &second_key,
-            &second_wrapped,
-            None,
-            "Work",
-        )
+        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
+            app_key: &second_key,
+            record: &second_wrapped,
+            prior_app_key: None,
+            label: "Work",
+        })
         .await?;
         let pending = identity_record::OrdinarySimpleGenesisRequest {
             app_key: &first_key,
@@ -781,8 +746,8 @@ mod tests {
             .ok_or_else(|| NookError::IndexedDb("Pending Simple genesis was erased".to_owned()))?;
         assert_eq!(preserved.identity_id, first.identity.identity_id);
         recovery.complete().await?;
-        keyring::clear_keyring_for_test().await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_keyring_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -795,21 +760,26 @@ mod tests {
     #[wasm_bindgen_test]
     async fn peer_only_identity_does_not_block_replacement_local_protection()
     -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        keyring::clear_keyring_for_test().await?;
-        let local_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_keyring_for_test().await?;
+        let local_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let wrapped =
             DeviceIdentityProtection::new(&local_key.secret_string()).with_pin("local-secret")?;
-        let saved = identity_record::save_new_protected_local_identity(
-            &local_key, &wrapped, None, "Personal",
+        let saved = NookDatabase::save_new_protected_local_identity(
+            IdentityDbSaveNewProtectedLocalIdentity {
+                app_key: &local_key,
+                record: &wrapped,
+                prior_app_key: None,
+                label: "Personal",
+            },
         )
         .await?;
-        let peer_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        let peer_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let identity_id = saved.identity.identity_id.clone();
-        identity_record::update_identity_directory(move |directory| {
+        NookDatabase::update_identity_directory(move |directory| {
             directory
                 .selected_mut()
-                .map_err(identity_record::map_domain_error)?
+                .map_err(NookDatabase::map_domain_error)?
                 .add_member(nook_core::IdentityMember {
                     app_id: peer_key.app_id().clone(),
                     auth_id: peer_key.auth_id(),
@@ -817,7 +787,7 @@ mod tests {
                     signing_public_key: DeviceSigningPublicKey::Unavailable,
                     label: None,
                 })
-                .map_err(identity_record::map_domain_error)
+                .map_err(NookDatabase::map_domain_error)
         })
         .await?;
 
@@ -827,23 +797,24 @@ mod tests {
         .execute()
         .await?;
 
-        let recovered_directory = identity_record::load_identity_directory().await?;
+        let recovered_directory = NookDatabase::load_identity_directory().await?;
         assert_eq!(recovered_directory.selection(), &IdentitySelection::Empty);
         assert_eq!(recovered_directory.identities().len(), 1);
         assert_eq!(recovered_directory.identities()[0].identity_id, identity_id);
         recovery.complete().await?;
-        let replacement_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        let replacement_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let replacement_wrapped = DeviceIdentityProtection::new(&replacement_key.secret_string())
             .with_pin("replacement-secret")?;
-        let replacement = identity_record::save_protected_local_identity(
-            &replacement_key,
-            &replacement_wrapped,
-            "Recovered",
-        )
-        .await?;
+        let replacement =
+            NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
+                app_key: &replacement_key,
+                record: &replacement_wrapped,
+                label: "Recovered",
+            })
+            .await?;
         assert_ne!(replacement.identity.identity_id, identity_id);
-        keyring::clear_keyring_for_test().await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_keyring_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -855,30 +826,33 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn scoped_recovery_rejects_an_unattributed_sentinel_marker() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        keyring::clear_keyring_for_test().await?;
-        let first_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let second_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_keyring_for_test().await?;
+        let first_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let second_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let first_wrapped =
             DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         let second_wrapped =
             DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
-        identity_record::save_new_protected_local_identity(
-            &first_key,
-            &first_wrapped,
-            None,
-            "Personal",
-        )
+        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
+            app_key: &first_key,
+            record: &first_wrapped,
+            prior_app_key: None,
+            label: "Personal",
+        })
         .await?;
-        identity_record::save_new_protected_local_identity(
-            &second_key,
-            &second_wrapped,
-            None,
-            "Work",
-        )
+        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
+            app_key: &second_key,
+            record: &second_wrapped,
+            prior_app_key: None,
+            label: "Work",
+        })
         .await?;
-        indexed_db::idb_put_string(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY, "{}")
-            .await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY,
+            value: "{}",
+        })
+        .await?;
 
         let result = LocalIdentityRecoveryRequest {
             expected_app_id: Some(second_key.app_id().clone()),
@@ -890,14 +864,14 @@ mod tests {
             result,
             Err(NookError::Database(message)) if message.contains("Sentinel")
         ));
-        assert_eq!(keyring::load_keyring().await?.entries().len(), 2);
+        assert_eq!(NookDatabase::load_keyring().await?.entries().len(), 2);
         assert_eq!(
-            indexed_db::idb_get_string(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY)
+            NookDatabase::idb_get_string(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY)
                 .await?,
             Some("{}".to_owned())
         );
-        indexed_db::idb_delete_key(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await?;
-        keyring::clear_keyring_for_test().await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::idb_delete_key(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await?;
+        NookDatabase::clear_keyring_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 }

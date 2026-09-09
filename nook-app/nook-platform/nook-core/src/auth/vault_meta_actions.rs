@@ -1,10 +1,11 @@
 //! Owned actions for replaying and projecting vault metadata.
 
 use crate::{EpochMetadataState, EventGraph, MemberLabel, SymmetricKey, VaultOperation};
+use nook_auth2::BuildMembersRecordsRequest;
 use nook_auth2::{
     AuthEnvelopes, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp,
     JoinRequest, MultiDeviceError, MultiDeviceResult, SentinelParticipantEntry,
-    SentinelShareEnvelope, VaultMember, VaultMetaState, build_members_records,
+    SentinelShareEnvelope, VaultMember, VaultMetaState,
 };
 
 use std::collections::BTreeMap;
@@ -420,6 +421,9 @@ impl<'a> SentinelMemberRecordProjection<'a> {
             })
             .collect::<MultiDeviceResult<Vec<_>>>()?;
         roster.sort_by(|left, right| left.auth_id.cmp(&right.auth_id));
-        build_members_records(&roster, self.members_key)
+        VaultMember::build_members_records(BuildMembersRecordsRequest {
+            roster: &roster,
+            members_key: self.members_key,
+        })
     }
 }

@@ -1,5 +1,7 @@
 use super::wasm_bindgen;
+use crate::BrowserPasskeyRequestOptions;
 use crate::passkey_browser;
+use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions};
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -49,13 +51,13 @@ impl NookPasskeySetup {
         rp_id: &str,
         rp_name: &str,
     ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
-        passkey_browser::creation_options(
-            rp_id,
-            rp_name,
-            passkey_browser::DEFAULT_PASSKEY_LABEL,
-            &self.user_handle,
-            &self.prf_input,
-        )
+        BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
+            rp_id: rp_id,
+            rp_name: rp_name,
+            passkey_label: passkey_browser::DEFAULT_PASSKEY_LABEL,
+            user_handle: &self.user_handle,
+            prf_input: &self.prf_input,
+        })
     }
 
     /// Build browser registration options with the label chosen by the caller.
@@ -68,13 +70,13 @@ impl NookPasskeySetup {
         rp_name: &str,
         passkey_label: &str,
     ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
-        passkey_browser::creation_options(
-            rp_id,
-            rp_name,
-            passkey_label,
-            &self.user_handle,
-            &self.prf_input,
-        )
+        BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
+            rp_id: rp_id,
+            rp_name: rp_name,
+            passkey_label: passkey_label,
+            user_handle: &self.user_handle,
+            prf_input: &self.prf_input,
+        })
     }
 }
 
@@ -128,7 +130,11 @@ impl NookPasskeyUnlockOptions {
         &self,
         rp_id: &str,
     ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
-        passkey_browser::request_options(rp_id, &self.credential_id, &self.prf_input)
+        BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
+            rp_id: rp_id,
+            credential_id: &self.credential_id,
+            prf_input: &self.prf_input,
+        })
     }
 }
 
@@ -248,13 +254,15 @@ impl NookPasswordEntrySummary {
     }
 }
 
-pub(crate) fn password_entries_to_vec(
-    entries: &[nook_core::PasswordUnlockEntry],
-) -> Vec<NookPasswordEntrySummary> {
-    entries
-        .iter()
-        .map(NookPasswordEntrySummary::from_core)
-        .collect()
+impl NookPasswordEntrySummary {
+    pub(crate) fn password_entries_to_vec(
+        entries: &[nook_core::PasswordUnlockEntry],
+    ) -> Vec<NookPasswordEntrySummary> {
+        entries
+            .iter()
+            .map(NookPasswordEntrySummary::from_core)
+            .collect()
+    }
 }
 
 #[cfg(test)]

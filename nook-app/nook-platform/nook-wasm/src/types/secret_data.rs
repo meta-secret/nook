@@ -340,24 +340,30 @@ impl Drop for NookTotpCode {
     }
 }
 
-pub(crate) fn records_to_vec(
-    records: Vec<nook_core::SecretRecord>,
-) -> Result<Vec<NookSecretRecord>, NookError> {
-    Ok(records
-        .into_iter()
-        .map(NookSecretRecord::from_record)
-        .collect())
+impl NookSecretRecord {
+    pub(crate) fn records_to_vec(
+        records: Vec<nook_core::SecretRecord>,
+    ) -> Result<Vec<NookSecretRecord>, NookError> {
+        Ok(records
+            .into_iter()
+            .map(NookSecretRecord::from_record)
+            .collect())
+    }
 }
 
-pub(crate) fn joins_to_vec(joins: Vec<nook_core::JoinRequest>) -> Vec<NookJoinRequest> {
-    joins.into_iter().map(NookJoinRequest::from_core).collect()
+impl NookJoinRequest {
+    pub(crate) fn joins_to_vec(joins: Vec<nook_core::JoinRequest>) -> Vec<NookJoinRequest> {
+        joins.into_iter().map(NookJoinRequest::from_core).collect()
+    }
 }
 
-pub(crate) fn members_to_vec(members: Vec<nook_core::VaultMember>) -> Vec<NookVaultMember> {
-    members
-        .into_iter()
-        .map(NookVaultMember::from_core)
-        .collect()
+impl NookVaultMember {
+    pub(crate) fn members_to_vec(members: Vec<nook_core::VaultMember>) -> Vec<NookVaultMember> {
+        members
+            .into_iter()
+            .map(NookVaultMember::from_core)
+            .collect()
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

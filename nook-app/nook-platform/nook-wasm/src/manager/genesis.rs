@@ -1,9 +1,13 @@
 //! Vault genesis and empty-session initialization.
 
 use super::{NookVaultManager, VaultNameState};
-use crate::NookError;
-use crate::NookSecretRecord;
+use crate::IdentityDbGenerateVaultDekForIdentity;
+use crate::NookDatabase;
 use crate::storage::identity_record;
+use crate::{NookError, NookSecretRecord};
+use nook_core::{
+    GenesisMembersRecordsRequest, IdentityRecord, IdentityVaultGenesisRecordsRequest, VaultMember,
+};
 use nook_core::{SymmetricKey, VaultMetaState, VaultType, VaultUnlock};
 use wasm_bindgen::JsError;
 
@@ -65,13 +69,14 @@ impl NookVaultManager {
             self.apply_identity_genesis_vault_keys(&identity_record, &keys)?;
             return Ok(pending);
         }
-        let keys = identity_record::generate_vault_dek_for_identity(
-            &pending.identity_id,
-            identity,
-            pending.store_id.clone(),
-        )
-        .await?;
-        let identity_record = identity_record::load_identity(&pending.identity_id)
+        let keys =
+            NookDatabase::generate_vault_dek_for_identity(IdentityDbGenerateVaultDekForIdentity {
+                identity_id: &pending.identity_id,
+                app_key: identity,
+                store_id: pending.store_id.clone(),
+            })
+            .await?;
+        let identity_record = NookDatabase::load_identity(&pending.identity_id)
             .await?
             .ok_or_else(|| {
                 NookError::Database("Pending genesis identity no longer exists.".to_owned())
@@ -87,7 +92,13 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.prepare_genesis_vault_keys(keys)?;
         if self.vault.architecture.vault_type == VaultType::Simple {
-            for record in nook_core::identity_vault_genesis_records(identity, keys, "genesis")? {
+            for record in IdentityRecord::identity_vault_genesis_records(
+                IdentityVaultGenesisRecordsRequest {
+                    identity: identity,
+                    keys: keys,
+                    enrolled_at: "genesis",
+                },
+            )? {
                 self.vault.meta.apply_record(&record)?;
             }
         }
@@ -120,7 +131,11 @@ impl NookVaultManager {
                 // are issued after the required participants are enrolled.
             }
         }
-        for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
+        for member in VaultMember::genesis_members_records(GenesisMembersRecordsRequest {
+            identity: identity,
+            members_key: &keys.members_key,
+            enrolled_at: "genesis",
+        })? {
             self.vault.meta.apply_record(&member)?;
         }
         Ok(())
@@ -152,7 +167,11 @@ impl NookVaultManager {
                     // Sentinel never writes per-device auth envelopes.
                 }
             }
-            for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {
+            for member in VaultMember::genesis_members_records(GenesisMembersRecordsRequest {
+                identity: &identity,
+                members_key: &members_key,
+                enrolled_at: "genesis",
+            })? {
                 self.vault.meta.apply_record(&member)?;
             }
         }

@@ -1,8 +1,9 @@
 //! Local device-protection persistence and destructive recovery.
 
 use super::NookVaultManager;
-use crate::NookError;
+use crate::AuthProviderDatabase;
 use crate::storage::{auth_providers, indexed_db};
+use crate::{NookDatabase, NookError};
 use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, DriveEventParent, StorageMode};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
@@ -45,13 +46,13 @@ impl NookVaultManager {
             Some(AppId::parse(expected_app_id)?)
         };
         self.quiesce_for_local_recovery();
-        let recovery = indexed_db::delete_device_identity_for_recovery(expected_app_id).await?;
+        let recovery = NookDatabase::delete_device_identity_for_recovery(expected_app_id).await?;
         if recovery.has_remaining_local_identities {
             if let Some(app_id) = recovery.retired_app_id.as_ref() {
-                auth_providers::delete_auth_providers_for_app_id(app_id).await?;
+                AuthProviderDatabase::delete_auth_providers_for_app_id(app_id).await?;
             }
         } else {
-            auth_providers::delete_auth_providers_db().await?;
+            AuthProviderDatabase::delete_auth_providers_db().await?;
         }
         recovery.complete().await?;
         Ok(())
@@ -64,9 +65,9 @@ impl NookVaultManager {
     ) -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
         let session_app_id = self.device.public_app_id();
         if session_app_id.is_empty() {
-            indexed_db::load_wrapped_device_identity().await
+            NookDatabase::load_wrapped_device_identity().await
         } else {
-            indexed_db::load_wrapped_device_identity_for_app_id(&session_app_id).await
+            NookDatabase::load_wrapped_device_identity_for_app_id(&session_app_id).await
         }
     }
 

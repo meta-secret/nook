@@ -4,7 +4,11 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::storage::event_db::save_event_bytes;
+use crate::EventDbSaveEventBytes;
+use crate::EventDbSaveHeads;
+use crate::IdentityDbSetIdentityMemberSigningPublicKey;
+use crate::NookDatabase;
+
 use crate::storage::identity_record;
 use nook_core::{
     IsoTimestamp, MemberLabel, SigningIdentity, StorageMode, StoreId, SymmetricKey, VaultEvent,
@@ -14,8 +18,7 @@ use std::collections::BTreeSet;
 
 use super::{
     DriveEventStore, EventId, GitHubEventStore, ICloudEventStore, NookError, NookVaultManager,
-    VaultOperation, iso_timestamp, load_local_event_store, load_signing_seed, save_heads,
-    save_signing_seed,
+    VaultOperation, iso_timestamp,
 };
 
 impl NookError {
@@ -67,13 +70,15 @@ impl SimpleGenesisOperationsInput<'_> {
                     )
                 })?
         } else {
-            identity_record::set_identity_member_signing_public_key(
-                &pending.identity_id,
-                self.identity.device_id(),
-                self.signing_public_key,
+            NookDatabase::set_identity_member_signing_public_key(
+                IdentityDbSetIdentityMemberSigningPublicKey {
+                    identity_id: &pending.identity_id,
+                    app_id: self.identity.device_id(),
+                    signing_public_key: self.signing_public_key,
+                },
             )
             .await?;
-            identity_record::load_identity(&pending.identity_id)
+            NookDatabase::load_identity(&pending.identity_id)
                 .await?
                 .ok_or_else(|| {
                     NookError::Database("Simple genesis identity no longer exists.".to_owned())
@@ -104,11 +109,12 @@ impl NookVaultManager {
             self.event_log.signing_seed = seed;
         }
         if self.event_log.signing_seed.is_empty() {
-            self.event_log.signing_seed = load_signing_seed().await?.ok_or_else(|| {
-                NookError::Database(
-                    "Staged Simple genesis requires an enrolled member signing key.".to_owned(),
-                )
-            })?;
+            self.event_log.signing_seed =
+                NookDatabase::load_signing_seed().await?.ok_or_else(|| {
+                    NookError::Database(
+                        "Staged Simple genesis requires an enrolled member signing key.".to_owned(),
+                    )
+                })?;
         }
         let signing = SigningIdentity::from_seed_hex_stored(&self.event_log.signing_seed)?;
         let staged = pending.staged_identity().ok_or_else(|| {
@@ -251,7 +257,7 @@ impl NookVaultManager {
     pub(in crate::manager) async fn bootstrap_event_log_genesis(
         &mut self,
     ) -> Result<(), NookError> {
-        let created_at = IsoTimestamp::parse(&iso_timestamp())?;
+        let created_at = IsoTimestamp::parse(&crate::BrowserTimestamp::now().into_iso_string())?;
         self.bootstrap_event_log_genesis_inner(&created_at, None)
             .await
     }
@@ -321,7 +327,7 @@ impl NookVaultManager {
             operations,
         };
         let proposed = VaultEvent::sign(body, signing.signing_key())?;
-        let proposed_bytes: Vec<u8> = nook_core::serialize_event_storage_yaml(&proposed)
+        let proposed_bytes: Vec<u8> = VaultEvent::serialize_event_storage_yaml(&proposed)
             .map_err(|e| NookError::Serialization(e.to_string()))?
             .into();
         let bytes = if let Some(pending) = pending {
@@ -336,22 +342,31 @@ impl NookVaultManager {
                 })
                 .await?;
             self.event_log.signing_seed.clone_from(&pinned.signing_seed);
-            let keyring_backed = identity_record::load_entry_for_app_id(app_key.app_id())
+            let keyring_backed = NookDatabase::load_entry_for_app_id(app_key.app_id())
                 .await?
                 .is_some();
             if !pending.is_staged() && !keyring_backed {
-                save_signing_seed(&pinned.signing_seed).await?;
+                NookDatabase::save_signing_seed(&pinned.signing_seed).await?;
             }
             pinned.event_yaml.into_bytes()
         } else {
             proposed_bytes
         };
-        let import = nook_core::parse_event_storage_bytes(&bytes.clone().into())?;
+        let import = VaultEvent::parse_event_storage_bytes(&bytes.clone().into())?;
         let expected_store_id = StoreId::parse(&self.vault.store_id)?;
         let event_id = import.validate_envelope(&expected_store_id)?;
-        save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes.as_ref()).await?;
+        NookDatabase::save_event_bytes(EventDbSaveEventBytes {
+            store_id: &self.vault.store_id,
+            event_id: event_id.as_str(),
+            bytes: bytes.as_ref(),
+        })
+        .await?;
         self.event_log.heads = vec![event_id.as_str().to_owned()];
-        save_heads(&self.vault.store_id, &self.event_log.heads).await?;
+        NookDatabase::save_heads(EventDbSaveHeads {
+            store_id: &self.vault.store_id,
+            heads: &self.event_log.heads,
+        })
+        .await?;
         self.queue_event_outbox_for_current_provider(&event_id, bytes.as_ref())
             .await?;
         Ok(())
@@ -401,17 +416,26 @@ impl NookVaultManager {
             actor_id,
             actor_signing_public_key: signing.public_key(),
             parents: Vec::new(),
-            created_at: IsoTimestamp::parse(&iso_timestamp())?,
+            created_at: IsoTimestamp::parse(&crate::BrowserTimestamp::now().into_iso_string())?,
             key_epoch: EventId::parse(&key_epoch)?,
             operations,
         };
         let genesis = VaultEvent::sign(body, signing.signing_key())?;
         let event_id = genesis.id()?;
-        let bytes = nook_core::serialize_event_storage_yaml(&genesis)
+        let bytes = VaultEvent::serialize_event_storage_yaml(&genesis)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes.as_ref()).await?;
+        NookDatabase::save_event_bytes(EventDbSaveEventBytes {
+            store_id: &self.vault.store_id,
+            event_id: event_id.as_str(),
+            bytes: bytes.as_ref(),
+        })
+        .await?;
         self.event_log.heads = vec![event_id.as_str().to_owned()];
-        save_heads(&self.vault.store_id, &self.event_log.heads).await?;
+        NookDatabase::save_heads(EventDbSaveHeads {
+            store_id: &self.vault.store_id,
+            heads: &self.event_log.heads,
+        })
+        .await?;
         self.queue_event_outbox_for_current_provider(&event_id, bytes.as_ref())
             .await?;
         Ok(())
@@ -425,7 +449,7 @@ impl NookVaultManager {
         participants: &[nook_core::SentinelGenesisParticipant],
         deliveries: &[nook_core::SentinelGenesisShareDelivery],
     ) -> Result<(), NookError> {
-        let store = load_local_event_store(&self.vault.store_id).await?;
+        let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
         if store.event_ids().is_empty() {
             return self
                 .bootstrap_sentinel_genesis_event(participants, deliveries)
@@ -438,7 +462,11 @@ impl NookVaultManager {
             .into_iter()
             .map(|head| head.as_str().to_owned())
             .collect();
-        save_heads(&self.vault.store_id, &self.event_log.heads).await
+        NookDatabase::save_heads(EventDbSaveHeads {
+            store_id: &self.vault.store_id,
+            heads: &self.event_log.heads,
+        })
+        .await
     }
 
     pub(in crate::manager) async fn persist_vault_change(

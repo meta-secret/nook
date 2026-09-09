@@ -1,9 +1,6 @@
 //! Typed values exported across the wasm-bindgen boundary (no untyped JavaScript bags).
 
-use crate::NookError;
-use crate::NookSecretListItem;
-use crate::NookSecretRecord;
-use crate::NookVaultManager;
+use crate::{NookError, NookSecretListItem, NookSecretRecord, NookVaultManager};
 use gloo_utils::window;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -34,7 +31,3 @@ pub use sync::*;
 pub use sync_state::*;
 
 pub(crate) use authentication::LoginAccountProjection;
-
-pub(crate) use access::password_entries_to_vec;
-pub(crate) use conflicts::{replacement_conflicts_to_vec, security_conflicts_to_vec};
-pub(crate) use secret_data::{joins_to_vec, members_to_vec, records_to_vec};

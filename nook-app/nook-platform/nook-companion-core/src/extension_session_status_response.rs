@@ -78,29 +78,33 @@ pub enum ExtensionSessionStatusAvailability {
     Unlocked,
 }
 
-#[must_use]
-pub fn decode_extension_session_status_response(
-    response: &ExtensionSessionStatusResponseWire,
-) -> ExtensionSessionStatusAvailability {
-    if !response.ok {
-        return ExtensionSessionStatusAvailability::Unavailable;
-    }
-    match response.status {
-        ExtensionSessionDeviceProtectionStatusWire::Missing
-        | ExtensionSessionDeviceProtectionStatusWire::Plaintext
-        | ExtensionSessionDeviceProtectionStatusWire::Passkey
-        | ExtensionSessionDeviceProtectionStatusWire::Pin => {
-            ExtensionSessionStatusAvailability::Locked
+impl ExtensionSessionStatusAvailability {
+    #[must_use]
+    pub fn decode_extension_session_status_response(
+        response: &ExtensionSessionStatusResponseWire,
+    ) -> ExtensionSessionStatusAvailability {
+        if !response.ok {
+            return ExtensionSessionStatusAvailability::Unavailable;
         }
-        ExtensionSessionDeviceProtectionStatusWire::Unlocked if response.device.is_complete() => {
-            ExtensionSessionStatusAvailability::Unlocked
-        }
-        ExtensionSessionDeviceProtectionStatusWire::Loading
-        | ExtensionSessionDeviceProtectionStatusWire::PinSetup
-        | ExtensionSessionDeviceProtectionStatusWire::Error
-        | ExtensionSessionDeviceProtectionStatusWire::Unlocked
-        | ExtensionSessionDeviceProtectionStatusWire::Unknown => {
-            ExtensionSessionStatusAvailability::Unavailable
+        match response.status {
+            ExtensionSessionDeviceProtectionStatusWire::Missing
+            | ExtensionSessionDeviceProtectionStatusWire::Plaintext
+            | ExtensionSessionDeviceProtectionStatusWire::Passkey
+            | ExtensionSessionDeviceProtectionStatusWire::Pin => {
+                ExtensionSessionStatusAvailability::Locked
+            }
+            ExtensionSessionDeviceProtectionStatusWire::Unlocked
+                if response.device.is_complete() =>
+            {
+                ExtensionSessionStatusAvailability::Unlocked
+            }
+            ExtensionSessionDeviceProtectionStatusWire::Loading
+            | ExtensionSessionDeviceProtectionStatusWire::PinSetup
+            | ExtensionSessionDeviceProtectionStatusWire::Error
+            | ExtensionSessionDeviceProtectionStatusWire::Unlocked
+            | ExtensionSessionDeviceProtectionStatusWire::Unknown => {
+                ExtensionSessionStatusAvailability::Unavailable
+            }
         }
     }
 }
@@ -111,7 +115,7 @@ mod tests {
 
     fn decode(json: &str) -> anyhow::Result<ExtensionSessionStatusAvailability> {
         let wire = serde_json::from_str::<ExtensionSessionStatusResponseWire>(json)?;
-        Ok(decode_extension_session_status_response(&wire))
+        Ok(ExtensionSessionStatusAvailability::decode_extension_session_status_response(&wire))
     }
 
     #[test]

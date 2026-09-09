@@ -6,12 +6,14 @@
 )]
 
 use crate::{DatabaseError, MultiDeviceError, VaultMetaRecord, VaultName, VaultStoreIdentity};
+use nook_auth2::{
+    AssessConnectAccessRequest, CreateSentinelShareRecordsRequest, SentinelShareEnvelope,
+};
 
 use crate::errors::{self, VaultResult};
 use crate::{
     ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultArchitecture,
     VaultCrypto, VaultFormatDocument, VaultMetaState, VaultRecordView, VaultType, VaultUnlock,
-    assess_connect_access,
 };
 use std::fmt;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -116,7 +118,13 @@ impl<'a> VaultContent<'a> {
         if !VaultRecordView::new(&records).has_multi_device_records()? {
             return Ok(VaultAccessStatus::NewVault);
         }
-        Ok(assess_connect_access(&records, identity)?.into())
+        Ok(
+            VaultMetaState::assess_connect_access(AssessConnectAccessRequest {
+                records: &records,
+                identity: identity,
+            })?
+            .into(),
+        )
     }
 
     /// Read unlock metadata without decrypting secrets.
@@ -388,10 +396,12 @@ mod tests {
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let third = DeviceIdentity::generate()?;
-        let records = crate::create_sentinel_share_records(
-            &keys,
-            &[first.clone(), second.clone(), third],
-            2.into(),
+        let records = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first.clone(), second.clone(), third],
+                threshold: 2.into(),
+            },
         )?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,

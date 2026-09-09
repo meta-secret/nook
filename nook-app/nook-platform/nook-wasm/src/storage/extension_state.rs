@@ -4,133 +4,192 @@
 //! `IndexedDB` alongside its other local-first state. Browser-vendor storage is
 //! intentionally not part of the vault persistence boundary.
 
+use nook_companion_core::{ExtensionPairingRecord, ExtensionPairingState};
 use rexie::{ObjectStore, Rexie, TransactionMode};
-use std::fmt;
 
 use std::collections::HashMap;
 
 use crate::NookError;
-use nook_companion_core::{ExtensionPairingRecord, ExtensionPairingState};
 
+pub(crate) struct ExtensionPairingDatabase {
+    connection: Rexie,
+}
+impl std::ops::Deref for ExtensionPairingDatabase {
+    type Target = Rexie;
+    fn deref(&self) -> &Rexie {
+        &self.connection
+    }
+}
 const DB_NAME: &str = "nook_extension";
 const STORE: &str = "pairing";
-pub(crate) fn validate_entries(
-    entries: &HashMap<String, ExtensionPairingRecord>,
-) -> Result<(), NookError> {
-    ExtensionPairingState::from_entries(entries.clone())
-        .validate()
-        .map_err(|error| NookError::Database(error.to_string()))
+/// Named values required by ExtensionPairingDatabase::reconcile.
+pub(crate) struct ExtensionPairingReconciliation<'a> {
+    pub(crate) state: &'a ExtensionPairingState,
+    pub(crate) removed_keys: &'a [String],
 }
 
-fn idb_err(context: &str, error: impl fmt::Debug) -> NookError {
-    NookError::IndexedDb(format!("{context}: {error:?}"))
-}
-
-async fn open_db() -> Result<rexie::Rexie, NookError> {
-    Rexie::builder(DB_NAME)
-        .version(1)
-        .add_object_store(ObjectStore::new(STORE))
-        .build()
-        .await
-        .map_err(|error| idb_err("nook_extension build error", error))
-}
-
-pub(crate) async fn read_all() -> Result<ExtensionPairingState, NookError> {
-    let rexie = open_db().await?;
-    let transaction = rexie
-        .transaction(&[STORE], TransactionMode::ReadOnly)
-        .map_err(|error| idb_err("nook_extension transaction error", error))?;
-    let store = transaction
-        .store(STORE)
-        .map_err(|error| idb_err("nook_extension store error", error))?;
-    let keys = store
-        .get_all_keys(None, None)
-        .await
-        .map_err(|error| idb_err("nook_extension get keys error", error))?;
-    let values = store
-        .get_all(None, None)
-        .await
-        .map_err(|error| idb_err("nook_extension get values error", error))?;
-    transaction
-        .done()
-        .await
-        .map_err(|error| idb_err("nook_extension transaction done error", error))?;
-
-    let mut entries = HashMap::with_capacity(keys.len());
-    for (key, value) in keys.into_iter().zip(values) {
-        let key: String = serde_wasm_bindgen::from_value(key)
-            .map_err(|error| idb_err("nook_extension key parse error", error))?;
-        let value: ExtensionPairingRecord = serde_wasm_bindgen::from_value(value)
-            .map_err(|error| idb_err("nook_extension value parse error", error))?;
-        entries.insert(key, value);
+impl ExtensionPairingDatabase {
+    pub(crate) fn validate_entries(
+        entries: &HashMap<String, ExtensionPairingRecord>,
+    ) -> Result<(), NookError> {
+        ExtensionPairingState::from_entries(entries.clone())
+            .validate()
+            .map_err(|error| NookError::Database(error.to_string()))
     }
-    validate_entries(&entries)?;
-    Ok(ExtensionPairingState::from_entries(entries))
 }
 
-pub(crate) async fn write_all(state: &ExtensionPairingState) -> Result<(), NookError> {
-    reconcile(state, &[]).await
-}
-
-pub(crate) async fn reconcile(
-    state: &ExtensionPairingState,
-    removed_keys: &[String],
-) -> Result<(), NookError> {
-    let entries = state.to_entries();
-    validate_entries(&entries)?;
-    let rexie = open_db().await?;
-    let transaction = rexie
-        .transaction(&[STORE], TransactionMode::ReadWrite)
-        .map_err(|error| idb_err("nook_extension transaction error", error))?;
-    let store = transaction
-        .store(STORE)
-        .map_err(|error| idb_err("nook_extension store error", error))?;
-    for key in removed_keys {
-        let key = serde_wasm_bindgen::to_value(key)
-            .map_err(|error| idb_err("nook_extension key error", error))?;
-        store
-            .delete(key)
+impl ExtensionPairingDatabase {
+    async fn open_db() -> Result<ExtensionPairingDatabase, NookError> {
+        Rexie::builder(DB_NAME)
+            .version(1)
+            .add_object_store(ObjectStore::new(STORE))
+            .build()
             .await
-            .map_err(|error| idb_err("nook_extension delete error", error))?;
+            .map(|connection| ExtensionPairingDatabase { connection })
+            .map_err(|error| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_extension build error", error))
+            })
     }
-    for (key, value) in &entries {
-        let key = serde_wasm_bindgen::to_value(key)
-            .map_err(|error| idb_err("nook_extension key error", error))?;
-        let value = serde_wasm_bindgen::to_value(value)
-            .map_err(|error| idb_err("nook_extension serialize error", error))?;
-        store
-            .put(&value, Some(&key))
-            .await
-            .map_err(|error| idb_err("nook_extension put error", error))?;
-    }
-    transaction
-        .done()
-        .await
-        .map(|_| ())
-        .map_err(|error| idb_err("nook_extension transaction done error", error))
 }
 
-pub(crate) async fn remove(keys: &[String]) -> Result<(), NookError> {
-    let rexie = open_db().await?;
-    let transaction = rexie
-        .transaction(&[STORE], TransactionMode::ReadWrite)
-        .map_err(|error| idb_err("nook_extension transaction error", error))?;
-    let store = transaction
-        .store(STORE)
-        .map_err(|error| idb_err("nook_extension store error", error))?;
-    for key in keys {
-        let key = serde_wasm_bindgen::to_value(key)
-            .map_err(|error| idb_err("nook_extension key error", error))?;
-        store
-            .delete(key)
-            .await
-            .map_err(|error| idb_err("nook_extension delete error", error))?;
+impl ExtensionPairingDatabase {
+    pub(crate) async fn read_all() -> Result<ExtensionPairingState, NookError> {
+        let rexie = ExtensionPairingDatabase::open_db().await?;
+        let transaction = rexie
+            .transaction(&[STORE], TransactionMode::ReadOnly)
+            .map_err(|error| {
+                NookError::IndexedDb(format!(
+                    "{}: {:?}",
+                    "nook_extension transaction error", error
+                ))
+            })?;
+        let store = transaction.store(STORE).map_err(|error| {
+            NookError::IndexedDb(format!("{}: {:?}", "nook_extension store error", error))
+        })?;
+        let keys = store.get_all_keys(None, None).await.map_err(|error| {
+            NookError::IndexedDb(format!("{}: {:?}", "nook_extension get keys error", error))
+        })?;
+        let values = store.get_all(None, None).await.map_err(|error| {
+            NookError::IndexedDb(format!(
+                "{}: {:?}",
+                "nook_extension get values error", error
+            ))
+        })?;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!(
+                "{}: {:?}",
+                "nook_extension transaction done error", error
+            ))
+        })?;
+
+        let mut entries = HashMap::with_capacity(keys.len());
+        for (key, value) in keys.into_iter().zip(values) {
+            let key: String = serde_wasm_bindgen::from_value(key).map_err(|error| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_extension key parse error", error))
+            })?;
+            let value: ExtensionPairingRecord =
+                serde_wasm_bindgen::from_value(value).map_err(|error| {
+                    NookError::IndexedDb(format!(
+                        "{}: {:?}",
+                        "nook_extension value parse error", error
+                    ))
+                })?;
+            entries.insert(key, value);
+        }
+        ExtensionPairingDatabase::validate_entries(&entries)?;
+        Ok(ExtensionPairingState::from_entries(entries))
     }
-    transaction
-        .done()
+}
+
+impl ExtensionPairingDatabase {
+    pub(crate) async fn write_all(state: &ExtensionPairingState) -> Result<(), NookError> {
+        ExtensionPairingDatabase::reconcile(ExtensionPairingReconciliation {
+            state: state,
+            removed_keys: &[],
+        })
         .await
-        .map(|_| ())
-        .map_err(|error| idb_err("nook_extension transaction done error", error))
+    }
+}
+
+impl ExtensionPairingDatabase {
+    pub(crate) async fn reconcile(
+        request: ExtensionPairingReconciliation<'_>,
+    ) -> Result<(), NookError> {
+        let ExtensionPairingReconciliation {
+            state,
+            removed_keys,
+        } = request;
+        let entries = state.to_entries();
+        ExtensionPairingDatabase::validate_entries(&entries)?;
+        let rexie = ExtensionPairingDatabase::open_db().await?;
+        let transaction = rexie
+            .transaction(&[STORE], TransactionMode::ReadWrite)
+            .map_err(|error| {
+                NookError::IndexedDb(format!(
+                    "{}: {:?}",
+                    "nook_extension transaction error", error
+                ))
+            })?;
+        let store = transaction.store(STORE).map_err(|error| {
+            NookError::IndexedDb(format!("{}: {:?}", "nook_extension store error", error))
+        })?;
+        for key in removed_keys {
+            let key = serde_wasm_bindgen::to_value(key).map_err(|error| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_extension key error", error))
+            })?;
+            store.delete(key).await.map_err(|error| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_extension delete error", error))
+            })?;
+        }
+        for (key, value) in &entries {
+            let key = serde_wasm_bindgen::to_value(key).map_err(|error| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_extension key error", error))
+            })?;
+            let value = serde_wasm_bindgen::to_value(value).map_err(|error| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_extension serialize error", error))
+            })?;
+            store.put(&value, Some(&key)).await.map_err(|error| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_extension put error", error))
+            })?;
+        }
+        transaction.done().await.map(|_| ()).map_err(|error| {
+            NookError::IndexedDb(format!(
+                "{}: {:?}",
+                "nook_extension transaction done error", error
+            ))
+        })
+    }
+}
+
+impl ExtensionPairingDatabase {
+    pub(crate) async fn remove(keys: &[String]) -> Result<(), NookError> {
+        let rexie = ExtensionPairingDatabase::open_db().await?;
+        let transaction = rexie
+            .transaction(&[STORE], TransactionMode::ReadWrite)
+            .map_err(|error| {
+                NookError::IndexedDb(format!(
+                    "{}: {:?}",
+                    "nook_extension transaction error", error
+                ))
+            })?;
+        let store = transaction.store(STORE).map_err(|error| {
+            NookError::IndexedDb(format!("{}: {:?}", "nook_extension store error", error))
+        })?;
+        for key in keys {
+            let key = serde_wasm_bindgen::to_value(key).map_err(|error| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_extension key error", error))
+            })?;
+            store.delete(key).await.map_err(|error| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_extension delete error", error))
+            })?;
+        }
+        transaction.done().await.map(|_| ()).map_err(|error| {
+            NookError::IndexedDb(format!(
+                "{}: {:?}",
+                "nook_extension transaction done error", error
+            ))
+        })
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -139,7 +198,7 @@ mod wasm_idb_tests {
     use std::slice;
 
     use super::*;
-    use nook_companion_core::{
+    use nook_core::{
         EXTENSION_GRANT_KEY_PREFIX as GRANT_KEY_PREFIX, ExtensionConnectScope,
         ExtensionPairingVaultType, StoredExtensionPairingGrant,
     };
@@ -170,10 +229,22 @@ mod wasm_idb_tests {
                 last_local_sync_at: "2026-07-25T00:00:01.000Z".to_owned(),
             }),
         );
-        write_all(&ExtensionPairingState::from_entries(entries.clone())).await?;
-        assert_eq!(read_all().await?.to_entries().get(&key), entries.get(&key));
-        remove(slice::from_ref(&key)).await?;
-        assert!(!read_all().await?.to_entries().contains_key(&key));
+        ExtensionPairingDatabase::write_all(&ExtensionPairingState::from_entries(entries.clone()))
+            .await?;
+        assert_eq!(
+            ExtensionPairingDatabase::read_all()
+                .await?
+                .to_entries()
+                .get(&key),
+            entries.get(&key)
+        );
+        ExtensionPairingDatabase::remove(slice::from_ref(&key)).await?;
+        assert!(
+            !ExtensionPairingDatabase::read_all()
+                .await?
+                .to_entries()
+                .contains_key(&key)
+        );
         Ok(())
     }
 }
@@ -181,7 +252,7 @@ mod wasm_idb_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_companion_core::{
+    use nook_core::{
         EXTENSION_GRANT_KEY_PREFIX as GRANT_KEY_PREFIX, ExtensionConnectScope,
         ExtensionPairingVaultType, StoredExtensionPairingGrant,
     };
@@ -209,12 +280,12 @@ mod tests {
             }),
         );
 
-        assert!(validate_entries(&entries).is_err());
+        assert!(ExtensionPairingDatabase::validate_entries(&entries).is_err());
     }
 
     #[wasm_bindgen_test]
     fn accepts_an_empty_pairing_state() {
         let entries = HashMap::new();
-        assert!(validate_entries(&entries).is_ok());
+        assert!(ExtensionPairingDatabase::validate_entries(&entries).is_ok());
     }
 }

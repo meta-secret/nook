@@ -1,4 +1,5 @@
 use super::*;
+use crate::{NookCompanionExtensionEndpoint, NookError, NookVaultManager};
 use nook_companion_core::{
     CompanionEpochMilliseconds, CompanionIdentityDiscoveryObservation,
     CompanionIdentityDiscoveryRequest, CompanionIdentityHandoffAuthorization,
@@ -6,6 +7,11 @@ use nook_companion_core::{
     CompanionIdentityStatusAdmissionRequest, CompanionInstallationAppKey, CompanionUnlockedAppKey,
     ExtensionConnectScope, ExtensionPairingVaultType,
 };
+use nook_companion_core::{
+    CompanionExtensionPresence, CompanionIdentityHandoffResponse, CompanionProtocolError,
+    CompanionWebsiteHandoffBegin,
+};
+use nook_core::{DeviceIdentity, SigningIdentity, VaultApplication};
 use wasm_bindgen_test::wasm_bindgen_test;
 
 fn epoch_milliseconds(

@@ -14,13 +14,15 @@
 
 use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultNameState};
-use crate::NookError;
-use crate::NookSecretRecord;
+use crate::IdentityDbEnsureLocalIdentityForAppKey;
+use crate::NookDatabase;
 use crate::conversion::LoadedVault;
-use crate::storage::event_db::load_local_event_store;
+
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
-use crate::storage::indexed_db::load_vault_local_cache;
+
 use crate::storage::{event_db, identity_record, indexed_db};
+use crate::{NookError, NookSecretRecord};
+use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use nook_core::{
     ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
     IdentityVaultEventId, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
@@ -151,13 +153,13 @@ mod tests {
         reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
     )]
     async fn verified_connect_finalizes_paired_identity_handoff() -> Result<(), JsError> {
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         let authorizer = AppKey::generate()?;
         let extension = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
         let owner_key = authorizer.clone();
         let owner_store = store_id.clone();
-        identity_record::update_identity_directory(move |directory| {
+        NookDatabase::update_identity_directory(move |directory| {
             let owner_id = directory.create_identity("Personal", &owner_key, None)?;
             let _ = directory.open_or_generate_vault_dek_for_identity(
                 &owner_id,
@@ -187,16 +189,16 @@ mod tests {
         assert!(manager.extension_identity_handoff_requires_connect());
 
         manager.ensure_identity_after_connect(&extension).await?;
-        let deferred = identity_record::load_identity_directory().await?;
+        let deferred = NookDatabase::load_identity_directory().await?;
         assert!(deferred.identity_for_app_key(&extension)?.is_none());
 
         manager
             .complete_connected_identity(&extension, None)
             .await?;
-        let committed = identity_record::load_identity_directory().await?;
+        let committed = NookDatabase::load_identity_directory().await?;
         assert!(committed.identity_for_app_key(&extension)?.is_some());
         assert!(manager.device.pending_extension_handoff.is_none());
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         Ok(())
     }
 
@@ -458,9 +460,11 @@ impl NookVaultManager {
         if self.storage.mode != StorageMode::Local {
             self.sync_events_from_current_provider().await?;
             if !self.vault.store_id.is_empty() && self.event_log_has_events().await? {
-                let status = VaultAccessStatus::from(nook_core::assess_connect_access(
-                    &self.stored_records_snapshot(),
-                    &identity,
+                let status = VaultAccessStatus::from(VaultMetaState::assess_connect_access(
+                    AssessConnectAccessRequest {
+                        records: &self.stored_records_snapshot(),
+                        identity: &identity,
+                    },
                 )?);
                 let _ = self
                     .status
@@ -468,7 +472,8 @@ impl NookVaultManager {
                     .send(format!("ASSESS_{}_{}", self.storage.mode, status));
                 return Ok(status);
             }
-            if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await?
+            if let Some(cached) =
+                NookDatabase::load_vault_local_cache(&self.local_cache_ref()).await?
                 && !cached.trim().is_empty()
             {
                 return Ok(VaultAccessStatus::RemoteMissingLocalCache);
@@ -495,9 +500,11 @@ impl NookVaultManager {
         // a brand-new vault and skip NeedsEnrollment.
         let status = if self.event_log_has_events().await? {
             self.hydrate_locked_projection_from_events().await?;
-            VaultAccessStatus::from(nook_core::assess_connect_access(
-                &self.stored_records_snapshot(),
-                &identity,
+            VaultAccessStatus::from(VaultMetaState::assess_connect_access(
+                AssessConnectAccessRequest {
+                    records: &self.stored_records_snapshot(),
+                    identity: &identity,
+                },
             )?)
         } else {
             nook_core::VaultContent::new(&content).access_status(&identity)?
@@ -701,7 +708,13 @@ impl NookVaultManager {
             _ => "Personal".to_owned(),
         };
         if self.vault.store_id.is_empty() {
-            let _ = identity_record::ensure_local_identity_for_app_key(identity, &label).await?;
+            let _ = NookDatabase::ensure_local_identity_for_app_key(
+                IdentityDbEnsureLocalIdentityForAppKey {
+                    app_key: identity,
+                    label: &label,
+                },
+            )
+            .await?;
             return Ok(());
         }
         let store_id = StoreId::parse(&self.vault.store_id)
@@ -710,7 +723,8 @@ impl NookVaultManager {
             if self.event_log.enabled {
                 let key_epoch = self.ensure_key_epoch().await?;
                 let checkpoint = self.ensure_causal_event_checkpoint().await?;
-                let event_store = event_db::load_local_event_store(&self.vault.store_id).await?;
+                let event_store =
+                    NookDatabase::load_local_event_store(&self.vault.store_id).await?;
                 let graph = event_store.load_graph(&self.vault.store_id)?;
                 let checkpoint_event_id = EventId::parse(&checkpoint)
                     .map_err(|error| NookError::Database(error.to_string()))?;
@@ -756,13 +770,13 @@ impl NookVaultManager {
             };
         if let Some(envelopes) = self.vault.meta.auth.get(&identity.auth_id()) {
             let authorized_auth_ids = if self.event_log.enabled {
-                let store = load_local_event_store(store_id.as_str()).await?;
+                let store = NookDatabase::load_local_event_store(store_id.as_str()).await?;
                 let graph = store.load_graph(store_id.as_str())?;
                 EventGraphAuthorizationProjection::new(&graph).active_auth_ids()?
             } else {
                 self.vault.meta.auth.keys().cloned().collect()
             };
-            let _ = identity_record::ensure_identity_from_legacy_vault(
+            let _ = NookDatabase::ensure_identity_from_legacy_vault(
                 identity_record::LegacyVaultIdentityInput {
                     app_key: identity,
                     store_id: &store_id,
@@ -779,7 +793,13 @@ impl NookVaultManager {
             .await?;
             return Ok(());
         }
-        let _ = identity_record::ensure_local_identity_for_app_key(identity, &label).await?;
+        let _ = NookDatabase::ensure_local_identity_for_app_key(
+            IdentityDbEnsureLocalIdentityForAppKey {
+                app_key: identity,
+                label: &label,
+            },
+        )
+        .await?;
         Ok(())
     }
 
@@ -790,7 +810,7 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         if self.event_log_has_events().await? || self.ensure_event_log_mode().await? {
             self.event_log.enabled = true;
-            let cache = indexed_db::load_from_indexed_db()
+            let cache = NookDatabase::load_from_indexed_db()
                 .await?
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| content.to_owned());
@@ -822,7 +842,7 @@ impl NookVaultManager {
     async fn load_connect_content(&mut self) -> Result<(String, bool), NookError> {
         if self.storage.use_local_cache_for_connect {
             self.storage.use_local_cache_for_connect = false;
-            let cached = load_vault_local_cache(&self.local_cache_ref())
+            let cached = NookDatabase::load_vault_local_cache(&self.local_cache_ref())
                 .await?
                 .filter(|value| !value.trim().is_empty())
                 .ok_or_else(|| {
@@ -877,7 +897,10 @@ impl NookVaultManager {
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
         let records = self.stored_records_snapshot();
-        match nook_core::assess_connect_access(&records, identity)? {
+        match VaultMetaState::assess_connect_access(AssessConnectAccessRequest {
+            records: &records,
+            identity: identity,
+        })? {
             ConnectAccessStatus::Ready => {}
             ConnectAccessStatus::JoinPending => {
                 return Err(NookError::Database(

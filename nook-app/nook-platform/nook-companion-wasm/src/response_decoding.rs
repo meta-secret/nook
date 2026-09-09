@@ -1,6 +1,9 @@
 //! WASM exports that decode session and response wire contracts.
 
 use nook_companion_core::{
+    AuthenticationOutcomeResponse, ExtensionSessionStatusAvailability, LoginPickerOpenResponse,
+};
+use nook_companion_core::{
     AuthenticatorBackupAttachResponse, AuthenticatorEnrollmentConfirmResponse,
     AuthenticatorEnrollmentStageResponse, AuthenticatorOptionsResponse,
     AuthenticatorPickerOpenResponse, AuthenticatorPreviewResponse, GeneratedPasswordResponse,
@@ -23,7 +26,7 @@ pub fn validate_extension_session_request(
 pub fn decode_extension_session_status_response(
     response: nook_companion_core::ExtensionSessionStatusResponseWire,
 ) -> nook_companion_core::ExtensionSessionStatusAvailability {
-    nook_companion_core::decode_extension_session_status_response(&response)
+    ExtensionSessionStatusAvailability::decode_extension_session_status_response(&response)
 }
 
 #[wasm_bindgen]
@@ -75,7 +78,7 @@ pub fn decode_website_login_save_action_response(
 pub fn decode_login_picker_open_response(
     response: nook_companion_core::LoginPickerOpenResponseWire,
 ) -> Result<nook_companion_core::LoginPickerOpenResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_login_picker_open_response(response)
+    LoginPickerOpenResponse::decode_login_picker_open_response(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
@@ -91,7 +94,7 @@ pub fn decode_authenticator_picker_open_response(
 pub fn decode_authentication_outcome_response(
     response: nook_companion_core::AuthenticationOutcomeResponseWire,
 ) -> Result<nook_companion_core::AuthenticationOutcomeResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authentication_outcome_response(response)
+    AuthenticationOutcomeResponse::decode_authentication_outcome_response(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 

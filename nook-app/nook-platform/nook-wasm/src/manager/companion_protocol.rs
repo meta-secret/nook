@@ -34,8 +34,10 @@ enum CompanionOperationError {
     InstallationAppKeyMismatch,
 }
 
-fn companion_js_error(error: &CompanionOperationError) -> JsError {
-    JsError::new(&error.to_string())
+impl NookVaultManager {
+    fn companion_js_error(error: &CompanionOperationError) -> JsError {
+        JsError::new(&error.to_string())
+    }
 }
 
 #[wasm_bindgen]
@@ -142,7 +144,7 @@ impl NookCompanionExtensionEndpoint {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
     pub fn new(presence: CompanionExtensionPresence) -> Result<Self, JsError> {
-        Self::from_presence(presence).map_err(|error| companion_js_error(&error))
+        Self::from_presence(presence).map_err(|error| NookVaultManager::companion_js_error(&error))
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -151,7 +153,7 @@ impl NookCompanionExtensionEndpoint {
         discovery: CompanionIdentityDiscoveryObservation,
     ) -> Result<CompanionIdentityStatus, JsError> {
         self.discover_inner(discovery)
-            .map_err(|error| companion_js_error(&error))
+            .map_err(|error| NookVaultManager::companion_js_error(&error))
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -163,16 +165,17 @@ impl NookCompanionExtensionEndpoint {
         let authorized = self
             .inner
             .authorize_handoff(authorization)
-            .map_err(|error| companion_js_error(&CompanionOperationError::Protocol(error)))?;
-        manager
-            .ensure_signing_identity()
-            .await
-            .map_err(|error| companion_js_error(&CompanionOperationError::Manager(error)))?;
+            .map_err(|error| {
+                NookVaultManager::companion_js_error(&CompanionOperationError::Protocol(error))
+            })?;
+        manager.ensure_signing_identity().await.map_err(|error| {
+            NookVaultManager::companion_js_error(&CompanionOperationError::Manager(error))
+        })?;
         Self::seal_authorized_loaded(CompanionAuthorizedSealOperation {
             manager,
             authorized,
         })
-        .map_err(|error| companion_js_error(&error))
+        .map_err(|error| NookVaultManager::companion_js_error(&error))
     }
 }
 
@@ -277,7 +280,7 @@ impl NookVaultManager {
         begin: CompanionWebsiteHandoffBegin,
     ) -> Result<CompanionIdentityHandoffRequest, JsError> {
         self.begin_companion_identity_handoff_inner(begin)
-            .map_err(|error| companion_js_error(&error))
+            .map_err(|error| NookVaultManager::companion_js_error(&error))
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -287,13 +290,13 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let mut pending = self
             .consume_companion_website_handoff(&response)
-            .map_err(|error| companion_js_error(&error))?;
+            .map_err(|error| NookVaultManager::companion_js_error(&error))?;
         let context = NookExtensionIdentityHandoffContext::from_companion(pending.context.clone())?;
         let CompanionIdentityStatus::Unlocked { app_key, .. } = &pending.request.transaction.status
         else {
-            return Err(companion_js_error(&CompanionOperationError::Protocol(
-                CompanionProtocolError::AppKeyUnavailable,
-            )));
+            return Err(NookVaultManager::companion_js_error(
+                &CompanionOperationError::Protocol(CompanionProtocolError::AppKeyUnavailable),
+            ));
         };
         let app_key = app_key.clone();
         self.device.extension_handoff_private_key = pending.take_recipient_secret();

@@ -1,5 +1,10 @@
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
@@ -46,10 +51,9 @@ pub use auth::enrollment::{
 pub use auth::identity::{
     IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, IdentityVaultDekEpoch,
     IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, MemberDekEnvelope,
-    identity_fingerprint,
 };
 pub use auth::identity_directory::{IdentityDirectory, IdentitySelection};
-pub use auth::identity_genesis::identity_vault_genesis_records;
+
 pub use auth::local_identity_keyring::{
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
 };
@@ -73,14 +77,7 @@ pub mod multi_device_api {
         MEMBER_RECORD_PREFIX, MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX,
         SelfRosterSync, SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareEnvelope,
         SentinelShareOpening, SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord,
-        VaultMetaState, VaultRecordView, assess_connect_access, build_members_records,
-        count_sentinel_share_records, create_sentinel_root_share_records_for_recipients,
-        create_sentinel_share_records, create_sentinel_share_records_for_recipients,
-        device_is_enrolled, encrypt_member_entry, ensure_self_in_roster, genesis_members_records,
-        is_sentinel_share_stored_record, member_from_identity, member_from_join,
-        parse_sentinel_share_envelope, pending_join_for_device, rename_vault_member,
-        replace_member_records, resolve_member_roster, revoke_vault_member, roster_add_member,
-        sentinel_share_record_key,
+        VaultMetaState, VaultRecordView,
     };
 }
 pub use auth::password_envelope::{
@@ -119,4 +116,24 @@ pub use wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, MemberLabel, OpaqueCiphertext,
     PasswordEntryId, Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
+};
+
+pub use auth::identity_genesis::IdentityVaultGenesisRecordsRequest;
+
+pub use auth::multi_device::{
+    BuildMembersRecordsRequest, DecryptMemberEntryRequest, EncryptMemberEntryRequest,
+    GenesisMembersRecordsRequest, MemberFromIdentityRequest, RenameVaultMemberRequest,
+    ReplaceMemberRecordsRequest, ResolveMemberRosterRequest, RevokeVaultMemberRequest,
+};
+
+pub use auth::multi_device::{
+    AssessConnectAccessRequest, DeviceIsEnrolledRequest, EnsureSelfInRosterRequest,
+    PendingJoinForDeviceRequest,
+};
+
+pub use auth::multi_device::RosterAddMemberRequest;
+
+pub use auth::multi_device::{
+    CreateSentinelRootShareRecordsForRecipientsRequest,
+    CreateSentinelShareRecordsForRecipientsRequest, CreateSentinelShareRecordsRequest,
 };

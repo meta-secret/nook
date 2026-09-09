@@ -67,40 +67,50 @@ impl FileAttachmentSecret {
         let file_name = self.file_name.trim();
         let mime_type = self.mime_type.trim();
         if title.is_empty() {
-            return invalid_file_attachment("title is required");
+            return FileAttachmentSecret::invalid_file_attachment("title is required");
         }
         if title.chars().count() > FILE_ATTACHMENT_MAX_TITLE_CHARS {
-            return invalid_file_attachment("title is too long");
+            return FileAttachmentSecret::invalid_file_attachment("title is too long");
         }
         if title.chars().any(char::is_control) {
-            return invalid_file_attachment("title contains control characters");
+            return FileAttachmentSecret::invalid_file_attachment(
+                "title contains control characters",
+            );
         }
         if file_name.is_empty() {
-            return invalid_file_attachment("file name is required");
+            return FileAttachmentSecret::invalid_file_attachment("file name is required");
         }
         if file_name.chars().count() > FILE_ATTACHMENT_MAX_FILE_NAME_CHARS {
-            return invalid_file_attachment("file name is too long");
+            return FileAttachmentSecret::invalid_file_attachment("file name is too long");
         }
         if file_name.contains('/') || file_name.contains('\\') || file_name.contains('\0') {
-            return invalid_file_attachment("file name must not contain path separators");
+            return FileAttachmentSecret::invalid_file_attachment(
+                "file name must not contain path separators",
+            );
         }
         if file_name.chars().any(char::is_control) {
-            return invalid_file_attachment("file name contains control characters");
+            return FileAttachmentSecret::invalid_file_attachment(
+                "file name contains control characters",
+            );
         }
         if mime_type.is_empty() {
-            return invalid_file_attachment("mime type is required");
+            return FileAttachmentSecret::invalid_file_attachment("mime type is required");
         }
         if mime_type.chars().count() > FILE_ATTACHMENT_MAX_MIME_TYPE_CHARS {
-            return invalid_file_attachment("mime type is too long");
+            return FileAttachmentSecret::invalid_file_attachment("mime type is too long");
         }
         if mime_type.chars().any(char::is_control) {
-            return invalid_file_attachment("mime type contains control characters");
+            return FileAttachmentSecret::invalid_file_attachment(
+                "mime type contains control characters",
+            );
         }
         if !mime_type
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'+' | b'.'))
         {
-            return invalid_file_attachment("mime type has an invalid format");
+            return FileAttachmentSecret::invalid_file_attachment(
+                "mime type has an invalid format",
+            );
         }
         let decoded = STANDARD.decode(&self.content_base64).map_err(|_| {
             SecretPayloadError::InvalidFileAttachment {
@@ -108,18 +118,22 @@ impl FileAttachmentSecret {
             }
         })?;
         if decoded.is_empty() {
-            return invalid_file_attachment("file content is empty");
+            return FileAttachmentSecret::invalid_file_attachment("file content is empty");
         }
         if decoded.len() > FILE_ATTACHMENT_MAX_BYTES {
-            return invalid_file_attachment(format!(
+            return FileAttachmentSecret::invalid_file_attachment(format!(
                 "file exceeds the {FILE_ATTACHMENT_MAX_BYTES}-byte limit"
             ));
         }
         if u64::try_from(decoded.len()).unwrap_or(u64::MAX) != u64::from(self.size_bytes) {
-            return invalid_file_attachment("sizeBytes does not match decoded content length");
+            return FileAttachmentSecret::invalid_file_attachment(
+                "sizeBytes does not match decoded content length",
+            );
         }
         if STANDARD.encode(&decoded) != self.content_base64 {
-            return invalid_file_attachment("content is not canonical standard base64");
+            return FileAttachmentSecret::invalid_file_attachment(
+                "content is not canonical standard base64",
+            );
         }
         Ok(())
     }
@@ -139,10 +153,12 @@ impl Zeroize for FileAttachmentSecret {
     }
 }
 
-fn invalid_file_attachment<T>(reason: impl Into<String>) -> SecretPayloadResult<T> {
-    Err(SecretPayloadError::InvalidFileAttachment {
-        reason: reason.into(),
-    })
+impl FileAttachmentSecret {
+    fn invalid_file_attachment<T>(reason: impl Into<String>) -> SecretPayloadResult<T> {
+        Err(SecretPayloadError::InvalidFileAttachment {
+            reason: reason.into(),
+        })
+    }
 }
 
 #[cfg(test)]

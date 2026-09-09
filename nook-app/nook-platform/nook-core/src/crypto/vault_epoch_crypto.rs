@@ -6,9 +6,12 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::SecretValue;
+use crate::{EncryptedSecretPayload, SecretValue};
+use nook_auth2::{
+    BuildMembersRecordsRequest, GenesisMembersRecordsRequest, PendingJoinForDeviceRequest,
+    ResolveMemberRosterRequest, VaultMember, VaultMetaState,
+};
 
-use crate::EncryptedSecretPayload;
 use crate::errors::{VaultEpochError, VaultEpochResult, VaultResult};
 use crate::multi_device::{AuthRecordIssuance, VaultKeys};
 #[cfg(test)]
@@ -16,7 +19,6 @@ use crate::secret_types::StoredRecordPayload;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, Sha256Hex, SymmetricKey};
-use crate::{build_members_records, resolve_member_roster};
 
 /// Re-encrypt user secrets under a new `secrets_key`.
 pub struct SecretEpochReencryption<'a> {
@@ -130,8 +132,14 @@ impl<'a> MembersCheckpointHash<'a> {
             old_members_key,
             new_members_key,
         } = self;
-        let roster = resolve_member_roster(records, old_members_key)?;
-        let member_records = build_members_records(&roster, new_members_key)?;
+        let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records: records,
+            members_key: old_members_key,
+        })?;
+        let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
+            roster: &roster,
+            members_key: new_members_key,
+        })?;
         let json = serde_json::to_string(&member_records)
             .map_err(VaultEpochError::MemberRecordsSerialize)?;
         Ok(Sha256Hex::from_bytes(json.as_bytes()))
@@ -165,7 +173,10 @@ impl<'a> VaultMetaRecordRewrap<'a> {
             old_members_key,
             new_keys,
         } = self;
-        let roster = resolve_member_roster(records_snapshot, old_members_key)?;
+        let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records: records_snapshot,
+            members_key: old_members_key,
+        })?;
         let mut records = Vec::with_capacity(roster.len().saturating_mul(2));
         for member in &roster {
             records.push(
@@ -178,7 +189,12 @@ impl<'a> VaultMetaRecordRewrap<'a> {
                 .issue()?,
             );
         }
-        records.extend(build_members_records(&roster, &new_keys.members_key)?);
+        records.extend(VaultMember::build_members_records(
+            BuildMembersRecordsRequest {
+                roster: &roster,
+                members_key: &new_keys.members_key,
+            },
+        )?);
         Ok(records)
     }
 }
@@ -278,10 +294,12 @@ mod tests {
         let new_keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
-        records.extend(genesis_members_records(
-            &identity,
-            &keys.members_key,
-            "2026-06-28T00:00:00Z",
+        records.extend(VaultMember::genesis_members_records(
+            GenesisMembersRecordsRequest {
+                identity: &identity,
+                members_key: &keys.members_key,
+                enrolled_at: "2026-06-28T00:00:00Z",
+            },
         )?);
         let hash = MembersCheckpointHash::new(&records, &keys.members_key, &new_keys.members_key)
             .compute()?;
@@ -296,10 +314,12 @@ mod tests {
         let new_keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let mut records = vec![identity.auth_record(&old_keys.secrets_key, &old_keys.members_key)?];
-        records.extend(genesis_members_records(
-            &identity,
-            &old_keys.members_key,
-            "2026-06-28T00:00:00Z",
+        records.extend(VaultMember::genesis_members_records(
+            GenesisMembersRecordsRequest {
+                identity: &identity,
+                members_key: &old_keys.members_key,
+                enrolled_at: "2026-06-28T00:00:00Z",
+            },
         )?);
         let mut state = VaultMetaState::from_stored_records(&records)?;
         let old_auth_envelopes = state.auth.get(&identity.auth_id()).cloned();
@@ -321,14 +341,19 @@ mod tests {
         let owner = DeviceIdentity::generate()?;
         let joiner = DeviceIdentity::generate()?;
         let mut records = vec![owner.auth_record(&old_keys.secrets_key, &old_keys.members_key)?];
-        records.extend(genesis_members_records(
-            &owner,
-            &old_keys.members_key,
-            "2026-06-28T00:00:00Z",
+        records.extend(VaultMember::genesis_members_records(
+            GenesisMembersRecordsRequest {
+                identity: &owner,
+                members_key: &old_keys.members_key,
+                enrolled_at: "2026-06-28T00:00:00Z",
+            },
         )?);
         records.push(JoinRequestIssuance::new(&joiner, "2026-06-28T00:01:00Z").issue()?);
-        let join = pending_join_for_device(&records, joiner.device_id())?
-            .ok_or_else(|| io::Error::other("join request must exist"))?;
+        let join = VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+            records: &records,
+            device_id: joiner.device_id(),
+        })?
+        .ok_or_else(|| io::Error::other("join request must exist"))?;
         let (joiner_auth, join_key, member_records) = JoinRequestApproval::new(
             &old_keys.secrets_key,
             &old_keys.members_key,
@@ -339,7 +364,7 @@ mod tests {
         .approve()?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(joiner_auth);
-        replace_member_records(&mut records, member_records)?;
+        VaultMember::replace_member_records(&mut records, member_records)?;
 
         let rotated_meta_records =
             VaultMetaRecordRewrap::new(&records, &old_keys.members_key, &new_keys).rewrap()?;

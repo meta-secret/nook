@@ -1,30 +1,35 @@
 use super::{application, wasm_bindgen};
+use crate::ConfiguredVaultApplication;
 use crate::storage::indexed_db;
+use crate::{ImportVaultBlobRequest, NookDatabase, SetLocalVaultLabelRequest};
 use nook_core::{IsoTimestamp, VaultApplication, VaultConnectIntent, VaultType};
 use wasm_bindgen::JsError;
 
-fn validate_configured_application_for_content(content: &str) -> Result<(), crate::NookError> {
-    let architecture = nook_core::VaultFormatDocument::new(content).architecture()?;
-    application::configured_vault_application().validate_session_access(architecture.vault_type)?;
-    Ok(())
+impl ConfiguredVaultApplication {
+    fn validate_configured_application_for_content(content: &str) -> Result<(), crate::NookError> {
+        let architecture = nook_core::VaultFormatDocument::new(content).architecture()?;
+        ConfiguredVaultApplication::configured_vault_application()
+            .validate_session_access(architecture.vault_type)?;
+        Ok(())
+    }
 }
 
 /// Configure the immutable application capability for this browser realm.
 #[wasm_bindgen]
 pub fn configure_vault_application(application: nook_core::VaultApplication) {
-    application::configure_vault_application(application);
+    ConfiguredVaultApplication::configure_vault_application(application);
 }
 
 /// Return the immutable capability configured by the current web app.
 #[wasm_bindgen]
 pub fn configured_vault_application() -> nook_core::VaultApplication {
-    application::configured_vault_application()
+    ConfiguredVaultApplication::configured_vault_application()
 }
 
 /// Return the stable semantic application name used by browser debug hooks.
 #[wasm_bindgen]
 pub fn configured_vault_application_name() -> String {
-    application::configured_vault_application()
+    ConfiguredVaultApplication::configured_vault_application()
         .as_str()
         .to_owned()
 }
@@ -32,19 +37,19 @@ pub fn configured_vault_application_name() -> String {
 /// Return whether the configured application is the Simple Vault artifact.
 #[wasm_bindgen]
 pub fn configured_vault_application_is_simple() -> bool {
-    application::configured_vault_application().is_simple()
+    ConfiguredVaultApplication::configured_vault_application().is_simple()
 }
 
 /// Return whether the configured application is the Sentinel Vault artifact.
 #[wasm_bindgen]
 pub fn configured_vault_application_is_sentinel() -> bool {
-    application::configured_vault_application().is_sentinel()
+    ConfiguredVaultApplication::configured_vault_application().is_sentinel()
 }
 
 /// Return whether the configured application may offer extension integration.
 #[wasm_bindgen]
 pub fn configured_vault_application_supports_extension() -> bool {
-    application::configured_vault_application().supports_extension()
+    ConfiguredVaultApplication::configured_vault_application().supports_extension()
 }
 
 /// Return the configured deployment-channel Simple Vault root URL.
@@ -92,14 +97,15 @@ pub fn vault_connect_intent_permits_empty_remote_genesis(
 /// not belong to this artifact's compile-time application capability.
 #[wasm_bindgen]
 pub fn validate_vault_content_for_application(content: &str) -> Result<(), JsError> {
-    validate_configured_application_for_content(content).map_err(Into::into)
+    ConfiguredVaultApplication::validate_configured_application_for_content(content)
+        .map_err(Into::into)
 }
 
 /// Validate extension pairing metadata through the Rust capability matrix.
 #[wasm_bindgen]
 pub fn validate_extension_pairing_vault_type(vault_type: &str) -> Result<(), JsError> {
     let vault_type = VaultType::parse(vault_type)?;
-    let application = application::configured_vault_application();
+    let application = ConfiguredVaultApplication::configured_vault_application();
     if application == VaultApplication::Extension {
         application.validate_session_access(vault_type)?;
     } else {
@@ -108,20 +114,25 @@ pub fn validate_extension_pairing_vault_type(vault_type: &str) -> Result<(), JsE
     Ok(())
 }
 
-async fn local_vault_matches_compiled_application(
-    store_id: &str,
-) -> Result<bool, crate::NookError> {
-    let Some(content) = indexed_db::load_vault_blob(store_id).await? else {
-        return Ok(false);
-    };
-    let architecture = nook_core::VaultFormatDocument::new(&content).architecture()?;
-    Ok(application::configured_vault_application().permits_vault_type(architecture.vault_type))
+impl ConfiguredVaultApplication {
+    async fn local_vault_matches_compiled_application(
+        store_id: &str,
+    ) -> Result<bool, crate::NookError> {
+        let Some(content) = NookDatabase::load_vault_blob(store_id).await? else {
+            return Ok(false);
+        };
+        let architecture = nook_core::VaultFormatDocument::new(&content).architecture()?;
+        Ok(ConfiguredVaultApplication::configured_vault_application()
+            .permits_vault_type(architecture.vault_type))
+    }
 }
 
 #[wasm_bindgen]
 pub async fn has_local_vault() -> Result<bool, JsError> {
-    for entry in indexed_db::list_vault_registry_entries().await? {
-        if local_vault_matches_compiled_application(&entry.store_id).await? {
+    for entry in NookDatabase::list_vault_registry_entries().await? {
+        if ConfiguredVaultApplication::local_vault_matches_compiled_application(&entry.store_id)
+            .await?
+        {
             return Ok(true);
         }
     }
@@ -130,10 +141,10 @@ pub async fn has_local_vault() -> Result<bool, JsError> {
 
 #[wasm_bindgen]
 pub async fn has_active_local_vault() -> Result<bool, JsError> {
-    let Some(store_id) = indexed_db::get_active_vault_id().await? else {
+    let Some(store_id) = NookDatabase::get_active_vault_id().await? else {
         return Ok(false);
     };
-    Ok(local_vault_matches_compiled_application(&store_id).await?)
+    Ok(ConfiguredVaultApplication::local_vault_matches_compiled_application(&store_id).await?)
 }
 
 #[wasm_bindgen]
@@ -195,8 +206,10 @@ impl NookLocalVaultEntry {
 #[wasm_bindgen]
 pub async fn list_local_vaults() -> Result<Vec<NookLocalVaultEntry>, JsError> {
     let mut matching = Vec::new();
-    for entry in indexed_db::list_vault_registry_entries().await? {
-        if local_vault_matches_compiled_application(&entry.store_id).await? {
+    for entry in NookDatabase::list_vault_registry_entries().await? {
+        if ConfiguredVaultApplication::local_vault_matches_compiled_application(&entry.store_id)
+            .await?
+        {
             matching.push(NookLocalVaultEntry {
                 store_id: entry.store_id,
                 label: entry.label,
@@ -239,10 +252,10 @@ impl NookActiveVaultSelection {
 
 #[wasm_bindgen]
 pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, JsError> {
-    let Some(store_id) = indexed_db::get_active_vault_id().await? else {
+    let Some(store_id) = NookDatabase::get_active_vault_id().await? else {
         return Ok(NookActiveVaultSelection(None));
     };
-    if local_vault_matches_compiled_application(&store_id).await? {
+    if ConfiguredVaultApplication::local_vault_matches_compiled_application(&store_id).await? {
         Ok(NookActiveVaultSelection(Some(store_id)))
     } else {
         Ok(NookActiveVaultSelection(None))
@@ -251,35 +264,41 @@ pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, Js
 
 #[wasm_bindgen]
 pub async fn set_active_vault(store_id: String) -> Result<(), JsError> {
-    let content = indexed_db::load_vault_blob(&store_id)
+    let content = NookDatabase::load_vault_blob(&store_id)
         .await?
         .ok_or_else(|| crate::NookError::Database("Local vault was not found.".to_owned()))?;
-    validate_configured_application_for_content(&content)?;
-    indexed_db::switch_active_vault(&store_id)
+    ConfiguredVaultApplication::validate_configured_application_for_content(&content)?;
+    NookDatabase::switch_active_vault(&store_id)
         .await
         .map_err(Into::into)
 }
 
 #[wasm_bindgen]
 pub async fn set_local_vault_label(store_id: String, label: String) -> Result<(), JsError> {
-    indexed_db::set_local_vault_label(&store_id, &label)
-        .await
-        .map_err(Into::into)
+    NookDatabase::set_local_vault_label(SetLocalVaultLabelRequest {
+        store_id: &store_id,
+        label: &label,
+    })
+    .await
+    .map_err(Into::into)
 }
 
 #[wasm_bindgen]
 pub async fn prepare_new_local_vault_slot() -> Result<(), JsError> {
-    indexed_db::prepare_new_local_vault_slot()
+    NookDatabase::prepare_new_local_vault_slot()
         .await
         .map_err(Into::into)
 }
 
 #[wasm_bindgen]
 pub async fn import_local_vault_blob(content: String) -> Result<String, JsError> {
-    validate_configured_application_for_content(&content)?;
-    indexed_db::import_vault_blob(&content, None)
-        .await
-        .map_err(Into::into)
+    ConfiguredVaultApplication::validate_configured_application_for_content(&content)?;
+    NookDatabase::import_vault_blob(ImportVaultBlobRequest {
+        content: &content,
+        label: None,
+    })
+    .await
+    .map_err(Into::into)
 }
 
 #[wasm_bindgen]
@@ -287,8 +306,11 @@ pub async fn import_named_local_vault_blob(
     content: String,
     label: String,
 ) -> Result<String, JsError> {
-    validate_configured_application_for_content(&content)?;
-    indexed_db::import_vault_blob(&content, Some(&label))
-        .await
-        .map_err(Into::into)
+    ConfiguredVaultApplication::validate_configured_application_for_content(&content)?;
+    NookDatabase::import_vault_blob(ImportVaultBlobRequest {
+        content: &content,
+        label: Some(&label),
+    })
+    .await
+    .map_err(Into::into)
 }

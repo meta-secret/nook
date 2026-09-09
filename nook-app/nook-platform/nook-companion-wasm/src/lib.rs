@@ -2,6 +2,11 @@
 
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
@@ -12,6 +17,15 @@
     clippy::uninlined_format_args
 )]
 
+use nook_companion_core::AuthenticationBackupCodesEvidence;
+use nook_companion_core::AuthenticationBackupCodesObservation;
+use nook_companion_core::AuthenticationEnrollmentObservation;
+use nook_companion_core::AuthenticationUsernameEvidence;
+use nook_companion_core::AuthenticationWorkflowMatch;
+use nook_companion_core::BackupCodePageText;
+use nook_companion_core::PageInputFieldObservation;
+use nook_companion_core::VaultHostObservation;
+use nook_companion_core::VaultHostPolicy;
 use nook_companion_core::{
     ExtensionPairingState, ExtensionReadySetup, OAuthOriginSupport, OAuthOriginUnsupportedReason,
     StoredExtensionPairingGrant,
@@ -49,20 +63,20 @@ const EXTENSION_VAULT_EVENT_TYPESCRIPT: &str =
 #[wasm_bindgen]
 #[must_use]
 pub fn page_has_backup_code_hint(text: &str) -> bool {
-    nook_companion_core::page_has_backup_code_hint(text)
+    BackupCodePageText::new(text).page_has_backup_code_hint()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn contains_backup_code_candidate(text: &str) -> bool {
-    nook_companion_core::contains_backup_code_candidate(text)
+    BackupCodePageText::new(text).contains_backup_code_candidate()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
-    nook_companion_core::extract_backup_code_candidates(&text)
+    BackupCodePageText::new(&text).extract_backup_code_candidates()
 }
 
 #[wasm_bindgen]
@@ -70,7 +84,7 @@ pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
 pub fn authentication_username_evidence(
     field: &NookPageInputFieldObservation,
 ) -> nook_companion_core::AuthenticationUsernameEvidence {
-    nook_companion_core::authentication_username_evidence(field.as_core())
+    (field.as_core()).authentication_username_evidence()
 }
 
 #[wasm_bindgen]
@@ -79,7 +93,7 @@ pub fn authentication_username_evidence(
 pub fn strongest_authentication_username_evidence(
     evidence: Vec<nook_companion_core::AuthenticationUsernameEvidence>,
 ) -> nook_companion_core::AuthenticationUsernameEvidence {
-    nook_companion_core::strongest_authentication_username_evidence(&evidence)
+    AuthenticationUsernameEvidence::strongest_authentication_username_evidence(&evidence)
 }
 
 #[wasm_bindgen]
@@ -322,51 +336,49 @@ pub fn default_simple_vault_url() -> String {
 
 #[wasm_bindgen]
 pub fn normalize_simple_vault_base_url(value: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::normalize_simple_vault_base_url(value)?)
+    Ok(VaultHostPolicy::new(value).normalize_simple_vault_base_url()?)
 }
 
 #[wasm_bindgen]
 pub fn simple_vault_url(base_url: &str, path: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::simple_vault_url(base_url, path)?)
+    Ok(VaultHostPolicy::new(base_url).simple_vault_url(path)?)
 }
 
 #[wasm_bindgen]
 pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::simple_vault_match_pattern(base_url)?)
+    Ok(VaultHostPolicy::new(base_url).simple_vault_match_pattern()?)
 }
 
 /// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
 #[wasm_bindgen]
 pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::matching_sentinel_vault_base_url(base_url)?.unwrap_or_default())
+    Ok(VaultHostPolicy::new(base_url)
+        .matching_sentinel_vault_base_url()?
+        .unwrap_or_default())
 }
 
 #[wasm_bindgen]
 pub fn sentinel_vault_match_patterns(base_url: &str) -> Result<Vec<String>, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::sentinel_vault_match_patterns(
-        base_url,
-    )?)
+    Ok(VaultHostPolicy::new(base_url).sentinel_vault_match_patterns()?)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn is_simple_vault_hostname(hostname: &str) -> bool {
-    nook_companion_core::is_simple_vault_hostname(hostname)
+    VaultHostObservation::new(hostname).is_simple_vault_hostname()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn is_sentinel_vault_hostname(hostname: &str) -> bool {
-    nook_companion_core::is_sentinel_vault_hostname(hostname)
+    VaultHostObservation::new(hostname).is_sentinel_vault_hostname()
 }
 
 #[wasm_bindgen]
 pub fn nook_vault_app_exclude_match_patterns(
     base_url: &str,
 ) -> Result<Vec<String>, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::nook_vault_app_exclude_match_patterns(
-        base_url,
-    )?)
+    Ok(VaultHostPolicy::new(base_url).nook_vault_app_exclude_match_patterns()?)
 }
 
 /// `base_url` may be empty when no configured vault base is available.
@@ -380,10 +392,7 @@ pub fn is_nook_vault_app_url(
     } else {
         Some(base_url)
     };
-    Ok(nook_companion_core::is_nook_vault_app_url(
-        candidate_url,
-        base_url,
-    )?)
+    Ok(VaultHostObservation::new(candidate_url).is_nook_vault_app_url(base_url)?)
 }
 
 #[wasm_bindgen]
@@ -391,10 +400,7 @@ pub fn belongs_to_simple_vault(
     base_url: &str,
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::belongs_to_simple_vault(
-        base_url,
-        candidate_url,
-    )?)
+    Ok(VaultHostPolicy::new(base_url).belongs_to_simple_vault(candidate_url)?)
 }
 
 #[wasm_bindgen]
@@ -402,10 +408,7 @@ pub fn belongs_to_sentinel_vault(
     base_url: &str,
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::belongs_to_sentinel_vault(
-        base_url,
-        candidate_url,
-    )?)
+    Ok(VaultHostPolicy::new(base_url).belongs_to_sentinel_vault(candidate_url)?)
 }
 
 #[cfg(test)]
@@ -559,13 +562,20 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn backup_code_classifier_bridge_preserves_typed_variants() {
         assert_eq!(
-            classify_authentication_backup_codes_observation("Use a backup code instead", false),
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Use a backup code instead",
+                    candidate_present: false
+                }
+            ),
             nook_companion_core::AuthenticationBackupCodesObservation::Absent
         );
         assert_eq!(
-            classify_authentication_backup_codes_observation(
-                "Save your recovery codes in a secure place",
-                false,
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Save your recovery codes in a secure place",
+                    candidate_present: false
+                }
             ),
             nook_companion_core::AuthenticationBackupCodesObservation::Present
         );
@@ -574,7 +584,13 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn enrollment_match_bridge_preserves_selected_recovery_action() -> Result<(), String> {
         let nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot) =
-            authentication_enrollment_workflow_match(true, "Save these recovery codes", false)
+            AuthenticationWorkflowMatch::authentication_enrollment_workflow_match(
+                AuthenticationEnrollmentObservation {
+                    authenticator_setup_hint: true,
+                    backup_codes_copy: "Save these recovery codes",
+                    manual_checkpoint_present: false,
+                },
+            )
         else {
             return Err("expected a selected enrollment workflow".to_owned());
         };
@@ -698,26 +714,30 @@ mod tests {
             assert!(is_extension_connect_scope(scope.as_str()));
         }
         assert!(!is_extension_connect_scope("foreign-scope"));
-        assert!(contains_backup_code_candidate("A1B2-C3D4-E5F6"));
+        assert!(BackupCodePageText::new("A1B2-C3D4-E5F6").contains_backup_code_candidate());
         assert_eq!(default_simple_vault_url(), "https://simple.nokey.sh/");
         assert_eq!(
-            simple_vault_url("https://simple.nokey.sh/root", "/login")
+            VaultHostPolicy::new("https://simple.nokey.sh/root")
+                .simple_vault_url("/login")
                 .map_err(|error| format!("url failed: {error:?}"))?,
             "https://simple.nokey.sh/root/login"
         );
         assert_eq!(
-            matching_sentinel_vault_base_url("https://simple.nokey.sh/")
+            VaultHostPolicy::new("https://simple.nokey.sh/")
+                .matching_sentinel_vault_base_url()
                 .map_err(|error| format!("match failed: {error:?}"))?,
             "https://sentinel.nokey.sh/"
         );
         assert!(
-            belongs_to_simple_vault(
-                "https://vault.example.test/simple/",
-                "https://vault.example.test/simple/app"
-            )
-            .map_err(|error| format!("membership failed: {error:?}"))?
+            VaultHostPolicy::new("https://vault.example.test/simple/")
+                .belongs_to_simple_vault("https://vault.example.test/simple/app")
+                .map_err(|error| format!("membership failed: {error:?}"))?
         );
-        assert!(simple_vault_url("http://example.test", "/app").is_err());
+        assert!(
+            VaultHostPolicy::new("http://example.test")
+                .simple_vault_url("/app")
+                .is_err()
+        );
         let preview = resolve_oauth_origin_support(
             nook_companion_core::BrowserOAuthProvider::GoogleDrive,
             "https://pr-42.nokey-simple.pages.dev",
@@ -950,7 +970,7 @@ mod wasm_tests {
                 AuthenticationBackupCodesObservation::Present,
             ),
         ] {
-            let classified = super::classify_authentication_backup_codes_observation(text, false);
+            let classified = AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(AuthenticationBackupCodesEvidence { text: text, candidate_present: false });
             let js_value = serde_wasm_bindgen::to_value(&classified)?;
             let decoded: AuthenticationBackupCodesObservation =
                 serde_wasm_bindgen::from_value(js_value)?;

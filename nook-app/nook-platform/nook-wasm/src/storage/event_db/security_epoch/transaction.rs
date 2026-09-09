@@ -5,6 +5,7 @@
 )]
 //! Contextual event rows and vault indexes within one live `IndexedDB` transaction.
 use super::VaultEventPersistence;
+use crate::NookDatabase;
 use crate::{NookError, storage};
 use nook_core::{EventId, LocalEventStore};
 use rexie::{Rexie, Store, Transaction, TransactionMode};
@@ -54,7 +55,7 @@ pub(super) struct EventTransaction {
 }
 impl EventTransaction {
     pub(super) async fn begin(kind: AppendKind) -> Result<Self, NookError> {
-        let connection = storage::open_nook_database().await?;
+        let connection = NookDatabase::open_nook_database().await?;
         let transaction = connection
             .transaction(
                 &[STORE_EVENTS, STORE_PROJECTIONS],

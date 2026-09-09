@@ -1,5 +1,8 @@
 //! Identity-directory commands that require the unlocked local app key.
 
+use crate::BrowserProviderVaultIdentityObservations;
+use crate::NookDatabase;
+use crate::NookIdentityDirectorySnapshot;
 use crate::identity_record;
 use crate::storage::event_db;
 use nook_core::{CurrentVaultReplaceability, StoreId};
@@ -21,7 +24,7 @@ impl NookVaultManager {
         let current_vault = if current_store_id.is_empty() {
             CurrentVaultReplaceability::Unknown
         } else {
-            let store = event_db::load_local_event_store_strict(current_store_id)
+            let store = NookDatabase::load_local_event_store_strict(current_store_id)
                 .await
                 .map_err(|error| JsError::new(&error.to_string()))?;
             match store.load_graph(current_store_id) {
@@ -29,9 +32,11 @@ impl NookVaultManager {
                 Err(_) => CurrentVaultReplaceability::Unknown,
             }
         };
-        let identities = identity_record::provider_vault_identity_observations(
-            &self.device.public_app_id(),
-            &provider_store_id,
+        let identities = NookIdentityDirectorySnapshot::provider_vault_identity_observations(
+            BrowserProviderVaultIdentityObservations {
+                session_app_id: &self.device.public_app_id(),
+                store_id: &provider_store_id,
+            },
         )
         .await
         .map_err(|error| JsError::new(&error.to_string()))?;

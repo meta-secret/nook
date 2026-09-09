@@ -1,8 +1,10 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
+use crate::ResolveMemberRosterRequest;
 use crate::{
     EpochMetadataState, EpochPasswordState, EventError, EventInsertStatus, VaultEpochError,
 };
+use nook_auth2::{BuildMembersRecordsRequest, VaultMember};
 
 use crate::errors::VaultResult;
 use crate::vault_ids::{AuthKeyId, StoreId};
@@ -10,8 +12,7 @@ use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use crate::{
     AppendEventInput, CanonicalEventBodyBytes, Database, EventId, EventStorageBytes,
     LocalEventStore, ObservedHeads, SecretEpochReencryption, SigningIdentity, StoredSecretRecord,
-    VaultCrypto, VaultMetaState, VaultOperation, VaultProjection, build_members_records,
-    resolve_member_roster,
+    VaultCrypto, VaultMetaState, VaultOperation, VaultProjection,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
@@ -141,8 +142,14 @@ impl VaultEventSession {
         records: &[StoredSecretRecord],
         members_key: &crate::SymmetricKey,
     ) -> VaultResult<Sha256Hex> {
-        let roster = resolve_member_roster(records, members_key)?;
-        let member_records = build_members_records(&roster, members_key)?;
+        let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records: records,
+            members_key: members_key,
+        })?;
+        let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
+            roster: &roster,
+            members_key: members_key,
+        })?;
         let json = serde_json::to_string(&member_records)
             .map_err(VaultEpochError::MemberRecordsSerialize)?;
         Ok(Sha256Hex::from_bytes(json.as_bytes()))

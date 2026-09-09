@@ -5,6 +5,9 @@
 )]
 //! Crash-safe Simple-vault genesis marker lifecycle.
 
+use crate::BrowserTimestamp;
+use crate::IdentityDbEnsureLocalIdentityForAppKey;
+use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use nook_core::{IsoTimestamp, StoreId};
 mod event;
 use crate::storage::identity_record;
@@ -244,7 +247,7 @@ impl PendingSimpleGenesis {
         Ok((pending.store_id == store_id).then_some(pending))
     }
     pub(crate) async fn load() -> Result<Option<Self>, NookError> {
-        indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+        NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
             .await?
             .map(|raw| PendingSimpleGenesis::decode(&raw))
             .transpose()
@@ -257,16 +260,16 @@ pub(crate) struct OrdinarySimpleGenesisRequest<'a> {
 impl OrdinarySimpleGenesisRequest<'_> {
     pub(crate) async fn begin_or_resume(self) -> Result<PendingSimpleGenesis, NookError> {
         let Self { app_key, label } = self;
-        if indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+        if NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
             .await?
             .is_some()
         {
             let selected = Rc::new(RefCell::new(None));
             let captured = Rc::clone(&selected);
-            indexed_db::idb_update_string(
-                PENDING_SIMPLE_GENESIS_KEY,
-                StringUpdateGuard::Unconditional,
-                move |current| {
+            NookDatabase::idb_update_string(IndexedDbUpdate {
+                key: PENDING_SIMPLE_GENESIS_KEY,
+                guard: StringUpdateGuard::Unconditional,
+                update: move |current| {
                     let raw = current.ok_or_else(|| {
                         NookError::IndexedDb(
                             "Pending Simple genesis marker disappeared.".to_owned(),
@@ -278,28 +281,34 @@ impl OrdinarySimpleGenesisRequest<'_> {
                     *captured.borrow_mut() = Some(pending);
                     Ok(encoded)
                 },
-            )
+            })
             .await?;
             return selected.borrow_mut().take().ok_or_else(|| {
                 NookError::IndexedDb("Pending Simple genesis produced no result.".to_owned())
             });
         }
-        let identity = identity_record::ensure_local_identity_for_app_key(app_key, label).await?;
+        let identity = NookDatabase::ensure_local_identity_for_app_key(
+            IdentityDbEnsureLocalIdentityForAppKey {
+                app_key: app_key,
+                label: label,
+            },
+        )
+        .await?;
         let proposed = PendingSimpleGenesis {
             store_id: nook_core::StoreId::generate()
                 .map_err(|error| NookError::Database(error.to_string()))?,
             identity_id: identity.identity_id,
-            created_at: IsoTimestamp::parse(&conversion::wasm_iso_timestamp())
+            created_at: IsoTimestamp::parse(&BrowserTimestamp::now().into_iso_string())
                 .map_err(|error| NookError::Database(error.to_string()))?,
             event_state: PendingSimpleGenesisEvent::AwaitingEvent,
             flow: PendingSimpleGenesisFlow::Ordinary,
         };
         let selected = Rc::new(RefCell::new(None));
         let captured = Rc::clone(&selected);
-        indexed_db::idb_update_string(
-            PENDING_SIMPLE_GENESIS_KEY,
-            StringUpdateGuard::Unconditional,
-            move |current| {
+        NookDatabase::idb_update_string(IndexedDbUpdate {
+            key: PENDING_SIMPLE_GENESIS_KEY,
+            guard: StringUpdateGuard::Unconditional,
+            update: move |current| {
                 let pending = current
                     .as_deref()
                     .map(PendingSimpleGenesis::decode)
@@ -309,7 +318,7 @@ impl OrdinarySimpleGenesisRequest<'_> {
                 *captured.borrow_mut() = Some(pending);
                 Ok(encoded)
             },
-        )
+        })
         .await?;
         selected.borrow_mut().take().ok_or_else(|| {
             NookError::IndexedDb("Pending Simple genesis produced no result.".to_owned())
@@ -360,20 +369,20 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn pending_genesis_survives_selection_change() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let pending = OrdinarySimpleGenesisRequest {
             app_key: &app_key,
             label: "Personal",
         }
         .begin_or_resume()
         .await?;
-        let another_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        let another_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let selected_key = another_key.clone();
-        identity_record::update_identity_directory(move |directory| {
+        NookDatabase::update_identity_directory(move |directory| {
             directory
                 .create_identity("Work", &selected_key, None)
-                .map_err(identity_record::map_domain_error)?;
+                .map_err(NookDatabase::map_domain_error)?;
             Ok(())
         })
         .await?;
@@ -395,7 +404,7 @@ mod tests {
         .begin_or_resume()
         .await?;
         assert_ne!(replacement.store_id, pending.store_id);
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -408,23 +417,23 @@ mod tests {
     #[wasm_bindgen_test]
     async fn cleanup_preserves_marker_when_any_completion_identity_differs() -> Result<(), NookError>
     {
-        identity_record::clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let pending = OrdinarySimpleGenesisRequest {
             app_key: &app_key,
             label: "Personal",
         }
         .begin_or_resume()
         .await?;
-        let original = indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+        let original = NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
             .await?
             .ok_or_else(|| NookError::Database("Pending genesis marker is missing.".to_owned()))?;
         let different_store = PendingSimpleGenesis {
-            store_id: nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?,
+            store_id: nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?,
             ..pending.clone()
         };
         let different_identity = PendingSimpleGenesis {
-            identity_id: IdentityId::generate().map_err(identity_record::map_domain_error)?,
+            identity_id: IdentityId::generate().map_err(NookDatabase::map_domain_error)?,
             ..pending.clone()
         };
         let different_time = PendingSimpleGenesis {
@@ -441,7 +450,7 @@ mod tests {
             .clear_pending()
             .await?;
             assert_eq!(
-                indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+                NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
                     .await?
                     .as_ref(),
                 Some(&original)
@@ -451,11 +460,11 @@ mod tests {
             .clear_pending()
             .await?;
         assert!(
-            indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
                 .await?
                 .is_none()
         );
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -467,18 +476,27 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn migrates_legacy_top_level_event_yaml() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
-        let identity =
-            identity_record::ensure_local_identity_for_app_key(&app_key, "Personal").await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let identity = NookDatabase::ensure_local_identity_for_app_key(
+            IdentityDbEnsureLocalIdentityForAppKey {
+                app_key: &app_key,
+                label: "Personal",
+            },
+        )
+        .await?;
         let raw = serde_json::to_string(&LegacyGenesisMarker {
-            store_id: nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?,
+            store_id: nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?,
             identity_id: identity.identity_id,
             created_at: "2026-08-13T00:00:00.000Z",
             event_yaml: "signed-event\n",
         })
         .map_err(|error| NookError::Serialization(error.to_string()))?;
-        indexed_db::idb_put_string(PENDING_SIMPLE_GENESIS_KEY, &raw).await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: PENDING_SIMPLE_GENESIS_KEY,
+            value: &raw,
+        })
+        .await?;
         let marker = OrdinarySimpleGenesisRequest {
             app_key: &app_key,
             label: "Personal",
@@ -486,7 +504,7 @@ mod tests {
         .begin_or_resume()
         .await?;
         assert_eq!(marker.event_yaml(), Some("signed-event\n"));
-        let upgraded = indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+        let upgraded = NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
             .await?
             .ok_or_else(|| NookError::IndexedDb("Marker disappeared.".to_owned()))?;
         let upgraded: UpgradedGenesisMarker = serde_json::from_str(&upgraded)
@@ -498,6 +516,6 @@ mod tests {
         assert_eq!(upgraded.identity_id, marker.identity_id);
         assert_eq!(upgraded.created_at, marker.created_at);
         assert!(matches!(upgraded.flow, PendingSimpleGenesisFlow::Ordinary));
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
 }

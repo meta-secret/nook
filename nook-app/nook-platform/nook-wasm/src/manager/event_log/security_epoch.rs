@@ -3,14 +3,14 @@
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
-use super::{
-    BuiltVaultEvent, NookError, NookVaultManager, VaultOperation, load_local_event_store,
-    save_key_epoch,
-};
+use super::{BuiltVaultEvent, NookError, NookVaultManager, VaultOperation};
+use crate::EventDbSaveKeyEpoch;
+use crate::NookDatabase;
 use crate::storage::event_db::{EpochPairAppend, EventAppend, VaultEventPersistence};
 use crate::storage::identity_record::{
     IdentityReconciliationStore, PendingIdentityRotation, ReconciliationIntent,
 };
+use nook_core::VaultEvent;
 use nook_core::{
     EpochMetadataState, EpochPasswordState, EventId, IdentityVaultEventId, MembersCheckpointHash,
     ProjectionEpoch, StoreId, SymmetricKey, VaultKeyRotation, VaultMetaGraphProjection,
@@ -118,7 +118,7 @@ impl SecurityEpochRecoveryPlan {
     fn built_event_from_yaml(yaml: &str) -> Result<BuiltVaultEvent, NookError> {
         let bytes = yaml.as_bytes().to_vec();
         let storage_bytes = nook_core::EventStorageBytes::from(bytes.clone());
-        let event = nook_core::parse_event_storage_bytes(&storage_bytes)?;
+        let event = VaultEvent::parse_event_storage_bytes(&storage_bytes)?;
         Ok(BuiltVaultEvent { event, bytes })
     }
 }
@@ -338,7 +338,7 @@ impl SecurityEpochRecoveryPlan {
 
 impl CommittedSecurityEpochExecution {
     async fn complete(self, manager: &mut NookVaultManager) -> Result<(), NookError> {
-        let local = load_local_event_store(&manager.vault.store_id).await?;
+        let local = NookDatabase::load_local_event_store(&manager.vault.store_id).await?;
         let graph = local.load_graph(&manager.vault.store_id)?;
         let projection = nook_core::VaultProjection::from_graph(&graph, &manager.vault.store_id)?;
         let advanced = self.projection_advanced_past(&projection);
@@ -369,7 +369,11 @@ impl CommittedSecurityEpochExecution {
             .commit_epoch(&key_epoch)
             .await?;
         manager.event_log.key_epoch = trigger_event_id.as_str().to_owned();
-        save_key_epoch(&manager.vault.store_id, &manager.event_log.key_epoch).await?;
+        NookDatabase::save_key_epoch(EventDbSaveKeyEpoch {
+            store_id: &manager.vault.store_id,
+            epoch: &manager.event_log.key_epoch,
+        })
+        .await?;
 
         let new_keys = nook_core::VaultKeys {
             secrets_key: SymmetricKey::parse(&plan.new_secrets_key)?,
@@ -535,7 +539,7 @@ mod tests {
                 },
                 signing.signing_key(),
             )?;
-            let yaml = String::from_utf8(nook_core::serialize_event_storage_yaml(&event)?.into())?;
+            let yaml = String::from_utf8(VaultEvent::serialize_event_storage_yaml(&event)?.into())?;
             Ok(Self {
                 new_secrets_key: String::new(),
                 new_members_key: String::new(),

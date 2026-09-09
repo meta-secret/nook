@@ -1,5 +1,6 @@
 use super::secret_presentation::{AuthenticatorGroupKeyRequest, SecretTitle, WebsiteHost};
 use super::{SecretListItem, SecretListItemData, SecretRecord, SecretValue};
+use crate::CreditCardFields;
 
 impl SecretRecord {
     /// Build the secret-free list representation that may cross into UI state.
@@ -256,15 +257,15 @@ mod tests {
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_card"),
             secret_type: SecretType::CreditCard,
-            data: SecretValue::CreditCard(CreditCardSecret::from_fields(
-                "Personal Visa",
-                "Ada Lovelace",
-                "4111 1111 1111 1111",
-                "12",
-                "2030",
-                "123",
-                "work",
-            )?),
+            data: SecretValue::CreditCard(CreditCardSecret::from_fields(CreditCardFields {
+                title: "Personal Visa",
+                cardholder_name: "Ada Lovelace",
+                number: "4111 1111 1111 1111",
+                expiration_month: "12",
+                expiration_year: "2030",
+                cvv: "123",
+                notes: "work",
+            })?),
         };
         let item = record.list_item();
         assert_eq!(item.secret_type(), SecretType::CreditCard);

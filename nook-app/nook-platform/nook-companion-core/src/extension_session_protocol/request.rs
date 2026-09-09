@@ -484,14 +484,16 @@ impl Drop for ExtensionSessionRequestWire {
     }
 }
 
-#[must_use]
-pub fn validate_extension_session_request_json(
-    serialized: &str,
-) -> ExtensionSessionRequestValidation {
-    if serde_json::from_str::<ExtensionSessionRequestWire>(serialized).is_ok() {
-        ExtensionSessionRequestValidation::Accepted
-    } else {
-        ExtensionSessionRequestValidation::Rejected
+impl ExtensionSessionRequestValidation {
+    #[must_use]
+    pub fn validate_extension_session_request_json(
+        serialized: &str,
+    ) -> ExtensionSessionRequestValidation {
+        if serde_json::from_str::<ExtensionSessionRequestWire>(serialized).is_ok() {
+            ExtensionSessionRequestValidation::Accepted
+        } else {
+            ExtensionSessionRequestValidation::Rejected
+        }
     }
 }
 
@@ -516,12 +518,12 @@ mod tests {
             r#""stored_json":"{}","active_vault":{"kind":"NoActiveVault"}"#,
         );
         assert_eq!(
-            validate_extension_session_request_json(&forged),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(&forged),
             ExtensionSessionRequestValidation::Rejected
         );
         let malformed = request.replace(r#""stored_json":"{}""#, r#""stored_json":42"#);
         assert_eq!(
-            validate_extension_session_request_json(&malformed),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(&malformed),
             ExtensionSessionRequestValidation::Rejected
         );
         Ok(())
@@ -558,7 +560,7 @@ mod tests {
         });
         let valid = valid_request.to_string();
         assert_eq!(
-            validate_extension_session_request_json(&valid),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(&valid),
             ExtensionSessionRequestValidation::Accepted
         );
 
@@ -567,14 +569,18 @@ mod tests {
             r#"{"githubPat":"secret"}"#,
         );
         assert_eq!(
-            validate_extension_session_request_json(&malformed_provider),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
+                &malformed_provider
+            ),
             ExtensionSessionRequestValidation::Rejected
         );
 
         let valid_signature = format!(r#""signature":"ed25519:{}""#, "0".repeat(128));
         let malformed_event = valid.replace(&valid_signature, r#""signature":1"#);
         assert_eq!(
-            validate_extension_session_request_json(&malformed_event),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
+                &malformed_event
+            ),
             ExtensionSessionRequestValidation::Rejected
         );
     }
@@ -583,43 +589,51 @@ mod tests {
     fn validates_passkey_bytes_and_queue_metadata() {
         let valid = r#"{"type":"nook:extension-session-finish-passkey-setup","payload":{"credentialId":[1],"userHandle":[2],"prfInput":[3],"prfOutput":[4],"deviceMode":1,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
         assert_eq!(
-            validate_extension_session_request_json(valid),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(valid),
             ExtensionSessionRequestValidation::Accepted
         );
         assert_eq!(
-            validate_extension_session_request_json(&valid.replace("[4]", "[256]")),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
+                &valid.replace("[4]", "[256]")
+            ),
             ExtensionSessionRequestValidation::Rejected
         );
         assert_eq!(
-            validate_extension_session_request_json(&valid.replace("interactive", "background")),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
+                &valid.replace("interactive", "background")
+            ),
             ExtensionSessionRequestValidation::Rejected
         );
         assert_eq!(
-            validate_extension_session_request_json(
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
                 &valid.replace(r#""expiresAt":42"#, r#""expiresAt":null"#,),
             ),
             ExtensionSessionRequestValidation::Rejected
         );
         assert_eq!(
-            validate_extension_session_request_json(
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
                 &valid.replace(r#""priority":"interactive""#, r#""priority":null"#),
             ),
             ExtensionSessionRequestValidation::Rejected
         );
         let ceremony = r#"{"type":"nook:extension-session-register-passkey","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","requestId":"request","requestJson":"{}","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
         assert_eq!(
-            validate_extension_session_request_json(ceremony),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(ceremony),
             ExtensionSessionRequestValidation::Accepted
         );
         assert_eq!(
-            validate_extension_session_request_json(&ceremony.replace("interactive", "probe")),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
+                &ceremony.replace("interactive", "probe")
+            ),
             ExtensionSessionRequestValidation::Rejected
         );
         assert_eq!(
-            validate_extension_session_request_json(&ceremony.replace(
-                r#"{"kind":"deadline","expiresAt":42,"priority":"interactive"}"#,
-                r#"{"kind":"message-default"}"#,
-            )),
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
+                &ceremony.replace(
+                    r#"{"kind":"deadline","expiresAt":42,"priority":"interactive"}"#,
+                    r#"{"kind":"message-default"}"#,
+                )
+            ),
             ExtensionSessionRequestValidation::Rejected
         );
     }
@@ -711,12 +725,14 @@ mod tests {
 
         for (family, valid, required_field) in cases {
             assert_eq!(
-                validate_extension_session_request_json(valid),
+                ExtensionSessionRequestValidation::validate_extension_session_request_json(valid),
                 ExtensionSessionRequestValidation::Accepted,
                 "{family} request should be accepted"
             );
             assert_eq!(
-                validate_extension_session_request_json(&valid.replace(required_field, "")),
+                ExtensionSessionRequestValidation::validate_extension_session_request_json(
+                    &valid.replace(required_field, "")
+                ),
                 ExtensionSessionRequestValidation::Rejected,
                 "{family} request should require its domain fields"
             );
@@ -727,14 +743,14 @@ mod tests {
     fn rejects_open_ended_session_domain_values() {
         let passkey_setup = r#"{"type":"nook:extension-session-finish-passkey-setup","payload":{"credentialId":[1],"userHandle":[2],"prfInput":[3],"prfOutput":[4],"deviceMode":1,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
         assert_eq!(
-            validate_extension_session_request_json(
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
                 &passkey_setup.replace(r#""deviceMode":1"#, r#""deviceMode":2"#),
             ),
             ExtensionSessionRequestValidation::Rejected
         );
         let backup_attach = r#"{"type":"nook:extension-session-authenticator-backup-attach","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","secretId":"secret","codes":["backup"],"mode":"replace","queue":{"kind":"message-default"}}}"#;
         assert_eq!(
-            validate_extension_session_request_json(
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
                 &backup_attach.replace(r#""mode":"replace""#, r#""mode":"append""#),
             ),
             ExtensionSessionRequestValidation::Rejected
@@ -749,7 +765,7 @@ mod tests {
             r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"}},"codes":["foreign"]}"#,
         ] {
             assert_eq!(
-                validate_extension_session_request_json(request),
+                ExtensionSessionRequestValidation::validate_extension_session_request_json(request),
                 ExtensionSessionRequestValidation::Rejected
             );
         }
@@ -762,7 +778,7 @@ mod tests {
             r#"{"type":"nook:extension-session-cancel-passkey","payload":{"requestId":"request","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#,
         ] {
             assert_eq!(
-                validate_extension_session_request_json(request),
+                ExtensionSessionRequestValidation::validate_extension_session_request_json(request),
                 ExtensionSessionRequestValidation::Rejected
             );
         }

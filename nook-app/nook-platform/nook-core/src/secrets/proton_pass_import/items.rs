@@ -6,6 +6,7 @@
 //! Decoded Proton Pass vaults and ordered item metadata conversion.
 use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{ProtonPassImportError, ProtonPassImportPlan};
+use crate::CreditCardFields;
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
 use serde_json::Value;
@@ -269,15 +270,15 @@ impl ProtonPassVaultItem<'_> {
             metadata.push(("pin".to_owned(), content.pin.trim().to_owned()));
         }
         ProtonPassNotes { notes: &mut notes }.append(metadata);
-        CreditCardSecret::from_fields(
-            item.data.metadata.name.trim(),
-            content.cardholder_name.trim(),
-            content.number.trim(),
-            expiration_month.trim(),
-            expiration_year.trim(),
-            content.verification_number.trim(),
-            &notes,
-        )
+        CreditCardSecret::from_fields(CreditCardFields {
+            title: item.data.metadata.name.trim(),
+            cardholder_name: content.cardholder_name.trim(),
+            number: content.number.trim(),
+            expiration_month: expiration_month.trim(),
+            expiration_year: expiration_year.trim(),
+            cvv: content.verification_number.trim(),
+            notes: &notes,
+        })
         .ok()
         .map(SecretValue::CreditCard)
     }

@@ -5,9 +5,9 @@
 )]
 
 use super::form_identity::AuthenticationRouteIdentity;
-use super::{
-    contains_any_word, expand_identity_text, looks_like_unrestricted_login_advance_control_label,
-};
+use crate::AuthenticationAdvanceControlObservation;
+
+use crate::AuthenticationControlText;
 /// Borrowed control identity, reused across label and provider predicates.
 pub(super) struct AuthenticationControlIdentity<'a> {
     identity: &'a str,
@@ -27,27 +27,25 @@ impl AuthenticationControlIdentity<'_> {
     fn names_provider(&self, scope: ProviderNameScope) -> bool {
         let identity = self.identity;
         let allow_single_letter_x = matches!(scope, ProviderNameScope::Label);
-        let identity = expand_identity_text(identity);
-        contains_any_word(
-            &identity,
-            &[
-                "google",
-                "apple",
-                "microsoft",
-                "facebook",
-                "github",
-                "git hub",
-                "gitlab",
-                "git lab",
-                "linkedin",
-                "linked in",
-                "twitter",
-                "x com",
-                "okta",
-                "amazon",
-                "discord",
-            ],
-        ) || (allow_single_letter_x && contains_any_word(&identity, &["x"]))
+        let identity = AuthenticationControlText::new(identity).expand_identity_text();
+        AuthenticationControlText::new(&identity).contains_any_word(&[
+            "google",
+            "apple",
+            "microsoft",
+            "facebook",
+            "github",
+            "git hub",
+            "gitlab",
+            "git lab",
+            "linkedin",
+            "linked in",
+            "twitter",
+            "x com",
+            "okta",
+            "amazon",
+            "discord",
+        ]) || (allow_single_letter_x
+            && AuthenticationControlText::new(&identity).contains_any_word(&["x"]))
     }
     pub(super) fn label_names_provider(&self) -> bool {
         let identity = self.identity;
@@ -59,9 +57,12 @@ impl AuthenticationControlIdentity<'_> {
     }
     pub(super) fn route_names_provider(&self) -> bool {
         let identity = self.identity;
-        let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
+        let route =
+            AuthenticationControlText::new(identity.split(['?', '#']).next().unwrap_or_default())
+                .expand_identity_text();
         let fragment =
-            expand_identity_text(identity.split_once('#').map_or("", |(_, value)| value));
+            AuthenticationControlText::new(identity.split_once('#').map_or("", |(_, value)| value))
+                .expand_identity_text();
         let segments = identity
             .split(['?', '#'])
             .next()
@@ -104,7 +105,10 @@ impl AuthenticationControlIdentity<'_> {
         AuthenticationControlIdentity::new(identity).names_provider(ProviderNameScope::Registered)
             || identity.split(['?', '#']).any(|metadata| {
                 metadata.split('&').any(|component| {
-                    let key = expand_identity_text(component.split('=').next().unwrap_or_default());
+                    let key = AuthenticationControlText::new(
+                        component.split('=').next().unwrap_or_default(),
+                    )
+                    .expand_identity_text();
                     let root = key
                         .strip_suffix(" id")
                         .or_else(|| key.strip_suffix(" name"))
@@ -112,10 +116,12 @@ impl AuthenticationControlIdentity<'_> {
                     ["provider", "identity provider", "idp", "connection"].contains(&root)
                 })
             })
-            || contains_any_word(&route, &["provider", "idp"])
+            || AuthenticationControlText::new(&route).contains_any_word(&["provider", "idp"])
             || (has_unknown_login_route_segment && !is_apple_identity_authorization_signin)
-            || ((contains_any_word(&route, &["x"]) || contains_any_word(&fragment, &["x"]))
-                && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
+            || ((AuthenticationControlText::new(&route).contains_any_word(&["x"])
+                || AuthenticationControlText::new(&fragment).contains_any_word(&["x"]))
+                && AuthenticationControlText::new(&route)
+                    .contains_any_word(&["login", "log in", "signin", "sign in"]))
     }
     fn has_provider_selection_grammar(&self) -> bool {
         let identity = self.identity;
@@ -137,83 +143,79 @@ impl AuthenticationControlIdentity<'_> {
     }
     pub(super) fn is_microsoft_primary_sign_in(&self) -> bool {
         let label = self.identity;
-        let identity = expand_identity_text(label);
+        let identity = AuthenticationControlText::new(label).expand_identity_text();
         identity.starts_with("sign in to ")
-            && contains_any_word(&identity, &["microsoft"])
+            && AuthenticationControlText::new(&identity).contains_any_word(&["microsoft"])
             && !AuthenticationControlIdentity::new(&identity.replace("microsoft", ""))
                 .label_names_provider()
     }
     pub(super) fn is_alternate_authentication_route(&self) -> bool {
         let label = self.identity;
-        let identity = expand_identity_text(label);
-        if contains_any_word(&identity, &["passkey", "saml", "sso"]) {
+        let identity = AuthenticationControlText::new(label).expand_identity_text();
+        if AuthenticationControlText::new(&identity).contains_any_word(&["passkey", "saml", "sso"])
+        {
             return true;
         }
         (AuthenticationControlIdentity::new(&identity).label_names_provider()
             && !AuthenticationControlIdentity::new(label).is_microsoft_primary_sign_in())
-            || (looks_like_unrestricted_login_advance_control_label(label)
+            || (AuthenticationAdvanceControlObservation::looks_like_unrestricted_login_advance_control_label(label)
                 && AuthenticationControlIdentity::new(&identity).has_provider_selection_grammar())
     }
     pub(super) fn is_auxiliary(&self) -> bool {
         let label = self.identity;
-        let identity = expand_identity_text(label);
-        contains_any_word(&identity, &["password"])
-            && contains_any_word(
-                &identity,
-                &[
-                    "show",
-                    "hide",
-                    "reveal",
-                    "unmask",
-                    "mask",
-                    "toggle",
-                    "visibility",
-                    "visible",
-                ],
-            )
+        let identity = AuthenticationControlText::new(label).expand_identity_text();
+        AuthenticationControlText::new(&identity).contains_any_word(&["password"])
+            && AuthenticationControlText::new(&identity).contains_any_word(&[
+                "show",
+                "hide",
+                "reveal",
+                "unmask",
+                "mask",
+                "toggle",
+                "visibility",
+                "visible",
+            ])
     }
     pub(super) fn is_explicit_advance(&self) -> bool {
         let label = self.identity;
-        contains_any_word(
-            &expand_identity_text(label),
-            &["signin", "sign-in", "sign in", "login", "log-in", "log in"],
+        AuthenticationControlText::new(
+            &AuthenticationControlText::new(label).expand_identity_text(),
         )
+        .contains_any_word(&["signin", "sign-in", "sign in", "login", "log-in", "log in"])
     }
     pub(super) fn is_one_time_code_resend(&self) -> bool {
         let label = self.identity;
-        contains_any_word(
-            &expand_identity_text(label),
-            &[
-                "resend",
-                "send again",
-                "request new code",
-                "send new code",
-                "another code",
-            ],
+        AuthenticationControlText::new(
+            &AuthenticationControlText::new(label).expand_identity_text(),
         )
+        .contains_any_word(&[
+            "resend",
+            "send again",
+            "request new code",
+            "send new code",
+            "another code",
+        ])
     }
     pub(super) fn is_password_recovery(&self) -> bool {
         let label = self.identity;
-        let identity = expand_identity_text(label);
-        contains_any_word(&identity, &["password"])
-            && contains_any_word(
-                &identity,
-                &["forgot", "forget", "recover", "recovery", "reset"],
-            )
+        let identity = AuthenticationControlText::new(label).expand_identity_text();
+        AuthenticationControlText::new(&identity).contains_any_word(&["password"])
+            && AuthenticationControlText::new(&identity)
+                .contains_any_word(&["forgot", "forget", "recover", "recovery", "reset"])
     }
     pub(super) fn is_registration(&self) -> bool {
         let label = self.identity;
-        contains_any_word(
-            &expand_identity_text(label),
-            &[
-                "create account",
-                "register",
-                "registration",
-                "signup",
-                "sign-up",
-                "sign up",
-            ],
+        AuthenticationControlText::new(
+            &AuthenticationControlText::new(label).expand_identity_text(),
         )
+        .contains_any_word(&[
+            "create account",
+            "register",
+            "registration",
+            "signup",
+            "sign-up",
+            "sign up",
+        ])
     }
 }
 

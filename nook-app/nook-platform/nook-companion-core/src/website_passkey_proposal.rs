@@ -21,6 +21,14 @@ pub enum WebsitePasskeyProposal {
     CreatePasskey,
 }
 
+/// Named values required by WebsitePasskeyProposal::propose_website_passkey.
+pub struct WebsitePasskeyEvidence {
+    pub workflow_kind: AuthenticationWorkflowKind,
+    pub manual_checkpoint_present: bool,
+    pub passkey_control_present: bool,
+    pub matching_passkey_account_count: AuthenticationPasskeyAccountCount,
+}
+
 impl WebsitePasskeyProposal {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -36,40 +44,44 @@ impl WebsitePasskeyProposal {
 ///
 /// Defaults remain explicit human approval. Manual checkpoints, second-factor,
 /// enrollment, and password-change workflows never receive a passkey proposal.
-#[must_use]
-pub const fn propose_website_passkey(
-    workflow_kind: AuthenticationWorkflowKind,
-    manual_checkpoint_present: bool,
-    passkey_control_present: bool,
-    matching_passkey_account_count: AuthenticationPasskeyAccountCount,
-) -> WebsitePasskeyProposal {
-    if manual_checkpoint_present {
-        return WebsitePasskeyProposal::None;
-    }
-    match workflow_kind {
-        AuthenticationWorkflowKind::Login | AuthenticationWorkflowKind::Signup => {}
-        AuthenticationWorkflowKind::PasswordChange
-        | AuthenticationWorkflowKind::TotpChallenge
-        | AuthenticationWorkflowKind::TotpEnrollment
-        | AuthenticationWorkflowKind::Manual => {
+impl WebsitePasskeyProposal {
+    #[must_use]
+    pub const fn propose_website_passkey(
+        request: WebsitePasskeyEvidence,
+    ) -> WebsitePasskeyProposal {
+        let WebsitePasskeyEvidence {
+            workflow_kind,
+            manual_checkpoint_present,
+            passkey_control_present,
+            matching_passkey_account_count,
+        } = request;
+        if manual_checkpoint_present {
             return WebsitePasskeyProposal::None;
         }
+        match workflow_kind {
+            AuthenticationWorkflowKind::Login | AuthenticationWorkflowKind::Signup => {}
+            AuthenticationWorkflowKind::PasswordChange
+            | AuthenticationWorkflowKind::TotpChallenge
+            | AuthenticationWorkflowKind::TotpEnrollment
+            | AuthenticationWorkflowKind::Manual => {
+                return WebsitePasskeyProposal::None;
+            }
+        }
+        if matching_passkey_account_count.raw() > 0 {
+            return WebsitePasskeyProposal::UsePasskey {
+                account_count: matching_passkey_account_count,
+            };
+        }
+        if passkey_control_present {
+            return WebsitePasskeyProposal::CreatePasskey;
+        }
+        WebsitePasskeyProposal::None
     }
-    if matching_passkey_account_count.raw() > 0 {
-        return WebsitePasskeyProposal::UsePasskey {
-            account_count: matching_passkey_account_count,
-        };
-    }
-    if passkey_control_present {
-        return WebsitePasskeyProposal::CreatePasskey;
-    }
-    WebsitePasskeyProposal::None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use {AuthenticationWorkflowKind::*, WebsitePasskeyProposal::*};
 
     #[test]
     fn proposes_passkeys_for_the_supported_workflow_cases() {
@@ -91,7 +103,12 @@ mod tests {
         ];
 
         for (workflow, manual, control, count, expected) in cases {
-            let actual = propose_website_passkey(workflow, manual, control, count.into());
+            let actual = WebsitePasskeyProposal::propose_website_passkey(WebsitePasskeyEvidence {
+                workflow_kind: workflow,
+                manual_checkpoint_present: manual,
+                passkey_control_present: control,
+                matching_passkey_account_count: count.into(),
+            });
             assert_eq!(actual, expected);
         }
     }

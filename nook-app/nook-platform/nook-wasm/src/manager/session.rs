@@ -1,3 +1,4 @@
+use crate::ConfiguredVaultApplication;
 use nook_core::{
     DriveEventParent, ICloudEventTarget, SentinelGenesisPhase, StorageMode, VaultArchitecture,
     VaultMetaState, VaultUnlock,
@@ -335,7 +336,7 @@ impl NookVaultManager {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            application: application::configured_vault_application(),
+            application: ConfiguredVaultApplication::configured_vault_application(),
             storage: StorageSession::default(),
             vault: VaultSessionState::default(),
             device: DeviceSessionState::default(),

@@ -2,6 +2,8 @@
 
 use super::super::verified_access::VerifiedVaultAccessFlow;
 use super::super::{CeremonyState, NookVaultManager};
+use crate::EventDbSaveEventBytes;
+use crate::NookDatabase;
 use crate::{NookError, NookSecretRecord};
 use nook_core::{
     DeviceIdentity, MultiDeviceError, SentinelUnlockPolicy, SentinelUnlockQuorum,
@@ -495,11 +497,11 @@ mod tests {
                         operations,
                     })?;
                 let event_id = event.validate_envelope(&fixture.output.store_id)?;
-                event_db::save_event_bytes(
-                    fixture.output.store_id.as_str(),
-                    event_id.as_str(),
-                    bytes.as_ref(),
-                )
+                NookDatabase::save_event_bytes(EventDbSaveEventBytes {
+                    store_id: fixture.output.store_id.as_str(),
+                    event_id: event_id.as_str(),
+                    bytes: bytes.as_ref(),
+                })
                 .await?;
                 let quorum = fixture
                     .ready_session(&fixture.output.stored_records)?
@@ -520,7 +522,7 @@ mod tests {
                     mem::discriminant(&error)
                 );
                 fixture.assert_reset(&manager);
-                event_db::clear_local_event_store(fixture.output.store_id.as_str()).await?;
+                NookDatabase::clear_local_event_store(fixture.output.store_id.as_str()).await?;
             }
             let mut manager = fixture.manager()?;
             manager.sentinel_unlock =

@@ -5,8 +5,13 @@
 )]
 //! Signing material bound to independently protected local identity entries.
 use super as keyring;
-use crate::NookError;
+use crate::IdentityDbWriteIdentityDirectory;
+use crate::KeyringDbKeyringDeleteKey;
+use crate::KeyringDbKeyringReadString;
+use crate::KeyringDbLoadKeyringForStore;
+use crate::KeyringDbWriteKeyring;
 use crate::storage::{self, event_db, identity_record};
+use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::{
     AppId, AppKey, DeviceSigningPublicKey, IdentityDirectory, IdentityId, IdentitySelection,
     LocalIdentityKeyring, LocalIdentityKeyringEntry, SigningIdentity, i18n_keys,
@@ -82,8 +87,12 @@ impl IdentitySigningSource<'_> {
                     NookError::Database("Protected signing seed is missing".to_owned())
                 })?,
             Some(_) | None if matches!(self.origin, SigningSeedOrigin::MigrateLegacy) => {
-                match keyring::read_string(store, event_db::SIGNING_SEED_KEY, "Legacy signing seed")
-                    .await?
+                match NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
+                    store: store,
+                    key: event_db::SIGNING_SEED_KEY,
+                    context: "Legacy signing seed",
+                })
+                .await?
                 {
                     Some(seed) => seed,
                     None if matches!(
@@ -169,8 +178,12 @@ impl LegacySignerProtection<'_> {
             directory,
             keyring,
         } = self;
-        let Some(seed) =
-            keyring::read_string(store, event_db::SIGNING_SEED_KEY, "Legacy signing seed").await?
+        let Some(seed) = NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
+            store: store,
+            key: event_db::SIGNING_SEED_KEY,
+            context: "Legacy signing seed",
+        })
+        .await?
         else {
             return Ok(());
         };
@@ -215,7 +228,7 @@ impl LegacySignerProtection<'_> {
                 prior_app_key.app_id(),
                 &protected_signing_public_key,
             )
-            .map_err(identity_record::map_domain_error)
+            .map_err(NookDatabase::map_domain_error)
     }
 }
 pub(crate) struct LocalIdentitySigner<'a> {
@@ -224,7 +237,7 @@ pub(crate) struct LocalIdentitySigner<'a> {
 impl LocalIdentitySigner<'_> {
     pub(crate) async fn load_or_create(self) -> Result<String, NookError> {
         let app_key = self.app_key;
-        let rexie = storage::open_nook_database().await?;
+        let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
             .map_err(|error| {
@@ -233,8 +246,12 @@ impl LocalIdentitySigner<'_> {
         let store = transaction.store("vault").map_err(|error| {
             NookError::IndexedDb(format!("Identity signing key store error: {error:?}"))
         })?;
-        let mut directory = identity_record::load_directory_for_write(&store).await?;
-        let mut keyring = keyring::load_keyring_for_store(&store, &directory).await?;
+        let mut directory = NookDatabase::load_directory_for_write(&store).await?;
+        let mut keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
+            store: &store,
+            directory: &directory,
+        })
+        .await?;
         let existing = keyring
             .entries()
             .iter()
@@ -271,11 +288,24 @@ impl LocalIdentitySigner<'_> {
                 .map_err(|error| NookError::Database(error.to_string()))?;
             directory
                 .set_member_signing_public_key(&identity_id, app_key.app_id(), signing.public_key())
-                .map_err(identity_record::map_domain_error)?;
-            keyring::write_keyring(&store, &keyring).await?;
-            identity_record::write_identity_directory(&store, &directory).await?;
+                .map_err(NookDatabase::map_domain_error)?;
+            NookDatabase::write_keyring(KeyringDbWriteKeyring {
+                store: &store,
+                keyring: &keyring,
+            })
+            .await?;
+            NookDatabase::write_identity_directory(IdentityDbWriteIdentityDirectory {
+                store: &store,
+                directory: &directory,
+            })
+            .await?;
         }
-        keyring::delete_key(&store, event_db::SIGNING_SEED_KEY, "Legacy signing seed").await?;
+        NookDatabase::keyring_delete_key(KeyringDbKeyringDeleteKey {
+            store: &store,
+            key: event_db::SIGNING_SEED_KEY,
+            context: "Legacy signing seed",
+        })
+        .await?;
         transaction.done().await.map_err(|error| {
             NookError::IndexedDb(format!("Identity signing key completion error: {error:?}"))
         })?;
@@ -307,10 +337,14 @@ mod tests {
     }
     impl LegacySeedFixture {
         async fn check(self) -> Result<CheckedIdentitySigningMaterial, NookError> {
-            indexed_db::idb_put_string(event_db::SIGNING_SEED_KEY, &self.seed).await?;
+            NookDatabase::idb_put_string(IdbPutStringRequest {
+                key: event_db::SIGNING_SEED_KEY,
+                value: &self.seed,
+            })
+            .await?;
             let app_key =
                 AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
-            let db = storage::open_nook_database().await?;
+            let db = NookDatabase::open_nook_database().await?;
             let transaction = db
                 .transaction(&["vault"], TransactionMode::ReadOnly)
                 .map_err(|error| {
@@ -333,12 +367,12 @@ mod tests {
                 NookError::IndexedDb(format!("Seed test completion error: {error:?}"))
             })?;
             assert_eq!(
-                indexed_db::idb_get_string(event_db::SIGNING_SEED_KEY)
+                NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY)
                     .await?
                     .as_deref(),
                 Some(self.seed.as_str())
             );
-            indexed_db::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
+            NookDatabase::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
             result
         }
     }
@@ -406,7 +440,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn signed_vault_identity_without_seed_cannot_mint_a_replacement_signer()
     -> Result<(), NookError> {
-        indexed_db::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
+        NookDatabase::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
         let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let wrapped = DeviceIdentityProtection::new(&app_key.secret_string())
             .with_pin("legacy identity pin")?;
@@ -417,7 +451,7 @@ mod tests {
             app_key.app_id().clone(),
             wrapped,
         );
-        let rexie = storage::open_nook_database().await?;
+        let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
             .map_err(|error| NookError::IndexedDb(format!("Signer test error: {error:?}")))?;

@@ -20,49 +20,65 @@ pub struct CanonicalControlDestination {
     pub is_microsoft_consumer_login_root: bool,
 }
 
-fn is_http_url(url: &Url) -> bool {
-    matches!(url.scheme(), "http" | "https")
-        && url.username().is_empty()
-        && url.password().is_none()
-        && url.host_str().is_some()
+/// Named values required by CanonicalControlDestination::canonicalize_control_destination.
+pub struct ControlDestinationEvidence<'a> {
+    pub source_origin: &'a str,
+    pub destination_identity: &'a str,
 }
 
-fn is_origin_only(url: &Url) -> bool {
-    url.path() == "/" && url.query().is_none() && url.fragment().is_none()
+impl CanonicalControlDestination {
+    fn is_http_url(url: &Url) -> bool {
+        matches!(url.scheme(), "http" | "https")
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.host_str().is_some()
+    }
 }
 
-fn has_valid_percent_encoding(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'%' {
-            if index + 2 >= bytes.len()
-                || !bytes[index + 1].is_ascii_hexdigit()
-                || !bytes[index + 2].is_ascii_hexdigit()
-            {
-                return false;
+impl CanonicalControlDestination {
+    fn is_origin_only(url: &Url) -> bool {
+        url.path() == "/" && url.query().is_none() && url.fragment().is_none()
+    }
+}
+
+impl CanonicalControlDestination {
+    fn has_valid_percent_encoding(value: &str) -> bool {
+        let bytes = value.as_bytes();
+        let mut index = 0;
+        while index < bytes.len() {
+            if bytes[index] == b'%' {
+                if index + 2 >= bytes.len()
+                    || !bytes[index + 1].is_ascii_hexdigit()
+                    || !bytes[index + 2].is_ascii_hexdigit()
+                {
+                    return false;
+                }
+                index += 3;
+            } else {
+                index += 1;
             }
-            index += 3;
-        } else {
-            index += 1;
         }
+        true
     }
-    true
 }
 
-fn decode_component(value: &str) -> Option<String> {
-    if !has_valid_percent_encoding(value) {
-        return None;
+impl CanonicalControlDestination {
+    fn decode_component(value: &str) -> Option<String> {
+        if !CanonicalControlDestination::has_valid_percent_encoding(value) {
+            return None;
+        }
+        let decoded = percent_decode_str(value).decode_utf8().ok()?;
+        if decoded.chars().any(char::is_control) || decoded.contains('%') {
+            return None;
+        }
+        Some(decoded.into_owned())
     }
-    let decoded = percent_decode_str(value).decode_utf8().ok()?;
-    if decoded.chars().any(char::is_control) || decoded.contains('%') {
-        return None;
-    }
-    Some(decoded.into_owned())
 }
 
-fn decode_query_component(value: &str) -> Option<String> {
-    decode_component(&value.replace('+', " "))
+impl CanonicalControlDestination {
+    fn decode_query_component(value: &str) -> Option<String> {
+        CanonicalControlDestination::decode_component(&value.replace('+', " "))
+    }
 }
 
 const REGISTERED_AUTHENTICATION_PROVIDER_DOMAINS: &[&str] = &[
@@ -80,17 +96,21 @@ const REGISTERED_AUTHENTICATION_PROVIDER_DOMAINS: &[&str] = &[
     "x.com",
 ];
 
-fn host_matches_registered_domain(host: &str, registered_domain: &str) -> bool {
-    host == registered_domain
-        || host
-            .strip_suffix(registered_domain)
-            .is_some_and(|prefix| prefix.ends_with('.'))
+impl CanonicalControlDestination {
+    fn host_matches_registered_domain(host: &str, registered_domain: &str) -> bool {
+        host == registered_domain
+            || host
+                .strip_suffix(registered_domain)
+                .is_some_and(|prefix| prefix.ends_with('.'))
+    }
 }
 
-fn host_is_registered_authentication_provider(host: &str) -> bool {
-    REGISTERED_AUTHENTICATION_PROVIDER_DOMAINS
-        .iter()
-        .any(|domain| host_matches_registered_domain(host, domain))
+impl CanonicalControlDestination {
+    fn host_is_registered_authentication_provider(host: &str) -> bool {
+        REGISTERED_AUTHENTICATION_PROVIDER_DOMAINS
+            .iter()
+            .any(|domain| CanonicalControlDestination::host_matches_registered_domain(host, domain))
+    }
 }
 
 /// Validate and canonicalize an untrusted browser destination.
@@ -99,72 +119,85 @@ fn host_is_registered_authentication_provider(host: &str) -> bool {
 /// browser-resolved absolute URL (after document/base resolution) and must have
 /// that exact origin. Encoded control characters, malformed escapes, and
 /// recursive percent escapes fail closed before authentication policy.
-#[must_use]
-pub fn canonicalize_control_destination(
-    source_origin: &str,
-    destination_identity: &str,
-) -> Option<CanonicalControlDestination> {
-    if source_origin.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-        || destination_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-    {
-        return None;
-    }
-    let source = Url::parse(source_origin.trim()).ok()?;
-    if !is_http_url(&source) || !is_origin_only(&source) {
-        return None;
-    }
-    let destination_identity = destination_identity.trim();
-    let destination = Url::parse(destination_identity).ok()?;
-    if !is_http_url(&destination) || destination.origin() != source.origin() {
-        return None;
-    }
+impl CanonicalControlDestination {
+    #[must_use]
+    pub fn canonicalize_control_destination(
+        request: ControlDestinationEvidence<'_>,
+    ) -> Option<CanonicalControlDestination> {
+        let ControlDestinationEvidence {
+            source_origin,
+            destination_identity,
+        } = request;
+        if source_origin.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            || destination_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        {
+            return None;
+        }
+        let source = Url::parse(source_origin.trim()).ok()?;
+        if !CanonicalControlDestination::is_http_url(&source)
+            || !CanonicalControlDestination::is_origin_only(&source)
+        {
+            return None;
+        }
+        let destination_identity = destination_identity.trim();
+        let destination = Url::parse(destination_identity).ok()?;
+        if !CanonicalControlDestination::is_http_url(&destination)
+            || destination.origin() != source.origin()
+        {
+            return None;
+        }
 
-    let decoded_path = decode_component(destination.path())?;
-    let query = match destination.query() {
-        Some(value) => Some(decode_query_component(value)?),
-        None => None,
-    };
-    let fragment = match destination.fragment() {
-        Some(value) => Some(decode_component(value)?),
-        None => None,
-    };
-    let is_microsoft_consumer_login_root = destination.scheme() == "https"
-        && destination.host_str() == Some("login.live.com")
-        && destination.port_or_known_default() == Some(443)
-        && decoded_path == "/";
-    let mut path_identity = decoded_path.clone();
-    if let Some(fragment) = &fragment {
-        path_identity.push('#');
-        path_identity.push_str(fragment);
-    }
-    let mut route_identity = decoded_path;
-    if let Some(query) = query {
-        route_identity.push('?');
-        route_identity.push_str(&query);
-    }
-    if let Some(fragment) = fragment {
-        route_identity.push('#');
-        route_identity.push_str(&fragment);
-    }
-    if route_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES {
-        return None;
-    }
+        let decoded_path = CanonicalControlDestination::decode_component(destination.path())?;
+        let query = match destination.query() {
+            Some(value) => Some(CanonicalControlDestination::decode_query_component(value)?),
+            None => None,
+        };
+        let fragment = match destination.fragment() {
+            Some(value) => Some(CanonicalControlDestination::decode_component(value)?),
+            None => None,
+        };
+        let is_microsoft_consumer_login_root = destination.scheme() == "https"
+            && destination.host_str() == Some("login.live.com")
+            && destination.port_or_known_default() == Some(443)
+            && decoded_path == "/";
+        let mut path_identity = decoded_path.clone();
+        if let Some(fragment) = &fragment {
+            path_identity.push('#');
+            path_identity.push_str(fragment);
+        }
+        let mut route_identity = decoded_path;
+        if let Some(query) = query {
+            route_identity.push('?');
+            route_identity.push_str(&query);
+        }
+        if let Some(fragment) = fragment {
+            route_identity.push('#');
+            route_identity.push_str(&fragment);
+        }
+        if route_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES {
+            return None;
+        }
 
-    Some(CanonicalControlDestination {
-        path_identity,
-        route_identity,
-        has_provider_authority: destination.scheme() == "https"
-            && destination
-                .host_str()
-                .is_some_and(host_is_registered_authentication_provider),
-        has_microsoft_provider_authority: destination.scheme() == "https"
-            && destination.host_str().is_some_and(|host| {
-                ["live.com", "microsoft.com", "microsoftonline.com"]
-                    .iter()
-                    .any(|domain| host_matches_registered_domain(host, domain))
-            }),
-        is_microsoft_consumer_login_root,
-    })
+        Some(CanonicalControlDestination {
+            path_identity,
+            route_identity,
+            has_provider_authority: destination.scheme() == "https"
+                && destination
+                    .host_str()
+                    .is_some_and(Self::host_is_registered_authentication_provider),
+            has_microsoft_provider_authority: destination.scheme() == "https"
+                && destination.host_str().is_some_and(|host| {
+                    ["live.com", "microsoft.com", "microsoftonline.com"]
+                        .iter()
+                        .any(|domain| {
+                            CanonicalControlDestination::host_matches_registered_domain(
+                                host, domain,
+                            )
+                        })
+                }),
+            is_microsoft_consumer_login_root,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -191,8 +224,13 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                canonicalize_control_destination(source, destination)
-                    .map(|canonical| canonical.path_identity),
+                CanonicalControlDestination::canonicalize_control_destination(
+                    ControlDestinationEvidence {
+                        source_origin: source,
+                        destination_identity: destination
+                    }
+                )
+                .map(|canonical| canonical.path_identity),
                 Some(expected_path.to_owned())
             );
         }
@@ -211,7 +249,13 @@ mod tests {
             "../login",
         ] {
             assert!(
-                canonicalize_control_destination("https://example.test", destination).is_none(),
+                CanonicalControlDestination::canonicalize_control_destination(
+                    ControlDestinationEvidence {
+                        source_origin: "https://example.test",
+                        destination_identity: destination
+                    }
+                )
+                .is_none(),
                 "{destination}"
             );
         }
@@ -220,10 +264,7 @@ mod tests {
     #[test]
     fn decodes_route_evidence_once_before_policy() {
         assert_eq!(
-            canonicalize_control_destination(
-                "https://example.test",
-                "https://example.test/auth/%64elete-account?action=close+account",
-            )
+            CanonicalControlDestination::canonicalize_control_destination(ControlDestinationEvidence { source_origin: "https://example.test", destination_identity: "https://example.test/auth/%64elete-account?action=close+account" })
             .map(|canonical| (canonical.path_identity, canonical.route_identity)),
             Some((
                 "/auth/delete-account".to_owned(),
@@ -237,7 +278,13 @@ mod tests {
             "https://example.test/login/%2564elete",
         ] {
             assert!(
-                canonicalize_control_destination("https://example.test", destination).is_none(),
+                CanonicalControlDestination::canonicalize_control_destination(
+                    ControlDestinationEvidence {
+                        source_origin: "https://example.test",
+                        destination_identity: destination
+                    }
+                )
+                .is_none(),
                 "{destination}"
             );
         }
@@ -253,7 +300,13 @@ mod tests {
             "https://example.test?next=/login",
         ] {
             assert!(
-                canonicalize_control_destination(source, "https://example.test/login").is_none(),
+                CanonicalControlDestination::canonicalize_control_destination(
+                    ControlDestinationEvidence {
+                        source_origin: source,
+                        destination_identity: "https://example.test/login"
+                    }
+                )
+                .is_none(),
                 "{source}"
             );
         }
@@ -262,30 +315,38 @@ mod tests {
     #[test]
     fn records_provider_authority_from_the_validated_host() {
         assert!(
-            canonicalize_control_destination(
-                "https://accounts.google.com",
-                "https://accounts.google.com/signin",
+            CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "https://accounts.google.com",
+                    destination_identity: "https://accounts.google.com/signin"
+                }
             )
             .is_some_and(|canonical| canonical.has_provider_authority)
         );
         assert!(
-            canonicalize_control_destination(
-                "https://example.test",
-                "https://example.test/signin/google",
+            CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "https://example.test",
+                    destination_identity: "https://example.test/signin/google"
+                }
             )
             .is_some_and(|canonical| !canonical.has_provider_authority)
         );
         assert!(
-            canonicalize_control_destination(
-                "https://google.attacker.com",
-                "https://google.attacker.com/signin",
+            CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "https://google.attacker.com",
+                    destination_identity: "https://google.attacker.com/signin"
+                }
             )
             .is_some_and(|canonical| !canonical.has_provider_authority)
         );
         assert!(
-            canonicalize_control_destination(
-                "http://accounts.google.com",
-                "http://accounts.google.com/signin",
+            CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "http://accounts.google.com",
+                    destination_identity: "http://accounts.google.com/signin"
+                }
             )
             .is_some_and(|canonical| !canonical.has_provider_authority)
         );
@@ -294,9 +355,11 @@ mod tests {
     #[test]
     fn preserves_fragment_routes_as_policy_evidence() {
         assert_eq!(
-            canonicalize_control_destination(
-                "https://example.test",
-                "https://example.test/#/delete-account",
+            CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "https://example.test",
+                    destination_identity: "https://example.test/#/delete-account"
+                }
             )
             .map(|canonical| (canonical.path_identity, canonical.route_identity)),
             Some((
@@ -312,11 +375,27 @@ mod tests {
             "https://example.test/login?next={}",
             "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
         );
-        assert!(canonicalize_control_destination("https://example.test", &destination).is_none());
+        assert!(
+            CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "https://example.test",
+                    destination_identity: &destination
+                }
+            )
+            .is_none()
+        );
         let fragment = format!(
             "https://example.test/login#{}",
             "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
         );
-        assert!(canonicalize_control_destination("https://example.test", &fragment).is_none());
+        assert!(
+            CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "https://example.test",
+                    destination_identity: &fragment
+                }
+            )
+            .is_none()
+        );
     }
 }

@@ -8,6 +8,7 @@
 use crate::errors::VaultResult;
 use crate::vault_connect::VaultAccessStatus;
 use crate::{Database, DeviceIdentity, VaultContent, VaultMetaState, VaultUnlock};
+use nook_auth2::{GenesisMembersRecordsRequest, VaultMember};
 
 /// Outcome of comparing remote YAML against the last synced snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,10 +124,12 @@ mod tests {
             identity: &DeviceIdentity,
         ) -> VaultResult<crate::StoredVaultYaml> {
             let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
-            records.extend(genesis_members_records(
-                identity,
-                &keys.members_key,
-                "2026-06-28T00:00:00Z",
+            records.extend(VaultMember::genesis_members_records(
+                GenesisMembersRecordsRequest {
+                    identity: identity,
+                    members_key: &keys.members_key,
+                    enrolled_at: "2026-06-28T00:00:00Z",
+                },
             )?);
             let store_id = StoreId::generate()?;
             VaultRecordSet::serialize_yaml_with_unlock(
@@ -182,10 +185,12 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let password_entries = vec![YamlSyncTestData::password_entry("backup-password")];
         let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
-        records.extend(genesis_members_records(
-            &identity,
-            &keys.members_key,
-            "2026-06-28T00:00:00Z",
+        records.extend(VaultMember::genesis_members_records(
+            GenesisMembersRecordsRequest {
+                identity: &identity,
+                members_key: &keys.members_key,
+                enrolled_at: "2026-06-28T00:00:00Z",
+            },
         )?);
         let store_id = StoreId::generate()?;
         let yaml = VaultRecordSet::serialize_yaml_with_unlock_and_name(

@@ -11,10 +11,9 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::VaultMetaRecord;
-
-use crate::StoredSecretRecord;
 use crate::errors::{ValidationError, ValidationResult};
+use crate::{StoredSecretRecord, VaultMetaRecord};
+use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
 use std::collections::BTreeSet;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -546,7 +545,13 @@ mod tests {
         let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
+        let shares = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first, second],
+                threshold: 2.into(),
+            },
+        )?;
         let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -577,10 +582,12 @@ mod tests {
                 ready_participants: 2.into(),
             },
         );
-        let shares = crate::create_sentinel_share_records(
-            &keys,
-            &[first.clone(), second.clone()],
-            2.into(),
+        let shares = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first.clone(), second.clone()],
+                threshold: 2.into(),
+            },
         )?;
         architecture.validate_records(&shares)?;
 
@@ -611,10 +618,12 @@ mod tests {
         );
 
         let mut duplicate_index = shares;
-        let first_envelope =
-            crate::parse_sentinel_share_envelope(duplicate_index[0].value.as_str())?;
-        let mut second_envelope =
-            crate::parse_sentinel_share_envelope(duplicate_index[1].value.as_str())?;
+        let first_envelope = SentinelShareEnvelope::parse_sentinel_share_envelope(
+            duplicate_index[0].value.as_str(),
+        )?;
+        let mut second_envelope = SentinelShareEnvelope::parse_sentinel_share_envelope(
+            duplicate_index[1].value.as_str(),
+        )?;
         second_envelope.share_index = first_envelope.share_index;
         duplicate_index[1].value =
             StoredRecordPayload::from_trusted(serde_json::to_string(&second_envelope)?);
@@ -630,7 +639,13 @@ mod tests {
         let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
+        let shares = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first, second],
+                threshold: 2.into(),
+            },
+        )?;
         assert_eq!(
             VaultArchitecture::default().validate_records(&shares),
             Err(ValidationError::SimpleVaultHasSentinelShares)

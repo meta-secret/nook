@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
+use nook_auth2::{GenesisMembersRecordsRequest, VaultMember};
 use nook_core::{
     AgeArmoredCiphertext, SecretFingerprint, Sha256Hex, SymmetricKey, VaultError, VaultFormat,
     VaultStoreIdentityRef, VaultSyncError, VaultVersionWrite,
@@ -13,7 +14,6 @@ use nook_core::{
     JoinRequest, LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue,
     SigningIdentity, StoreId, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation,
     VaultProjection, VaultProjectionCache, VaultRecordSet, VaultResult, VaultUnlock,
-    genesis_members_records,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -233,7 +233,13 @@ fn genesis_yaml(
     store_id: &str,
 ) -> VaultResult<nook_core::StoredVaultYaml> {
     let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
-    records.extend(genesis_members_records(identity, &keys.members_key, TS)?);
+    records.extend(VaultMember::genesis_members_records(
+        GenesisMembersRecordsRequest {
+            identity: identity,
+            members_key: &keys.members_key,
+            enrolled_at: TS,
+        },
+    )?);
     VaultRecordSet::serialize_yaml_with_unlock(
         &records,
         &VaultUnlock::Keys,

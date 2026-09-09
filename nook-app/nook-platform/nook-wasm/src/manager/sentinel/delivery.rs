@@ -1,5 +1,8 @@
 //! Sentinel share delivery and member onboarding boundary.
 
+use crate::NookDatabase;
+use crate::SentinelDbLoadSentinelGenesisShareDelivery;
+use crate::SentinelDbSaveSentinelGenesisShareDelivery;
 use nook_core::{
     SentinelOnboardingIssuance, SentinelOnboardingPackage, SentinelOnboardingRecipient,
 };
@@ -7,10 +10,7 @@ use nook_core::{
 use super::super::NookVaultManager;
 use super::StoredSentinelGenesisDelivery;
 use crate::storage::auth_providers::ProviderSnapshotPublication;
-use crate::storage::indexed_db::{
-    list_sentinel_genesis_share_deliveries, load_sentinel_genesis_share_delivery,
-    save_sentinel_genesis_share_delivery,
-};
+
 use crate::{NookError, NookSentinelStoredDeliverySummary};
 use nook_core::{DeviceMode, SentinelGenesisPhase, VaultArchitecture, VaultMetaState};
 use wasm_bindgen::JsError;
@@ -60,10 +60,12 @@ impl NookVaultManager {
             delivery: package.delivery.clone(),
         })
         .map_err(|error| NookError::Serialization(error.to_string()))?;
-        save_sentinel_genesis_share_delivery(
-            package.delivery.store_id.as_str(),
-            identity.device_id().as_str(),
-            &stored_json,
+        NookDatabase::save_sentinel_genesis_share_delivery(
+            SentinelDbSaveSentinelGenesisShareDelivery {
+                store_id: package.delivery.store_id.as_str(),
+                device_id: identity.device_id().as_str(),
+                delivery_json: &stored_json,
+            },
         )
         .await?;
         ProviderSnapshotPublication {
@@ -85,7 +87,10 @@ impl NookVaultManager {
     ) -> Result<Vec<NookSentinelStoredDeliverySummary>, JsError> {
         let identity = self.device_identity()?;
         let mut summaries = Vec::new();
-        for entry in list_sentinel_genesis_share_deliveries(identity.device_id().as_str()).await? {
+        for entry in
+            NookDatabase::list_sentinel_genesis_share_deliveries(identity.device_id().as_str())
+                .await?
+        {
             let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&entry.delivery_json)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             // Revalidate the persisted bundle before advertising it to UI.
@@ -111,12 +116,16 @@ impl NookVaultManager {
         store_id: String,
     ) -> Result<String, JsError> {
         let identity = self.ensure_device_identity()?;
-        let stored_json =
-            load_sentinel_genesis_share_delivery(store_id.trim(), identity.device_id().as_str())
-                .await?
-                .ok_or_else(|| {
-                    JsError::new("No Sentinel share delivery exists for this vault and device.")
-                })?;
+        let stored_json = NookDatabase::load_sentinel_genesis_share_delivery(
+            SentinelDbLoadSentinelGenesisShareDelivery {
+                store_id: store_id.trim(),
+                device_id: identity.device_id().as_str(),
+            },
+        )
+        .await?
+        .ok_or_else(|| {
+            JsError::new("No Sentinel share delivery exists for this vault and device.")
+        })?;
         let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let record = stored

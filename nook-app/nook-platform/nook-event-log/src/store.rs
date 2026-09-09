@@ -6,8 +6,9 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::GenesisImportRequest;
 use crate::canonical::EventId;
-use crate::event::{VaultEvent, parse_event_storage_bytes, serialize_event_storage_yaml};
+use crate::event::VaultEvent;
 use crate::graph::{EventGraph, EventInsertStatus};
 mod remote;
 use crate::{EventError, EventResult, EventStorageBytes};
@@ -84,7 +85,7 @@ impl LocalEventStore {
                     .ok_or_else(|| EventError::MissingEvent {
                         event_id: event_id.as_str().to_owned(),
                     })?;
-            let event = parse_event_storage_bytes(&bytes.to_vec().into())?;
+            let event = VaultEvent::parse_event_storage_bytes(&bytes.to_vec().into())?;
             let _ = graph.insert(event, store_id)?;
         }
         Ok(graph)
@@ -97,7 +98,7 @@ impl LocalEventStore {
         store_id: &str,
     ) -> EventResult<(EventId, EventInsertStatus)> {
         let event_id = event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
-        let bytes = serialize_event_storage_yaml(event)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(event)?;
         if self.replica.contains_event(&event_id) {
             return Ok((event_id, EventInsertStatus::Duplicate));
         }
@@ -116,7 +117,7 @@ mod tests {
     use crate::canonical::Ed25519Signature;
     use crate::event::{
         EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
-        VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
+        VaultEventSchemaVersion, VaultOperation,
     };
     use crate::graph::EventInsertStatus;
     use crate::signing::SigningIdentity;
@@ -136,18 +137,20 @@ mod tests {
     impl SignedEventFixture<'_> {
         fn genesis_for_store(&self, store_id: &str) -> EventResult<VaultEvent> {
             let signing_key = self.signing_key;
-            build_genesis_import_event(
-                &StoreId::parse(store_id)?,
-                &SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
-                &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-                GenesisImportPayload {
+            VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &StoreId::parse(store_id)?,
+                actor_id: &SigningIdentity::actor_id_for_verifying_key(
+                    &signing_key.verifying_key(),
+                )?,
+                key_epoch: &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+                payload: GenesisImportPayload {
                     source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                     secrets: vec![],
                     password_entries: vec![],
                 },
-                &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-                signing_key,
-            )
+                created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+                signing_key: signing_key,
+            })
         }
     }
 
@@ -199,7 +202,7 @@ mod tests {
 
     impl VaultEvent {
         fn remote_record(&self) -> EventResult<(EventId, EventStorageBytes)> {
-            Ok((self.id()?, serialize_event_storage_yaml(self)?))
+            Ok((self.id()?, VaultEvent::serialize_event_storage_yaml(self)?))
         }
     }
 
@@ -211,7 +214,7 @@ mod tests {
         }
         .genesis()?;
         let id = genesis.id()?;
-        let bytes = serialize_event_storage_yaml(&genesis)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
         local.union_remote(&[(id.clone(), bytes)], STORE)?;
@@ -272,7 +275,7 @@ mod tests {
         }
         .genesis()?;
         let id = genesis.id()?;
-        let bytes = serialize_event_storage_yaml(&genesis)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
         let heads = local.union_remote_and_heads(&[(id.clone(), bytes)], STORE)?;
@@ -289,7 +292,7 @@ mod tests {
         }
         .genesis()?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let genesis_bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut local_a = LocalEventStore::new();
         local_a.put_event(genesis_id.clone(), genesis_bytes.clone());
@@ -311,7 +314,7 @@ mod tests {
         }
         .genesis()?;
         let real_id = genesis.id()?;
-        let bytes = serialize_event_storage_yaml(&genesis)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
         let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
 
         let mut local = LocalEventStore::new();
@@ -332,7 +335,7 @@ mod tests {
         }
         .genesis_for_store("store_otherstore1")?;
         let other_id = other.id()?;
-        let bytes = serialize_event_storage_yaml(&other)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&other)?;
 
         assert_eq!(
             CheckedRemoteEvent::parse(&other_id, &bytes)
@@ -358,7 +361,7 @@ mod tests {
             signing_key: &signing_key,
         }
         .genesis()?;
-        let bytes = serialize_event_storage_yaml(&genesis)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
         let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
 
         let err = CheckedRemoteEvent::parse(&wrong_id, &bytes)
@@ -484,7 +487,7 @@ mod tests {
         .genesis()?;
         let event_id = genesis.id()?;
         genesis.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "00".repeat(64)));
-        let bytes = serialize_event_storage_yaml(&genesis)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
         let err = local
@@ -505,13 +508,13 @@ mod tests {
         }
         .genesis()?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let genesis_bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
         let child = SignedEventFixture {
             signing_key: &stranger_key,
         }
         .signed_child(genesis_id.clone(), "secret_remoteuna1")?;
         let child_id = child.id()?;
-        let child_bytes = serialize_event_storage_yaml(&child)?;
+        let child_bytes = VaultEvent::serialize_event_storage_yaml(&child)?;
 
         let mut local = LocalEventStore::new();
         local.union_remote(&[(genesis_id, genesis_bytes)], STORE)?;
@@ -531,13 +534,13 @@ mod tests {
         }
         .genesis()?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let genesis_bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
         let child = SignedEventFixture {
             signing_key: &stranger_key,
         }
         .signed_child(genesis_id.clone(), "secret_batchbad1")?;
         let child_id = child.id()?;
-        let child_bytes = serialize_event_storage_yaml(&child)?;
+        let child_bytes = VaultEvent::serialize_event_storage_yaml(&child)?;
 
         let mut local = LocalEventStore::new();
         let imported = local.union_remote(
@@ -564,13 +567,13 @@ mod tests {
         }
         .genesis()?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let genesis_bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
         let child = SignedEventFixture {
             signing_key: &stranger_key,
         }
         .signed_child(genesis_id.clone(), "secret_pendingbad1")?;
         let child_id = child.id()?;
-        let child_bytes = serialize_event_storage_yaml(&child)?;
+        let child_bytes = VaultEvent::serialize_event_storage_yaml(&child)?;
 
         let mut local = LocalEventStore::new();
         let imported = local.union_remote(&[(child_id.clone(), child_bytes)], STORE)?;
@@ -592,7 +595,7 @@ mod tests {
         }
         .genesis()?;
         let remote_id = remote.id()?;
-        let remote_bytes = serialize_event_storage_yaml(&remote)?;
+        let remote_bytes = VaultEvent::serialize_event_storage_yaml(&remote)?;
         let existing_id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
         let existing_bytes = EventStorageBytes::from(b"not event yaml".to_vec());
 
@@ -620,13 +623,13 @@ mod tests {
         }
         .genesis()?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let genesis_bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
         let child = SignedEventFixture {
             signing_key: &signing_key,
         }
         .signed_child(genesis_id.clone(), "secret_remoteout1")?;
         let child_id = child.id()?;
-        let child_bytes = serialize_event_storage_yaml(&child)?;
+        let child_bytes = VaultEvent::serialize_event_storage_yaml(&child)?;
 
         let mut local = LocalEventStore::new();
         local.put_event(genesis_id.clone(), genesis_bytes.clone());
@@ -651,7 +654,7 @@ mod tests {
         }
         .genesis()?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let genesis_bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut device_a = LocalEventStore::new();
         device_a.put_event(genesis_id.clone(), genesis_bytes.clone());

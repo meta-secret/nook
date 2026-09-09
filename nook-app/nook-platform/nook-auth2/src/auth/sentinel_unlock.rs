@@ -21,6 +21,7 @@ use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     MultiDeviceError, MultiDeviceResult, StoreId, StoredSecretRecord,
 };
+use crate::{CreateSentinelRootShareRecordsForRecipientsRequest, SentinelShareEnvelope};
 use crate::{SentinelParticipantCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold};
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Deserializer, Serialize, de};
@@ -447,7 +448,7 @@ impl SentinelUnlockRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SentinelShareOpening, create_sentinel_root_share_records_for_recipients};
+    use crate::SentinelShareOpening;
 
     struct Fixture {
         keys: VaultKeys,
@@ -813,7 +814,12 @@ mod tests {
                 .map(|identity| (identity.device_id().clone(), identity.public_key()))
                 .collect::<Vec<_>>();
             let (keys, records) =
-                create_sentinel_root_share_records_for_recipients(&recipients, 2.into())?;
+                SentinelShareEnvelope::create_sentinel_root_share_records_for_recipients(
+                    CreateSentinelRootShareRecordsForRecipientsRequest {
+                        recipients: &recipients,
+                        threshold: 2.into(),
+                    },
+                )?;
             let requester = participants[2].clone();
             Ok(Fixture {
                 keys,

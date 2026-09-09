@@ -9,11 +9,9 @@
 mod operation_application;
 
 use crate::canonical::EventId;
-use crate::epoch::{
-    EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
-    concurrent_epoch_rotations_conflict, operation_starts_epoch,
-};
+use crate::epoch::{EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch};
 use crate::graph::EventGraph;
+use crate::{ConcurrentEpochRotations, GenesisImportRequest, VaultEvent, VaultOperation};
 use crate::{EventError, EventResult};
 use crate::{PasswordUnlockEntry, SecretFingerprint};
 use nook_auth2::StoredSecretRecord;
@@ -149,7 +147,9 @@ impl VaultProjection {
 
             let mut security_reason = None;
             for operation in &event.body.operations {
-                if let EpochTransition::Rotated(reason) = operation_starts_epoch(operation) {
+                if let EpochTransition::Rotated(reason) =
+                    VaultOperation::operation_starts_epoch(operation)
+                {
                     epoch_events.insert(event_id.clone(), reason);
                     security_reason = Some(reason);
                 }
@@ -231,7 +231,12 @@ impl VaultProjection {
                 }
                 let left_reason = epoch_events[left_id];
                 let right_reason = epoch_events[right_id];
-                if concurrent_epoch_rotations_conflict(left_reason, right_reason) {
+                if EpochRotationReason::concurrent_epoch_rotations_conflict(
+                    ConcurrentEpochRotations {
+                        left: left_reason,
+                        right: right_reason,
+                    },
+                ) {
                     conflicts.push(SecurityConflict {
                         events: vec![left_id.clone(), right_id.clone()],
                         reasons: vec![left_reason, right_reason],
@@ -303,7 +308,7 @@ mod tests {
     use crate::PasswordEnvelope;
     use crate::event::{
         EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
-        VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
+        VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
     use crate::{
@@ -393,18 +398,18 @@ mod tests {
         }
 
         fn genesis(graph: &mut EventGraph, signing_key: &SigningKey) -> EventResult<EventId> {
-            let event = build_genesis_import_event(
-                &store()?,
-                &actor(signing_key)?,
-                &epoch()?,
-                GenesisImportPayload {
+            let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &store()?,
+                actor_id: &actor(signing_key)?,
+                key_epoch: &epoch()?,
+                payload: GenesisImportPayload {
                     source_content_hash: Self::genesis_source_hash(),
                     secrets: vec![],
                     password_entries: vec![],
                 },
-                &Self::ts("2026-06-28T00:00:00Z"),
-                signing_key,
-            )?;
+                created_at: &Self::ts("2026-06-28T00:00:00Z"),
+                signing_key: signing_key,
+            })?;
             let id = event.id()?;
             graph.insert(event, STORE)?;
             Ok(id)

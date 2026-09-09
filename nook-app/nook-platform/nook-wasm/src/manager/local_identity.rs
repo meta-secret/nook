@@ -1,39 +1,46 @@
 //! Local identity creation, selection, and session adoption.
 
+use crate::AuthProviderDatabase;
+use crate::IdentityDbSaveNewProtectedLocalIdentity;
+use crate::IdentityDbSaveProtectedLocalIdentity;
 use crate::storage::device_access::DeviceAccessProfileKey;
 use crate::storage::identity_record::LocalIdentitySigner;
 use crate::storage::{auth_providers, identity_record, indexed_db};
+use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use identity_record::{LocalIdentityRecovery, PendingSimpleGenesis};
 use nook_core::{AppId, IdentityId, i18n_keys};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
 use super::{EventLogSyncIssueState, NookVaultManager, StorageSession};
-use crate::NookError;
 
 const DEFAULT_IDENTITY_LABEL: &str = "Personal";
 
-fn local_identity_label(label: &str) -> Result<String, &'static str> {
-    let label = label.trim();
-    if label.is_empty() {
-        return Err("Identity label cannot be empty.");
+impl NookVaultManager {
+    fn local_identity_label(label: &str) -> Result<String, &'static str> {
+        let label = label.trim();
+        if label.is_empty() {
+            return Err("Identity label cannot be empty.");
+        }
+        Ok(label.to_owned())
     }
-    Ok(label.to_owned())
 }
 
-async fn ensure_no_pending_vault_creation() -> Result<(), NookError> {
-    let simple_pending = PendingSimpleGenesis::load().await?.is_some();
-    let sentinel_pending = indexed_db::load_sentinel_genesis_finalization_pending()
-        .await?
-        .is_some();
-    let recovery_cleanup_pending = LocalIdentityRecovery::has_pending().await?;
-    if simple_pending || sentinel_pending || recovery_cleanup_pending {
-        return Err(NookError::Database(
-            "Pending vault creation or recovery cleanup must finish before changing identities"
-                .to_owned(),
-        ));
+impl NookVaultManager {
+    async fn ensure_no_pending_vault_creation() -> Result<(), NookError> {
+        let simple_pending = PendingSimpleGenesis::load().await?.is_some();
+        let sentinel_pending = NookDatabase::load_sentinel_genesis_finalization_pending()
+            .await?
+            .is_some();
+        let recovery_cleanup_pending = LocalIdentityRecovery::has_pending().await?;
+        if simple_pending || sentinel_pending || recovery_cleanup_pending {
+            return Err(NookError::Database(
+                "Pending vault creation or recovery cleanup must finish before changing identities"
+                    .to_owned(),
+            ));
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 #[wasm_bindgen]
@@ -42,9 +49,9 @@ impl NookVaultManager {
     /// written until its browser-protection ceremony succeeds.
     #[wasm_bindgen]
     pub async fn begin_local_identity_creation(&mut self, label: &str) -> Result<(), JsError> {
-        let label = local_identity_label(label).map_err(JsError::new)?;
-        ensure_no_pending_vault_creation().await?;
-        if identity_record::selected_legacy_signer_requires_authorization().await? {
+        let label = NookVaultManager::local_identity_label(label).map_err(JsError::new)?;
+        NookVaultManager::ensure_no_pending_vault_creation().await?;
+        if NookDatabase::selected_legacy_signer_requires_authorization().await? {
             if self.device.identity_private_key.is_empty() {
                 return Err(NookError::Decryption(
                     i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned(),
@@ -75,8 +82,8 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn activate_local_identity(&mut self, identity_id: String) -> Result<(), JsError> {
         let identity_id = IdentityId::parse(&identity_id)?;
-        ensure_no_pending_vault_creation().await?;
-        let selection = identity_record::select_local_identity(identity_id).await?;
+        NookVaultManager::ensure_no_pending_vault_creation().await?;
+        let selection = NookDatabase::select_local_identity(identity_id).await?;
         self.finish_local_identity_activation(&selection.selected_app_id);
         Ok(())
     }
@@ -89,12 +96,12 @@ impl NookVaultManager {
         app_id: String,
     ) -> Result<String, JsError> {
         let app_id = AppId::parse(&app_id)?;
-        ensure_no_pending_vault_creation().await?;
+        NookVaultManager::ensure_no_pending_vault_creation().await?;
         let changes_live_identity = self.device.public_app_id() != app_id.as_str();
-        let entry = identity_record::load_entry_for_app_id(&app_id)
+        let entry = NookDatabase::load_entry_for_app_id(&app_id)
             .await?
             .ok_or_else(|| JsError::new("App key has no protected local identity."))?;
-        let selection = identity_record::select_local_identity(entry.identity_id().clone()).await?;
+        let selection = NookDatabase::select_local_identity(entry.identity_id().clone()).await?;
         if changes_live_identity {
             self.finish_local_identity_activation(&selection.selected_app_id);
         }
@@ -117,7 +124,8 @@ mod tests {
     #[wasm_bindgen_test]
     fn cancelled_creation_leaves_no_pending_identity() -> Result<(), &'static str> {
         let mut manager = NookVaultManager::new();
-        manager.device.pending_local_identity_label = Some(local_identity_label("Work")?);
+        manager.device.pending_local_identity_label =
+            Some(NookVaultManager::local_identity_label("Work")?);
         assert!(manager.local_identity_creation_pending());
 
         manager.cancel_local_identity_creation();
@@ -129,7 +137,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn empty_identity_labels_are_rejected() {
         assert_eq!(
-            local_identity_label("   "),
+            NookVaultManager::local_identity_label("   "),
             Err("Identity label cannot be empty.")
         );
     }
@@ -190,10 +198,10 @@ mod browser_tests {
     #[wasm_bindgen_test]
     async fn pending_recovery_cleanup_blocks_creation_before_browser_protection()
     -> Result<(), NookError> {
-        indexed_db::idb_put_string(
-            identity_record::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY,
-            "pending",
-        )
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: identity_record::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY,
+            value: "pending",
+        })
         .await?;
         let mut manager = NookVaultManager::new();
 
@@ -201,7 +209,7 @@ mod browser_tests {
 
         assert!(result.is_err());
         assert!(!manager.local_identity_creation_pending());
-        indexed_db::idb_delete_key(identity_record::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
+        NookDatabase::idb_delete_key(identity_record::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
             .await
     }
 
@@ -218,10 +226,10 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("protect personal identity: {error:?}"))?;
         let app_key = manager.device_identity()?;
         let signing_seed = manager.event_log.signing_seed.clone();
-        let protected = identity_record::load_selected_entry()
+        let protected = NookDatabase::load_selected_entry()
             .await?
             .ok_or_else(|| anyhow::anyhow!("selected identity is missing"))?;
-        let mut keyring = identity_record::load_keyring().await?;
+        let mut keyring = NookDatabase::load_keyring().await?;
         keyring
             .replace(LocalIdentityKeyringEntry::legacy(
                 protected.identity_id().clone(),
@@ -229,12 +237,16 @@ mod browser_tests {
                 protected.wrapped_app_key().clone(),
             ))
             .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-        indexed_db::idb_put_string(
-            identity_record::LOCAL_IDENTITY_KEYRING_KEY,
-            &serde_json::to_string(&keyring)?,
-        )
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: identity_record::LOCAL_IDENTITY_KEYRING_KEY,
+            value: &serde_json::to_string(&keyring)?,
+        })
         .await?;
-        indexed_db::idb_put_string(event_db::SIGNING_SEED_KEY, &signing_seed).await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: event_db::SIGNING_SEED_KEY,
+            value: &signing_seed,
+        })
+        .await?;
         let app_secret = manager.device.identity_private_key.clone();
         manager.device.identity_private_key.clear();
 
@@ -249,13 +261,13 @@ mod browser_tests {
 
         assert!(manager.local_identity_creation_pending());
         assert!(
-            identity_record::load_selected_entry()
+            NookDatabase::load_selected_entry()
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("migrated identity is missing"))?
                 .has_signing_seed()
         );
         assert!(
-            indexed_db::idb_get_string(event_db::SIGNING_SEED_KEY,)
+            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY,)
                 .await?
                 .is_none()
         );
@@ -297,20 +309,20 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("activate personal identity: {error:?}"))?;
 
         assert_ne!(previous_app_id, personal_app_id);
-        let selected = identity_record::load_selected_entry()
+        let selected = NookDatabase::load_selected_entry()
             .await?
             .ok_or_else(|| anyhow::anyhow!("selected identity is missing"))?;
         assert_eq!(selected.app_id().as_str(), personal_app_id);
         assert_eq!(manager.device.public_app_id(), personal_app_id);
 
-        let work_identity_id = identity_record::load_keyring()
+        let work_identity_id = NookDatabase::load_keyring()
             .await?
             .entries()
             .iter()
             .find(|entry| entry.app_id().as_str() != personal_app_id)
             .map(|entry| entry.identity_id().clone())
             .ok_or_else(|| anyhow::anyhow!("work identity is missing"))?;
-        identity_record::select_local_identity(work_identity_id).await?;
+        NookDatabase::select_local_identity(work_identity_id).await?;
 
         assert_eq!(manager.device.public_app_id(), personal_app_id);
         assert!(manager.device.identity_private_key.is_empty());
@@ -357,22 +369,24 @@ impl NookVaultManager {
                 } else {
                     Some(self.device_identity()?)
                 };
-                auth_providers::migrate_legacy_auth_providers_for_selected_identity().await?;
+                AuthProviderDatabase::migrate_legacy_auth_providers_for_selected_identity().await?;
                 DeviceAccessProfileKey::selected().await?.migrate().await?;
-                identity_record::save_new_protected_local_identity(
-                    &app_key,
-                    record,
-                    prior_app_key.as_ref(),
-                    label,
+                NookDatabase::save_new_protected_local_identity(
+                    IdentityDbSaveNewProtectedLocalIdentity {
+                        app_key: &app_key,
+                        record: record,
+                        prior_app_key: prior_app_key.as_ref(),
+                        label: label,
+                    },
                 )
                 .await?
             }
             None => {
-                identity_record::save_protected_local_identity(
-                    &app_key,
-                    record,
-                    DEFAULT_IDENTITY_LABEL,
-                )
+                NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
+                    app_key: &app_key,
+                    record: record,
+                    label: DEFAULT_IDENTITY_LABEL,
+                })
                 .await?
             }
         };
@@ -396,7 +410,7 @@ impl NookVaultManager {
         app_key: nook_core::AppKey,
         record: &nook_core::WrappedDeviceIdentity,
     ) -> Result<(), NookError> {
-        let signing_seed = if identity_record::load_entry_for_app_id(app_key.app_id())
+        let signing_seed = if NookDatabase::load_entry_for_app_id(app_key.app_id())
             .await?
             .is_some()
         {
@@ -404,9 +418,13 @@ impl NookVaultManager {
                 .load_or_create()
                 .await?
         } else {
-            identity_record::save_protected_local_identity(&app_key, record, DEFAULT_IDENTITY_LABEL)
-                .await?
-                .signing_seed
+            NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
+                app_key: &app_key,
+                record: record,
+                label: DEFAULT_IDENTITY_LABEL,
+            })
+            .await?
+            .signing_seed
         };
         self.reset_local_identity_session();
         self.device.id = app_key.app_id().to_string();

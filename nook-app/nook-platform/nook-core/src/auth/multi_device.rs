@@ -10,12 +10,14 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::MemberLabel;
-use nook_auth2::MultiDeviceError;
+use crate::{MemberLabel, VaultOperation};
+use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
+use nook_auth2::{
+    IdentityRecord, IdentityVaultGenesisRecordsRequest, MultiDeviceError,
+    ResolveMemberRosterRequest, VaultMember,
+};
 
 pub use nook_auth2::multi_device_api::*;
-
-use crate::VaultOperation;
 
 /// Inputs for the immutable Simple-vault identity roster written at genesis.
 pub struct SimpleIdentityGenesisOperationsInput<'a> {
@@ -45,7 +47,12 @@ impl SimpleIdentityGenesisOperationsInput<'_> {
         {
             return Err(MultiDeviceError::IdentityEnrollmentRequired);
         }
-        let records = crate::identity_vault_genesis_records(identity, keys, created_at)?;
+        let records =
+            IdentityRecord::identity_vault_genesis_records(IdentityVaultGenesisRecordsRequest {
+                identity: identity,
+                keys: keys,
+                enrolled_at: created_at,
+            })?;
         identity
             .members
             .iter()
@@ -276,10 +283,12 @@ mod tests {
                 graph.insert(trigger, store_id.as_str())? == EventInsertStatus::Applied,
                 "security trigger must apply"
             );
-            let share_records = create_sentinel_share_records(
-                &VaultKeys::generate()?,
-                &[first.clone(), second.clone()],
-                2.into(),
+            let share_records = SentinelShareEnvelope::create_sentinel_share_records(
+                CreateSentinelShareRecordsRequest {
+                    keys: &VaultKeys::generate()?,
+                    participants: &[first.clone(), second.clone()],
+                    threshold: 2.into(),
+                },
             )?;
             let checkpoint = VaultEvent::sign(
                 VaultEventBody {
@@ -391,7 +400,10 @@ mod tests {
             members_key: &members_key,
         })
         .build()?;
-        let roster = crate::resolve_member_roster(&records, &members_key)?;
+        let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records: &records,
+            members_key: &members_key,
+        })?;
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].device_id, *identity.device_id());
 

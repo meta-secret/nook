@@ -11,17 +11,16 @@
 //! age ciphertext parser as normal unlock, but it never returns plaintext keys,
 //! private device material, or decrypted secret values.
 
-use crate::EpochPasswordState;
+use crate::{EpochPasswordState, EventId, ProjectionEpoch};
+use nook_auth2::{PendingJoinForDeviceRequest, VaultMetaState};
+use nook_event_log::GenesisImportRequest;
 
-use crate::EventId;
-use crate::ProjectionEpoch;
 use crate::errors::VaultResult;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_ids::{AuthKeyId, SecretId};
 use crate::vault_wire::AgeArmoredCiphertext;
 use crate::{
     AuthEnvelopes, DeviceIdentity, SymmetricKey, VaultCrypto, VaultMetaRecord, VaultRecordView,
-    pending_join_for_device,
 };
 use crate::{VaultEvent, VaultEventSchemaVersion, VaultOperation};
 use std::collections::{BTreeMap, BTreeSet};
@@ -126,7 +125,12 @@ impl VaultAccessDiagnosticRequest<'_> {
         ) {
             return Ok(VaultKeyAccessDiagnosticStatus::UnsupportedEpoch);
         }
-        if pending_join_for_device(records, identity.device_id())?.is_some() {
+        if VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+            records: records,
+            device_id: identity.device_id(),
+        })?
+        .is_some()
+        {
             return Ok(VaultKeyAccessDiagnosticStatus::JoinPending);
         }
         let auth_id = identity.auth_id();
@@ -430,7 +434,7 @@ mod tests {
         ApiKeySecret, EncryptedSecretPayload, GenesisImportPayload, IsoTimestamp, KeyEpoch,
         PasswordEntryId, PasswordEnvelope, PasswordEnvelopeVersion, PasswordUnlockEntry,
         SecretType, SecretValue, SigningIdentity, StoreId, StoredRecordPayload, VaultKeys,
-        VaultProjection, VaultResult, build_genesis_import_event,
+        VaultProjection, VaultResult,
     };
     use ed25519_dalek::SigningKey;
     use std::ptr;
@@ -704,11 +708,11 @@ mod tests {
         let actor_id = SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
         let store_id = StoreId::parse("store_diagstore11")?;
         let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
-        let event = build_genesis_import_event(
-            &store_id,
-            &actor_id,
-            &epoch,
-            GenesisImportPayload {
+        let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &store_id,
+            actor_id: &actor_id,
+            key_epoch: &epoch,
+            payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: vec![EncryptedSecretPayload {
                     id: SecretId::from_vault_record("secret_eventdiag"),
@@ -723,9 +727,9 @@ mod tests {
                 }],
                 password_entries: Vec::new(),
             },
-            &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
-            &signing_key,
-        )?;
+            created_at: &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
+            signing_key: &signing_key,
+        })?;
         let mut projection = VaultProjection {
             epoch: ProjectionEpoch::Current(KeyEpoch(epoch)),
             ..VaultProjection::default()
@@ -808,18 +812,18 @@ mod tests {
         let actor_id = SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
         let store_id = StoreId::parse("store_diagstore12")?;
         let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
-        let event = build_genesis_import_event(
-            &store_id,
-            &actor_id,
-            &epoch,
-            GenesisImportPayload {
+        let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &store_id,
+            actor_id: &actor_id,
+            key_epoch: &epoch,
+            payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             },
-            &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
-            &signing_key,
-        )?;
+            created_at: &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
+            signing_key: &signing_key,
+        })?;
         let projection = VaultProjection {
             store_id,
             epoch: ProjectionEpoch::Current(KeyEpoch(epoch)),

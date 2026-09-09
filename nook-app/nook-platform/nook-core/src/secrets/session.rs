@@ -11,7 +11,7 @@ use crate::ValidationError;
 use crate::errors::{SessionError, SessionResult, VaultResult};
 use crate::{
     BackupCodeAttachMode, BackupCodePersistenceVerification, Database, SecretId, SecretType,
-    SecretValue, StoredRecordPayload, VaultCrypto, VaultMetaState, validate_secret_data,
+    SecretValue, StoredRecordPayload, VaultCrypto, VaultMetaState,
 };
 
 /// Replacement payload admitted by a plaintext or encrypted session.
@@ -51,7 +51,7 @@ impl PlaintextSecretSession<'_> {
         if old_id == new_id {
             return Err(SessionError::ReplacementIdUnchanged);
         }
-        validate_secret_data(input.data_yaml)?;
+        SecretValue::validate_secret_data(input.data_yaml)?;
         if !db.list().iter().any(|record| record.id == old_id) {
             return Err(SessionError::SecretNotFound { id: old_id });
         }
@@ -152,7 +152,7 @@ impl<'a> EncryptedSecretSession<'a> {
         if old_id == new_id {
             return Err(SessionError::ReplacementIdUnchanged);
         }
-        validate_secret_data(input.data_yaml)?;
+        SecretValue::validate_secret_data(input.data_yaml)?;
         if !state.secrets.contains_key(&old_id) {
             return Err(SessionError::SecretNotFound { id: old_id });
         }

@@ -36,34 +36,45 @@ pub enum AuthenticationPasskeyAccountAvailability {
 
 /// Classify non-secret recovery copy before consent. Candidate extraction is deferred
 /// until the user approves the save action.
-#[must_use]
-pub fn classify_authentication_backup_codes_observation(
-    text: &str,
-    candidate_present: bool,
-) -> AuthenticationBackupCodesObservation {
-    let normalized = text.to_ascii_lowercase();
-    let recovery_subject = ["backup codes", "recovery codes", "emergency codes"]
+/// Named values required by AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation.
+pub struct AuthenticationBackupCodesEvidence<'a> {
+    pub text: &'a str,
+    pub candidate_present: bool,
+}
+
+impl AuthenticationBackupCodesObservation {
+    #[must_use]
+    pub fn classify_authentication_backup_codes_observation(
+        request: AuthenticationBackupCodesEvidence<'_>,
+    ) -> AuthenticationBackupCodesObservation {
+        let AuthenticationBackupCodesEvidence {
+            text,
+            candidate_present,
+        } = request;
+        let normalized = text.to_ascii_lowercase();
+        let recovery_subject = ["backup codes", "recovery codes", "emergency codes"]
+            .iter()
+            .any(|phrase| normalized.contains(phrase));
+        let preservation_instruction = [
+            "save",
+            "store",
+            "keep",
+            "download",
+            "print",
+            "copy",
+            "generated",
+        ]
         .iter()
-        .any(|phrase| normalized.contains(phrase));
-    let preservation_instruction = [
-        "save",
-        "store",
-        "keep",
-        "download",
-        "print",
-        "copy",
-        "generated",
-    ]
-    .iter()
-    .any(|word| {
-        normalized
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .any(|token| token == *word)
-    });
-    if recovery_subject && (preservation_instruction || candidate_present) {
-        AuthenticationBackupCodesObservation::Present
-    } else {
-        AuthenticationBackupCodesObservation::Absent
+        .any(|word| {
+            normalized
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .any(|token| token == *word)
+        });
+        if recovery_subject && (preservation_instruction || candidate_present) {
+            AuthenticationBackupCodesObservation::Present
+        } else {
+            AuthenticationBackupCodesObservation::Absent
+        }
     }
 }
 
@@ -93,7 +104,12 @@ impl AuthenticationAuthenticatorObservationFacts {
 
     pub(super) fn backup_codes_hint(&self) -> bool {
         matches!(
-            classify_authentication_backup_codes_observation(&self.backup_codes_copy, false),
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: &self.backup_codes_copy,
+                    candidate_present: false
+                }
+            ),
             AuthenticationBackupCodesObservation::Present
         )
     }
@@ -136,23 +152,35 @@ mod tests {
     #[test]
     fn backup_code_observation_requires_recovery_preservation_copy() {
         assert_eq!(
-            classify_authentication_backup_codes_observation("Use a backup code instead", false),
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Use a backup code instead",
+                    candidate_present: false
+                }
+            ),
             AuthenticationBackupCodesObservation::Absent
         );
         assert_eq!(
-            classify_authentication_backup_codes_observation(
-                "Save your backup codes in a secure place",
-                false,
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Save your backup codes in a secure place",
+                    candidate_present: false
+                }
             ),
             AuthenticationBackupCodesObservation::Present
         );
         assert_eq!(
-            classify_authentication_backup_codes_observation("Backup codes", true),
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Backup codes",
+                    candidate_present: true
+                }
+            ),
             AuthenticationBackupCodesObservation::Present
         );
         for ordinary_otp in ["Authenticator code\n123456", "One-time code\n123456"] {
             assert_eq!(
-                classify_authentication_backup_codes_observation(ordinary_otp, false),
+                AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(AuthenticationBackupCodesEvidence { text: ordinary_otp, candidate_present: false }),
                 AuthenticationBackupCodesObservation::Absent
             );
         }

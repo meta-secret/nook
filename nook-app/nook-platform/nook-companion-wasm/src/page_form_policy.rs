@@ -1,5 +1,15 @@
 //! Typed WASM bindings for portable page-field and password-form policy.
 
+use nook_companion_core::AuthenticationAdvanceControlObservation;
+use nook_companion_core::AuthenticationControlText;
+use nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation;
+use nook_companion_core::AuthenticationDetailedPasskeyControlObservation;
+use nook_companion_core::AuthenticationPageObservation;
+use nook_companion_core::AuthenticationPageObservationFacts;
+use nook_companion_core::AuthenticationRouteActuation;
+use nook_companion_core::AuthenticationRouteEvidence;
+use nook_companion_core::LoginContextObservation;
+use nook_companion_core::PageInputFieldObservation;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -42,7 +52,7 @@ impl NookPageInputFieldObservation {
 #[wasm_bindgen]
 #[must_use]
 pub fn expand_identity_text(value: &str) -> String {
-    nook_companion_core::expand_identity_text(value)
+    AuthenticationControlText::new(value).expand_identity_text()
 }
 
 #[wasm_bindgen]
@@ -75,55 +85,57 @@ impl NookLoginContextObservation {
 #[wasm_bindgen]
 #[must_use]
 pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
-    nook_companion_core::has_login_context(&observation.inner)
+    (&observation.inner).has_login_context()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
-    nook_companion_core::looks_like_username_field(&field.inner)
+    (&field.inner).looks_like_username_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
-    nook_companion_core::looks_like_one_time_code_field(&field.inner)
+    (&field.inner).looks_like_one_time_code_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_one_time_code_auto_submit_signal(signal: &str) -> bool {
-    nook_companion_core::looks_like_one_time_code_auto_submit_signal(signal)
+    AuthenticationControlText::new(signal).looks_like_one_time_code_auto_submit_signal()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
-    nook_companion_core::looks_like_passkey_control_label(label)
+    AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(label)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
-    nook_companion_core::looks_like_passkey_enrollment_or_management_label(label)
+    AuthenticationAdvanceControlObservation::looks_like_passkey_enrollment_or_management_label(
+        label,
+    )
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
-    nook_companion_core::looks_like_manual_checkpoint_label(label)
+    AuthenticationAdvanceControlObservation::looks_like_manual_checkpoint_label(label)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_email_verification_body(body: &str) -> bool {
-    nook_companion_core::looks_like_email_verification_body(body)
+    AuthenticationAdvanceControlObservation::looks_like_email_verification_body(body)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn looks_like_login_advance_control_label(label: &str) -> bool {
-    nook_companion_core::looks_like_login_advance_control_label(label)
+    AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(label)
 }
 
 #[wasm_bindgen]
@@ -133,10 +145,12 @@ pub fn has_safe_authentication_route_identity(
     form_identity: &str,
     destination_identity: &str,
 ) -> bool {
-    nook_companion_core::has_safe_authentication_route_identity(
-        source_origin,
-        form_identity,
-        destination_identity,
+    AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity(
+        AuthenticationRouteEvidence {
+            source_origin: source_origin,
+            form_identity: form_identity,
+            destination_identity: destination_identity,
+        },
     )
 }
 
@@ -158,16 +172,18 @@ pub fn can_activate_authentication_route_control(
     has_local_authentication_scope: bool,
     has_authentication_password: bool,
 ) -> bool {
-    nook_companion_core::can_activate_authentication_route_control(
-        source_origin,
-        form_identity,
-        destination_identity,
-        control_label,
-        control_machine_identity,
-        has_concrete_control,
-        has_authentication_username,
-        has_local_authentication_scope,
-        has_authentication_password,
+    AuthenticationAdvanceControlObservation::can_activate_authentication_route_control(
+        AuthenticationRouteActuation {
+            source_origin: source_origin,
+            form_identity: form_identity,
+            destination_identity: destination_identity,
+            control_label: control_label,
+            control_machine_identity: control_machine_identity,
+            has_concrete_control: has_concrete_control,
+            has_authentication_username: has_authentication_username,
+            has_local_authentication_scope: has_local_authentication_scope,
+            has_authentication_password: has_authentication_password,
+        },
     )
 }
 
@@ -186,7 +202,7 @@ pub fn authentication_implicit_submit_actuation_is_safe(
 pub fn authentication_advance_control_is_safe(
     observation: nook_companion_core::AuthenticationAdvanceControlObservation,
 ) -> bool {
-    nook_companion_core::authentication_advance_control_is_safe(&observation)
+    (&observation).authentication_advance_control_is_safe()
 }
 
 #[wasm_bindgen]
@@ -195,7 +211,7 @@ pub fn authentication_advance_control_is_safe(
 pub fn authentication_passkey_control_candidate_is_safe(
     candidate: nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
 ) -> bool {
-    nook_companion_core::authentication_passkey_control_candidate_is_safe(&candidate)
+    (&candidate).authentication_passkey_control_candidate_is_safe()
 }
 
 #[wasm_bindgen]
@@ -204,7 +220,7 @@ pub fn authentication_passkey_control_candidate_is_safe(
 pub fn authentication_passkey_control_evidence_is_safe(
     evidence: nook_companion_core::AuthenticationDetailedPasskeyControlObservation,
 ) -> bool {
-    nook_companion_core::authentication_passkey_control_evidence_is_safe(&evidence)
+    (&evidence).authentication_passkey_control_evidence_is_safe()
 }
 
 #[wasm_bindgen]
@@ -219,7 +235,9 @@ pub fn authentication_passkey_control_evidence_is_safe(
 pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {
-    nook_companion_core::authentication_form_observation_priority(observation).into()
+    (observation)
+        .authentication_form_observation_priority()
+        .into()
 }
 
 #[wasm_bindgen]
@@ -235,7 +253,9 @@ pub fn authentication_form_observation_priority(
 pub fn authentication_page_observation_facts_priority(
     facts: nook_companion_core::AuthenticationPageObservationFacts,
 ) -> u8 {
-    nook_companion_core::authentication_page_observation_facts_priority(facts).into()
+    (facts)
+        .authentication_page_observation_facts_priority()
+        .into()
 }
 
 #[wasm_bindgen]
@@ -260,15 +280,18 @@ mod tests {
             false,
         );
         assert!(looks_like_one_time_code_field(&otp));
-        assert!(looks_like_one_time_code_auto_submit_signal(
-            "oninput=this.form.requestSubmit()"
-        ));
-        assert!(looks_like_one_time_code_auto_submit_signal(
-            "oninput=this.form.submit()"
-        ));
-        assert!(!looks_like_one_time_code_auto_submit_signal(
-            "oninput=validate_requestSubmit()"
-        ));
+        assert!(
+            AuthenticationControlText::new("oninput=this.form.requestSubmit()")
+                .looks_like_one_time_code_auto_submit_signal()
+        );
+        assert!(
+            AuthenticationControlText::new("oninput=this.form.submit()")
+                .looks_like_one_time_code_auto_submit_signal()
+        );
+        assert!(
+            !AuthenticationControlText::new("oninput=validate_requestSubmit()")
+                .looks_like_one_time_code_auto_submit_signal()
+        );
 
         let username = NookPageInputFieldObservation::new(
             nook_companion_core::PageInputType::Text,
@@ -343,11 +366,10 @@ mod tests {
             current_password_field_count: 1.into(),
             ..Default::default()
         };
-        assert_eq!(authentication_form_observation_priority(login), 4);
+        assert_eq!((login).authentication_form_observation_priority(), 4);
         assert_eq!(
-            authentication_page_observation_facts_priority(
-                nook_companion_core::AuthenticationPageObservationFacts::default()
-            ),
+            (nook_companion_core::AuthenticationPageObservationFacts::default())
+                .authentication_page_observation_facts_priority(),
             1
         );
         let login_facts = nook_companion_core::AuthenticationPageObservationFacts {
@@ -364,7 +386,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            authentication_page_observation_facts_priority(login_facts),
+            (login_facts).authentication_page_observation_facts_priority(),
             4
         );
     }
@@ -722,7 +744,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            authentication_page_observation_facts_priority(generic_password_facts),
+            (generic_password_facts).authentication_page_observation_facts_priority(),
             3
         );
 
@@ -869,7 +891,7 @@ mod tests {
             nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
                 login_advance_observation("https://login.example.test/auth/passkey", "Use passkey"),
             );
-        assert!(authentication_passkey_control_candidate_is_safe(accepted));
+        assert!((accepted).authentication_passkey_control_candidate_is_safe());
 
         let rejected =
             nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
@@ -878,7 +900,7 @@ mod tests {
                     "Use passkey",
                 ),
             );
-        assert!(!authentication_passkey_control_candidate_is_safe(rejected));
+        assert!(!(rejected).authentication_passkey_control_candidate_is_safe());
 
         let security_key_enrollment =
             nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
@@ -887,9 +909,7 @@ mod tests {
                     "Use security key",
                 ),
             );
-        assert!(!authentication_passkey_control_candidate_is_safe(
-            security_key_enrollment
-        ));
+        assert!(!(security_key_enrollment).authentication_passkey_control_candidate_is_safe());
 
         let mut signup =
             login_advance_observation("https://login.example.test/auth/passkey", "Use passkey");
@@ -898,9 +918,7 @@ mod tests {
             nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
                 signup,
             );
-        assert!(!authentication_passkey_control_candidate_is_safe(
-            signup_candidate
-        ));
+        assert!(!(signup_candidate).authentication_passkey_control_candidate_is_safe());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -916,9 +934,17 @@ mod tests {
         );
         assert!(has_login_context(&login_context));
 
-        assert!(looks_like_passkey_control_label("Sign in with passkey"));
-        assert!(!looks_like_passkey_control_label("Remove passkey"));
-        assert!(looks_like_passkey_enrollment_or_management_label(
+        assert!(
+            AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(
+                "Sign in with passkey"
+            )
+        );
+        assert!(
+            !AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(
+                "Remove passkey"
+            )
+        );
+        assert!(AuthenticationAdvanceControlObservation::looks_like_passkey_enrollment_or_management_label(
             "Add passkey"
         ));
         assert!(looks_like_manual_checkpoint_label("Accept privacy policy"));
@@ -930,9 +956,7 @@ mod tests {
             nook_companion_core::AuthenticationDetailedPasskeyControlObservation::ExplicitlyMarked(
                 login_advance_observation("https://login.example.test/auth/passkey", "Use passkey"),
             );
-        assert!(authentication_passkey_control_evidence_is_safe(
-            safe_passkey
-        ));
+        assert!((safe_passkey).authentication_passkey_control_evidence_is_safe());
         assert_eq!(
             parse_page_input_type(" PASSWORD "),
             nook_companion_core::PageInputType::Password

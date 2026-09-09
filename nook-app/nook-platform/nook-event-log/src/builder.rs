@@ -7,10 +7,7 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::canonical::EventId;
-use crate::event::{
-    VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-    serialize_event_storage_yaml,
-};
+use crate::event::{VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation};
 use crate::signing::SigningIdentity;
 use crate::{EventError, EventResult, EventStorageBytes};
 use nook_auth2::{AuthKeyId, IsoTimestamp, StoreId};
@@ -51,7 +48,7 @@ impl AppendEventInput<'_> {
             operations: self.operations,
         };
         let event = VaultEvent::sign(body, self.signing_identity.signing_key())?;
-        let bytes = serialize_event_storage_yaml(&event)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&event)?;
         Ok((event, bytes))
     }
 }
@@ -102,9 +99,9 @@ mod tests {
     use std::str;
 
     use super::*;
+    use crate::EventResult;
     use crate::canonical::EventId;
     use crate::signing::SigningIdentity;
-    use crate::{EventResult, parse_event_storage_bytes};
 
     #[test]
     fn parents_from_heads_is_sorted_deduped() -> EventResult<()> {
@@ -137,7 +134,10 @@ mod tests {
         assert!(str::from_utf8(bytes.as_ref())?.starts_with("schema_version:"));
         assert_eq!(event.body.store_id, store_id);
         assert_eq!(event.body.actor_id, actor);
-        assert_eq!(parse_event_storage_bytes(&bytes)?.id()?, event.id()?);
+        assert_eq!(
+            VaultEvent::parse_event_storage_bytes(&bytes)?.id()?,
+            event.id()?
+        );
         Ok(())
     }
 

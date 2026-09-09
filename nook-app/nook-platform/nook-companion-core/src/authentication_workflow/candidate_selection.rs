@@ -3,7 +3,6 @@
 use super::{
     AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
     AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
-    authentication_page_observations_are_valid, classify_authentication_workflow,
 };
 use serde::{Deserialize, Serialize, de::Error as _};
 use tsify::Tsify;
@@ -127,43 +126,50 @@ enum AuthenticationWorkflowCandidatePriority {
 }
 
 /// Rank a browser form observation for a bounded host scan.
-#[must_use]
-pub const fn authentication_form_observation_priority(
-    observation: AuthenticationPageObservation,
-) -> AuthenticationFormObservationPriority {
-    observation.form_priority()
+impl AuthenticationPageObservation {
+    #[must_use]
+    pub const fn authentication_form_observation_priority(
+        self,
+    ) -> AuthenticationFormObservationPriority {
+        let observation = self;
+        observation.form_priority()
+    }
 }
 
 /// Select the highest-priority valid workflow candidate in observation order.
-#[must_use]
-pub fn classify_authentication_workflow_candidates(
-    observations: &[AuthenticationPageObservation],
-) -> AuthenticationWorkflowMatch {
-    if !authentication_page_observations_are_valid(observations) {
-        return AuthenticationWorkflowMatch::Rejected;
-    }
-
-    let mut selected = AuthenticationWorkflowMatch::NoMatch;
-    for (index, observation) in observations.iter().copied().enumerate() {
-        let AuthenticationWorkflowMatch::Matched(mut candidate) =
-            classify_authentication_workflow(observation)
-        else {
-            continue;
-        };
-        candidate.observation_index =
-            super::AuthenticationWorkflowObservationIndex(u32::try_from(index).unwrap_or(u32::MAX));
-        let replace = match selected {
-            AuthenticationWorkflowMatch::NoMatch => true,
-            AuthenticationWorkflowMatch::Rejected => false,
-            AuthenticationWorkflowMatch::Matched(current) => {
-                candidate.candidate_priority() > current.candidate_priority()
-            }
-        };
-        if replace {
-            selected = AuthenticationWorkflowMatch::Matched(candidate);
+impl AuthenticationWorkflowMatch {
+    #[must_use]
+    pub fn classify_authentication_workflow_candidates(
+        observations: &[AuthenticationPageObservation],
+    ) -> AuthenticationWorkflowMatch {
+        if !AuthenticationPageObservation::authentication_page_observations_are_valid(observations)
+        {
+            return AuthenticationWorkflowMatch::Rejected;
         }
+
+        let mut selected = AuthenticationWorkflowMatch::NoMatch;
+        for (index, observation) in observations.iter().copied().enumerate() {
+            let AuthenticationWorkflowMatch::Matched(mut candidate) =
+                (observation).classify_authentication_workflow()
+            else {
+                continue;
+            };
+            candidate.observation_index = super::AuthenticationWorkflowObservationIndex(
+                u32::try_from(index).unwrap_or(u32::MAX),
+            );
+            let replace = match selected {
+                AuthenticationWorkflowMatch::NoMatch => true,
+                AuthenticationWorkflowMatch::Rejected => false,
+                AuthenticationWorkflowMatch::Matched(current) => {
+                    candidate.candidate_priority() > current.candidate_priority()
+                }
+            };
+            if replace {
+                selected = AuthenticationWorkflowMatch::Matched(candidate);
+            }
+        }
+        selected
     }
-    selected
 }
 
 #[cfg(test)]
@@ -205,7 +211,11 @@ mod tests {
         for (observations, expected_index) in
             [([signup, manual_login], 0), ([manual_login, signup], 1)]
         {
-            let snapshot = classify_authentication_workflow_candidates(&observations).snapshot()?;
+            let snapshot =
+                AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+                    &observations,
+                )
+                .snapshot()?;
             assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
             assert_eq!(
                 snapshot.action,
@@ -230,7 +240,10 @@ mod tests {
             backup_codes_hint: true,
             ..Default::default()
         };
-        let snapshot = classify_authentication_workflow_candidates(&[recovery, otp]).snapshot()?;
+        let snapshot = AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(&[
+            recovery, otp,
+        ])
+        .snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpEnrollment);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!(u32::from(snapshot.observation_index), 1);

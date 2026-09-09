@@ -1,7 +1,6 @@
 use super::{NookProviderSelection, NookStorageConnectArgs, wasm_bindgen};
 use crate::types::NookManagerStoreScope;
-use nook_core::ManagerStoreScopeRef;
-use nook_core::ProviderRows;
+use nook_core::{ManagerStoreScopeRef, ProviderRows};
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]

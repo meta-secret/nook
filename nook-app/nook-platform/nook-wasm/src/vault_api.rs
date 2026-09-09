@@ -1,9 +1,14 @@
 use super::{NookSecretRecord, NookVaultManager, wasm_bindgen};
+use crate::AuthProviderDatabase;
+use crate::ConfiguredVaultApplication;
+use crate::ExtensionPairingDatabase;
+use crate::ExtensionPairingReconciliation;
 use crate::storage::auth_providers::{
     PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
 };
 use crate::storage::{auth_providers, extension_state, identity_record};
 use crate::vault_api_local::has_local_vault;
+use crate::{NookDatabase, SetLocalVaultLabelRequest};
 use js_sys::Date;
 use nook_core::{
     ActiveProviderLoginSetup, AppId, DevicePublicKey, ProviderSaveOutcome, ProviderSaveSetup,
@@ -121,7 +126,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let loaded = auth_providers::load_auth_providers(&identity).await?;
+        let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
         Ok(loaded.snapshot)
     }
 
@@ -133,7 +138,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let loaded = auth_providers::load_auth_providers(&identity).await?;
+        let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
         let snapshot = loaded.snapshot;
         if !has_local_vault().await? {
             return Ok(snapshot);
@@ -210,7 +215,7 @@ impl NookVaultManager {
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let existing = auth_providers::load_auth_providers(&identity)
+        let existing = AuthProviderDatabase::load_auth_providers(&identity)
             .await?
             .snapshot;
         let replaced = existing.replace_active_vault_grants(&snapshot);
@@ -234,7 +239,7 @@ impl NookVaultManager {
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
         let app_id = AppId::parse(app_id)?;
-        if identity_record::load_entry_for_app_id(&app_id)
+        if NookDatabase::load_entry_for_app_id(&app_id)
             .await?
             .is_none()
         {
@@ -268,7 +273,7 @@ pub fn seal_auth_providers_for_device_public_key(
 /// Delete the `nook_auth` `IndexedDB` database (used on full sign-out / reset).
 #[wasm_bindgen]
 pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
-    auth_providers::delete_auth_providers_db().await?;
+    AuthProviderDatabase::delete_auth_providers_db().await?;
     Ok(())
 }
 
@@ -276,7 +281,7 @@ pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
 #[wasm_bindgen]
 pub async fn read_extension_pairing_state()
 -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    Ok(extension_state::read_all().await?)
+    Ok(ExtensionPairingDatabase::read_all().await?)
 }
 
 /// Persist extension pairing metadata in extension-origin Rexie storage.
@@ -284,7 +289,7 @@ pub async fn read_extension_pairing_state()
 pub async fn write_extension_pairing_state(
     state: nook_companion_core::ExtensionPairingState,
 ) -> Result<(), wasm_bindgen::JsError> {
-    extension_state::write_all(&state).await?;
+    ExtensionPairingDatabase::write_all(&state).await?;
     Ok(())
 }
 
@@ -293,7 +298,7 @@ pub async fn write_extension_pairing_state(
 pub async fn remove_extension_pairing_state(
     keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
-    extension_state::remove(&keys).await?;
+    ExtensionPairingDatabase::remove(&keys).await?;
     Ok(())
 }
 
@@ -303,7 +308,11 @@ pub async fn reconcile_extension_pairing_state(
     state: nook_companion_core::ExtensionPairingState,
     removed_keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
-    extension_state::reconcile(&state, &removed_keys).await?;
+    ExtensionPairingDatabase::reconcile(ExtensionPairingReconciliation {
+        state: &state,
+        removed_keys: &removed_keys,
+    })
+    .await?;
     Ok(())
 }
 
@@ -616,7 +625,7 @@ mod projection_tests {
 
         assert_eq!(configured_vault_application_name(), "unified-development");
         assert_eq!(
-            configured_vault_application(),
+            ConfiguredVaultApplication::configured_vault_application(),
             nook_core::VaultApplication::UnifiedDevelopment
         );
         assert!(!configured_vault_application_is_simple());
@@ -694,7 +703,7 @@ mod projection_tests {
             .connect_fresh("local".to_owned(), String::new(), String::new())
             .await?;
         let store_id = manager.vault_store_id();
-        let content = crate::storage::indexed_db::load_vault_blob(&store_id)
+        let content = NookDatabase::load_vault_blob(&store_id)
             .await
             .map_err(|error| JsError::new(&error.to_string()))?
             .ok_or_else(|| JsError::new("connected local vault blob was not persisted"))?;
@@ -715,12 +724,16 @@ mod projection_tests {
             NookLocalVaultUnlockState::Unlocked
         );
 
-        set_local_vault_label(store_id.clone(), "  Browser vault  ".to_owned()).await?;
+        NookDatabase::set_local_vault_label(SetLocalVaultLabelRequest {
+            store_id: store_id.clone(),
+            label: "  Browser vault  ".to_owned(),
+        })
+        .await?;
         let renamed = list_local_vaults().await?;
         assert_eq!(renamed[0].label(), "Browser vault");
         assert_eq!(renamed[0].display_label("Fallback"), "Browser vault");
 
-        prepare_new_local_vault_slot().await?;
+        NookDatabase::prepare_new_local_vault_slot().await?;
         let imported = import_named_local_vault_blob(content, "Imported vault".to_owned()).await?;
         assert_eq!(imported, store_id);
         set_active_vault(imported.clone()).await?;

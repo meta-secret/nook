@@ -5,10 +5,10 @@
 )]
 //! Identity-scoped persistence and legacy migration for device-access profiles.
 
+use crate::NookDatabase;
 use crate::storage::{identity_record, indexed_db};
+use crate::{IdbPutStringRequest, IndexedDbFallbackUpdate, IndexedDbMigration, NookError};
 use nook_core::AppId;
-
-use crate::NookError;
 
 use super::{
     DEVICE_ACCESS_PROFILE_KEY, DeviceAccessProfile, DeviceAccessProfileDecodeResult, migration,
@@ -53,8 +53,8 @@ impl DeviceAccessProfileUpdate {
 
 impl DeviceAccessProfileKey {
     pub(crate) async fn selected() -> Result<Self, NookError> {
-        let keyring = identity_record::load_keyring().await?;
-        let entry = identity_record::load_selected_entry().await?;
+        let keyring = NookDatabase::load_keyring().await?;
+        let entry = NookDatabase::load_selected_entry().await?;
         let Some(entry) = entry else {
             return Ok(DeviceAccessProfileKey {
                 value: DEVICE_ACCESS_PROFILE_KEY.to_owned(),
@@ -69,7 +69,7 @@ impl DeviceAccessProfileKey {
     pub(crate) async fn for_app_id(app_id: &str) -> Result<Self, NookError> {
         let app_id =
             AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
-        let keyring = identity_record::load_keyring().await?;
+        let keyring = NookDatabase::load_keyring().await?;
         let Some(entry) = keyring
             .entries()
             .iter()
@@ -87,7 +87,7 @@ impl DeviceAccessProfileKey {
     pub(super) async fn for_verified_app_id(app_id: &str) -> Result<Self, NookError> {
         let app_id =
             AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
-        let keyring = identity_record::load_keyring().await?;
+        let keyring = NookDatabase::load_keyring().await?;
         if let Some(entry) = keyring
             .entries()
             .iter()
@@ -107,10 +107,10 @@ impl DeviceAccessProfileKey {
         })
     }
     pub(crate) async fn load(self) -> Result<DeviceAccessProfile, NookError> {
-        let raw = match indexed_db::idb_get_string(&self.value).await? {
+        let raw = match NookDatabase::idb_get_string(&self.value).await? {
             Some(raw) => Some(raw),
             None if self.legacy_owner.is_some() => {
-                indexed_db::idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
+                NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
                     .await?
                     .filter(|raw| {
                         LegacyProfileAdmission {
@@ -137,8 +137,10 @@ impl DeviceAccessProfileKey {
         let Some(entry) = self.legacy_owner else {
             return Ok(());
         };
-        indexed_db::idb_migrate_string_if(DEVICE_ACCESS_PROFILE_KEY, &self.value, move |legacy| {
-            match nook_core::DeviceAccessProfile::decode(legacy) {
+        NookDatabase::idb_migrate_string_if(IndexedDbMigration {
+            source_key: DEVICE_ACCESS_PROFILE_KEY,
+            target_key: &self.value,
+            can_migrate: move |legacy| match nook_core::DeviceAccessProfile::decode(legacy) {
                 DeviceAccessProfileDecodeResult::Current(profile) => {
                     migration::LegacyProfileMembership {
                         profile: &profile,
@@ -148,7 +150,7 @@ impl DeviceAccessProfileKey {
                 }
                 DeviceAccessProfileDecodeResult::RecoverableDefault
                 | DeviceAccessProfileDecodeResult::FutureVersion => false,
-            }
+            },
         })
         .await
     }
@@ -164,18 +166,18 @@ impl DeviceAccessProfileKey {
             .is_some()
             .then_some(DEVICE_ACCESS_PROFILE_KEY);
         let legacy_owner = self.legacy_owner;
-        indexed_db::idb_update_string_with_fallback(
-            &self.value,
-            fallback_key,
-            mutation.guard,
-            move |raw| {
+        NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
+            key: &self.value,
+            fallback_key: fallback_key,
+            guard: mutation.guard,
+            can_adopt_fallback: move |raw| {
                 LegacyProfileAdmission {
                     owner: legacy_owner.as_ref(),
                 }
                 .accepts(raw)
             },
-            move |raw| mutation.apply(raw),
-        )
+            update: move |raw| mutation.apply(raw),
+        })
         .await
     }
     #[must_use]
@@ -187,14 +189,18 @@ impl DeviceAccessProfileKey {
     }
     #[cfg(test)]
     pub(crate) async fn clear_companion() -> Result<(), NookError> {
-        indexed_db::idb_delete_key(DEVICE_ACCESS_PROFILE_KEY).await
+        NookDatabase::idb_delete_key(DEVICE_ACCESS_PROFILE_KEY).await
     }
     #[cfg(test)]
     pub(super) async fn save_companion(profile: &DeviceAccessProfile) -> Result<(), NookError> {
         let json = serde_json::to_string(profile).map_err(|error| {
             NookError::IndexedDb(format!("Device access profile serialize error: {error}"))
         })?;
-        indexed_db::idb_put_string(DEVICE_ACCESS_PROFILE_KEY, &json).await
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: DEVICE_ACCESS_PROFILE_KEY,
+            value: &json,
+        })
+        .await
     }
 }
 
@@ -319,35 +325,39 @@ mod browser_tests {
             IsoTimestamp::from_trusted("2026-08-25T01:00:00.000Z".to_owned()),
         );
         let companion_raw = serde_json::to_string(&companion_profile)?;
-        indexed_db::idb_put_string(SOURCE_KEY, &companion_raw).await?;
-        indexed_db::idb_delete_key(TARGET_KEY).await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: SOURCE_KEY,
+            value: &companion_raw,
+        })
+        .await?;
+        NookDatabase::idb_delete_key(TARGET_KEY).await?;
 
-        let result = indexed_db::idb_update_string_with_fallback(
-            TARGET_KEY,
-            Some(SOURCE_KEY),
-            StringUpdateGuard::Unconditional,
-            move |raw| {
+        let result = NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
+            key: TARGET_KEY,
+            fallback_key: Some(SOURCE_KEY),
+            guard: StringUpdateGuard::Unconditional,
+            can_adopt_fallback: move |raw| {
                 LegacyProfileAdmission {
                     owner: Some(&owner),
                 }
                 .accepts(raw)
             },
-            |current| {
+            update: |current| {
                 assert!(current.is_none());
                 serde_json::to_string(&DeviceAccessProfile::default()).map_err(|error| {
                     NookError::IndexedDb(format!("Test profile serialize error: {error}"))
                 })
             },
-        )
+        })
         .await?;
 
         assert_eq!(result, StringUpdateResult::Applied);
         assert_eq!(
-            indexed_db::idb_get_string(SOURCE_KEY).await?.as_deref(),
+            NookDatabase::idb_get_string(SOURCE_KEY).await?.as_deref(),
             Some(companion_raw.as_str())
         );
-        assert!(indexed_db::idb_get_string(TARGET_KEY).await?.is_some());
-        indexed_db::idb_delete_keys(&[SOURCE_KEY, TARGET_KEY]).await?;
+        assert!(NookDatabase::idb_get_string(TARGET_KEY).await?.is_some());
+        NookDatabase::idb_delete_keys(&[SOURCE_KEY, TARGET_KEY]).await?;
         Ok(())
     }
     struct ProfileMutationFixture {
@@ -366,13 +376,17 @@ mod browser_tests {
             }
         }
         async fn read(&self) -> Result<Option<String>, NookError> {
-            indexed_db::idb_get_string(&self.key).await
+            NookDatabase::idb_get_string(&self.key).await
         }
         async fn write(&self, raw: &str) -> Result<(), NookError> {
-            indexed_db::idb_put_string(&self.key, raw).await
+            NookDatabase::idb_put_string(IdbPutStringRequest {
+                key: &self.key,
+                value: raw,
+            })
+            .await
         }
         async fn clear(self) -> Result<(), NookError> {
-            indexed_db::idb_delete_key(&self.key).await
+            NookDatabase::idb_delete_key(&self.key).await
         }
         fn expect_rejected(result: Result<StringUpdateResult, NookError>) -> anyhow::Result<()> {
             match result {

@@ -9,6 +9,7 @@ use super::super::import_support::{
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{DashlaneImportError, DashlaneImportPlan};
+use crate::CreditCardFields;
 use crate::{
     AuthenticatorIssuerHostsError, AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue,
     SecureNoteSecret, ValidationError,
@@ -357,15 +358,15 @@ impl PaymentColumns {
             } else {
                 account_holder
             };
-            match CreditCardSecret::from_fields(
-                &title,
-                &cardholder,
-                &number,
-                &expiration_month,
-                &expiration_year,
-                &code,
-                "",
-            ) {
+            match CreditCardSecret::from_fields(CreditCardFields {
+                title: &title,
+                cardholder_name: &cardholder,
+                number: &number,
+                expiration_month: &expiration_month,
+                expiration_year: &expiration_year,
+                cvv: &code,
+                notes: "",
+            }) {
                 Ok(mut card) => {
                     DashlaneNotes {
                         notes: &mut card.notes,

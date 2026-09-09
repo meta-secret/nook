@@ -1,5 +1,10 @@
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
@@ -33,15 +38,13 @@ mod store;
 pub use builder::{AppendEventInput, ObservedHeads};
 pub use canonical::{Ed25519Signature, EventId};
 pub use epoch::{
-    EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
-    concurrent_epoch_rotations_conflict, operation_starts_epoch,
+    ConcurrentEpochRotations, EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
 };
 pub use errors::{EventError, EventResult};
 pub use event::{
     EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, GenesisImportPayload,
-    SentinelShareIssuedPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
-    VaultOperation, build_genesis_import_event, parse_event_storage_bytes,
-    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
+    GenesisImportRequest, SentinelShareIssuedPayload, VaultEvent, VaultEventBody,
+    VaultEventSchemaVersion, VaultOperation,
 };
 pub use event_bytes::{CanonicalEventBodyBytes, EventStorageBytes};
 pub use fingerprint::SecretFingerprint;

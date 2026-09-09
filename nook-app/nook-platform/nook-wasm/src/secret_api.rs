@@ -1,6 +1,10 @@
 use super::types::{NookOtpauthPreview, NookTotpCode};
 use super::{NookError, NookSecretFormFields, types, wasm_bindgen};
+use crate::DriveStorageClient;
+use crate::SharedDriveGrantPolicy;
 use js_sys::Date;
+use nook_core::CreditCardFields;
+use nook_core::SecretFormFields;
 use nook_core::{
     AuthenticatorSecret, BackupCodeAttachMode, SecretListItemData, SecretType, SecretTypeFilter,
     ValidationError,
@@ -288,15 +292,20 @@ impl NookSecretListItem {
 }
 
 /// Serialize validated form fields into the YAML payload expected by `add_secret`.
-fn build_secret_yaml_inner(fields: &NookSecretFormFields) -> Result<String, NookError> {
-    Ok(nook_core::build_secret_yaml_from_form(&fields.inner)?
-        .as_str()
-        .to_owned())
+impl NookSecretFormFields {
+    fn build_secret_yaml_inner(&self) -> Result<String, NookError> {
+        let fields = self;
+        Ok(
+            SecretFormFields::build_secret_yaml_from_form(&fields.inner)?
+                .as_str()
+                .to_owned(),
+        )
+    }
 }
 
 #[wasm_bindgen]
 pub fn build_secret_yaml(fields: &NookSecretFormFields) -> Result<String, wasm_bindgen::JsError> {
-    build_secret_yaml_inner(fields).map_err(Into::into)
+    (fields).build_secret_yaml_inner().map_err(Into::into)
 }
 
 #[wasm_bindgen]
@@ -547,15 +556,15 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn credit_card_list_and_detail_keep_distinct_secret_boundaries() -> anyhow::Result<()> {
-        let card = CreditCardSecret::from_fields(
-            "Personal Visa",
-            "Ada Lovelace",
-            "4111111111111111",
-            "12",
-            "2030",
-            "123",
-            "private billing note",
-        )?;
+        let card = CreditCardSecret::from_fields(CreditCardFields {
+            title: "Personal Visa",
+            cardholder_name: "Ada Lovelace",
+            number: "4111111111111111",
+            expiration_month: "12",
+            expiration_year: "2030",
+            cvv: "123",
+            notes: "private billing note",
+        })?;
         let record = nook_core::SecretRecord {
             id: SecretId::from_vault_record("secret_credit_card"),
             secret_type: SecretType::CreditCard,
@@ -666,17 +675,23 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn google_drive_grant_requires_explicit_preset() -> anyhow::Result<()> {
-        assert!(!is_google_drive_shared_grant_request(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::NotApplicable,
+        assert!(!DriveStorageClient::is_google_drive_shared_grant_request(
+            SharedDriveGrantPolicy {
+                provider_type: StorageProviderType::OauthFile,
+                oauth_preset: ProviderOauthPreset::NotApplicable
+            }
         ));
-        assert!(is_google_drive_shared_grant_request(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
+        assert!(DriveStorageClient::is_google_drive_shared_grant_request(
+            SharedDriveGrantPolicy {
+                provider_type: StorageProviderType::OauthFile,
+                oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive)
+            }
         ));
-        assert!(!is_google_drive_shared_grant_request(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
+        assert!(!DriveStorageClient::is_google_drive_shared_grant_request(
+            SharedDriveGrantPolicy {
+                provider_type: StorageProviderType::OauthFile,
+                oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::ICloud)
+            }
         ));
         Ok(())
     }

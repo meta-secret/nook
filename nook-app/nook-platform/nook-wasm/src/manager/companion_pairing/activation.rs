@@ -6,8 +6,8 @@ use nook_core::{
     AuthEnvelopes, CheckedRemoteEvent, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId,
     LocalEventStore, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
-    serialize_event_storage_yaml,
 };
+use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope, VaultEvent};
 use std::collections::BTreeSet;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -102,7 +102,7 @@ impl NookPrevalidatedCompanionPairingApproval {
             {
                 return Err(CompanionPairingPreparationFailure::EventIdMismatch);
             }
-            let bytes = serialize_event_storage_yaml(&record.event)
+            let bytes = VaultEvent::serialize_event_storage_yaml(&record.event)
                 .map_err(|_| CompanionPairingPreparationFailure::RecordInvalid)?;
             let checked = CheckedRemoteEvent::parse(&event_id, &bytes)
                 .map_err(|_| CompanionPairingPreparationFailure::RecordInvalid)?;
@@ -200,16 +200,16 @@ mod tests {
         NookCompanionPairingExtensionEndpoint, NookVaultManager, VaultNameState,
         event_log::ExternalEventLogRecord,
     };
-    use nook_companion_core::{
-        CompanionPairingApproval, CompanionPairingApprovalAttempt,
-        CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
-        CompanionPairingProviderManifestDigest, CompanionPairingRequest, ExtensionConnectScope,
-        ExtensionPairingVaultType,
-    };
     use nook_core::{
         ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, EpochMetadataState,
         EpochPasswordState, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
         VaultApplication, VaultKeys, VaultOperation, create_sentinel_share_records,
+    };
+    use nook_core::{
+        CompanionPairingApproval, CompanionPairingApprovalAttempt,
+        CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
+        CompanionPairingProviderManifestDigest, CompanionPairingRequest, ExtensionConnectScope,
+        ExtensionPairingVaultType,
     };
 
     pub(super) struct ActivationFixture {
@@ -383,8 +383,13 @@ mod tests {
             self.records.0.push(trigger);
             let first = DeviceIdentity::generate()?;
             let second = DeviceIdentity::generate()?;
-            let shares =
-                create_sentinel_share_records(&VaultKeys::generate()?, &[first, second], 2.into())?;
+            let shares = SentinelShareEnvelope::create_sentinel_share_records(
+                CreateSentinelShareRecordsRequest {
+                    keys: &VaultKeys::generate()?,
+                    participants: &[first, second],
+                    threshold: 2.into(),
+                },
+            )?;
             let store_id = StoreId::parse(&self.manager.vault.store_id)?;
             let (event, _) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
                 store_id: &store_id,

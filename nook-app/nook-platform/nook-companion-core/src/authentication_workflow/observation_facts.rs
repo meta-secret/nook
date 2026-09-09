@@ -15,7 +15,6 @@ mod submission;
 pub use authenticator::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationPasskeyAccountAvailability,
-    classify_authentication_backup_codes_observation,
 };
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
@@ -31,8 +30,6 @@ pub use fields::AuthenticationFieldObservationFacts;
 pub use passkey::{
     AuthenticationDetailedPasskeyControlCandidateObservation,
     AuthenticationDetailedPasskeyControlObservation, AuthenticationPasskeyControlObservation,
-    authentication_passkey_control_candidate_is_safe,
-    authentication_passkey_control_evidence_is_safe,
 };
 pub use submission::{
     AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
@@ -116,11 +113,14 @@ impl AuthenticationPageObservationFacts {
 }
 
 /// Rank one browser form observation from typed facts before the host applies its bounded scan.
-#[must_use]
-pub fn authentication_page_observation_facts_priority(
-    facts: AuthenticationPageObservationFacts,
-) -> AuthenticationFormObservationPriority {
-    facts.form_priority()
+impl AuthenticationPageObservationFacts {
+    #[must_use]
+    pub fn authentication_page_observation_facts_priority(
+        self,
+    ) -> AuthenticationFormObservationPriority {
+        let facts = self;
+        facts.form_priority()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -164,7 +164,9 @@ impl AuthenticationPageObservationFactsBatch {
                 })
                 .collect(),
         };
-        super::classify_authentication_workflow_candidates(&observations.observations)
+        AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+            &observations.observations,
+        )
     }
 }
 
@@ -446,14 +448,12 @@ mod tests {
             AuthenticationFormObservationPriority::default()
         );
         assert_eq!(
-            u8::from(authentication_page_observation_facts_priority(otp)),
+            u8::from((otp).authentication_page_observation_facts_priority()),
             1
         );
         assert!(password_login().form_priority() > otp_priority);
         assert_eq!(
-            u8::from(authentication_page_observation_facts_priority(
-                password_login()
-            )),
+            u8::from((password_login()).authentication_page_observation_facts_priority()),
             4
         );
     }
@@ -502,9 +502,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(authentication_passkey_control_evidence_is_safe(
-            &facts.authenticator.detailed_passkey_control
-        ));
+        assert!(
+            (&facts.authenticator.detailed_passkey_control)
+                .authentication_passkey_control_evidence_is_safe()
+        );
         assert!(facts.into_observation().passkey_control_present);
     }
 
@@ -861,9 +862,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(authentication_passkey_control_evidence_is_safe(
-            &facts.authenticator.detailed_passkey_control
-        ));
+        assert!(
+            (&facts.authenticator.detailed_passkey_control)
+                .authentication_passkey_control_evidence_is_safe()
+        );
         assert!(!facts.authenticator.passkey_control_present(facts.fields));
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
@@ -975,3 +977,5 @@ mod tests {
         ));
     }
 }
+
+pub use authenticator::AuthenticationBackupCodesEvidence;

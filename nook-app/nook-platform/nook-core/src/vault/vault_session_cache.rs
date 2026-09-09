@@ -6,6 +6,7 @@
 )]
 
 use crate::SessionError;
+use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 
 use crate::errors::{MultiDeviceError, VaultResult};
 use crate::{DeviceIdentity, VaultFormatDocument, VaultRecordView, VaultType};
@@ -78,8 +79,13 @@ mod tests {
         let keys = VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares =
-            create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2.into())?;
+        let shares = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first.clone(), second.clone()],
+                threshold: 2.into(),
+            },
+        )?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {

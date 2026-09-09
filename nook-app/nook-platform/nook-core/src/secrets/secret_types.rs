@@ -4,12 +4,9 @@
 //! metadata shares the same YAML row boundary. `nook-core` owns the plaintext
 //! password-manager payloads and session records.
 
-use crate::AuthenticatorSecret;
-use crate::CreditCardSecret;
-use crate::SecretId;
-use crate::bip39;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
+use crate::{AuthenticatorSecret, CreditCardSecret, SecretId};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::fmt;
@@ -129,17 +126,22 @@ impl fmt::Debug for PasskeyPrivateKeyPkcs8 {
 impl PasskeyPrivateKeyPkcs8 {
     pub fn parse(encoded: impl Into<String>) -> SecretPayloadResult<Self> {
         let encoded = encoded.into();
-        validate_base64url_field(
-            "ES256 private key",
-            &encoded,
-            1,
-            PASSKEY_PRIVATE_KEY_MAX_LEN,
-        )?;
+        PasskeySecret::validate_base64url_field(PasskeyEncodedField {
+            name: "ES256 private key",
+            encoded: &encoded,
+            minimum: 1,
+            maximum: PASSKEY_PRIVATE_KEY_MAX_LEN,
+        })?;
         Ok(Self(encoded))
     }
 
     fn validate(&self) -> SecretPayloadResult<()> {
-        validate_base64url_field("ES256 private key", &self.0, 1, PASSKEY_PRIVATE_KEY_MAX_LEN)?;
+        PasskeySecret::validate_base64url_field(PasskeyEncodedField {
+            name: "ES256 private key",
+            encoded: &self.0,
+            minimum: 1,
+            maximum: PASSKEY_PRIVATE_KEY_MAX_LEN,
+        })?;
         self.validate_es256(None)
             .map_err(|error| SecretPayloadError::InvalidPasskey {
                 reason: error.to_string(),
@@ -174,12 +176,22 @@ impl fmt::Debug for PasskeyPublicKeyCose {
 impl PasskeyPublicKeyCose {
     pub fn parse(encoded: impl Into<String>) -> SecretPayloadResult<Self> {
         let encoded = encoded.into();
-        validate_base64url_field("ES256 public key", &encoded, 1, PASSKEY_PUBLIC_KEY_MAX_LEN)?;
+        PasskeySecret::validate_base64url_field(PasskeyEncodedField {
+            name: "ES256 public key",
+            encoded: &encoded,
+            minimum: 1,
+            maximum: PASSKEY_PUBLIC_KEY_MAX_LEN,
+        })?;
         Ok(Self(encoded))
     }
 
     fn validate(&self) -> SecretPayloadResult<()> {
-        validate_base64url_field("ES256 public key", &self.0, 1, PASSKEY_PUBLIC_KEY_MAX_LEN)
+        PasskeySecret::validate_base64url_field(PasskeyEncodedField {
+            name: "ES256 public key",
+            encoded: &self.0,
+            minimum: 1,
+            maximum: PASSKEY_PUBLIC_KEY_MAX_LEN,
+        })
     }
 
     pub(crate) fn encoded(&self) -> &str {
@@ -280,30 +292,61 @@ impl fmt::Debug for PasskeySecret {
     }
 }
 
+/// Named values required by PasskeySecret::validate_text_field.
+struct PasskeyTextField<'a> {
+    name: &'static str,
+    value: &'a str,
+    minimum: usize,
+    maximum: usize,
+}
+
+/// Named values required by PasskeySecret::validate_base64url_field.
+struct PasskeyEncodedField<'a> {
+    name: &'static str,
+    encoded: &'a str,
+    minimum: usize,
+    maximum: usize,
+}
+
 impl PasskeySecret {
     pub fn validate(&self) -> SecretPayloadResult<()> {
-        validate_rp_id(&self.rp_id)?;
-        validate_text_field("RP name", &self.rp_name, 1, 256)?;
-        validate_base64url_field(
-            "credential id",
-            &self.credential_id,
-            16,
-            PASSKEY_CREDENTIAL_ID_MAX_LEN,
-        )?;
-        validate_base64url_field(
-            "user handle",
-            &self.user_handle,
-            1,
-            PASSKEY_USER_HANDLE_MAX_LEN,
-        )?;
-        validate_text_field("user name", &self.user_name, 1, 256)?;
-        validate_text_field("user display name", &self.user_display_name, 1, 256)?;
+        PasskeySecret::validate_rp_id(&self.rp_id)?;
+        PasskeySecret::validate_text_field(PasskeyTextField {
+            name: "RP name",
+            value: &self.rp_name,
+            minimum: 1,
+            maximum: 256,
+        })?;
+        PasskeySecret::validate_base64url_field(PasskeyEncodedField {
+            name: "credential id",
+            encoded: &self.credential_id,
+            minimum: 16,
+            maximum: PASSKEY_CREDENTIAL_ID_MAX_LEN,
+        })?;
+        PasskeySecret::validate_base64url_field(PasskeyEncodedField {
+            name: "user handle",
+            encoded: &self.user_handle,
+            minimum: 1,
+            maximum: PASSKEY_USER_HANDLE_MAX_LEN,
+        })?;
+        PasskeySecret::validate_text_field(PasskeyTextField {
+            name: "user name",
+            value: &self.user_name,
+            minimum: 1,
+            maximum: 256,
+        })?;
+        PasskeySecret::validate_text_field(PasskeyTextField {
+            name: "user display name",
+            value: &self.user_display_name,
+            minimum: 1,
+            maximum: 256,
+        })?;
         self.key.validate()?;
         if !self.discoverable {
-            return invalid_passkey("passkey credentials must be discoverable");
+            return PasskeySecret::invalid_passkey("passkey credentials must be discoverable");
         }
         if self.backup_state && !self.backup_eligible {
-            return invalid_passkey("backup state requires backup eligibility");
+            return PasskeySecret::invalid_passkey("backup state requires backup eligibility");
         }
         Ok(())
     }
@@ -329,73 +372,90 @@ impl Zeroize for PasskeySecret {
     }
 }
 
-fn invalid_passkey<T>(reason: impl Into<String>) -> SecretPayloadResult<T> {
-    Err(SecretPayloadError::InvalidPasskey {
-        reason: reason.into(),
-    })
-}
-
-fn validate_text_field(
-    name: &'static str,
-    value: &str,
-    minimum: usize,
-    maximum: usize,
-) -> SecretPayloadResult<()> {
-    let length = value.chars().count();
-    if value.trim() != value || length < minimum || length > maximum {
-        return invalid_passkey(format!(
-            "{name} has an invalid length or surrounding whitespace"
-        ));
-    }
-    if value.chars().any(char::is_control) {
-        return invalid_passkey(format!("{name} contains control characters"));
-    }
-    Ok(())
-}
-
-fn validate_base64url_field(
-    name: &'static str,
-    encoded: &str,
-    minimum: usize,
-    maximum: usize,
-) -> SecretPayloadResult<()> {
-    let decoded =
-        URL_SAFE_NO_PAD
-            .decode(encoded)
-            .map_err(|_| SecretPayloadError::InvalidPasskey {
-                reason: format!("{name} is not canonical base64url"),
-            })?;
-    if decoded.len() < minimum || decoded.len() > maximum {
-        return invalid_passkey(format!("{name} has an invalid byte length"));
-    }
-    if URL_SAFE_NO_PAD.encode(&decoded) != encoded {
-        return invalid_passkey(format!("{name} is not canonical base64url"));
-    }
-    Ok(())
-}
-
-fn validate_rp_id(rp_id: &str) -> SecretPayloadResult<()> {
-    validate_text_field("RP id", rp_id, 1, 253)?;
-    if rp_id == "localhost" {
-        return Ok(());
-    }
-    if !rp_id.is_ascii()
-        || rp_id.starts_with('.')
-        || rp_id.ends_with('.')
-        || !rp_id.contains('.')
-        || rp_id.split('.').any(|label| {
-            label.is_empty()
-                || label.len() > 63
-                || label.starts_with('-')
-                || label.ends_with('-')
-                || !label
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+impl PasskeySecret {
+    fn invalid_passkey<T>(reason: impl Into<String>) -> SecretPayloadResult<T> {
+        Err(SecretPayloadError::InvalidPasskey {
+            reason: reason.into(),
         })
-    {
-        return invalid_passkey("RP id must be a canonical DNS domain or localhost");
     }
-    Ok(())
+}
+
+impl PasskeySecret {
+    fn validate_text_field(request: PasskeyTextField<'_>) -> SecretPayloadResult<()> {
+        let PasskeyTextField {
+            name,
+            value,
+            minimum,
+            maximum,
+        } = request;
+        let length = value.chars().count();
+        if value.trim() != value || length < minimum || length > maximum {
+            return PasskeySecret::invalid_passkey(format!(
+                "{name} has an invalid length or surrounding whitespace"
+            ));
+        }
+        if value.chars().any(char::is_control) {
+            return PasskeySecret::invalid_passkey(format!("{name} contains control characters"));
+        }
+        Ok(())
+    }
+}
+
+impl PasskeySecret {
+    fn validate_base64url_field(request: PasskeyEncodedField<'_>) -> SecretPayloadResult<()> {
+        let PasskeyEncodedField {
+            name,
+            encoded,
+            minimum,
+            maximum,
+        } = request;
+        let decoded =
+            URL_SAFE_NO_PAD
+                .decode(encoded)
+                .map_err(|_| SecretPayloadError::InvalidPasskey {
+                    reason: format!("{name} is not canonical base64url"),
+                })?;
+        if decoded.len() < minimum || decoded.len() > maximum {
+            return PasskeySecret::invalid_passkey(format!("{name} has an invalid byte length"));
+        }
+        if URL_SAFE_NO_PAD.encode(&decoded) != encoded {
+            return PasskeySecret::invalid_passkey(format!("{name} is not canonical base64url"));
+        }
+        Ok(())
+    }
+}
+
+impl PasskeySecret {
+    fn validate_rp_id(rp_id: &str) -> SecretPayloadResult<()> {
+        PasskeySecret::validate_text_field(PasskeyTextField {
+            name: "RP id",
+            value: rp_id,
+            minimum: 1,
+            maximum: 253,
+        })?;
+        if rp_id == "localhost" {
+            return Ok(());
+        }
+        if !rp_id.is_ascii()
+            || rp_id.starts_with('.')
+            || rp_id.ends_with('.')
+            || !rp_id.contains('.')
+            || rp_id.split('.').any(|label| {
+                label.is_empty()
+                    || label.len() > 63
+                    || label.starts_with('-')
+                    || label.ends_with('-')
+                    || !label
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+            })
+        {
+            return PasskeySecret::invalid_passkey(
+                "RP id must be a canonical DNS domain or localhost",
+            );
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -430,7 +490,7 @@ impl SecretValue {
             SecretType::SeedPhrase => {
                 let secret: SeedPhraseSecret =
                     serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidSeedPhrase)?;
-                bip39::validate_bip39_mnemonic(&secret.seed)?;
+                SeedPhraseSecret::validate_bip39_mnemonic(&secret.seed)?;
                 Ok(Self::SeedPhrase(secret))
             }
             SecretType::SecureNote => serde_yaml::from_str(yaml)

@@ -12,6 +12,7 @@
 )]
 
 use crate::EventError;
+use nook_event_log::{GenesisImportRequest, VaultEvent};
 
 use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultProjection, VaultResult};
 use serde::{Deserialize, Serialize};
@@ -175,7 +176,7 @@ mod tests {
     use crate::{
         DeviceIdentity, DeviceSigningPublicKey, EventId, GenesisImportPayload, IsoTimestamp,
         MemberLabel, PasswordEntryId, PasswordEntryIssuance, SigningIdentity, StoreId, VaultEvent,
-        VaultEventBody, VaultEventSchemaVersion, build_genesis_import_event,
+        VaultEventBody, VaultEventSchemaVersion,
     };
 
     const STORE_ID: &str = "store_recovery01x";
@@ -232,20 +233,20 @@ mod tests {
             10.into(),
         )
         .issue()?;
-        let genesis = build_genesis_import_event(
-            &StoreId::parse(STORE_ID)?,
-            &signing.actor_id()?,
-            &EventId::from_sha256_hex(
+        let genesis = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &StoreId::parse(STORE_ID)?,
+            actor_id: &signing.actor_id()?,
+            key_epoch: &EventId::from_sha256_hex(
                 nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
             )?,
-            GenesisImportPayload {
+            payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
                 password_entries: vec![password.clone()],
             },
-            &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
-            signing.signing_key(),
-        )?;
+            created_at: &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
+            signing_key: signing.signing_key(),
+        })?;
         let genesis_id = genesis.id()?;
         let mut graph = EventGraph::new();
         graph.insert(genesis, STORE_ID)?;
@@ -331,20 +332,20 @@ mod tests {
     fn sentinel_participants_require_quorum_and_never_offer_passwords() -> anyhow::Result<()> {
         let signing = SigningIdentity::generate()?.0;
         let device = DeviceIdentity::generate()?;
-        let genesis = build_genesis_import_event(
-            &StoreId::parse(STORE_ID)?,
-            &signing.actor_id()?,
-            &EventId::from_sha256_hex(
+        let genesis = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &StoreId::parse(STORE_ID)?,
+            actor_id: &signing.actor_id()?,
+            key_epoch: &EventId::from_sha256_hex(
                 nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
             )?,
-            GenesisImportPayload {
+            payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
                 password_entries: vec![],
             },
-            &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
-            signing.signing_key(),
-        )?;
+            created_at: &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
+            signing_key: signing.signing_key(),
+        })?;
         let genesis_id = genesis.id()?;
         let mut graph = EventGraph::new();
         graph.insert(genesis, STORE_ID)?;
@@ -385,20 +386,20 @@ mod tests {
             10.into(),
         )
         .issue()?;
-        let genesis = build_genesis_import_event(
-            &StoreId::parse(STORE_ID)?,
-            &signing.actor_id()?,
-            &EventId::from_sha256_hex(
+        let genesis = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &StoreId::parse(STORE_ID)?,
+            actor_id: &signing.actor_id()?,
+            key_epoch: &EventId::from_sha256_hex(
                 nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
             )?,
-            GenesisImportPayload {
+            payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
                 password_entries: vec![password.clone()],
             },
-            &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
-            signing.signing_key(),
-        )?;
+            created_at: &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
+            signing_key: signing.signing_key(),
+        })?;
         let genesis_id = genesis.id()?;
         let mut graph = EventGraph::new();
         graph.insert(genesis, STORE_ID)?;

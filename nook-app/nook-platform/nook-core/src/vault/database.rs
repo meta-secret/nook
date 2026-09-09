@@ -6,15 +6,13 @@
 //! stay localised.
 
 use crate::{AgeArmoredCiphertext, VaultFormat};
+use crate::{SecretId, multi_device, vault_format};
 
-use crate::SecretId;
 use crate::errors::{DatabaseError, DatabaseResult, VaultFormatError};
-use crate::multi_device;
 use crate::secret_types::{
     SecretRecord, SecretType, SecretValue, StoredRecordPayload, StoredSecretRecord,
 };
 use crate::vault_crypto::VaultCrypto;
-use crate::vault_format;
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml, SymmetricKey};
 use std::collections::HashMap;
 
@@ -547,10 +545,10 @@ mod tests {
 
     #[test]
     fn validate_before_insert_rejects_blank_label() -> anyhow::Result<()> {
-        use crate::{SecretId, validate_secret_data};
+        use crate::SecretId;
 
         assert!(SecretId::parse("   ").is_err());
-        assert!(validate_secret_data("").is_err());
+        assert!(SecretValue::validate_secret_data("").is_err());
         Ok(())
     }
 }

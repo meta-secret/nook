@@ -2,15 +2,21 @@ use super::super::event_log::{
     EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
 };
 use super::NookVaultManager;
+use crate::NookReplacementConflict;
+use crate::NookSecurityConflict;
 use crate::types;
 use serde::Serialize;
 use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::{JsCast, JsError, prelude::wasm_bindgen};
 
-fn serialize_js_array<T: Serialize>(value: &T) -> Result<js_sys::Array, serde_wasm_bindgen::Error> {
-    Ok(value
-        .serialize(&Serializer::new().serialize_maps_as_objects(true))?
-        .unchecked_into())
+impl NookVaultManager {
+    fn serialize_js_array<T: Serialize>(
+        value: &T,
+    ) -> Result<js_sys::Array, serde_wasm_bindgen::Error> {
+        Ok(value
+            .serialize(&Serializer::new().serialize_maps_as_objects(true))?
+            .unchecked_into())
+    }
 }
 
 #[wasm_bindgen]
@@ -23,7 +29,8 @@ pub struct NookEventLogRecords(Vec<EventLogStorageRecord>);
 impl NookEventLogRecords {
     #[wasm_bindgen]
     pub fn to_array(&self) -> Result<js_sys::Array, JsError> {
-        serialize_js_array(&self.0).map_err(|error| JsError::new(&error.to_string()))
+        NookVaultManager::serialize_js_array(&self.0)
+            .map_err(|error| JsError::new(&error.to_string()))
     }
 }
 
@@ -120,7 +127,8 @@ impl NookVaultManager {
         &self,
     ) -> Result<Vec<crate::NookReplacementConflict>, JsError> {
         let projection = self.load_projection_conflicts().await?;
-        types::replacement_conflicts_to_vec(projection.replacement_conflicts).map_err(Into::into)
+        NookReplacementConflict::replacement_conflicts_to_vec(projection.replacement_conflicts)
+            .map_err(Into::into)
     }
 
     #[wasm_bindgen]
@@ -128,7 +136,8 @@ impl NookVaultManager {
         &self,
     ) -> Result<Vec<crate::NookSecurityConflict>, JsError> {
         let projection = self.load_projection_conflicts().await?;
-        types::security_conflicts_to_vec(projection.security_conflicts).map_err(Into::into)
+        NookSecurityConflict::security_conflicts_to_vec(projection.security_conflicts)
+            .map_err(Into::into)
     }
 }
 
@@ -225,7 +234,7 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn event_log_export_serializes_flattened_signed_events_as_plain_objects()
     -> Result<(), wasm_bindgen::JsError> {
-        let value = serialize_js_array(&vec![ExportedRecord {
+        let value = NookVaultManager::serialize_js_array(&vec![ExportedRecord {
             event_id: "event-1".to_owned(),
             event: SignedEvent {
                 body: SignedEventBody { schema_version: 1 },

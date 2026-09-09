@@ -4,130 +4,139 @@ use super::{
     AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
 };
+use crate::AuthenticationPageObservation;
+use crate::AuthenticationWorkflowMatch;
 
 const MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE: u32 = 20;
 
-const fn saved_login_capability_matches_contract(snapshot: AuthenticationWorkflowSnapshot) -> bool {
-    let is_login_credentials = matches!(
-        (snapshot.kind, snapshot.stage),
-        (
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Credentials
-        )
-    );
-    match snapshot.action {
-        AuthenticationWorkflowAction::ContinueWithNook => {
-            is_login_credentials
-                && matches!(
-                    snapshot.saved_login_capability,
-                    AuthenticationSavedLoginCapability::FillSavedLogin
-                )
+impl AuthenticationWorkflowSnapshot {
+    const fn saved_login_capability_matches_contract(self) -> bool {
+        let snapshot = self;
+        let is_login_credentials = matches!(
+            (snapshot.kind, snapshot.stage),
+            (
+                AuthenticationWorkflowKind::Login,
+                AuthenticationWorkflowStage::Credentials
+            )
+        );
+        match snapshot.action {
+            AuthenticationWorkflowAction::ContinueWithNook => {
+                is_login_credentials
+                    && matches!(
+                        snapshot.saved_login_capability,
+                        AuthenticationSavedLoginCapability::FillSavedLogin
+                    )
+            }
+            AuthenticationWorkflowAction::UsePasskey
+            | AuthenticationWorkflowAction::CreatePasskey
+                if is_login_credentials =>
+            {
+                true
+            }
+            _ => matches!(
+                snapshot.saved_login_capability,
+                AuthenticationSavedLoginCapability::Unavailable
+            ),
         }
-        AuthenticationWorkflowAction::UsePasskey | AuthenticationWorkflowAction::CreatePasskey
-            if is_login_credentials =>
-        {
-            true
-        }
-        _ => matches!(
-            snapshot.saved_login_capability,
-            AuthenticationSavedLoginCapability::Unavailable
-        ),
     }
 }
 
-const fn classifier_tuple_matches_contract(snapshot: AuthenticationWorkflowSnapshot) -> bool {
-    matches!(
-        (
-            snapshot.kind,
-            snapshot.stage,
-            snapshot.action,
-            snapshot.current_step.raw(),
-            snapshot.total_steps.raw(),
-        ),
-        (
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::ContinueWithNook
-                | AuthenticationWorkflowAction::UsePasskey
-                | AuthenticationWorkflowAction::CreatePasskey,
-            1,
-            3,
-        ) | (
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Manual,
-            AuthenticationWorkflowAction::TakeOver,
-            1,
-            3,
-        ) | (
-            AuthenticationWorkflowKind::Signup,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::GeneratePassword
-                | AuthenticationWorkflowAction::UsePasskey
-                | AuthenticationWorkflowAction::CreatePasskey,
-            2,
-            5,
-        ) | (
-            AuthenticationWorkflowKind::Signup,
-            AuthenticationWorkflowStage::Manual,
-            AuthenticationWorkflowAction::TakeOver,
-            2,
-            5,
-        ) | (
-            AuthenticationWorkflowKind::PasswordChange,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::GeneratePassword,
-            2,
-            4,
-        ) | (
-            AuthenticationWorkflowKind::PasswordChange,
-            AuthenticationWorkflowStage::Manual,
-            AuthenticationWorkflowAction::TakeOver,
-            2,
-            4,
-        ) | (
-            AuthenticationWorkflowKind::TotpChallenge,
-            AuthenticationWorkflowStage::SecondFactor,
-            AuthenticationWorkflowAction::FillTotp | AuthenticationWorkflowAction::TakeOver,
-            2,
-            3,
-        ) | (
-            AuthenticationWorkflowKind::TotpChallenge,
-            AuthenticationWorkflowStage::Manual,
-            AuthenticationWorkflowAction::TakeOver,
-            2,
-            3,
-        ) | (
-            AuthenticationWorkflowKind::TotpEnrollment,
-            AuthenticationWorkflowStage::Setup,
-            AuthenticationWorkflowAction::EnrollAuthenticator,
-            2,
-            5,
-        ) | (
-            AuthenticationWorkflowKind::TotpEnrollment,
-            AuthenticationWorkflowStage::Verification,
-            AuthenticationWorkflowAction::FillTotp,
-            3,
-            5,
-        ) | (
-            AuthenticationWorkflowKind::TotpEnrollment,
-            AuthenticationWorkflowStage::Recovery,
-            AuthenticationWorkflowAction::SaveBackupCodes,
-            4,
-            5,
-        ) | (
-            AuthenticationWorkflowKind::TotpEnrollment,
-            AuthenticationWorkflowStage::Manual,
-            AuthenticationWorkflowAction::TakeOver,
-            2..=4,
-            5,
-        ) | (
-            AuthenticationWorkflowKind::Manual,
-            AuthenticationWorkflowStage::Manual,
-            AuthenticationWorkflowAction::TakeOver,
-            1,
-            1,
+impl AuthenticationWorkflowSnapshot {
+    const fn classifier_tuple_matches_contract(self) -> bool {
+        let snapshot = self;
+        matches!(
+            (
+                snapshot.kind,
+                snapshot.stage,
+                snapshot.action,
+                snapshot.current_step.raw(),
+                snapshot.total_steps.raw(),
+            ),
+            (
+                AuthenticationWorkflowKind::Login,
+                AuthenticationWorkflowStage::Credentials,
+                AuthenticationWorkflowAction::ContinueWithNook
+                    | AuthenticationWorkflowAction::UsePasskey
+                    | AuthenticationWorkflowAction::CreatePasskey,
+                1,
+                3,
+            ) | (
+                AuthenticationWorkflowKind::Login,
+                AuthenticationWorkflowStage::Manual,
+                AuthenticationWorkflowAction::TakeOver,
+                1,
+                3,
+            ) | (
+                AuthenticationWorkflowKind::Signup,
+                AuthenticationWorkflowStage::Credentials,
+                AuthenticationWorkflowAction::GeneratePassword
+                    | AuthenticationWorkflowAction::UsePasskey
+                    | AuthenticationWorkflowAction::CreatePasskey,
+                2,
+                5,
+            ) | (
+                AuthenticationWorkflowKind::Signup,
+                AuthenticationWorkflowStage::Manual,
+                AuthenticationWorkflowAction::TakeOver,
+                2,
+                5,
+            ) | (
+                AuthenticationWorkflowKind::PasswordChange,
+                AuthenticationWorkflowStage::Credentials,
+                AuthenticationWorkflowAction::GeneratePassword,
+                2,
+                4,
+            ) | (
+                AuthenticationWorkflowKind::PasswordChange,
+                AuthenticationWorkflowStage::Manual,
+                AuthenticationWorkflowAction::TakeOver,
+                2,
+                4,
+            ) | (
+                AuthenticationWorkflowKind::TotpChallenge,
+                AuthenticationWorkflowStage::SecondFactor,
+                AuthenticationWorkflowAction::FillTotp | AuthenticationWorkflowAction::TakeOver,
+                2,
+                3,
+            ) | (
+                AuthenticationWorkflowKind::TotpChallenge,
+                AuthenticationWorkflowStage::Manual,
+                AuthenticationWorkflowAction::TakeOver,
+                2,
+                3,
+            ) | (
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationWorkflowStage::Setup,
+                AuthenticationWorkflowAction::EnrollAuthenticator,
+                2,
+                5,
+            ) | (
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationWorkflowStage::Verification,
+                AuthenticationWorkflowAction::FillTotp,
+                3,
+                5,
+            ) | (
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationWorkflowStage::Recovery,
+                AuthenticationWorkflowAction::SaveBackupCodes,
+                4,
+                5,
+            ) | (
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationWorkflowStage::Manual,
+                AuthenticationWorkflowAction::TakeOver,
+                2..=4,
+                5,
+            ) | (
+                AuthenticationWorkflowKind::Manual,
+                AuthenticationWorkflowStage::Manual,
+                AuthenticationWorkflowAction::TakeOver,
+                1,
+                1,
+            )
         )
-    )
+    }
 }
 
 impl AuthenticationWorkflowSnapshot {
@@ -138,14 +147,14 @@ impl AuthenticationWorkflowSnapshot {
             || self.total_steps.raw() == 0
             || self.current_step.raw() > self.total_steps.raw()
             || !self.approval_requirement_matches_action()
-            || !saved_login_capability_matches_contract(self)
+            || !(self).saved_login_capability_matches_contract()
             || self.observation_index.raw()
                 >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE
         {
             return false;
         }
 
-        classifier_tuple_matches_contract(self)
+        (self).classifier_tuple_matches_contract()
     }
 }
 
@@ -156,7 +165,7 @@ mod tests {
         AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
         AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
         AuthenticationWorkflowStage, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
-        classify_authentication_workflow, classify_authentication_workflow_candidates,
+        classify_authentication_workflow,
     };
     use super::MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE;
 
@@ -241,7 +250,8 @@ mod tests {
                                                 };
                                                 if let AuthenticationWorkflowMatch::Matched(
                                                     snapshot,
-                                                ) = classify_authentication_workflow(observation)
+                                                ) =
+                                                    (observation).classify_authentication_workflow()
                                                 {
                                                     outputs.push((observation, snapshot));
                                                 }
@@ -343,7 +353,7 @@ mod tests {
                                     vec![AuthenticationPageObservation::default(); index];
                                 observations.push(*observation);
                                 let produced =
-                                    classify_authentication_workflow_candidates(&observations)
+                                    AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(&observations)
                                         .snapshot()?;
                                 let mut expected = accepted;
                                 expected.observation_index = u32::try_from(index)?.into();

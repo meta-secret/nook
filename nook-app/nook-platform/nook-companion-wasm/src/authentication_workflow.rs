@@ -1,4 +1,11 @@
-use nook_companion_core::WebsiteLoginOptions;
+use nook_companion_core::AuthenticationBackupCodesEvidence;
+use nook_companion_core::AuthenticationBackupCodesObservation;
+use nook_companion_core::AuthenticationEnrollmentObservation;
+use nook_companion_core::AuthenticationWorkflowMatch;
+use nook_companion_core::{
+    AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowSnapshotResponse,
+    WebsiteLoginOptions,
+};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -6,15 +13,17 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub fn decode_authentication_workflow_snapshot_response(
     response: nook_companion_core::AuthenticationWorkflowSnapshotResponseWire,
 ) -> Result<nook_companion_core::AuthenticationWorkflowSnapshotResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authentication_workflow_snapshot_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+    AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(
+        response,
+    )
+    .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
 pub fn decode_authentication_workflow_runtime_response(
     response: nook_companion_core::AuthenticationWorkflowRuntimeResponseWire,
 ) -> Result<nook_companion_core::AuthenticationWorkflowRuntimeResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authentication_workflow_runtime_response(response)
+    AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
@@ -57,7 +66,12 @@ pub fn classify_authentication_backup_codes_observation(
     text: &str,
     candidate_present: bool,
 ) -> nook_companion_core::AuthenticationBackupCodesObservation {
-    nook_companion_core::classify_authentication_backup_codes_observation(text, candidate_present)
+    AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+        AuthenticationBackupCodesEvidence {
+            text: text,
+            candidate_present: candidate_present,
+        },
+    )
 }
 
 #[wasm_bindgen]
@@ -67,10 +81,12 @@ pub fn authentication_enrollment_workflow_match(
     backup_codes_copy: &str,
     manual_checkpoint_present: bool,
 ) -> nook_companion_core::AuthenticationWorkflowMatch {
-    nook_companion_core::authentication_enrollment_workflow_match(
-        authenticator_setup_hint,
-        backup_codes_copy,
-        manual_checkpoint_present,
+    AuthenticationWorkflowMatch::authentication_enrollment_workflow_match(
+        AuthenticationEnrollmentObservation {
+            authenticator_setup_hint: authenticator_setup_hint,
+            backup_codes_copy: backup_codes_copy,
+            manual_checkpoint_present: manual_checkpoint_present,
+        },
     )
 }
 
@@ -80,7 +96,7 @@ pub fn authentication_enrollment_workflow_match(
 pub fn classify_companion_authentication_workflow(
     input: nook_companion_core::AuthenticationPageObservations,
 ) -> nook_companion_core::AuthenticationWorkflowMatch {
-    nook_companion_core::classify_authentication_workflow_candidates(&input.observations)
+    AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(&input.observations)
 }
 
 #[wasm_bindgen]
@@ -135,10 +151,12 @@ mod tests {
                 super::CompanionAuthenticationWorkflowMatchKind::Rejected,
             ),
             (
-                super::authentication_enrollment_workflow_match(
-                    true,
-                    "Save these recovery codes",
-                    false,
+                AuthenticationWorkflowMatch::authentication_enrollment_workflow_match(
+                    AuthenticationEnrollmentObservation {
+                        authenticator_setup_hint: true,
+                        backup_codes_copy: "Save these recovery codes",
+                        manual_checkpoint_present: false,
+                    },
                 ),
                 super::CompanionAuthenticationWorkflowMatchKind::Matched,
             ),

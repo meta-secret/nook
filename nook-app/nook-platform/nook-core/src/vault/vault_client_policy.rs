@@ -4,6 +4,9 @@
 //! module owns the state transitions and predicates that must behave the same
 //! in every client.
 
+use nook_app_common::AppLocale;
+use nook_app_common::TranslateFromCatalogRequest;
+use nook_app_common::TranslationCatalog;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod connection;
@@ -18,7 +21,7 @@ pub use sync_policy::{
     VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
 };
 
-use crate::{i18n_keys, translate_from_catalog};
+use crate::i18n_keys;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -181,10 +184,12 @@ impl VaultClientPolicy {
             architecture_allows_secret_creation,
         )
         .translation_key()?;
-        Some(translate_from_catalog(
-            catalog_json,
-            locale,
-            translation_key,
+        Some(TranslationCatalog::translate_from_catalog(
+            TranslateFromCatalogRequest {
+                catalog_json: catalog_json,
+                locale: locale,
+                key: translation_key,
+            },
         ))
     }
 
@@ -287,7 +292,7 @@ mod tests {
                 1.into(),
                 true,
                 false,
-                crate::get_translation_catalog("en"),
+                AppLocale::get_translation_catalog("en"),
                 "en",
             )
             .as_deref(),

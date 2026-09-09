@@ -5,6 +5,7 @@
 )]
 //! Vault-scoped reconciliation marker persistence and guarded cleanup.
 use super::super::indexed_db;
+use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use crate::{NookError, storage};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
 use nook_core::{AgeArmoredCiphertext, IdentityVaultEventId, StoreId};
@@ -75,10 +76,10 @@ impl<'a> IdentityReconciliationStore<'a> {
             previous_checkpoint: previous_checkpoint.clone(),
             progress: PendingIdentityReconciliationProgress::Prepared { plan_envelope },
         };
-        let disposition = indexed_db::idb_update_string(
-            &IdentityReconciliationStore::new(store_id).key(),
-            StringUpdateGuard::Unconditional,
-            move |raw| match raw {
+        let disposition = NookDatabase::idb_update_string(IndexedDbUpdate {
+            key: &IdentityReconciliationStore::new(store_id).key(),
+            guard: StringUpdateGuard::Unconditional,
+            update: move |raw| match raw {
                 None => proposed.encode(),
                 Some(raw) => {
                     if PendingIdentityReconciliation::decode(&raw)? == proposed {
@@ -90,7 +91,7 @@ impl<'a> IdentityReconciliationStore<'a> {
                     }
                 }
             },
-        )
+        })
         .await?;
         if disposition != StringUpdateResult::Applied {
             return Err(NookError::IndexedDb(
@@ -103,7 +104,7 @@ impl<'a> IdentityReconciliationStore<'a> {
         let store_id = self.store_id;
 
         let Some(raw) =
-            indexed_db::idb_get_string(&IdentityReconciliationStore::new(store_id).key()).await?
+            NookDatabase::idb_get_string(&IdentityReconciliationStore::new(store_id).key()).await?
         else {
             return Ok(None);
         };
@@ -150,7 +151,7 @@ impl<'a> IdentityReconciliationStore<'a> {
     {
         let store_id = self.store_id;
 
-        let rexie = storage::open_nook_database().await?;
+        let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
             .map_err(|error| {
@@ -187,10 +188,10 @@ impl<'a> IdentityReconciliationStore<'a> {
         let stage = update.stage();
 
         let expected_store_id = store_id.clone();
-        let disposition = indexed_db::idb_update_string(
-            &IdentityReconciliationStore::new(store_id).key(),
-            StringUpdateGuard::Unconditional,
-            move |raw| {
+        let disposition = NookDatabase::idb_update_string(IndexedDbUpdate {
+            key: &IdentityReconciliationStore::new(store_id).key(),
+            guard: StringUpdateGuard::Unconditional,
+            update: move |raw| {
                 let pending = PendingIdentityReconciliation::decode(&raw.ok_or_else(|| {
                     NookError::IndexedDb("Identity reconciliation marker disappeared.".to_owned())
                 })?)?;
@@ -201,7 +202,7 @@ impl<'a> IdentityReconciliationStore<'a> {
                 }
                 update.apply(pending)?.encode()
             },
-        )
+        })
         .await?;
         if disposition != StringUpdateResult::Applied {
             return Err(NookError::IndexedDb(format!(
@@ -287,7 +288,7 @@ mod browser_tests {
     async fn abort_only_removes_the_matching_prepared_rotation() -> Result<(), NookError> {
         let store_id = ReconciliationFixture::new()?.store_id;
         let key = IdentityReconciliationStore::new(&store_id).key();
-        indexed_db::idb_delete_key(&key).await?;
+        NookDatabase::idb_delete_key(&key).await?;
         let first_plan = ReconciliationFixture::plan_envelope()?;
         IdentityReconciliationStore::new(&store_id)
             .mark(ReconciliationIntent {
@@ -392,7 +393,7 @@ mod browser_tests {
             })
             .await;
         assert!(result.is_err());
-        indexed_db::idb_delete_key(&IdentityReconciliationStore::new(&store_id).key()).await
+        NookDatabase::idb_delete_key(&IdentityReconciliationStore::new(&store_id).key()).await
     }
 
     #[cfg_attr(
@@ -498,16 +499,20 @@ mod browser_tests {
             },
         };
         let successor_raw = successor.encode()?;
-        indexed_db::idb_put_string(&key, &successor_raw).await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: &key,
+            value: &successor_raw,
+        })
+        .await?;
 
         IdentityReconciliationStore::new(&store_id)
             .clear_consumed(consumed)
             .await?;
 
-        let preserved = indexed_db::idb_get_string(&key).await?.ok_or_else(|| {
+        let preserved = NookDatabase::idb_get_string(&key).await?.ok_or_else(|| {
             NookError::IndexedDb("Successor reconciliation marker disappeared.".to_owned())
         })?;
         assert_eq!(preserved, successor_raw);
-        indexed_db::idb_delete_key(&key).await
+        NookDatabase::idb_delete_key(&key).await
     }
 }

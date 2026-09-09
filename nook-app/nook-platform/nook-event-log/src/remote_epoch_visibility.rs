@@ -6,12 +6,10 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::GenesisImportRequest;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{
-    EventId, EventResult, EventStorageBytes, LocalEventStore, VaultEvent, VaultOperation,
-    parse_event_storage_bytes,
-};
+use crate::{EventId, EventResult, EventStorageBytes, LocalEventStore, VaultEvent, VaultOperation};
 
 impl VaultEvent {
     pub(crate) fn starts_security_epoch(&self) -> bool {
@@ -110,7 +108,7 @@ impl LocalEventStore {
                 Ok((
                     event_id.clone(),
                     bytes.clone(),
-                    parse_event_storage_bytes(bytes)?,
+                    VaultEvent::parse_event_storage_bytes(bytes)?,
                 ))
             })
             .collect::<EventResult<Vec<_>>>()
@@ -180,7 +178,7 @@ impl<'a> RemoteEventWrites<'a> {
         let events = self.events;
         let mut priorities = BTreeMap::new();
         for (event_id, bytes) in events.iter() {
-            let event = parse_event_storage_bytes(bytes)?;
+            let event = VaultEvent::parse_event_storage_bytes(bytes)?;
             priorities.insert(event_id.clone(), event.publish_priority());
         }
         events.sort_by_key(|(event_id, _)| {
@@ -202,8 +200,7 @@ mod tests {
     use crate::{
         DeviceSigningPublicKey, EpochMetadataState, EpochPasswordState, EventError,
         GenesisImportPayload, IsoTimestamp, PasswordEntryId, Sha256Hex, SigningIdentity, StoreId,
-        VaultEventBody, VaultEventSchemaVersion, build_genesis_import_event,
-        serialize_event_storage_yaml,
+        VaultEventBody, VaultEventSchemaVersion,
     };
     use ed25519_dalek::SigningKey;
 
@@ -242,21 +239,26 @@ mod tests {
     impl EpochPairFixture {
         fn new() -> EventResult<Self> {
             let signing_key = test_support::signing_key();
-            let genesis = build_genesis_import_event(
-                &StoreId::parse(STORE)?,
-                &SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
-                &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-                GenesisImportPayload {
+            let genesis = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &StoreId::parse(STORE)?,
+                actor_id: &SigningIdentity::actor_id_for_verifying_key(
+                    &signing_key.verifying_key(),
+                )?,
+                key_epoch: &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+                payload: GenesisImportPayload {
                     source_content_hash: Sha256Hex::from_trusted("00".repeat(32)),
                     secrets: Vec::new(),
                     password_entries: Vec::new(),
                 },
-                &IsoTimestamp::from_trusted("2026-08-14T00:00:00Z".to_owned()),
-                &signing_key,
-            )?;
+                created_at: &IsoTimestamp::from_trusted("2026-08-14T00:00:00Z".to_owned()),
+                signing_key: &signing_key,
+            })?;
             let previous = genesis.id()?;
             let mut local = LocalEventStore::new();
-            local.put_event(previous.clone(), serialize_event_storage_yaml(&genesis)?);
+            local.put_event(
+                previous.clone(),
+                VaultEvent::serialize_event_storage_yaml(&genesis)?,
+            );
             let trigger = Self::signed_event(
                 &signing_key,
                 vec![previous.clone()],
@@ -280,8 +282,14 @@ mod tests {
             let checkpoint_id = checkpoint.id()?;
             Ok(Self(
                 local,
-                (trigger_id, serialize_event_storage_yaml(&trigger)?),
-                (checkpoint_id, serialize_event_storage_yaml(&checkpoint)?),
+                (
+                    trigger_id,
+                    VaultEvent::serialize_event_storage_yaml(&trigger)?,
+                ),
+                (
+                    checkpoint_id,
+                    VaultEvent::serialize_event_storage_yaml(&checkpoint)?,
+                ),
             ))
         }
     }
@@ -347,7 +355,10 @@ mod tests {
         )?;
         let remote = vec![
             trigger.clone(),
-            (checkpoint.id()?, serialize_event_storage_yaml(&checkpoint)?),
+            (
+                checkpoint.id()?,
+                VaultEvent::serialize_event_storage_yaml(&checkpoint)?,
+            ),
         ];
 
         let visible = local.visibility_gated_remote_events(&remote, STORE)?;
@@ -368,7 +379,10 @@ mod tests {
         )?;
         let remote = vec![
             trigger,
-            (descendant.id()?, serialize_event_storage_yaml(&descendant)?),
+            (
+                descendant.id()?,
+                VaultEvent::serialize_event_storage_yaml(&descendant)?,
+            ),
         ];
 
         assert!(
@@ -394,7 +408,7 @@ mod tests {
         let imported = local.union_remote(
             &[(
                 descendant_id.clone(),
-                serialize_event_storage_yaml(&descendant)?,
+                VaultEvent::serialize_event_storage_yaml(&descendant)?,
             )],
             STORE,
         )?;

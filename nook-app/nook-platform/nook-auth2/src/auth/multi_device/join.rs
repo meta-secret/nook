@@ -6,10 +6,13 @@
 
 use super::{
     AuthRecordIssuance, DeviceIdentity, DeviceSigningPublicKey, JoinRequest, StoredRecordPayload,
-    StoredSecretRecord, SymmetricKey, build_members_records, genesis_members_records,
-    member_from_identity, member_from_join, resolve_member_roster, roster_add_member,
+    StoredSecretRecord, SymmetricKey,
 };
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
+use crate::{
+    BuildMembersRecordsRequest, GenesisMembersRecordsRequest, MemberFromIdentityRequest,
+    ResolveMemberRosterRequest, RosterAddMemberRequest, VaultMember,
+};
 use crate::{DeviceId, SecretId};
 
 /// Borrowed identity data awaiting one consuming join-request record issuance.
@@ -99,15 +102,27 @@ impl<'a> JoinRequestApproval<'a> {
             &self.join.public_key,
         )
         .issue()?;
-        let new_member = member_from_join(self.join)?;
-        let roster = match resolve_member_roster(self.records, self.members_key) {
-            Ok(existing) => roster_add_member(existing, new_member),
+        let new_member = VaultMember::member_from_join(self.join)?;
+        let roster = match VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records: self.records,
+            members_key: self.members_key,
+        }) {
+            Ok(existing) => VaultMember::roster_add_member(RosterAddMemberRequest {
+                roster: existing,
+                member: new_member,
+            }),
             Err(_) => vec![
-                member_from_identity(self.approver, &self.join.requested_at),
+                VaultMember::member_from_identity(MemberFromIdentityRequest {
+                    identity: self.approver,
+                    enrolled_at: &self.join.requested_at,
+                }),
                 new_member,
             ],
         };
-        let member_records = build_members_records(&roster, self.members_key)?;
+        let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
+            roster: &roster,
+            members_key: self.members_key,
+        })?;
         Ok((auth_record, self.join.device_id.to_string(), member_records))
     }
 }
@@ -193,13 +208,20 @@ impl<'a> DeviceEnrollment<'a> {
                 members_key,
             } => {
                 let auth = self.identity.auth_record(secrets_key, members_key)?;
-                let members =
-                    genesis_members_records(self.identity, members_key, self.enrolled_at)?;
+                let members = VaultMember::genesis_members_records(GenesisMembersRecordsRequest {
+                    identity: self.identity,
+                    members_key: members_key,
+                    enrolled_at: self.enrolled_at,
+                })?;
                 Ok((auth, members))
             }
             EnrollmentKeys::Shared(shared) => {
                 let auth = self.identity.auth_record(&shared, &shared)?;
-                let members = genesis_members_records(self.identity, &shared, self.enrolled_at)?;
+                let members = VaultMember::genesis_members_records(GenesisMembersRecordsRequest {
+                    identity: self.identity,
+                    members_key: &shared,
+                    enrolled_at: self.enrolled_at,
+                })?;
                 Ok((auth, members))
             }
         }

@@ -4,7 +4,9 @@ use super::{
     ActivationClock, CompanionPairingCandidateFailure, PairingActivationCandidate,
     PairingActivationStorageAdmission,
 };
-use crate::storage::open_nook_database;
+use crate::ExtensionPairingDatabase;
+use crate::NookDatabase;
+
 use rexie::TransactionMode;
 
 mod schema;
@@ -117,7 +119,7 @@ impl PairingActivationStore {
         let PairingActivationCommit { admission, clock } = request;
         let encoded = EncodedCandidate::new(&admission.candidate)?;
         let gate_json = CandidateSchema::encode(&encoded.gate)?;
-        let connection = open_nook_database()
+        let connection = NookDatabase::open_nook_database()
             .await
             .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
         let transaction = connection
@@ -442,7 +444,7 @@ mod browser_tests {
         }
 
         async fn activation_keys() -> Result<Vec<String>, NookError> {
-            let connection = open_nook_database().await?;
+            let connection = NookDatabase::open_nook_database().await?;
             let transaction = connection
                 .transaction(&[VAULT_STORE], TransactionMode::ReadOnly)
                 .map_err(|error| NookError::Database(format!("test transaction: {error:?}")))?;
@@ -468,7 +470,7 @@ mod browser_tests {
         }
 
         async fn authoritative_events_exclude_candidates() -> Result<(), NookError> {
-            let connection = open_nook_database().await?;
+            let connection = NookDatabase::open_nook_database().await?;
             let transaction = connection
                 .transaction(&["events"], TransactionMode::ReadOnly)
                 .map_err(|error| NookError::Database(format!("test transaction: {error:?}")))?;
@@ -492,19 +494,22 @@ mod browser_tests {
         }
 
         async fn commit_and_replay_remain_inert() -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
-            let authoritative_before = extension_state::read_all().await?;
+            NookDatabase::clear_vault_db().await?;
+            let authoritative_before = ExtensionPairingDatabase::read_all().await?;
             let fixture = Self::candidate()?;
             Self::commit(fixture).await?;
             assert!(!Self::activation_keys().await?.is_empty());
-            assert_eq!(extension_state::read_all().await?, authoritative_before);
+            assert_eq!(
+                ExtensionPairingDatabase::read_all().await?,
+                authoritative_before
+            );
             Self::authoritative_events_exclude_candidates().await?;
             assert!(Self::commit(Self::candidate()?).await.is_err());
             Ok(())
         }
 
         async fn concurrent_commits_have_one_winner() -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
+            NookDatabase::clear_vault_db().await?;
             let first = Self::commit(Self::candidate()?);
             let second = Self::commit(Self::candidate()?);
             let (first, second) = futures_util::join!(first, second);
@@ -513,7 +518,7 @@ mod browser_tests {
         }
 
         async fn late_expiry_aborts_payloads_and_gate() -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
+            NookDatabase::clear_vault_db().await?;
             let fixture = Self::expiring_candidate()?;
             let clock = DeterministicClock::new(vec![
                 Self::epoch("160")?,
@@ -538,7 +543,7 @@ mod browser_tests {
 
         async fn observation_failure_aborts_payloads_and_gate() -> Result<(), NookError> {
             for observations in [vec![Self::epoch("160")?], vec![Self::epoch("160")?; 2]] {
-                indexed_db::clear_vault_db().await?;
+                NookDatabase::clear_vault_db().await?;
                 let fixture = Self::expiring_candidate()?;
                 let result = PairingActivationStore::commit(PairingActivationCommit {
                     admission: PairingActivationStorageAdmission {

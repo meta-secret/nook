@@ -1,5 +1,9 @@
 use super::*;
+use crate::DeviceProtectionDeviceModeState;
+use crate::NookExtensionIdentityHandoffContext;
+use crate::NookVaultManager;
 use nook_core::{AppKey, SigningIdentity};
+use nook_core::{DeviceMode, DeviceProtectionStatus, PasskeyDeviceProtectionMode};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -9,37 +13,37 @@ fn device_protection_contexts_and_manager_state_project_in_wasm() -> Result<(), 
     let store_id = nook_core::StoreId::generate()?;
     let creation = NookExtensionIdentityHandoffContext::vault_creation();
     assert!(matches!(
-        pending_extension_enrollment(&creation, None)?,
+        (&creation).pending_extension_enrollment(None)?,
         PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None }
     ));
     let authorizer = AppKey::generate()?;
     assert!(matches!(
-        pending_extension_enrollment(&creation, Some(&authorizer))?,
+        (&creation).pending_extension_enrollment(Some(&authorizer))?,
         PendingExtensionIdentityEnrollment::VaultCreation {
             authorizer: Some(_)
         }
     ));
     let paired = NookExtensionIdentityHandoffContext::paired_vault(store_id.as_str())?;
     assert!(matches!(
-        pending_extension_enrollment(&paired, None)?,
+        (&paired).pending_extension_enrollment(None)?,
         PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
     ));
     assert!(matches!(
-        pending_extension_enrollment(&paired, Some(&authorizer))?,
+        (&paired).pending_extension_enrollment(Some(&authorizer))?,
         PendingExtensionIdentityEnrollment::PairedVault { .. }
     ));
     let imported = NookExtensionIdentityHandoffContext::existing_vault_import(store_id.as_str())?;
     assert!(matches!(
-        pending_extension_enrollment(&imported, None)?,
+        (&imported).pending_extension_enrollment(None)?,
         PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
     ));
     assert!(NookExtensionIdentityHandoffContext::paired_vault("invalid").is_err());
     assert_eq!(
-        passkey_mode_from_device_mode(DeviceMode::Standard),
+        NookVaultManager::passkey_mode_from_device_mode(DeviceMode::Standard),
         PasskeyDeviceProtectionMode::Standard
     );
     assert_eq!(
-        passkey_mode_from_device_mode(DeviceMode::AntiHacker),
+        NookVaultManager::passkey_mode_from_device_mode(DeviceMode::AntiHacker),
         PasskeyDeviceProtectionMode::AntiHacker
     );
 

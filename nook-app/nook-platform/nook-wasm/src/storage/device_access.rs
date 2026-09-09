@@ -8,6 +8,8 @@
 //! This companion record is deliberately separate from `device_identity_wrapped`.
 //! Corrupt or future descriptive metadata must never block device-key unlock.
 
+use crate::IdentityDbSaveNewProtectedLocalIdentity;
+use crate::{IdbPutStringRequest, NookDatabase, NookError, SaveWrappedDeviceIdentityRequest};
 use js_sys::Date;
 use nook_core::IsoTimestamp;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -21,14 +23,14 @@ pub(crate) use nook_core::{
     PasskeyLastUsedAtEvidence,
 };
 
-use crate::NookError;
-
 #[cfg(test)]
 use super::indexed_db;
 use super::indexed_db::{StringUpdateGuard, StringUpdateResult};
 
 mod migration;
 mod profile_store;
+mod verified_vault_access;
+pub(crate) use verified_vault_access::VerifiedVaultAccessUpdate;
 
 pub(crate) use profile_store::DeviceAccessProfileKey;
 #[cfg(test)]
@@ -220,33 +222,6 @@ impl AppPasskeyNameUpdate<'_> {
                 "Passkey changed before its name was saved".to_owned(),
             )),
         }
-    }
-}
-
-pub(crate) struct VerifiedVaultAccessUpdate<'a> {
-    pub(crate) device_id: &'a nook_core::DeviceId,
-    pub(crate) store_id: &'a nook_core::StoreId,
-}
-impl VerifiedVaultAccessUpdate<'_> {
-    pub(crate) async fn apply(self) -> Result<(), NookError> {
-        let Self {
-            device_id,
-            store_id,
-        } = self;
-
-        let now = IsoTimestamp::from_trusted(Date::new_0().to_iso_string().into());
-        let profile_key = DeviceAccessProfileKey::for_verified_app_id(device_id.as_str()).await?;
-        profile_key
-            .update(DeviceAccessProfileMutation {
-                intent: DeviceAccessProfileUpdateIntent::BestEffort,
-                guard: StringUpdateGuard::Unconditional,
-                update: move |profile: &mut DeviceAccessProfile| {
-                    profile.record_verified_vault_access(device_id, store_id, now);
-                    Ok(())
-                },
-            })
-            .await
-            .map(|_| ())
     }
 }
 
@@ -646,7 +621,11 @@ mod tests {
             user_handle: setup.user_handle(),
             prf_input: setup.prf_input(),
         })?;
-        indexed_db::save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
+        NookDatabase::save_wrapped_device_identity(SaveWrappedDeviceIdentityRequest {
+            device_id: identity.device_id().as_str(),
+            record: &wrapped,
+        })
+        .await?;
         DeviceAccessProfileKey::clear_companion().await?;
 
         assert!(
@@ -700,8 +679,11 @@ mod tests {
             user_handle: setup.user_handle(),
             prf_input: setup.prf_input(),
         })?;
-        indexed_db::save_wrapped_device_identity(identity.device_id().as_str(), &current_wrapped)
-            .await?;
+        NookDatabase::save_wrapped_device_identity(SaveWrappedDeviceIdentityRequest {
+            device_id: identity.device_id().as_str(),
+            record: &current_wrapped,
+        })
+        .await?;
 
         SelectedPasskeyCreation {
             credential_fingerprint: &current_fingerprint,
@@ -760,12 +742,12 @@ mod tests {
                 prf_input: first_setup.prf_input(),
                 prf_output: &output,
             })?;
-        identity_record::save_new_protected_local_identity(
-            &first_key,
-            &first_wrapped,
-            None,
-            "Personal",
-        )
+        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
+            app_key: &first_key,
+            record: &first_wrapped,
+            prior_app_key: None,
+            label: "Personal",
+        })
         .await?;
         let companion_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
@@ -792,12 +774,12 @@ mod tests {
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let second_wrapped =
             DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
-        identity_record::save_new_protected_local_identity(
-            &second_key,
-            &second_wrapped,
-            None,
-            "Work",
-        )
+        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
+            app_key: &second_key,
+            record: &second_wrapped,
+            prior_app_key: None,
+            label: "Work",
+        })
         .await?;
 
         let first_fingerprint =
@@ -848,8 +830,13 @@ mod tests {
         let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let wrapped =
             DeviceIdentityProtection::new(&app_key.secret_string()).with_pin("first-secret")?;
-        identity_record::save_new_protected_local_identity(&app_key, &wrapped, None, "Personal")
-            .await?;
+        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
+            app_key: &app_key,
+            record: &wrapped,
+            prior_app_key: None,
+            label: "Personal",
+        })
+        .await?;
         let app_device_id = DeviceId::parse(app_key.app_id().as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
         let first_store = nook_core::StoreId::generate()
@@ -893,7 +880,7 @@ mod tests {
                 .any(|entry| entry.store_id == second_store)
         );
         assert!(
-            indexed_db::idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
+            NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
                 .await?
                 .is_none()
         );
@@ -911,7 +898,11 @@ mod tests {
     #[wasm_bindgen_test]
     async fn future_profile_is_preserved_during_best_effort_updates() -> Result<(), NookError> {
         const FUTURE_PROFILE: &str = r#"{"version":999,"futureField":"keep-me"}"#;
-        indexed_db::idb_put_string(DEVICE_ACCESS_PROFILE_KEY, FUTURE_PROFILE).await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: DEVICE_ACCESS_PROFILE_KEY,
+            value: FUTURE_PROFILE,
+        })
+        .await?;
 
         let device_id = DeviceId::parse("0123456789abcdef")
             .map_err(|error| NookError::Database(error.to_string()))?;
@@ -933,63 +924,10 @@ mod tests {
             .is_err()
         );
         assert_eq!(
-            indexed_db::idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
+            NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
                 .await?
                 .as_deref(),
             Some(FUTURE_PROFILE)
-        );
-
-        DeviceAccessProfileKey::clear_companion().await?;
-        Ok(())
-    }
-
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    #[wasm_bindgen_test]
-    async fn concurrent_verified_access_updates_preserve_both_relationships()
-    -> Result<(), NookError> {
-        DeviceAccessProfileKey::clear_companion().await?;
-        let device_a = DeviceId::parse("0123456789abcdef")
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        let device_b = DeviceId::parse("fedcba9876543210")
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        let store_a = StoreId::parse("store_testtoken11")
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        let store_b = StoreId::parse("store_testtoken12")
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        let (first, second) = future::join(
-            VerifiedVaultAccessUpdate {
-                device_id: &device_a,
-                store_id: &store_a,
-            }
-            .apply(),
-            VerifiedVaultAccessUpdate {
-                device_id: &device_b,
-                store_id: &store_b,
-            }
-            .apply(),
-        )
-        .await;
-        first?;
-        second?;
-
-        let profile = DeviceAccessProfileKey::selected().await?.load().await?;
-        assert!(
-            profile
-                .verified_vaults
-                .iter()
-                .any(|entry| { entry.device_id == device_a && entry.store_id == store_a })
-        );
-        assert!(
-            profile
-                .verified_vaults
-                .iter()
-                .any(|entry| { entry.device_id == device_b && entry.store_id == store_b })
         );
 
         DeviceAccessProfileKey::clear_companion().await?;

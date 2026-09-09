@@ -6,14 +6,17 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::GitHubStorageClient;
+use crate::GitHubStorageClientFetchGithubVault;
+use crate::GitHubStorageClientWriteGithubTextFile;
+use nook_core::{EventId, GenesisImportRequest, VaultEvent};
 use reqwest::{Client, StatusCode};
 use std::path::Path;
 use std::str;
 
 use super::checked_event_write::CheckedEventWrite;
 use crate::NookError;
-use crate::storage::github::{fetch_github_vault, write_github_text_file};
-use nook_core::EventId;
+
 use serde::Deserialize;
 
 pub(crate) struct GitHubEventStore<'a> {
@@ -195,7 +198,14 @@ impl GitHubEventStore<'_> {
         event_id: &EventId,
     ) -> Result<Option<Vec<u8>>, NookError> {
         let path = event_id.storage_path();
-        if let Some(file) = fetch_github_vault(pat, repo, &path, None).await? {
+        if let Some(file) = GitHubStorageClient::new(pat)
+            .fetch_github_vault(GitHubStorageClientFetchGithubVault {
+                repo: repo,
+                path: &path,
+                root_empty: None,
+            })
+            .await?
+        {
             return Ok(Some(file.content.into_bytes()));
         }
         Ok(None)
@@ -234,11 +244,25 @@ impl GitHubEventStore<'_> {
         let content = Self::event_content(bytes)?;
 
         for attempt in 0..3 {
-            match write_github_text_file(pat, repo, &path, content, None).await {
+            match GitHubStorageClient::new(pat)
+                .write_github_text_file(GitHubStorageClientWriteGithubTextFile {
+                    repo: repo,
+                    path: &path,
+                    content: content,
+                    sha: None,
+                })
+                .await
+            {
                 Ok(_) => return Ok(()),
                 Err(NookError::GitHub(message)) if attempt < 2 => {
                     if Self::is_retryable_event_write_error(&message) {
-                        if let Ok(Some(existing)) = fetch_github_vault(pat, repo, &path, None).await
+                        if let Ok(Some(existing)) = GitHubStorageClient::new(pat)
+                            .fetch_github_vault(GitHubStorageClientFetchGithubVault {
+                                repo: repo,
+                                path: &path,
+                                root_empty: None,
+                            })
+                            .await
                         {
                             let existing_bytes = existing.content.as_bytes();
                             if checked.matches(existing_bytes) {
@@ -264,10 +288,7 @@ impl GitHubEventStore<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::{
-        GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId, build_genesis_import_event,
-        serialize_event_storage_yaml,
-    };
+    use nook_core::{GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -473,19 +494,19 @@ mod tests {
     )]
     async fn event_write_rejects_mismatched_event_id_before_network() -> anyhow::Result<()> {
         let (identity, _) = SigningIdentity::generate()?;
-        let event = build_genesis_import_event(
-            &StoreId::parse("store_testtoken11")?,
-            &identity.actor_id()?,
-            &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-            GenesisImportPayload {
+        let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &StoreId::parse("store_testtoken11")?,
+            actor_id: &identity.actor_id()?,
+            key_epoch: &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+            payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: vec![],
                 password_entries: vec![],
             },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            identity.signing_key(),
-        )?;
-        let bytes: Vec<u8> = serialize_event_storage_yaml(&event)?.into();
+            created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            signing_key: identity.signing_key(),
+        })?;
+        let bytes: Vec<u8> = VaultEvent::serialize_event_storage_yaml(&event)?.into();
         let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let store = GitHubEventStore { pat: "", repo: "" };
         let error = store

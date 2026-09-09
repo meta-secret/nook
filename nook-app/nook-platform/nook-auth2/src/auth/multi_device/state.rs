@@ -2,7 +2,6 @@ use super::{
     AgeArmoredCiphertext, AuthEnvelopes, Deserialize, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, SENTINEL_SHARE_RECORD_PREFIX, SecretId, SecretType,
     SentinelShareEnvelope, Serialize, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
-    parse_sentinel_share_envelope, sentinel_share_record_key,
 };
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppId, AuthKeyId, DeviceId};
@@ -47,14 +46,16 @@ pub struct SentinelParticipantEntry {
 /// Whether a flat-record key matches the `pk_id` inside the decrypted member entry.
 /// YAML load normalizes `pk_id` to `key_{digest}` while legacy ciphertext may still
 /// store the bare 64-hex digest — accept both forms.
-pub(super) fn member_record_key_matches(stored_key: &str, entry_pk_id: &AuthKeyId) -> bool {
-    if stored_key == entry_pk_id.member_record_key() {
-        return true;
+impl AuthKeyId {
+    pub(super) fn member_record_key_matches(&self, stored_key: &str) -> bool {
+        if stored_key == self.member_record_key() {
+            return true;
+        }
+        if let Ok(normalized) = crate::AuthKeyId::parse(self.as_str()) {
+            return stored_key == normalized.member_record_key();
+        }
+        false
     }
-    if let Ok(normalized) = crate::AuthKeyId::parse(entry_pk_id.as_str()) {
-        return stored_key == normalized.member_record_key();
-    }
-    false
 }
 
 /// Single classification site for the four record kinds that share the
@@ -87,7 +88,8 @@ impl VaultMetaRecord {
             .strip_prefix(SENTINEL_SHARE_RECORD_PREFIX)
         {
             let device_id = DeviceId::parse(device_id_str)?;
-            let share = parse_sentinel_share_envelope(record.value.as_str())?;
+            let share =
+                SentinelShareEnvelope::parse_sentinel_share_envelope(record.value.as_str())?;
             return Ok(Self::SentinelShare(device_id, share));
         }
         if let Ok(join) = JoinRequest::parse_json(record.value.as_str()) {
@@ -141,7 +143,7 @@ impl VaultMetaRecord {
                 value: payload.clone(),
             },
             Self::SentinelShare(device_id, share) => StoredSecretRecord {
-                key: SecretId::from_vault_record(&sentinel_share_record_key(device_id)),
+                key: SecretId::from_vault_record(&DeviceId::sentinel_share_record_key(device_id)),
                 secret_type: None,
                 value: StoredRecordPayload::from_trusted(
                     serde_json::to_string(share)

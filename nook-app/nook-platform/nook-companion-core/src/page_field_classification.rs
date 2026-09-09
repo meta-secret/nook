@@ -4,6 +4,7 @@
 //! which identity strings count as username, OTP, passkey, or manual-checkpoint
 //! signals used to build authentication workflow observations in the host.
 
+use crate::ControlDestinationEvidence;
 use control_identity::AuthenticationControlIdentity as ControlIdentity;
 use form_identity::{
     AuthenticationRouteIdentity as RouteIdentity, CredentialDestination, DestinationPolicy,
@@ -11,13 +12,16 @@ use form_identity::{
 };
 mod authentication_advance_control;
 mod control_identity;
+mod control_labels;
+mod control_text;
+pub use control_text::AuthenticationControlText;
 mod destination_identity;
 mod form_identity;
 mod input_role;
 mod one_time_code_progression;
 mod passkey;
 
-pub(crate) use input_role::{AuthenticationInputRole, classify_authentication_input_role};
+pub(crate) use input_role::AuthenticationInputRole;
 
 /// Maximum byte length for each DOM-controlled authentication identity string.
 pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
@@ -27,22 +31,55 @@ pub use authentication_advance_control::{
     PageControlActionability, PageControlOwnership, PageControlSemantics,
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
-pub use destination_identity::{CanonicalControlDestination, canonicalize_control_destination};
-pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
+pub use destination_identity::CanonicalControlDestination;
+
 pub(super) use passkey::PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS;
-pub use passkey::{
-    looks_like_passkey_control_label, looks_like_passkey_enrollment_or_management_label,
-};
 
 /// Validate one bounded advance-control observation for exact browser actuation.
-#[must_use]
-pub fn authentication_advance_control_is_safe(
-    observation: &AuthenticationAdvanceControlObservation,
-) -> bool {
-    matches!(
-        observation.classify(),
-        AuthenticationAdvanceControlDecision::AdvancesAuthentication
-    )
+/// Named values required by AuthenticationAdvanceControlObservation::one_time_code_ceremony_context_is_authenticated.
+pub struct OneTimeCodeRouteEvidence<'a> {
+    pub _authentication_username: AuthenticationUsernameEvidence,
+    pub source_origin: &'a str,
+    pub form_identity: &'a str,
+    pub destination_identity: &'a str,
+}
+
+/// Named values required by AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity.
+pub struct AuthenticationRouteEvidence<'a> {
+    pub source_origin: &'a str,
+    pub form_identity: &'a str,
+    pub destination_identity: &'a str,
+}
+
+/// Named values required by AuthenticationAdvanceControlObservation::has_safe_credential_update_route_identity.
+pub struct CredentialUpdateRouteEvidence<'a> {
+    pub source_origin: &'a str,
+    pub form_identity: &'a str,
+    pub destination_identity: &'a str,
+}
+
+/// Named values required by AuthenticationAdvanceControlObservation::can_activate_authentication_route_control.
+pub struct AuthenticationRouteActuation<'a> {
+    pub source_origin: &'a str,
+    pub form_identity: &'a str,
+    pub destination_identity: &'a str,
+    pub control_label: &'a str,
+    pub control_machine_identity: &'a str,
+    pub has_concrete_control: bool,
+    pub has_authentication_username: bool,
+    pub has_local_authentication_scope: bool,
+    pub has_authentication_password: bool,
+}
+
+impl AuthenticationAdvanceControlObservation {
+    #[must_use]
+    pub fn authentication_advance_control_is_safe(&self) -> bool {
+        let observation = self;
+        matches!(
+            observation.classify(),
+            AuthenticationAdvanceControlDecision::AdvancesAuthentication
+        )
+    }
 }
 
 use serde::{Deserialize, Serialize};
@@ -89,32 +126,6 @@ pub struct PageInputFieldObservation {
 }
 
 /// Expand camelCase / separators into lowercase identity tokens for matching.
-#[must_use]
-pub fn expand_identity_text(value: &str) -> String {
-    let mut with_breaks = String::with_capacity(value.len() * 2);
-    let chars: Vec<char> = value.chars().collect();
-    for (index, c) in chars.iter().enumerate() {
-        if index > 0 {
-            let prev = chars[index - 1];
-            let needs_break = (prev.is_ascii_lowercase() && c.is_ascii_uppercase())
-                || (prev.is_ascii_alphabetic() && c.is_ascii_digit())
-                || (prev.is_ascii_digit() && c.is_ascii_alphabetic());
-            if needs_break {
-                with_breaks.push(' ');
-            }
-        }
-        if matches!(*c, '_' | '-' | '.' | '/' | '#') {
-            with_breaks.push(' ');
-        } else {
-            with_breaks.push(*c);
-        }
-    }
-    with_breaks
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_ascii_lowercase()
-}
 
 /// Browser-collected login-surface identity text without DOM handles.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -147,373 +158,328 @@ const LOGIN_PATH_WORDS: &[&str] = &[
 ];
 
 /// True when form/path/ancestor context looks like a login surface.
-#[must_use]
-pub fn has_login_context(observation: &LoginContextObservation) -> bool {
-    let form = expand_identity_text(&observation.form_identity);
-    if contains_any_word(&form, LOGIN_SURFACE_WORDS) {
-        return true;
-    }
-    for ancestor in &observation.ancestor_identities {
-        let identity = expand_identity_text(ancestor);
-        if contains_any_word(&identity, LOGIN_SURFACE_WORDS) {
+impl LoginContextObservation {
+    #[must_use]
+    pub fn has_login_context(&self) -> bool {
+        let observation = self;
+        let form =
+            AuthenticationControlText::new(&observation.form_identity).expand_identity_text();
+        if AuthenticationControlText::new(&form).contains_any_word(LOGIN_SURFACE_WORDS) {
             return true;
         }
+        for ancestor in &observation.ancestor_identities {
+            let identity = AuthenticationControlText::new(ancestor).expand_identity_text();
+            if AuthenticationControlText::new(&identity).contains_any_word(LOGIN_SURFACE_WORDS) {
+                return true;
+            }
+        }
+        let advance = AuthenticationControlText::new(&observation.advance_control_label)
+            .expand_identity_text();
+        if advance != "submit"
+            && AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(
+                &observation.advance_control_label,
+            )
+        {
+            return true;
+        }
+        let path = observation.path_context.to_ascii_lowercase();
+        AuthenticationControlText::new(&path).contains_any_word(LOGIN_PATH_WORDS)
     }
-    let advance = expand_identity_text(&observation.advance_control_label);
-    if advance != "submit"
-        && looks_like_login_advance_control_label(&observation.advance_control_label)
-    {
-        return true;
-    }
-    let path = observation.path_context.to_ascii_lowercase();
-    contains_any_word(&path, LOGIN_PATH_WORDS)
 }
 
 /// Classify whether an input should count as a username/email identity field.
-#[must_use]
-pub fn looks_like_username_field(field: &PageInputFieldObservation) -> bool {
-    if field.disabled || field.read_only {
-        return false;
+/// Named values required by PageInputFieldObservation::has_autocomplete_token.
+pub struct AutocompleteTokenQuery<'a> {
+    pub tokens: &'a [String],
+    pub expected: &'a str,
+}
+
+impl PageInputFieldObservation {
+    #[must_use]
+    pub fn looks_like_username_field(&self) -> bool {
+        let field = self;
+        if field.disabled || field.read_only {
+            return false;
+        }
+        matches!(
+            (field).classify_authentication_input_role(),
+            AuthenticationInputRole::Username(_)
+        )
     }
-    matches!(
-        classify_authentication_input_role(field),
-        AuthenticationInputRole::Username(_)
-    )
 }
 
 /// Classify whether an input should count as a one-time-code field.
-#[must_use]
-pub fn looks_like_one_time_code_field(field: &PageInputFieldObservation) -> bool {
-    if field.disabled || field.read_only {
-        return false;
+impl PageInputFieldObservation {
+    #[must_use]
+    pub fn looks_like_one_time_code_field(&self) -> bool {
+        let field = self;
+        if field.disabled || field.read_only {
+            return false;
+        }
+        matches!(
+            (field).classify_authentication_input_role(),
+            AuthenticationInputRole::OneTimeCode(_)
+        )
     }
-    matches!(
-        classify_authentication_input_role(field),
-        AuthenticationInputRole::OneTimeCode(_)
-    )
 }
 
-/// True when a checkbox/control label looks like terms / privacy acceptance.
-#[must_use]
-pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
-    let lower = label.to_ascii_lowercase();
-    [
-        "terms", "privacy", "agree", "accept", "policy", "consent", "eula",
-    ]
-    .iter()
-    .any(|needle| lower.contains(needle))
-}
-
-/// True when body copy looks like an email-verification gate.
-#[must_use]
-pub fn looks_like_email_verification_body(body: &str) -> bool {
-    let lower = body.to_ascii_lowercase();
-    [
-        "verify your email",
-        "check your email",
-        "email verification",
-        "confirm your email",
-    ]
-    .iter()
-    .any(|needle| lower.contains(needle))
-}
-
-/// True when an activatable control advances an authentication ceremony.
-#[must_use]
-pub fn looks_like_login_advance_control_label(label: &str) -> bool {
-    if label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-        || RouteIdentity::new(label).indicates_destructive_action()
-        || looks_like_non_authentication_submit_control_label(label)
-        || ControlIdentity::new(label).is_password_recovery()
-        || ControlIdentity::new(label).is_registration()
-        || ControlIdentity::new(label).is_alternate_authentication_route()
-    {
-        return false;
-    }
-    looks_like_unrestricted_login_advance_control_label(label)
-}
-
-fn looks_like_unrestricted_login_advance_control_label(label: &str) -> bool {
-    let identity = expand_identity_text(label);
-    if contains_any_word(&identity, &["entrar"])
-        && identity.split_whitespace().any(|token| token != "entrar")
-    {
-        return false;
-    }
-    repeated_localized_login_label(&identity)
-        || contains_any_word(&identity, LOGIN_ADVANCE_WORDS)
-        || contains_any_word(&identity, &["submit"])
-}
-
-fn repeated_localized_login_label(identity: &str) -> bool {
-    let tokens = identity.split_whitespace().collect::<Vec<_>>();
-    !tokens.is_empty()
-        && (tokens.iter().all(|token| *token == "anmelden")
-            || (tokens.len() % 2 == 0 && tokens.chunks(2).all(|pair| pair == ["se", "connecter"])))
-}
-
-pub(super) fn looks_like_supported_localized_login_control_label(label: &str) -> bool {
-    repeated_localized_login_label(&expand_identity_text(label))
-}
-
-/// True when a semantic submit explicitly describes a non-authentication action.
-#[must_use]
-pub fn looks_like_non_authentication_submit_control_label(label: &str) -> bool {
-    let identity = expand_identity_text(label);
-    contains_any_word(
-        &identity,
-        &[
-            "save",
-            "update",
-            "subscribe",
-            "search",
-            "publish",
-            "post",
-            "delete",
-            "remove",
-            "deactivate",
-            "close account",
-            "erase",
-            "destroy",
-            "cancel",
-            "back",
-            "help",
-            "learn more",
-        ],
-    )
-}
-
-#[must_use]
-pub fn looks_like_password_update_submit_control_label(label: &str) -> bool {
-    let identity = expand_identity_text(label);
-    matches!(
-        identity.as_str(),
-        "save" | "save changes" | "save and continue" | "update" | "update credentials" | "change"
-    ) || (contains_any_word(&identity, &["password"])
-        && contains_any_word(&identity, &["save", "update", "change", "set", "reset"]))
-}
-
-pub(crate) fn one_time_code_ceremony_context_is_authenticated(
-    _authentication_username: AuthenticationUsernameEvidence,
-    source_origin: &str,
-    form_identity: &str,
-    destination_identity: &str,
-) -> bool {
-    if [source_origin, form_identity, destination_identity]
-        .into_iter()
-        .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
-    {
-        return false;
-    }
-    let Some(destination) =
-        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
-    else {
-        return false;
-    };
-    if RouteIdentity::new(form_identity).indicates_destructive_action()
-        || RouteIdentity::new(form_identity).indicates_account_management()
-        || RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
-        || RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
-        || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
-            DestinationPolicy {
-                credential: CredentialDestination::Authentication,
-                provider: OAuthAuthorization::Disallowed,
+impl AuthenticationAdvanceControlObservation {
+    pub(crate) fn one_time_code_ceremony_context_is_authenticated(
+        request: OneTimeCodeRouteEvidence<'_>,
+    ) -> bool {
+        let OneTimeCodeRouteEvidence {
+            _authentication_username,
+            source_origin,
+            form_identity,
+            destination_identity,
+        } = request;
+        if [source_origin, form_identity, destination_identity]
+            .into_iter()
+            .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+        {
+            return false;
+        }
+        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: source_origin,
+                destination_identity: destination_identity,
             },
-        )
-    {
-        return false;
+        ) else {
+            return false;
+        };
+        if RouteIdentity::new(form_identity).indicates_destructive_action()
+            || RouteIdentity::new(form_identity).indicates_account_management()
+            || RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
+            || RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
+            || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
+                DestinationPolicy {
+                    credential: CredentialDestination::Authentication,
+                    provider: OAuthAuthorization::Disallowed,
+                },
+            )
+        {
+            return false;
+        }
+        [form_identity, destination.path_identity.as_str()]
+            .into_iter()
+            .any(|identity| RouteIdentity::new(identity).indicates_one_time_code_authentication())
     }
-    [form_identity, destination.path_identity.as_str()]
-        .into_iter()
-        .any(|identity| RouteIdentity::new(identity).indicates_one_time_code_authentication())
 }
 
-pub(crate) fn authentication_passkey_control_is_safe(
-    observation: &AuthenticationAdvanceControlObservation,
-    explicitly_marked: bool,
-) -> bool {
-    let label_identity = expand_identity_text(&observation.label);
-    let label_names_passkey_credential = contains_any_word(
-        &label_identity,
-        &[
-            "passkey",
-            "passkeys",
-            "pass key",
-            "pass keys",
-            "security key",
-            "security keys",
-            "hardware key",
-            "webauthn",
-            "fido",
-            "touch id",
-            "face id",
-            "windows hello",
-        ],
-    );
-    let label_names_enrollment_or_management = contains_any_word(
-        &label_identity,
-        &[
-            "add",
-            "create",
-            "enable",
-            "enroll",
-            "enrollment",
-            "register",
-            "registration",
-            "manage",
-            "management",
-            "settings",
-            "set up",
-            "setup",
-            "configure",
-        ],
-    );
-    let label_names_passkey_enrollment_or_management =
-        label_names_passkey_credential && label_names_enrollment_or_management;
-    let label_names_device_management = label_names_enrollment_or_management
-        && contains_any_word(&label_identity, &["device", "devices"]);
-    if !observation.is_bounded()
-        || !matches!(
-            observation.actionability,
-            PageControlActionability::Actionable
-        )
-        || !matches!(
-            observation.ownership,
-            PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-        )
-        || (!explicitly_marked && !looks_like_passkey_control_label(&observation.label))
-        || RouteIdentity::new(&observation.label).indicates_destructive_action()
-        || RouteIdentity::new(&observation.machine_identity).has_control_veto()
-        || matches!(
-            observation.submission_method,
-            PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
-        )
-        || label_names_passkey_enrollment_or_management
-        || label_names_device_management
-        || RouteIdentity::new(&observation.form_identity).indicates_destructive_action()
-        || RouteIdentity::new(&observation.form_identity).indicates_account_management()
-    {
-        return false;
+impl AuthenticationAdvanceControlObservation {
+    pub(crate) fn authentication_passkey_control_is_safe(
+        &self,
+        explicitly_marked: PasskeyControlMarking,
+    ) -> bool {
+        let observation = self;
+        let explicitly_marked = matches!(explicitly_marked, PasskeyControlMarking::Explicit);
+        let label_identity =
+            AuthenticationControlText::new(&observation.label).expand_identity_text();
+        let label_names_passkey_credential = AuthenticationControlText::new(&label_identity)
+            .contains_any_word(&[
+                "passkey",
+                "passkeys",
+                "pass key",
+                "pass keys",
+                "security key",
+                "security keys",
+                "hardware key",
+                "webauthn",
+                "fido",
+                "touch id",
+                "face id",
+                "windows hello",
+            ]);
+        let label_names_enrollment_or_management = AuthenticationControlText::new(&label_identity)
+            .contains_any_word(&[
+                "add",
+                "create",
+                "enable",
+                "enroll",
+                "enrollment",
+                "register",
+                "registration",
+                "manage",
+                "management",
+                "settings",
+                "set up",
+                "setup",
+                "configure",
+            ]);
+        let label_names_passkey_enrollment_or_management =
+            label_names_passkey_credential && label_names_enrollment_or_management;
+        let label_names_device_management = label_names_enrollment_or_management
+            && AuthenticationControlText::new(&label_identity)
+                .contains_any_word(&["device", "devices"]);
+        if !observation.is_bounded()
+            || !matches!(
+                observation.actionability,
+                PageControlActionability::Actionable
+            )
+            || !matches!(
+                observation.ownership,
+                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
+            )
+            || (!explicitly_marked
+                && !AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(
+                    &observation.label,
+                ))
+            || RouteIdentity::new(&observation.label).indicates_destructive_action()
+            || RouteIdentity::new(&observation.machine_identity).has_control_veto()
+            || matches!(
+                observation.submission_method,
+                PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
+            )
+            || label_names_passkey_enrollment_or_management
+            || label_names_device_management
+            || RouteIdentity::new(&observation.form_identity).indicates_destructive_action()
+            || RouteIdentity::new(&observation.form_identity).indicates_account_management()
+        {
+            return false;
+        }
+        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: &observation.source_origin,
+                destination_identity: &observation.destination_identity,
+            },
+        ) else {
+            return false;
+        };
+        let has_authentication_context = observation.password_field_count.raw() > 0
+            || observation.one_time_code_field_count.raw() > 0
+            || matches!(
+                observation.authentication_username,
+                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+            )
+            || RouteIdentity::new(&observation.form_identity).indicates_authentication()
+            || RouteIdentity::new(&destination.path_identity).indicates_authentication();
+        if !has_authentication_context {
+            return false;
+        }
+        if (observation).passkey_new_password_ceremony_lacks_assertion_state(&destination) {
+            return false;
+        }
+        !RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
+            && !RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
+            && !RouteIdentity::new(&destination.route_identity)
+                .has_disallowed_passkey_action_or_provider()
     }
-    let Some(destination) = destination_identity::canonicalize_control_destination(
-        &observation.source_origin,
-        &observation.destination_identity,
-    ) else {
-        return false;
-    };
-    let has_authentication_context = observation.password_field_count.raw() > 0
-        || observation.one_time_code_field_count.raw() > 0
-        || matches!(
-            observation.authentication_username,
-            AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-        )
-        || RouteIdentity::new(&observation.form_identity).indicates_authentication()
-        || RouteIdentity::new(&destination.path_identity).indicates_authentication();
-    if !has_authentication_context {
-        return false;
-    }
-    if passkey_new_password_ceremony_lacks_assertion_state(observation, &destination) {
-        return false;
-    }
-    !RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
-        && !RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
-        && !RouteIdentity::new(&destination.route_identity)
-            .has_disallowed_passkey_action_or_provider()
 }
 
-fn passkey_new_password_ceremony_lacks_assertion_state(
-    observation: &AuthenticationAdvanceControlObservation,
-    destination: &CanonicalControlDestination,
-) -> bool {
-    observation.new_password_field_count.raw() > 0
-        && !RouteIdentity::new(&destination.path_identity).indicates_login()
-        && !RouteIdentity::new(&destination.route_identity).indicates_login()
+impl AuthenticationAdvanceControlObservation {
+    fn passkey_new_password_ceremony_lacks_assertion_state(
+        &self,
+        destination: &CanonicalControlDestination,
+    ) -> bool {
+        let observation = self;
+        observation.new_password_field_count.raw() > 0
+            && !RouteIdentity::new(&destination.path_identity).indicates_login()
+            && !RouteIdentity::new(&destination.route_identity).indicates_login()
+    }
 }
 
 /// Decide whether bounded form and destination identities describe a safe authentication route.
-#[must_use]
-pub fn has_safe_authentication_route_identity(
-    source_origin: &str,
-    form_identity: &str,
-    destination_identity: &str,
-) -> bool {
-    if [source_origin, form_identity, destination_identity]
-        .into_iter()
-        .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
-    {
-        return false;
-    }
-    if RouteIdentity::new(form_identity).has_control_veto() {
-        return false;
-    }
-    let Some(destination) =
-        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
-    else {
-        return false;
-    };
-    if RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
-        || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
-            DestinationPolicy {
-                credential: CredentialDestination::Authentication,
-                provider: OAuthAuthorization::Disallowed,
+impl AuthenticationAdvanceControlObservation {
+    #[must_use]
+    pub fn has_safe_authentication_route_identity(
+        request: AuthenticationRouteEvidence<'_>,
+    ) -> bool {
+        let AuthenticationRouteEvidence {
+            source_origin,
+            form_identity,
+            destination_identity,
+        } = request;
+        if [source_origin, form_identity, destination_identity]
+            .into_iter()
+            .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+        {
+            return false;
+        }
+        if RouteIdentity::new(form_identity).has_control_veto() {
+            return false;
+        }
+        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: source_origin,
+                destination_identity: destination_identity,
             },
-        )
-    {
-        return false;
+        ) else {
+            return false;
+        };
+        if RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
+            || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
+                DestinationPolicy {
+                    credential: CredentialDestination::Authentication,
+                    provider: OAuthAuthorization::Disallowed,
+                },
+            )
+        {
+            return false;
+        }
+        RouteIdentity::new(form_identity).indicates_authentication()
+            || RouteIdentity::new(&destination.path_identity).has_safe_login_identity()
     }
-    RouteIdentity::new(form_identity).indicates_authentication()
-        || RouteIdentity::new(&destination.path_identity).has_safe_login_identity()
 }
 
 /// Admit implicit credential-creation on register, recovery, or password-update routes.
-#[must_use]
-pub fn has_safe_credential_update_route_identity(
-    source_origin: &str,
-    form_identity: &str,
-    destination_identity: &str,
-) -> bool {
-    if [source_origin, form_identity, destination_identity]
-        .into_iter()
-        .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
-    {
-        return false;
-    }
-    if RouteIdentity::new(form_identity).indicates_destructive_action()
-        || RouteIdentity::new(form_identity).has_disallowed_action_or_provider(DestinationPolicy {
-            credential: CredentialDestination::PasswordUpdate,
-            provider: OAuthAuthorization::Disallowed,
-        })
-        || ControlIdentity::new(form_identity).is_auxiliary()
-    {
-        return false;
-    }
-    let Some(destination) =
-        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
-    else {
-        return false;
-    };
-    if RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
-        || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
-            DestinationPolicy {
-                credential: CredentialDestination::PasswordUpdate,
-                provider: OAuthAuthorization::Disallowed,
+impl AuthenticationAdvanceControlObservation {
+    #[must_use]
+    pub fn has_safe_credential_update_route_identity(
+        request: CredentialUpdateRouteEvidence<'_>,
+    ) -> bool {
+        let CredentialUpdateRouteEvidence {
+            source_origin,
+            form_identity,
+            destination_identity,
+        } = request;
+        if [source_origin, form_identity, destination_identity]
+            .into_iter()
+            .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+        {
+            return false;
+        }
+        if RouteIdentity::new(form_identity).indicates_destructive_action()
+            || RouteIdentity::new(form_identity).has_disallowed_action_or_provider(
+                DestinationPolicy {
+                    credential: CredentialDestination::PasswordUpdate,
+                    provider: OAuthAuthorization::Disallowed,
+                },
+            )
+            || ControlIdentity::new(form_identity).is_auxiliary()
+        {
+            return false;
+        }
+        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: source_origin,
+                destination_identity: destination_identity,
             },
-        )
-    {
-        return false;
+        ) else {
+            return false;
+        };
+        if RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
+            || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
+                DestinationPolicy {
+                    credential: CredentialDestination::PasswordUpdate,
+                    provider: OAuthAuthorization::Disallowed,
+                },
+            )
+        {
+            return false;
+        }
+        let credential_update_route = RouteIdentity::new(&destination.route_identity)
+            .indicates_registration()
+            || RouteIdentity::new(&destination.route_identity).indicates_password_recovery()
+            || RouteIdentity::new(&destination.route_identity).indicates_password_update();
+        if RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
+            && !credential_update_route
+        {
+            return false;
+        }
+        RouteIdentity::new(form_identity).indicates_authentication()
+            || RouteIdentity::new(&destination.path_identity).has_safe_login_identity()
+            || credential_update_route
     }
-    let credential_update_route = RouteIdentity::new(&destination.route_identity)
-        .indicates_registration()
-        || RouteIdentity::new(&destination.route_identity).indicates_password_recovery()
-        || RouteIdentity::new(&destination.route_identity).indicates_password_update();
-    if RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
-        && !credential_update_route
-    {
-        return false;
-    }
-    RouteIdentity::new(form_identity).indicates_authentication()
-        || RouteIdentity::new(&destination.path_identity).has_safe_login_identity()
-        || credential_update_route
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -529,128 +495,154 @@ pub enum AuthenticationUsernameEvidence {
     Explicit,
 }
 
-#[must_use]
-pub fn authentication_username_evidence(
-    field: &PageInputFieldObservation,
-) -> AuthenticationUsernameEvidence {
-    if !looks_like_username_field(field) {
-        return AuthenticationUsernameEvidence::Absent;
-    }
-    if has_autocomplete_token(&field.autocomplete_tokens, "username") {
-        return AuthenticationUsernameEvidence::Explicit;
-    }
-    let identity = expand_identity_text(&field.identity_text);
-    if field.input_type == PageInputType::Text
-        && field.login_context
-        && field.identity_text.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-        && field.autocomplete_tokens.len() == 1
-        && has_autocomplete_token(&field.autocomplete_tokens, "tel-national")
-        && identity == "tel national phone number or email"
-    {
-        return AuthenticationUsernameEvidence::MixedPhoneOrEmail;
-    }
-    if has_autocomplete_token(&field.autocomplete_tokens, "email") {
-        return if username_negative(&identity) {
-            AuthenticationUsernameEvidence::Generic
-        } else if has_autocomplete_token(&field.autocomplete_tokens, "webauthn") {
-            AuthenticationUsernameEvidence::WebAuthnEmail
-        } else if field.login_context {
-            AuthenticationUsernameEvidence::Strong
-        } else {
-            AuthenticationUsernameEvidence::StandardsBasedEmail
-        };
-    }
-    if contains_any_word(
-        &identity,
-        &[
+impl PageInputFieldObservation {
+    #[must_use]
+    pub fn authentication_username_evidence(&self) -> AuthenticationUsernameEvidence {
+        let field = self;
+        if !(field).looks_like_username_field() {
+            return AuthenticationUsernameEvidence::Absent;
+        }
+        if PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+            tokens: &field.autocomplete_tokens,
+            expected: "username",
+        }) {
+            return AuthenticationUsernameEvidence::Explicit;
+        }
+        let identity = AuthenticationControlText::new(&field.identity_text).expand_identity_text();
+        if field.input_type == PageInputType::Text
+            && field.login_context
+            && field.identity_text.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && field.autocomplete_tokens.len() == 1
+            && PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+                tokens: &field.autocomplete_tokens,
+                expected: "tel-national",
+            })
+            && identity == "tel national phone number or email"
+        {
+            return AuthenticationUsernameEvidence::MixedPhoneOrEmail;
+        }
+        if PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+            tokens: &field.autocomplete_tokens,
+            expected: "email",
+        }) {
+            return if PageInputFieldObservation::username_negative(&identity) {
+                AuthenticationUsernameEvidence::Generic
+            } else if PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+                tokens: &field.autocomplete_tokens,
+                expected: "webauthn",
+            }) {
+                AuthenticationUsernameEvidence::WebAuthnEmail
+            } else if field.login_context {
+                AuthenticationUsernameEvidence::Strong
+            } else {
+                AuthenticationUsernameEvidence::StandardsBasedEmail
+            };
+        }
+        if AuthenticationControlText::new(&identity).contains_any_word(&[
             "loginfmt",
             "login fmt",
             "login email",
             "login e mail",
             "login e-mail",
-        ],
-    ) {
-        AuthenticationUsernameEvidence::Strong
-    } else {
-        AuthenticationUsernameEvidence::Generic
+        ]) {
+            AuthenticationUsernameEvidence::Strong
+        } else {
+            AuthenticationUsernameEvidence::Generic
+        }
     }
 }
 
 /// Select the strongest username evidence without duplicating its ordering in hosts.
-#[must_use]
-pub fn strongest_authentication_username_evidence(
-    evidence: &[AuthenticationUsernameEvidence],
-) -> AuthenticationUsernameEvidence {
-    if evidence.contains(&AuthenticationUsernameEvidence::Explicit) {
-        AuthenticationUsernameEvidence::Explicit
-    } else if evidence.contains(&AuthenticationUsernameEvidence::WebAuthnEmail) {
-        AuthenticationUsernameEvidence::WebAuthnEmail
-    } else if evidence.contains(&AuthenticationUsernameEvidence::MixedPhoneOrEmail) {
-        AuthenticationUsernameEvidence::MixedPhoneOrEmail
-    } else if evidence.contains(&AuthenticationUsernameEvidence::Strong) {
-        AuthenticationUsernameEvidence::Strong
-    } else if evidence.contains(&AuthenticationUsernameEvidence::StandardsBasedEmail) {
-        AuthenticationUsernameEvidence::StandardsBasedEmail
-    } else if evidence.contains(&AuthenticationUsernameEvidence::Generic) {
-        AuthenticationUsernameEvidence::Generic
-    } else {
-        AuthenticationUsernameEvidence::Absent
+impl AuthenticationUsernameEvidence {
+    #[must_use]
+    pub fn strongest_authentication_username_evidence(
+        evidence: &[AuthenticationUsernameEvidence],
+    ) -> AuthenticationUsernameEvidence {
+        if evidence.contains(&AuthenticationUsernameEvidence::Explicit) {
+            AuthenticationUsernameEvidence::Explicit
+        } else if evidence.contains(&AuthenticationUsernameEvidence::WebAuthnEmail) {
+            AuthenticationUsernameEvidence::WebAuthnEmail
+        } else if evidence.contains(&AuthenticationUsernameEvidence::MixedPhoneOrEmail) {
+            AuthenticationUsernameEvidence::MixedPhoneOrEmail
+        } else if evidence.contains(&AuthenticationUsernameEvidence::Strong) {
+            AuthenticationUsernameEvidence::Strong
+        } else if evidence.contains(&AuthenticationUsernameEvidence::StandardsBasedEmail) {
+            AuthenticationUsernameEvidence::StandardsBasedEmail
+        } else if evidence.contains(&AuthenticationUsernameEvidence::Generic) {
+            AuthenticationUsernameEvidence::Generic
+        } else {
+            AuthenticationUsernameEvidence::Absent
+        }
     }
 }
 
 /// Decide whether a locally scoped control may advance a safe authentication route.
-#[must_use]
-#[expect(
-    clippy::too_many_arguments,
-    clippy::fn_params_excessive_bools,
-    reason = "typed WASM policy boundary"
-)]
-pub fn can_activate_authentication_route_control(
-    source_origin: &str,
-    form_identity: &str,
-    destination_identity: &str,
-    control_label: &str,
-    control_machine_identity: &str,
-    has_concrete_control: bool,
-    has_authentication_username: bool,
-    has_local_authentication_scope: bool,
-    has_authentication_password: bool,
-) -> bool {
-    if !has_safe_authentication_route_identity(source_origin, form_identity, destination_identity)
-        || control_label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-        || control_machine_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-        || RouteIdentity::new(control_machine_identity).has_control_veto()
-    {
-        return false;
-    }
-    let has_matching_microsoft_authority =
-        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
+impl AuthenticationAdvanceControlObservation {
+    #[must_use]
+    pub fn can_activate_authentication_route_control(
+        request: AuthenticationRouteActuation<'_>,
+    ) -> bool {
+        let AuthenticationRouteActuation {
+            source_origin,
+            form_identity,
+            destination_identity,
+            control_label,
+            control_machine_identity,
+            has_concrete_control,
+            has_authentication_username,
+            has_local_authentication_scope,
+            has_authentication_password,
+        } = request;
+        if !AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity(
+            AuthenticationRouteEvidence {
+                source_origin: source_origin,
+                form_identity: form_identity,
+                destination_identity: destination_identity,
+            },
+        ) || control_label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            || control_machine_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            || RouteIdentity::new(control_machine_identity).has_control_veto()
+        {
+            return false;
+        }
+        let has_matching_microsoft_authority =
+            CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: source_origin,
+                    destination_identity: destination_identity,
+                },
+            )
             .is_some_and(|destination| destination.has_microsoft_provider_authority)
-            && ControlIdentity::new(control_label).is_microsoft_primary_sign_in();
-    if ControlIdentity::new(control_label).label_names_provider()
-        && !has_matching_microsoft_authority
-    {
-        return false;
+                && ControlIdentity::new(control_label).is_microsoft_primary_sign_in();
+        if ControlIdentity::new(control_label).label_names_provider()
+            && !has_matching_microsoft_authority
+        {
+            return false;
+        }
+        if AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(
+            control_label,
+        ) {
+            return has_authentication_username && has_local_authentication_scope;
+        }
+        control_label.is_empty()
+            && !has_concrete_control
+            && (has_authentication_username || has_authentication_password)
+            && has_local_authentication_scope
     }
-    if looks_like_login_advance_control_label(control_label) {
-        return has_authentication_username && has_local_authentication_scope;
-    }
-    control_label.is_empty()
-        && !has_concrete_control
-        && (has_authentication_username || has_authentication_password)
-        && has_local_authentication_scope
 }
 
-pub(crate) fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
-    tokens
-        .iter()
-        .any(|token| token.eq_ignore_ascii_case(expected))
+impl PageInputFieldObservation {
+    pub(crate) fn has_autocomplete_token(request: AutocompleteTokenQuery<'_>) -> bool {
+        let AutocompleteTokenQuery { tokens, expected } = request;
+        tokens
+            .iter()
+            .any(|token| token.eq_ignore_ascii_case(expected))
+    }
 }
 
-fn username_positive(identity: &str) -> bool {
-    contains_any_word(
-        identity,
-        &[
+impl PageInputFieldObservation {
+    fn username_positive(identity: &str) -> bool {
+        AuthenticationControlText::new(identity).contains_any_word(&[
             "user",
             "user name",
             "username",
@@ -668,14 +660,13 @@ fn username_positive(identity: &str) -> bool {
             "phone",
             "phone number",
             "skype",
-        ],
-    )
+        ])
+    }
 }
 
-fn username_negative(identity: &str) -> bool {
-    contains_any_word(
-        identity,
-        &[
+impl PageInputFieldObservation {
+    fn username_negative(identity: &str) -> bool {
+        AuthenticationControlText::new(identity).contains_any_word(&[
             "newsletter",
             "subscribe",
             "marketing",
@@ -686,14 +677,13 @@ fn username_negative(identity: &str) -> bool {
             "contact us",
             "feedback",
             "support email",
-        ],
-    )
+        ])
+    }
 }
 
-fn one_time_code_positive(identity: &str) -> bool {
-    contains_any_word(
-        identity,
-        &[
+impl PageInputFieldObservation {
+    fn one_time_code_positive(identity: &str) -> bool {
+        AuthenticationControlText::new(identity).contains_any_word(&[
             "otp",
             "totp",
             "2 fa",
@@ -708,14 +698,13 @@ fn one_time_code_positive(identity: &str) -> bool {
             "verification code",
             "authenticator",
             "authenticator code",
-        ],
-    )
+        ])
+    }
 }
 
-fn one_time_code_negative(identity: &str) -> bool {
-    contains_any_word(
-        identity,
-        &[
+impl PageInputFieldObservation {
+    fn one_time_code_negative(identity: &str) -> bool {
+        AuthenticationControlText::new(identity).contains_any_word(&[
             "card",
             "credit",
             "debit",
@@ -728,49 +717,8 @@ fn one_time_code_negative(identity: &str) -> bool {
             "zip",
             "search",
             "coupon",
-        ],
-    )
-}
-
-fn contains_any_word(haystack: &str, needles: &[&str]) -> bool {
-    needles
-        .iter()
-        .any(|needle| contains_word_phrase(haystack, needle))
-}
-
-fn contains_word_phrase(haystack: &str, phrase: &str) -> bool {
-    let Some(mut start) = haystack.find(phrase) else {
-        return false;
-    };
-    loop {
-        let end = start + phrase.len();
-        let before_ok = start == 0
-            || !haystack
-                .as_bytes()
-                .get(start - 1)
-                .copied()
-                .is_some_and(is_word_byte);
-        let after_ok = end >= haystack.len()
-            || !haystack
-                .as_bytes()
-                .get(end)
-                .copied()
-                .is_some_and(is_word_byte);
-        if before_ok && after_ok {
-            return true;
-        }
-        let next = haystack[start + 1..]
-            .find(phrase)
-            .map(|offset| start + 1 + offset);
-        match next {
-            Some(index) => start = index,
-            None => return false,
-        }
+        ])
     }
-}
-
-const fn is_word_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 #[cfg(test)]
@@ -799,120 +747,105 @@ mod tests {
     #[test]
     fn expands_camel_case_and_separators() {
         assert_eq!(
-            expand_identity_text("VerificationCode"),
+            AuthenticationControlText::new("VerificationCode").expand_identity_text(),
             "verification code"
         );
-        assert_eq!(expand_identity_text("login_email"), "login email");
+        assert_eq!(
+            AuthenticationControlText::new("login_email").expand_identity_text(),
+            "login email"
+        );
     }
 
     #[test]
     fn detects_otp_identity_without_hotpot_false_positive() {
-        assert!(looks_like_one_time_code_field(&field(
-            PageInputType::Text,
-            "Enter OTP Code",
-            &[],
-            false,
-        )));
-        assert!(looks_like_one_time_code_field(&field(
-            PageInputType::Tel,
-            "VerificationCode",
-            &[],
-            false,
-        )));
-        assert!(!looks_like_one_time_code_field(&field(
-            PageInputType::Text,
-            "hotpot-special Favorite dish",
-            &[],
-            false,
-        )));
-        assert!(!looks_like_one_time_code_field(&field(
-            PageInputType::Text,
-            "card-security-code",
-            &[],
-            false,
-        )));
+        assert!(
+            (&field(PageInputType::Text, "Enter OTP Code", &[], false,))
+                .looks_like_one_time_code_field()
+        );
+        assert!(
+            (&field(PageInputType::Tel, "VerificationCode", &[], false,))
+                .looks_like_one_time_code_field()
+        );
+        assert!(
+            !(&field(
+                PageInputType::Text,
+                "hotpot-special Favorite dish",
+                &[],
+                false,
+            ))
+                .looks_like_one_time_code_field()
+        );
+        assert!(
+            !(&field(PageInputType::Text, "card-security-code", &[], false,))
+                .looks_like_one_time_code_field()
+        );
     }
 
     #[test]
     fn detects_username_with_login_context_for_bare_email() {
         let context = |label: &str| {
-            has_login_context(&LoginContextObservation {
+            (&LoginContextObservation {
                 form_identity: String::new(),
                 ancestor_identities: Vec::new(),
                 advance_control_label: label.to_owned(),
                 path_context: String::new(),
             })
+                .has_login_context()
         };
         assert!(context("Entrar"));
         for label in "Submit|Entrar en el sorteo|Entrar con Amazon".split('|') {
             assert!(!context(label));
         }
-        assert!(!looks_like_username_field(&field(
-            PageInputType::Email,
-            "newsletter-email",
-            &[],
-            true,
-        )));
-        assert!(!looks_like_username_field(&field(
-            PageInputType::Email,
-            "primary",
-            &[],
-            false,
-        )));
-        assert!(looks_like_username_field(&field(
-            PageInputType::Email,
-            "primary",
-            &[],
-            true,
-        )));
-        assert!(looks_like_username_field(&field(
-            PageInputType::Text,
-            "loginfmt",
-            &[],
-            false,
-        )));
+        assert!(
+            !(&field(PageInputType::Email, "newsletter-email", &[], true,))
+                .looks_like_username_field()
+        );
+        assert!(
+            !(&field(PageInputType::Email, "primary", &[], false,)).looks_like_username_field()
+        );
+        assert!((&field(PageInputType::Email, "primary", &[], true,)).looks_like_username_field());
+        assert!((&field(PageInputType::Text, "loginfmt", &[], false,)).looks_like_username_field());
     }
 
     #[test]
     fn email_webauthn_is_distinct_from_generic_standards_email() {
         assert_eq!(
-            authentication_username_evidence(&field(
+            (&field(
                 PageInputType::Text,
                 "identity",
                 &["email", "webauthn"],
                 false,
-            )),
+            ))
+                .authentication_username_evidence(),
             AuthenticationUsernameEvidence::WebAuthnEmail
         );
         assert_eq!(
-            authentication_username_evidence(&field(
-                PageInputType::Text,
-                "identity",
-                &["email"],
-                false,
-            )),
+            (&field(PageInputType::Text, "identity", &["email"], false,))
+                .authentication_username_evidence(),
             AuthenticationUsernameEvidence::StandardsBasedEmail
         );
         assert_eq!(
-            authentication_username_evidence(&field(
+            (&field(
                 PageInputType::Text,
                 "newsletter-email",
                 &["email", "webauthn"],
                 false,
-            )),
+            ))
+                .authentication_username_evidence(),
             AuthenticationUsernameEvidence::Absent
         );
         assert_eq!(
-            authentication_username_evidence(&field(
+            (&field(
                 PageInputType::Text,
                 "identity",
                 &["username", "webauthn"],
                 false,
-            )),
+            ))
+                .authentication_username_evidence(),
             AuthenticationUsernameEvidence::Explicit
         );
         assert_eq!(
-            strongest_authentication_username_evidence(&[
+            AuthenticationUsernameEvidence::strongest_authentication_username_evidence(&[
                 AuthenticationUsernameEvidence::StandardsBasedEmail,
                 AuthenticationUsernameEvidence::Strong,
                 AuthenticationUsernameEvidence::WebAuthnEmail,
@@ -923,22 +856,32 @@ mod tests {
 
     #[test]
     fn passkey_and_manual_checkpoint_labels() {
-        assert!(looks_like_manual_checkpoint_label("I agree to the Terms"));
-        assert!(looks_like_email_verification_body(
-            "Please verify your email to continue"
-        ));
+        assert!(
+            AuthenticationAdvanceControlObservation::looks_like_manual_checkpoint_label(
+                "I agree to the Terms"
+            )
+        );
+        assert!(
+            AuthenticationAdvanceControlObservation::looks_like_email_verification_body(
+                "Please verify your email to continue"
+            )
+        );
     }
 
     #[test]
     fn login_advance_labels_require_authentication_words() {
         for label in "Next|Proceed|SignIn|signin|Sign   In|Login|Log\tin|Submit|Entrar|Entrar Entrar Entrar|Anmelden Anmelden Anmelden|Se connecter Se connecter Se connecter".split('|') {
-            assert!(looks_like_login_advance_control_label(label));
+            assert!(AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(label));
         }
         for label in "Learn more|Subscribe|Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Anmelden Anmelden Foo|Se connecter Se connecter Amazon|Continue with X".split('|') {
-            assert!(!looks_like_login_advance_control_label(label));
+            assert!(!AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(label));
         }
         let oversized = "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
-        assert!(!looks_like_login_advance_control_label(&oversized));
+        assert!(
+            !AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(
+                &oversized
+            )
+        );
     }
 
     #[test]
@@ -947,16 +890,18 @@ mod tests {
             let (machine, visible_label) = label
                 .strip_prefix("machine:")
                 .map_or(("", label), |machine| (machine, "Continue"));
-            can_activate_authentication_route_control(
-                "https://login.microsoftonline.com",
-                form,
-                "https://login.microsoftonline.com/common/login",
-                visible_label,
-                machine,
-                concrete,
-                username,
-                local,
-                password,
+            AuthenticationAdvanceControlObservation::can_activate_authentication_route_control(
+                AuthenticationRouteActuation {
+                    source_origin: "https://login.microsoftonline.com",
+                    form_identity: form,
+                    destination_identity: "https://login.microsoftonline.com/common/login",
+                    control_label: visible_label,
+                    control_machine_identity: machine,
+                    has_concrete_control: concrete,
+                    has_authentication_username: username,
+                    has_local_authentication_scope: local,
+                    has_authentication_password: password,
+                },
             )
         };
         assert!(decide("", "", false, true, true, false));
@@ -977,7 +922,13 @@ mod tests {
     #[test]
     fn route_identity_requires_positive_same_origin_authentication_evidence() {
         let safe = |form, destination| {
-            has_safe_authentication_route_identity("https://example.test", form, destination)
+            AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity(
+                AuthenticationRouteEvidence {
+                    source_origin: "https://example.test",
+                    form_identity: form,
+                    destination_identity: destination,
+                },
+            )
         };
         for destination in "https://example.test/login?notprovider=x&notconnection=enterprise&continue=https://mail.google.com|https://example.test/auth/login?x=1|https://example.test/v3/signin/identifier|https://example.test/auth/sign-in/identifier|https://example.test/account/sign-in|https://example.test/authentication/login|https://example.test/v2/auth/signin|https://example.test/signin/callback|https://example.test/login/v2".split('|') {
             assert!(safe("login-form", destination), "{destination}");
@@ -991,4 +942,10 @@ mod tests {
         let oversized = "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
         assert!(!safe(&oversized, "/auth/login"));
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PasskeyControlMarking {
+    Explicit,
+    Implicit,
 }

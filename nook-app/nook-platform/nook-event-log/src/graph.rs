@@ -1,5 +1,6 @@
 //! Causal event DAG: parent validation, ancestry, heads, and pending events.
 
+use crate::GenesisImportRequest;
 mod authorization;
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
@@ -215,7 +216,7 @@ mod tests {
     use crate::EventResult;
     use crate::event::{
         EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
-        VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
+        VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key, store};
     use ed25519_dalek::SigningKey;
@@ -279,18 +280,18 @@ mod tests {
     }
 
     fn genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
-        build_genesis_import_event(
-            &store()?,
-            &actor(signing_key)?,
-            &epoch()?,
-            GenesisImportPayload {
+        VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &store()?,
+            actor_id: &actor(signing_key)?,
+            key_epoch: &epoch()?,
+            payload: GenesisImportPayload {
                 source_content_hash: genesis_source_hash(),
                 secrets: vec![],
                 password_entries: vec![],
             },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            signing_key,
-        )
+            created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            signing_key: signing_key,
+        })
     }
 
     #[test]

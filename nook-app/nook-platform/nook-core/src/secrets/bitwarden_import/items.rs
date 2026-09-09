@@ -6,6 +6,7 @@
 //! Bitwarden plaintext items, nullable text and ordered metadata conversion.
 use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{BitwardenImportError, BitwardenImportPlan};
+use crate::CreditCardFields;
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
 use serde_json::Value;
@@ -169,15 +170,15 @@ impl BitwardenItem {
             metadata.insert(0, ("brand".to_owned(), card.brand.0));
         }
         BitwardenNotes { notes: &mut notes }.append(metadata);
-        CreditCardSecret::from_fields(
-            self.name.trim(),
-            card.cardholder_name.trim(),
-            card.number.trim(),
-            card.exp_month.trim(),
-            card.exp_year.trim(),
-            card.code.trim(),
-            &notes,
-        )
+        CreditCardSecret::from_fields(CreditCardFields {
+            title: self.name.trim(),
+            cardholder_name: card.cardholder_name.trim(),
+            number: card.number.trim(),
+            expiration_month: card.exp_month.trim(),
+            expiration_year: card.exp_year.trim(),
+            cvv: card.code.trim(),
+            notes: &notes,
+        })
         .ok()
         .map(SecretValue::CreditCard)
     }

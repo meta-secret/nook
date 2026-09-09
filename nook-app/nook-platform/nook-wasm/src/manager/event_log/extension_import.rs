@@ -1,10 +1,9 @@
 use super::{ExtensionEventLogImportStatus, ExternalEventLogRecord, NookVaultManager};
-use crate::NookError;
 use crate::manager::{CeremonyState, EventLogSessionState, SyncOutboxState, VaultSessionState};
-use crate::storage::event_db::{clear_local_event_store, load_local_event_store};
+
 use crate::storage::indexed_db;
-use nook_core::CheckedRemoteEvent;
-use nook_core::EventId;
+use crate::{NookDatabase, NookError};
+use nook_core::{CheckedRemoteEvent, EventId, VaultEvent};
 use nook_core::{
     DeviceId, DevicePublicKey, DeviceSigningPublicKey, EventGraphDeviceAccess,
     EventGraphDeviceAccessRequest, SentinelGenesisPhase, StoreId, VaultApplication,
@@ -27,7 +26,7 @@ impl NookVaultManager {
         for record in records {
             let event_id = EventId::parse(&record.event_id)?;
             Self::validate_event_record_id(&event_id, &record.event)?;
-            let bytes = nook_core::serialize_event_storage_yaml(&record.event)?;
+            let bytes = VaultEvent::serialize_event_storage_yaml(&record.event)?;
             let record_store_id = CheckedRemoteEvent::parse(&event_id, &bytes)
                 .map(CheckedRemoteEvent::into_store_id)?;
             if record_store_id != *expected_store_id {
@@ -53,9 +52,9 @@ impl NookVaultManager {
         self.event_log = previous_event_log;
         self.sync_outbox = previous_sync_outbox;
         if let Some(store_id) = previous_active_store_id {
-            indexed_db::switch_active_vault(store_id).await?;
+            NookDatabase::switch_active_vault(store_id).await?;
         } else {
-            indexed_db::clear_active_vault_id().await?;
+            NookDatabase::clear_active_vault_id().await?;
         }
         Ok(())
     }
@@ -72,7 +71,7 @@ impl NookVaultManager {
         let device_signing_public_key =
             DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
         let (stored_device_id, _) =
-            indexed_db::load_wrapped_device_identity_for_app_id(device_id.as_str())
+            NookDatabase::load_wrapped_device_identity_for_app_id(device_id.as_str())
                 .await?
                 .ok_or_else(|| {
                     NookError::IndexedDb(
@@ -106,7 +105,7 @@ impl NookVaultManager {
             )));
         }
 
-        let store = load_local_event_store(&self.vault.store_id).await?;
+        let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
         let has_active_grant =
             EventGraphDeviceAccess::new(&graph).has_access(&EventGraphDeviceAccessRequest {
@@ -145,9 +144,9 @@ impl NookVaultManager {
         // Drop poisoned/quarantined bytes for this vault so a later Approve
         // retry is not permanently blocked by the rejected import.
         if require_clear {
-            clear_local_event_store(store_id).await?;
+            NookDatabase::clear_local_event_store(store_id).await?;
         } else {
-            clear_local_event_store(store_id).await.ok();
+            NookDatabase::clear_local_event_store(store_id).await.ok();
         }
         self.restore_rejected_extension_import(
             previous_active_store_id,
@@ -198,7 +197,7 @@ impl NookVaultManager {
         }
         Self::validate_extension_import_records(&targets.store_id, &records)?;
 
-        let previous_active_store_id = indexed_db::get_active_vault_id().await?;
+        let previous_active_store_id = NookDatabase::get_active_vault_id().await?;
         let mut previous_vault = mem::take(&mut self.vault);
         let mut previous_event_log = mem::take(&mut self.event_log);
         let mut previous_sync_outbox = mem::take(&mut self.sync_outbox);
