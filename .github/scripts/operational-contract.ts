@@ -73,8 +73,8 @@ export class OperationalShellProbe {
       });
       return ok({
         exitCode: outcome.exitCode,
-        stdout: outcome.stdout.toString(),
-        stderr: outcome.stderr.toString(),
+        stdout: outcome.stdout?.toString() ?? "",
+        stderr: outcome.stderr?.toString() ?? "",
       });
     } catch {
       return err({
@@ -89,8 +89,9 @@ export class OperationalCommandProbe {
     private readonly request: {
       cmd: string[];
       stdin?: Blob;
-      stdout: "pipe";
-      stderr: "pipe";
+      env?: Record<string, string | undefined>;
+      stdout: "pipe" | "inherit";
+      stderr: "pipe" | "inherit";
     },
   ) {}
   execute(): Result<OperationalProbeOutcome, OperationalContractFailure> {
@@ -98,8 +99,8 @@ export class OperationalCommandProbe {
       const outcome = Bun.spawnSync(this.request);
       return ok({
         exitCode: outcome.exitCode,
-        stdout: outcome.stdout.toString(),
-        stderr: outcome.stderr.toString(),
+        stdout: outcome.stdout?.toString() ?? "",
+        stderr: outcome.stderr?.toString() ?? "",
       });
     } catch {
       return err({
