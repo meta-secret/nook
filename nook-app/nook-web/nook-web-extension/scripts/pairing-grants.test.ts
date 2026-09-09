@@ -259,4 +259,20 @@ describe('extension pairing grant transport', () => {
       deviceSigningPublicKey: 'signing',
     })
   })
+  test('compares migration records through the typed Rust policy', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const { vaultName, ...otherFields } = storedGrant
+    expect(
+      policy.comparePairingRecords({
+        current: storedGrant,
+        migrated: { ...otherFields, vaultName },
+      }),
+    ).toBe('Equivalent')
+    expect(
+      policy.comparePairingRecords({
+        current: storedGrant,
+        migrated: { ...storedGrant, vaultName: 'Changed' },
+      }),
+    ).toBe('Different')
+  })
 })

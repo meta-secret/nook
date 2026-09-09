@@ -703,7 +703,10 @@ class ExtensionPairingIdentity {
           (key) =>
             legacyKeys.includes(key) &&
             key in current &&
-            JSON.stringify(current[key]) === JSON.stringify(migrated[key]),
+            pairingPolicy.comparePairingRecords({
+              current: current[key],
+              migrated: migrated[key],
+            }) === 'Equivalent',
         )
         if (
           completedKeys.length > 0 &&
