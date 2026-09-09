@@ -34,7 +34,7 @@ impl RecoveryPlanning<'_> {
             .await
             .unwrap_or_default()
         {
-            directory.retire_app_id(app_id);
+            directory = directory.retire_app_id(app_id);
         }
         Ok(RecoveryDirectory {
             value: directory,

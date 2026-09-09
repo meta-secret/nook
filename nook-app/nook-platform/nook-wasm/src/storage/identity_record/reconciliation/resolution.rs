@@ -10,8 +10,10 @@ use super::{
     IdentityReconciliationStore, NookError, PendingIdentityReconciliation,
     PendingIdentityReconciliationProgress,
 };
+use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::{IdbPutStringRequest, NookDatabase};
 use identity_record::LegacyVaultIdentityInput;
+use nook_core::DirectoryLegacyVaultImport;
 use nook_core::{
     AgeArmoredCiphertext, AppKey, AuthKeyId, IdentityRecord, IdentityVaultDekEpoch,
     IdentityVaultDekEpochUpdate, IdentityVaultEventId, StoreId,
@@ -200,26 +202,29 @@ impl ResolvedIdentityPersistence {
         } = self;
         let consumed_marker = resolution.consumed_marker;
         let directory_store_id = store_id.clone();
-        let record = NookDatabase::update_identity_directory(move |directory| {
-            let identity_id = directory
-                .import_legacy_vault(
-                    &label,
-                    &app_key,
-                    directory_store_id,
-                    nook_core::IdentityVaultDekReconciliation {
+        let record = NookDatabase::update_identity_directory(move |mut directory| {
+            let resolved_identity = directory
+                .import_legacy_vault(DirectoryLegacyVaultImport {
+                    label: &label,
+                    app_key: &app_key,
+                    store_id: directory_store_id,
+                    reconciliation: nook_core::IdentityVaultDekReconciliation {
                         secrets_envelope,
                         members_envelope,
                         epoch_update: resolution.update,
                         authorized_auth_ids,
                     },
-                )
+                })
                 .map_err(|error| NookError::Database(error.to_string()))?;
-            directory
+            directory = resolved_identity.directory;
+            let identity_id = resolved_identity.identity_id;
+            let value = directory
                 .identities()
                 .iter()
                 .find(|record| record.identity_id == identity_id)
                 .cloned()
-                .ok_or_else(|| NookError::Database("Imported identity disappeared.".to_owned()))
+                .ok_or_else(|| NookError::Database("Imported identity disappeared.".to_owned()))?;
+            Ok(IdentityDirectoryWrite { directory, value })
         })
         .await?;
 

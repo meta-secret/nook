@@ -7,7 +7,9 @@
 
 use crate::BrowserTimestamp;
 use crate::IdentityDbEnsureLocalIdentityForAppKey;
+use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
+use nook_core::IdentityCreation;
 use nook_core::{IsoTimestamp, StoreId};
 mod event;
 use crate::storage::identity_record;
@@ -319,6 +321,10 @@ impl OrdinarySimpleGenesisRequest<'_> {
 }
 #[cfg(test)]
 mod tests {
+    use crate::storage::identity_record::IdentityDirectoryWrite;
+
+    use nook_core::IdentityCreation;
+
     use nook_core::{AppKey, IdentityId, IsoTimestamp};
 
     use super::{
@@ -371,11 +377,16 @@ mod tests {
         .await?;
         let another_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let selected_key = another_key.clone();
-        NookDatabase::update_identity_directory(move |directory| {
-            directory
-                .create_identity("Work", &selected_key, None)
-                .map_err(NookDatabase::map_domain_error)?;
-            Ok(())
+        NookDatabase::update_identity_directory(move |mut directory| {
+            let resolved_identity = directory
+                .create_identity(IdentityCreation {
+                    label: "Work",
+                    app_key: &selected_key,
+                    member_label: None,
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+            directory = resolved_identity.directory;
+            Ok(IdentityDirectoryWrite::from(directory))
         })
         .await?;
         let resumed = OrdinarySimpleGenesisRequest {

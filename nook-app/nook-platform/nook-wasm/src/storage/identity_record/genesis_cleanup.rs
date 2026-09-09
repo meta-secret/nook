@@ -8,7 +8,7 @@
 use crate::IdentityDbMigrateDirectory;
 use crate::storage::event_db;
 use crate::{NookDatabase, NookError};
-use nook_core::IdentityDirectory;
+use nook_core::{IdentityDirectory, StagedIdentityRebase};
 use rexie::TransactionMode;
 
 use super::{
@@ -63,12 +63,12 @@ impl SimpleGenesisCompletion<'_> {
             candidate
         } else {
             current
-                .rebase_staged_vault_creation(
-                    &staged.base_directory,
-                    &staged.directory,
-                    &pending.identity_id,
-                )
-                .map_err(NookDatabase::map_domain_error)?
+                .rebase_staged_vault_creation(StagedIdentityRebase {
+                    base: &staged.base_directory,
+                    candidate: &staged.directory,
+                    identity_id: &pending.identity_id,
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?
         };
         let encoded = serde_json::to_string(&directory).map_err(|error| {
             NookError::IndexedDb(format!("Genesis identity encode error: {error}"))

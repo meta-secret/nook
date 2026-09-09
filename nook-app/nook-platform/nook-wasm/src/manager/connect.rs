@@ -17,6 +17,8 @@ use super::{NookVaultManager, VaultNameState};
 use crate::IdentityDbEnsureLocalIdentityForAppKey;
 use crate::NookDatabase;
 use crate::conversion::LoadedVault;
+use crate::storage::identity_record::IdentityDirectoryWrite;
+use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
 
@@ -45,6 +47,10 @@ impl NookError {
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod tests {
+    use crate::storage::identity_record::IdentityDirectoryWrite;
+
+    use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
+
     use super::*;
     use crate::manager::PendingExtensionIdentityEnrollment;
     use crate::manager::VaultNameState;
@@ -159,14 +165,27 @@ mod tests {
         let store_id = nook_core::StoreId::generate()?;
         let owner_key = authorizer.clone();
         let owner_store = store_id.clone();
-        NookDatabase::update_identity_directory(move |directory| {
-            let owner_id = directory.create_identity("Personal", &owner_key, None)?;
-            let _ = directory.open_or_generate_vault_dek_for_identity(
-                &owner_id,
-                &owner_key,
-                owner_store,
-            )?;
-            Ok(())
+        NookDatabase::update_identity_directory(move |mut directory| {
+            let resolved_identity = directory
+                .create_identity(IdentityCreation {
+                    label: "Personal",
+                    app_key: &owner_key,
+                    member_label: None,
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+            directory = resolved_identity.directory;
+            let owner_id = resolved_identity.identity_id;
+            let opened_identity = directory
+                .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                    identity_id: &owner_id,
+                    vault: IdentityVaultKeyOpening {
+                        app_key: &owner_key,
+                        store_id: owner_store,
+                    },
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+            directory = opened_identity.directory;
+            Ok(IdentityDirectoryWrite::from(directory))
         })
         .await?;
 

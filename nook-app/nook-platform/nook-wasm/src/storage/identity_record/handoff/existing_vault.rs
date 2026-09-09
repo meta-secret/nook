@@ -11,16 +11,21 @@ use crate::EventDbSaveEventBytesToStore;
 use crate::storage::{event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::{
+    DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
+    IdentityVaultKeyOpening,
+};
+use nook_core::{
     EventGraphAuthorizationProjection, EventGraphDeviceAccess, EventGraphDeviceAccessRequest,
     IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation,
     IdentityVaultEventId,
 };
 pub(super) struct ExistingVaultHandoffResult {
+    pub(super) directory: nook_core::IdentityDirectory,
     pub(super) identity_id: nook_core::IdentityId,
     pub(super) vault_keys: nook_core::VaultKeys,
 }
 pub(super) struct ExistingVaultHandoff<'a> {
-    pub(super) directory: &'a mut nook_core::IdentityDirectory,
+    pub(super) directory: nook_core::IdentityDirectory,
     pub(super) events: &'a rexie::Store,
     pub(super) store_id: &'a nook_core::StoreId,
     pub(super) app_key: &'a nook_core::AppKey,
@@ -138,31 +143,36 @@ impl CheckedExistingVaultHandoff<'_> {
             input,
             reconciliation,
         } = self;
-        let identity_id = input
+        let imported = input
             .directory
-            .import_legacy_vault(
-                &input.existing.label,
-                input.app_key,
-                input.store_id.clone(),
+            .import_legacy_vault(DirectoryLegacyVaultImport {
+                label: &input.existing.label,
+                app_key: input.app_key,
+                store_id: input.store_id.clone(),
                 reconciliation,
-            )
-            .map_err(NookDatabase::map_domain_error)?;
-        let vault_keys = input
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        let opened = imported
             .directory
-            .open_or_generate_vault_dek_for_identity(
-                &identity_id,
-                input.app_key,
-                input.store_id.clone(),
-            )
-            .map_err(NookDatabase::map_domain_error)?;
+            .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                identity_id: &imported.identity_id,
+                vault: IdentityVaultKeyOpening {
+                    app_key: input.app_key,
+                    store_id: input.store_id.clone(),
+                },
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         Ok(ExistingVaultHandoffResult {
-            identity_id,
-            vault_keys,
+            directory: opened.directory,
+            identity_id: imported.identity_id,
+            vault_keys: opened.keys,
         })
     }
 }
 #[cfg(test)]
 mod tests {
+    use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
+
     use super::super::IdentityHandoffCommit;
     use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
     use crate::manager::PendingExtensionIdentityEnrollment;
@@ -201,12 +211,25 @@ mod tests {
             let store_id =
                 nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?;
             let mut material = IdentityDirectory::empty();
-            let identity_id = material
-                .create_identity("Imported", &identity, None)
-                .map_err(NookDatabase::map_domain_error)?;
-            let _ = material
-                .open_or_generate_vault_dek_for_identity(&identity_id, &identity, store_id.clone())
-                .map_err(NookDatabase::map_domain_error)?;
+            let resolved_identity = material
+                .create_identity(IdentityCreation {
+                    label: "Imported",
+                    app_key: &identity,
+                    member_label: None,
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+            material = resolved_identity.directory;
+            let identity_id = resolved_identity.identity_id;
+            let opened_identity = material
+                .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                    identity_id: &identity_id,
+                    vault: IdentityVaultKeyOpening {
+                        app_key: &identity,
+                        store_id: store_id.clone(),
+                    },
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+            material = opened_identity.directory;
             let grant = &material
                 .selected()
                 .map_err(NookDatabase::map_domain_error)?
@@ -507,7 +530,10 @@ mod tests {
         let mut directory = NookDatabase::load_identity_directory().await?;
         assert_eq!(
             directory
-                .open_or_generate_vault_dek(&fixture.identity, fixture.store_id.clone())
+                .open_vault_dek(IdentityVaultKeyOpening {
+                    app_key: &fixture.identity,
+                    store_id: fixture.store_id.clone()
+                })
                 .map_err(NookDatabase::map_domain_error)?,
             events.replacement_keys
         );
@@ -536,12 +562,23 @@ mod tests {
         })
         .await?;
         let mut directory = IdentityDirectory::empty();
-        let pending_identity_id = directory
-            .create_identity("Pending", &fixture.identity, None)
-            .map_err(NookDatabase::map_domain_error)?;
-        directory
-            .create_identity("Concurrent duplicate", &fixture.identity, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let resolved_identity = directory
+            .create_identity(IdentityCreation {
+                label: "Pending",
+                app_key: &fixture.identity,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        directory = resolved_identity.directory;
+        let pending_identity_id = resolved_identity.identity_id;
+        let resolved_identity = directory
+            .create_identity(IdentityCreation {
+                label: "Concurrent duplicate",
+                app_key: &fixture.identity,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        directory = resolved_identity.directory;
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: IDENTITY_DIRECTORY_KEY,
             value: &serde_json::to_string(&directory)
@@ -765,25 +802,9 @@ mod tests {
         let store = transaction
             .store("events")
             .map_err(|error| NookError::IndexedDb(format!("Admission store error: {error:?}")))?;
-        let mut directory = IdentityDirectory::empty();
-        {
-            let _checked = ExistingVaultHandoff {
-                directory: &mut directory,
-                events: &store,
-                store_id: &fixture.store_id,
-                app_key: &fixture.identity,
-                signing_public_key: &events.signing_public_key,
-                existing: ExistingVaultImportCommit {
-                    device_id: fixture.identity.device_id().clone(),
-                    label: "Imported".to_owned(),
-                },
-            }
-            .check()
-            .await?;
-        }
-        assert!(directory.identities().is_empty());
+        let directory = IdentityDirectory::empty();
         let checked = ExistingVaultHandoff {
-            directory: &mut directory,
+            directory,
             events: &store,
             store_id: &fixture.store_id,
             app_key: &fixture.identity,
@@ -795,7 +816,9 @@ mod tests {
         }
         .check()
         .await?;
+        assert!(checked.input.directory.identities().is_empty());
         let imported = checked.import()?;
+        let directory = imported.directory;
         assert_eq!(directory.identities().len(), 1);
         assert_eq!(directory.selected()?.identity_id, imported.identity_id);
         assert_eq!(

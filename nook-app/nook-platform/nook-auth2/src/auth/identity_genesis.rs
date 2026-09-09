@@ -74,7 +74,7 @@ mod tests {
         let first = AppKey::generate()?;
         let second = AppKey::generate()?;
         let mut identity = IdentityRecord::create_with_app_key("Personal", &first, None)?;
-        identity.add_member(IdentityMember {
+        identity = identity.add_member(IdentityMember {
             app_id: second.app_id().clone(),
             auth_id: second.auth_id(),
             public_key: second.public_key(),

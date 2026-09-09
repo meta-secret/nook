@@ -377,8 +377,10 @@ mod tests {
         let work_store = StoreId::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
         let mut work = IdentityRecord::create_with_app_key("Work", &work_key, None)?;
-        personal.generate_vault_dek(personal_store.clone())?;
-        work.generate_vault_dek(work_store)?;
+        let opened_identity = personal.generate_vault_dek(personal_store.clone())?;
+        personal = opened_identity.identity;
+        let opened_identity = work.generate_vault_dek(work_store)?;
+        work = opened_identity.identity;
         let selected_work = work.identity_id.clone();
         let directory = IdentityDirectory::from_records(
             vec![work, personal],
@@ -402,7 +404,8 @@ mod tests {
         let personal_store = StoreId::generate()?;
         let unknown_store = StoreId::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
-        personal.generate_vault_dek(personal_store)?;
+        let opened_identity = personal.generate_vault_dek(personal_store)?;
+        personal = opened_identity.identity;
         let directory = IdentityDirectory::from_records(vec![personal], IdentitySelection::Empty)?;
 
         assert!(
@@ -421,7 +424,8 @@ mod tests {
         let app_key = AppKey::generate()?;
         let store_id = StoreId::generate()?;
         let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
-        identity.generate_vault_dek(store_id.clone())?;
+        let opened_identity = identity.generate_vault_dek(store_id.clone())?;
+        identity = opened_identity.identity;
 
         assert_eq!(
             IdentityVaultAppGrant {
@@ -441,7 +445,8 @@ mod tests {
         let app_key = AppKey::generate()?;
         let store_id = StoreId::generate()?;
         let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
-        identity.generate_vault_dek(store_id.clone())?;
+        let opened_identity = identity.generate_vault_dek(store_id.clone())?;
+        identity = opened_identity.identity;
         let vault = identity
             .vault_deks
             .iter_mut()

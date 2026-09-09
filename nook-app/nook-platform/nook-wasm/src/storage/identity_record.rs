@@ -3,6 +3,10 @@
 use crate::storage::indexed_db;
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, MultiDeviceError};
+use nook_core::{
+    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, IdentityCreation,
+    IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
+};
 use rexie::TransactionMode;
 mod directory_migration;
 mod genesis_cleanup;
@@ -85,11 +89,14 @@ pub(crate) struct IdentityDbEnsureLocalIdentityForAppKey<'a> {
 
 /// Named values required by NookDatabase::ensure_local_identity_in_directory.
 pub(crate) struct IdentityDbEnsureLocalIdentityInDirectory<'a> {
-    pub(crate) directory: &'a mut IdentityDirectory,
+    pub(crate) directory: IdentityDirectory,
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) label: &'a str,
     pub(crate) allow_peer_only_bootstrap: bool,
 }
+
+mod directory_write;
+pub(crate) use directory_write::IdentityDirectoryWrite;
 
 /// Named values required by NookDatabase::generate_vault_dek_for_identity.
 pub(crate) struct IdentityDbGenerateVaultDekForIdentity<'a> {
@@ -366,7 +373,7 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, NookError>
     where
-        F: FnOnce(&mut IdentityDirectory) -> Result<T, NookError>,
+        F: FnOnce(IdentityDirectory) -> Result<IdentityDirectoryWrite<T>, NookError>,
     {
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
@@ -375,8 +382,8 @@ impl NookDatabase {
         let store = transaction.store("vault").map_err(|error| {
             NookError::IndexedDb(format!("Identity update store error: {error:?}"))
         })?;
-        let mut directory = NookDatabase::load_directory_for_write(&store).await?;
-        let value = update(&mut directory)?;
+        let directory = NookDatabase::load_directory_for_write(&store).await?;
+        let IdentityDirectoryWrite { directory, value } = update(directory)?;
         NookDatabase::write_identity_directory(IdentityDbWriteIdentityDirectory {
             store: &store,
             directory: &directory,
@@ -408,7 +415,7 @@ impl NookDatabase {
         let mut directory = NookDatabase::load_directory_for_write(&store).await?;
         let identity = keyring::ProtectedIdentityPublication {
             store: &store,
-            directory: &mut directory,
+            directory,
             app_key,
             wrapped_app_key: record,
             label,
@@ -442,7 +449,7 @@ impl NookDatabase {
         let mut directory = NookDatabase::load_directory_for_write(&store).await?;
         let identity = keyring::ProtectedIdentityPublication {
             store: &store,
-            directory: &mut directory,
+            directory,
             app_key,
             wrapped_app_key: record,
             label,
@@ -498,8 +505,15 @@ impl NookDatabase {
         let signing_public_key = signing_public_key.clone();
         NookDatabase::update_identity_directory(move |directory| {
             directory
-                .set_member_signing_public_key(&identity_id, &app_id, &signing_public_key)
-                .map_err(NookDatabase::map_domain_error)
+                .set_member_signing_public_key(DirectoryMemberSigningUpdate {
+                    identity_id: &identity_id,
+                    member: IdentityMemberSigningUpdate {
+                        app_id: &app_id,
+                        signing_public_key: &signing_public_key,
+                    },
+                })
+                .map(IdentityDirectoryWrite::from)
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))
         })
         .await
     }
@@ -535,9 +549,9 @@ impl NookDatabase {
 impl NookDatabase {
     fn ensure_local_identity_in_directory(
         request: IdentityDbEnsureLocalIdentityInDirectory<'_>,
-    ) -> Result<nook_core::IdentityRecord, NookError> {
+    ) -> Result<IdentityDirectoryWrite<nook_core::IdentityRecord>, NookError> {
         let IdentityDbEnsureLocalIdentityInDirectory {
-            directory,
+            mut directory,
             app_key,
             label,
             allow_peer_only_bootstrap,
@@ -547,16 +561,24 @@ impl NookDatabase {
             .map_err(NookDatabase::map_domain_error)?
         {
             Some(identity_id) => identity_id,
-            None if directory.identities().is_empty() || allow_peer_only_bootstrap => directory
-                .create_identity(label, app_key, None)
-                .map_err(NookDatabase::map_domain_error)?,
+            None if directory.identities().is_empty() || allow_peer_only_bootstrap => {
+                let resolved_identity = directory
+                    .create_identity(IdentityCreation {
+                        label,
+                        app_key,
+                        member_label: None,
+                    })
+                    .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+                directory = resolved_identity.directory;
+                resolved_identity.identity_id
+            }
             None => {
                 return Err(NookError::Database(
                     MultiDeviceError::IdentityEnrollmentRequired.to_string(),
                 ));
             }
         };
-        directory
+        let value = directory
             .identities()
             .iter()
             .find(|identity| identity.identity_id == identity_id)
@@ -568,7 +590,8 @@ impl NookDatabase {
                     }
                     .to_string(),
                 )
-            })
+            })?;
+        Ok(IdentityDirectoryWrite { directory, value })
     }
 }
 
@@ -607,8 +630,15 @@ impl NookDatabase {
         let app_key = app_key.clone();
         NookDatabase::update_identity_directory(move |directory| {
             directory
-                .open_or_generate_vault_dek_for_identity(&identity_id, &app_key, store_id)
-                .map_err(|error| NookError::Database(error.to_string()))
+                .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                    identity_id: &identity_id,
+                    vault: IdentityVaultKeyOpening {
+                        app_key: &app_key,
+                        store_id: store_id,
+                    },
+                })
+                .map(IdentityDirectoryWrite::from)
+                .map_err(|rejected| NookError::Database(rejected.into_cause().to_string()))
         })
         .await
     }
@@ -635,10 +665,14 @@ impl NookDatabase {
 
 #[cfg(test)]
 mod tests {
+
+    use crate::storage::identity_record::IdentityDirectoryWrite;
+
     use crate::identity_record;
     use crate::identity_record::NookIdentityDirectorySelectionKind;
     use crate::storage::event_db;
     use nook_core::{AppKey, IdentityDirectory, IdentityRecord, IdentitySelection, IsoTimestamp};
+    use nook_core::{IdentityCreation, IdentityVaultKeyOpening};
 
     use super::*;
     use wasm_bindgen_test::*;
@@ -682,8 +716,13 @@ mod tests {
         let work_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let work_id = NookDatabase::update_identity_directory(move |directory| {
             directory
-                .create_identity("Work", &work_key, None)
-                .map_err(NookDatabase::map_domain_error)
+                .create_identity(IdentityCreation {
+                    label: "Work",
+                    app_key: &work_key,
+                    member_label: None,
+                })
+                .map(IdentityDirectoryWrite::from)
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))
         })
         .await?;
         let reloaded = NookDatabase::load_identity_directory().await?;
@@ -732,8 +771,13 @@ mod tests {
         let second_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let second_id = NookDatabase::update_identity_directory(move |directory| {
             directory
-                .create_identity("Work", &second_key, None)
-                .map_err(NookDatabase::map_domain_error)
+                .create_identity(IdentityCreation {
+                    label: "Work",
+                    app_key: &second_key,
+                    member_label: None,
+                })
+                .map(IdentityDirectoryWrite::from)
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))
         })
         .await?;
 
@@ -759,16 +803,32 @@ mod tests {
         NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let mut legacy = IdentityDirectory::empty();
-        legacy
-            .create_identity("Personal", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let resolved_identity = legacy
+            .create_identity(IdentityCreation {
+                label: "Personal",
+                app_key: &app_key,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = resolved_identity.directory;
         let store_id = nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?;
-        let expected = legacy
-            .open_or_generate_vault_dek(&app_key, store_id.clone())
-            .map_err(NookDatabase::map_domain_error)?;
-        let selected_id = legacy
-            .create_identity("Work", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let opened_identity = legacy
+            .open_or_generate_vault_dek(IdentityVaultKeyOpening {
+                app_key: &app_key,
+                store_id: store_id.clone(),
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = opened_identity.identity;
+        let expected = opened_identity.keys;
+        let resolved_identity = legacy
+            .create_identity(IdentityCreation {
+                label: "Work",
+                app_key: &app_key,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = resolved_identity.directory;
+        let selected_id = resolved_identity.identity_id;
         let legacy_raw = serde_json::to_string(&legacy)
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         NookDatabase::idb_put_string(IdbPutStringRequest {
@@ -789,7 +849,10 @@ mod tests {
         );
         assert_eq!(
             migrated
-                .open_or_generate_vault_dek(&app_key, store_id)
+                .open_vault_dek(IdentityVaultKeyOpening {
+                    app_key: &app_key,
+                    store_id: store_id
+                })
                 .map_err(NookDatabase::map_domain_error)?,
             expected
         );
@@ -810,9 +873,15 @@ mod tests {
         NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let mut directory = IdentityDirectory::empty();
-        let identity_id = directory
-            .create_identity("Personal", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let resolved_identity = directory
+            .create_identity(IdentityCreation {
+                label: "Personal",
+                app_key: &app_key,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        directory = resolved_identity.directory;
+        let identity_id = resolved_identity.identity_id;
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: IDENTITY_DIRECTORY_KEY,
             value: &serde_json::to_string(&directory)
@@ -857,13 +926,23 @@ mod tests {
         })
         .await?;
         let mut current = IdentityDirectory::empty();
-        current
-            .create_identity("Personal", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let resolved_identity = current
+            .create_identity(IdentityCreation {
+                label: "Personal",
+                app_key: &app_key,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        current = resolved_identity.directory;
         let work_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
-        current
-            .create_identity("Work", &work_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let resolved_identity = current
+            .create_identity(IdentityCreation {
+                label: "Work",
+                app_key: &work_key,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        current = resolved_identity.directory;
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: IDENTITY_DIRECTORY_KEY,
             value: &serde_json::to_string(&current)

@@ -5,6 +5,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::{DirectoryCreationEnrollment, IdentityCreation, IdentityVaultKeyOpening};
 use std::collections::HashMap;
 
 use super::IdentityDirectory;
@@ -217,6 +218,8 @@ impl IdentityRecord {
 
 #[cfg(test)]
 mod tests {
+    use crate::{DirectoryCreationEnrollment, IdentityCreation, IdentityVaultKeyOpening};
+
     use super::*;
     use crate::{AppKey, DeviceSigningPublicKey};
 
@@ -306,9 +309,11 @@ mod tests {
         let other = AppKey::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &shared, None)?;
         let store_id = crate::StoreId::generate()?;
-        let expected = personal.generate_vault_dek(store_id.clone())?;
+        let opened_identity = personal.generate_vault_dek(store_id.clone())?;
+        personal = opened_identity.identity;
+        let expected = opened_identity.keys;
         let mut work = IdentityRecord::create_with_app_key("Work", &shared, None)?;
-        work.add_member(IdentityMember {
+        work = work.add_member(IdentityMember {
             app_id: other.app_id().clone(),
             auth_id: other.auth_id(),
             public_key: other.public_key(),
@@ -329,7 +334,10 @@ mod tests {
         assert_eq!(migrated.selected()?.identity_id, selected_id);
         assert_eq!(migrated.selected()?.members.len(), 2);
         assert_eq!(
-            migrated.open_or_generate_vault_dek(&shared, store_id)?,
+            migrated.open_vault_dek(IdentityVaultKeyOpening {
+                app_key: &shared,
+                store_id: store_id
+            })?,
             expected
         );
         Ok(())
@@ -338,7 +346,12 @@ mod tests {
     #[test]
     fn valid_directory_does_not_change() -> anyhow::Result<()> {
         let mut directory = IdentityDirectory::empty();
-        directory.create_identity("Personal", &AppKey::generate()?, None)?;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &AppKey::generate()?,
+            member_label: None,
+        })?;
+        directory = resolved_identity.directory;
         let expected = directory.clone();
 
         let (migrated, changed) = directory.migrate_legacy_duplicate_app_key_ownership()?;
@@ -352,8 +365,20 @@ mod tests {
     fn preserves_durably_referenced_identity_over_selected_identity() -> anyhow::Result<()> {
         let shared = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
-        let pending_identity_id = directory.create_identity("Pending genesis", &shared, None)?;
-        let selected_identity_id = directory.create_identity("Selected", &shared, None)?;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Pending genesis",
+            app_key: &shared,
+            member_label: None,
+        })?;
+        directory = resolved_identity.directory;
+        let pending_identity_id = resolved_identity.identity_id;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Selected",
+            app_key: &shared,
+            member_label: None,
+        })?;
+        directory = resolved_identity.directory;
+        let selected_identity_id = resolved_identity.identity_id;
         assert_ne!(pending_identity_id, selected_identity_id);
 
         let (migrated, changed) = directory
@@ -370,12 +395,33 @@ mod tests {
         let legacy_key = AppKey::generate()?;
         let candidate_key = AppKey::generate()?;
         let mut base = IdentityDirectory::empty();
-        let preserved_id = base.create_identity("Pending", &legacy_key, None)?;
-        base.create_identity("Legacy duplicate", &legacy_key, None)?;
-        base.select(&preserved_id)?;
+        let resolved_identity = base.create_identity(IdentityCreation {
+            label: "Pending",
+            app_key: &legacy_key,
+            member_label: None,
+        })?;
+        base = resolved_identity.directory;
+        let preserved_id = resolved_identity.identity_id;
+        let resolved_identity = base.create_identity(IdentityCreation {
+            label: "Legacy duplicate",
+            app_key: &legacy_key,
+            member_label: None,
+        })?;
+        base = resolved_identity.directory;
+        base = base.select(&preserved_id)?;
         let mut candidate = base.clone();
-        candidate.enroll_selected_app_key_for_vault_creation(&candidate_key, "Pending")?;
-        candidate.create_identity("Candidate overlap", &candidate_key, None)?;
+        let resolved_identity =
+            candidate.enroll_selected_app_key_for_vault_creation(DirectoryCreationEnrollment {
+                app_key: &candidate_key,
+                label: "Pending",
+            })?;
+        candidate = resolved_identity.directory;
+        let resolved_identity = candidate.create_identity(IdentityCreation {
+            label: "Candidate overlap",
+            app_key: &candidate_key,
+            member_label: None,
+        })?;
+        candidate = resolved_identity.directory;
 
         assert!(matches!(
             candidate.migrate_legacy_duplicate_app_key_ownership_from_base(&base, &preserved_id),

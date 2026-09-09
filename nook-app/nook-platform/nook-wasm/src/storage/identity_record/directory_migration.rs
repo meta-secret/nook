@@ -5,6 +5,7 @@ use crate::{
     NookDatabase, NookError,
 };
 use nook_core::IdentityDirectory;
+use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 impl NookDatabase {
     pub(super) async fn load_pending_genesis(
         store: &rexie::Store,
@@ -204,6 +205,8 @@ impl NookDatabase {
 }
 #[cfg(test)]
 mod tests {
+    use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
+
     use super::*;
     use nook_core::AppKey;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -212,12 +215,24 @@ mod tests {
         NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let mut legacy = IdentityDirectory::empty();
-        let pending_identity_id = legacy
-            .create_identity("Pending genesis", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
-        let selected_identity_id = legacy
-            .create_identity("Selected", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let resolved_identity = legacy
+            .create_identity(IdentityCreation {
+                label: "Pending genesis",
+                app_key: &app_key,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = resolved_identity.directory;
+        let pending_identity_id = resolved_identity.identity_id;
+        let resolved_identity = legacy
+            .create_identity(IdentityCreation {
+                label: "Selected",
+                app_key: &app_key,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = resolved_identity.directory;
+        let selected_identity_id = resolved_identity.identity_id;
         assert_ne!(pending_identity_id, selected_identity_id);
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: IDENTITY_DIRECTORY_KEY,
@@ -259,21 +274,35 @@ mod tests {
         NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let mut legacy = IdentityDirectory::empty();
-        let pending_identity_id = legacy
-            .create_identity("Pending genesis", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
-        legacy
-            .create_identity("Selected", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let resolved_identity = legacy
+            .create_identity(IdentityCreation {
+                label: "Pending genesis",
+                app_key: &app_key,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = resolved_identity.directory;
+        let pending_identity_id = resolved_identity.identity_id;
+        let resolved_identity = legacy
+            .create_identity(IdentityCreation {
+                label: "Selected",
+                app_key: &app_key,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = resolved_identity.directory;
         let store_id = nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?;
         let mut candidate = legacy.clone();
-        candidate
-            .open_or_generate_vault_dek_for_identity(
-                &pending_identity_id,
-                &app_key,
-                store_id.clone(),
-            )
-            .map_err(NookDatabase::map_domain_error)?;
+        let opened_identity = candidate
+            .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                identity_id: &pending_identity_id,
+                vault: IdentityVaultKeyOpening {
+                    app_key: &app_key,
+                    store_id: store_id.clone(),
+                },
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        candidate = opened_identity.directory;
         let pending = PendingSimpleGenesis {
             store_id: store_id.clone(),
             identity_id: pending_identity_id.clone(),

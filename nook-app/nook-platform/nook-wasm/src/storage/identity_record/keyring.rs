@@ -204,7 +204,7 @@ impl NookDatabase {
         request: KeyringDbLoadKeyringForStore<'_>,
     ) -> Result<nook_core::LocalIdentityKeyring, NookError> {
         let KeyringDbLoadKeyringForStore { store, directory } = request;
-        let mut keyring = match NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
+        let keyring = match NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
             store: store,
             key: LOCAL_IDENTITY_KEYRING_KEY,
             context: "Local identity keyring",
@@ -217,16 +217,17 @@ impl NookDatabase {
         let migrated = NookDatabase::migrate_legacy_active_key(LegacyIdentityKeyMigration {
             store: store,
             directory: directory,
-            keyring: &mut keyring,
+            keyring,
         })
         .await?;
+        let keyring = migrated.keyring;
         NookDatabase::validate_keyring_directory_binding(
             KeyringDbValidateKeyringDirectoryBinding {
                 keyring: &keyring,
                 directory: directory,
             },
         )?;
-        if migrated {
+        if matches!(migrated.state, legacy::LegacyKeyMigrationState::Migrated) {
             NookDatabase::write_keyring(KeyringDbWriteKeyring {
                 store: store,
                 keyring: &keyring,
@@ -411,9 +412,9 @@ impl NookDatabase {
             })?
             .app_id()
             .clone();
-        directory
+        directory = directory
             .select(&identity_id)
-            .map_err(NookDatabase::map_domain_error)?;
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         NookDatabase::write_identity_directory(IdentityDbWriteIdentityDirectory {
             store: &store,
             directory: &directory,

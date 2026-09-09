@@ -76,7 +76,10 @@ mod tests {
             let mut identity = IdentityRecord::create_with_app_key("Personal", &app, None)?;
             let peer = IdentityRecord::create_with_app_key("Peer", &second, None)?;
             identity.members.extend(peer.members);
-            let keys = identity.generate_vault_dek(StoreId::parse("store_abcdefghijk")?)?;
+            let opened_identity =
+                identity.generate_vault_dek(StoreId::parse("store_abcdefghijk")?)?;
+            identity = opened_identity.identity;
+            let keys = opened_identity.keys;
             let grant = identity
                 .vault_deks
                 .pop()

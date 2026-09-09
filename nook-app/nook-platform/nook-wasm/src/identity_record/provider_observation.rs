@@ -172,7 +172,10 @@ mod tests {
         let current_id = current.identity_id.clone();
         let current_entry = keyring_entry(&current, &current_key)?;
         let mut other = IdentityRecord::create_with_app_key("Work", &other_key, None)?;
-        other.generate_vault_dek(store_id.clone())?;
+        let opened_identity = other
+            .generate_vault_dek(store_id.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        other = opened_identity.identity;
         let other_entry = keyring_entry(&other, &other_key)?;
         let projection = projection(
             vec![current, other],
@@ -201,7 +204,10 @@ mod tests {
         let current_id = current.identity_id.clone();
         let current_entry = keyring_entry(&current, &current_key)?;
         let mut linked = IdentityRecord::create_with_app_key("Work", &linked_key, None)?;
-        linked.generate_vault_dek(store_id.clone())?;
+        let opened_identity = linked
+            .generate_vault_dek(store_id.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        linked = opened_identity.identity;
         let projection = projection(vec![current, linked], current_id, vec![current_entry])?;
 
         let decision = decision(current_key.app_id().as_str(), &store_id, &projection);
@@ -220,7 +226,10 @@ mod tests {
         let app_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
         let mut base = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
-        base.generate_vault_dek(store_id.clone())?;
+        let opened_identity = base
+            .generate_vault_dek(store_id.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        base = opened_identity.identity;
         let entry = keyring_entry(&base, &app_key)?;
 
         for (remove_secrets, remove_members) in [(true, false), (false, true), (true, true)] {

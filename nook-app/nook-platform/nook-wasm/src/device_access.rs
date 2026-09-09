@@ -671,8 +671,14 @@ mod tests {
         let unrelated_store = nook_core::StoreId::generate()?;
         let mut current = IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
         let mut companion = IdentityRecord::create_with_app_key("Work", &companion_key, None)?;
-        current.generate_vault_dek(current_store.clone())?;
-        companion.generate_vault_dek(companion_store.clone())?;
+        let opened_identity = current
+            .generate_vault_dek(current_store.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        current = opened_identity.identity;
+        let opened_identity = companion
+            .generate_vault_dek(companion_store.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        companion = opened_identity.identity;
         let vaults = vec![
             vault_row(&current_store, "Personal vault"),
             vault_row(&companion_store, "Work vault"),
@@ -702,8 +708,14 @@ mod tests {
         let work_store = nook_core::StoreId::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
         let mut work = IdentityRecord::create_with_app_key("Work", &work_key, None)?;
-        personal.generate_vault_dek(personal_store.clone())?;
-        work.generate_vault_dek(work_store.clone())?;
+        let opened_identity = personal
+            .generate_vault_dek(personal_store.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        personal = opened_identity.identity;
+        let opened_identity = work
+            .generate_vault_dek(work_store.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        work = opened_identity.identity;
         let mut personal_profile = DeviceAccessProfile::default();
         personal_profile = personal_profile.record_verified_vault_access(
             &DeviceId::parse(personal_key.app_id().as_str())?,
@@ -842,9 +854,10 @@ mod browser_tests {
             .map_err(|error| NookError::Database(error.to_string()))?;
         let mut identity = IdentityRecord::create_with_app_key("Companion", &companion_key, None)
             .map_err(|error| NookError::Database(error.to_string()))?;
-        identity
+        let opened_identity = identity
             .generate_vault_dek(store_id.clone())
             .map_err(|error| NookError::Database(error.to_string()))?;
+        identity = opened_identity.identity;
         NookDatabase::save_vault_blob(SaveVaultBlobRequest {
             store_id: store_id.as_str(),
             content: "encrypted-vault",

@@ -434,7 +434,7 @@ mod tests {
         let (second_signing, _) = SigningIdentity::generate()?;
         let mut identity =
             IdentityRecord::create_with_app_key("Personal", &current, Some("Browser".to_owned()))?;
-        identity.add_member(crate::IdentityMember {
+        identity = identity.add_member(crate::IdentityMember {
             app_id: second.app_id().clone(),
             auth_id: second.auth_id(),
             public_key: second.public_key(),

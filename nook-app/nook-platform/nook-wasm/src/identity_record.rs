@@ -4,6 +4,7 @@ use crate::BrowserDeviceAccessSnapshotForSessionWithProtected;
 use crate::BrowserDeviceVaultAccessForIdentity;
 use crate::NookDatabase;
 use crate::storage::identity_record;
+use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::{
     NookError,
     device_access::{self, NookDeviceAccessSnapshot, NookDeviceVaultAccess},
@@ -612,7 +613,8 @@ pub async fn select_identity(identity_id: String) -> Result<(), wasm_bindgen::Js
     NookDatabase::update_identity_directory(move |directory| {
         directory
             .select(&identity_id)
-            .map_err(|error| NookError::Database(error.to_string()))
+            .map(IdentityDirectoryWrite::from)
+            .map_err(|rejected| NookError::Database(rejected.into_cause().to_string()))
     })
     .await
     .map_err(|error| JsError::new(&error.to_string()))
@@ -660,7 +662,10 @@ mod tests {
         let mut record =
             IdentityRecord::create_with_app_key("Personal", &app_key, Some("MacBook".to_owned()))?;
         let store_id = nook_core::StoreId::generate()?;
-        record.generate_vault_dek(store_id.clone())?;
+        let opened_identity = record
+            .generate_vault_dek(store_id.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        record = opened_identity.identity;
         let local_protections = [LocalAppProtection {
             app_id: app_key.app_id().clone(),
             protection: DeviceAccessProtectionKind::PasskeyStandard,
@@ -738,7 +743,10 @@ mod tests {
         let personal_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
-        personal.generate_vault_dek(store_id.clone())?;
+        let opened_identity = personal
+            .generate_vault_dek(store_id.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        personal = opened_identity.identity;
         let linked = [&personal];
         let current_app_granted = NookIdentityDirectorySnapshot::selected_vault_current_app_granted(
             BrowserSelectedVaultCurrentAppGranted {
@@ -838,7 +846,10 @@ mod tests {
         let app_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
         let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
-        identity.generate_vault_dek(store_id.clone())?;
+        let opened_identity = identity
+            .generate_vault_dek(store_id.clone())
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        identity = opened_identity.identity;
         let vault = identity
             .vault_deks
             .iter_mut()

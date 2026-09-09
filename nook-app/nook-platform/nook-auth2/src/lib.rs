@@ -49,14 +49,24 @@ pub use auth::enrollment::{
     SharedProviderGrant, TypedEnrollmentProvider,
 };
 pub use auth::identity::{
-    IdentityId, IdentityMember, IdentityMemberKeyBinding, IdentityRecord,
-    IdentityVaultAppEnvelopes, IdentityVaultDek, IdentityVaultDekEpoch,
-    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, MemberDekEnvelope,
+    IdentityId, IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation, IdentityMember,
+    IdentityMemberKeyBinding, IdentityMemberSigningUpdate, IdentityMemberVaultGrant,
+    IdentityRecord, IdentityRecordRejection, IdentityVaultAppEnvelopes, IdentityVaultDek,
+    IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation,
+    IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
 };
-pub use auth::identity_directory::{IdentityDirectory, IdentitySelection};
+pub use auth::identity_directory::{
+    DirectoryCreationEnrollment, DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate,
+    DirectoryOwnedVaultOpening, DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory,
+    IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
+    IdentitySelection, LocalIdentityKeyRetirement, StagedIdentityRebase,
+};
 
 pub use auth::local_identity_keyring::{
+    IdentitySigningSeedProtection, KeyringEntryRejection, KeyringRejection,
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
+    ProtectedIdentityKeyring, ProtectedSigningEntry, RemovedLocalIdentityKey,
+    SigningSeedProtection, WrappedAppKeyReplacement,
 };
 #[cfg(any(test, feature = "mock-passkey"))]
 pub use auth::mock_passkey::{

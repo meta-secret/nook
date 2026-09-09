@@ -4,6 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Selection of the initiating local identity and surviving protected keys.
+use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::{device_access, identity_record, indexed_db};
 use crate::{IdbPutStringRequest, NookDatabase, NookError, ReadStringPreferringRequest};
 use crate::{
@@ -12,6 +13,7 @@ use crate::{
     IdentityDbValidateVaultIdentityEnrollment, KeyringDbLoadKeyringForStore,
 };
 use identity_record::keyring;
+use nook_core::LocalIdentityKeyRetirement;
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, LocalIdentityKeyring};
 pub(super) struct RecoveryState {
     pub(super) directory: nook_core::IdentityDirectory,
@@ -86,9 +88,9 @@ impl RecoveryPlanning<'_> {
             .iter()
             .map(|app_id| RecoveryAccessProfile { app_id }.key())
             .collect();
-        directory.reset_for_device_recovery(None);
+        directory = directory.reset_for_device_recovery(None);
         for app_id in app_ids {
-            directory.retire_app_id(app_id);
+            directory = directory.retire_app_id(app_id);
         }
         directory
             .validate()
@@ -132,7 +134,7 @@ impl RecoveryPlanning<'_> {
                     .entries()
                     .iter()
                     .find(|entry| entry.app_id() == expected)
-                    .cloned()
+                    .map(|entry| entry.identity_id().clone())
                     .ok_or_else(|| {
                         NookError::Database(
                             "Recovery target changed before confirmation".to_owned(),
@@ -141,14 +143,19 @@ impl RecoveryPlanning<'_> {
             )
         };
         let (retired_identity_id, retired_app_id, access_profile_keys) =
-            if let Some(entry) = target_entry {
+            if let Some(identity_id) = target_entry {
                 let prior_selection = directory.selection().clone();
-                let retired_identity_id = entry.identity_id().clone();
-                keyring
-                    .remove(entry.identity_id())
-                    .map_err(|error| NookError::Database(error.to_string()))?;
-                directory
-                    .retire_local_identity_key(entry.identity_id(), entry.app_id())
+                let removed = keyring
+                    .remove(&identity_id)
+                    .map_err(|rejected| NookError::Database(rejected.into_cause().to_string()))?;
+                keyring = removed.keyring;
+                let entry = removed.entry;
+                let retired_identity_id = identity_id;
+                directory = directory
+                    .retire_local_identity_key(LocalIdentityKeyRetirement {
+                        identity_id: entry.identity_id(),
+                        app_id: entry.app_id(),
+                    })
                     .map_err(|error| NookError::Database(error.to_string()))?;
                 let surviving_selection = match prior_selection {
                     IdentitySelection::Selected(identity_id)
@@ -159,15 +166,15 @@ impl RecoveryPlanning<'_> {
                     IdentitySelection::Empty | IdentitySelection::Selected(_) => None,
                 };
                 if let Some(identity_id) = surviving_selection {
-                    directory
+                    directory = directory
                         .select(&identity_id)
                         .map_err(|error| NookError::Database(error.to_string()))?;
                 } else if let Some(next) = keyring.entries().first() {
-                    directory
+                    directory = directory
                         .select(next.identity_id())
                         .map_err(|error| NookError::Database(error.to_string()))?;
                 } else {
-                    directory.clear_selection();
+                    directory = directory.clear_selection();
                 }
                 (
                     Some(retired_identity_id),
@@ -188,7 +195,7 @@ impl RecoveryPlanning<'_> {
                         "Recovery target changed before confirmation".to_owned(),
                     ));
                 }
-                directory.reset_for_device_recovery(persisted_app_id.clone());
+                directory = directory.reset_for_device_recovery(persisted_app_id.clone());
                 keyring = LocalIdentityKeyring::empty();
                 (None, persisted_app_id, Vec::new())
             };
@@ -207,6 +214,8 @@ impl RecoveryPlanning<'_> {
 }
 #[cfg(test)]
 mod tests {
+    use crate::storage::identity_record::IdentityDirectoryWrite;
+
     use super::*;
     use crate::storage::identity_record;
     use crate::storage::{device_access, event_db, indexed_db};
@@ -778,16 +787,15 @@ mod tests {
         let identity_id = saved.identity.identity_id.clone();
         NookDatabase::update_identity_directory(move |directory| {
             directory
-                .selected_mut()
-                .map_err(NookDatabase::map_domain_error)?
-                .add_member(nook_core::IdentityMember {
+                .add_selected_member(nook_core::IdentityMember {
                     app_id: peer_key.app_id().clone(),
                     auth_id: peer_key.auth_id(),
                     public_key: peer_key.public_key(),
                     signing_public_key: DeviceSigningPublicKey::Unavailable,
                     label: None,
                 })
-                .map_err(NookDatabase::map_domain_error)
+                .map(IdentityDirectoryWrite::from)
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))
         })
         .await?;
 

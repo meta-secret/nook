@@ -10,6 +10,10 @@ use crate::manager::PendingExtensionIdentityEnrollment;
 use crate::storage::event_db;
 use crate::{IdbPutStringRequest, NookDatabase, manager};
 use existing_vault::ExistingVaultHandoff;
+use nook_core::{
+    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
+    IdentityCreation, IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
+};
 use rexie::TransactionMode;
 
 use super as identity_record;
@@ -100,12 +104,17 @@ impl IdentityHandoffCommit<'_> {
             PendingExtensionIdentityEnrollment::PairedVault {
                 authorizer,
                 store_id,
-            } => (
-                directory
-                    .enroll_app_key_for_owned_vault(authorizer, input.app_key, store_id)
-                    .map_err(NookDatabase::map_domain_error)?,
-                None,
-            ),
+            } => {
+                let enrolled = directory
+                    .enroll_app_key_for_owned_vault(DirectoryVaultEnrollment {
+                        current_app_key: authorizer,
+                        new_app_key: input.app_key,
+                        store_id,
+                    })
+                    .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+                directory = enrolled.directory;
+                (enrolled.identity_id, None)
+            }
             PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. } => {
                 return Err(NookError::Database(
                     "Paired session unlock does not publish identity membership.".to_owned(),
@@ -119,7 +128,7 @@ impl IdentityHandoffCommit<'_> {
                     NookError::IndexedDb(format!("Handoff event store error: {error:?}"))
                 })?;
                 let imported = ExistingVaultHandoff {
-                    directory: &mut directory,
+                    directory,
                     events: &events,
                     store_id,
                     app_key: input.app_key,
@@ -128,20 +137,29 @@ impl IdentityHandoffCommit<'_> {
                 }
                 .import()
                 .await?;
+                directory = imported.directory;
                 (imported.identity_id, Some(imported.vault_keys))
             }
         };
-        directory
-            .set_member_signing_public_key(
-                &identity_id,
-                input.app_key.app_id(),
-                input.signing_public_key,
-            )
-            .map_err(NookDatabase::map_domain_error)?;
+        directory = directory
+            .set_member_signing_public_key(DirectoryMemberSigningUpdate {
+                identity_id: &identity_id,
+                member: IdentityMemberSigningUpdate {
+                    app_id: input.app_key.app_id(),
+                    signing_public_key: input.signing_public_key,
+                },
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         if let Some((app_id, signing_public_key)) = input.authorizer_signing {
-            directory
-                .set_member_signing_public_key(&identity_id, app_id, signing_public_key)
-                .map_err(NookDatabase::map_domain_error)?;
+            directory = directory
+                .set_member_signing_public_key(DirectoryMemberSigningUpdate {
+                    identity_id: &identity_id,
+                    member: IdentityMemberSigningUpdate {
+                        app_id: app_id,
+                        signing_public_key: signing_public_key,
+                    },
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         }
         directory
             .validate()
@@ -173,6 +191,8 @@ impl IdentityHandoffCommit<'_> {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
+    use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
+
     use super::{IdentityHandoffCommit, PendingExtensionIdentityEnrollment};
     use crate::NookError;
     use crate::storage::{event_db, identity_record, indexed_db};
@@ -265,12 +285,25 @@ mod tests {
         let fixture = HandoffFixture::new()?;
         let authorizer = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
-        let identity_id = directory.create_identity("Authorizer", &authorizer, None)?;
-        directory.open_or_generate_vault_dek_for_identity(
-            &identity_id,
-            &authorizer,
-            fixture.store_id.clone(),
-        )?;
+        let resolved_identity = directory
+            .create_identity(IdentityCreation {
+                label: "Authorizer",
+                app_key: &authorizer,
+                member_label: None,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        directory = resolved_identity.directory;
+        let identity_id = resolved_identity.identity_id;
+        let opened_identity = directory
+            .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                identity_id: &identity_id,
+                vault: IdentityVaultKeyOpening {
+                    app_key: &authorizer,
+                    store_id: fixture.store_id.clone(),
+                },
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        directory = opened_identity.directory;
         let encoded = serde_json::to_string(&directory)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         NookDatabase::clear_vault_db().await?;

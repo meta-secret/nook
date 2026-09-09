@@ -5,6 +5,7 @@ use crate::IdentityDbGenerateVaultDekForIdentity;
 use crate::NookDatabase;
 use crate::storage::identity_record;
 use crate::{NookError, NookSecretRecord};
+use nook_core::{DirectoryOwnedVaultOpening, IdentityVaultKeyOpening};
 use nook_core::{
     GenesisMembersRecordsRequest, IdentityRecord, IdentityVaultGenesisRecordsRequest, VaultMember,
 };
@@ -50,15 +51,19 @@ impl NookVaultManager {
         .await?;
         self.vault.store_id = pending.store_id.to_string();
         if let Some(staged) = pending.staged_identity() {
-            let mut directory = staged.directory.clone();
-            let keys = directory
-                .open_or_generate_vault_dek_for_identity(
-                    &pending.identity_id,
-                    identity,
-                    pending.store_id.clone(),
-                )
+            let keys = staged
+                .directory
+                .open_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                    identity_id: &pending.identity_id,
+                    vault: IdentityVaultKeyOpening {
+                        app_key: identity,
+                        store_id: pending.store_id.clone(),
+                    },
+                })
                 .map_err(|error| NookError::Database(error.to_string()))?;
-            let identity_record = directory
+
+            let identity_record = staged
+                .directory
                 .identities()
                 .iter()
                 .find(|record| record.identity_id == pending.identity_id)

@@ -14,8 +14,10 @@ use crate::storage::{self, event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::{
     AppId, AppKey, DeviceSigningPublicKey, IdentityDirectory, IdentityId, IdentitySelection,
-    LocalIdentityKeyring, LocalIdentityKeyringEntry, SigningIdentity, i18n_keys,
+    IdentitySigningSeedProtection, LocalIdentityKeyring, LocalIdentityKeyringEntry,
+    SigningIdentity, SigningSeedProtection, i18n_keys,
 };
+use nook_core::{DirectoryMemberSigningUpdate, IdentityMemberSigningUpdate};
 use rexie::{Store, TransactionMode};
 
 pub(super) enum SigningSeedOrigin {
@@ -168,14 +170,21 @@ impl IdentitySigningEvidence<'_> {
 }
 pub(super) struct LegacySignerProtection<'a> {
     pub(super) store: &'a Store,
-    pub(super) directory: &'a mut IdentityDirectory,
-    pub(super) keyring: &'a mut LocalIdentityKeyring,
+    pub(super) directory: IdentityDirectory,
+    pub(super) keyring: LocalIdentityKeyring,
+}
+pub(super) struct ProtectedLegacySigners {
+    pub(super) directory: IdentityDirectory,
+    pub(super) keyring: LocalIdentityKeyring,
 }
 impl LegacySignerProtection<'_> {
-    pub(super) async fn protect(self, prior_app_key: Option<&AppKey>) -> Result<(), NookError> {
+    pub(super) async fn protect(
+        self,
+        prior_app_key: Option<&AppKey>,
+    ) -> Result<ProtectedLegacySigners, NookError> {
         let Self {
             store,
-            directory,
+            mut directory,
             keyring,
         } = self;
         let Some(seed) = NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
@@ -185,7 +194,7 @@ impl LegacySignerProtection<'_> {
         })
         .await?
         else {
-            return Ok(());
+            return Ok(ProtectedLegacySigners { directory, keyring });
         };
         let IdentitySelection::Selected(identity_id) = directory.selection() else {
             return Err(NookError::Database(
@@ -193,11 +202,11 @@ impl LegacySignerProtection<'_> {
             ));
         };
         let identity_id = identity_id.clone();
-        let existing = keyring.entry(&identity_id).cloned().ok_or_else(|| {
+        let existing = keyring.entry(&identity_id).ok_or_else(|| {
             NookError::Database("Legacy signing seed owner has no local keyring entry".to_owned())
         })?;
         if existing.has_signing_seed() {
-            return Ok(());
+            return Ok(ProtectedLegacySigners { directory, keyring });
         }
         let prior_app_key = prior_app_key.ok_or_else(|| {
             NookError::Decryption(
@@ -205,7 +214,7 @@ impl LegacySignerProtection<'_> {
             )
         })?;
         let established_signing_public_key = IdentitySigningEvidence {
-            directory,
+            directory: &directory,
             identity_id: &identity_id,
             app_id: prior_app_key.app_id(),
         }
@@ -214,21 +223,29 @@ impl LegacySignerProtection<'_> {
             .map_err(|error| NookError::Database(error.to_string()))?
             .public_key();
         EstablishedSigningKey(&established_signing_public_key).check(&signing_public_key)?;
-        let mut protected = existing;
-        let protected_signing_public_key = protected
-            .protect_signing_seed(prior_app_key, &seed)
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        EstablishedSigningKey(&signing_public_key).check(&protected_signing_public_key)?;
-        keyring
-            .replace(protected)
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        directory
-            .set_member_signing_public_key(
-                &identity_id,
-                prior_app_key.app_id(),
-                &protected_signing_public_key,
-            )
-            .map_err(NookDatabase::map_domain_error)
+        let protected = keyring
+            .protect_signing_seed(IdentitySigningSeedProtection {
+                identity_id: &identity_id,
+                material: SigningSeedProtection {
+                    app_key: prior_app_key,
+                    signing_seed: &seed,
+                },
+            })
+            .map_err(|rejected| NookError::Database(rejected.into_cause().to_string()))?;
+        EstablishedSigningKey(&signing_public_key).check(&protected.signing_public_key)?;
+        directory = directory
+            .set_member_signing_public_key(DirectoryMemberSigningUpdate {
+                identity_id: &identity_id,
+                member: IdentityMemberSigningUpdate {
+                    app_id: prior_app_key.app_id(),
+                    signing_public_key: &protected.signing_public_key,
+                },
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        Ok(ProtectedLegacySigners {
+            directory,
+            keyring: protected.keyring,
+        })
     }
 }
 pub(crate) struct LocalIdentitySigner<'a> {
@@ -256,7 +273,6 @@ impl LocalIdentitySigner<'_> {
             .entries()
             .iter()
             .find(|entry| entry.app_id() == app_key.app_id())
-            .cloned()
             .ok_or_else(|| {
                 NookError::Database("App key has no protected local keyring entry".to_owned())
             })?;
@@ -270,7 +286,7 @@ impl LocalIdentitySigner<'_> {
         let vaults = evidence.vaults()?;
         let signing = IdentitySigningSource {
             store: &store,
-            existing: Some(&existing),
+            existing: Some(existing),
             app_key,
             origin: SigningSeedOrigin::MigrateLegacy,
             established: &established,
@@ -279,16 +295,25 @@ impl LocalIdentitySigner<'_> {
         .check()
         .await?;
         if !existing.has_signing_seed() {
-            let mut updated = existing;
-            updated
-                .protect_signing_seed(app_key, signing.seed())
-                .map_err(|error| NookError::Database(error.to_string()))?;
-            keyring
-                .replace(updated)
-                .map_err(|error| NookError::Database(error.to_string()))?;
-            directory
-                .set_member_signing_public_key(&identity_id, app_key.app_id(), signing.public_key())
-                .map_err(NookDatabase::map_domain_error)?;
+            keyring = keyring
+                .protect_signing_seed(IdentitySigningSeedProtection {
+                    identity_id: &identity_id,
+                    material: SigningSeedProtection {
+                        app_key,
+                        signing_seed: signing.seed(),
+                    },
+                })
+                .map_err(|rejected| NookError::Database(rejected.into_cause().to_string()))?
+                .keyring;
+            directory = directory
+                .set_member_signing_public_key(DirectoryMemberSigningUpdate {
+                    identity_id: &identity_id,
+                    member: IdentityMemberSigningUpdate {
+                        app_id: app_key.app_id(),
+                        signing_public_key: signing.public_key(),
+                    },
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
             NookDatabase::write_keyring(KeyringDbWriteKeyring {
                 store: &store,
                 keyring: &keyring,
