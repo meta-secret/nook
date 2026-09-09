@@ -17,6 +17,9 @@ import {
 } from '../../lib/login-picker-messages'
 import {
   AuthenticationWorkflowAction,
+  AuthenticationWorkflowActivity,
+  authentication_workflow_activity_progress,
+  project_password_workflow_activity,
   GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
@@ -99,8 +102,9 @@ class LoginPasskeyInteraction {
       workflowUi.setFlightProgress({
         step,
         title,
-        currentStep: 1,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.ReadyLogin,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
 
@@ -280,8 +284,9 @@ class LoginPasskeyInteraction {
         workflowUi.setFlightProgress({
           step,
           title,
-          currentStep: 2,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.FillingLogin,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
         })
 
@@ -300,8 +305,9 @@ class LoginPasskeyInteraction {
         workflowUi.setFlightProgress({
           step,
           title,
-          currentStep: 2,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.FillingLogin,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
         })
         description.textContent = workflowUi.translatedMessage(
@@ -314,8 +320,9 @@ class LoginPasskeyInteraction {
       workflowUi.setFlightProgress({
         step,
         title,
-        currentStep: 3,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.VerifyingLogin,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetVerifyingTitle,
       })
       description.textContent = workflowUi.translatedMessage(
@@ -350,8 +357,9 @@ class LoginPasskeyInteraction {
       workflowUi.setFlightProgress({
         step,
         title,
-        currentStep: 1,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.ReadyLogin,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
 
@@ -370,8 +378,9 @@ class LoginPasskeyInteraction {
       workflowUi.setFlightProgress({
         step,
         title,
-        currentStep: 1,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.ReadyLogin,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
 
@@ -389,8 +398,9 @@ class LoginPasskeyInteraction {
       workflowUi.setFlightProgress({
         step,
         title,
-        currentStep: 1,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.ReadyLogin,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
 
@@ -409,8 +419,9 @@ class LoginPasskeyInteraction {
       workflowUi.setFlightProgress({
         step,
         title,
-        currentStep: 1,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.ReadyLogin,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
 
@@ -483,8 +494,9 @@ class LoginPasskeyInteraction {
     workflowUi.setFlightProgress({
       step,
       title,
-      currentStep: 2,
-      totalSteps: 3,
+      ...authentication_workflow_activity_progress(
+        AuthenticationWorkflowActivity.FillingLogin,
+      ),
       titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
     })
 
@@ -524,14 +536,16 @@ class LoginPasskeyInteraction {
     if (widgetState.busy) return
     widgetState.busy = true
     continueButton.disabled = true
-    const totalSteps = workflow.summary.currentPasswordFieldCount > 0 ? 4 : 5
+    const activity = project_password_workflow_activity({
+      currentPasswordFieldCount: workflow.summary.currentPasswordFieldCount,
+      newPasswordFieldCount: workflow.summary.newPasswordFieldCount,
+    })
 
     workflowUi.setFlightProgress({
       step,
       title,
-      currentStep: 2,
-      totalSteps,
-      titleKey: WorkflowCopy.titleForObservation(workflow),
+      ...activity.generationProgress,
+      titleKey: WorkflowCopy.forKind(activity.kind).titleKey,
     })
 
     authenticationWorkflowUi.setStatus({
@@ -825,8 +839,9 @@ class LoginPasskeyInteraction {
     workflowUi.setFlightProgress({
       step,
       title,
-      currentStep: 2,
-      totalSteps: 3,
+      ...authentication_workflow_activity_progress(
+        AuthenticationWorkflowActivity.FillingLogin,
+      ),
       titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
     })
 
@@ -851,8 +866,9 @@ class LoginPasskeyInteraction {
         workflowUi.setFlightProgress({
           step,
           title,
-          currentStep: 1,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.ReadyLogin,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         })
 
@@ -872,8 +888,9 @@ class LoginPasskeyInteraction {
         workflowUi.setFlightProgress({
           step,
           title,
-          currentStep: 1,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.ReadyLogin,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         })
 
@@ -892,8 +909,9 @@ class LoginPasskeyInteraction {
         workflowUi.setFlightProgress({
           step,
           title,
-          currentStep: 1,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.ReadyLogin,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         })
 
@@ -915,8 +933,9 @@ class LoginPasskeyInteraction {
         workflowUi.setFlightProgress({
           step,
           title,
-          currentStep: 1,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.ReadyLogin,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         })
 

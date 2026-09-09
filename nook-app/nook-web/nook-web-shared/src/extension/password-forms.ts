@@ -2,6 +2,7 @@ import { PasswordFormSummaryObservation } from "./password-form-summary-observat
 import { companionWasmReady } from "./companion-ready";
 import {
   authentication_advance_control_is_safe,
+  authentication_control_transportable,
   authentication_page_observation_facts_priority,
   authentication_passkey_control_candidate_is_safe,
   looks_like_one_time_code_auto_submit_signal,
@@ -261,11 +262,11 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     request: PageControlObservationRequest,
   ): AuthenticationAdvanceControlObservation[] {
     const observation = this.pageControlObservation(request);
-    if (observation.submissionMethod === PageControlSubmissionMethod.Dialog)
-      return [];
     if (
-      observation.submissionMethod === PageControlSubmissionMethod.Get &&
-      request.observation.summary.usernameFieldCount !== 1
+      !authentication_control_transportable({
+        submissionMethod: observation.submissionMethod,
+        usernameFieldCount: request.observation.summary.usernameFieldCount,
+      })
     )
       return [];
     return authenticationSubmissionControls.authenticationFactStringsAreTransportable(

@@ -212,30 +212,6 @@ class BackgroundVaultRuntime {
     )
   }
 
-  private isImportedEventLogState(
-    value: unknown,
-  ): value is ImportedEventLogState {
-    if (!value || typeof value !== 'object') return false
-    const status = value as Record<string, unknown>
-    if (
-      typeof status.vaultStoreId !== 'string' ||
-      typeof status.eventCount !== 'number' ||
-      !Number.isInteger(status.eventCount) ||
-      status.eventCount < 0 ||
-      typeof status.accessGranted !== 'boolean' ||
-      !Array.isArray(status.heads) ||
-      !status.heads.every((head) => typeof head === 'string')
-    ) {
-      return false
-    }
-    // Denied imports may report zero heads after rollback; granted imports must
-    // still prove a non-empty applicable projection.
-    if (status.accessGranted) {
-      return status.eventCount > 0 && status.heads.length > 0
-    }
-    return true
-  }
-
   async importExtensionEventLog({
     grant,
     records,
@@ -252,12 +228,11 @@ class BackgroundVaultRuntime {
         grant.deviceSigningPublicKey,
         recordValues,
       )
-      const status = statusValue.to_object()
-      statusValue.free()
-      if (!this.isImportedEventLogState(status)) {
-        throw new Error('Rust returned an invalid extension event-log status.')
+      try {
+        return statusValue.to_object()
+      } finally {
+        statusValue.free()
       }
-      return status
     } finally {
       manager.free()
     }

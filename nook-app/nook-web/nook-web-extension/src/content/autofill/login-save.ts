@@ -9,6 +9,9 @@ import {
 import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
   AuthenticationOutcomeResponseKind,
+  AuthenticationWorkflowActivity,
+  authentication_workflow_activity_progress,
+  is_authentication_navigation_path,
   AuthenticationOutcomeVerdict,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { AuthenticationGesture } from '../../lib/auth-widget-policy'
@@ -131,12 +134,6 @@ class LoginSaveInteraction {
     await this.dismissSaveOffer(offer)
   }
 
-  private pageLooksLikeAuthPath(pathname: string): boolean {
-    return /(?:^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|password|passwd|auth|sso|otp|2fa|mfa|verify)(?:\/|$)/i.test(
-      pathname,
-    )
-  }
-
   private collectOutcomeObservation({
     startedAt,
     authPath,
@@ -162,7 +159,7 @@ class LoginSaveInteraction {
     return {
       navigatedAwayFromAuthPath:
         location.pathname !== authPath ||
-        !this.pageLooksLikeAuthPath(location.pathname),
+        !is_authentication_navigation_path(location.pathname),
       authFieldsPresent,
       successMarkerPresent,
       errorMarkerPresent,
@@ -425,8 +422,9 @@ class LoginSaveInteraction {
     const step = document.createElement('p')
     step.className = 'step-label'
     const nookTypedArgs0_2: Parameters<typeof workflowUi.progressLabel>[0] = {
-      currentStep: 4,
-      totalSteps: 4,
+      ...authentication_workflow_activity_progress(
+        AuthenticationWorkflowActivity.SaveOffer,
+      ),
     }
     step.textContent = workflowUi.progressLabel(nookTypedArgs0_2)
 

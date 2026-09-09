@@ -6,6 +6,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { AuthenticationWorkflowApproval } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import { emptyPasswordFormSummary } from '../../../../nook-web-shared/src/extension/password-form-summary-state'
 
 const actionMocks = vi.hoisted(() => ({
   clearLoginCredentials: vi.fn(),
@@ -116,7 +117,10 @@ vi.mock(
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/workflow-ui',
-  () => ({
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('../../../../nook-web-extension/src/content/autofill/workflow-ui')
+    >()),
     workflowUi: {
       setFlightProgress: vi.fn(),
       translatedMessage: (key: string) => key,
@@ -137,7 +141,7 @@ import { loginPasskeyInteraction } from '../../../../nook-web-extension/src/cont
 const workflow = {
   root: document,
   formScope: { kind: 'unowned' },
-  summary: {},
+  summary: { ...emptyPasswordFormSummary, newPasswordFieldCount: 1 },
 } as unknown as PasswordFormObservation
 
 const approval: AuthenticationWorkflowApproval = {

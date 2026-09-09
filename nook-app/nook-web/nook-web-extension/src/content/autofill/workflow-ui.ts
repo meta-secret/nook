@@ -1,4 +1,3 @@
-import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
@@ -73,20 +72,6 @@ export class WorkflowCopy {
           descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,
         })
     }
-  }
-  static titleForObservation(
-    workflow: PasswordFormObservation,
-  ): BrowserMessageKey {
-    if (
-      workflow.summary.currentPasswordFieldCount > 0 &&
-      workflow.summary.newPasswordFieldCount > 0
-    ) {
-      return BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle
-    }
-    if (workflow.summary.newPasswordFieldCount > 0) {
-      return BROWSER_MESSAGE_KEYS.WidgetSignupTitle
-    }
-    return BROWSER_MESSAGE_KEYS.WidgetLoginTitle
   }
 }
 

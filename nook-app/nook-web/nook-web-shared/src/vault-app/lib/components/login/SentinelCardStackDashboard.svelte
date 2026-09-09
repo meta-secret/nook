@@ -25,6 +25,7 @@
   import type { VaultState } from "$lib/vault.svelte";
   import {
     SentinelGenesisPhase,
+    evaluate_sentinel_policy_draft,
     sentinel_genesis_phase_translation_key,
     type NookSentinelGenesisDelivery,
     type NookSentinelGenesisParticipantStatus,
@@ -139,14 +140,14 @@
   const availableRosterSlots = $derived(
     Math.max(0, participantCount - rosterCount),
   );
+  const policyDraft = $derived(
+    evaluate_sentinel_policy_draft({
+      participants: participantCount,
+      threshold,
+    }),
+  );
   const policyValid = $derived(
-    name.trim().length > 0 &&
-      Number.isInteger(participantCount) &&
-      participantCount >= 2 &&
-      participantCount <= 16 &&
-      Number.isInteger(threshold) &&
-      threshold >= 2 &&
-      threshold <= participantCount,
+    name.trim().length > 0 && policyDraft.admission.kind === "accepted",
   );
   const onboardingStep = $derived(
     onboardingStage === SentinelCardOnboardingStage.Identity
@@ -650,7 +651,7 @@
                       side="top"
                       class="max-h-80 border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
                     >
-                      {#each [...Array(participantCount - 1).keys()].map((index) => index + 2) as option (option)}
+                      {#each policyDraft.thresholdChoices as option (option)}
                         <Select.Item
                           value={String(option)}
                           class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
@@ -690,7 +691,7 @@
                       side="top"
                       class="max-h-80 border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
                     >
-                      {#each [3, 4, 5] as option (option)}
+                      {#each policyDraft.participantChoices.filter( (option) => [3, 4, 5].includes(option) ) as option (option)}
                         <Select.Item
                           value={String(option)}
                           class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"

@@ -38,6 +38,7 @@
   import { sentinelGenesisBrowser } from "$lib/enrollment/sentinel-genesis-link";
   import {
     SentinelGenesisPhase,
+    evaluate_sentinel_policy_draft,
     VaultApplication,
     sentinel_genesis_participant_fingerprint,
     type NookSentinelGenesisDelivery,
@@ -199,13 +200,14 @@
   const trimmedVaultName = $derived(vaultName.trim());
   const vaultNameReady = $derived(trimmedVaultName.length > 0);
   const sentinelNameReady = $derived(sentinelName.trim().length > 0);
+  const sentinelPolicy = $derived(
+    evaluate_sentinel_policy_draft({
+      participants: sentinelParticipantCount,
+      threshold: sentinelThreshold,
+    }),
+  );
   const sentinelPolicyValid = $derived(
-    Number.isInteger(sentinelParticipantCount) &&
-      Number.isInteger(sentinelThreshold) &&
-      sentinelParticipantCount >= 2 &&
-      sentinelParticipantCount <= 16 &&
-      sentinelThreshold >= 2 &&
-      sentinelThreshold <= sentinelParticipantCount,
+    sentinelPolicy.admission.kind === "accepted",
   );
   const sentinelDashboardActive = $derived(
     sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen &&

@@ -21,6 +21,7 @@
   import type { VaultState } from "$lib/vault.svelte";
   import {
     SentinelGenesisPhase,
+    evaluate_sentinel_policy_draft,
     sentinel_genesis_phase_translation_key,
     type NookSentinelGenesisDelivery,
     type NookSentinelGenesisParticipantStatus,
@@ -88,15 +89,14 @@
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
   );
-  const participantChoices = [...Array(15).keys()].map((index) => index + 2);
+  const policyDraft = $derived(
+    evaluate_sentinel_policy_draft({
+      participants: participantCount,
+      threshold,
+    }),
+  );
   const policyValid = $derived(
-    name.trim().length > 0 &&
-      Number.isInteger(participantCount) &&
-      participantCount >= 2 &&
-      participantCount <= 16 &&
-      Number.isInteger(threshold) &&
-      threshold >= 2 &&
-      threshold <= participantCount,
+    name.trim().length > 0 && policyDraft.admission.kind === "accepted",
   );
   const rosterCount = $derived(Math.max(1, participants.length));
   const workflowStage = $derived(
@@ -145,7 +145,14 @@
 
   function chooseTotal(value: number) {
     participantCount = value;
-    threshold = Math.min(threshold, value);
+    const choices = evaluate_sentinel_policy_draft({
+      participants: value,
+      threshold,
+    }).thresholdChoices;
+    if (!choices.includes(threshold)) {
+      const lastChoice = choices.at(-1);
+      if (lastChoice !== undefined) threshold = lastChoice;
+    }
     policyStep = SentinelTerminalPolicyStep.Threshold;
     void scrollOutput();
   }
@@ -335,7 +342,7 @@
                 {vault.t(I18N_KEYS.LoginSentinelTerminalTotalQuestion)}
               </p>
               <div class="mt-3 flex flex-wrap gap-2">
-                {#each participantChoices as choice (choice)}
+                {#each policyDraft.participantChoices as choice (choice)}
                   <button
                     {...choice === participantCount
                       ? {
@@ -356,7 +363,7 @@
                 {vault.t(I18N_KEYS.LoginSentinelTerminalThresholdQuestion)}
               </p>
               <div class="mt-3 flex flex-wrap gap-2">
-                {#each [...Array(participantCount - 1).keys()].map((index) => index + 2) as choice (choice)}
+                {#each policyDraft.thresholdChoices as choice (choice)}
                   <button
                     {...choice === threshold
                       ? { "data-testid": "sentinel-genesis-threshold" }

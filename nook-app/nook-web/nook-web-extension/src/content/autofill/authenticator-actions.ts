@@ -9,6 +9,8 @@ import {
 
 import {
   AuthenticationWorkflowAction,
+  AuthenticationWorkflowActivity,
+  authentication_workflow_activity_progress,
   AuthenticatorCodeResponseKind,
   AuthenticatorPickerOpenResponseKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -92,8 +94,9 @@ class AuthenticatorInteraction {
       {
         step,
         title,
-        currentStep: 2,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.FillingAuthenticator,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
       }
     workflowUi.setFlightProgress(progressRequest)
@@ -243,8 +246,9 @@ class AuthenticatorInteraction {
       {
         step,
         title,
-        currentStep: 2,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.FillingAuthenticator,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
       }
     workflowUi.setFlightProgress(nookTypedArgs0_7)
@@ -275,8 +279,9 @@ class AuthenticatorInteraction {
       {
         step,
         title,
-        currentStep: 2,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.FillingAuthenticator,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
       }
     workflowUi.setFlightProgress(nookTypedArgs0_8)
@@ -312,8 +317,9 @@ class AuthenticatorInteraction {
         >[0] = {
           step,
           title,
-          currentStep: 2,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.FillingAuthenticator,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
         }
         workflowUi.setFlightProgress(nookTypedArgs0_10)
@@ -337,8 +343,9 @@ class AuthenticatorInteraction {
         >[0] = {
           step,
           title,
-          currentStep: 2,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.FillingAuthenticator,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
         }
         workflowUi.setFlightProgress(nookTypedArgs0_12)
@@ -362,8 +369,9 @@ class AuthenticatorInteraction {
         >[0] = {
           step,
           title,
-          currentStep: 2,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.FillingAuthenticator,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
         }
         workflowUi.setFlightProgress(nookTypedArgs0_14)
@@ -391,8 +399,9 @@ class AuthenticatorInteraction {
         >[0] = {
           step,
           title,
-          currentStep: 2,
-          totalSteps: 3,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.FillingAuthenticator,
+          ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
         }
         workflowUi.setFlightProgress(nookTypedArgs0_16)
@@ -476,8 +485,9 @@ class AuthenticatorInteraction {
       >[0] = {
         step,
         title,
-        currentStep: 2,
-        totalSteps: 3,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.FillingAuthenticator,
+        ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
       }
       workflowUi.setFlightProgress(nookTypedArgs0_19)

@@ -12,6 +12,7 @@ import {
 
 import {
   AuthenticationWorkflowAction,
+  saved_login_action_available,
   type AuthenticationPageObservationFacts,
   type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -421,13 +422,9 @@ class AuthenticationWidgetRenderer {
     })
 
     body.append(takeOverButton)
-    const passkeyAction =
-      snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
-      snapshot.action === AuthenticationWorkflowAction.CreatePasskey
-    const savedLoginActionAvailable =
-      loginMatches.kind === 'locked' ||
-      (loginMatches.kind === 'ready' && loginMatches.count > 0)
-    if (passkeyAction && savedLoginActionAvailable) {
+    if (
+      saved_login_action_available({ action: snapshot.action, loginMatches })
+    ) {
       const savedLoginButton = document.createElement('button')
       savedLoginButton.type = 'button'
       savedLoginButton.className = 'text-button'
