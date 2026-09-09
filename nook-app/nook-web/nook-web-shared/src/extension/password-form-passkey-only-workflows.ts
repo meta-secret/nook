@@ -35,10 +35,48 @@ type RankableWorkflowObservation = {
   summary: RankableWorkflowSummary;
 };
 
-type PasskeyOnlyScope = {
-  root: ParentNode;
-  formScope: PasswordFormScope;
-};
+enum AuthenticationScopeFieldPresence {
+  Present = "present",
+  Absent = "absent",
+}
+
+class PasskeyOnlyScope {
+  readonly root: ParentNode;
+  readonly formScope: PasswordFormScope;
+
+  constructor(query: ObservationWithScope) {
+    this.root = query.root;
+    this.formScope = query.formScope;
+  }
+
+  candidates(indexed: IndexedPasskeyCandidates): PasskeyControlCandidate[] {
+    if (this.formScope.kind === PasswordFormScopeKind.Owned) {
+      const owned = indexed.owned.get(this.formScope.owner);
+      return owned ? owned : [];
+    }
+    return indexed.unowned.filter((candidate) =>
+      this.root.contains(candidate.control),
+    );
+  }
+
+  passwordFieldPresence(): AuthenticationScopeFieldPresence {
+    return passwordFieldDiscovery.findPasswordFields(this).length > 0
+      ? AuthenticationScopeFieldPresence.Present
+      : AuthenticationScopeFieldPresence.Absent;
+  }
+
+  oneTimeCodeFieldPresence(): AuthenticationScopeFieldPresence {
+    return passwordFieldDiscovery.findOneTimeCodeFields(this).length > 0
+      ? AuthenticationScopeFieldPresence.Present
+      : AuthenticationScopeFieldPresence.Absent;
+  }
+
+  usernameFieldPresence(): AuthenticationScopeFieldPresence {
+    return passwordFieldDiscovery.findUsernameFields(this).length > 0
+      ? AuthenticationScopeFieldPresence.Present
+      : AuthenticationScopeFieldPresence.Absent;
+  }
+}
 
 type PasskeyControlSafetyRequest<Observation> = {
   candidate: PasskeyControlCandidate;
@@ -94,11 +132,6 @@ type ShortlistWorkflowsRequest<
 type CollectPasskeyOnlyScopesRequest = {
   root: Document;
   passkeyCandidates: PasskeyControlCandidate[];
-};
-
-type PasskeyCandidatesForScopeRequest = {
-  scope: PasskeyOnlyScope;
-  indexed: IndexedPasskeyCandidates;
 };
 
 type TakePreferredPasskeyOnlyObservationsRequest<Summary> = {
@@ -198,7 +231,8 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
       emptySummary,
     } = this.request;
     if (!passwordFieldDiscovery.pageHasPasskeyControl(root)) return [];
-    const passkeyCandidates = passwordFieldDiscovery.findPasskeyControls(root);
+    const passkeyCandidates =
+      passwordFieldDiscovery.findPasskeyControls(root);
     const indexed =
       PasskeyOnlyWorkflowSummary.indexPasskeyCandidatesByScope(
         passkeyCandidates,
@@ -269,7 +303,9 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
         !control.form,
     );
     const semanticSubmitControlCount =
-      authenticationSubmissionControls.countedSemanticSubmitControls(controls);
+      authenticationSubmissionControls.countedSemanticSubmitControls(
+        controls,
+      );
     const fieldQuery: PasswordFieldQuery = { root, formScope };
     const passwordFields =
       passwordFieldDiscovery.findPasswordFields(fieldQuery);
@@ -345,10 +381,11 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
   }: TakeBoundedPriorityWorkflowsRequest<Observation>): Observation[] {
     const selected: Array<BoundedPriorityWorkflowEntry<Observation>> = [];
     for (const observation of observations) {
-      const progressionRequest: CheapWorkflowProgressionRequest<Observation> = {
-        observation,
-        passkeyControlIsSafe,
-      };
+      const progressionRequest: CheapWorkflowProgressionRequest<Observation> =
+        {
+          observation,
+          passkeyControlIsSafe,
+        };
       const priority = observationPriority(observation);
       const progressing =
         PasskeyOnlyWorkflowSummary.cheapWorkflowLooksProgressing(
@@ -400,7 +437,8 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
       observation.formScope.kind === PasswordFormScopeKind.Owned
         ? observation.formScope.owner
         : observation.root;
-    const passkeyCandidates = passwordFieldDiscovery.findPasskeyControls(root);
+    const passkeyCandidates =
+      passwordFieldDiscovery.findPasskeyControls(root);
     const safetyRequest: ObservationHasSafePasskeyRequest<Observation> = {
       observation,
       passkeyCandidates,
@@ -456,7 +494,7 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
           owner: form,
         },
       };
-      scopes.push(ownedScope);
+      scopes.push(new PasskeyOnlyScope(ownedScope));
     }
     const formlessPasskeys = passkeyCandidates.filter(({ control }) => {
       if (
@@ -487,7 +525,7 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
           kind: PasswordFormScopeKind.Unowned,
         },
       };
-      scopes.push(unownedScope);
+      scopes.push(new PasskeyOnlyScope(unownedScope));
     }
     return scopes;
   }
@@ -516,45 +554,6 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
     }
     return { owned, unowned };
   }
-  static passkeyCandidatesForScope({
-    scope,
-    indexed,
-  }: PasskeyCandidatesForScopeRequest): PasskeyControlCandidate[] {
-    if (scope.formScope.kind === PasswordFormScopeKind.Owned) {
-      const owned = indexed.owned.get(scope.formScope.owner);
-      return owned ? owned : [];
-    }
-    return indexed.unowned.filter((candidate) =>
-      scope.root.contains(candidate.control),
-    );
-  }
-  static scopeHasPasswordField(scope: PasskeyOnlyScope): boolean {
-    const fieldQuery: Parameters<
-      typeof passwordFieldDiscovery.findPasswordFields
-    >[0] = {
-      root: scope.root,
-      formScope: scope.formScope,
-    };
-    return passwordFieldDiscovery.findPasswordFields(fieldQuery).length > 0;
-  }
-  static scopeHasOneTimeCodeField(scope: PasskeyOnlyScope): boolean {
-    const fieldQuery: Parameters<
-      typeof passwordFieldDiscovery.findOneTimeCodeFields
-    >[0] = {
-      root: scope.root,
-      formScope: scope.formScope,
-    };
-    return passwordFieldDiscovery.findOneTimeCodeFields(fieldQuery).length > 0;
-  }
-  static scopeHasUsernameField(scope: PasskeyOnlyScope): boolean {
-    const fieldQuery: Parameters<
-      typeof passwordFieldDiscovery.findUsernameFields
-    >[0] = {
-      root: scope.root,
-      formScope: scope.formScope,
-    };
-    return passwordFieldDiscovery.findUsernameFields(fieldQuery).length > 0;
-  }
   static takePreferredPasskeyOnlyObservations<Summary>({
     scopes,
     summarizeRoot,
@@ -567,17 +566,13 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
   > {
     const preferred: Array<PreferredPasskeyObservationEntry<Summary>> = [];
     for (const scope of scopes) {
-      if (PasskeyOnlyWorkflowSummary.scopeHasPasswordField(scope)) {
+      if (
+        scope.passwordFieldPresence() ===
+        AuthenticationScopeFieldPresence.Present
+      ) {
         continue;
       }
-      const scopedCandidatesRequest: PasskeyCandidatesForScopeRequest = {
-        scope,
-        indexed,
-      };
-      const scopedCandidates =
-        PasskeyOnlyWorkflowSummary.passkeyCandidatesForScope(
-          scopedCandidatesRequest,
-        );
+      const scopedCandidates = scope.candidates(indexed);
       const emptyObservation: PasskeyOnlyWorkflowObservation<Summary> = {
         root: scope.root,
         formScope: scope.formScope,
@@ -591,15 +586,18 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
         passkeyControlIsSafe,
       };
       const cheapSafe =
-        !PasskeyOnlyWorkflowSummary.scopeHasPasswordField(scope) &&
+        scope.passwordFieldPresence() ===
+          AuthenticationScopeFieldPresence.Absent &&
         PasskeyOnlyWorkflowSummary.observationHasSafePasskey(
           cheapSafetyRequest,
         );
       if (
         preferred.length >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS &&
         !cheapSafe &&
-        !PasskeyOnlyWorkflowSummary.scopeHasOneTimeCodeField(scope) &&
-        !PasskeyOnlyWorkflowSummary.scopeHasUsernameField(scope)
+        scope.oneTimeCodeFieldPresence() ===
+          AuthenticationScopeFieldPresence.Absent &&
+        scope.usernameFieldPresence() ===
+          AuthenticationScopeFieldPresence.Absent
       ) {
         continue;
       }
@@ -632,7 +630,11 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
         preferred.push(preferredEntry);
         continue;
       }
-      if (!safe && !PasskeyOnlyWorkflowSummary.scopeHasOneTimeCodeField(scope))
+      if (
+        !safe &&
+        scope.oneTimeCodeFieldPresence() ===
+          AuthenticationScopeFieldPresence.Absent
+      )
         continue;
       const lowest = preferred.reduce((...pair) => {
         const current = pair[0];
@@ -798,10 +800,11 @@ export class IndependentPasskeyWorkflows<
         passkeyCandidates,
         passkeyControlIsSafe,
       };
-      const progressionRequest: CheapWorkflowProgressionRequest<Observation> = {
-        observation,
-        passkeyControlIsSafe,
-      };
+      const progressionRequest: CheapWorkflowProgressionRequest<Observation> =
+        {
+          observation,
+          passkeyControlIsSafe,
+        };
       return {
         observation,
         safe: PasskeyOnlyWorkflowSummary.observationHasSafePasskey(
@@ -814,10 +817,11 @@ export class IndependentPasskeyWorkflows<
           ),
       };
     });
-    const rankedRequest: TakeRankedWorkflowObservationsRequest<Observation> = {
-      fieldBearing,
-      ranked,
-    };
+    const rankedRequest: TakeRankedWorkflowObservationsRequest<Observation> =
+      {
+        fieldBearing,
+        ranked,
+      };
     return PasskeyOnlyWorkflowSummary.takeRankedWorkflowObservations(
       rankedRequest,
     );

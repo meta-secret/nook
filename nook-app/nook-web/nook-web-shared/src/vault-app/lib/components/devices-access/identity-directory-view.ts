@@ -18,7 +18,8 @@ import {
   type DashboardTimestamp,
   DashboardTimestampKind,
   type DashboardText,
-  DashboardTextKind,
+  KnownDashboardText,
+  UnknownDashboardText,
   type DashboardView,
 } from "../devices-access-dashboard-state";
 import type { VaultAccessView } from "./access-chain";
@@ -120,8 +121,8 @@ export class IdentityDirectoryReader {
         localProtection: member.localProtection,
         label:
           member.labelKind === NookIdentityMemberLabelKind.Known
-            ? { kind: DashboardTextKind.Known, value: member.label() }
-            : { kind: DashboardTextKind.Unknown },
+            ? new KnownDashboardText(member.label())
+            : new UnknownDashboardText(),
       };
     } finally {
       member.free();
@@ -130,8 +131,8 @@ export class IdentityDirectoryReader {
   private static readText(value: NookDeviceAccessText): DashboardText {
     try {
       return value.kind === NookDeviceAccessTextKind.Known
-        ? { kind: DashboardTextKind.Known, value: value.value() }
-        : { kind: DashboardTextKind.Unknown };
+        ? new KnownDashboardText(value.value())
+        : new UnknownDashboardText();
     } finally {
       value.free();
     }
@@ -167,7 +168,9 @@ export class IdentityDirectoryReader {
       entry.free();
     }
   }
-  private static readAccess(snapshot: NookDeviceAccessSnapshot): DashboardView {
+  private static readAccess(
+    snapshot: NookDeviceAccessSnapshot,
+  ): DashboardView {
     try {
       return {
         protection: snapshot.protection,
@@ -175,11 +178,17 @@ export class IdentityDirectoryReader {
         deviceId: IdentityDirectoryReader.readText(snapshot.deviceId),
         credentialId: IdentityDirectoryReader.readText(snapshot.credentialId),
         passkeyName: IdentityDirectoryReader.readText(snapshot.passkeyName),
-        providerLabel: IdentityDirectoryReader.readText(snapshot.providerLabel),
+        providerLabel: IdentityDirectoryReader.readText(
+          snapshot.providerLabel,
+        ),
         createdAt: IdentityDirectoryReader.readTimestamp(snapshot.createdAt),
-        lastUsedAt: IdentityDirectoryReader.readTimestamp(snapshot.lastUsedAt),
+        lastUsedAt: IdentityDirectoryReader.readTimestamp(
+          snapshot.lastUsedAt,
+        ),
         keeper: snapshot.keeper,
-        vaults: snapshot.vaults().map(IdentityDirectoryReader.readVaultAccess),
+        vaults: snapshot
+          .vaults()
+          .map(IdentityDirectoryReader.readVaultAccess),
       };
     } finally {
       snapshot.free();
@@ -194,7 +203,9 @@ export class IdentityDirectoryReader {
         label: identity.label,
         localAccess: identity.localAccess,
         members: identity.members().map(IdentityDirectoryReader.readMember),
-        vaults: identity.vaults().map(IdentityDirectoryReader.readVaultAccess),
+        vaults: identity
+          .vaults()
+          .map(IdentityDirectoryReader.readVaultAccess),
       };
     } finally {
       identity.free();

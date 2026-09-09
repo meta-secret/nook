@@ -1,3 +1,4 @@
+import { VaultRecoveryErrorKind } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { EnrollmentEntryKind } from "$lib/vault/state/session.svelte";
@@ -82,7 +83,10 @@ export class VaultPasswordActions {
           state.runtimeConfig.e2eExposeVault &&
           e2eManager.add_vault_password_for_e2e
         ) {
-          return e2eManager.add_vault_password_for_e2e(trimmedLabel, password);
+          return e2eManager.add_vault_password_for_e2e(
+            trimmedLabel,
+            password,
+          );
         }
         return manager.add_vault_password(trimmedLabel, password);
       });
@@ -238,9 +242,10 @@ export class VaultPasswordActions {
       state.applyConnectedSecretPage(connectedPageArgs);
       if (state.deviceProtectionReady) {
         await state.ensureProviderSaved();
-        const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
-          ensureLocalRow: false,
-        };
+        const providerLoadOptions: Parameters<typeof state.loadProviders>[0] =
+          {
+            ensureLocalRow: false,
+          };
         await state.loadProviders(providerLoadOptions);
       }
       await state.refreshPasswordEntriesList();
@@ -262,9 +267,8 @@ export class VaultPasswordActions {
         e instanceof Error ? e.message : "Failed to unlock with password.";
       log.warn("vault password unlock failed");
       if (
-        SentinelUnlockActions.isSentinelPasswordUnlockForbiddenError(
-          browserLogRuntime.runtimeFailure(e),
-        )
+        browserLogRuntime.runtimeFailure(e).vaultRecoveryKind() ===
+        VaultRecoveryErrorKind.SentinelPasswordUnlockForbidden
       ) {
         state.errorMsg = state.t(
           I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,

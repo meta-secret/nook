@@ -590,9 +590,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 frame={DeviceProtectionGateFrame.HostSection}
                 creationOnly={false}
                 initializeSession={false}
-                recoveryAppId={view.deviceId.kind === DashboardTextKind.Known
-                  ? view.deviceId.value
-                  : ""}
+                recoveryAppId={view.deviceId.displayText(() => "")}
                 onBeforeProtectionAction={keepCurrentIdentitySession}
                 onProtectionReady={() => void focusAfterProtectionReady(false)}
               />
@@ -677,9 +675,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 selectedVault.kind ===
                 IdentityBridgeVaultSelectionKind.Selected}
               {@const deviceIdentifier =
-                view.deviceId.kind === DashboardTextKind.Known
-                  ? view.deviceId.value
-                  : vault.t(I18N_KEYS.DevicesAccessUnknown)}
+                view.deviceId.displayText(() => vault.t(I18N_KEYS.DevicesAccessUnknown))}
               {@const protectionSummaryRequest: ConstructorParameters<
                 typeof PasskeyCardPresentation
               >[0] = {

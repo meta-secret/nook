@@ -11,7 +11,8 @@ import {
   type DashboardText,
   type DashboardTimestamp,
   type DashboardView,
-  DashboardTextKind,
+  KnownDashboardText,
+  UnknownDashboardText,
   DashboardTimestampKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 import { AccessChainStage } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/access-chain'
@@ -28,12 +29,9 @@ import IdentityKeyInventory from '../../../../nook-web-shared/src/vault-app/lib/
 import { PasskeyCardSummaryKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
 import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 
-const known = (value: string): DashboardText => ({
-  kind: DashboardTextKind.Known,
-  value,
-})
+const known = (value: string): DashboardText => new KnownDashboardText(value)
 
-const unknownText: DashboardText = { kind: DashboardTextKind.Unknown }
+const unknownText: DashboardText = new UnknownDashboardText()
 
 const knownTime: DashboardTimestamp = {
   kind: DashboardTimestampKind.Known,

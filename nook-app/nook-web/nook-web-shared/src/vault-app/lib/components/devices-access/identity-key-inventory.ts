@@ -1,13 +1,14 @@
 import {
+  device_access_credential_kind,
+  DeviceAccessCredentialKind,
+} from "$app-wasm";
+import {
   DeviceAccessProtectionKind,
   NookIdentityLocalAccessKind,
 } from "$app-wasm";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
-import {
-  type DashboardView,
-  DashboardTextKind,
-} from "../devices-access-dashboard-state";
+import { type DashboardView } from "../devices-access-dashboard-state";
 import type { IdentityDirectoryEntry } from "./identity-directory-view";
 import { IdentityAccessPresentation } from "./identity-access-list";
 import { AccessChainPresentation } from "./access-chain";
@@ -56,7 +57,9 @@ export class IdentityKeyInventory {
     for (const [index, member] of identity.members.entries()) {
       const isCurrent = member.currentBrowser;
       const localProtection =
-        currentIdentity && isCurrent ? view.protection : member.localProtection;
+        currentIdentity && isCurrent
+          ? view.protection
+          : member.localProtection;
       const isLocal = localProtection !== DeviceAccessProtectionKind.Missing;
       const isCompanion =
         isCurrent &&
@@ -67,14 +70,13 @@ export class IdentityKeyInventory {
       };
       const appBase = {
         key: `app:${member.appId}`,
-        title:
-          member.label.kind === DashboardTextKind.Known
-            ? member.label.value
-            : isCompanion
-              ? vault.t(I18N_KEYS.DevicesAccessCompanionSession)
-              : isCurrent || isLocal
-                ? vault.t(I18N_KEYS.DevicesAccessThisBrowserAppKey)
-                : vault.t(fallbackTitleArgs),
+        title: member.label.displayText(() =>
+          isCompanion
+            ? vault.t(I18N_KEYS.DevicesAccessCompanionSession)
+            : isCurrent || isLocal
+              ? vault.t(I18N_KEYS.DevicesAccessThisBrowserAppKey)
+              : vault.t(fallbackTitleArgs),
+        ),
         appId: member.appId,
       };
       if (!isLocal) {
@@ -122,7 +124,8 @@ export class IdentityKeyInventory {
         typeLabel: ((
           ...[
             v = vault.t(
-              AccessChainPresentation.isPasskeyProtection(localProtection)
+              device_access_credential_kind(localProtection) ===
+                DeviceAccessCredentialKind.Passkey
                 ? I18N_KEYS.DevicesAccessKeyTypePasskey
                 : localProtection ===
                     DeviceAccessProtectionKind.CompanionSession
@@ -136,7 +139,8 @@ export class IdentityKeyInventory {
         ),
         renamable:
           Boolean(currentProtector) &&
-          AccessChainPresentation.isPasskeyProtection(localProtection),
+          device_access_credential_kind(localProtection) ===
+            DeviceAccessCredentialKind.Passkey,
         passkeySummary: ((...[v = PASSKEY_CARD_SUMMARY_ABSENT]) => v)(
           currentProtector?.passkeySummary,
         ),

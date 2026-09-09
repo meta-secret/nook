@@ -1,9 +1,11 @@
+import {
+  device_access_credential_kind,
+  DeviceAccessCredentialKind,
+} from "$app-wasm";
 import { PasskeyKeeperKind } from "$app-wasm";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import {
-  type DashboardText,
-  DashboardTextKind,
   type DashboardTimestamp,
   DashboardTimestampKind,
   type DashboardView,
@@ -61,11 +63,6 @@ type CreatedLabelRequest = {
   readonly value: DashboardTimestamp;
 };
 
-type TextOrFallbackRequest = {
-  readonly value: DashboardText;
-  readonly fallback: string;
-};
-
 export class PasskeyCardPresentation {
   constructor(private readonly request: PasskeyCardSummaryRequest) {}
   get summary(): PasskeyCardSummary {
@@ -90,16 +87,10 @@ export class PasskeyCardPresentation {
       vault,
       value: view.createdAt,
     };
-    const titleArgs: Parameters<typeof this.textOrFallback>[0] = {
-      value: view.passkeyName,
-      fallback: vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed),
-    };
-    const fingerprintArgs: Parameters<typeof this.textOrFallback>[0] = {
-      value: view.credentialId,
-      fallback: unknown,
-    };
     return {
-      title: this.textOrFallback(titleArgs),
+      title: view.passkeyName.displayText(() =>
+        vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed),
+      ),
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypePasskey),
       modeLabel: new AccessChainPresentation(vault).protectionLabel(
         protectionLabelArgs,
@@ -108,15 +99,14 @@ export class PasskeyCardPresentation {
         {
           kind: PasskeyCardFactKind.Fingerprint,
           label: vault.t(I18N_KEYS.DevicesAccessCredentialId),
-          value: this.textOrFallback(fingerprintArgs),
+          value: view.credentialId.displayText(() => unknown),
         },
         {
           kind: PasskeyCardFactKind.Keeper,
           label: vault.t(I18N_KEYS.DevicesAccessKeeperLabel),
-          value:
-            view.providerLabel.kind === DashboardTextKind.Known
-              ? view.providerLabel.value
-              : this.keeperLabel(keeperLabelArgs),
+          value: view.providerLabel.displayText(() =>
+            this.keeperLabel(keeperLabelArgs),
+          ),
         },
         {
           kind: PasskeyCardFactKind.Created,
@@ -132,9 +122,6 @@ export class PasskeyCardPresentation {
         },
       ],
     };
-  }
-  private textOrFallback({ value, fallback }: TextOrFallbackRequest): string {
-    return value.kind === DashboardTextKind.Known ? value.value : fallback;
   }
   private createdLabel({ vault, value }: CreatedLabelRequest): string {
     if (value.kind !== DashboardTimestampKind.Known) {
@@ -193,7 +180,12 @@ export class PasskeyCardPresentation {
   }
   get state(): PasskeyCardSummaryState {
     const request = this.request;
-    if (!AccessChainPresentation.isPasskeyProtection(request.view.protection)) {
+    if (
+      !(
+        device_access_credential_kind(request.view.protection) ===
+        DeviceAccessCredentialKind.Passkey
+      )
+    ) {
       return PASSKEY_CARD_SUMMARY_ABSENT;
     }
     return {

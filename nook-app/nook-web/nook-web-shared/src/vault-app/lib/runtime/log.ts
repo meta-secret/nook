@@ -25,6 +25,8 @@
 
 import {
   type LogEntry,
+  classify_vault_recovery_error,
+  VaultRecoveryErrorKind,
   log_record,
   log_clear,
   log_count,
@@ -46,10 +48,24 @@ export enum LogLevel {
 
 export type { LogEntry } from "$app-wasm";
 
-export type RuntimeFailure = {
+type RuntimeFailureDetails = {
   readonly message: string;
   readonly stack?: string;
 };
+
+export class RuntimeFailure {
+  readonly message: string;
+  readonly stack?: string;
+
+  constructor(details: RuntimeFailureDetails) {
+    this.message = details.message;
+    if (details.stack) this.stack = details.stack;
+  }
+
+  vaultRecoveryKind(): VaultRecoveryErrorKind {
+    return classify_vault_recovery_error(this.message);
+  }
+}
 
 const LOG_LEVELS: readonly LogLevel[] = [
   LogLevel.Error,
@@ -231,12 +247,14 @@ class BrowserLogRuntime {
           log: () => {},
         };
   runtimeFailure(cause: unknown): RuntimeFailure {
-    return cause instanceof Error
-      ? {
-          message: cause.message,
-          ...(cause.stack ? { stack: cause.stack } : {}),
-        }
-      : { message: String(cause) };
+    return new RuntimeFailure(
+      cause instanceof Error
+        ? {
+            message: cause.message,
+            ...(cause.stack ? { stack: cause.stack } : {}),
+          }
+        : { message: String(cause) },
+    );
   }
 
   runtimeError(cause: unknown): Error {
@@ -679,12 +697,13 @@ class BrowserLogRuntime {
       console[method] = (...args: ConsoleArguments) => {
         this.originalConsole[method](...args);
         if (this.isEnabled(level)) {
-          const persistMessageArgs2: Parameters<typeof this.persistMessage>[0] =
-            {
-              level,
-              scope: "console",
-              message: this.stringifyArgs(args),
-            };
+          const persistMessageArgs2: Parameters<
+            typeof this.persistMessage
+          >[0] = {
+            level,
+            scope: "console",
+            message: this.stringifyArgs(args),
+          };
           this.persistMessage(persistMessageArgs2);
         }
       };

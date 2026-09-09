@@ -8,7 +8,10 @@ import {
   type IdentityBridgeCopy,
   type IdentityBridgeInput,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-bridge-model'
-import { DashboardTextKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
+import {
+  KnownDashboardText,
+  UnknownDashboardText,
+} from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 import { DeviceAccessIdentityState } from '$app-wasm'
 import {
   PasskeyCardFactKind,
@@ -57,9 +60,9 @@ const vault = (storeId: string, verified: boolean) => ({
   label: storeId === 'home' ? 'Home' : 'Archive',
   verified,
   verifiedAt: verified
-    ? { kind: DashboardTextKind.Known as const, value: '2026-08-04T10:00:00Z' }
-    : { kind: DashboardTextKind.Unknown as const },
-  lastLocalUpdateAt: { kind: DashboardTextKind.Unknown as const },
+    ? new KnownDashboardText('2026-08-04T10:00:00Z')
+    : new UnknownDashboardText(),
+  lastLocalUpdateAt: new UnknownDashboardText(),
 })
 
 function input(

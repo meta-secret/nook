@@ -1,3 +1,4 @@
+import { VaultRecoveryErrorKind } from "$app-wasm";
 import type { NookStorageConnectArgs } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
@@ -116,7 +117,8 @@ export class VaultConnectionActions {
         probeDecision === VaultConnectProbeDecision.ReassessFirstSyncProvider
       ) {
         const providerArgs = state.providerWasmArgs(state.syncProviders[0]!);
-        const remoteStatus = await state.assessVaultConnectStatus(providerArgs);
+        const remoteStatus =
+          await state.assessVaultConnectStatus(providerArgs);
         log.debug("loadDb provider re-assess");
         if (remoteStatus === VaultAccessStatus.Ready) {
           accessStatus = VaultAccessStatus.Ready;
@@ -137,7 +139,9 @@ export class VaultConnectionActions {
       }
 
       if (
-        state.clientPolicy.vault_connect_password_lookup_required(accessStatus)
+        state.clientPolicy.vault_connect_password_lookup_required(
+          accessStatus,
+        )
       ) {
         await state.ensureProviderSaved();
         await state.refreshPasswordEntriesList();
@@ -249,9 +253,8 @@ export class VaultConnectionActions {
         return;
       }
       if (
-        SentinelUnlockActions.isSentinelCeremonyRequiredError(
-          browserLogRuntime.runtimeFailure(e),
-        )
+        browserLogRuntime.runtimeFailure(e).vaultRecoveryKind() ===
+        VaultRecoveryErrorKind.SentinelCeremonyRequired
       ) {
         state.sentinelCeremonyPrompt = true;
         state.errorMsg = "";

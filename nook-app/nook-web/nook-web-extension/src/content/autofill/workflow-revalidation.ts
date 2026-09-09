@@ -82,13 +82,46 @@ const boundAuthenticationControlSelector = [
   'a[href]',
 ].join(',')
 
-type AuthenticationControlIdentitySnapshot = {
-  controls: Element[]
+enum AuthenticationControlIdentityComparison {
+  Same = 'same',
+  Changed = 'changed',
 }
 
-type AuthenticationControlIdentitiesMatchRequest = {
-  approved: AuthenticationControlIdentitySnapshot
-  current: AuthenticationControlIdentitySnapshot
+class AuthenticationControlIdentitySnapshot {
+  private constructor(private readonly controls: Element[]) {}
+
+  static capture(
+    workflow: PasswordFormObservation,
+  ): AuthenticationControlIdentitySnapshot {
+    const controls = Array.from(
+      workflow.root.querySelectorAll<Element>(
+        boundAuthenticationControlSelector,
+      ),
+    )
+    if (workflow.formScope.kind === PasswordFormScopeKind.Unowned) {
+      return new AuthenticationControlIdentitySnapshot(controls)
+    }
+    const owner = workflow.formScope.owner
+    return new AuthenticationControlIdentitySnapshot(
+      controls.filter((control) =>
+        'form' in control ? control.form === owner : owner.contains(control),
+      ),
+    )
+  }
+
+  compare(
+    current: AuthenticationControlIdentitySnapshot,
+  ): AuthenticationControlIdentityComparison {
+    if (this.controls.length !== current.controls.length) {
+      return AuthenticationControlIdentityComparison.Changed
+    }
+    for (const [index, control] of this.controls.entries()) {
+      if (current.controls[index] !== control) {
+        return AuthenticationControlIdentityComparison.Changed
+      }
+    }
+    return AuthenticationControlIdentityComparison.Same
+  }
 }
 
 /**
@@ -169,9 +202,7 @@ export class RevalidatedAuthenticationAction {
         observations,
         selectedIndex,
         controlIdentities:
-          RevalidatedAuthenticationAction.authenticationControlIdentitySnapshot(
-            currentWorkflow,
-          ),
+          AuthenticationControlIdentitySnapshot.capture(currentWorkflow),
       }
     }
     if (!approvalIsActive()) return rejected()
@@ -239,20 +270,15 @@ export class RevalidatedAuthenticationAction {
     const currentFactsBatch: AuthenticationPageObservationFactsBatch = {
       observations: [currentObservation.facts],
     }
-    const currentIdentitiesMatchRequest: AuthenticationControlIdentitiesMatchRequest =
-      {
-        approved: approvedObservation.controlIdentities,
-        current: currentObservation.controlIdentities,
-      }
     if (
       currentObservation.selectedIndex !== approvedObservation.selectedIndex ||
       !authentication_page_observation_facts_match_binding(
         approvedDomObservationBindingToken,
         currentFactsBatch,
       ) ||
-      !RevalidatedAuthenticationAction.authenticationControlIdentitiesMatch(
-        currentIdentitiesMatchRequest,
-      ) ||
+      approvedObservation.controlIdentities.compare(
+        currentObservation.controlIdentities,
+      ) === AuthenticationControlIdentityComparison.Changed ||
       !approvalIsActive()
     ) {
       return rejected()
@@ -264,11 +290,6 @@ export class RevalidatedAuthenticationAction {
       const postActionFactsBatch: AuthenticationPageObservationFactsBatch = {
         observations: [postActionObservation.facts],
       }
-      const postActionIdentitiesMatchRequest: AuthenticationControlIdentitiesMatchRequest =
-        {
-          approved: approvedObservation.controlIdentities,
-          current: postActionObservation.controlIdentities,
-        }
       if (
         postActionObservation.selectedIndex !==
           approvedObservation.selectedIndex ||
@@ -276,9 +297,9 @@ export class RevalidatedAuthenticationAction {
           approvedDomObservationBindingToken,
           postActionFactsBatch,
         ) ||
-        !RevalidatedAuthenticationAction.authenticationControlIdentitiesMatch(
-          postActionIdentitiesMatchRequest,
-        )
+        approvedObservation.controlIdentities.compare(
+          postActionObservation.controlIdentities,
+        ) === AuthenticationControlIdentityComparison.Changed
       ) {
         return false
       }
@@ -296,7 +317,9 @@ export class RevalidatedAuthenticationAction {
     if (
       actResult.kind === RevalidatedAuthenticationActResultKind.ControlMissing
     ) {
-      return { kind: RevalidatedAuthenticationActionOutcomeKind.ControlMissing }
+      return {
+        kind: RevalidatedAuthenticationActionOutcomeKind.ControlMissing,
+      }
     }
     return { kind: RevalidatedAuthenticationActionOutcomeKind.ActionFailed }
   }
@@ -310,32 +333,5 @@ export class RevalidatedAuthenticationAction {
       kind: AuthenticationObservationBindingKind.Required,
       token: bind_authentication_page_observation_facts(batch),
     }
-  }
-  private static authenticationControlIdentitySnapshot(
-    workflow: PasswordFormObservation,
-  ): AuthenticationControlIdentitySnapshot {
-    const queryRoot = workflow.root
-    const controls = Array.from(
-      queryRoot.querySelectorAll<Element>(boundAuthenticationControlSelector),
-    )
-    if (workflow.formScope.kind === PasswordFormScopeKind.Unowned) {
-      return { controls }
-    }
-    const owner = workflow.formScope.owner
-    return {
-      controls: controls.filter((control) =>
-        'form' in control ? control.form === owner : owner.contains(control),
-      ),
-    }
-  }
-  private static authenticationControlIdentitiesMatch({
-    approved,
-    current,
-  }: AuthenticationControlIdentitiesMatchRequest): boolean {
-    if (approved.controls.length !== current.controls.length) return false
-    for (const [index, control] of approved.controls.entries()) {
-      if (current.controls[index] !== control) return false
-    }
-    return true
   }
 }

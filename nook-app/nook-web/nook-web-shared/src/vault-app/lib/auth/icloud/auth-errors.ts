@@ -32,11 +32,6 @@ type CloudKitRedirectDetails =
 
 type CloudKitDiagnosticStrings = CloudKitDiagnosticString[];
 
-type ErrorTokenSearch = {
-  readonly details: CloudKitAuthErrorDetails;
-  readonly predicate: (value: string) => boolean;
-};
-
 type ExpectedCloudKitSignInFailureCheck = {
   readonly error: unknown;
   readonly hasSignInControl: boolean;
@@ -51,10 +46,34 @@ export const CloudKitAuthErrorTranslationKey = {
 export type CloudKitAuthErrorTranslationKey =
   (typeof CloudKitAuthErrorTranslationKey)[keyof typeof CloudKitAuthErrorTranslationKey];
 
+enum CloudKitAuthenticationRequirement {
+  Required = "required",
+  Other = "other",
+}
+
+enum CloudKitFailureToken {
+  AuthenticationRequired = "AUTHENTICATION_REQUIRED",
+  RequestNeedsAuthorization = "REQUEST NEEDS AUTHORIZATION",
+  NeedsAuthorization = "NEEDS AUTHORIZATION",
+  UnknownError = "UNKNOWN_ERROR",
+  AuthenticationFailed = "AUTHENTICATION_FAILED",
+  MisdirectedStatus = "421",
+  Misdirected = "MISDIRECTED",
+}
+
+enum CloudKitSignInFailureExpectation {
+  Expected = "expected",
+  Unexpected = "unexpected",
+}
+
 export class CloudKitFailureDiagnostic {
-  constructor(private readonly request: unknown) {}
-  get details(): CloudKitAuthErrorDetails {
-    const error = this.request;
+  readonly details: CloudKitAuthErrorDetails;
+
+  constructor(error: unknown) {
+    this.details = CloudKitFailureDiagnostic.decodeDetails(error);
+  }
+
+  private static decodeDetails(error: unknown): CloudKitAuthErrorDetails {
     if (error instanceof Error) {
       const code: CloudKitDiagnosticString =
         error.name && error.name !== "Error"
@@ -86,7 +105,9 @@ export class CloudKitFailureDiagnostic {
         CloudKitFailureDiagnostic.stringValue(authError.serverErrorCode),
         CloudKitFailureDiagnostic.stringValue(authError.name),
       ]);
-      const message = CloudKitFailureDiagnostic.stringValue(authError.message);
+      const message = CloudKitFailureDiagnostic.stringValue(
+        authError.message,
+      );
       const reason = CloudKitFailureDiagnostic.firstDiagnosticString([
         CloudKitFailureDiagnostic.stringValue(authError.reason),
         CloudKitFailureDiagnostic.stringValue(authError._reason),
@@ -173,99 +194,71 @@ export class CloudKitFailureDiagnostic {
   static firstDiagnosticString(
     values: CloudKitDiagnosticStrings,
   ): CloudKitDiagnosticString {
-    return ((v) => (v ? v : { kind: CloudKitDiagnosticValueKind.Unavailable }))(
+    return ((v) =>
+      v ? v : { kind: CloudKitDiagnosticValueKind.Unavailable })(
       values.find(
         (value) => value.kind === CloudKitDiagnosticValueKind.Available,
       ),
     );
   }
-  static hasErrorToken({ details, predicate }: ErrorTokenSearch): boolean {
-    return [details.code, details.message, details.reason, details.statusText]
-      .filter((value): value is string => Boolean(value))
-      .some((value) => predicate(value.toUpperCase()));
+  private containsToken(token: CloudKitFailureToken): boolean {
+    const { code, message, reason, statusText } = this.details;
+    return [code, message, reason, statusText].some(
+      (value) => value !== undefined && value.toUpperCase().includes(token),
+    );
   }
-  static isAuthRequiredCloudKitError(
-    details: CloudKitAuthErrorDetails,
-  ): boolean {
-    if (details.status === 421) return true;
-    const hasErrorTokenArgs: Parameters<
-      typeof CloudKitFailureDiagnostic.hasErrorToken
-    >[0] = {
-      details,
-      predicate: (value) =>
-        [
-          "AUTHENTICATION_REQUIRED",
-          "REQUEST NEEDS AUTHORIZATION",
-          "NEEDS AUTHORIZATION",
-        ].some((token) => value.includes(token)),
-    };
-    return CloudKitFailureDiagnostic.hasErrorToken(hasErrorTokenArgs);
+
+  private authenticationRequirement(): CloudKitAuthenticationRequirement {
+    if (
+      this.details.status === 421 ||
+      this.containsToken(CloudKitFailureToken.AuthenticationRequired) ||
+      this.containsToken(CloudKitFailureToken.RequestNeedsAuthorization) ||
+      this.containsToken(CloudKitFailureToken.NeedsAuthorization)
+    )
+      return CloudKitAuthenticationRequirement.Required;
+    return CloudKitAuthenticationRequirement.Other;
+  }
+
+  signInFailureExpectation(): CloudKitSignInFailureExpectation {
+    return this.authenticationRequirement() ===
+      CloudKitAuthenticationRequirement.Required ||
+      this.containsToken(CloudKitFailureToken.UnknownError)
+      ? CloudKitSignInFailureExpectation.Expected
+      : CloudKitSignInFailureExpectation.Unexpected;
+  }
+
+  translationKey(): CloudKitAuthErrorTranslationKey {
+    if (
+      this.authenticationRequirement() ===
+        CloudKitAuthenticationRequirement.Required ||
+      this.containsToken(CloudKitFailureToken.MisdirectedStatus) ||
+      this.containsToken(CloudKitFailureToken.Misdirected)
+    )
+      return CloudKitAuthErrorTranslationKey.SignInRequired;
+    // AUTHENTICATION_FAILED means a bad API token or a disallowed browser Origin.
+    if (
+      this.containsToken(CloudKitFailureToken.AuthenticationFailed) ||
+      this.containsToken(CloudKitFailureToken.UnknownError)
+    )
+      return CloudKitAuthErrorTranslationKey.UnknownError;
+    return CloudKitAuthErrorTranslationKey.SignInFailed;
   }
 }
+
 export class CloudKitSetupFailure {
   constructor(private readonly request: ExpectedCloudKitSignInFailureCheck) {}
   get expected(): boolean {
     const { error, hasSignInControl } = this.request;
-    const details = new CloudKitFailureDiagnostic(error).details;
-    if (CloudKitFailureDiagnostic.isAuthRequiredCloudKitError(details))
-      return hasSignInControl;
-    const hasErrorTokenArgs2: Parameters<
-      typeof CloudKitFailureDiagnostic.hasErrorToken
-    >[0] = {
-      details,
-      predicate: (value) => value.includes("UNKNOWN_ERROR"),
-    };
-    const isOpaqueUnknown =
-      CloudKitFailureDiagnostic.hasErrorToken(hasErrorTokenArgs2);
-    return isOpaqueUnknown && hasSignInControl;
+    return (
+      new CloudKitFailureDiagnostic(error).signInFailureExpectation() ===
+        CloudKitSignInFailureExpectation.Expected && hasSignInControl
+    );
   }
 }
+
 export class CloudKitFailurePresentation {
   constructor(private readonly request: unknown) {}
   get translationKey(): CloudKitAuthErrorTranslationKey {
-    const error = this.request;
-    const details = new CloudKitFailureDiagnostic(error).details;
-    if (CloudKitFailureDiagnostic.isAuthRequiredCloudKitError(details)) {
-      return CloudKitAuthErrorTranslationKey.SignInRequired;
-    }
-    const isMisdirectedRequest =
-      details.status === 421 ||
-      (() => {
-        const hasErrorTokenArgs3: Parameters<
-          typeof CloudKitFailureDiagnostic.hasErrorToken
-        >[0] = {
-          details,
-          predicate: (value) =>
-            value.includes("421") || value.includes("MISDIRECTED"),
-        };
-        return CloudKitFailureDiagnostic.hasErrorToken(hasErrorTokenArgs3);
-      })();
-    if (isMisdirectedRequest) {
-      return CloudKitAuthErrorTranslationKey.SignInRequired;
-    }
-    // AUTHENTICATION_FAILED means a bad API token or a disallowed browser Origin.
-    if (
-      (() => {
-        const hasErrorTokenArgs4: Parameters<
-          typeof CloudKitFailureDiagnostic.hasErrorToken
-        >[0] = {
-          details,
-          predicate: (value) => value.includes("AUTHENTICATION_FAILED"),
-        };
-        return CloudKitFailureDiagnostic.hasErrorToken(hasErrorTokenArgs4);
-      })() ||
-      (() => {
-        const hasErrorTokenArgs5: Parameters<
-          typeof CloudKitFailureDiagnostic.hasErrorToken
-        >[0] = {
-          details,
-          predicate: (value) => value.includes("UNKNOWN_ERROR"),
-        };
-        return CloudKitFailureDiagnostic.hasErrorToken(hasErrorTokenArgs5);
-      })()
-    ) {
-      return CloudKitAuthErrorTranslationKey.UnknownError;
-    }
-    return CloudKitAuthErrorTranslationKey.SignInFailed;
+    return new CloudKitFailureDiagnostic(this.request).translationKey();
   }
 }

@@ -3,7 +3,6 @@ import { VaultType } from "$lib/vault/architecture-model";
 import type { VaultState } from "$lib/vault.svelte";
 import { type RuntimeFailure, browserLogRuntime } from "$lib/runtime/log";
 import {
-  classify_vault_recovery_error,
   JoinEnrollmentState,
   NookSentinelUnlockSessionStatus,
   ProviderSyncFreshness,
@@ -51,25 +50,10 @@ export class SentinelUnlockActions {
     if (previous !== status) previous.free();
   }
 
-  static isSentinelCeremonyRequiredError(failure: RuntimeFailure): boolean {
-    return (
-      classify_vault_recovery_error(failure.message) ===
-      VaultRecoveryErrorKind.SentinelCeremonyRequired
-    );
-  }
-
-  static isSentinelPasswordUnlockForbiddenError(
-    failure: RuntimeFailure,
-  ): boolean {
-    return (
-      classify_vault_recovery_error(failure.message) ===
-      VaultRecoveryErrorKind.SentinelPasswordUnlockForbidden
-    );
-  }
-
   isSentinelVault(): boolean {
     const state = this.state;
-    if (state.vaultArchitecture.vault_type === VaultType.Sentinel) return true;
+    if (state.vaultArchitecture.vault_type === VaultType.Sentinel)
+      return true;
     if (!state.hasManager) return false;
     try {
       return (
@@ -89,7 +73,8 @@ export class SentinelUnlockActions {
     )
       return false;
     if (
-      state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares &&
+      state.sentinelUnlockStatus ===
+        SentinelVaultUnlockState.AwaitingShares &&
       !state.sentinelUnlockSession.active &&
       state.hasManager &&
       state.requireManager().vaultStoreId === ""
@@ -99,7 +84,8 @@ export class SentinelUnlockActions {
       state.sentinelCeremonyPrompt ||
       state.sentinelUnlockStatus ===
         SentinelVaultUnlockState.CeremonyRequired ||
-      state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares ||
+      state.sentinelUnlockStatus ===
+        SentinelVaultUnlockState.AwaitingShares ||
       this.isSentinelVault()
     );
   }
@@ -151,7 +137,8 @@ export class SentinelUnlockActions {
 
   async ensureSentinelCeremonyHydrated(): Promise<void> {
     const state = this.state;
-    if (!state.hasManager || state.isAuthenticated || state.isVerifying) return;
+    if (!state.hasManager || state.isAuthenticated || state.isVerifying)
+      return;
     await state.initDeviceIdentity();
     try {
       await state.syncFromStorage(ProviderSyncFreshness.Forced);
@@ -177,9 +164,8 @@ export class SentinelUnlockActions {
       });
     } catch (e) {
       if (
-        SentinelUnlockActions.isSentinelCeremonyRequiredError(
-          browserLogRuntime.runtimeFailure(e),
-        )
+        browserLogRuntime.runtimeFailure(e).vaultRecoveryKind() ===
+        VaultRecoveryErrorKind.SentinelCeremonyRequired
       ) {
         state.refreshVaultArchitectureFromManager();
         state.sentinelCeremonyPrompt = true;
@@ -280,7 +266,9 @@ export class SentinelUnlockActions {
       state.sentinelUnlockRequest = "";
       const replaceUnlockSessionArgs3: Parameters<
         SentinelUnlockActions["replaceUnlockSession"]
-      >[0] = { status: SentinelUnlockActions.inactiveSentinelUnlockSession() };
+      >[0] = {
+        status: SentinelUnlockActions.inactiveSentinelUnlockSession(),
+      };
       this.replaceUnlockSession(replaceUnlockSessionArgs3);
       state.sentinelUnlockStatus = SentinelVaultUnlockState.Unlocked;
       await state.ensureProviderSaved();
@@ -309,9 +297,8 @@ export class SentinelUnlockActions {
       if (state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked) {
         state.sentinelCeremonyPrompt = false;
       } else if (
-        SentinelUnlockActions.isSentinelCeremonyRequiredError(
-          browserLogRuntime.runtimeFailure(e),
-        )
+        browserLogRuntime.runtimeFailure(e).vaultRecoveryKind() ===
+        VaultRecoveryErrorKind.SentinelCeremonyRequired
       ) {
         state.sentinelCeremonyPrompt = true;
         state.errorMsg = "";
@@ -331,7 +318,8 @@ export class SentinelUnlockActions {
   }: SentinelCeremonyPresentation): Promise<boolean> {
     const state = this.state;
     if (
-      !SentinelUnlockActions.isSentinelCeremonyRequiredError(failure) &&
+      failure.vaultRecoveryKind() !==
+        VaultRecoveryErrorKind.SentinelCeremonyRequired &&
       !this.isSentinelVault()
     ) {
       return false;
@@ -347,6 +335,9 @@ export class SentinelUnlockActions {
       state.errorMsg = "";
       return true;
     }
-    return SentinelUnlockActions.isSentinelCeremonyRequiredError(failure);
+    return (
+      failure.vaultRecoveryKind() ===
+      VaultRecoveryErrorKind.SentinelCeremonyRequired
+    );
   }
 }

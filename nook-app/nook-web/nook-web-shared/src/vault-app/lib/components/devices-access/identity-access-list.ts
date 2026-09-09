@@ -1,3 +1,7 @@
+import {
+  device_access_credential_kind,
+  DeviceAccessCredentialKind,
+} from "$app-wasm";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import { DeviceAccessProtectionKind } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
@@ -46,7 +50,10 @@ export class IdentityAccessPresentation {
     const lastUsed = new AccessChainPresentation(vault).lastUsedLabel(
       lastUsedLabelArgs,
     );
-    if (AccessChainPresentation.isPasskeyProtection(view.protection)) {
+    if (
+      device_access_credential_kind(view.protection) ===
+      DeviceAccessCredentialKind.Passkey
+    ) {
       const summaryArgs: ConstructorParameters<
         typeof PasskeyCardPresentation
       >[0] = {
@@ -67,7 +74,9 @@ export class IdentityAccessPresentation {
         },
       };
       cards.push(passkeyCard);
-    } else if (view.protection === DeviceAccessProtectionKind.PinOrPassphrase) {
+    } else if (
+      view.protection === DeviceAccessProtectionKind.PinOrPassphrase
+    ) {
       const pinCard: IdentityAccessCard = {
         key: "pin",
         kind: IdentityAccessKeyKind.PinOrPassphrase,

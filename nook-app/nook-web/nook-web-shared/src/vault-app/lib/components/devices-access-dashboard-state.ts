@@ -30,9 +30,47 @@ export enum DashboardTextKind {
   Known = "known",
 }
 
-export type DashboardText =
-  | { kind: typeof DashboardTextKind.Unknown }
-  | { kind: typeof DashboardTextKind.Known; value: string };
+export enum AccessNodeDetailKind {
+  Absent = "absent",
+  Identifier = "identifier",
+  Summary = "summary",
+}
+
+/**
+ * The single supporting line under a node title: one short public identifier
+ * rendered as data, a plain-language summary, or nothing yet.
+ */
+export type AccessNodeDetail =
+  | { kind: typeof AccessNodeDetailKind.Absent }
+  | { kind: typeof AccessNodeDetailKind.Identifier; value: string }
+  | { kind: typeof AccessNodeDetailKind.Summary; value: string };
+
+export class KnownDashboardText {
+  readonly kind = DashboardTextKind.Known;
+  constructor(readonly value: string) {}
+
+  displayText(_unavailable: () => string): string {
+    return this.value;
+  }
+
+  identifierDetail(): AccessNodeDetail {
+    return { kind: AccessNodeDetailKind.Identifier, value: this.value };
+  }
+}
+
+export class UnknownDashboardText {
+  readonly kind = DashboardTextKind.Unknown;
+
+  displayText(unavailable: () => string): string {
+    return unavailable();
+  }
+
+  identifierDetail(): AccessNodeDetail {
+    return { kind: AccessNodeDetailKind.Absent };
+  }
+}
+
+export type DashboardText = KnownDashboardText | UnknownDashboardText;
 
 export enum DashboardTimestampKind {
   Unavailable = "unavailable",

@@ -9,16 +9,14 @@ import {
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/access-chain'
 import {
   type DashboardText,
-  DashboardTextKind,
+  KnownDashboardText,
+  UnknownDashboardText,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 
-const known = (value: string): DashboardText => ({
-  kind: DashboardTextKind.Known,
-  value,
-})
+const known = (value: string): DashboardText => new KnownDashboardText(value)
 
-const unknown: DashboardText = { kind: DashboardTextKind.Unknown }
+const unknown: DashboardText = new UnknownDashboardText()
 
 /** Translations are exercised by e2e; here the key and its data are the subject. */
 const vault = {
