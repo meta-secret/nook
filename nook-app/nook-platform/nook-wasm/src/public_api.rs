@@ -653,15 +653,14 @@ mod browser_tests {
             .unwrap(),
             "provider-1"
         );
-        assert!(
-            shared_grant_provider_id(
+        assert!(matches!(
+            select_shared_grant_provider(nook_core::SharedGrantProviderRequest {
                 snapshot,
-                OauthFilePreset::GoogleDrive,
-                nook_core::SharedStorageTargetSelection::Create,
-            )
-            .provider_id()
-            .is_err()
-        );
+                preset: OauthFilePreset::GoogleDrive,
+                target: nook_core::SharedStorageTargetSelection::Create,
+            }),
+            nook_core::SharedGrantProviderOutcome::AuthorizationRequired
+        ));
 
         let updated_drive = set_google_drive_provider_mode(
             nook_core::OAuthFileConfigData::default(),
