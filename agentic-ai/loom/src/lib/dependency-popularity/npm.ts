@@ -1,3 +1,10 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  RegistryResponse,
+  RegistryJson,
+  RegistryFailureKind,
+  type RegistryFailure,
+} from './registry-response.ts';
 import {
   UntrustedYamlPropertyPresence,
   type UntrustedYamlNode,
@@ -14,49 +21,61 @@ import {
 import type { UntrustedYamlPropertyArgs } from '../guards.ts';
 
 export class NpmRegistryMetrics {
-  private constructor(private readonly request: string) {}
-  static fetch(name: string): Promise<NpmPackageMetrics> {
-    return new NpmRegistryMetrics(name).execute();
-  }
-  private async execute(): Promise<NpmPackageMetrics> {
+  constructor(private readonly request: string) {}
+  async execute(): Promise<Result<NpmPackageMetrics, RegistryFailure>> {
     const name = this.request;
     const encoded = encodeURIComponent(name);
-    const [downloadsResponse, metadataResponse] = await Promise.all([
-      fetch(`https://api.npmjs.org/downloads/point/last-week/${encoded}`),
-      fetch(`https://registry.npmjs.org/${encoded}`),
+    const [downloadsFetch, metadataFetch] = await Promise.all([
+      new RegistryResponse(
+        `https://api.npmjs.org/downloads/point/last-week/${encoded}`,
+      ).fetch(),
+      new RegistryResponse(`https://registry.npmjs.org/${encoded}`).fetch(),
     ]);
+    if (downloadsFetch.isErr()) return err(downloadsFetch.error);
+    if (metadataFetch.isErr()) return err(metadataFetch.error);
+    const downloadsResponse = downloadsFetch.value;
+    const metadataResponse = metadataFetch.value;
     if (!downloadsResponse.ok) {
-      throw new Error(
-        `npm downloads lookup failed for ${name}: HTTP ${downloadsResponse.status}`,
-      );
+      return err({
+        kind: RegistryFailureKind.Payload,
+        message: `npm downloads lookup failed for ${name}: HTTP ${downloadsResponse.status}`,
+      });
     }
     if (!metadataResponse.ok) {
-      throw new Error(
-        `npm registry lookup failed for ${name}: HTTP ${metadataResponse.status}`,
-      );
+      return err({
+        kind: RegistryFailureKind.Payload,
+        message: `npm registry lookup failed for ${name}: HTTP ${metadataResponse.status}`,
+      });
     }
-    const downloadsJson = UntrustedYamlBoundary.fromHost(
-      (await downloadsResponse.json()) as UntrustedYamlNode,
-    );
-    const metadataJson = UntrustedYamlBoundary.fromHost(
-      (await metadataResponse.json()) as UntrustedYamlNode,
-    );
+    const downloadsDecoded = await new RegistryJson(downloadsResponse).decode();
+    if (downloadsDecoded.isErr()) return err(downloadsDecoded.error);
+    const metadataDecoded = await new RegistryJson(metadataResponse).decode();
+    if (metadataDecoded.isErr()) return err(metadataDecoded.error);
+    const downloadsJson = downloadsDecoded.value;
+    const metadataJson = metadataDecoded.value;
     const weeklyDownloadsArgs = { value: downloadsJson, name };
     const weeklyDownloads = this.readWeeklyDownloads(weeklyDownloadsArgs);
+    if (weeklyDownloads.isErr()) return err(weeklyDownloads.error);
     const githubStars = await this.resolveGitHubStars(metadataJson);
-    return {
+    if (githubStars.isErr()) return err(githubStars.error);
+    return ok({
       ecosystem: DependencyEcosystem.Npm,
       name,
-      weeklyDownloads,
-      githubStars,
-    };
+      weeklyDownloads: weeklyDownloads.value,
+      githubStars: githubStars.value,
+    });
   }
 
-  private readWeeklyDownloads(args: ReadWeeklyDownloadsArgs): number {
+  private readWeeklyDownloads(
+    args: ReadWeeklyDownloadsArgs,
+  ): Result<number, RegistryFailure> {
     const { value, name } = args;
 
     if (!UntrustedYamlBoundary.isRecord(value)) {
-      throw new Error(`npm downloads payload invalid for ${name}`);
+      return err({
+        kind: RegistryFailureKind.Payload,
+        message: `npm downloads payload invalid for ${name}`,
+      });
     }
     const downloadsArgs: UntrustedYamlPropertyArgs = {
       record: value,
@@ -67,16 +86,19 @@ export class NpmRegistryMetrics {
       downloads.presence === UntrustedYamlPropertyPresence.Absent ||
       typeof downloads.value !== 'number'
     ) {
-      throw new Error(`npm downloads payload invalid for ${name}`);
+      return err({
+        kind: RegistryFailureKind.Payload,
+        message: `npm downloads payload invalid for ${name}`,
+      });
     }
-    return downloads.value;
+    return ok(downloads.value);
   }
 
   private async resolveGitHubStars(
     metadata: UntrustedYamlNode,
-  ): Promise<GitHubStars> {
+  ): Promise<Result<GitHubStars, RegistryFailure>> {
     if (!UntrustedYamlBoundary.isRecord(metadata)) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
     const repositoryPropertyArgs: UntrustedYamlPropertyArgs = {
       record: metadata,
@@ -105,7 +127,7 @@ export class NpmRegistryMetrics {
     }
     const slug = this.githubSlug(repoUrl);
     if (slug.length === 0) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
     const requestInit: RequestInit = {
       headers: {
@@ -113,18 +135,20 @@ export class NpmRegistryMetrics {
         'User-Agent': 'nook-loom-dependency-popularity',
       },
     };
-    const response = await fetch(
+    const fetched = await new RegistryResponse(
       `https://api.github.com/repos/${slug}`,
       requestInit,
-    );
+    ).fetch();
+    if (fetched.isErr()) return err(fetched.error);
+    const response = fetched.value;
     if (!response.ok) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
-    const json = UntrustedYamlBoundary.fromHost(
-      (await response.json()) as UntrustedYamlNode,
-    );
+    const decoded = await new RegistryJson(response).decode();
+    if (decoded.isErr()) return err(decoded.error);
+    const json = decoded.value;
     if (!UntrustedYamlBoundary.isRecord(json)) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
     const starsArgs: UntrustedYamlPropertyArgs = {
       record: json,
@@ -135,12 +159,12 @@ export class NpmRegistryMetrics {
       stars.presence === UntrustedYamlPropertyPresence.Absent ||
       typeof stars.value !== 'number'
     ) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
-    return {
+    return ok({
       presence: GitHubStarsPresence.Reported,
       stars: stars.value,
-    };
+    });
   }
 
   private githubSlug(repoUrl: string): string {

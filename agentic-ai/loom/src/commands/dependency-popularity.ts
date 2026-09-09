@@ -1,3 +1,5 @@
+import { err, ok, type Result } from 'neverthrow';
+import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
 import type { DependencyPopularityRequest } from '../codec/args/dependency-popularity.ts';
 
 import { CrateRegistryMetrics } from '../lib/dependency-popularity/crates.ts';
@@ -19,13 +21,10 @@ import { RepositoryRoot } from '../lib/repo.ts';
 import type { EvaluatePopularityArgs } from '../lib/dependency-popularity/evaluate.ts';
 
 export class DependencyPopularityCommand {
-  private constructor(private readonly request: DependencyPopularityRequest) {}
-  static run(
-    request: DependencyPopularityRequest,
-  ): Promise<DependencyPopularityReport> {
-    return new DependencyPopularityCommand(request).execute();
-  }
-  private async execute(): Promise<DependencyPopularityReport> {
+  constructor(private readonly request: DependencyPopularityRequest) {}
+  async execute(): Promise<
+    Result<DependencyPopularityReport, RegistryFailure>
+  > {
     const request = this.request;
     const thresholds: PopularityThresholds = {
       minNpmWeeklyDownloads: request.minNpmWeeklyDownloads,
@@ -45,27 +44,33 @@ export class DependencyPopularityCommand {
 
     const findings: PopularityFinding[] = [];
     for (const name of npmPackages) {
-      const metrics = await NpmRegistryMetrics.fetch(name);
+      const metrics = await new NpmRegistryMetrics(name).execute();
+      if (metrics.isErr()) return err(metrics.error);
       const evaluatePopularityArgs2: EvaluatePopularityArgs = {
-        metrics,
+        metrics: metrics.value,
         thresholds,
       };
       findings.push(
-        DependencyPopularityPolicy.evaluate(evaluatePopularityArgs2),
+        new DependencyPopularityPolicy(
+          evaluatePopularityArgs2.thresholds,
+        ).evaluate(evaluatePopularityArgs2.metrics),
       );
     }
     for (const name of rustCrates) {
-      const metrics = await CrateRegistryMetrics.fetch(name);
+      const metrics = await new CrateRegistryMetrics(name).execute();
+      if (metrics.isErr()) return err(metrics.error);
       const evaluatePopularityArgs: EvaluatePopularityArgs = {
-        metrics,
+        metrics: metrics.value,
         thresholds,
       };
       findings.push(
-        DependencyPopularityPolicy.evaluate(evaluatePopularityArgs),
+        new DependencyPopularityPolicy(
+          evaluatePopularityArgs.thresholds,
+        ).evaluate(evaluatePopularityArgs.metrics),
       );
     }
 
-    return {
+    return ok({
       ok: findings.every(
         (finding) => finding.verdict === PopularityVerdict.Pass,
       ),
@@ -73,7 +78,7 @@ export class DependencyPopularityCommand {
       npmPackages,
       rustCrates,
       findings,
-    };
+    });
   }
 }
 

@@ -85,7 +85,9 @@ describe('evaluatePopularity', () => {
       },
       thresholds,
     };
-    const finding = DependencyPopularityPolicy.evaluate(findingArgs3);
+    const finding = new DependencyPopularityPolicy(
+      findingArgs3.thresholds,
+    ).evaluate(findingArgs3.metrics);
     expect(finding.verdict).toBe(PopularityVerdict.Pass);
     expect(finding.reasons).toHaveLength(0);
   });
@@ -103,7 +105,9 @@ describe('evaluatePopularity', () => {
       },
       thresholds,
     };
-    const finding = DependencyPopularityPolicy.evaluate(findingArgs2);
+    const finding = new DependencyPopularityPolicy(
+      findingArgs2.thresholds,
+    ).evaluate(findingArgs2.metrics);
     expect(finding.verdict).toBe(PopularityVerdict.Fail);
     expect(finding.reasons.length).toBeGreaterThan(0);
   });
@@ -119,7 +123,9 @@ describe('evaluatePopularity', () => {
       },
       thresholds,
     };
-    const finding = DependencyPopularityPolicy.evaluate(findingArgs);
+    const finding = new DependencyPopularityPolicy(
+      findingArgs.thresholds,
+    ).evaluate(findingArgs.metrics);
     expect(finding.verdict).toBe(PopularityVerdict.Fail);
   });
 });

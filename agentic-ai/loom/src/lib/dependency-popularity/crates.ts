@@ -1,3 +1,10 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  RegistryResponse,
+  RegistryJson,
+  RegistryFailureKind,
+  type RegistryFailure,
+} from './registry-response.ts';
 import {
   UntrustedYamlPropertyPresence,
   type UntrustedYamlNode,
@@ -14,11 +21,8 @@ import {
 import type { UntrustedYamlPropertyArgs } from '../guards.ts';
 
 export class CrateRegistryMetrics {
-  private constructor(private readonly request: string) {}
-  static fetch(name: string): Promise<CrateMetrics> {
-    return new CrateRegistryMetrics(name).execute();
-  }
-  private async execute(): Promise<CrateMetrics> {
+  constructor(private readonly request: string) {}
+  async execute(): Promise<Result<CrateMetrics, RegistryFailure>> {
     const name = this.request;
     const requestInit: RequestInit = {
       headers: {
@@ -26,20 +30,26 @@ export class CrateRegistryMetrics {
         'User-Agent': 'nook-loom-dependency-popularity (meta-secret/nook)',
       },
     };
-    const response = await fetch(
+    const fetched = await new RegistryResponse(
       `https://crates.io/api/v1/crates/${encodeURIComponent(name)}`,
       requestInit,
-    );
+    ).fetch();
+    if (fetched.isErr()) return err(fetched.error);
+    const response = fetched.value;
     if (!response.ok) {
-      throw new Error(
-        `crates.io lookup failed for ${name}: HTTP ${response.status}`,
-      );
+      return err({
+        kind: RegistryFailureKind.Payload,
+        message: `crates.io lookup failed for ${name}: HTTP ${response.status}`,
+      });
     }
-    const json = UntrustedYamlBoundary.fromHost(
-      (await response.json()) as UntrustedYamlNode,
-    );
+    const decoded = await new RegistryJson(response).decode();
+    if (decoded.isErr()) return err(decoded.error);
+    const json = decoded.value;
     if (!UntrustedYamlBoundary.isRecord(json)) {
-      throw new Error(`crates.io payload invalid for ${name}`);
+      return err({
+        kind: RegistryFailureKind.Payload,
+        message: `crates.io payload invalid for ${name}`,
+      });
     }
     const cratePropertyArgs2: UntrustedYamlPropertyArgs = {
       record: json,
@@ -50,7 +60,10 @@ export class CrateRegistryMetrics {
       crateProperty.presence === UntrustedYamlPropertyPresence.Absent ||
       !UntrustedYamlBoundary.isRecord(crateProperty.value)
     ) {
-      throw new Error(`crates.io payload invalid for ${name}`);
+      return err({
+        kind: RegistryFailureKind.Payload,
+        message: `crates.io payload invalid for ${name}`,
+      });
     }
     const crate = crateProperty.value;
     const downloadsArgs: UntrustedYamlPropertyArgs = {
@@ -69,22 +82,27 @@ export class CrateRegistryMetrics {
       recentDownloads.presence === UntrustedYamlPropertyPresence.Absent ||
       typeof recentDownloads.value !== 'number'
     ) {
-      throw new Error(`crates.io download fields missing for ${name}`);
+      return err({
+        kind: RegistryFailureKind.Payload,
+        message: `crates.io download fields missing for ${name}`,
+      });
     }
-    return {
+    const githubStars = await this.resolveCrateGitHubStars(json);
+    if (githubStars.isErr()) return err(githubStars.error);
+    return ok({
       ecosystem: DependencyEcosystem.CratesIo,
       name,
       downloads: downloads.value,
       recentDownloads: recentDownloads.value,
-      githubStars: await this.resolveCrateGitHubStars(json),
-    };
+      githubStars: githubStars.value,
+    });
   }
 
   private async resolveCrateGitHubStars(
     payload: UntrustedYamlNode,
-  ): Promise<GitHubStars> {
+  ): Promise<Result<GitHubStars, RegistryFailure>> {
     if (!UntrustedYamlBoundary.isRecord(payload)) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
     const versionsArgs: UntrustedYamlPropertyArgs = {
       record: payload,
@@ -95,7 +113,7 @@ export class CrateRegistryMetrics {
       versions.presence === UntrustedYamlPropertyPresence.Absent ||
       !Array.isArray(versions.value)
     ) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
     const cratePropertyArgs: UntrustedYamlPropertyArgs = {
       record: payload,
@@ -106,7 +124,7 @@ export class CrateRegistryMetrics {
       crateProperty.presence === UntrustedYamlPropertyPresence.Absent ||
       !UntrustedYamlBoundary.isRecord(crateProperty.value)
     ) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
     const repositoryArgs: UntrustedYamlPropertyArgs = {
       record: crateProperty.value,
@@ -117,13 +135,13 @@ export class CrateRegistryMetrics {
       repository.presence === UntrustedYamlPropertyPresence.Absent ||
       typeof repository.value !== 'string'
     ) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
     const match = repository.value.match(/github\.com\/([^/]+)\/([^/#?]+)/i);
     const owner = match?.[1];
     const repo = match?.[2];
     if (typeof owner !== 'string' || typeof repo !== 'string') {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
     const requestInit: RequestInit = {
       headers: {
@@ -131,18 +149,20 @@ export class CrateRegistryMetrics {
         'User-Agent': 'nook-loom-dependency-popularity',
       },
     };
-    const response = await fetch(
+    const fetched = await new RegistryResponse(
       `https://api.github.com/repos/${owner}/${repo.replace(/\.git$/, '')}`,
       requestInit,
-    );
+    ).fetch();
+    if (fetched.isErr()) return err(fetched.error);
+    const response = fetched.value;
     if (!response.ok) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
-    const json = UntrustedYamlBoundary.fromHost(
-      (await response.json()) as UntrustedYamlNode,
-    );
+    const decoded = await new RegistryJson(response).decode();
+    if (decoded.isErr()) return err(decoded.error);
+    const json = decoded.value;
     if (!UntrustedYamlBoundary.isRecord(json)) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
     const starsArgs: UntrustedYamlPropertyArgs = {
       record: json,
@@ -153,11 +173,11 @@ export class CrateRegistryMetrics {
       stars.presence === UntrustedYamlPropertyPresence.Absent ||
       typeof stars.value !== 'number'
     ) {
-      return { presence: GitHubStarsPresence.Unavailable };
+      return ok({ presence: GitHubStarsPresence.Unavailable });
     }
-    return {
+    return ok({
       presence: GitHubStarsPresence.Reported,
       stars: stars.value,
-    };
+    });
   }
 }

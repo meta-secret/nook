@@ -1,3 +1,4 @@
+import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
 import type { PrePushFailure } from '../commands/pre-push.ts';
 import {
   PullRequestValidationCommand,
@@ -250,6 +251,7 @@ export class LoomRequestCatalog {
       | SkillScaffoldFailure
       | PrLandFailure
       | PrePushFailure
+      | RegistryFailure
     >
   > {
     switch (request.family) {
@@ -320,9 +322,9 @@ export class LoomRequestCatalog {
         break;
       }
       case RequestFamily.DependencyPopularity:
-        return ok(
-          await DependencyPopularityCommand.run(request.dependencyPopularity),
-        );
+        return new DependencyPopularityCommand(
+          request.dependencyPopularity,
+        ).execute();
       case RequestFamily.ToolsList:
       case RequestFamily.ToolsCall: {
         const loomFailureDetailArgs: LoomFailureDetailArgs = {

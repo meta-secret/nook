@@ -8,13 +8,10 @@ import {
 } from './types.ts';
 
 export class DependencyPopularityPolicy {
-  private constructor(private readonly request: EvaluatePopularityArgs) {}
-  static evaluate(args: EvaluatePopularityArgs): PopularityFinding {
-    return new DependencyPopularityPolicy(args).execute();
-  }
-  private execute(): PopularityFinding {
-    const args = this.request;
-    const { metrics, thresholds } = args;
+  constructor(private readonly thresholds: PopularityThresholds) {}
+
+  evaluate(metrics: DependencyMetrics): PopularityFinding {
+    const thresholds = this.thresholds;
 
     const reasons: string[] = [];
     if (metrics.ecosystem === DependencyEcosystem.Npm) {
