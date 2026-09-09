@@ -1,3 +1,4 @@
+import { GitHubEvidenceField } from './agent-stats-github-field.ts';
 import {
   GitHubActionJobs,
   GitHubSourceVerification,
@@ -13,13 +14,11 @@ import {
 
 import { CommandOutputPolicy, HostCommand } from './run.ts';
 
-import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
+import { LoomFailureCode } from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
 
 import type { RunCommandArgs } from './run.ts';
-
-import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 
 export class GithubActionEvidenceApi {
   private constructor(
@@ -47,21 +46,24 @@ export class GithubActionEvidenceApi {
         record: page,
         key: 'workflow_runs',
       };
-      for (const run of GithubActionEvidenceApi.requiredArrayProperty(
-        runsRequest,
-      )) {
+      const requiredField1 = new GitHubEvidenceField(runsRequest).array();
+      if (requiredField1.isErr()) return err(requiredField1.error);
+      for (const run of requiredField1.value) {
         if (!UntrustedYamlBoundary.isRecord(run)) continue;
         const titleRequest: GitHubPropertyRequest = {
           record: run,
           key: 'display_title',
         };
-        const displayTitle =
-          GithubActionEvidenceApi.requiredStringProperty(titleRequest);
+        const requiredField2 = new GitHubEvidenceField(titleRequest).string();
+        if (requiredField2.isErr()) return err(requiredField2.error);
+        const displayTitle = requiredField2.value;
         if (!displayTitle.startsWith(titlePrefix)) {
           continue;
         }
         const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
-        const runId = GithubActionEvidenceApi.requiredNumberProperty(idRequest);
+        const requiredField3 = new GitHubEvidenceField(idRequest).number();
+        if (requiredField3.isErr()) return err(requiredField3.error);
+        const runId = requiredField3.value;
         const sourceRequest: DispatchedSourceHeadRequest = {
           displayTitle,
           prNumber: request.prNumber,
@@ -96,12 +98,14 @@ export class GithubActionEvidenceApi {
         record: page,
         key: 'workflow_runs',
       };
-      for (const run of GithubActionEvidenceApi.requiredArrayProperty(
-        runsRequest,
-      )) {
+      const requiredField4 = new GitHubEvidenceField(runsRequest).array();
+      if (requiredField4.isErr()) return err(requiredField4.error);
+      for (const run of requiredField4.value) {
         if (!UntrustedYamlBoundary.isRecord(run)) continue;
         const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
-        const runId = GithubActionEvidenceApi.requiredNumberProperty(idRequest);
+        const requiredField5 = new GitHubEvidenceField(idRequest).number();
+        if (requiredField5.isErr()) return err(requiredField5.error);
+        const runId = requiredField5.value;
         const verifiedRequest: GitHubPropertyRequest = {
           record: run,
           key: 'source_verified',
@@ -156,15 +160,16 @@ export class GithubActionEvidenceApi {
         record: page,
         key: 'total_count',
       };
-      expectedRunCount = Math.max(
-        expectedRunCount,
-        GithubActionEvidenceApi.requiredNumberProperty(totalRequest),
-      );
+      const requiredField6 = new GitHubEvidenceField(totalRequest).number();
+      if (requiredField6.isErr()) return err(requiredField6.error);
+      expectedRunCount = Math.max(expectedRunCount, requiredField6.value);
       const runsRequest: GitHubPropertyRequest = {
         record: page,
         key: 'workflow_runs',
       };
-      const runs = GithubActionEvidenceApi.requiredArrayProperty(runsRequest);
+      const requiredField7 = new GitHubEvidenceField(runsRequest).array();
+      if (requiredField7.isErr()) return err(requiredField7.error);
+      const runs = requiredField7.value;
       for (const run of runs) {
         if (!UntrustedYamlBoundary.isRecord(run)) {
           return err({
@@ -173,13 +178,16 @@ export class GithubActionEvidenceApi {
           });
         }
         const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
-        const runId = GithubActionEvidenceApi.requiredNumberProperty(idRequest);
+        const requiredField8 = new GitHubEvidenceField(idRequest).number();
+        if (requiredField8.isErr()) return err(requiredField8.error);
+        const runId = requiredField8.value;
         const attemptRequest: GitHubPropertyRequest = {
           record: run,
           key: 'run_attempt',
         };
-        const latestAttempt =
-          GithubActionEvidenceApi.requiredNumberProperty(attemptRequest);
+        const requiredField9 = new GitHubEvidenceField(attemptRequest).number();
+        if (requiredField9.isErr()) return err(requiredField9.error);
+        const latestAttempt = requiredField9.value;
         for (let attempt = 1; attempt <= latestAttempt; attempt += 1) {
           const attemptApiRequest: GitHubApiRequest = {
             repoRoot: request.repoRoot,
@@ -257,10 +265,9 @@ export class GithubActionEvidenceApi {
       record: request.attemptRecord,
       key: 'name',
     };
-    if (
-      GithubActionEvidenceApi.requiredStringProperty(workflowRequest) !==
-      'E2E (PR)'
-    )
+    const requiredField10 = new GitHubEvidenceField(workflowRequest).string();
+    if (requiredField10.isErr()) return err(requiredField10.error);
+    if (requiredField10.value !== 'E2E (PR)')
       return ok(GitHubSourceVerification.Verified);
     const jobsRequest: GitHubApiRequest = {
       repoRoot: request.repoRoot,
@@ -281,8 +288,10 @@ export class GithubActionEvidenceApi {
         });
       }
       const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
+      const requiredField11 = new GitHubEvidenceField(jobsProperty).array();
+      if (requiredField11.isErr()) return err(requiredField11.error);
       const verificationRequest: ActionJobsVerifiedSourceRequest = {
-        jobs: GithubActionEvidenceApi.requiredArrayProperty(jobsProperty),
+        jobs: requiredField11.value,
       };
       const verification = new GitHubActionJobs(
         verificationRequest.jobs,
@@ -301,8 +310,9 @@ export class GithubActionEvidenceApi {
       record: request.attemptRecord,
       key: 'name',
     };
-    const workflow =
-      GithubActionEvidenceApi.requiredStringProperty(workflowRequest);
+    const requiredField12 = new GitHubEvidenceField(workflowRequest).string();
+    if (requiredField12.isErr()) return err(requiredField12.error);
+    const workflow = requiredField12.value;
     const gateJobName =
       workflow === 'PR'
         ? 'Validate explicit CI request'
@@ -329,8 +339,10 @@ export class GithubActionEvidenceApi {
         });
       }
       const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
+      const requiredField13 = new GitHubEvidenceField(jobsProperty).array();
+      if (requiredField13.isErr()) return err(requiredField13.error);
       const validationRequest: ActionJobsRequestedValidationRequest = {
-        jobs: GithubActionEvidenceApi.requiredArrayProperty(jobsProperty),
+        jobs: requiredField13.value,
         gateJobName,
       };
       const validation = new GitHubActionJobs(
@@ -417,56 +429,6 @@ export class GithubActionEvidenceApi {
       typeof property.value === 'number'
       ? property.value
       : 0;
-  }
-
-  static requiredStringProperty(request: GitHubPropertyRequest): string {
-    const value = GithubActionEvidenceApi.stringProperty(request);
-    if (value.length === 0) {
-      GithubActionEvidenceApi.failGitHubCollection(
-        `GitHub field ${request.key} must be a non-empty string`,
-      );
-    }
-    return value;
-  }
-
-  static requiredNumberProperty(request: GitHubPropertyRequest): number {
-    const args: UntrustedYamlPropertyArgs = request;
-    const property = UntrustedYamlBoundary.property(args);
-    if (
-      property.presence === UntrustedYamlPropertyPresence.Absent ||
-      typeof property.value !== 'number' ||
-      !Number.isInteger(property.value) ||
-      property.value < 0
-    ) {
-      GithubActionEvidenceApi.failGitHubCollection(
-        `GitHub field ${request.key} must be a non-negative integer`,
-      );
-    }
-    return property.value;
-  }
-
-  static requiredArrayProperty(
-    request: GitHubPropertyRequest,
-  ): readonly UntrustedYamlNode[] {
-    const args: UntrustedYamlPropertyArgs = request;
-    const property = UntrustedYamlBoundary.property(args);
-    if (
-      property.presence === UntrustedYamlPropertyPresence.Absent ||
-      !Array.isArray(property.value)
-    ) {
-      GithubActionEvidenceApi.failGitHubCollection(
-        `GitHub field ${request.key} must be a list`,
-      );
-    }
-    return property.value;
-  }
-
-  static failGitHubCollection(message: string): never {
-    const detail: LoomFailureDetailArgs = {
-      code: LoomFailureCode.CommandFailed,
-      text: message,
-    };
-    LoomFailure.detail(detail);
   }
 }
 

@@ -1,3 +1,7 @@
+import {
+  GitHubReviewReactions,
+  GitHubReviewEvidence,
+} from './agent-stats-github-review-evidence.ts';
 import { GitHubEvidenceField } from './agent-stats-github-field.ts';
 import type {
   AgentStatsGitHubEvidenceRequest,
@@ -6,17 +10,8 @@ import type {
   BuildReviewEvidenceRequest,
   ActionsEvidence,
   HeadObservation,
-  ReviewRequestObservation,
-  ReviewResultObservation,
-  ReviewEventObservation,
-  ReviewEvidence,
   CollectReviewReactionPagesRequest,
   BuildHeadObservationRequest,
-  ReviewRequestsRequest,
-  ReviewResultsRequest,
-  ResolveHeadShaRequest,
-  ReviewEventPairRequest,
-  HasLoginRequest,
 } from './agent-stats-github-contracts.ts';
 export type {
   AgentStatsGitHubEvidenceRequest,
@@ -28,7 +23,6 @@ import { LoomFailureCode } from '../loom-failure.ts';
 import { err, ok, type Result } from 'neverthrow';
 import type { GitHubEvidenceFailure } from './agent-stats-github-api.ts';
 import {
-  UntrustedYamlPropertyPresence,
   type UntrustedYamlMap,
   type UntrustedYamlNode,
   UntrustedYamlBoundary,
@@ -41,7 +35,6 @@ import {
   GithubActionEvidenceApi,
 } from './agent-stats-github-api.ts';
 
-import type { UntrustedYamlPropertyArgs } from './guards.ts';
 import {
   type HeadSupersededRequest,
   type ObsoleteRunSecondsRequest,
@@ -53,10 +46,7 @@ import {
   ReviewedDeliveryHistory,
   EarliestTimestamp,
 } from './agent-stats-github-delivery.ts';
-import {
-  ReviewOutcome,
-  ReviewFindingBody,
-} from './agent-stats-github-review.ts';
+
 import {
   type ActionObservation,
   type ActionObservationRequest,
@@ -73,15 +63,6 @@ import {
 /** Owns the github agent evidence registry and its capability transitions. */
 export class GithubAgentEvidence {
   private constructor() {}
-  private static readonly CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
-
-  private static readonly GITHUB_ACTIONS_LOGIN = 'github-actions[bot]';
-
-  private static readonly TRUSTED_REVIEW_ASSOCIATIONS = new Set([
-    'OWNER',
-    'MEMBER',
-    'COLLABORATOR',
-  ]);
 
   static collectAgentStatsGitHubEvidence(
     request: AgentStatsGitHubEvidenceRequest,
@@ -165,8 +146,9 @@ export class GithubAgentEvidence {
     for (const commit of pageAdmission3.value) {
       if (!UntrustedYamlBoundary.isRecord(commit)) continue;
       const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
-      const headSha =
-        GithubActionEvidenceApi.requiredStringProperty(propertyRequest);
+      const requiredField1 = new GitHubEvidenceField(propertyRequest).string();
+      if (requiredField1.isErr()) return err(requiredField1.error);
+      const headSha = requiredField1.value;
       knownHeadShas.push(headSha);
     }
     if (!knownHeadShas.includes(request.finalHeadSha)) {
@@ -186,8 +168,7 @@ export class GithubAgentEvidence {
       reviewCommentsRequest,
     );
     if (githubResult8.isErr()) return err(githubResult8.error);
-    const githubResult9 =
-      GithubAgentEvidence.collectReviewReactionPages(reactionsRequest);
+    const githubResult9 = new GitHubReviewReactions(reactionsRequest).collect();
     if (githubResult9.isErr()) return err(githubResult9.error);
     const reviewRequest: BuildReviewEvidenceRequest = {
       issueCommentPages,
@@ -197,8 +178,7 @@ export class GithubAgentEvidence {
       knownHeadShas,
       mergedAt: request.mergedAt,
     };
-    const pageAdmission4 =
-      GithubAgentEvidence.buildReviewEvidence(reviewRequest);
+    const pageAdmission4 = new GitHubReviewEvidence(reviewRequest).build();
     if (pageAdmission4.isErr()) return err(pageAdmission4.error);
     const reviews = pageAdmission4.value;
     const actionsRequest: BuildActionsEvidenceRequest = {
@@ -400,181 +380,6 @@ export class GithubAgentEvidence {
     });
   }
 
-  static buildReviewEvidence(
-    request: BuildReviewEvidenceRequest,
-  ): Result<ReviewEvidence, GitHubEvidenceFailure> {
-    const pageAdmission7 = GithubActionEvidenceApi.flattenApiPages(
-      request.issueCommentPages,
-    );
-    if (pageAdmission7.isErr()) return err(pageAdmission7.error);
-    const issueComments = pageAdmission7.value.filter(
-      UntrustedYamlBoundary.isRecord,
-    );
-    const pageAdmission8 = GithubActionEvidenceApi.flattenApiPages(
-      request.reviewPages,
-    );
-    if (pageAdmission8.isErr()) return err(pageAdmission8.error);
-    const reviews = pageAdmission8.value.filter(UntrustedYamlBoundary.isRecord);
-    const pageAdmission9 = GithubActionEvidenceApi.flattenApiPages(
-      request.reviewCommentPages,
-    );
-    if (pageAdmission9.isErr()) return err(pageAdmission9.error);
-    const reviewComments = pageAdmission9.value.filter(
-      UntrustedYamlBoundary.isRecord,
-    );
-    const pageAdmission10 = GithubActionEvidenceApi.flattenApiPages(
-      request.reviewReactionPages,
-    );
-    if (pageAdmission10.isErr()) return err(pageAdmission10.error);
-    const reviewReactions = pageAdmission10.value.filter(
-      UntrustedYamlBoundary.isRecord,
-    );
-    const requestsRequest: ReviewRequestsRequest = {
-      comments: issueComments,
-      knownHeadShas: request.knownHeadShas,
-      mergedAt: request.mergedAt,
-    };
-    const requests = GithubAgentEvidence.reviewRequests(requestsRequest);
-    const resultsRequest: ReviewResultsRequest = {
-      issueComments,
-      reviews,
-      reviewComments,
-      reviewReactions,
-      requests,
-      knownHeadShas: request.knownHeadShas,
-      mergedAt: request.mergedAt,
-    };
-    const results = GithubAgentEvidence.reviewResults(resultsRequest);
-    const events: ReviewEventObservation[] = [];
-    const matchedResultKeys = new Set<string>();
-    for (const reviewRequest of requests) {
-      const result = results.find(
-        (candidate) =>
-          candidate.headSha === reviewRequest.headSha &&
-          candidate.completedAt >= reviewRequest.requestedAt &&
-          (candidate.requestCommentId === 0 ||
-            candidate.requestCommentId === reviewRequest.commentId) &&
-          !matchedResultKeys.has(
-            GithubAgentEvidence.reviewResultKey(candidate),
-          ),
-      );
-      if (result) {
-        matchedResultKeys.add(GithubAgentEvidence.reviewResultKey(result));
-        const pairRequest: ReviewEventPairRequest = { reviewRequest, result };
-        events.push(GithubAgentEvidence.reviewEventFromPair(pairRequest));
-      } else {
-        const event: ReviewEventObservation = {
-          headSha: reviewRequest.headSha,
-          requestedAt: reviewRequest.requestedAt,
-          completedAt: '',
-          outcome: ReviewOutcome.Unavailable,
-          requested: true,
-          findingCount: 0,
-          latencySeconds: 0,
-        };
-        events.push(event);
-      }
-    }
-    for (const result of results) {
-      if (matchedResultKeys.has(GithubAgentEvidence.reviewResultKey(result)))
-        continue;
-      const event: ReviewEventObservation = {
-        headSha: result.headSha,
-        requestedAt: result.completedAt,
-        completedAt: result.completedAt,
-        outcome: result.outcome,
-        requested: false,
-        findingCount: result.findingCount,
-        latencySeconds: 0,
-      };
-      events.push(event);
-    }
-    let findingBatchCount = 0;
-    let findingCount = 0;
-    for (const event of events) {
-      if (event.outcome !== ReviewOutcome.Findings) continue;
-      findingBatchCount += 1;
-      findingCount += event.findingCount;
-    }
-    return ok({
-      events: events.map(GithubAgentEvidence.reviewEventRecord),
-      requestCount: requests.length,
-      findingBatchCount,
-      findingCount,
-    });
-  }
-
-  private static collectReviewReactionPages(
-    request: CollectReviewReactionPagesRequest,
-  ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
-    const reactions: UntrustedYamlMap[] = [];
-    const pageAdmission11 = GithubActionEvidenceApi.flattenApiPages(
-      request.issueCommentPages,
-    );
-    if (pageAdmission11.isErr()) return err(pageAdmission11.error);
-    const comments = pageAdmission11.value.filter(
-      UntrustedYamlBoundary.isRecord,
-    );
-    for (const comment of comments) {
-      if (!GithubAgentEvidence.isTrustedReviewRequester(comment)) continue;
-      const bodyRequest: PropertyRequest = { record: comment, key: 'body' };
-      const body = GithubActionEvidenceApi.requiredStringProperty(bodyRequest);
-      if (!/nook-codex-review:[0-9a-f]{7,40}/.test(body)) continue;
-      const commentIdRequest: PropertyRequest = { record: comment, key: 'id' };
-      const commentId =
-        GithubActionEvidenceApi.requiredNumberProperty(commentIdRequest);
-      const apiRequest: GitHubApiRequest = {
-        repoRoot: request.repoRoot,
-        endpoint: `repos/{owner}/{repo}/issues/comments/${commentId}/reactions`,
-        fields: ['per_page=100'],
-      };
-      const githubResult10 = GithubActionEvidenceApi.runGitHubApi(apiRequest);
-      if (githubResult10.isErr()) return err(githubResult10.error);
-      const pageAdmission12 = GithubActionEvidenceApi.flattenApiPages(
-        githubResult10.value,
-      );
-      if (pageAdmission12.isErr()) return err(pageAdmission12.error);
-      for (const reaction of pageAdmission12.value) {
-        if (!UntrustedYamlBoundary.isRecord(reaction)) {
-          GithubActionEvidenceApi.failGitHubCollection(
-            'GitHub reaction must be a mapping',
-          );
-        }
-        const contentRequest: PropertyRequest = {
-          record: reaction,
-          key: 'content',
-        };
-        const createdAtRequest: PropertyRequest = {
-          record: reaction,
-          key: 'created_at',
-        };
-        const userRequest: UntrustedYamlPropertyArgs = {
-          record: reaction,
-          key: 'user',
-        };
-        const user = UntrustedYamlBoundary.property(userRequest);
-        if (
-          user.presence === UntrustedYamlPropertyPresence.Absent ||
-          !UntrustedYamlBoundary.isRecord(user.value)
-        ) {
-          GithubActionEvidenceApi.failGitHubCollection(
-            'GitHub reaction user must be a mapping',
-          );
-        }
-        const reactionRecord = {
-          request_comment_id: commentId,
-          content:
-            GithubActionEvidenceApi.requiredStringProperty(contentRequest),
-          created_at:
-            GithubActionEvidenceApi.requiredStringProperty(createdAtRequest),
-          user: user.value,
-        };
-        reactions.push(UntrustedYamlBoundary.seal(reactionRecord));
-      }
-    }
-    return ok([reactions]);
-  }
-
   private static buildHeadObservation(
     request: BuildHeadObservationRequest,
   ): HeadObservation {
@@ -614,264 +419,6 @@ export class GithubAgentEvidence {
     };
   }
 
-  private static reviewRequests(
-    request: ReviewRequestsRequest,
-  ): ReviewRequestObservation[] {
-    const observations: ReviewRequestObservation[] = [];
-    for (const comment of request.comments) {
-      const cutoffRequest: PropertyRequest = {
-        record: comment,
-        key: 'created_at',
-      };
-      if (
-        GithubActionEvidenceApi.requiredStringProperty(cutoffRequest) >
-        request.mergedAt
-      )
-        continue;
-      if (!GithubAgentEvidence.isTrustedReviewRequester(comment)) continue;
-      const bodyRequest: PropertyRequest = { record: comment, key: 'body' };
-      const body = GithubActionEvidenceApi.requiredStringProperty(bodyRequest);
-      const marker = body.match(/nook-codex-review:([0-9a-f]{7,40})/);
-      if (!marker) continue;
-      const [defaulted1 = ''] = [marker[1]];
-      const headRequest: ResolveHeadShaRequest = {
-        candidate: defaulted1,
-        knownHeadShas: request.knownHeadShas,
-      };
-      const headSha = GithubAgentEvidence.resolveHeadSha(headRequest);
-      if (headSha.length === 0) continue;
-      const createdAtRequest: PropertyRequest = {
-        record: comment,
-        key: 'created_at',
-      };
-      const commentIdRequest: PropertyRequest = { record: comment, key: 'id' };
-      const commentId =
-        GithubActionEvidenceApi.requiredNumberProperty(commentIdRequest);
-      const requestedAt =
-        GithubActionEvidenceApi.requiredStringProperty(createdAtRequest);
-      const observation: ReviewRequestObservation = {
-        commentId,
-        headSha,
-        requestedAt,
-      };
-      observations.push(observation);
-    }
-    return observations;
-  }
-
-  private static reviewResults(
-    request: ReviewResultsRequest,
-  ): ReviewResultObservation[] {
-    const results: ReviewResultObservation[] = [];
-    for (const review of request.reviews) {
-      const reviewLoginRequest: HasLoginRequest = {
-        record: review,
-        expected: GithubAgentEvidence.CODEX_LOGIN,
-      };
-      if (!GithubAgentEvidence.hasLogin(reviewLoginRequest)) continue;
-      const stateRequest: PropertyRequest = { record: review, key: 'state' };
-      if (GithubActionEvidenceApi.stringProperty(stateRequest) === 'PENDING')
-        continue;
-      const cutoffRequest: PropertyRequest = {
-        record: review,
-        key: 'submitted_at',
-      };
-      if (
-        GithubActionEvidenceApi.requiredStringProperty(cutoffRequest) >
-        request.mergedAt
-      )
-        continue;
-      const reviewIdRequest: PropertyRequest = { record: review, key: 'id' };
-      const reviewId =
-        GithubActionEvidenceApi.requiredNumberProperty(reviewIdRequest);
-      const inlineFindingCount = request.reviewComments.filter((comment) => {
-        const commentLoginRequest: HasLoginRequest = {
-          record: comment,
-          expected: GithubAgentEvidence.CODEX_LOGIN,
-        };
-        const reviewRequest: PropertyRequest = {
-          record: comment,
-          key: 'pull_request_review_id',
-        };
-        const replyRequest: PropertyRequest = {
-          record: comment,
-          key: 'in_reply_to_id',
-        };
-        return (
-          GithubAgentEvidence.hasLogin(commentLoginRequest) &&
-          GithubActionEvidenceApi.requiredNumberProperty(reviewRequest) ===
-            reviewId &&
-          GithubActionEvidenceApi.numberProperty(replyRequest) === 0
-        );
-      }).length;
-      const bodyRequest: PropertyRequest = { record: review, key: 'body' };
-      const bodyFindingCount = ReviewFindingBody.countFindings(
-        GithubActionEvidenceApi.stringProperty(bodyRequest),
-      );
-      const findingCount = inlineFindingCount + bodyFindingCount;
-      if (findingCount === 0) continue;
-      const commitRequest: PropertyRequest = {
-        record: review,
-        key: 'commit_id',
-      };
-      const candidate =
-        GithubActionEvidenceApi.requiredStringProperty(commitRequest);
-      const headRequest: ResolveHeadShaRequest = {
-        candidate,
-        knownHeadShas: request.knownHeadShas,
-      };
-      const headSha = GithubAgentEvidence.resolveHeadSha(headRequest);
-      if (headSha.length === 0) continue;
-      const submittedAtRequest: PropertyRequest = {
-        record: review,
-        key: 'submitted_at',
-      };
-      const observation: ReviewResultObservation = {
-        headSha,
-        completedAt:
-          GithubActionEvidenceApi.requiredStringProperty(submittedAtRequest),
-        outcome: ReviewOutcome.Findings,
-        findingCount,
-        requestCommentId: 0,
-      };
-      results.push(observation);
-    }
-    for (const comment of request.issueComments) {
-      const cutoffRequest: PropertyRequest = {
-        record: comment,
-        key: 'created_at',
-      };
-      if (
-        GithubActionEvidenceApi.requiredStringProperty(cutoffRequest) >
-        request.mergedAt
-      )
-        continue;
-      const commentLoginRequest: HasLoginRequest = {
-        record: comment,
-        expected: GithubAgentEvidence.CODEX_LOGIN,
-      };
-      if (!GithubAgentEvidence.hasLogin(commentLoginRequest)) continue;
-      const bodyRequest: PropertyRequest = { record: comment, key: 'body' };
-      const body = GithubActionEvidenceApi.requiredStringProperty(bodyRequest);
-      if (!body.includes('find any major issues')) continue;
-      const match = body.match(/Reviewed commit:\*\* `([0-9a-f]{7,40})/i);
-      if (!match) continue;
-      const [defaulted2 = ''] = [match[1]];
-      const headRequest: ResolveHeadShaRequest = {
-        candidate: defaulted2,
-        knownHeadShas: request.knownHeadShas,
-      };
-      const headSha = GithubAgentEvidence.resolveHeadSha(headRequest);
-      if (headSha.length === 0) continue;
-      const createdAtRequest: PropertyRequest = {
-        record: comment,
-        key: 'created_at',
-      };
-      const observation: ReviewResultObservation = {
-        headSha,
-        completedAt:
-          GithubActionEvidenceApi.requiredStringProperty(createdAtRequest),
-        outcome: ReviewOutcome.Clean,
-        findingCount: 0,
-        requestCommentId: 0,
-      };
-      results.push(observation);
-    }
-    for (const reaction of request.reviewReactions) {
-      const cutoffRequest: PropertyRequest = {
-        record: reaction,
-        key: 'created_at',
-      };
-      if (
-        GithubActionEvidenceApi.requiredStringProperty(cutoffRequest) >
-        request.mergedAt
-      )
-        continue;
-      const reactionLoginRequest: HasLoginRequest = {
-        record: reaction,
-        expected: GithubAgentEvidence.CODEX_LOGIN,
-      };
-      if (!GithubAgentEvidence.hasLogin(reactionLoginRequest)) continue;
-      const contentRequest: PropertyRequest = {
-        record: reaction,
-        key: 'content',
-      };
-      if (
-        GithubActionEvidenceApi.requiredStringProperty(contentRequest) !== '+1'
-      )
-        continue;
-      const commentIdRequest: PropertyRequest = {
-        record: reaction,
-        key: 'request_comment_id',
-      };
-      const commentId =
-        GithubActionEvidenceApi.requiredNumberProperty(commentIdRequest);
-      const reviewRequest = request.requests.find(
-        (candidate) => candidate.commentId === commentId,
-      );
-      if (!reviewRequest) continue;
-      if (
-        results.some(
-          (result) =>
-            result.headSha === reviewRequest.headSha &&
-            result.completedAt >= reviewRequest.requestedAt,
-        )
-      ) {
-        continue;
-      }
-      const createdAtRequest: PropertyRequest = {
-        record: reaction,
-        key: 'created_at',
-      };
-      const observation: ReviewResultObservation = {
-        headSha: reviewRequest.headSha,
-        completedAt:
-          GithubActionEvidenceApi.requiredStringProperty(createdAtRequest),
-        outcome: ReviewOutcome.Clean,
-        findingCount: 0,
-        requestCommentId: commentId,
-      };
-      results.push(observation);
-    }
-    return results;
-  }
-
-  private static resolveHeadSha(request: ResolveHeadShaRequest): string {
-    // Full SHAs arrive only through trusted request markers or Codex-authored
-    // results. Keep them even when a later rebase removes them from PR ancestry.
-    if (/^[0-9a-f]{40}$/.test(request.candidate)) {
-      return request.candidate;
-    }
-    const matches = request.knownHeadShas.filter((headSha) =>
-      headSha.startsWith(request.candidate),
-    );
-    const [defaulted3 = ''] = [matches[0]];
-    return matches.length === 1 ? defaulted3 : '';
-  }
-
-  private static reviewEventFromPair(
-    request: ReviewEventPairRequest,
-  ): ReviewEventObservation {
-    const requestedAt = Date.parse(request.reviewRequest.requestedAt);
-    const completedAt = Date.parse(request.result.completedAt);
-    return {
-      headSha: request.reviewRequest.headSha,
-      requestedAt: request.reviewRequest.requestedAt,
-      completedAt: request.result.completedAt,
-      outcome: request.result.outcome,
-      requested: true,
-      findingCount: request.result.findingCount,
-      latencySeconds: Math.max(
-        0,
-        Math.round((completedAt - requestedAt) / 1000),
-      ),
-    };
-  }
-
-  private static reviewResultKey(result: ReviewResultObservation): string {
-    return `${result.headSha}:${result.completedAt}:${result.outcome}:${result.requestCommentId}`;
-  }
-
   private static headObservationRecord(
     observation: HeadObservation,
   ): UntrustedYamlMap {
@@ -885,58 +432,5 @@ export class GithubAgentEvidence {
       obsolete_action_seconds: observation.obsoleteActionSeconds,
     };
     return UntrustedYamlBoundary.seal(record);
-  }
-
-  private static reviewEventRecord(
-    event: ReviewEventObservation,
-  ): UntrustedYamlMap {
-    const record = {
-      head_sha: event.headSha,
-      requested_at: event.requestedAt,
-      completed_at: event.completedAt,
-      reviewer: 'codex',
-      outcome: event.outcome,
-      requested: event.requested,
-      finding_count: event.findingCount,
-      latency_seconds: event.latencySeconds,
-    };
-    return UntrustedYamlBoundary.seal(record);
-  }
-
-  private static hasLogin(request: HasLoginRequest): boolean {
-    const userArgs: UntrustedYamlPropertyArgs = {
-      record: request.record,
-      key: 'user',
-    };
-    const user = UntrustedYamlBoundary.property(userArgs);
-    if (
-      user.presence === UntrustedYamlPropertyPresence.Absent ||
-      !UntrustedYamlBoundary.isRecord(user.value)
-    ) {
-      return false;
-    }
-    const loginRequest: PropertyRequest = { record: user.value, key: 'login' };
-    return (
-      GithubActionEvidenceApi.stringProperty(loginRequest) === request.expected
-    );
-  }
-
-  private static isTrustedReviewRequester(comment: UntrustedYamlMap): boolean {
-    const associationRequest: PropertyRequest = {
-      record: comment,
-      key: 'author_association',
-    };
-    if (
-      GithubAgentEvidence.TRUSTED_REVIEW_ASSOCIATIONS.has(
-        GithubActionEvidenceApi.stringProperty(associationRequest),
-      )
-    ) {
-      return true;
-    }
-    const loginRequest: HasLoginRequest = {
-      record: comment,
-      expected: GithubAgentEvidence.GITHUB_ACTIONS_LOGIN,
-    };
-    return GithubAgentEvidence.hasLogin(loginRequest);
   }
 }

@@ -1,3 +1,4 @@
+import { GitHubReviewEvidence } from '../src/lib/agent-stats-github-review-evidence.ts';
 import assert from 'node:assert/strict';
 import { describe, expect, test } from 'bun:test';
 
@@ -692,7 +693,7 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [firstHead, finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = new GitHubReviewEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -731,7 +732,7 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = new GitHubReviewEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -772,7 +773,7 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = new GitHubReviewEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -821,7 +822,7 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = new GitHubReviewEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -858,7 +859,7 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = new GitHubReviewEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -892,7 +893,7 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = new GitHubReviewEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
