@@ -1,3 +1,4 @@
+import { LoomRequestExecution } from './registry.ts';
 import { readFileSync } from 'node:fs';
 
 import {
@@ -105,7 +106,7 @@ export class LoomRequestDispatch {
     }
 
     if (request.family === RequestFamily.ToolsList) {
-      const discovery = LoomRequestCatalog.listDiscoverableRequests();
+      const discovery = new LoomRequestCatalog().listDiscoverableRequests();
       if (discovery.isErr())
         return {
           exitCode: 1,
@@ -130,7 +131,7 @@ export class LoomRequestDispatch {
     }
 
     try {
-      const execution = await LoomRequestCatalog.executeRequest(request);
+      const execution = await new LoomRequestExecution(request).execute();
       if (execution.isErr()) {
         return {
           exitCode: 1,
