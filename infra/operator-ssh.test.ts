@@ -3,7 +3,7 @@ import {mkdtemp,realpath,rm,symlink,writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 
-import {OperatorSshEnsureInclude,OperatorSshRenderManagedConfig,OperatorSshRequireInventory,OperatorSshWritableConfigPath} from "./operator-ssh";
+import {OperatorSshFailureKind,OperatorSshEnsureInclude,OperatorSshRenderManagedConfig,OperatorSshRequireInventory,OperatorSshWritableConfigPath} from "./operator-ssh";
 
 const home = {
   accessFallback: "ssh.example.invalid",
@@ -75,9 +75,9 @@ describe("operator SSH configuration", () => {
       const link = join(fixture, "config");
       await writeFile(target, "Host existing\n", "utf8");
       await symlink(target, link);
-      expect(await new OperatorSshWritableConfigPath(link).execute()).toBe(
-        await realpath(target),
-      );
+      const outcome = await new OperatorSshWritableConfigPath(link).execute();
+      expect(outcome.isOk()).toBe(true);
+      if (outcome.isOk()) expect(outcome.value).toBe(await realpath(target));
     } finally {
       await rm(fixture, { force: true, recursive: true });
     }
@@ -88,38 +88,38 @@ describe("operator SSH configuration", () => {
     try {
       const link = join(fixture, "config");
       await symlink(join(fixture, "missing-config"), link);
-      expect(new OperatorSshWritableConfigPath(link).execute()).rejects.toThrow(
-        "dangling symbolic link",
-      );
+      const outcome = await new OperatorSshWritableConfigPath(link).execute();
+      expect(outcome.isErr()).toBe(true);
+      if (outcome.isErr()) expect(outcome.error.kind).toBe(OperatorSshFailureKind.DanglingLink);
     } finally {
       await rm(fixture, { force: true, recursive: true });
     }
   });
 
   test("rejects a non-private address", () => {
-    expect(() =>
-      new OperatorSshRequireInventory({
+    const outcome = new OperatorSshRequireInventory({
         ...home,
         address: "203.0.113.10",
-      }).execute(),
-    ).toThrow("private LAN address");
+      }).execute();
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) expect(outcome.error.message).toContain("private LAN address");
   });
 
   test("rejects malformed private-looking addresses", () => {
-    expect(() =>
-      new OperatorSshRequireInventory({
+    const outcome = new OperatorSshRequireInventory({
         ...home,
         address: "192.168.999.140",
-      }).execute(),
-    ).toThrow("private LAN address");
+      }).execute();
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) expect(outcome.error.message).toContain("private LAN address");
   });
 
   test("requires a distinct Cloudflare fallback", () => {
-    expect(() =>
-      new OperatorSshRequireInventory({
+    const outcome = new OperatorSshRequireInventory({
         ...home,
         accessFallback: "nook-home-lan",
-      }).execute(),
-    ).toThrow("distinct hostname");
+      }).execute();
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) expect(outcome.error.message).toContain("distinct hostname");
   });
 });
