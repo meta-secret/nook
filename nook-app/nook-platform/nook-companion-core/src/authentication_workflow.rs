@@ -867,3 +867,7 @@ pub use activity_presentation::{
     AuthenticationDisplayProgress, AuthenticationWorkflowActivity,
     PasswordWorkflowActivityEvidence, PasswordWorkflowActivityPresentation,
 };
+
+pub use observation_facts::{
+    ApprovedAuthenticationWorkflowDecision, ApprovedAuthenticationWorkflowRevalidation,
+};

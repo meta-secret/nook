@@ -23,6 +23,23 @@ pub struct AuthenticationFieldObservationFacts {
 }
 
 impl AuthenticationFieldObservationFacts {
+    pub(super) fn approved_role_compatibility(
+        self,
+        approved: Self,
+    ) -> super::revalidation::ApprovedObservationCompatibility {
+        use super::revalidation::ApprovedObservationCompatibility::{Changed, Unchanged};
+        if self.username_field_count == approved.username_field_count
+            && self.current_password_field_count == approved.current_password_field_count
+            && self.new_password_field_count == approved.new_password_field_count
+            && self.generic_password_field_count == approved.generic_password_field_count
+            && self.one_time_code_field_count == approved.one_time_code_field_count
+        {
+            Unchanged
+        } else {
+            Changed
+        }
+    }
+
     fn username_fields_match(self, observation: &AuthenticationAdvanceControlObservation) -> bool {
         if matches!(
             observation.submission_method,

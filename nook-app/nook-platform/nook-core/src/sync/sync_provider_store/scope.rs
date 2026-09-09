@@ -491,3 +491,46 @@ mod tests {
         }
     }
 }
+
+#[derive(Debug, Clone, serde::Deserialize, tsify::Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct RemoteEventFlushProviderRequest {
+    pub snapshot: AuthProvidersSnapshotData,
+    pub vault_store_id: String,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderEventFlushTarget {
+    OtherVault,
+    LocalOnly,
+    Remote,
+}
+impl StorageProviderData {
+    pub fn event_flush_target(&self, vault_store_id: &str) -> ProviderEventFlushTarget {
+        if self.store_id.as_deref() != Some(vault_store_id) {
+            return ProviderEventFlushTarget::OtherVault;
+        }
+        match self.provider_type {
+            StorageProviderType::Local | StorageProviderType::LocalFolder => {
+                ProviderEventFlushTarget::LocalOnly
+            }
+            StorageProviderType::Github | StorageProviderType::OauthFile => {
+                ProviderEventFlushTarget::Remote
+            }
+        }
+    }
+}
+impl RemoteEventFlushProviderRequest {
+    pub fn select(self) -> Vec<StorageProviderData> {
+        self.snapshot
+            .providers
+            .into_iter()
+            .filter(|provider| {
+                matches!(
+                    provider.event_flush_target(&self.vault_store_id),
+                    ProviderEventFlushTarget::Remote
+                )
+            })
+            .collect()
+    }
+}

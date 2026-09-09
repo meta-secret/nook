@@ -187,7 +187,10 @@ impl IdentityRecord {
             return Ok(());
         };
         let existing = &self.members[index];
-        if existing.auth_id != incoming.auth_id || existing.public_key != incoming.public_key {
+        if matches!(
+            existing.binding_to_member(&incoming),
+            crate::IdentityMemberKeyBinding::DifferentKeyMaterial
+        ) {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "Legacy identity directory has conflicting material for one app key.".to_owned(),
             ));

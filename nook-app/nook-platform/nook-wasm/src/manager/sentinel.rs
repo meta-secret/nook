@@ -389,7 +389,10 @@ impl NookVaultManager {
             .architecture()
             .unwrap_or_else(|_| self.vault.architecture.clone());
         if architecture.vault_type == VaultType::Sentinel {
-            if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
+            if matches!(
+                self.vault.key_material(),
+                crate::manager::session::VaultKeyMaterial::Unavailable
+            ) {
                 return Err(MultiDeviceError::SentinelCeremonyRequired.into());
             }
             // Session already holds reconstructed keys — hydrate records without

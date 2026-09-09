@@ -8,20 +8,26 @@
 use super::identity::{IdentityMember, IdentityVaultDek, IdentityVaultDekEpoch, MemberDekEnvelope};
 use super::multi_device::{AppKey, VaultKeys};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum IdentityVaultGrantReconciliation {
+    Current,
+    RewrapRequired,
+}
+
 impl IdentityVaultDek {
     #[must_use]
-    pub(super) fn already_grants(
+    pub(super) fn reconciliation_with(
         &self,
         app_key: &AppKey,
         members: &[IdentityMember],
         keys: &VaultKeys,
         key_epoch: &IdentityVaultDekEpoch,
-    ) -> bool {
+    ) -> IdentityVaultGrantReconciliation {
         if &self.key_epoch != key_epoch
             || self.secrets_envelopes.len() != members.len()
             || self.members_envelopes.len() != members.len()
         {
-            return false;
+            return IdentityVaultGrantReconciliation::RewrapRequired;
         }
         let covers_members = |envelopes: &[MemberDekEnvelope]| {
             members.iter().all(|member| {
@@ -33,16 +39,20 @@ impl IdentityVaultDek {
             })
         };
         if !covers_members(&self.secrets_envelopes) || !covers_members(&self.members_envelopes) {
-            return false;
+            return IdentityVaultGrantReconciliation::RewrapRequired;
         }
-        let decrypt_for_app = |envelopes: &[MemberDekEnvelope]| {
-            envelopes
-                .iter()
-                .find(|entry| entry.app_id == *app_key.app_id())
-                .and_then(|entry| app_key.decrypt_envelope(&entry.envelope).ok())
+        let super::identity::IdentityVaultAppEnvelopes::Granted { secrets, members } =
+            self.app_envelopes(app_key.app_id())
+        else {
+            return IdentityVaultGrantReconciliation::RewrapRequired;
         };
-        decrypt_for_app(&self.secrets_envelopes).as_ref() == Some(&keys.secrets_key)
-            && decrypt_for_app(&self.members_envelopes).as_ref() == Some(&keys.members_key)
+        if app_key.decrypt_envelope(&secrets.envelope).ok().as_ref() == Some(&keys.secrets_key)
+            && app_key.decrypt_envelope(&members.envelope).ok().as_ref() == Some(&keys.members_key)
+        {
+            IdentityVaultGrantReconciliation::Current
+        } else {
+            IdentityVaultGrantReconciliation::RewrapRequired
+        }
     }
 }
 
@@ -80,12 +90,12 @@ mod tests {
         }
 
         fn matches(&self, grant: &IdentityVaultDek) -> bool {
-            grant.already_grants(
+            grant.reconciliation_with(
                 &self.app,
                 &self.members,
                 &self.keys,
                 &IdentityVaultDekEpoch::LegacyUnknown,
-            )
+            ) == super::IdentityVaultGrantReconciliation::Current
         }
     }
 
@@ -125,12 +135,15 @@ mod tests {
             key_epoch: IdentityVaultEventId::parse(&format!("sha256u:{}", "a".repeat(43)))?,
             checkpoint: IdentityVaultEventId::parse(&format!("sha256u:{}", "b".repeat(43)))?,
         };
-        assert!(!fixture.grant.already_grants(
-            &fixture.app,
-            &fixture.members,
-            &fixture.keys,
-            &epoch
-        ));
+        assert_eq!(
+            fixture.grant.reconciliation_with(
+                &fixture.app,
+                &fixture.members,
+                &fixture.keys,
+                &epoch
+            ),
+            super::IdentityVaultGrantReconciliation::RewrapRequired
+        );
         let different = crate::VaultKeys::generate()?;
         let original = mem::replace(&mut fixture.keys.secrets_key, different.secrets_key);
         assert!(!fixture.matches(&fixture.grant));

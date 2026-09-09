@@ -11,6 +11,7 @@ mod ceremony;
 mod disclosure;
 mod fields;
 mod passkey;
+mod revalidation;
 mod submission;
 pub use authenticator::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
@@ -30,6 +31,9 @@ pub use fields::AuthenticationFieldObservationFacts;
 pub use passkey::{
     AuthenticationDetailedPasskeyControlCandidateObservation,
     AuthenticationDetailedPasskeyControlObservation, AuthenticationPasskeyControlObservation,
+};
+pub use revalidation::{
+    ApprovedAuthenticationWorkflowDecision, ApprovedAuthenticationWorkflowRevalidation,
 };
 pub use submission::{
     AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,

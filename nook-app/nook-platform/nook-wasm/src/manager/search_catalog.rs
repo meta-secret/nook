@@ -118,7 +118,10 @@ impl NookVaultManager {
             ));
         }
         let store_id = self.vault.store_id.clone();
-        if self.vault.search_catalog_store_id != store_id || !self.vault.search_catalog.is_ready() {
+        if matches!(
+            self.vault.catalog_availability(),
+            crate::manager::session::SessionCatalogAvailability::Restore
+        ) {
             let crypto = self.vault.crypto.get()?;
             let restored = SearchCatalogRestore::load(&store_id, crypto).await;
             self.vault.search_catalog = match restored {

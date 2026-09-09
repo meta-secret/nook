@@ -42,17 +42,21 @@ pub use epoch::{
 };
 pub use errors::{EventError, EventResult};
 pub use event::{
-    EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, GenesisImportPayload,
-    GenesisImportRequest, SentinelShareIssuedPayload, VaultEvent, VaultEventBody,
-    VaultEventSchemaVersion, VaultOperation,
+    EncryptedSecretPayload, EpochCheckpointRequirement, EpochMetadataState, EpochPasswordState,
+    GenesisImportContents, GenesisImportPayload, GenesisImportRequest, SecurityRotationTrigger,
+    SentinelShareIssuedPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
+    VaultOperation,
 };
 pub use event_bytes::{CanonicalEventBodyBytes, EventStorageBytes};
 pub use fingerprint::SecretFingerprint;
-pub use graph::{EventGraph, EventGraphVaultArchitecture, EventInsertStatus, EventPendingReason};
+pub use graph::{
+    EventGraph, EventGraphReplacementEvidence, EventGraphVaultArchitecture, EventInsertStatus,
+    EventPendingReason,
+};
 pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
     ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,
-    SecretReplacementConflict, SecurityConflict, VaultProjection,
+    ProjectionIntegrity, SecretReplacementConflict, SecurityConflict, VaultProjection,
 };
 pub use remote_epoch_visibility::RemoteEventWrites;
 pub use signing::SigningIdentity;

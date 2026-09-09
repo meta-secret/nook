@@ -105,7 +105,9 @@ pub use errors::{
 };
 pub use extension_identity_handoff::{
     ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen, ExtensionIdentityHandoffSeal,
-    HandoffEventLog, HandoffSigningSeedChoice, HandoffSigningSeedSelection,
+    ExtensionIdentityHandoffSealRequest, ExtensionIdentityHandoffSource,
+    ExtensionIdentityHandoffSourceBinding, HandoffEventLog, HandoffSigningSeedChoice,
+    HandoffSigningSeedSelection,
 };
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan,
@@ -267,16 +269,17 @@ pub use sync_provider_store::{
     DuplicateProviderSelection, DuplicateSyncProvider, GoogleOAuthTokenInput,
     ICloudOAuthTokenInput, LegacyAuthProvidersSnapshot, LocalFolderConfigData,
     LocalProviderRowRequest, ManagerStoreScopeRef, NormalizedAuthSnapshot, OAuthAccessToken,
-    OAuthAccessTokenRef, OAuthFileConfigData, ProviderEnrollmentRequest, ProviderLabelLabels,
-    ProviderRows, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup,
+    OAuthAccessTokenRef, OAuthFileConfigData, ProviderEnrollmentRequest, ProviderEventFlushTarget,
+    ProviderLabelLabels, ProviderRows, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup,
     ProviderSelectionRequest, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
     ProviderSyncRevision, ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope,
-    SharedGrantProviderSelection, StagedRemoteConnection, StorageConnectArgs, StorageProviderData,
-    StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
-    StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
-    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-    StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-    StoredOAuthTokenExpiry, VaultStorageConnection,
+    RemoteEventFlushProviderRequest, SharedGrantProviderSelection, StagedRemoteConnection,
+    StorageConnectArgs, StorageProviderData, StoredGithubPat, StoredGithubRepository,
+    StoredGoogleDriveFolder, StoredICloudShareTarget, StoredLocalFolderConfiguration,
+    StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
+    StoredOAuthAccountIdentity, StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
+    StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+    VaultStorageConnection,
 };
 pub use validation::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_SHARED_FOLDER_REF_PREFIX,

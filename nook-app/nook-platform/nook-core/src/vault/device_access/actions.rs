@@ -67,18 +67,13 @@ impl IdentityVaultAppGrant<'_> {
         if !self.identity.has_app_id(self.app_id) {
             return IdentityVaultAppGrantKind::NotGranted;
         }
-        let grants_secrets = vault
-            .secrets_envelopes
-            .iter()
-            .any(|envelope| envelope.app_id == *self.app_id);
-        let grants_members = vault
-            .members_envelopes
-            .iter()
-            .any(|envelope| envelope.app_id == *self.app_id);
-        if grants_secrets && grants_members {
-            IdentityVaultAppGrantKind::Granted
-        } else {
-            IdentityVaultAppGrantKind::NotGranted
+        match vault.app_envelopes(self.app_id) {
+            nook_auth2::IdentityVaultAppEnvelopes::Granted { .. } => {
+                IdentityVaultAppGrantKind::Granted
+            }
+            nook_auth2::IdentityVaultAppEnvelopes::NotGranted => {
+                IdentityVaultAppGrantKind::NotGranted
+            }
         }
     }
 }

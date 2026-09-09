@@ -204,6 +204,45 @@ impl Default for VaultSessionState {
     }
 }
 
+/// Presence only; cryptographic validation and authorization remain at effects.
+pub(in crate::manager) enum VaultKeyMaterial<'a> {
+    Unavailable,
+    Available { secrets: &'a str, members: &'a str },
+}
+pub(in crate::manager) enum SessionCatalogAvailability<'a> {
+    UnavailableStore,
+    Restore,
+    Reconcile,
+    Ready(&'a nook_core::SecretSearchCatalog),
+}
+impl VaultSessionState {
+    pub(in crate::manager) fn key_material(&self) -> VaultKeyMaterial<'_> {
+        if self.secrets_key.is_empty() || self.members_key.is_empty() {
+            VaultKeyMaterial::Unavailable
+        } else {
+            VaultKeyMaterial::Available {
+                secrets: &self.secrets_key,
+                members: &self.members_key,
+            }
+        }
+    }
+    pub(in crate::manager) fn catalog_availability(&self) -> SessionCatalogAvailability<'_> {
+        if self.store_id.is_empty() {
+            return SessionCatalogAvailability::UnavailableStore;
+        }
+        if self.search_catalog_store_id != self.store_id {
+            return SessionCatalogAvailability::Restore;
+        }
+        match &self.search_catalog {
+            SearchCatalogState::Unavailable => SessionCatalogAvailability::Restore,
+            SearchCatalogState::Ready(_) if self.search_catalog_dirty => {
+                SessionCatalogAvailability::Reconcile
+            }
+            SearchCatalogState::Ready(catalog) => SessionCatalogAvailability::Ready(catalog),
+        }
+    }
+}
+
 impl VaultSessionState {
     pub(in crate::manager) fn reset(&mut self) {
         let architecture = self.architecture.clone();

@@ -108,7 +108,13 @@ async fn device_protection_handoff_guards_fail_closed_without_session_state() ->
     );
     assert!(
         manager
-            .seal_extension_identity_handoff("not-a-public-key", "nonce")
+            .seal_extension_identity_handoff(nook_core::ExtensionIdentityHandoffSealRequest {
+                recipient_public_key: "not-a-public-key".into(),
+                nonce: "nonce".into(),
+                expected_device_id: "not-a-device".into(),
+                expected_device_public_key: "not-a-key".into(),
+                expected_device_signing_public_key: "not-a-signing-key".into()
+            })
             .await
             .is_err()
     );

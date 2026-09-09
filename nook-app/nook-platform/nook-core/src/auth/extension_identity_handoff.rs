@@ -118,6 +118,41 @@ impl HandoffNonce<'_> {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, tsify::Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct ExtensionIdentityHandoffSealRequest {
+    pub recipient_public_key: String,
+    pub nonce: String,
+    pub expected_device_id: String,
+    pub expected_device_public_key: String,
+    pub expected_device_signing_public_key: String,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtensionIdentityHandoffSourceBinding {
+    Matched,
+    DifferentIdentity,
+}
+pub struct ExtensionIdentityHandoffSource<'a> {
+    pub identity: &'a DeviceIdentity,
+    pub signing: &'a SigningIdentity,
+}
+impl ExtensionIdentityHandoffSource<'_> {
+    pub fn binding(
+        &self,
+        request: &ExtensionIdentityHandoffSealRequest,
+    ) -> ExtensionIdentityHandoffSourceBinding {
+        if request.expected_device_id == self.identity.device_id().as_str()
+            && request.expected_device_public_key == self.identity.public_key().as_str()
+            && request.expected_device_signing_public_key == self.signing.public_key_hex()
+        {
+            ExtensionIdentityHandoffSourceBinding::Matched
+        } else {
+            ExtensionIdentityHandoffSourceBinding::DifferentIdentity
+        }
+    }
+}
+
 /// Source material and exact destination for an extension handoff.
 pub struct ExtensionIdentityHandoffSeal<'a> {
     pub identity: &'a DeviceIdentity,

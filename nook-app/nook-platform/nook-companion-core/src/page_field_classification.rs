@@ -194,16 +194,26 @@ pub struct AutocompleteTokenQuery<'a> {
     pub expected: &'a str,
 }
 
+pub(crate) enum AuthenticationFieldUsability {
+    Unavailable,
+    Role(AuthenticationInputRole),
+}
+impl PageInputFieldObservation {
+    pub(crate) fn usable_authentication_role(&self) -> AuthenticationFieldUsability {
+        if self.disabled || self.read_only {
+            AuthenticationFieldUsability::Unavailable
+        } else {
+            AuthenticationFieldUsability::Role(self.classify_authentication_input_role())
+        }
+    }
+}
+
 impl PageInputFieldObservation {
     #[must_use]
     pub fn looks_like_username_field(&self) -> bool {
-        let field = self;
-        if field.disabled || field.read_only {
-            return false;
-        }
         matches!(
-            (field).classify_authentication_input_role(),
-            AuthenticationInputRole::Username(_)
+            self.usable_authentication_role(),
+            AuthenticationFieldUsability::Role(AuthenticationInputRole::Username(_))
         )
     }
 }
@@ -212,32 +222,32 @@ impl PageInputFieldObservation {
 impl PageInputFieldObservation {
     #[must_use]
     pub fn looks_like_one_time_code_field(&self) -> bool {
-        let field = self;
-        if field.disabled || field.read_only {
-            return false;
-        }
         matches!(
-            (field).classify_authentication_input_role(),
-            AuthenticationInputRole::OneTimeCode(_)
+            self.usable_authentication_role(),
+            AuthenticationFieldUsability::Role(AuthenticationInputRole::OneTimeCode(_))
         )
     }
 }
 
-impl AuthenticationAdvanceControlObservation {
-    pub(crate) fn one_time_code_ceremony_context_is_authenticated(
-        request: OneTimeCodeRouteEvidence<'_>,
-    ) -> bool {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OneTimeCodeRouteDecision {
+    Authentication,
+    Unrelated,
+    Rejected,
+}
+impl OneTimeCodeRouteEvidence<'_> {
+    pub(crate) fn classify(self) -> OneTimeCodeRouteDecision {
         let OneTimeCodeRouteEvidence {
             _authentication_username,
             source_origin,
             form_identity,
             destination_identity,
-        } = request;
+        } = self;
         if [source_origin, form_identity, destination_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
         {
-            return false;
+            return OneTimeCodeRouteDecision::Rejected;
         }
         let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
@@ -245,32 +255,43 @@ impl AuthenticationAdvanceControlObservation {
                 destination_identity: destination_identity,
             },
         ) else {
-            return false;
+            return OneTimeCodeRouteDecision::Rejected;
         };
-        if RouteIdentity::new(form_identity).indicates_destructive_action()
-            || RouteIdentity::new(form_identity).indicates_account_management()
-            || RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
-            || RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
-            || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
-                DestinationPolicy {
-                    credential: CredentialDestination::Authentication,
-                    provider: OAuthAuthorization::Disallowed,
-                },
-            )
-        {
-            return false;
+        if !matches!(
+            RouteIdentity::new(form_identity).form_admission(),
+            form_identity::AuthenticationRouteDecision::Eligible
+        ) || !matches!(
+            RouteIdentity::new(&destination.route_identity).one_time_code_destination(),
+            form_identity::AuthenticationRouteDecision::Eligible
+        ) {
+            return OneTimeCodeRouteDecision::Rejected;
         }
-        [form_identity, destination.path_identity.as_str()]
+        if [form_identity, destination.path_identity.as_str()]
             .into_iter()
             .any(|identity| RouteIdentity::new(identity).indicates_one_time_code_authentication())
+        {
+            OneTimeCodeRouteDecision::Authentication
+        } else {
+            OneTimeCodeRouteDecision::Unrelated
+        }
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PasskeyControlDecision {
+    Assertion,
+    ControlVeto,
+    InvalidDestination,
+    MissingAuthenticationContext,
+    EnrollmentWithoutAssertion,
+    DestinationVeto,
+}
+
 impl AuthenticationAdvanceControlObservation {
-    pub(crate) fn authentication_passkey_control_is_safe(
+    pub(crate) fn classify_authentication_passkey_control(
         &self,
         explicitly_marked: PasskeyControlMarking,
-    ) -> bool {
+    ) -> PasskeyControlDecision {
         let observation = self;
         let explicitly_marked = matches!(explicitly_marked, PasskeyControlMarking::Explicit);
         let label_identity =
@@ -332,10 +353,12 @@ impl AuthenticationAdvanceControlObservation {
             )
             || label_names_passkey_enrollment_or_management
             || label_names_device_management
-            || RouteIdentity::new(&observation.form_identity).indicates_destructive_action()
-            || RouteIdentity::new(&observation.form_identity).indicates_account_management()
+            || !matches!(
+                RouteIdentity::new(&observation.form_identity).form_admission(),
+                form_identity::AuthenticationRouteDecision::Eligible
+            )
         {
-            return false;
+            return PasskeyControlDecision::ControlVeto;
         }
         let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
@@ -343,7 +366,7 @@ impl AuthenticationAdvanceControlObservation {
                 destination_identity: &observation.destination_identity,
             },
         ) else {
-            return false;
+            return PasskeyControlDecision::InvalidDestination;
         };
         let has_authentication_context = observation.password_field_count.is_nonzero()
             || observation.one_time_code_field_count.is_nonzero()
@@ -354,15 +377,17 @@ impl AuthenticationAdvanceControlObservation {
             || RouteIdentity::new(&observation.form_identity).indicates_authentication()
             || RouteIdentity::new(&destination.path_identity).indicates_authentication();
         if !has_authentication_context {
-            return false;
+            return PasskeyControlDecision::MissingAuthenticationContext;
         }
         if (observation).passkey_new_password_ceremony_lacks_assertion_state(&destination) {
-            return false;
+            return PasskeyControlDecision::EnrollmentWithoutAssertion;
         }
-        !RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
-            && !RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
-            && !RouteIdentity::new(&destination.route_identity)
-                .has_disallowed_passkey_action_or_provider()
+        match RouteIdentity::new(&destination.route_identity).passkey_destination() {
+            form_identity::AuthenticationRouteDecision::Eligible => {
+                PasskeyControlDecision::Assertion
+            }
+            _ => PasskeyControlDecision::DestinationVeto,
+        }
     }
 }
 

@@ -334,17 +334,30 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn seal_extension_identity_handoff(
         &mut self,
-        recipient_public_key: &str,
-        nonce: &str,
+        request: nook_core::ExtensionIdentityHandoffSealRequest,
     ) -> Result<String, JsError> {
+        // The caller's prior status observation cannot authorize a later seal.
+        self.ensure_device_identity()?;
+        let signing = self.ensure_signing_identity().await?;
         let identity = self.ensure_device_identity()?;
-        self.ensure_signing_identity().await?;
-        let recipient_public_key = DevicePublicKey::parse(recipient_public_key)?;
+        let source = nook_core::ExtensionIdentityHandoffSource {
+            identity: &identity,
+            signing: &signing,
+        };
+        if matches!(
+            source.binding(&request),
+            nook_core::ExtensionIdentityHandoffSourceBinding::DifferentIdentity
+        ) {
+            return Err(JsError::new(
+                "Extension identity request does not match this device.",
+            ));
+        }
+        let recipient_public_key = DevicePublicKey::parse(&request.recipient_public_key)?;
         Ok(nook_core::ExtensionIdentityHandoffSeal {
             identity: &identity,
             signing_seed: &self.event_log.signing_seed,
             recipient_public_key: &recipient_public_key,
-            nonce,
+            nonce: &request.nonce,
         }
         .seal()?
         .into_inner())

@@ -102,6 +102,24 @@ impl Default for VaultProjection {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectionIntegrity {
+    UnresolvedSchema,
+    BlockingConflicts,
+    Resolved,
+}
+impl VaultProjection {
+    pub fn integrity(&self) -> ProjectionIntegrity {
+        if self.unresolved_schema {
+            ProjectionIntegrity::UnresolvedSchema
+        } else if self.has_blocking_conflicts() {
+            ProjectionIntegrity::BlockingConflicts
+        } else {
+            ProjectionIntegrity::Resolved
+        }
+    }
+}
+
 impl VaultProjection {
     #[must_use]
     pub fn live_secrets(&self, graph: &EventGraph) -> BTreeMap<String, StoredSecretRecord> {

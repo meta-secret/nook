@@ -31,13 +31,13 @@ impl AuthenticationDetailedPasskeyControlCandidateObservation {
     }
 
     fn is_safe(&self) -> bool {
-        (self.observation()).authentication_passkey_control_is_safe(
+        (self.observation()).classify_authentication_passkey_control(
             if matches!(self, Self::ExplicitlyMarked(_)) {
                 PasskeyControlMarking::Explicit
             } else {
                 PasskeyControlMarking::Implicit
             },
-        )
+        ) == crate::page_field_classification::PasskeyControlDecision::Assertion
     }
 }
 
@@ -101,12 +101,12 @@ impl AuthenticationDetailedPasskeyControlObservation {
             self,
             Self::Observed(observation)
                 if compatible(observation)
-                    && (observation).authentication_passkey_control_is_safe(if false { PasskeyControlMarking::Explicit } else { PasskeyControlMarking::Implicit })
+                    && (observation).classify_authentication_passkey_control(PasskeyControlMarking::Implicit) == crate::page_field_classification::PasskeyControlDecision::Assertion
         ) || matches!(
             self,
             Self::ExplicitlyMarked(observation)
                 if compatible(observation)
-                    && (observation).authentication_passkey_control_is_safe(if true { PasskeyControlMarking::Explicit } else { PasskeyControlMarking::Implicit })
+                    && (observation).classify_authentication_passkey_control(PasskeyControlMarking::Explicit) == crate::page_field_classification::PasskeyControlDecision::Assertion
         ) || matches!(
             self,
             Self::Candidates(candidates)

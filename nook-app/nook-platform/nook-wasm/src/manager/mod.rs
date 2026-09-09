@@ -455,9 +455,8 @@ impl NookVaultManager {
         let crypto = self.vault.crypto.get()?;
         let offset = usize::try_from(offset).unwrap_or(usize::MAX);
         let limit = usize::try_from(limit).unwrap_or(nook_core::DEFAULT_SECRET_PAGE_SIZE);
-        if !self.vault.search_catalog_dirty
-            && self.vault.search_catalog_store_id == self.vault.store_id
-            && let SearchCatalogState::Ready(catalog) = &self.vault.search_catalog
+        if let session::SessionCatalogAvailability::Ready(catalog) =
+            self.vault.catalog_availability()
         {
             return Ok(catalog.query(query, secret_type_filter, offset.into(), limit.into()));
         }

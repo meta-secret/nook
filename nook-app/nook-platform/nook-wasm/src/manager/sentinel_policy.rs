@@ -15,7 +15,10 @@ impl NookVaultManager {
         if !self.is_sentinel_session() {
             return SentinelVaultUnlockState::NotSentinel;
         }
-        if !self.vault.secrets_key.is_empty() && !self.vault.members_key.is_empty() {
+        if matches!(
+            self.vault.key_material(),
+            crate::manager::session::VaultKeyMaterial::Available { .. }
+        ) {
             return SentinelVaultUnlockState::Unlocked;
         }
         if self.vault.meta.sentinel_shares.is_empty() {

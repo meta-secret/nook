@@ -49,7 +49,8 @@ pub use auth::enrollment::{
     SharedProviderGrant, TypedEnrollmentProvider,
 };
 pub use auth::identity::{
-    IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, IdentityVaultDekEpoch,
+    IdentityId, IdentityMember, IdentityMemberKeyBinding, IdentityRecord,
+    IdentityVaultAppEnvelopes, IdentityVaultDek, IdentityVaultDekEpoch,
     IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, MemberDekEnvelope,
 };
 pub use auth::identity_directory::{IdentityDirectory, IdentitySelection};

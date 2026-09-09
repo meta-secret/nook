@@ -124,7 +124,10 @@ impl NookVaultManager {
             return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
-        if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
+        if matches!(
+            self.vault.key_material(),
+            crate::manager::session::VaultKeyMaterial::Unavailable
+        ) {
             return Err(NookError::Database(
                 "Vault must be unlocked before adding a password.".to_owned(),
             )
@@ -200,7 +203,10 @@ impl NookVaultManager {
             return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
-        if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
+        if matches!(
+            self.vault.key_material(),
+            crate::manager::session::VaultKeyMaterial::Unavailable
+        ) {
             return Err(NookError::Database(
                 "Vault must be unlocked before updating a password.".to_owned(),
             )

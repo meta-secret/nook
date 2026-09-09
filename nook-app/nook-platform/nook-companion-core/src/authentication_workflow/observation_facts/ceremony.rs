@@ -82,6 +82,21 @@ impl Default for AuthenticationCeremonyContextObservation {
 }
 
 impl AuthenticationCeremonyContextObservation {
+    pub(super) fn approved_scope_compatibility(
+        &self,
+        approved: &Self,
+    ) -> super::revalidation::ApprovedObservationCompatibility {
+        use super::revalidation::ApprovedObservationCompatibility::{Changed, Unchanged};
+        if self.source_origin == approved.source_origin
+            && self.form_identity == approved.form_identity
+            && self.destination_identity == approved.destination_identity
+        {
+            Unchanged
+        } else {
+            Changed
+        }
+    }
+
     fn is_bounded(&self) -> bool {
         [
             &self.source_origin,
@@ -103,7 +118,16 @@ impl AuthenticationCeremonyContextObservation {
                     AuthenticationUsernameEvidence::Absent
                 )
             && self.is_bounded()
-            && AuthenticationAdvanceControlObservation::one_time_code_ceremony_context_is_authenticated(OneTimeCodeRouteEvidence { _authentication_username: self.authentication_username, source_origin: &self.source_origin, form_identity: &self.form_identity, destination_identity: &self.destination_identity })
+            && matches!(
+                (OneTimeCodeRouteEvidence {
+                    _authentication_username: self.authentication_username,
+                    source_origin: &self.source_origin,
+                    form_identity: &self.form_identity,
+                    destination_identity: &self.destination_identity
+                })
+                .classify(),
+                crate::page_field_classification::OneTimeCodeRouteDecision::Authentication
+            )
     }
 }
 

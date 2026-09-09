@@ -286,9 +286,11 @@ impl NookVaultManager {
             secrets: vec![],
             password_entries: self.vault.password_entries.clone(),
         }];
-        if !self.vault.secrets_key.is_empty() && !self.vault.members_key.is_empty() {
-            let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
-            let members_key = SymmetricKey::parse(&self.vault.members_key)?;
+        if let crate::manager::session::VaultKeyMaterial::Available { secrets, members } =
+            self.vault.key_material()
+        {
+            let secrets_key = SymmetricKey::parse(secrets)?;
+            let members_key = SymmetricKey::parse(members)?;
             match self.vault.architecture.vault_type {
                 VaultType::Simple => {
                     operations.extend(

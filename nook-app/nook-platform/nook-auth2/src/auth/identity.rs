@@ -58,6 +58,54 @@ pub struct IdentityMember {
     pub label: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentityMemberKeyBinding {
+    Matches,
+    DifferentKeyMaterial,
+}
+impl IdentityMember {
+    pub fn binding_to_app_key(&self, app: &AppKey) -> IdentityMemberKeyBinding {
+        if self.auth_id == app.auth_id() && self.public_key == app.public_key() {
+            IdentityMemberKeyBinding::Matches
+        } else {
+            IdentityMemberKeyBinding::DifferentKeyMaterial
+        }
+    }
+    pub(super) fn binding_to_member(&self, other: &Self) -> IdentityMemberKeyBinding {
+        if self.auth_id == other.auth_id && self.public_key == other.public_key {
+            IdentityMemberKeyBinding::Matches
+        } else {
+            IdentityMemberKeyBinding::DifferentKeyMaterial
+        }
+    }
+}
+
+pub enum IdentityVaultAppEnvelopes<'a> {
+    NotGranted,
+    Granted {
+        secrets: &'a MemberDekEnvelope,
+        members: &'a MemberDekEnvelope,
+    },
+}
+impl IdentityVaultDek {
+    pub fn app_envelopes(&self, app_id: &AppId) -> IdentityVaultAppEnvelopes<'_> {
+        let secrets = self
+            .secrets_envelopes
+            .iter()
+            .find(|entry| &entry.app_id == app_id);
+        let members = self
+            .members_envelopes
+            .iter()
+            .find(|entry| &entry.app_id == app_id);
+        match (secrets, members) {
+            (Some(secrets), Some(members)) => {
+                IdentityVaultAppEnvelopes::Granted { secrets, members }
+            }
+            _ => IdentityVaultAppEnvelopes::NotGranted,
+        }
+    }
+}
+
 /// Identity-held DEK envelopes for one vault.
 ///
 /// Grant comparison is internal to identity reconciliation:
@@ -65,7 +113,7 @@ pub struct IdentityMember {
 /// use nook_auth2::{AppKey, IdentityMember, IdentityVaultDek, IdentityVaultDekEpoch, VaultKeys};
 /// let compare = |grant: &IdentityVaultDek, app: &AppKey, members: &[IdentityMember],
 ///                keys: &VaultKeys, epoch: &IdentityVaultDekEpoch| {
-///     grant.already_grants(app, members, keys, epoch)
+///     grant.reconciliation_with(app, members, keys, epoch)
 /// };
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -219,7 +267,10 @@ impl IdentityRecord {
             .iter()
             .find(|member| member.app_id == *app_key.app_id())
             .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
-        if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key() {
+        if matches!(
+            member.binding_to_app_key(app_key),
+            IdentityMemberKeyBinding::DifferentKeyMaterial
+        ) {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "existing app id has different key material".to_owned(),
             ));
@@ -227,16 +278,11 @@ impl IdentityRecord {
         let Some(vault_dek) = self.vault_dek(&store_id) else {
             return self.generate_vault_dek(store_id);
         };
-        let secrets = vault_dek
-            .secrets_envelopes
-            .iter()
-            .find(|entry| entry.app_id == *app_key.app_id())
-            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
-        let members = vault_dek
-            .members_envelopes
-            .iter()
-            .find(|entry| entry.app_id == *app_key.app_id())
-            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
+        let IdentityVaultAppEnvelopes::Granted { secrets, members } =
+            vault_dek.app_envelopes(app_key.app_id())
+        else {
+            return Err(MultiDeviceError::IdentityEnrollmentRequired);
+        };
         Ok(VaultKeys {
             secrets_key: app_key.decrypt_envelope(&secrets.envelope)?,
             members_key: app_key.decrypt_envelope(&members.envelope)?,
@@ -409,7 +455,10 @@ impl IdentityRecord {
             .iter()
             .find(|member| member.app_id == *app_key.app_id())
             .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
-        if existing.auth_id != app_key.auth_id() || existing.public_key != app_key.public_key() {
+        if matches!(
+            existing.binding_to_app_key(app_key),
+            IdentityMemberKeyBinding::DifferentKeyMaterial
+        ) {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "existing app id has different key material".to_owned(),
             ));
@@ -443,7 +492,9 @@ impl IdentityRecord {
                 "reconciling app key is not authorized for this vault".to_owned(),
             ));
         }
-        if vault_dek.already_grants(app_key, &authorized_members, &keys, &next_epoch) {
+        if vault_dek.reconciliation_with(app_key, &authorized_members, &keys, &next_epoch)
+            == super::identity_dek_grant::IdentityVaultGrantReconciliation::Current
+        {
             return Ok(());
         }
         let mut rewrapped =
@@ -471,7 +522,10 @@ impl IdentityRecord {
             .iter()
             .find(|member| member.app_id == *app_key.app_id())
             .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
-        if existing.auth_id != app_key.auth_id() || existing.public_key != app_key.public_key() {
+        if matches!(
+            existing.binding_to_app_key(app_key),
+            IdentityMemberKeyBinding::DifferentKeyMaterial
+        ) {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "existing app id has different key material".to_owned(),
             ));

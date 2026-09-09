@@ -256,3 +256,7 @@ pub use page_field_classification::AuthenticationControlTransportability;
 
 mod authenticator_session_response;
 pub use authenticator_session_response::*;
+
+pub use authentication_workflow::{
+    ApprovedAuthenticationWorkflowDecision, ApprovedAuthenticationWorkflowRevalidation,
+};

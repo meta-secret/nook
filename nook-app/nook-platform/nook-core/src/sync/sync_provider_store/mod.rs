@@ -36,7 +36,10 @@ pub use catalog::{DuplicateProviderSelection, LocalProviderRowRequest};
 pub use enrollment::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
 pub use oauth::{GoogleOAuthTokenInput, ICloudOAuthTokenInput};
 pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
-pub use scope::{ActiveVaultProviderRows, ProviderRows};
+pub use scope::{
+    ActiveVaultProviderRows, ProviderEventFlushTarget, ProviderRows,
+    RemoteEventFlushProviderRequest,
+};
 pub use state::*;
 pub use storage_args::{
     DraftStorageConnection, ProviderLabelLabels, ProviderSelectionRequest,

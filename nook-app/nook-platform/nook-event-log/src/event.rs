@@ -311,6 +311,78 @@ pub struct VaultEventBody {
     pub operations: Vec<VaultOperation>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GenesisImportContents {
+    Other,
+    Empty,
+    Populated,
+}
+pub enum EpochCheckpointRequirement<'a> {
+    NotRequired,
+    SecurityRotationParent(&'a EventId),
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecurityRotationTrigger {
+    Other,
+    PasswordRotated,
+    PasswordRemoved,
+    DeviceRevoked,
+}
+impl VaultEventBody {
+    pub fn genesis_import_contents(&self) -> GenesisImportContents {
+        match self.operations.as_slice() {
+            [
+                VaultOperation::VaultImported {
+                    secrets,
+                    password_entries,
+                    ..
+                },
+            ] => {
+                if secrets.is_empty() && password_entries.is_empty() {
+                    GenesisImportContents::Empty
+                } else {
+                    GenesisImportContents::Populated
+                }
+            }
+            _ => GenesisImportContents::Other,
+        }
+    }
+    pub fn security_rotation_trigger(&self) -> SecurityRotationTrigger {
+        match self.operations.as_slice() {
+            [VaultOperation::PasswordRotated { .. }] => SecurityRotationTrigger::PasswordRotated,
+            [VaultOperation::PasswordRemoved { .. }] => SecurityRotationTrigger::PasswordRemoved,
+            [VaultOperation::DeviceRevoked { .. }] => SecurityRotationTrigger::DeviceRevoked,
+            _ => SecurityRotationTrigger::Other,
+        }
+    }
+    pub fn epoch_checkpoint_requirement(&self) -> EventResult<EpochCheckpointRequirement<'_>> {
+        let checkpoints = self
+            .operations
+            .iter()
+            .filter(|op| matches!(op, VaultOperation::EpochCheckpoint { .. }))
+            .count();
+        if checkpoints == 0 || self.schema_version < VaultEventSchemaVersion::V3 {
+            return Ok(EpochCheckpointRequirement::NotRequired);
+        }
+        if checkpoints != 1 || self.operations.len() != 1 {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must be the event's sole operation",
+            });
+        }
+        let [parent] = self.parents.as_slice() else {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must have exactly one direct parent",
+            });
+        };
+        if self.key_epoch != *parent {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint key epoch must equal its direct parent id",
+            });
+        }
+        Ok(EpochCheckpointRequirement::SecurityRotationParent(parent))
+    }
+}
+
 impl VaultEventBody {
     pub fn to_canonical_value(&self) -> EventResult<Value> {
         let mut body = self.clone();

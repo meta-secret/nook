@@ -81,43 +81,21 @@ impl EventGraph {
         &self,
         event: &VaultEvent,
     ) -> EventResult<()> {
-        let checkpoints = event
-            .body
-            .operations
-            .iter()
-            .filter(|operation| matches!(operation, VaultOperation::EpochCheckpoint { .. }))
-            .count();
-        if checkpoints == 0 || event.body.schema_version < VaultEventSchemaVersion::V3 {
+        let crate::EpochCheckpointRequirement::SecurityRotationParent(parent_id) =
+            event.body.epoch_checkpoint_requirement()?
+        else {
             return Ok(());
-        }
-        if checkpoints != 1 || event.body.operations.len() != 1 {
-            return Err(EventError::InvalidEpochCheckpointStructure {
-                reason: "checkpoint must be the event's sole operation",
-            });
-        }
-        let [parent_id] = event.body.parents.as_slice() else {
-            return Err(EventError::InvalidEpochCheckpointStructure {
-                reason: "checkpoint must have exactly one direct parent",
-            });
         };
-        if event.body.key_epoch != *parent_id {
-            return Err(EventError::InvalidEpochCheckpointStructure {
-                reason: "checkpoint key epoch must equal its direct parent id",
-            });
-        }
         let parent = self
             .events
             .get(parent_id)
             .ok_or_else(|| EventError::MissingEvent {
                 event_id: parent_id.as_str().to_owned(),
             })?;
-        let is_security_trigger = matches!(
-            parent.body.operations.as_slice(),
-            [VaultOperation::PasswordRotated { .. }
-                | VaultOperation::PasswordRemoved { .. }
-                | VaultOperation::DeviceRevoked { .. }]
-        );
-        if !is_security_trigger {
+        if matches!(
+            parent.body.security_rotation_trigger(),
+            crate::SecurityRotationTrigger::Other
+        ) {
             return Err(EventError::InvalidEpochCheckpointStructure {
                 reason: "checkpoint parent must be one security rotation trigger",
             });

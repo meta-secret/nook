@@ -89,3 +89,10 @@ pub fn providers_visible_while_device_locked(
     .visible_while_locked();
     snapshot
 }
+
+#[wasm_bindgen]
+pub fn select_remote_event_flush_providers(
+    request: nook_core::RemoteEventFlushProviderRequest,
+) -> Vec<nook_core::StorageProviderData> {
+    request.select()
+}

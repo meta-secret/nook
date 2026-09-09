@@ -90,40 +90,37 @@ impl CurrentVaultReplaceability {
         graph: &crate::EventGraph,
         store_id: &str,
     ) -> CurrentVaultReplaceability {
-        if graph.is_empty() || !graph.pending_events().is_empty() || !graph.quarantined().is_empty()
-        {
-            return CurrentVaultReplaceability::Unknown;
+        use nook_event_log::{
+            EventGraphReplacementEvidence, GenesisImportContents, ProjectionIntegrity,
+        };
+        let evidence = graph.replacement_evidence();
+        if matches!(evidence, EventGraphReplacementEvidence::Unavailable) {
+            return Self::Unknown;
         }
         let Ok(projection) = crate::VaultProjection::from_graph(graph, store_id) else {
-            return CurrentVaultReplaceability::Unknown;
+            return Self::Unknown;
         };
-        if projection.unresolved_schema || projection.has_blocking_conflicts() {
-            return CurrentVaultReplaceability::Unknown;
+        if !matches!(projection.integrity(), ProjectionIntegrity::Resolved) {
+            return Self::Unknown;
         }
-        let roots = graph
-            .events()
-            .filter(|(_, event)| event.body.parents.is_empty())
-            .collect::<Vec<_>>();
-        let [(_, root)] = roots.as_slice() else {
-            return CurrentVaultReplaceability::Unknown;
-        };
-        let [
-            VaultOperation::VaultImported {
-                secrets,
-                password_entries,
-                ..
-            },
-        ] = root.body.operations.as_slice()
-        else {
-            return CurrentVaultReplaceability::Unknown;
-        };
-        if !secrets.is_empty()
-            || !password_entries.is_empty()
-            || graph.len() > EventCount::SINGLE_EVENT
-        {
-            return CurrentVaultReplaceability::PreserveRequired;
+        match evidence {
+            EventGraphReplacementEvidence::Unavailable => Self::Unknown,
+            EventGraphReplacementEvidence::GenesisOnly(root) => {
+                match root.body.genesis_import_contents() {
+                    GenesisImportContents::Other => Self::Unknown,
+                    GenesisImportContents::Empty => Self::Replaceable,
+                    GenesisImportContents::Populated => Self::PreserveRequired,
+                }
+            }
+            EventGraphReplacementEvidence::Established(root) => {
+                match root.body.genesis_import_contents() {
+                    GenesisImportContents::Other => Self::Unknown,
+                    GenesisImportContents::Empty | GenesisImportContents::Populated => {
+                        Self::PreserveRequired
+                    }
+                }
+            }
         }
-        CurrentVaultReplaceability::Replaceable
     }
 }
 

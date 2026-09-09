@@ -12,6 +12,51 @@ use crate::AuthenticationControlText;
 pub(super) struct AuthenticationRouteIdentity<'a> {
     identity: &'a str,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AuthenticationRouteDecision {
+    Eligible,
+    Destructive,
+    AccountManagement,
+    Unrelated,
+    DisallowedDestination,
+}
+impl AuthenticationRouteIdentity<'_> {
+    pub(super) fn form_admission(&self) -> AuthenticationRouteDecision {
+        if self.indicates_destructive_action() {
+            AuthenticationRouteDecision::Destructive
+        } else if self.indicates_account_management() {
+            AuthenticationRouteDecision::AccountManagement
+        } else {
+            AuthenticationRouteDecision::Eligible
+        }
+    }
+    pub(super) fn one_time_code_destination(&self) -> AuthenticationRouteDecision {
+        if self.indicates_destructive_action() {
+            AuthenticationRouteDecision::Destructive
+        } else if self.indicates_non_authentication() {
+            AuthenticationRouteDecision::Unrelated
+        } else if self.has_disallowed_action_or_provider(DestinationPolicy {
+            credential: CredentialDestination::Authentication,
+            provider: OAuthAuthorization::Disallowed,
+        }) {
+            AuthenticationRouteDecision::DisallowedDestination
+        } else {
+            AuthenticationRouteDecision::Eligible
+        }
+    }
+    pub(super) fn passkey_destination(&self) -> AuthenticationRouteDecision {
+        if self.indicates_destructive_action() {
+            AuthenticationRouteDecision::Destructive
+        } else if self.indicates_non_authentication() {
+            AuthenticationRouteDecision::Unrelated
+        } else if self.has_disallowed_passkey_action_or_provider() {
+            AuthenticationRouteDecision::DisallowedDestination
+        } else {
+            AuthenticationRouteDecision::Eligible
+        }
+    }
+}
+
 impl<'a> AuthenticationRouteIdentity<'a> {
     pub(super) fn new(identity: &'a str) -> Self {
         Self { identity }

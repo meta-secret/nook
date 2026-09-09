@@ -37,6 +37,36 @@ pub struct EventGraph {
     causal: CausalGraph<EventId>,
 }
 
+/// Complete accepted history with one unambiguous genesis root.
+#[derive(Clone, Copy)]
+pub enum EventGraphReplacementEvidence<'a> {
+    Unavailable,
+    GenesisOnly(&'a VaultEvent),
+    Established(&'a VaultEvent),
+}
+impl EventGraph {
+    pub fn replacement_evidence(&self) -> EventGraphReplacementEvidence<'_> {
+        if self.is_empty() || !self.pending_events().is_empty() || !self.quarantined().is_empty() {
+            return EventGraphReplacementEvidence::Unavailable;
+        }
+        let mut roots = self
+            .events
+            .values()
+            .filter(|event| event.body.parents.is_empty());
+        let Some(root) = roots.next() else {
+            return EventGraphReplacementEvidence::Unavailable;
+        };
+        if roots.next().is_some() {
+            return EventGraphReplacementEvidence::Unavailable;
+        }
+        if self.len() == EventCount::SINGLE_EVENT {
+            EventGraphReplacementEvidence::GenesisOnly(root)
+        } else {
+            EventGraphReplacementEvidence::Established(root)
+        }
+    }
+}
+
 impl EventGraph {
     #[must_use]
     pub fn new() -> Self {

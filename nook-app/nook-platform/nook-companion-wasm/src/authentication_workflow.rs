@@ -203,3 +203,10 @@ pub fn authentication_control_transportable(
 pub fn is_authentication_navigation_path(pathname: &str) -> bool {
     nook_companion_core::AuthenticationNavigationPath::from(pathname).has_authentication_segment()
 }
+
+#[wasm_bindgen]
+pub fn revalidate_approved_authentication_workflow(
+    request: nook_companion_core::ApprovedAuthenticationWorkflowRevalidation,
+) -> nook_companion_core::ApprovedAuthenticationWorkflowDecision {
+    request.revalidate()
+}
