@@ -1,3 +1,29 @@
+import type {
+  AgentStatsGitHubEvidenceRequest,
+  AgentStatsGitHubEvidence,
+  BuildActionsEvidenceRequest,
+  BuildReviewEvidenceRequest,
+  ActionsEvidence,
+  HeadObservation,
+  ReviewRequestObservation,
+  ReviewResultObservation,
+  ReviewEventObservation,
+  ReviewEvidence,
+  CollectReviewReactionPagesRequest,
+  BuildHeadObservationRequest,
+  ReviewRequestsRequest,
+  ReviewResultsRequest,
+  ResolveHeadShaRequest,
+  ReviewEventPairRequest,
+  HasLoginRequest,
+} from './agent-stats-github-contracts.ts';
+export type {
+  AgentStatsGitHubEvidenceRequest,
+  AgentStatsGitHubEvidence,
+  BuildActionsEvidenceRequest,
+  BuildReviewEvidenceRequest,
+} from './agent-stats-github-contracts.ts';
+import { LoomFailureCode } from '../loom-failure.ts';
 import { err, ok, type Result } from 'neverthrow';
 import type { GitHubEvidenceFailure } from './agent-stats-github-api.ts';
 import {
@@ -21,7 +47,6 @@ import {
   ValidationWorkflowHistory,
 } from './agent-stats-github-validation.ts';
 import {
-  type DeliveryHeadStart,
   DeliveryHeadTimeline,
   LatestTimestamp,
   ReviewedDeliveryHistory,
@@ -99,9 +124,16 @@ export class GithubAgentEvidence {
       );
     if (githubResult4.isErr()) return err(githubResult4.error);
     const dispatchedActionPages = githubResult4.value;
+    const pageAdmission1 =
+      GithubActionEvidenceApi.flattenApiPages(expandedActionPages);
+    if (pageAdmission1.isErr()) return err(pageAdmission1.error);
+    const pageAdmission2 = GithubActionEvidenceApi.flattenApiPages(
+      dispatchedActionPages,
+    );
+    if (pageAdmission2.isErr()) return err(pageAdmission2.error);
     const allActionPages: UntrustedYamlNode = [
-      ...GithubActionEvidenceApi.flattenApiPages(expandedActionPages),
-      ...GithubActionEvidenceApi.flattenApiPages(dispatchedActionPages),
+      ...pageAdmission1.value,
+      ...pageAdmission2.value,
     ];
     const issueCommentsRequest: GitHubApiRequest = {
       repoRoot: request.repoRoot,
@@ -127,7 +159,9 @@ export class GithubAgentEvidence {
     if (githubResult5.isErr()) return err(githubResult5.error);
     const commitPages = githubResult5.value;
     const knownHeadShas: string[] = [];
-    for (const commit of GithubActionEvidenceApi.flattenApiPages(commitPages)) {
+    const pageAdmission3 = GithubActionEvidenceApi.flattenApiPages(commitPages);
+    if (pageAdmission3.isErr()) return err(pageAdmission3.error);
+    for (const commit of pageAdmission3.value) {
       if (!UntrustedYamlBoundary.isRecord(commit)) continue;
       const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
       const headSha =
@@ -162,7 +196,10 @@ export class GithubAgentEvidence {
       knownHeadShas,
       mergedAt: request.mergedAt,
     };
-    const reviews = GithubAgentEvidence.buildReviewEvidence(reviewRequest);
+    const pageAdmission4 =
+      GithubAgentEvidence.buildReviewEvidence(reviewRequest);
+    if (pageAdmission4.isErr()) return err(pageAdmission4.error);
+    const reviews = pageAdmission4.value;
     const actionsRequest: BuildActionsEvidenceRequest = {
       pages: allActionPages,
       prNumber: request.prNumber,
@@ -171,7 +208,10 @@ export class GithubAgentEvidence {
       reviewEvents: reviews.events,
       deliveryHeadOrder: knownHeadShas,
     };
-    const actions = GithubAgentEvidence.buildActionsEvidence(actionsRequest);
+    const pageAdmission5 =
+      GithubAgentEvidence.buildActionsEvidence(actionsRequest);
+    if (pageAdmission5.isErr()) return err(pageAdmission5.error);
+    const actions = pageAdmission5.value;
     const deliveryHeadsRequest = {
       actionHeads: actions.heads,
       reviewEvents: reviews.events,
@@ -196,8 +236,12 @@ export class GithubAgentEvidence {
 
   static buildActionsEvidence(
     request: BuildActionsEvidenceRequest,
-  ): ActionsEvidence {
-    const pages = GithubActionEvidenceApi.flattenApiPages(request.pages);
+  ): Result<ActionsEvidence, GitHubEvidenceFailure> {
+    const pageAdmission6 = GithubActionEvidenceApi.flattenApiPages(
+      request.pages,
+    );
+    if (pageAdmission6.isErr()) return err(pageAdmission6.error);
+    const pages = pageAdmission6.value;
     const rawRuns: UntrustedYamlMap[] = [];
     let expectedRunCount = 0;
     for (const page of pages) {
@@ -219,9 +263,10 @@ export class GithubAgentEvidence {
     }
     const collectedRunIds = new Set(rawRuns.map(ActionRunIdentity.read));
     if (collectedRunIds.size < expectedRunCount) {
-      GithubActionEvidenceApi.failGitHubCollection(
-        `GitHub Actions history is incomplete: expected ${expectedRunCount}, collected ${collectedRunIds.size}`,
-      );
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: `GitHub Actions history is incomplete: expected ${expectedRunCount}, collected ${collectedRunIds.size}`,
+      });
     }
     const deduplicatedRuns = new Map<string, ActionObservation>();
     for (const rawRun of rawRuns) {
@@ -322,7 +367,7 @@ export class GithubAgentEvidence {
           GithubActionEvidenceApi.numberProperty(durationRequest);
       }
     }
-    return {
+    return ok({
       runs,
       heads,
       validationCycles,
@@ -330,24 +375,38 @@ export class GithubAgentEvidence {
       obsoleteValidationCount,
       cancelledValidationSeconds,
       cancelledValidationCount,
-    };
+    });
   }
 
   static buildReviewEvidence(
     request: BuildReviewEvidenceRequest,
-  ): ReviewEvidence {
-    const issueComments = GithubActionEvidenceApi.flattenApiPages(
+  ): Result<ReviewEvidence, GitHubEvidenceFailure> {
+    const pageAdmission7 = GithubActionEvidenceApi.flattenApiPages(
       request.issueCommentPages,
-    ).filter(UntrustedYamlBoundary.isRecord);
-    const reviews = GithubActionEvidenceApi.flattenApiPages(
+    );
+    if (pageAdmission7.isErr()) return err(pageAdmission7.error);
+    const issueComments = pageAdmission7.value.filter(
+      UntrustedYamlBoundary.isRecord,
+    );
+    const pageAdmission8 = GithubActionEvidenceApi.flattenApiPages(
       request.reviewPages,
-    ).filter(UntrustedYamlBoundary.isRecord);
-    const reviewComments = GithubActionEvidenceApi.flattenApiPages(
+    );
+    if (pageAdmission8.isErr()) return err(pageAdmission8.error);
+    const reviews = pageAdmission8.value.filter(UntrustedYamlBoundary.isRecord);
+    const pageAdmission9 = GithubActionEvidenceApi.flattenApiPages(
       request.reviewCommentPages,
-    ).filter(UntrustedYamlBoundary.isRecord);
-    const reviewReactions = GithubActionEvidenceApi.flattenApiPages(
+    );
+    if (pageAdmission9.isErr()) return err(pageAdmission9.error);
+    const reviewComments = pageAdmission9.value.filter(
+      UntrustedYamlBoundary.isRecord,
+    );
+    const pageAdmission10 = GithubActionEvidenceApi.flattenApiPages(
       request.reviewReactionPages,
-    ).filter(UntrustedYamlBoundary.isRecord);
+    );
+    if (pageAdmission10.isErr()) return err(pageAdmission10.error);
+    const reviewReactions = pageAdmission10.value.filter(
+      UntrustedYamlBoundary.isRecord,
+    );
     const requestsRequest: ReviewRequestsRequest = {
       comments: issueComments,
       knownHeadShas: request.knownHeadShas,
@@ -415,21 +474,25 @@ export class GithubAgentEvidence {
       findingBatchCount += 1;
       findingCount += event.findingCount;
     }
-    return {
+    return ok({
       events: events.map(GithubAgentEvidence.reviewEventRecord),
       requestCount: requests.length,
       findingBatchCount,
       findingCount,
-    };
+    });
   }
 
   private static collectReviewReactionPages(
     request: CollectReviewReactionPagesRequest,
   ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
     const reactions: UntrustedYamlMap[] = [];
-    const comments = GithubActionEvidenceApi.flattenApiPages(
+    const pageAdmission11 = GithubActionEvidenceApi.flattenApiPages(
       request.issueCommentPages,
-    ).filter(UntrustedYamlBoundary.isRecord);
+    );
+    if (pageAdmission11.isErr()) return err(pageAdmission11.error);
+    const comments = pageAdmission11.value.filter(
+      UntrustedYamlBoundary.isRecord,
+    );
     for (const comment of comments) {
       if (!GithubAgentEvidence.isTrustedReviewRequester(comment)) continue;
       const bodyRequest: PropertyRequest = { record: comment, key: 'body' };
@@ -445,9 +508,11 @@ export class GithubAgentEvidence {
       };
       const githubResult10 = GithubActionEvidenceApi.runGitHubApi(apiRequest);
       if (githubResult10.isErr()) return err(githubResult10.error);
-      for (const reaction of GithubActionEvidenceApi.flattenApiPages(
+      const pageAdmission12 = GithubActionEvidenceApi.flattenApiPages(
         githubResult10.value,
-      )) {
+      );
+      if (pageAdmission12.isErr()) return err(pageAdmission12.error);
+      for (const reaction of pageAdmission12.value) {
         if (!UntrustedYamlBoundary.isRecord(reaction)) {
           GithubActionEvidenceApi.failGitHubCollection(
             'GitHub reaction must be a mapping',
@@ -853,139 +918,3 @@ export class GithubAgentEvidence {
     return GithubAgentEvidence.hasLogin(loginRequest);
   }
 }
-
-export type AgentStatsGitHubEvidenceRequest = {
-  readonly repoRoot: string;
-  readonly prNumber: number;
-  readonly branch: string;
-  readonly openedAt: string;
-  readonly startedAt: string;
-  readonly mergedAt: string;
-  readonly finalHeadSha: string;
-};
-
-export type AgentStatsGitHubEvidence = {
-  readonly githubActionsRuns: UntrustedYamlMap[];
-  readonly deliveryHeads: UntrustedYamlMap[];
-  readonly reviewEvents: UntrustedYamlMap[];
-  readonly validationCycles: UntrustedYamlMap[];
-  readonly obsoleteValidationSeconds: number;
-  readonly obsoleteValidationCount: number;
-  readonly cancelledValidationSeconds: number;
-  readonly cancelledValidationCount: number;
-  readonly reviewRequestCount: number;
-  readonly reviewFindingBatchCount: number;
-  readonly reviewFindingCount: number;
-};
-
-export type BuildActionsEvidenceRequest = {
-  readonly pages: UntrustedYamlNode;
-  readonly prNumber: number;
-  readonly finalHeadSha: string;
-  readonly mergedAt: string;
-  readonly reviewEvents: readonly UntrustedYamlMap[];
-  readonly deliveryHeadOrder: readonly string[];
-};
-
-export type BuildReviewEvidenceRequest = {
-  readonly issueCommentPages: UntrustedYamlNode;
-  readonly reviewPages: UntrustedYamlNode;
-  readonly reviewCommentPages: UntrustedYamlNode;
-  readonly reviewReactionPages: UntrustedYamlNode;
-  readonly knownHeadShas: readonly string[];
-  readonly mergedAt: string;
-};
-
-type ActionsEvidence = {
-  readonly runs: UntrustedYamlMap[];
-  readonly heads: UntrustedYamlMap[];
-  readonly validationCycles: UntrustedYamlMap[];
-  readonly obsoleteValidationSeconds: number;
-  readonly obsoleteValidationCount: number;
-  readonly cancelledValidationSeconds: number;
-  readonly cancelledValidationCount: number;
-};
-
-type HeadObservation = {
-  readonly headSha: string;
-  readonly firstObservedAt: string;
-  readonly lastObservedAt: string;
-  readonly final: boolean;
-  readonly actionRunCount: number;
-  readonly actionSeconds: number;
-  readonly obsoleteActionSeconds: number;
-};
-
-type ReviewRequestObservation = {
-  readonly commentId: number;
-  readonly headSha: string;
-  readonly requestedAt: string;
-};
-
-type ReviewResultObservation = {
-  readonly headSha: string;
-  readonly completedAt: string;
-  readonly outcome: ReviewOutcome;
-  readonly findingCount: number;
-  readonly requestCommentId: number;
-};
-
-type ReviewEventObservation = {
-  readonly headSha: string;
-  readonly requestedAt: string;
-  readonly completedAt: string;
-  readonly outcome: ReviewOutcome;
-  readonly requested: boolean;
-  readonly findingCount: number;
-  readonly latencySeconds: number;
-};
-
-type ReviewEvidence = {
-  readonly events: UntrustedYamlMap[];
-  readonly requestCount: number;
-  readonly findingBatchCount: number;
-  readonly findingCount: number;
-};
-
-type CollectReviewReactionPagesRequest = {
-  readonly repoRoot: string;
-  readonly issueCommentPages: UntrustedYamlNode;
-};
-
-type BuildHeadObservationRequest = {
-  readonly headSha: string;
-  readonly runs: readonly ActionObservation[];
-  readonly finalHeadSha: string;
-  readonly headStarts: readonly DeliveryHeadStart[];
-};
-
-type ReviewRequestsRequest = {
-  readonly comments: readonly UntrustedYamlMap[];
-  readonly knownHeadShas: readonly string[];
-  readonly mergedAt: string;
-};
-
-type ReviewResultsRequest = {
-  readonly issueComments: readonly UntrustedYamlMap[];
-  readonly reviews: readonly UntrustedYamlMap[];
-  readonly reviewComments: readonly UntrustedYamlMap[];
-  readonly reviewReactions: readonly UntrustedYamlMap[];
-  readonly requests: readonly ReviewRequestObservation[];
-  readonly knownHeadShas: readonly string[];
-  readonly mergedAt: string;
-};
-
-type ResolveHeadShaRequest = {
-  readonly candidate: string;
-  readonly knownHeadShas: readonly string[];
-};
-
-type ReviewEventPairRequest = {
-  readonly reviewRequest: ReviewRequestObservation;
-  readonly result: ReviewResultObservation;
-};
-
-type HasLoginRequest = {
-  readonly record: UntrustedYamlMap;
-  readonly expected: string;
-};

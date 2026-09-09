@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { describe, expect, test } from 'bun:test';
@@ -176,7 +177,9 @@ describe('agent stats manual E2E evidence', () => {
       },
     ]);
     const request = AgentStatsGithubManualE2eScenario.evidenceRequest(pages);
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.runs[0]?.finished_at).toBe(request.mergedAt);
@@ -193,7 +196,9 @@ describe('agent stats manual E2E evidence', () => {
       },
     ]);
     const request = AgentStatsGithubManualE2eScenario.evidenceRequest(pages);
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs[0]?.finished_at).toBe(request.mergedAt);
     expect(evidence.runs[0]?.duration_seconds).toBe(3600);
@@ -209,9 +214,11 @@ describe('agent stats manual E2E evidence', () => {
         conclusion: 'failure',
       },
     ]);
-    const evidence = GithubAgentEvidence.buildActionsEvidence(
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(
       AgentStatsGithubManualE2eScenario.evidenceRequest(pages),
     );
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.runs[0]?.source_attributed).toBe(false);

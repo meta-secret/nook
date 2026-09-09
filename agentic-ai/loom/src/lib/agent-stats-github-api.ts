@@ -32,7 +32,11 @@ export class GithubActionEvidenceApi {
     const selectedRuns: UntrustedYamlMap[] = [];
     const sourceHeadByRun = new Map<number, string>();
     const titlePrefix = `E2E PR #${request.prNumber} @ `;
-    for (const page of GithubActionEvidenceApi.flattenApiPages(request.pages)) {
+    const pageAdmission1 = GithubActionEvidenceApi.flattenApiPages(
+      request.pages,
+    );
+    if (pageAdmission1.isErr()) return err(pageAdmission1.error);
+    for (const page of pageAdmission1.value) {
       if (!UntrustedYamlBoundary.isRecord(page)) continue;
       const runsRequest: GitHubPropertyRequest = {
         record: page,
@@ -79,7 +83,9 @@ export class GithubActionEvidenceApi {
     if (githubResult1.isErr()) return err(githubResult1.error);
     const expanded = githubResult1.value;
     const associatedRuns: UntrustedYamlMap[] = [];
-    for (const page of GithubActionEvidenceApi.flattenApiPages(expanded)) {
+    const pageAdmission2 = GithubActionEvidenceApi.flattenApiPages(expanded);
+    if (pageAdmission2.isErr()) return err(pageAdmission2.error);
+    for (const page of pageAdmission2.value) {
       if (!UntrustedYamlBoundary.isRecord(page)) continue;
       const runsRequest: GitHubPropertyRequest = {
         record: page,
@@ -127,7 +133,11 @@ export class GithubActionEvidenceApi {
   static expandActionAttemptPages(
     request: ExpandActionAttemptPagesRequest,
   ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
-    const pages = GithubActionEvidenceApi.flattenApiPages(request.pages);
+    const pageAdmission3 = GithubActionEvidenceApi.flattenApiPages(
+      request.pages,
+    );
+    if (pageAdmission3.isErr()) return err(pageAdmission3.error);
+    const pages = pageAdmission3.value;
     const expandedRuns: UntrustedYamlMap[] = [];
     let expectedRunCount = 0;
     for (const page of pages) {
@@ -173,9 +183,11 @@ export class GithubActionEvidenceApi {
           const githubResult2 =
             GithubActionEvidenceApi.runGitHubApi(attemptApiRequest);
           if (githubResult2.isErr()) return err(githubResult2.error);
-          const attemptRecords = GithubActionEvidenceApi.flattenApiPages(
+          const pageAdmission4 = GithubActionEvidenceApi.flattenApiPages(
             githubResult2.value,
           );
+          if (pageAdmission4.isErr()) return err(pageAdmission4.error);
+          const attemptRecords = pageAdmission4.value;
           const attemptRecord = attemptRecords.find(
             UntrustedYamlBoundary.isRecord,
           );
@@ -246,9 +258,11 @@ export class GithubActionEvidenceApi {
     };
     const githubResult5 = GithubActionEvidenceApi.runGitHubApi(jobsRequest);
     if (githubResult5.isErr()) return err(githubResult5.error);
-    for (const page of GithubActionEvidenceApi.flattenApiPages(
+    const pageAdmission5 = GithubActionEvidenceApi.flattenApiPages(
       githubResult5.value,
-    )) {
+    );
+    if (pageAdmission5.isErr()) return err(pageAdmission5.error);
+    for (const page of pageAdmission5.value) {
       if (!UntrustedYamlBoundary.isRecord(page)) {
         return err({
           code: LoomFailureCode.CommandFailed,
@@ -331,9 +345,11 @@ export class GithubActionEvidenceApi {
     };
     const githubResult6 = GithubActionEvidenceApi.runGitHubApi(jobsRequest);
     if (githubResult6.isErr()) return err(githubResult6.error);
-    for (const page of GithubActionEvidenceApi.flattenApiPages(
+    const pageAdmission6 = GithubActionEvidenceApi.flattenApiPages(
       githubResult6.value,
-    )) {
+    );
+    if (pageAdmission6.isErr()) return err(pageAdmission6.error);
+    for (const page of pageAdmission6.value) {
       if (!UntrustedYamlBoundary.isRecord(page)) {
         return err({
           code: LoomFailureCode.CommandFailed,
@@ -451,18 +467,21 @@ export class GithubActionEvidenceApi {
     }
   }
 
-  static flattenApiPages(value: UntrustedYamlNode): UntrustedYamlNode[] {
+  static flattenApiPages(
+    value: UntrustedYamlNode,
+  ): Result<UntrustedYamlNode[], GitHubEvidenceFailure> {
     if (!Array.isArray(value)) {
-      GithubActionEvidenceApi.failGitHubCollection(
-        'GitHub API pagination did not return a list',
-      );
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: 'GitHub API pagination did not return a list',
+      });
     }
     const flattened: UntrustedYamlNode[] = [];
     for (const page of value) {
       if (Array.isArray(page)) flattened.push(...page);
       else flattened.push(page);
     }
-    return flattened;
+    return ok(flattened);
   }
 
   static stringProperty(request: GitHubPropertyRequest): string {

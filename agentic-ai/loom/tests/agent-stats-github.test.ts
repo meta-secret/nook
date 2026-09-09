@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { describe, expect, test } from 'bun:test';
 
 import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
@@ -117,7 +118,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs).toHaveLength(4);
     expect(evidence.heads).toHaveLength(2);
@@ -156,7 +159,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.heads.map((head) => head.head_sha)).toEqual([
       firstHead,
@@ -189,7 +194,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [UntrustedYamlBoundary.seal(successorReviewEvent)],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.heads.map((head) => head.head_sha)).toEqual([
       firstHead,
@@ -230,7 +237,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [UntrustedYamlBoundary.seal(descendantReviewEvent)],
       deliveryHeadOrder: [firstHead, finalHead, thirdHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
     const firstCycle = evidence.validationCycles.find(
       (cycle) => cycle.head_sha === firstHead,
     );
@@ -258,7 +267,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(0);
@@ -299,7 +310,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
     expect(evidence.runs).toHaveLength(1);
   });
 
@@ -323,7 +336,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.runs[0]?.source_pr).toBe(42);
@@ -341,7 +356,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs).toHaveLength(0);
     expect(evidence.heads).toHaveLength(1);
@@ -386,7 +403,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.validationCycles).toHaveLength(2);
     expect(evidence.validationCycles.map((cycle) => cycle.workflow)).toEqual([
@@ -416,7 +435,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(0);
@@ -458,7 +479,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(1);
@@ -485,7 +508,9 @@ describe('agent stats GitHub evidence', () => {
       deliveryHeadOrder: [finalHead],
     };
 
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs[0]?.started_at).toBe('2026-08-01T10:00:00Z');
     expect(evidence.runs[0]?.duration_seconds).toBe(120);
@@ -515,7 +540,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.runs[0]?.duration_seconds).toBe(600);
   });
@@ -548,7 +575,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [UntrustedYamlBoundary.seal(reviewEventRecord)],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.obsoleteValidationSeconds).toBe(600);
     expect(evidence.obsoleteValidationCount).toBe(1);
@@ -577,7 +606,9 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.obsoleteValidationSeconds).toBe(0);
     expect(evidence.heads[1]?.head_sha).toBe(finalHead);
@@ -661,7 +692,9 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [firstHead, finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.events).toHaveLength(3);
     expect(evidence.requestCount).toBe(3);
@@ -698,7 +731,9 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.findingBatchCount).toBe(1);
     expect(evidence.findingCount).toBe(1);
@@ -737,7 +772,9 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.events).toHaveLength(2);
     expect(evidence.events[0]?.outcome).toBe('clean');
@@ -784,7 +821,9 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.events).toHaveLength(2);
     expect(evidence.events[0]?.outcome).toBe('findings');
@@ -819,7 +858,9 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.requestCount).toBe(1);
     expect(evidence.findingBatchCount).toBe(1);
@@ -851,7 +892,9 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
+    const evidenceResult = GithubAgentEvidence.buildReviewEvidence(request);
+    assert(evidenceResult.isOk());
+    const evidence = evidenceResult.value;
 
     expect(evidence.findingBatchCount).toBe(0);
     expect(evidence.findingCount).toBe(0);
