@@ -1,93 +1,135 @@
-import {accessSync,constants,rmSync,writeFileSync} from "node:fs";
-import {delimiter,join} from "node:path";
-import {CLUSTER_NAME,K3D_BINARY,K3S_IMAGE,type CommandRequest,HostCommand} from "./contracts";
+import { CommandOutputPolicy } from "./contracts";
+import { accessSync, constants, rmSync, writeFileSync } from "node:fs";
+import { delimiter, join } from "node:path";
+import { err, ok, type Result } from "neverthrow";
+import {
+  CLUSTER_NAME,
+  K3D_BINARY,
+  K3S_IMAGE,
+  CacheFailureKind,
+  type CacheFailure,
+  type CommandRequest,
+  HostCommand,
+} from "./contracts";
 
 export class RuntimeRequireCommand {
-  constructor(private readonly request: string) {}
-  execute(): void {
-    const command = this.request;
-
+  constructor(private readonly command: string) {}
+  execute(): Result<void, CacheFailure> {
     const { PATH: executablePath = "" } = process.env;
-    const candidates = command.includes("/")
-      ? [command]
+    const candidates = this.command.includes("/")
+      ? [this.command]
       : executablePath
           .split(delimiter)
           .filter((directory) => directory.length > 0)
-          .map((directory) => join(directory, command));
-    const found = candidates.some((candidate) => {
+          .map((directory) => join(directory, this.command));
+    for (const candidate of candidates) {
       try {
         accessSync(candidate, constants.X_OK);
-        return true;
+        return ok();
       } catch {
-        return false;
+        /* A missing PATH entry is not itself a failed command admission. */
       }
+    }
+    return err({
+      kind: CacheFailureKind.Command,
+      message: `${this.command} is required`,
     });
-    if (!found) throw new Error(`${command} is required`);
   }
 }
-
 export class RuntimeWriteKubeconfig {
-  constructor(private readonly request: string) {}
-  execute(): void {
-    const kubeconfigPath = this.request;
-
+  constructor(private readonly path: string) {}
+  execute(): Result<void, CacheFailure> {
     const outcome = new HostCommand({
       label: "read isolated k3d kubeconfig",
       command: [K3D_BINARY, "kubeconfig", "get", CLUSTER_NAME],
     }).run();
-    writeFileSync(kubeconfigPath, outcome.stdout, { mode: 0o600 });
+    if (outcome.isErr()) return err(outcome.error);
+    try {
+      writeFileSync(this.path, outcome.value.stdout, { mode: 0o600 });
+      return ok();
+    } catch {
+      return err({
+        kind: CacheFailureKind.Filesystem,
+        message: "Unable to write isolated kubeconfig",
+      });
+    }
   }
 }
-
+export enum ClusterOwnership {
+  Unowned = "unowned",
+  Created = "created",
+}
+export enum ClusterPresence {
+  Absent = "absent",
+  Present = "present",
+}
+export type TemporaryWorkspace =
+  | { kind: TemporaryWorkspaceKind.Absent }
+  | { kind: TemporaryWorkspaceKind.Created; path: string };
+export enum TemporaryWorkspaceKind {
+  Absent = "absent",
+  Created = "created",
+}
+export interface CleanupRequest {
+  readonly workspace: TemporaryWorkspace;
+  readonly cluster: ClusterOwnership;
+}
 export class RuntimeCleanup {
   constructor(private readonly request: CleanupRequest) {}
-  execute(): void {
-    const request = this.request;
-
-    let cleanupError = "";
-    if (request.clusterCreated) {
-      const outcome = new HostCommand({
+  execute(): Result<void, readonly CacheFailure[]> {
+    const failures: CacheFailure[] = [];
+    if (this.request.cluster === ClusterOwnership.Created) {
+      const removed = new HostCommand({
         label: "delete exact k3d proof cluster",
         command: [K3D_BINARY, "cluster", "delete", CLUSTER_NAME],
-        allowFailure: true,
-        streamOutput: true,
+        output: CommandOutputPolicy.Streamed,
       }).run();
-      if (outcome.exitCode !== 0) cleanupError = outcome.stderr;
+      if (removed.isErr()) failures.push(removed.error);
     }
-    if (request.temporaryDirectory.length > 0) {
-      rmSync(request.temporaryDirectory, { recursive: true, force: true });
+    if (this.request.workspace.kind === TemporaryWorkspaceKind.Created) {
+      try {
+        rmSync(this.request.workspace.path, { recursive: true, force: true });
+      } catch {
+        failures.push({
+          kind: CacheFailureKind.Filesystem,
+          message: "Unable to remove cache proof workspace",
+        });
+      }
     }
-    if (request.clusterCreated && new SimulationCluster().clusterExists()) {
-      cleanupError = `${cleanupError}\ncluster ${CLUSTER_NAME} still exists`;
+    if (this.request.cluster === ClusterOwnership.Created) {
+      const present = new SimulationCluster().clusterExists();
+      if (present.isErr()) failures.push(present.error);
+      else if (present.value === ClusterPresence.Present)
+        failures.push({
+          kind: CacheFailureKind.Cleanup,
+          message: `cluster ${CLUSTER_NAME} still exists`,
+        });
     }
-    if (cleanupError.trim().length > 0) {
-      throw new Error(`k3d proof cleanup failed: ${cleanupError.trim()}`);
-    }
+    return failures.length > 0 ? err(failures) : ok();
   }
 }
-
-export interface CleanupRequest {
-  readonly temporaryDirectory: string;
-  readonly clusterCreated: boolean;
-}
-
 export class SimulationCluster {
   constructor(private readonly name: string = CLUSTER_NAME) {}
-  clusterExists(): boolean {
-    const outcome = new HostCommand({
+  clusterExists(): Result<ClusterPresence, CacheFailure> {
+    return new HostCommand({
       label: "list k3d clusters",
       command: [K3D_BINARY, "cluster", "list", "--no-headers"],
-    }).run();
-    return outcome.stdout
-      .split("\n")
-      .map((line) => {
-        const [name = ""] = line.trim().split(/\s+/);
-        return name;
-      })
-      .includes(this.name);
+    })
+      .run()
+      .map((outcome) =>
+        outcome.stdout
+          .split("\n")
+          .map((line) => {
+            const [name = ""] = line.trim().split(/\s+/);
+            return name;
+          })
+          .includes(this.name)
+          ? ClusterPresence.Present
+          : ClusterPresence.Absent,
+      );
   }
-  createCluster(): void {
-    new HostCommand({
+  createCluster(): Result<void, CacheFailure> {
+    return new HostCommand({
       label: "create pinned k3d cluster",
       command: [
         K3D_BINARY,
@@ -123,10 +165,12 @@ export class SimulationCluster {
         "--timeout",
         "180s",
       ],
-      streamOutput: true,
-    }).run();
+      output: CommandOutputPolicy.Streamed,
+    })
+      .run()
+      .map(() => {});
   }
-  prepareLocalStorage(): void {
+  prepareLocalStorage(): Result<void, CacheFailure> {
     const requests: readonly CommandRequest[] = [
       {
         label: "prepare Zot local storage",
@@ -151,6 +195,10 @@ export class SimulationCluster {
         ],
       })),
     ];
-    for (const request of requests) new HostCommand(request).run();
+    for (const request of requests) {
+      const outcome = new HostCommand(request).run();
+      if (outcome.isErr()) return err(outcome.error);
+    }
+    return ok();
   }
 }

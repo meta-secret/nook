@@ -1,9 +1,26 @@
-import {randomUUID} from "node:crypto";
-import {ADMIN_SECRET,ADMIN_USERNAME,BUILDKIT_IMAGE,REGISTRY_HOST,REMOTE_SECRET,REMOTE_USERNAME,REPOSITORY_ROOT,SIMULATION_DIRECTORY,KubernetesManifestApplication,RequiredOutputText,ForbiddenOutputText,HostCommand,KubectlCommand} from "./contracts";
+import { CommandOutputPolicy } from "./contracts";
+import { err, ok, type Result } from "neverthrow";
+import { CacheFailureKind, type CacheFailure } from "./contracts";
+import { randomUUID } from "node:crypto";
+import {
+  ADMIN_SECRET,
+  ADMIN_USERNAME,
+  BUILDKIT_IMAGE,
+  REGISTRY_HOST,
+  REMOTE_SECRET,
+  REMOTE_USERNAME,
+  REPOSITORY_ROOT,
+  SIMULATION_DIRECTORY,
+  KubernetesManifestApplication,
+  RequiredOutputText,
+  ForbiddenOutputText,
+  HostCommand,
+  KubectlCommand,
+} from "./contracts";
 
 class RegistryIdentityPassword {
   constructor(private readonly request: RegistryIdentity) {}
-  hash(): string {
+  hash(): Result<string, CacheFailure> {
     const identity = this.request;
 
     const outcome = new HostCommand({
@@ -20,13 +37,15 @@ class RegistryIdentityPassword {
         identity.password,
       ],
     }).run();
-    const line = outcome.stdout.trim();
-    new RequiredOutputText({
+    if (outcome.isErr()) return err(outcome.error);
+    const line = outcome.value.stdout.trim();
+    const bcrypt = new RequiredOutputText({
       content: line,
       expected: `${identity.username}:$2`,
       label: `bcrypt record for ${identity.username}`,
     }).assertPresent();
-    return line;
+    if (bcrypt.isErr()) return err(bcrypt.error);
+    return ok(line);
   }
 }
 
@@ -52,7 +71,7 @@ class RegistryIdentityConfig {
 
 class RegistrySecretManifest {
   constructor(private readonly request: DeployPlatformRequest) {}
-  render(): string {
+  render(): Result<string, CacheFailure> {
     const request = this.request;
 
     const admin: RegistryIdentity = {
@@ -65,11 +84,12 @@ class RegistrySecretManifest {
       password: request.remotePassword,
       secretName: REMOTE_SECRET,
     };
-    const htpasswd = [
-      new RegistryIdentityPassword(admin).hash(),
-      new RegistryIdentityPassword(remote).hash(),
-    ].join("\n");
-    return `apiVersion: v1
+    const adminHash = new RegistryIdentityPassword(admin).hash();
+    if (adminHash.isErr()) return err(adminHash.error);
+    const remoteHash = new RegistryIdentityPassword(remote).hash();
+    if (remoteHash.isErr()) return err(remoteHash.error);
+    const htpasswd = [adminHash.value, remoteHash.value].join("\n");
+    return ok(`apiVersion: v1
 kind: Secret
 metadata:
   name: nook-zot-htpasswd
@@ -99,52 +119,61 @@ metadata:
 type: kubernetes.io/dockerconfigjson
 stringData:
   .dockerconfigjson: '${new RegistryIdentityConfig(remote).encode()}'
-`;
+`);
   }
 }
 
 export class CachePlatformDeployment {
   constructor(private readonly request: DeployPlatformRequest) {}
-  apply(): void {
+  apply(): Result<void, CacheFailure> {
     const request = this.request;
 
-    new KubectlCommand({
+    const namespaces = new KubectlCommand({
       kubeconfigPath: request.kubeconfigPath,
       label: "create production namespaces",
       command: ["apply", "-f", "infra/k0s/manifests/namespaces.yaml"],
-      streamOutput: true,
+      output: CommandOutputPolicy.Streamed,
     }).run();
-    new KubernetesManifestApplication({
+    if (namespaces.isErr()) return err(namespaces.error);
+    const secrets = new RegistrySecretManifest(request).render();
+    if (secrets.isErr()) return err(secrets.error);
+    const secretApplication = new KubernetesManifestApplication({
       kubeconfigPath: request.kubeconfigPath,
       label: "create ephemeral registry credentials",
-      yaml: new RegistrySecretManifest(request).render(),
+      yaml: secrets.value,
     }).apply();
-    new KubernetesManifestApplication({
+    if (secretApplication.isErr()) return err(secretApplication.error);
+    const overlay = new ProductionCacheOverlay().render();
+    if (overlay.isErr()) return err(overlay.error);
+    const applied = new KubernetesManifestApplication({
       kubeconfigPath: request.kubeconfigPath,
       label: "apply production-derived Zot and BuildKit workloads",
-      yaml: renderProductionOverlay(),
+      yaml: overlay.value,
     }).apply();
+    if (applied.isErr()) return err(applied.error);
     for (const command of [
       ["-n", "hive-data", "rollout", "status", "deployment/nook-zot"],
       ["-n", "arc-runners", "rollout", "status", "statefulset/nook-buildkit"],
     ]) {
       const [workload = "workload"] = command.slice(-1);
-      new KubectlCommand({
+      const rollout = new KubectlCommand({
         kubeconfigPath: request.kubeconfigPath,
         label: `wait for ${workload}`,
         command: [...command, "--timeout=300s"],
-        streamOutput: true,
+        output: CommandOutputPolicy.Streamed,
       }).run();
+      if (rollout.isErr()) return err(rollout.error);
     }
+    return ok();
   }
 }
 
 export class CachePlatformBoundary {
   constructor(private readonly request: string) {}
-  assert(): void {
+  assert(): Result<void, CacheFailure> {
     const kubeconfigPath = this.request;
 
-    const buildkit = new KubectlCommand({
+    const buildkitResult = new KubectlCommand({
       kubeconfigPath,
       label: "inspect simulated BuildKit StatefulSet",
       command: [
@@ -155,28 +184,36 @@ export class CachePlatformBoundary {
         "-o",
         "yaml",
       ],
-    }).run().stdout;
-    const zot = new KubectlCommand({
+    }).run();
+    if (buildkitResult.isErr()) return err(buildkitResult.error);
+    const buildkit = buildkitResult.value.stdout;
+    const zotResult = new KubectlCommand({
       kubeconfigPath,
       label: "inspect simulated Zot Deployment",
       command: ["-n", "hive-data", "get", "deployment/nook-zot", "-o", "yaml"],
-    }).run().stdout;
-    const zotConfig = new KubectlCommand({
+    }).run();
+    if (zotResult.isErr()) return err(zotResult.error);
+    const zot = zotResult.value.stdout;
+    const zotConfigResult = new KubectlCommand({
       kubeconfigPath,
       label: "inspect simulated Zot configuration",
       command: ["-n", "hive-data", "get", "configmap/nook-zot", "-o", "yaml"],
-    }).run().stdout;
+    }).run();
+    if (zotConfigResult.isErr()) return err(zotConfigResult.error);
+    const zotConfig = zotConfigResult.value.stdout;
     for (const expected of [
       "automountServiceAccountToken: false",
       "runAsNonRoot: true",
       "--oci-worker-no-process-sandbox",
       BUILDKIT_IMAGE,
     ]) {
-      new RequiredOutputText({
+      const requiredBuildkitControl = new RequiredOutputText({
         content: buildkit,
         expected,
         label: "simulated BuildKit boundary",
       }).assertPresent();
+      if (requiredBuildkitControl.isErr())
+        return err(requiredBuildkitControl.error);
     }
     for (const expected of [
       "privileged: true",
@@ -184,11 +221,13 @@ export class CachePlatformBoundary {
       "/run/containerd/containerd.sock",
       "hostPath:",
     ]) {
-      new ForbiddenOutputText({
+      const forbiddenBuildkitControl = new ForbiddenOutputText({
         content: buildkit,
         expected,
         label: "simulated BuildKit boundary",
       }).assertAbsent();
+      if (forbiddenBuildkitControl.isErr())
+        return err(forbiddenBuildkitControl.error);
     }
     for (const expected of [
       "automountServiceAccountToken: false",
@@ -196,17 +235,21 @@ export class CachePlatformBoundary {
       "allowPrivilegeEscalation: false",
       "readOnlyRootFilesystem: true",
     ]) {
-      new RequiredOutputText({
+      const requiredRegistryControl = new RequiredOutputText({
         content: zot,
         expected,
         label: "simulated Zot boundary",
       }).assertPresent();
+      if (requiredRegistryControl.isErr())
+        return err(requiredRegistryControl.error);
     }
-    new RequiredOutputText({
+    const registryFormat = new RequiredOutputText({
       content: zotConfig,
       expected: "docker2s2",
       label: "simulated Zot configuration",
     }).assertPresent();
+    if (registryFormat.isErr()) return err(registryFormat.error);
+    return ok();
   }
 }
 
@@ -225,33 +268,47 @@ export interface DeployPlatformRequest {
   readonly remotePassword: string;
 }
 
-export function generatePassword(): string {
-  return randomUUID().replaceAll("-", "");
+export class RegistryProofCredentials {
+  generatePassword(): Result<string, CacheFailure> {
+    try {
+      return ok(randomUUID().replaceAll("-", ""));
+    } catch {
+      return err({
+        kind: CacheFailureKind.Command,
+        message: "Unable to create ephemeral registry credential",
+      });
+    }
+  }
 }
 
-function renderProductionOverlay(): string {
-  const outcome = new HostCommand({
-    label: "render production-derived Kubernetes overlay",
-    command: [
-      "kubectl",
-      "kustomize",
-      SIMULATION_DIRECTORY,
-      "--load-restrictor=LoadRestrictionsNone",
-    ],
-    cwd: REPOSITORY_ROOT,
-  }).run();
-  const rendered = outcome.stdout
-    .replaceAll("__NOOK_REGISTRY_USERNAME__", ADMIN_USERNAME)
-    .replaceAll("__NOOK_REGISTRY_REMOTE_USERNAME__", REMOTE_USERNAME);
-  for (const expected of [
-    "__NOOK_REGISTRY_USERNAME__",
-    "__NOOK_REGISTRY_REMOTE_USERNAME__",
-  ]) {
-    new ForbiddenOutputText({
-      content: rendered,
-      expected,
-      label: "rendered Kubernetes overlay",
-    }).assertAbsent();
+class ProductionCacheOverlay {
+  render(): Result<string, CacheFailure> {
+    const outcome = new HostCommand({
+      label: "render production-derived Kubernetes overlay",
+      command: [
+        "kubectl",
+        "kustomize",
+        SIMULATION_DIRECTORY,
+        "--load-restrictor=LoadRestrictionsNone",
+      ],
+      cwd: REPOSITORY_ROOT,
+    }).run();
+    if (outcome.isErr()) return err(outcome.error);
+    const rendered = outcome.value.stdout
+      .replaceAll("__NOOK_REGISTRY_USERNAME__", ADMIN_USERNAME)
+      .replaceAll("__NOOK_REGISTRY_REMOTE_USERNAME__", REMOTE_USERNAME);
+    for (const expected of [
+      "__NOOK_REGISTRY_USERNAME__",
+      "__NOOK_REGISTRY_REMOTE_USERNAME__",
+    ]) {
+      const unresolvedPlaceholder = new ForbiddenOutputText({
+        content: rendered,
+        expected,
+        label: "rendered Kubernetes overlay",
+      }).assertAbsent();
+      if (unresolvedPlaceholder.isErr())
+        return err(unresolvedPlaceholder.error);
+    }
+    return ok(rendered);
   }
-  return rendered;
 }

@@ -1,13 +1,25 @@
-import {readFileSync} from "node:fs";
-import {join} from "node:path";
-import {BUILDKIT_IMAGE,BUILDKIT_ADDRESS,REGISTRY_HOST,SIMULATION_DIRECTORY,KubernetesManifestApplication,RequiredOutputText,HostCommand,KubectlCommand} from "./contracts";
+import { CommandFailurePolicy, CommandOutputPolicy } from "./contracts";
+import { err, ok, type Result } from "neverthrow";
+import { CacheFailureKind, type CacheFailure } from "./contracts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  BUILDKIT_IMAGE,
+  BUILDKIT_ADDRESS,
+  REGISTRY_HOST,
+  SIMULATION_DIRECTORY,
+  KubernetesManifestApplication,
+  RequiredOutputText,
+  HostCommand,
+  KubectlCommand,
+} from "./contracts";
 
 export class JobsPodNode {
   constructor(private readonly request: PodNodeRequest) {}
-  execute(): string {
+  execute(): Result<string, CacheFailure> {
     const request = this.request;
 
-    const nodeName = new KubectlCommand({
+    const nodeNameResult = new KubectlCommand({
       kubeconfigPath: request.kubeconfigPath,
       label: `read node for ${request.podName}`,
       command: [
@@ -18,12 +30,15 @@ export class JobsPodNode {
         "-o",
         "jsonpath={.spec.nodeName}",
       ],
-    })
-      .run()
-      .stdout.trim();
+    }).run();
+    if (nodeNameResult.isErr()) return err(nodeNameResult.error);
+    const nodeName = nodeNameResult.value.stdout.trim();
     if (nodeName.length === 0)
-      throw new Error(`${request.podName} has no node`);
-    return nodeName;
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message: `${request.podName} has no node`,
+      });
+    return ok(nodeName);
   }
 }
 
@@ -71,9 +86,21 @@ class JobsShellQuote {
 
 class CacheBuildJob {
   constructor(private readonly request: BuildJobRequest) {}
-  manifest(): string {
+  manifest(): Result<string, CacheFailure> {
     const request = this.request;
 
+    let dockerfile: string;
+    try {
+      dockerfile = readFileSync(
+        join(SIMULATION_DIRECTORY, "proof.Dockerfile"),
+        "utf8",
+      ).trimEnd();
+    } catch {
+      return err({
+        kind: CacheFailureKind.Filesystem,
+        message: "Unable to read cache proof Dockerfile",
+      });
+    }
     const argumentsList = new JobsBuildCommandArguments(request).execute();
     const directArgs = argumentsList
       .map((argument) => `            - ${JSON.stringify(argument)}`)
@@ -81,8 +108,9 @@ class CacheBuildJob {
     const shellCommand = ["buildctl", ...argumentsList]
       .map((value) => new JobsShellQuote(value).execute())
       .join(" ");
-    const command = request.expectCommandFailure
-      ? `          command: ["sh", "-euc"]
+    const command =
+      request.expectation === BuildCommandExpectation.Denied
+        ? `          command: ["sh", "-euc"]
           args:
             - |-
               if ${shellCommand} >/tmp/buildctl.log 2>&1; then
@@ -93,17 +121,18 @@ class CacheBuildJob {
               grep -Fq "exporting cache to registry" /tmp/buildctl.log
               grep -Eiq "denied|unauthorized|insufficient_scope|authorization failed" /tmp/buildctl.log
               echo "registry-write-denied"`
-      : `          command: ["buildctl"]
+        : `          command: ["buildctl"]
           args:
 ${directArgs}`;
-    return `apiVersion: v1
+    return ok(`apiVersion: v1
 kind: ConfigMap
 metadata:
   name: ${request.name}-context
   namespace: arc-runners
 data:
   Dockerfile: |-
-${PROOF_DOCKERFILE.split("\n")
+${dockerfile
+  .split("\n")
   .map((line) => `    ${line}`)
   .join("\n")}
 ---
@@ -165,68 +194,78 @@ ${command}
         - name: temporary
           emptyDir:
             sizeLimit: 64Mi
-`;
+`);
   }
 }
 
 export class CacheBuildSubmission {
   constructor(private readonly request: BuildJobRequest) {}
-  start(): void {
+  start(): Result<void, CacheFailure> {
     const request = this.request;
 
-    new KubernetesManifestApplication({
+    const manifest = new CacheBuildJob(request).manifest();
+    if (manifest.isErr()) return err(manifest.error);
+    return new KubernetesManifestApplication({
       kubeconfigPath: request.kubeconfigPath,
       label: `start build job ${request.name}`,
-      yaml: new CacheBuildJob(request).manifest(),
+      yaml: manifest.value,
     }).apply();
   }
 }
 
 export class CacheBuildCompletion {
   constructor(private readonly request: BuildJobResultRequest) {}
-  finish(): string {
+  finish(): Result<string, CacheFailure> {
     const request = this.request;
 
-    const completed = new KubernetesJobCompletion({
+    const completedResult = new KubernetesJobCompletion({
       kubeconfigPath: request.kubeconfigPath,
       name: request.name,
     }).wait();
-    const logs = new KubectlCommand({
+    if (completedResult.isErr()) return err(completedResult.error);
+    const completed = completedResult.value;
+    const logsResult = new KubectlCommand({
       kubeconfigPath: request.kubeconfigPath,
       label: `read build job ${request.name} logs`,
       command: ["-n", "arc-runners", "logs", `job/${request.name}`],
-      allowFailure: true,
-    }).run().stdout;
+      failurePolicy: CommandFailurePolicy.ObserveExit,
+    }).run();
+    if (logsResult.isErr()) return err(logsResult.error);
+    const logs = logsResult.value.stdout;
     process.stdout.write(`\n== ${request.name} ==\n${logs}`);
-    if (!completed) {
-      const description = new KubectlCommand({
+    if (completed !== JobCompletion.Completed) {
+      const descriptionResult = new KubectlCommand({
         kubeconfigPath: request.kubeconfigPath,
         label: `describe failed build job ${request.name}`,
         command: ["-n", "arc-runners", "describe", `job/${request.name}`],
-        allowFailure: true,
-      }).run().stdout;
-      throw new Error(
-        `build job ${request.name} did not complete\n${logs}\n${description}`,
-      );
+        failurePolicy: CommandFailurePolicy.ObserveExit,
+      }).run();
+      if (descriptionResult.isErr()) return err(descriptionResult.error);
+      const description = descriptionResult.value.stdout;
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message: `build job ${request.name} did not complete\n${logs}\n${description}`,
+      });
     }
-    if (request.expectCached) {
-      new JobsAssertCacheStepDidNotExecute({
+    if (request.cacheReuse === CacheReuseExpectation.Required) {
+      const cacheReuse = new JobsAssertCacheStepDidNotExecute({
         logs,
         jobName: request.name,
       }).execute();
+      if (cacheReuse.isErr()) return err(cacheReuse.error);
     }
-    return logs;
+    return ok(logs);
   }
 }
 
 class KubernetesJobCompletion {
   constructor(private readonly request: JobTerminalRequest) {}
-  wait(): boolean {
+  wait(): Result<JobCompletion, CacheFailure> {
     const request = this.request;
 
     const deadline = Date.now() + 300_000;
     while (Date.now() < deadline) {
-      const conditions = new KubectlCommand({
+      const conditionsResult = new KubectlCommand({
         kubeconfigPath: request.kubeconfigPath,
         label: `read terminal state for build job ${request.name}`,
         command: [
@@ -237,16 +276,19 @@ class KubernetesJobCompletion {
           "-o",
           'jsonpath={range .status.conditions[?(@.status=="True")]}{.type}{"\\n"}{end}',
         ],
-        allowFailure: true,
-      }).run().stdout;
-      if (conditions.includes("Complete")) return true;
-      if (conditions.includes("Failed")) return false;
-      new HostCommand({
+        failurePolicy: CommandFailurePolicy.ObserveExit,
+      }).run();
+      if (conditionsResult.isErr()) return err(conditionsResult.error);
+      const conditions = conditionsResult.value.stdout;
+      if (conditions.includes("Complete")) return ok(JobCompletion.Completed);
+      if (conditions.includes("Failed")) return ok(JobCompletion.Failed);
+      const terminalWait = new HostCommand({
         label: "wait for build job terminal state",
         command: ["sleep", "1"],
       }).run();
+      if (terminalWait.isErr()) return err(terminalWait.error);
     }
-    return false;
+    return ok(JobCompletion.TimedOut);
   }
 }
 
@@ -257,19 +299,24 @@ class JobsAssertCacheStepDidNotExecute {
       readonly jobName: string;
     },
   ) {}
-  execute(): void {
+  execute(): Result<void, CacheFailure> {
     const request = this.request;
 
-    new RequiredOutputText({
+    const markerPresent = new RequiredOutputText({
       content: request.logs,
       expected: "cache-proof-execution-marker",
       label: `build job ${request.jobName}`,
     }).assertPresent();
+    if (markerPresent.isErr()) return err(markerPresent.error);
     const executionLine =
       /^#\d+\s+\d+(?:\.\d+)?\s+cache-proof-execution-marker$/m;
     if (executionLine.test(request.logs)) {
-      throw new Error(`build job ${request.jobName}: cached RUN step executed`);
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message: `build job ${request.jobName}: cached RUN step executed`,
+      });
     }
+    return ok();
   }
 }
 
@@ -316,19 +363,22 @@ spec:
 
 export class BuildkitShardAccessProof {
   constructor(private readonly request: NetworkPolicyJobRequest) {}
-  run(): void {
+  run(): Result<void, CacheFailure> {
     const request = this.request;
 
-    new KubernetesManifestApplication({
+    const authorizedClient = new KubernetesManifestApplication({
       kubeconfigPath: request.kubeconfigPath,
       label: "start authorized BuildKit shard client",
       yaml: new JobsShardAccessJobYaml(request).execute(),
     }).apply();
-    new CacheBuildCompletion({
+    if (authorizedClient.isErr()) return err(authorizedClient.error);
+    const authorizedCompletion = new CacheBuildCompletion({
       kubeconfigPath: request.kubeconfigPath,
       name: request.name,
-      expectCached: false,
+      cacheReuse: CacheReuseExpectation.Unspecified,
     }).finish();
+    if (authorizedCompletion.isErr()) return err(authorizedCompletion.error);
+    return ok();
   }
 }
 
@@ -381,44 +431,52 @@ spec:
 
 export class CacheNetworkPolicyProof {
   constructor(private readonly request: NetworkPolicyJobRequest) {}
-  run(): void {
+  run(): Result<void, CacheFailure> {
     const request = this.request;
 
-    new KubernetesManifestApplication({
+    const unauthorizedClient = new KubernetesManifestApplication({
       kubeconfigPath: request.kubeconfigPath,
       label: "start unauthorized BuildKit client",
       yaml: new JobsNetworkPolicyJobYaml(request).execute(),
     }).apply();
-    const logs = new CacheBuildCompletion({
+    if (unauthorizedClient.isErr()) return err(unauthorizedClient.error);
+    const logsResult = new CacheBuildCompletion({
       kubeconfigPath: request.kubeconfigPath,
       name: request.name,
-      expectCached: false,
+      cacheReuse: CacheReuseExpectation.Unspecified,
     }).finish();
-    new RequiredOutputText({
+    if (logsResult.isErr()) return err(logsResult.error);
+    const logs = logsResult.value;
+    const accessDenied = new RequiredOutputText({
       content: logs,
       expected: "network-policy-denied",
       label: "BuildKit NetworkPolicy proof",
     }).assertPresent();
+    if (accessDenied.isErr()) return err(accessDenied.error);
+    return ok();
   }
 }
 
 export class BuildkitPodRestart {
   constructor(private readonly request: PodNodeRequest) {}
-  run(): void {
+  run(): Result<void, CacheFailure> {
     const request = this.request;
 
-    const previous = new JobsPodIdentity({
+    const previousResult = new JobsPodIdentity({
       kubeconfigPath: request.kubeconfigPath,
       namespace: "arc-runners",
       podName: request.podName,
     }).execute();
-    new KubectlCommand({
+    if (previousResult.isErr()) return err(previousResult.error);
+    const previous = previousResult.value;
+    const deleted = new KubectlCommand({
       kubeconfigPath: request.kubeconfigPath,
       label: `restart ${request.podName}`,
       command: ["-n", "arc-runners", "delete", `pod/${request.podName}`],
-      streamOutput: true,
+      output: CommandOutputPolicy.Streamed,
     }).run();
-    new KubectlCommand({
+    if (deleted.isErr()) return err(deleted.error);
+    const created = new KubectlCommand({
       kubeconfigPath: request.kubeconfigPath,
       label: `wait for replacement ${request.podName}`,
       command: [
@@ -429,17 +487,23 @@ export class BuildkitPodRestart {
         "--for=create",
         "--timeout=300s",
       ],
-      streamOutput: true,
+      output: CommandOutputPolicy.Streamed,
     }).run();
-    const replacement = new JobsPodIdentity({
+    if (created.isErr()) return err(created.error);
+    const replacementResult = new JobsPodIdentity({
       kubeconfigPath: request.kubeconfigPath,
       namespace: "arc-runners",
       podName: request.podName,
     }).execute();
+    if (replacementResult.isErr()) return err(replacementResult.error);
+    const replacement = replacementResult.value;
     if (replacement.uid === previous.uid) {
-      throw new Error(`${request.podName} retained its UID after deletion`);
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message: `${request.podName} retained its UID after deletion`,
+      });
     }
-    new KubectlCommand({
+    const readyWait = new KubectlCommand({
       kubeconfigPath: request.kubeconfigPath,
       label: `wait for restarted ${request.podName}`,
       command: [
@@ -450,45 +514,55 @@ export class BuildkitPodRestart {
         "--for=condition=Ready",
         "--timeout=300s",
       ],
-      streamOutput: true,
+      output: CommandOutputPolicy.Streamed,
     }).run();
-    const ready = new JobsPodIdentity({
+    if (readyWait.isErr()) return err(readyWait.error);
+    const readyResult = new JobsPodIdentity({
       kubeconfigPath: request.kubeconfigPath,
       namespace: "arc-runners",
       podName: request.podName,
     }).execute();
+    if (readyResult.isErr()) return err(readyResult.error);
+    const ready = readyResult.value;
     if (ready.uid !== replacement.uid) {
-      throw new Error(
-        `${request.podName} changed UID while waiting for readiness`,
-      );
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message: `${request.podName} changed UID while waiting for readiness`,
+      });
     }
+    return ok();
   }
 }
 
 export class RegistryRestart {
   constructor(private readonly request: string) {}
-  run(): void {
+  run(): Result<void, CacheFailure> {
     const kubeconfigPath = this.request;
 
-    const previous = new JobsLabeledPodIdentity({
+    const previousResult = new JobsLabeledPodIdentity({
       kubeconfigPath,
       namespace: "hive-data",
       labelSelector: "app.kubernetes.io/name=nook-zot",
       previousUid: "",
     }).execute();
-    new KubectlCommand({
+    if (previousResult.isErr()) return err(previousResult.error);
+    const previous = previousResult.value;
+    const deleted = new KubectlCommand({
       kubeconfigPath,
       label: "restart Zot pod",
       command: ["-n", "hive-data", "delete", `pod/${previous.name}`],
-      streamOutput: true,
+      output: CommandOutputPolicy.Streamed,
     }).run();
-    const replacement = new JobsLabeledPodIdentity({
+    if (deleted.isErr()) return err(deleted.error);
+    const replacementResult = new JobsLabeledPodIdentity({
       kubeconfigPath,
       namespace: "hive-data",
       labelSelector: "app.kubernetes.io/name=nook-zot",
       previousUid: previous.uid,
     }).execute();
-    new KubectlCommand({
+    if (replacementResult.isErr()) return err(replacementResult.error);
+    const replacement = replacementResult.value;
+    const readyWait = new KubectlCommand({
       kubeconfigPath,
       label: "wait for restarted Zot",
       command: [
@@ -499,25 +573,32 @@ export class RegistryRestart {
         "--for=condition=Ready",
         "--timeout=300s",
       ],
-      streamOutput: true,
+      output: CommandOutputPolicy.Streamed,
     }).run();
-    const ready = new JobsPodIdentity({
+    if (readyWait.isErr()) return err(readyWait.error);
+    const readyResult = new JobsPodIdentity({
       kubeconfigPath,
       namespace: "hive-data",
       podName: replacement.name,
     }).execute();
+    if (readyResult.isErr()) return err(readyResult.error);
+    const ready = readyResult.value;
     if (ready.uid !== replacement.uid) {
-      throw new Error("Zot changed UID while waiting for readiness");
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message: "Zot changed UID while waiting for readiness",
+      });
     }
+    return ok();
   }
 }
 
 class JobsPodIdentity {
   constructor(private readonly request: PodIdentityRequest) {}
-  execute(): PodIdentity {
+  execute(): Result<PodIdentity, CacheFailure> {
     const request = this.request;
 
-    const output = new KubectlCommand({
+    const outputResult = new KubectlCommand({
       kubeconfigPath: request.kubeconfigPath,
       label: `read identity for ${request.podName}`,
       command: [
@@ -528,25 +609,28 @@ class JobsPodIdentity {
         "-o",
         "jsonpath={.metadata.name} {.metadata.uid}",
       ],
-    })
-      .run()
-      .stdout.trim();
+    }).run();
+    if (outputResult.isErr()) return err(outputResult.error);
+    const output = outputResult.value.stdout.trim();
     const [name = "", uid = ""] = output.split(" ");
     if (name.length === 0 || uid.length === 0) {
-      throw new Error(`pod identity is incomplete: ${output}`);
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message: `pod identity is incomplete: ${output}`,
+      });
     }
-    return { name, uid };
+    return ok({ name, uid });
   }
 }
 
 class JobsLabeledPodIdentity {
   constructor(private readonly request: ReplacementPodRequest) {}
-  execute(): PodIdentity {
+  execute(): Result<PodIdentity, CacheFailure> {
     const request = this.request;
 
     const deadline = Date.now() + 300_000;
     while (Date.now() < deadline) {
-      const outcome = new KubectlCommand({
+      const outcomeResult = new KubectlCommand({
         kubeconfigPath: request.kubeconfigPath,
         label: `find replacement Pod for ${request.labelSelector}`,
         command: [
@@ -559,29 +643,28 @@ class JobsLabeledPodIdentity {
           "-o",
           "jsonpath={range .items[*]}{.metadata.name} {.metadata.uid}{'\\n'}{end}",
         ],
-        allowFailure: true,
+        failurePolicy: CommandFailurePolicy.ObserveExit,
       }).run();
+      if (outcomeResult.isErr()) return err(outcomeResult.error);
+      const outcome = outcomeResult.value;
       for (const line of outcome.stdout.trim().split("\n")) {
         const [name = "", uid = ""] = line.trim().split(" ");
         if (name.length > 0 && uid.length > 0 && uid !== request.previousUid) {
-          return { name, uid };
+          return ok({ name, uid });
         }
       }
-      new HostCommand({
+      const replacementWait = new HostCommand({
         label: "wait for replacement Pod",
         command: ["sleep", "1"],
       }).run();
+      if (replacementWait.isErr()) return err(replacementWait.error);
     }
-    throw new Error(
-      `replacement Pod did not appear for ${request.labelSelector}`,
-    );
+    return err({
+      kind: CacheFailureKind.Expectation,
+      message: `replacement Pod did not appear for ${request.labelSelector}`,
+    });
   }
 }
-
-const PROOF_DOCKERFILE = readFileSync(
-  join(SIMULATION_DIRECTORY, "proof.Dockerfile"),
-  "utf8",
-).trimEnd();
 
 export interface BuildJobRequest {
   readonly kubeconfigPath: string;
@@ -592,13 +675,13 @@ export interface BuildJobRequest {
   readonly dockerConfigSecret: string;
   readonly cacheImport: string;
   readonly cacheExport: string;
-  readonly expectCommandFailure: boolean;
+  readonly expectation: BuildCommandExpectation;
 }
 
 export interface BuildJobResultRequest {
   readonly kubeconfigPath: string;
   readonly name: string;
-  readonly expectCached: boolean;
+  readonly cacheReuse: CacheReuseExpectation;
 }
 
 interface JobTerminalRequest {
@@ -633,4 +716,18 @@ interface ReplacementPodRequest {
   readonly namespace: string;
   readonly labelSelector: string;
   readonly previousUid: string;
+}
+
+enum JobCompletion {
+  Completed = "completed",
+  Failed = "failed",
+  TimedOut = "timed-out",
+}
+export enum BuildCommandExpectation {
+  Success = "success",
+  Denied = "denied",
+}
+export enum CacheReuseExpectation {
+  Unspecified = "unspecified",
+  Required = "required",
 }

@@ -1,20 +1,56 @@
-import {mkdtempSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {ADMIN_SECRET,K3D_BINARY,K3D_VERSION,BUILDKIT_ADDRESS,REGISTRY_HOST,REMOTE_SECRET,RequiredOutputText,HostCommand} from "./contracts";
-import {type BuildJobRequest,type BuildJobResultRequest,CacheBuildCompletion,JobsPodNode,BuildkitShardAccessProof,CacheNetworkPolicyProof,BuildkitPodRestart,RegistryRestart,CacheBuildSubmission} from "./jobs";
-import {type DeployPlatformRequest,CachePlatformBoundary,CachePlatformDeployment,generatePassword} from "./platform";
-import {SimulationCluster,type CleanupRequest,RuntimeCleanup,RuntimeRequireCommand,RuntimeWriteKubeconfig} from "./runtime";
+import { BuildCommandExpectation, CacheReuseExpectation } from "./jobs";
+import { err, ok, type Result } from "neverthrow";
+import { CacheFailureKind, type CacheFailure } from "./contracts";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  ADMIN_SECRET,
+  K3D_BINARY,
+  K3D_VERSION,
+  BUILDKIT_ADDRESS,
+  REGISTRY_HOST,
+  REMOTE_SECRET,
+  RequiredOutputText,
+  HostCommand,
+} from "./contracts";
+import {
+  type BuildJobRequest,
+  type BuildJobResultRequest,
+  CacheBuildCompletion,
+  JobsPodNode,
+  BuildkitShardAccessProof,
+  CacheNetworkPolicyProof,
+  BuildkitPodRestart,
+  RegistryRestart,
+  CacheBuildSubmission,
+} from "./jobs";
+import {
+  type DeployPlatformRequest,
+  CachePlatformBoundary,
+  CachePlatformDeployment,
+  RegistryProofCredentials,
+} from "./platform";
+import {
+  SimulationCluster,
+  ClusterPresence,
+  ClusterOwnership,
+  TemporaryWorkspaceKind,
+  type TemporaryWorkspace,
+  RuntimeCleanup,
+  RuntimeRequireCommand,
+  RuntimeWriteKubeconfig,
+} from "./runtime";
 
 class ProveFinish {
   constructor(private readonly request: FinishRequest) {}
-  execute(): string {
+  execute(): Result<string, CacheFailure> {
     const request = this.request;
 
     const result: BuildJobResultRequest = {
       kubeconfigPath: request.job.kubeconfigPath,
       name: request.job.name,
-      expectCached: request.expectCached,
+      cacheReuse: request.cacheReuse,
     };
     return new CacheBuildCompletion(result).finish();
   }
@@ -27,7 +63,7 @@ class ProveProveStableCache {
       readonly buildkitNodes: readonly string[];
     },
   ) {}
-  execute(): void {
+  execute(): Result<void, CacheFailure> {
     const request = this.request;
 
     const [firstNode = "", secondNode = "", thirdNode = ""] =
@@ -41,17 +77,21 @@ class ProveProveStableCache {
       dockerConfigSecret: REMOTE_SECRET,
       cacheImport: "",
       cacheExport: FORBIDDEN_CACHE_REF,
-      expectCommandFailure: true,
+      expectation: BuildCommandExpectation.Denied,
     };
-    new CacheBuildSubmission(forbidden).start();
-    new RequiredOutputText({
-      content: new ProveFinish({
-        job: forbidden,
-        expectCached: false,
-      }).execute(),
+    const deniedSubmitted = new CacheBuildSubmission(forbidden).start();
+    if (deniedSubmitted.isErr()) return err(deniedSubmitted.error);
+    const denied = new ProveFinish({
+      job: forbidden,
+      cacheReuse: CacheReuseExpectation.Unspecified,
+    }).execute();
+    if (denied.isErr()) return err(denied.error);
+    const denialObserved = new RequiredOutputText({
+      content: denied.value,
       expected: "registry-write-denied",
       label: "Zot stable-scope ACL proof",
     }).assertPresent();
+    if (denialObserved.isErr()) return err(denialObserved.error);
 
     const publish: BuildJobRequest = {
       kubeconfigPath: request.kubeconfigPath,
@@ -62,32 +102,49 @@ class ProveProveStableCache {
       dockerConfigSecret: ADMIN_SECRET,
       cacheImport: "",
       cacheExport: MAIN_CACHE_REF,
-      expectCommandFailure: false,
+      expectation: BuildCommandExpectation.Success,
     };
-    new CacheBuildSubmission(publish).start();
-    new ProveFinish({ job: publish, expectCached: false }).execute();
+    const publishSubmitted = new CacheBuildSubmission(publish).start();
+    if (publishSubmitted.isErr()) return err(publishSubmitted.error);
+    const publishCompleted = new ProveFinish({
+      job: publish,
+      cacheReuse: CacheReuseExpectation.Unspecified,
+    }).execute();
+    if (publishCompleted.isErr()) return err(publishCompleted.error);
 
     const localReuse: BuildJobRequest = {
       ...publish,
       name: "cache-main-local-reuse",
       cacheExport: "",
     };
-    new CacheBuildSubmission(localReuse).start();
-    new ProveFinish({ job: localReuse, expectCached: true }).execute();
+    const localSubmitted = new CacheBuildSubmission(localReuse).start();
+    if (localSubmitted.isErr()) return err(localSubmitted.error);
+    const localCompleted = new ProveFinish({
+      job: localReuse,
+      cacheReuse: CacheReuseExpectation.Required,
+    }).execute();
+    if (localCompleted.isErr()) return err(localCompleted.error);
 
-    new BuildkitPodRestart({
+    const buildkitRestarted = new BuildkitPodRestart({
       kubeconfigPath: request.kubeconfigPath,
       podName: "nook-buildkit-0",
     }).run();
+    if (buildkitRestarted.isErr()) return err(buildkitRestarted.error);
     const restartReuse: BuildJobRequest = {
       ...publish,
       name: "cache-main-restart-reuse",
       cacheExport: "",
     };
-    new CacheBuildSubmission(restartReuse).start();
-    new ProveFinish({ job: restartReuse, expectCached: true }).execute();
+    const restartSubmitted = new CacheBuildSubmission(restartReuse).start();
+    if (restartSubmitted.isErr()) return err(restartSubmitted.error);
+    const restartCompleted = new ProveFinish({
+      job: restartReuse,
+      cacheReuse: CacheReuseExpectation.Required,
+    }).execute();
+    if (restartCompleted.isErr()) return err(restartCompleted.error);
 
-    new RegistryRestart(request.kubeconfigPath).run();
+    const registryRestarted = new RegistryRestart(request.kubeconfigPath).run();
+    if (registryRestarted.isErr()) return err(registryRestarted.error);
     const freshShard: BuildJobRequest = {
       kubeconfigPath: request.kubeconfigPath,
       name: "cache-main-fresh-shard",
@@ -97,10 +154,16 @@ class ProveProveStableCache {
       dockerConfigSecret: REMOTE_SECRET,
       cacheImport: MAIN_CACHE_REF,
       cacheExport: "",
-      expectCommandFailure: false,
+      expectation: BuildCommandExpectation.Success,
     };
-    new CacheBuildSubmission(freshShard).start();
-    new ProveFinish({ job: freshShard, expectCached: true }).execute();
+    const freshSubmitted = new CacheBuildSubmission(freshShard).start();
+    if (freshSubmitted.isErr()) return err(freshSubmitted.error);
+    const freshCompleted = new ProveFinish({
+      job: freshShard,
+      cacheReuse: CacheReuseExpectation.Required,
+    }).execute();
+    if (freshCompleted.isErr()) return err(freshCompleted.error);
+    return ok();
   }
 }
 
@@ -111,7 +174,7 @@ class ProveProveIsolatedCache {
       readonly buildkitNodes: readonly string[];
     },
   ) {}
-  execute(): void {
+  execute(): Result<void, CacheFailure> {
     const request = this.request;
 
     const [firstNode = "", secondNode = "", thirdNode = ""] =
@@ -125,7 +188,7 @@ class ProveProveIsolatedCache {
       dockerConfigSecret: REMOTE_SECRET,
       cacheImport: MAIN_CACHE_REF,
       cacheExport: ISOLATED_A_CACHE_REF,
-      expectCommandFailure: false,
+      expectation: BuildCommandExpectation.Success,
     };
     const isolatedB: BuildJobRequest = {
       kubeconfigPath: request.kubeconfigPath,
@@ -136,12 +199,22 @@ class ProveProveIsolatedCache {
       dockerConfigSecret: REMOTE_SECRET,
       cacheImport: MAIN_CACHE_REF,
       cacheExport: ISOLATED_B_CACHE_REF,
-      expectCommandFailure: false,
+      expectation: BuildCommandExpectation.Success,
     };
-    new CacheBuildSubmission(isolatedA).start();
-    new CacheBuildSubmission(isolatedB).start();
-    new ProveFinish({ job: isolatedA, expectCached: false }).execute();
-    new ProveFinish({ job: isolatedB, expectCached: false }).execute();
+    const aSubmitted = new CacheBuildSubmission(isolatedA).start();
+    if (aSubmitted.isErr()) return err(aSubmitted.error);
+    const bSubmitted = new CacheBuildSubmission(isolatedB).start();
+    if (bSubmitted.isErr()) return err(bSubmitted.error);
+    const aCompleted = new ProveFinish({
+      job: isolatedA,
+      cacheReuse: CacheReuseExpectation.Unspecified,
+    }).execute();
+    if (aCompleted.isErr()) return err(aCompleted.error);
+    const bCompleted = new ProveFinish({
+      job: isolatedB,
+      cacheReuse: CacheReuseExpectation.Unspecified,
+    }).execute();
+    if (bCompleted.isErr()) return err(bCompleted.error);
 
     const restoreA: BuildJobRequest = {
       ...isolatedA,
@@ -159,10 +232,21 @@ class ProveProveIsolatedCache {
       cacheImport: ISOLATED_B_CACHE_REF,
       cacheExport: "",
     };
-    new CacheBuildSubmission(restoreA).start();
-    new CacheBuildSubmission(restoreB).start();
-    new ProveFinish({ job: restoreA, expectCached: true }).execute();
-    new ProveFinish({ job: restoreB, expectCached: true }).execute();
+    const aRestored = new CacheBuildSubmission(restoreA).start();
+    if (aRestored.isErr()) return err(aRestored.error);
+    const bRestored = new CacheBuildSubmission(restoreB).start();
+    if (bRestored.isErr()) return err(bRestored.error);
+    const aReused = new ProveFinish({
+      job: restoreA,
+      cacheReuse: CacheReuseExpectation.Required,
+    }).execute();
+    if (aReused.isErr()) return err(aReused.error);
+    const bReused = new ProveFinish({
+      job: restoreB,
+      cacheReuse: CacheReuseExpectation.Required,
+    }).execute();
+    if (bReused.isErr()) return err(bReused.error);
+    return ok();
   }
 }
 
@@ -173,121 +257,165 @@ const FORBIDDEN_CACHE_REF = `${REGISTRY_HOST}/nook/buildcache/kubernetes-sim-for
 
 interface FinishRequest {
   readonly job: BuildJobRequest;
-  readonly expectCached: boolean;
+  readonly cacheReuse: CacheReuseExpectation;
 }
 
+enum ProofSignalState {
+  Listening = "listening",
+  Cleaning = "cleaning",
+}
 class CacheRuntimeProof {
-  private activeTemporaryDirectory = "";
-  private activeClusterCreated = false;
-  private signalCleanupStarted = false;
+  private workspace: TemporaryWorkspace = {
+    kind: TemporaryWorkspaceKind.Absent,
+  };
+  private cluster = ClusterOwnership.Unowned;
+  private signalState = ProofSignalState.Listening;
   signalCleanup(): void {
-    if (this.signalCleanupStarted) return;
-    this.signalCleanupStarted = true;
-    new RuntimeCleanup({
-      temporaryDirectory: this.activeTemporaryDirectory,
-      clusterCreated: this.activeClusterCreated,
+    if (this.signalState === ProofSignalState.Cleaning) return;
+    this.signalState = ProofSignalState.Cleaning;
+    const cleanup = new RuntimeCleanup({
+      workspace: this.workspace,
+      cluster: this.cluster,
     }).execute();
+    if (cleanup.isErr())
+      console.error(cleanup.error.map((failure) => failure.message).join("\n"));
     process.exit(130);
   }
-  verifyPrerequisites(): void {
+  verifyPrerequisites(): Result<void, CacheFailure> {
     for (const command of ["bun", "docker", K3D_BINARY, "kubectl"]) {
-      new RuntimeRequireCommand(command).execute();
+      const admitted = new RuntimeRequireCommand(command).execute();
+      if (admitted.isErr()) return err(admitted.error);
     }
     const version = new HostCommand({
       label: "verify pinned k3d version",
       command: [K3D_BINARY, "version"],
-    }).run().stdout;
-    new RequiredOutputText({
-      content: version,
+    }).run();
+    if (version.isErr()) return err(version.error);
+    const pinned = new RequiredOutputText({
+      content: version.value.stdout,
       expected: `k3d version ${K3D_VERSION}`,
       label: "k3d version",
     }).assertPresent();
-    if (new SimulationCluster().clusterExists()) {
-      throw new Error(
-        "refusing to replace existing k3d cluster named nook-cache-proof",
-      );
+    if (pinned.isErr()) return err(pinned.error);
+    const presence = new SimulationCluster().clusterExists();
+    if (presence.isErr()) return err(presence.error);
+    if (presence.value === ClusterPresence.Present)
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message:
+          "refusing to replace existing k3d cluster named nook-cache-proof",
+      });
+    return ok();
+  }
+  private createWorkspace(): Result<string, CacheFailure> {
+    try {
+      return ok(mkdtempSync(join(tmpdir(), "nook-kubernetes-cache-proof-")));
+    } catch {
+      return err({
+        kind: CacheFailureKind.Filesystem,
+        message: "Unable to create Kubernetes cache proof workspace",
+      });
     }
   }
-  runProof(): void {
-    this.verifyPrerequisites();
-    this.activeTemporaryDirectory = mkdtempSync(
-      join(tmpdir(), "nook-kubernetes-cache-proof-"),
-    );
-    const kubeconfigPath = join(
-      this.activeTemporaryDirectory,
-      "kubeconfig.yaml",
-    );
-
-    new SimulationCluster().createCluster();
-    this.activeClusterCreated = true;
-    new RuntimeWriteKubeconfig(kubeconfigPath).execute();
-    new SimulationCluster().prepareLocalStorage();
+  runProof(): Result<void, CacheFailure> {
+    const prerequisites = this.verifyPrerequisites();
+    if (prerequisites.isErr()) return err(prerequisites.error);
+    const workspace = this.createWorkspace();
+    if (workspace.isErr()) return err(workspace.error);
+    this.workspace = {
+      kind: TemporaryWorkspaceKind.Created,
+      path: workspace.value,
+    };
+    const kubeconfigPath = join(workspace.value, "kubeconfig.yaml");
+    const created = new SimulationCluster().createCluster();
+    if (created.isErr()) return err(created.error);
+    this.cluster = ClusterOwnership.Created;
+    const configured = new RuntimeWriteKubeconfig(kubeconfigPath).execute();
+    if (configured.isErr()) return err(configured.error);
+    const storage = new SimulationCluster().prepareLocalStorage();
+    if (storage.isErr()) return err(storage.error);
+    const credentials = new RegistryProofCredentials();
+    const adminPassword = credentials.generatePassword();
+    if (adminPassword.isErr()) return err(adminPassword.error);
+    const remotePassword = credentials.generatePassword();
+    if (remotePassword.isErr()) return err(remotePassword.error);
     const deployRequest: DeployPlatformRequest = {
       kubeconfigPath,
-      adminPassword: generatePassword(),
-      remotePassword: generatePassword(),
+      adminPassword: adminPassword.value,
+      remotePassword: remotePassword.value,
     };
-    new CachePlatformDeployment(deployRequest).apply();
-    new CachePlatformBoundary(kubeconfigPath).assert();
-
-    const buildkitNodes = [0, 1, 2].map((index) =>
-      new JobsPodNode({
+    const deployed = new CachePlatformDeployment(deployRequest).apply();
+    if (deployed.isErr()) return err(deployed.error);
+    const boundary = new CachePlatformBoundary(kubeconfigPath).assert();
+    if (boundary.isErr()) return err(boundary.error);
+    const buildkitNodes: string[] = [];
+    for (const index of [0, 1, 2]) {
+      const node = new JobsPodNode({
         kubeconfigPath,
         podName: `nook-buildkit-${index}`,
-      }).execute(),
-    );
-    if (new Set(buildkitNodes).size !== 3) {
-      throw new Error(
-        `BuildKit anti-affinity: expected 3 nodes, got ${buildkitNodes}`,
-      );
+      }).execute();
+      if (node.isErr()) return err(node.error);
+      buildkitNodes.push(node.value);
     }
-    if (typeof buildkitNodes[0] !== "string") {
-      throw new Error("BuildKit node inventory has no first node");
-    }
-    new BuildkitShardAccessProof({
+    if (new Set(buildkitNodes).size !== 3)
+      return err({
+        kind: CacheFailureKind.Identity,
+        message: `BuildKit anti-affinity: expected 3 nodes, got ${buildkitNodes}`,
+      });
+    const [firstNode] = buildkitNodes;
+    if (typeof firstNode !== "string")
+      return err({
+        kind: CacheFailureKind.Identity,
+        message: "BuildKit node inventory has no first node",
+      });
+    const access = new BuildkitShardAccessProof({
       kubeconfigPath,
       name: "cache-shard-allowed",
-      nodeName: buildkitNodes[0],
+      nodeName: firstNode,
     }).run();
-    new CacheNetworkPolicyProof({
+    if (access.isErr()) return err(access.error);
+    const isolation = new CacheNetworkPolicyProof({
       kubeconfigPath,
       name: "cache-network-denied",
-      nodeName: buildkitNodes[0],
+      nodeName: firstNode,
     }).run();
-    new ProveProveStableCache({ kubeconfigPath, buildkitNodes }).execute();
-    new ProveProveIsolatedCache({ kubeconfigPath, buildkitNodes }).execute();
+    if (isolation.isErr()) return err(isolation.error);
+    const stable = new ProveProveStableCache({
+      kubeconfigPath,
+      buildkitNodes,
+    }).execute();
+    if (stable.isErr()) return err(stable.error);
+    const isolated = new ProveProveIsolatedCache({
+      kubeconfigPath,
+      buildkitNodes,
+    }).execute();
+    if (isolated.isErr()) return err(isolated.error);
     console.log("kubernetes cache runtime proof passed");
+    return ok();
   }
-  execute(): void {
-    process.on("SIGINT", () => this.signalCleanup());
-    process.on("SIGTERM", () => this.signalCleanup());
-
-    const proofErrors: Error[] = [];
-    try {
-      this.runProof();
-    } catch (error) {
-      proofErrors.push(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    } finally {
-      const cleanupRequest: CleanupRequest = {
-        temporaryDirectory: this.activeTemporaryDirectory,
-        clusterCreated: this.activeClusterCreated,
-      };
-      try {
-        new RuntimeCleanup(cleanupRequest).execute();
-        this.activeClusterCreated = false;
-        this.activeTemporaryDirectory = "";
-      } catch (error) {
-        const cleanupError =
-          error instanceof Error ? error : new Error(String(error));
-        proofErrors.push(cleanupError);
-      }
+  execute(): Result<void, readonly CacheFailure[]> {
+    const cleanupOnSignal = this.signalCleanup.bind(this);
+    process.on("SIGINT", cleanupOnSignal);
+    process.on("SIGTERM", cleanupOnSignal);
+    const proof = this.runProof();
+    const cleanup = new RuntimeCleanup({
+      workspace: this.workspace,
+      cluster: this.cluster,
+    }).execute();
+    if (cleanup.isOk()) {
+      this.workspace = { kind: TemporaryWorkspaceKind.Absent };
+      this.cluster = ClusterOwnership.Unowned;
     }
-
-    if (proofErrors.length > 0) {
-      throw new Error(proofErrors.map((error) => error.message).join("\n"));
-    }
+    process.off("SIGINT", cleanupOnSignal);
+    process.off("SIGTERM", cleanupOnSignal);
+    const failures: CacheFailure[] = [];
+    if (proof.isErr()) failures.push(proof.error);
+    if (cleanup.isErr()) failures.push(...cleanup.error);
+    return failures.length > 0 ? err(failures) : ok();
   }
 }
-new CacheRuntimeProof().execute();
+const outcome = new CacheRuntimeProof().execute();
+if (outcome.isErr()) {
+  console.error(outcome.error.map((failure) => failure.message).join("\n"));
+  process.exitCode = 1;
+}

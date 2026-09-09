@@ -1,47 +1,64 @@
-import {spawnSync} from "node:child_process";
-import {resolve} from "node:path";
+import { err, ok, type Result } from "neverthrow";
+import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 
 export class HostCommand {
   constructor(private readonly request: CommandRequest) {}
-  run(): CommandOutcome {
+  run(): Result<CommandOutcome, CacheFailure> {
     const request = this.request;
 
     const executable = request.command[0];
-    if (!executable) throw new Error(`${request.label} has no executable`);
+    if (!executable)
+      return err({
+        kind: CacheFailureKind.Command,
+        message: `${request.label} has no executable`,
+      });
     const { environment = process.env } = request;
-    const result = spawnSync(executable, request.command.slice(1), {
-      cwd: request.cwd,
-      env: environment,
-      input: request.input,
-      encoding: "utf8",
-    });
+    let result;
+    try {
+      result = spawnSync(executable, request.command.slice(1), {
+        cwd: request.cwd,
+        env: environment,
+        input: request.input,
+        encoding: "utf8",
+      });
+    } catch {
+      return err({
+        kind: CacheFailureKind.Command,
+        message: `${request.label} could not start`,
+      });
+    }
     const {
-      status: exitCode = 1,
+      status,
       stdout = "",
       stderr: rawStderr = result.error?.message,
     } = result;
     const [stderr = ""] = [rawStderr];
     const outcome: CommandOutcome = {
-      exitCode,
-      stdout,
-      stderr,
+      exitCode: typeof status === "number" ? status : 1,
+      stdout: typeof stdout === "string" ? stdout : "",
+      stderr: typeof stderr === "string" ? stderr : "",
     };
-    if (request.streamOutput) {
+    if (request.output === CommandOutputPolicy.Streamed) {
       if (outcome.stdout.length > 0) process.stdout.write(outcome.stdout);
       if (outcome.stderr.length > 0) process.stderr.write(outcome.stderr);
     }
-    if (outcome.exitCode !== 0 && !request.allowFailure) {
-      throw new Error(
-        `${request.label} failed with exit ${outcome.exitCode}\n${outcome.stdout}${outcome.stderr}`,
-      );
+    if (
+      outcome.exitCode !== 0 &&
+      request.failurePolicy !== CommandFailurePolicy.ObserveExit
+    ) {
+      return err({
+        kind: CacheFailureKind.Command,
+        message: `${request.label} failed with exit ${outcome.exitCode}`,
+      });
     }
-    return outcome;
+    return ok(outcome);
   }
 }
 
 export class KubectlCommand {
   constructor(private readonly request: KubectlRequest) {}
-  run(): CommandOutcome {
+  run(): Result<CommandOutcome, CacheFailure> {
     const request = this.request;
 
     return new HostCommand({
@@ -50,8 +67,8 @@ export class KubectlCommand {
       cwd: REPOSITORY_ROOT,
       input: request.input,
       environment: { ...process.env, KUBECONFIG: request.kubeconfigPath },
-      allowFailure: request.allowFailure,
-      streamOutput: request.streamOutput,
+      failurePolicy: request.failurePolicy,
+      output: request.output,
     }).run();
   }
 }
@@ -64,42 +81,48 @@ export class KubernetesManifestApplication {
       readonly yaml: string;
     },
   ) {}
-  apply(): void {
+  apply(): Result<void, CacheFailure> {
     const request = this.request;
 
-    new KubectlCommand({
+    return new KubectlCommand({
       kubeconfigPath: request.kubeconfigPath,
       label: request.label,
       command: ["apply", "-f", "-"],
       input: request.yaml,
-      streamOutput: true,
-    }).run();
+      output: CommandOutputPolicy.Streamed,
+    })
+      .run()
+      .map(() => {});
   }
 }
 
 export class RequiredOutputText {
   constructor(private readonly request: AssertionRequest) {}
-  assertPresent(): void {
+  assertPresent(): Result<void, CacheFailure> {
     const request = this.request;
 
     if (!request.content.includes(request.expected)) {
-      throw new Error(
-        `${request.label}: missing ${JSON.stringify(request.expected)}`,
-      );
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message: `${request.label}: missing ${JSON.stringify(request.expected)}`,
+      });
     }
+    return ok();
   }
 }
 
 export class ForbiddenOutputText {
   constructor(private readonly request: AssertionRequest) {}
-  assertAbsent(): void {
+  assertAbsent(): Result<void, CacheFailure> {
     const request = this.request;
 
     if (request.content.includes(request.expected)) {
-      throw new Error(
-        `${request.label}: found forbidden ${JSON.stringify(request.expected)}`,
-      );
+      return err({
+        kind: CacheFailureKind.Expectation,
+        message: `${request.label}: found forbidden ${JSON.stringify(request.expected)}`,
+      });
     }
+    return ok();
   }
 }
 
@@ -126,8 +149,8 @@ export interface CommandRequest {
   readonly cwd?: string;
   readonly input?: string;
   readonly environment?: NodeJS.ProcessEnv;
-  readonly allowFailure?: boolean;
-  readonly streamOutput?: boolean;
+  readonly failurePolicy?: CommandFailurePolicy;
+  readonly output?: CommandOutputPolicy;
 }
 
 export interface CommandOutcome {
@@ -141,12 +164,34 @@ export interface KubectlRequest {
   readonly label: string;
   readonly command: readonly string[];
   readonly input?: string;
-  readonly allowFailure?: boolean;
-  readonly streamOutput?: boolean;
+  readonly failurePolicy?: CommandFailurePolicy;
+  readonly output?: CommandOutputPolicy;
 }
 
 interface AssertionRequest {
   readonly content: string;
   readonly expected: string;
   readonly label: string;
+}
+
+export enum CacheFailureKind {
+  Command = "command",
+  Filesystem = "filesystem",
+  Expectation = "expectation",
+  Identity = "identity",
+  Timeout = "timeout",
+  Cleanup = "cleanup",
+}
+export interface CacheFailure {
+  readonly kind: CacheFailureKind;
+  readonly message: string;
+}
+
+export enum CommandFailurePolicy {
+  RequireSuccess = "require-success",
+  ObserveExit = "observe-exit",
+}
+export enum CommandOutputPolicy {
+  Captured = "captured",
+  Streamed = "streamed",
 }
