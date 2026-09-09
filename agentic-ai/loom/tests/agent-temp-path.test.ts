@@ -5,6 +5,8 @@ import path from 'node:path';
 import {
   AGENT_TEMP_DIR_TOKEN,
   AgentTemporaryDirectory,
+  TaskAnchorHistory,
+  AgentTemporaryPath,
 } from '../src/lib/agent-temp-path.ts';
 import { RepositoryRoot } from '../src/lib/repo.ts';
 import { HostCommand } from '../src/lib/run.ts';
@@ -26,8 +28,8 @@ describe('agent temporary paths', () => {
       taskAnchorCommit: FIRST_COMMIT,
       osTempDirectory: '/temporary',
     };
-    const first = AgentTemporaryDirectory.buildAgentTempDirectory(parts);
-    const second = AgentTemporaryDirectory.buildAgentTempDirectory(parts);
+    const first = new AgentTemporaryDirectory(parts).path();
+    const second = new AgentTemporaryDirectory(parts).path();
 
     expect(first).toBe(second);
     expect(first).toMatch(
@@ -47,9 +49,9 @@ describe('agent temporary paths', () => {
       osTempDirectory: '/temporary',
     };
 
-    expect(
-      AgentTemporaryDirectory.buildAgentTempDirectory(firstParts),
-    ).not.toBe(AgentTemporaryDirectory.buildAgentTempDirectory(secondParts));
+    expect(new AgentTemporaryDirectory(firstParts).path()).not.toBe(
+      new AgentTemporaryDirectory(secondParts).path(),
+    );
   });
 
   test('isolates different commits in one worktree', () => {
@@ -63,9 +65,9 @@ describe('agent temporary paths', () => {
       taskAnchorCommit: SECOND_COMMIT,
     };
 
-    expect(
-      AgentTemporaryDirectory.buildAgentTempDirectory(firstParts),
-    ).not.toBe(AgentTemporaryDirectory.buildAgentTempDirectory(secondParts));
+    expect(new AgentTemporaryDirectory(firstParts).path()).not.toBe(
+      new AgentTemporaryDirectory(secondParts).path(),
+    );
   });
 
   test('selects the latest checkout commit for the current branch', () => {
@@ -78,9 +80,7 @@ describe('agent temporary paths', () => {
       ].join('\n'),
     };
 
-    expect(AgentTemporaryDirectory.selectTaskAnchorCommit(selection)).toBe(
-      FIRST_COMMIT,
-    );
+    expect(new TaskAnchorHistory(selection).commit()).toBe(FIRST_COMMIT);
   });
 
   test('keeps the task anchor stable after implementation commits', () => {
@@ -98,8 +98,8 @@ describe('agent temporary paths', () => {
       ].join('\n'),
     };
 
-    expect(AgentTemporaryDirectory.selectTaskAnchorCommit(firstSelection)).toBe(
-      AgentTemporaryDirectory.selectTaskAnchorCommit(secondSelection),
+    expect(new TaskAnchorHistory(firstSelection).commit()).toBe(
+      new TaskAnchorHistory(secondSelection).commit(),
     );
   });
 
@@ -114,9 +114,7 @@ describe('agent temporary paths', () => {
       ].join('\n'),
     };
 
-    expect(AgentTemporaryDirectory.selectTaskAnchorCommit(selection)).toBe(
-      FIRST_COMMIT,
-    );
+    expect(new TaskAnchorHistory(selection).commit()).toBe(FIRST_COMMIT);
   });
 
   test('uses the initial reflog commit for a directly created worktree', () => {
@@ -134,12 +132,10 @@ describe('agent temporary paths', () => {
       ].join('\n'),
     };
 
-    expect(
-      AgentTemporaryDirectory.selectTaskAnchorCommit(initialSelection),
-    ).toBe(FIRST_COMMIT);
-    expect(
-      AgentTemporaryDirectory.selectTaskAnchorCommit(committedSelection),
-    ).toBe(FIRST_COMMIT);
+    expect(new TaskAnchorHistory(initialSelection).commit()).toBe(FIRST_COMMIT);
+    expect(new TaskAnchorHistory(committedSelection).commit()).toBe(
+      FIRST_COMMIT,
+    );
   });
 
   test('resolves the token with the exact task anchor commit', () => {
@@ -167,13 +163,14 @@ describe('agent temporary paths', () => {
       branchName: HostCommand.run(branchRequest).stdout.trim(),
       reflog: HostCommand.run(reflogRequest).stdout,
     };
-    const taskAnchorCommit =
-      AgentTemporaryDirectory.selectTaskAnchorCommit(selection);
+    const taskAnchorCommit = new TaskAnchorHistory(selection).commit();
     const request: ResolveAgentTempPathRequest = {
       repoRoot,
       authoredPath: `${AGENT_TEMP_DIR_TOKEN}/123.yaml`,
     };
-    const resolved = AgentTemporaryDirectory.resolveAgentTempPath(request);
+    const temporaryPath1 = new AgentTemporaryPath(request).resolve();
+    assert(temporaryPath1.isOk());
+    const resolved = temporaryPath1.value;
 
     expect(resolved).toContain(`${path.sep}${taskAnchorCommit}${path.sep}`);
     expect(resolved).toMatch(
@@ -192,8 +189,8 @@ describe('agent temporary paths', () => {
       authoredPath: 'relative/123.yaml',
     };
 
-    expect(AgentTemporaryDirectory.resolveAgentTempPath(request)).toBe(
-      path.resolve('relative/123.yaml'),
-    );
+    const temporaryPath2 = new AgentTemporaryPath(request).resolve();
+    assert(temporaryPath2.isOk());
+    expect(temporaryPath2.value).toBe(path.resolve('relative/123.yaml'));
   });
 });

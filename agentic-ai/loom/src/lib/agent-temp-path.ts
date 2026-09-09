@@ -1,38 +1,41 @@
+import { err, ok, type Result } from 'neverthrow';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { HostCommand } from './run.ts';
-import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
+import { LoomFailureCode } from '../loom-failure.ts';
 
 import type { RunCommandArgs } from './run.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 
 export const AGENT_TEMP_DIR_TOKEN = '{agentTempDir}';
+const WORKTREE_ID_LENGTH = 16;
+const AGENT_TEMP_DIRECTORY_NAME = 'nook-agent-stats';
 
 /** Owns the agent temporary directory registry and its capability transitions. */
 export class AgentTemporaryDirectory {
-  private constructor() {}
-  private static readonly AGENT_TEMP_DIRECTORY_NAME = 'nook-agent-stats';
-
-  private static readonly WORKTREE_ID_LENGTH = 16;
-
-  static buildAgentTempDirectory(parts: AgentTempDirectoryParts): string {
+  constructor(private readonly request: AgentTempDirectoryParts) {}
+  path(): string {
+    const parts = this.request;
     const canonicalWorktree = path.resolve(parts.repoRoot);
     const worktreeId = createHash('sha256')
       .update(canonicalWorktree)
       .digest('hex')
-      .slice(0, AgentTemporaryDirectory.WORKTREE_ID_LENGTH);
+      .slice(0, WORKTREE_ID_LENGTH);
 
     return path.join(
       parts.osTempDirectory,
-      AgentTemporaryDirectory.AGENT_TEMP_DIRECTORY_NAME,
+      AGENT_TEMP_DIRECTORY_NAME,
       parts.taskAnchorCommit,
       worktreeId,
     );
   }
-
-  static selectTaskAnchorCommit(selection: TaskAnchorSelection): string {
+}
+export class TaskAnchorHistory {
+  constructor(private readonly request: TaskAnchorSelection) {}
+  commit(): string {
+    const selection = this.request;
     const checkoutSuffix = ` to ${selection.branchName}`;
     const lines = selection.reflog.split('\n');
     for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -57,10 +60,13 @@ export class AgentTemporaryDirectory {
     }
     return selection.currentCommit;
   }
-
-  static resolveAgentTempPath(request: ResolveAgentTempPathRequest): string {
+}
+export class AgentTemporaryPath {
+  constructor(private readonly request: ResolveAgentTempPathRequest) {}
+  resolve(): Result<string, AgentTemporaryPathFailure> {
+    const request = this.request;
     if (!request.authoredPath.includes(AGENT_TEMP_DIR_TOKEN)) {
-      return path.resolve(request.authoredPath);
+      return ok(path.resolve(request.authoredPath));
     }
 
     const gitHeadRequest: RunCommandArgs = {
@@ -75,7 +81,7 @@ export class AgentTemporaryDirectory {
         code: LoomFailureCode.CommandFailed,
         text: 'Could not resolve the exact Git commit for {agentTempDir}',
       };
-      LoomFailure.detail(failure);
+      return err({ code: failure.code, message: failure.text });
     }
 
     const branchRequest: RunCommandArgs = {
@@ -95,23 +101,32 @@ export class AgentTemporaryDirectory {
       branchName,
       reflog,
     };
-    const taskAnchorCommit =
-      AgentTemporaryDirectory.selectTaskAnchorCommit(taskAnchorSelection);
+    const taskAnchorCommit = new TaskAnchorHistory(
+      taskAnchorSelection,
+    ).commit();
 
     const directoryParts: AgentTempDirectoryParts = {
       repoRoot: request.repoRoot,
       taskAnchorCommit,
       osTempDirectory: tmpdir(),
     };
-    const agentTempDirectory =
-      AgentTemporaryDirectory.buildAgentTempDirectory(directoryParts);
+    const agentTempDirectory = new AgentTemporaryDirectory(
+      directoryParts,
+    ).path();
     const directoryOptions: { readonly recursive: true } = { recursive: true };
-    mkdirSync(agentTempDirectory, directoryOptions);
+    try {
+      mkdirSync(agentTempDirectory, directoryOptions);
+    } catch {
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: 'Could not create the agent temporary directory',
+      });
+    }
     const expanded = request.authoredPath.replaceAll(
       AGENT_TEMP_DIR_TOKEN,
       agentTempDirectory,
     );
-    return path.resolve(expanded);
+    return ok(path.resolve(expanded));
   }
 }
 
@@ -130,4 +145,9 @@ export type TaskAnchorSelection = {
   readonly currentCommit: string;
   readonly branchName: string;
   readonly reflog: string;
+};
+
+export type AgentTemporaryPathFailure = {
+  readonly code: LoomFailureCode;
+  readonly message: string;
 };

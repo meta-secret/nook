@@ -10,7 +10,7 @@ import type {
 
 import { AgentStatsOperation, RequestFamily } from '../codec/enums.ts';
 
-import { AgentTemporaryDirectory } from '../lib/agent-temp-path.ts';
+import { AgentTemporaryPath } from '../lib/agent-temp-path.ts';
 
 import { AgentStatisticsAssembly } from '../lib/agent-stats-assemble.ts';
 
@@ -46,10 +46,12 @@ export class AgentStatisticsCommand {
       repoRoot,
       authoredPath: request.outputPath,
     };
-    const scratchPath =
-      AgentTemporaryDirectory.resolveAgentTempPath(scratchPathRequest);
-    const outPath =
-      AgentTemporaryDirectory.resolveAgentTempPath(outputPathRequest);
+    const temporaryPath1 = new AgentTemporaryPath(scratchPathRequest).resolve();
+    if (temporaryPath1.isErr()) return err(temporaryPath1.error);
+    const scratchPath = temporaryPath1.value;
+    const temporaryPath2 = new AgentTemporaryPath(outputPathRequest).resolve();
+    if (temporaryPath2.isErr()) return err(temporaryPath2.error);
+    const outPath = temporaryPath2.value;
     const assembledArgs = {
       repoRoot,
       prNumber: request.prNumber,
@@ -107,9 +109,11 @@ export class AgentStatisticsFileCommand {
       repoRoot,
       authoredPath: request.statsFile,
     };
+    const temporaryPath3 = new AgentTemporaryPath(statsPathRequest).resolve();
+    if (temporaryPath3.isErr()) return err(temporaryPath3.error);
     const validateFileArgs: ValidateFileArgs = {
       operation: AgentStatsOperation.Validate,
-      file: AgentTemporaryDirectory.resolveAgentTempPath(statsPathRequest),
+      file: temporaryPath3.value,
     };
     return this.validateFile(validateFileArgs);
   }
@@ -123,8 +127,9 @@ export class AgentStatisticsFileCommand {
       repoRoot,
       authoredPath: request.statsFile,
     };
-    const absolute =
-      AgentTemporaryDirectory.resolveAgentTempPath(statsPathRequest);
+    const temporaryPath4 = new AgentTemporaryPath(statsPathRequest).resolve();
+    if (temporaryPath4.isErr()) return err(temporaryPath4.error);
+    const absolute = temporaryPath4.value;
     const prFromName = path.basename(absolute).replace(/\.ya?ml$/, '');
     const prNumber = Number.parseInt(prFromName, 10);
     if (!Number.isInteger(prNumber) || prNumber <= 0) {

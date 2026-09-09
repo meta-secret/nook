@@ -12,7 +12,7 @@ import {
 } from '../commands/pr-land.ts';
 import type { SkillScaffoldFailure } from '../commands/skill-scaffold.ts';
 import type { CortexSessionFailure } from '../commands/cortex-session-clean.ts';
-import { ok, type Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import type { CortexAuditFailure } from '../commands/cortex-audit.ts';
 import {
   AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
@@ -69,7 +69,7 @@ import {
 import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
 import {
   AGENT_TEMP_DIR_TOKEN,
-  AgentTemporaryDirectory,
+  AgentTemporaryPath,
 } from '../lib/agent-temp-path.ts';
 import { RepositoryRoot, BunExecutable } from '../lib/repo.ts';
 
@@ -204,8 +204,11 @@ export class LoomRequestCatalog {
       repoRoot,
       authoredPath: AGENT_TEMP_DIR_TOKEN,
     };
-    const agentTempDirectory =
-      AgentTemporaryDirectory.resolveAgentTempPath(agentTempPathRequest);
+    const temporaryPath1 = new AgentTemporaryPath(
+      agentTempPathRequest,
+    ).resolve();
+    if (temporaryPath1.isErr()) return err(temporaryPath1.error);
+    const agentTempDirectory = temporaryPath1.value;
 
     return ok(
       LoomRequestCatalog.DISCOVERABLE_DEFINITIONS.map((definition) => {
