@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { Database, constants as sqliteConstants } from 'bun:sqlite';
 import { createHash } from 'node:crypto';
 import {
@@ -154,56 +155,22 @@ export class DelegationRunJournal {
     const lease =
       await DelegationRunJournal.acquireDelegationLifecycleLock(lockInput);
     try {
+      lease.assertHeld(runDirectory);
       return await DelegationRunJournal.admitWhileLocked(input);
     } finally {
-      await DelegationRunJournal.releaseDelegationLifecycleLock(lease);
+      await lease.release();
     }
   }
 
   static async acquireDelegationLifecycleLock(
     input: DelegationLifecycleLockInput,
   ): Promise<DelegationLifecycleLease> {
-    const runDirectoryStatus = await lstat(input.runDirectory);
-    if (
-      runDirectoryStatus.isSymbolicLink() ||
-      !runDirectoryStatus.isDirectory()
-    ) {
-      throw new Error('Delegation lifecycle run directory is unsafe.');
-    }
-    const canonicalRunDirectory = await realpath(input.runDirectory);
-    const lockPath = resolve(canonicalRunDirectory, '.delegation.lock.sqlite');
-    const localLease =
-      await DelegationRunJournal.acquireLocalLifecycleLock(lockPath);
-    let database: Database | false = false;
-    try {
-      database = new Database(lockPath, LIFECYCLE_LOCK_OPEN_FLAGS);
-      database.exec(
-        `PRAGMA busy_timeout = ${LIFECYCLE_LOCK_BUSY_TIMEOUT_MILLISECONDS};`,
-      );
-      database.exec('BEGIN EXCLUSIVE;');
-      return { lockPath, database, releaseLocal: localLease.release };
-    } catch {
-      try {
-        if (database !== false) database.close(false);
-      } finally {
-        localLease.release();
-      }
-      throw new Error('Delegation lifecycle lock acquisition failed.');
-    }
-  }
-
-  static async releaseDelegationLifecycleLock(
-    lease: DelegationLifecycleLease,
-  ): Promise<void> {
-    try {
-      lease.database.exec('ROLLBACK;');
-    } finally {
-      try {
-        lease.database.close(false);
-      } finally {
-        lease.releaseLocal();
-      }
-    }
+    return DelegationLifecycleLease.acquire({
+      key: LIFECYCLE_TRANSITION,
+      input,
+      requestLocal: (lockPath) =>
+        DelegationRunJournal.acquireLocalLifecycleLock(lockPath),
+    });
   }
 
   private static async acquireLocalLifecycleLock(
@@ -647,11 +614,84 @@ export type DelegationLifecycleLockInput = {
   readonly runDirectory: string;
 };
 
-export type DelegationLifecycleLease = {
+const LIFECYCLE_TRANSITION = Symbol('delegation-lifecycle-transition');
+enum DelegationLockPhase {
+  Held = 'held',
+  Released = 'released',
+}
+type DelegationLockResources = {
   readonly lockPath: string;
   readonly database: Database;
   readonly releaseLocal: () => void;
 };
+type AcquireDelegationLock = {
+  readonly key: typeof LIFECYCLE_TRANSITION;
+  readonly input: DelegationLifecycleLockInput;
+  readonly requestLocal: (path: string) => Promise<LocalLifecycleLease>;
+};
+export class DelegationLifecycleLease {
+  private phase = DelegationLockPhase.Held;
+  private constructor(private readonly resources: DelegationLockResources) {}
+  static async acquire(
+    request: AcquireDelegationLock,
+  ): Promise<DelegationLifecycleLease> {
+    if (request.key !== LIFECYCLE_TRANSITION)
+      throw new Error('Invalid delegation lock transition.');
+    const { input, requestLocal } = request;
+    const runDirectoryStatus = await lstat(input.runDirectory);
+    if (
+      runDirectoryStatus.isSymbolicLink() ||
+      !runDirectoryStatus.isDirectory()
+    ) {
+      throw new Error('Delegation lifecycle run directory is unsafe.');
+    }
+    const canonicalRunDirectory = await realpath(input.runDirectory);
+    const lockPath = resolve(canonicalRunDirectory, '.delegation.lock.sqlite');
+    const localLease = await requestLocal(lockPath);
+    let database: Database | false = false;
+    try {
+      database = new Database(lockPath, LIFECYCLE_LOCK_OPEN_FLAGS);
+      database.exec(
+        `PRAGMA busy_timeout = ${LIFECYCLE_LOCK_BUSY_TIMEOUT_MILLISECONDS};`,
+      );
+      database.exec('BEGIN EXCLUSIVE;');
+      return new DelegationLifecycleLease({
+        lockPath,
+        database,
+        releaseLocal: localLease.release,
+      });
+    } catch {
+      try {
+        if (database !== false) database.close(false);
+      } finally {
+        localLease.release();
+      }
+      throw new Error('Delegation lifecycle lock acquisition failed.');
+    }
+  }
+  assertHeld(runDirectory: string): void {
+    if (
+      this.phase !== DelegationLockPhase.Held ||
+      resolve(realpathSync(runDirectory), '.delegation.lock.sqlite') !==
+        this.resources.lockPath
+    )
+      throw new Error('Delegation lifecycle lock is not held for this run.');
+  }
+  async release(): Promise<void> {
+    if (this.phase !== DelegationLockPhase.Held)
+      throw new Error('Delegation lifecycle lock has already been released.');
+    this.phase = DelegationLockPhase.Released;
+    try {
+      this.resources.database.exec('ROLLBACK;');
+    } finally {
+      try {
+        this.resources.database.close(false);
+      } finally {
+        this.resources.releaseLocal();
+      }
+    }
+  }
+}
 
 type LocalLifecycleLease = {
   readonly release: () => void;

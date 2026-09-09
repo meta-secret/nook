@@ -62,21 +62,67 @@ export type ModuleExpertRuntimeIdentity = {
   readonly selectedContextPaths: readonly string[];
 };
 
-export type ModuleExpertRuntimeSession = {
-  readonly kind: ModuleExpertRuntimeCapabilityKind.Session;
-};
+export class ModuleExpertRuntimeSession {
+  readonly kind = ModuleExpertRuntimeCapabilityKind.Session;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(key: typeof AUTHORITY_ISSUANCE): ModuleExpertRuntimeSession {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new ModuleExpertRuntimeSession();
+    capability.seal();
+    return capability;
+  }
+}
 
-export type ModuleExpertJournalAuthority = {
-  readonly kind: ModuleExpertRuntimeCapabilityKind.JournalAuthority;
-};
+export class ModuleExpertJournalAuthority {
+  readonly kind = ModuleExpertRuntimeCapabilityKind.JournalAuthority;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(key: typeof AUTHORITY_ISSUANCE): ModuleExpertJournalAuthority {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new ModuleExpertJournalAuthority();
+    capability.seal();
+    return capability;
+  }
+}
 
-export type ModuleExpertJournalBinding = {
-  readonly kind: ModuleExpertRuntimeCapabilityKind.JournalBinding;
-};
+export class ModuleExpertJournalBinding {
+  readonly kind = ModuleExpertRuntimeCapabilityKind.JournalBinding;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(key: typeof AUTHORITY_ISSUANCE): ModuleExpertJournalBinding {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new ModuleExpertJournalBinding();
+    capability.seal();
+    return capability;
+  }
+}
 
-export type ModuleExpertCompletionAuthority = {
-  readonly kind: ModuleExpertRuntimeCapabilityKind.CompletionAuthority;
-};
+export class ModuleExpertCompletionAuthority {
+  readonly kind = ModuleExpertRuntimeCapabilityKind.CompletionAuthority;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(
+    key: typeof AUTHORITY_ISSUANCE,
+  ): ModuleExpertCompletionAuthority {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new ModuleExpertCompletionAuthority();
+    capability.seal();
+    return capability;
+  }
+}
 
 export type TrustedModuleExpertExecution = {
   readonly completion: AgentExecutionCompletion;
@@ -229,15 +275,11 @@ export class ModuleExpertRuntimeAuthority {
       selectedContextPaths: Object.freeze([...request.selectedContextPaths]),
     };
     const identity = Object.freeze(identityValue);
-    const sessionValue = {
-      kind: ModuleExpertRuntimeCapabilityKind.Session,
-    } as const;
-    const session: ModuleExpertRuntimeSession = Object.freeze(sessionValue);
-    const authorityValue = {
-      kind: ModuleExpertRuntimeCapabilityKind.JournalAuthority,
-    } as const;
-    const journalAuthority: ModuleExpertJournalAuthority =
-      Object.freeze(authorityValue);
+    const sessionValue = ModuleExpertRuntimeSession.issue(AUTHORITY_ISSUANCE);
+    const session: ModuleExpertRuntimeSession = sessionValue;
+    const authorityValue =
+      ModuleExpertJournalAuthority.issue(AUTHORITY_ISSUANCE);
+    const journalAuthority: ModuleExpertJournalAuthority = authorityValue;
     const agentProfile: AgentProfile<string> = {
       name: profile.name,
       instructionPrefix: MODULE_EXPERT_AGENT_INSTRUCTIONS,
@@ -315,11 +357,9 @@ export class ModuleExpertRuntimeAuthority {
       consumeArgs,
     );
     const completion = isolatedExecution.completion;
-    const authorityValue = {
-      kind: ModuleExpertRuntimeCapabilityKind.CompletionAuthority,
-    } as const;
-    const authority: ModuleExpertCompletionAuthority =
-      Object.freeze(authorityValue);
+    const authorityValue =
+      ModuleExpertCompletionAuthority.issue(AUTHORITY_ISSUANCE);
+    const authority: ModuleExpertCompletionAuthority = authorityValue;
     const authorityRecord: ModuleExpertCompletionAuthorityRecord = {
       session: args.session,
       identityDigest: record.identityDigest,
@@ -351,10 +391,8 @@ export class ModuleExpertRuntimeAuthority {
     ModuleExpertRuntimeAuthority.MODULE_EXPERT_JOURNAL_AUTHORITIES.delete(
       args.authority,
     );
-    const bindingValue = {
-      kind: ModuleExpertRuntimeCapabilityKind.JournalBinding,
-    } as const;
-    const binding: ModuleExpertJournalBinding = Object.freeze(bindingValue);
+    const bindingValue = ModuleExpertJournalBinding.issue(AUTHORITY_ISSUANCE);
+    const binding: ModuleExpertJournalBinding = bindingValue;
     ModuleExpertRuntimeAuthority.MODULE_EXPERT_JOURNAL_BINDINGS.set(
       binding,
       record,
@@ -437,3 +475,5 @@ export class ModuleExpertRuntimeAuthority {
     ].join('\n\n');
   }
 }
+
+const AUTHORITY_ISSUANCE = Symbol('expert-authority-issuance');

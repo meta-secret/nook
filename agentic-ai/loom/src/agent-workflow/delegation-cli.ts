@@ -268,8 +268,10 @@ export class DelegationJournalCli {
       parent: request.parent,
       now: () => new Date().toISOString(),
     };
-    const journal = new AgentAttemptJournal<string>(journalConfiguration);
-    await journal.initialize();
+    const preparedJournal = new AgentAttemptJournal<string>(
+      journalConfiguration,
+    );
+    const journal = await preparedJournal.initialize();
     const processing = await journal.finalize(terminal);
     const verificationRequest: ReadParentAttemptArgs = {
       runDirectory,

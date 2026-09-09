@@ -1,6 +1,9 @@
 import { join, resolve } from 'node:path';
 
-import { AgentAttemptJournal } from '../../src/agent-workflow/agent-journal.ts';
+import {
+  AgentAttemptJournal,
+  type ActiveAgentAttemptJournal,
+} from '../../src/agent-workflow/agent-journal.ts';
 
 import type { AgentAttemptJournalConfiguration } from '../../src/agent-workflow/agent-journal.ts';
 
@@ -146,7 +149,7 @@ export class ModuleExpertsInvokeParentFixtureScenario {
 
   static async createJournal(
     args: CreateJournalArgs,
-  ): Promise<AgentAttemptJournal<string>> {
+  ): Promise<ActiveAgentAttemptJournal<string>> {
     const runDirectory = join(
       args.repoRoot,
       'workflow',
@@ -168,8 +171,8 @@ export class ModuleExpertsInvokeParentFixtureScenario {
       parent: args.parent,
       now: () => new Date().toISOString(),
     };
-    const journal = new AgentAttemptJournal<string>(configuration);
-    await journal.initialize();
+    const preparedJournal = new AgentAttemptJournal<string>(configuration);
+    const journal = await preparedJournal.initialize();
     return journal;
   }
 }

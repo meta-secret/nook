@@ -61,7 +61,10 @@ test('materializes synthesis context without repository paths or credentials', a
         'GITHUB_TOKEN',
       );
     } finally {
-      await isolation.dispose();
+      const disposal = isolation.dispose();
+      expect(isolation.dispose()).toBe(disposal);
+      expect(() => isolation.codexOptions).toThrow('disposed');
+      await disposal;
     }
     expect(await readdir(temporaryRoot)).toEqual([]);
   } finally {

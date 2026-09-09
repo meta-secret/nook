@@ -389,8 +389,8 @@ export class AgentWorkflowDelegationAggregationScenario {
       parent: input.declaration.parent,
       now: () => '2026-08-26T00:00:00.000Z',
     };
-    const journal = new AgentAttemptJournal<string>(configuration);
-    await journal.initialize();
+    const preparedJournal = new AgentAttemptJournal<string>(configuration);
+    const journal = await preparedJournal.initialize();
     const terminal =
       AgentWorkflowDelegationAggregationScenario.terminalFor(input);
     const processing = await journal.finalize(terminal);

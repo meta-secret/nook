@@ -664,7 +664,10 @@ describe('module expert read-context MCP', () => {
         ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
           serverRequest,
         );
-      await server.dispose();
+      const disposal = server.dispose();
+      expect(server.dispose()).toBe(disposal);
+      expect(() => server.url).toThrow('disposed');
+      await disposal;
       await server.dispose();
       const request: McpRequest = { id: 50, jsonrpc: '2.0', method: 'ping' };
       const closedCall: McpCall = { request, server };

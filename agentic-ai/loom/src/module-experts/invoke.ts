@@ -2,7 +2,10 @@ import { AgentAttemptTransport } from '../agent-workflow/attempt-codec.ts';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { AgentAttemptJournal } from '../agent-workflow/agent-journal.ts';
+import {
+  AgentAttemptJournal,
+  type ActiveModuleExpertJournal,
+} from '../agent-workflow/agent-journal.ts';
 import { AgentAttemptEventKind } from '../agent-workflow/agent-events.ts';
 import {
   AgentAttemptAdapterKind,
@@ -133,8 +136,9 @@ export class ModuleExpertInvocation {
       authority: runtimeSession.journalAuthority,
       identity: runtimeSession.identity,
     };
-    const journal = AgentAttemptJournal.createModuleExpert<string>(journalArgs);
-    await journal.initialize();
+    const preparedJournal =
+      AgentAttemptJournal.createModuleExpert<string>(journalArgs);
+    const journal = await preparedJournal.initialize();
     const selectedContextObservation: RuntimeActivityObservation = {
       activity: WorkflowRuntimeActivityKind.SourceReadCompleted,
       detail: 'Module expert context selected.',
@@ -529,7 +533,7 @@ type ReadVerifiedProjectionArgs = {
 };
 
 type FinalizeFailedAttemptContext = {
-  readonly journal: AgentAttemptJournal<string>;
+  readonly journal: ActiveModuleExpertJournal<string>;
   readonly activityCount: number;
   readonly runDirectory: string;
   readonly profile: ModuleExpertProfile;

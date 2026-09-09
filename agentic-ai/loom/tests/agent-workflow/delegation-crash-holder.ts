@@ -79,4 +79,4 @@ while (
   await Bun.sleep(10);
 }
 
-await DelegationRunJournal.releaseDelegationLifecycleLock(lease);
+await lease.release();

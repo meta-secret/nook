@@ -9,9 +9,20 @@ export enum ModuleExpertIsolationReceiptKind {
   Isolated = 'module-expert-isolation-receipt',
 }
 
-export type ModuleExpertIsolationReceipt = {
-  readonly kind: ModuleExpertIsolationReceiptKind.Isolated;
-};
+export class ModuleExpertIsolationReceipt {
+  readonly kind = ModuleExpertIsolationReceiptKind.Isolated;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(key: typeof AUTHORITY_ISSUANCE): ModuleExpertIsolationReceipt {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new ModuleExpertIsolationReceipt();
+    capability.seal();
+    return capability;
+  }
+}
 
 export type IsolatedModuleExpertExecution = {
   readonly completion: AgentExecutionCompletion;
@@ -60,10 +71,8 @@ export class ModuleExpertIsolationReceipts {
     };
     const completion =
       await ModuleExpertCodexSdkAgentRuntime.executeIsolated(codexArgs);
-    const receiptValue = {
-      kind: ModuleExpertIsolationReceiptKind.Isolated,
-    } as const;
-    const receipt: ModuleExpertIsolationReceipt = Object.freeze(receiptValue);
+    const receiptValue = ModuleExpertIsolationReceipt.issue(AUTHORITY_ISSUANCE);
+    const receipt: ModuleExpertIsolationReceipt = receiptValue;
     const record: ModuleExpertIsolationReceiptRecord = {
       completionDigest:
         ModuleExpertIsolationReceipts.isolatedCompletionDigest(completion),
@@ -137,3 +146,5 @@ type ModuleExpertIsolationInvocationEvidence<
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
   readonly selectedContextPaths: readonly string[];
 };
+
+const AUTHORITY_ISSUANCE = Symbol('expert-authority-issuance');

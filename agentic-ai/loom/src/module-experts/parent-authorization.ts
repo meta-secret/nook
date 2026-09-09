@@ -36,9 +36,22 @@ export enum ModuleExpertParentAuthorizationKind {
   Verified = 'verified-module-expert-parent-authorization',
 }
 
-export type VerifiedModuleExpertParentAuthorization = {
-  readonly kind: ModuleExpertParentAuthorizationKind.Verified;
-};
+export class VerifiedModuleExpertParentAuthorization {
+  readonly kind = ModuleExpertParentAuthorizationKind.Verified;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(
+    key: typeof AUTHORITY_ISSUANCE,
+  ): VerifiedModuleExpertParentAuthorization {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new VerifiedModuleExpertParentAuthorization();
+    capability.seal();
+    return capability;
+  }
+}
 
 export type ConsumeModuleExpertParentAuthorizationArgs =
   VerifyModuleExpertParentAuthorizationArgs & {
@@ -106,11 +119,10 @@ export class ModuleExpertParentAuthorization {
     ) {
       ModuleExpertParentAuthorization.authorizationFailed();
     }
-    const authorizationValue = {
-      kind: ModuleExpertParentAuthorizationKind.Verified,
-    } as const;
+    const authorizationValue =
+      VerifiedModuleExpertParentAuthorization.issue(AUTHORITY_ISSUANCE);
     const authorization: VerifiedModuleExpertParentAuthorization =
-      Object.freeze(authorizationValue);
+      authorizationValue;
     ModuleExpertParentAuthorization.VERIFIED_PARENT_AUTHORIZATIONS.set(
       authorization,
       ModuleExpertParentAuthorization.parentAuthorizationDigest(args),
@@ -188,3 +200,5 @@ type ReadDepthThreeAuthorityArgs = {
   readonly args: VerifyModuleExpertParentAuthorizationArgs;
   readonly immediate: VerifiedParentAttempt;
 };
+
+const AUTHORITY_ISSUANCE = Symbol('expert-authority-issuance');

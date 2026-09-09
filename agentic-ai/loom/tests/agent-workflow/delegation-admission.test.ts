@@ -312,8 +312,10 @@ describe('ordinary delegation admission', () => {
       parent: expertDeclaration.parent,
       now: () => new Date().toISOString(),
     };
-    const journal = new AgentAttemptJournal<string>(journalConfiguration);
-    await journal.initialize();
+    const preparedJournal = new AgentAttemptJournal<string>(
+      journalConfiguration,
+    );
+    const journal = await preparedJournal.initialize();
     const expertTerminal: TaskTerminal<string> = {
       kind: TaskTerminalKind.Completed,
       task: expertDeclaration.identity.task,

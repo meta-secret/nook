@@ -11,9 +11,22 @@ export enum StructuralExpertIsolationReceiptKind {
   Isolated = 'structural-expert-isolation-receipt',
 }
 
-export type StructuralExpertIsolationReceipt = {
-  readonly kind: StructuralExpertIsolationReceiptKind.Isolated;
-};
+export class StructuralExpertIsolationReceipt {
+  readonly kind = StructuralExpertIsolationReceiptKind.Isolated;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(
+    key: typeof AUTHORITY_ISSUANCE,
+  ): StructuralExpertIsolationReceipt {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new StructuralExpertIsolationReceipt();
+    capability.seal();
+    return capability;
+  }
+}
 
 export type IsolatedStructuralExpertExecution = {
   readonly completion: AgentExecutionCompletion;
@@ -56,11 +69,9 @@ export class StructuralExpertIsolationReceipts {
   ): Promise<IsolatedStructuralExpertExecution> {
     const completion =
       await ReadOnlyExpertCodexRuntime.executeIsolated(request);
-    const receiptValue = {
-      kind: StructuralExpertIsolationReceiptKind.Isolated,
-    } as const;
-    const receipt: StructuralExpertIsolationReceipt =
-      Object.freeze(receiptValue);
+    const receiptValue =
+      StructuralExpertIsolationReceipt.issue(AUTHORITY_ISSUANCE);
+    const receipt: StructuralExpertIsolationReceipt = receiptValue;
     const record: StructuralExpertIsolationReceiptRecord = {
       completionDigest:
         StructuralExpertIsolationReceipts.completionDigest(completion),
@@ -148,3 +159,5 @@ export class StructuralExpertIsolationReceipts {
     return createHash('sha256').update(value).digest('hex');
   }
 }
+
+const AUTHORITY_ISSUANCE = Symbol('expert-authority-issuance');

@@ -2,7 +2,10 @@ import { AgentAttemptTransport } from '../agent-workflow/attempt-codec.ts';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { AgentAttemptJournal } from '../agent-workflow/agent-journal.ts';
+import {
+  AgentAttemptJournal,
+  type ActiveStructuralExpertJournal,
+} from '../agent-workflow/agent-journal.ts';
 import type { StructuralExpertAttemptJournalConfiguration } from '../agent-workflow/agent-journal.ts';
 import {
   AgentAttemptAdapterKind,
@@ -99,8 +102,9 @@ export class StructuralExpertInvocation {
       configuration,
       identity: runtime.identity,
     };
-    const journal = AgentAttemptJournal.createStructuralExpert(journalRequest);
-    await journal.initialize();
+    const preparedJournal =
+      AgentAttemptJournal.createStructuralExpert(journalRequest);
+    const journal = await preparedJournal.initialize();
     let activityCount = 0;
     const observe = async (
       observation: RuntimeActivityObservation,
@@ -406,7 +410,7 @@ export type InvokeStructuralExpertRequest = {
 
 type FinalizeStructuralFailureInput = {
   readonly activityCount: number;
-  readonly journal: AgentAttemptJournal<string>;
+  readonly journal: ActiveStructuralExpertJournal<string>;
   readonly request: StructuralExpertInvocationRequest;
   readonly runDirectory: string;
 };

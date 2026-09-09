@@ -92,13 +92,13 @@ describe('agent attempt journal', () => {
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
       const liveOutput: string[] = [];
-      const journal = new AgentAttemptJournal<'inspect'>({
+      const preparedJournal = new AgentAttemptJournal<'inspect'>({
         ...AgentWorkflowAgentJournalScenario.configuration(runDirectory),
         compactOutput: (line) => {
           liveOutput.push(line);
         },
       });
-      await journal.initialize();
+      const journal = await preparedJournal.initialize();
       await journal.observe({
         activity: WorkflowRuntimeActivityKind.TurnCompleted,
         detail: 'Live Cortex evidence.',
@@ -327,7 +327,7 @@ describe('agent attempt journal', () => {
         kind: AgentAttemptEventKind.AttemptStarted,
       };
       await expect(journal.append(lateEvent)).rejects.toThrow(
-        'finalized agent attempt journal',
+        'journal is completed',
       );
     } finally {
       await rm(runDirectory, removeOptions);
@@ -338,10 +338,10 @@ describe('agent attempt journal', () => {
     const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-failure-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const journal = new AgentAttemptJournal<'inspect'>(
+      const preparedJournal = new AgentAttemptJournal<'inspect'>(
         AgentWorkflowAgentJournalScenario.configuration(runDirectory),
       );
-      await journal.initialize();
+      const journal = await preparedJournal.initialize();
       const terminal: FailedTaskTerminal<'inspect'> = {
         kind: TaskTerminalKind.Failed,
         task: 'inspect',
@@ -370,11 +370,11 @@ describe('agent attempt journal', () => {
         compactOutput: async () =>
           Promise.reject(new Error('Output unavailable.')),
       };
-      const journal = new AgentAttemptJournal<'inspect'>(
+      const preparedJournal = new AgentAttemptJournal<'inspect'>(
         failingOutputConfiguration,
       );
 
-      await journal.initialize();
+      const journal = await preparedJournal.initialize();
       await journal.observe({
         activity: WorkflowRuntimeActivityKind.TurnCompleted,
         detail: 'Live output still cannot gate coordination.',
@@ -407,10 +407,10 @@ describe('agent attempt journal', () => {
         parent: configured.parent,
         now: configured.now,
       };
-      const journal = new AgentAttemptJournal<'inspect'>(
+      const preparedJournal = new AgentAttemptJournal<'inspect'>(
         missingRegistryConfiguration,
       );
-      await journal.initialize();
+      const journal = await preparedJournal.initialize();
       const referencedActivity = {
         activity: WorkflowRuntimeActivityKind.TurnCompleted,
         detail: 'Live Cortex evidence.',
@@ -437,8 +437,10 @@ describe('agent attempt journal', () => {
         ...AgentWorkflowAgentJournalScenario.configuration(runDirectory),
         adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
       };
-      const journal = new AgentAttemptJournal<'inspect'>(genericConfiguration);
-      await journal.initialize();
+      const preparedJournal = new AgentAttemptJournal<'inspect'>(
+        genericConfiguration,
+      );
+      const journal = await preparedJournal.initialize();
       const terminal: CompletedTaskTerminal<'inspect'> = {
         kind: TaskTerminalKind.Completed,
         task: 'inspect',

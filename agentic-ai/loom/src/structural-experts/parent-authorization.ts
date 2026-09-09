@@ -30,9 +30,22 @@ export enum StructuralParentAuthorizationKind {
   Verified = 'verified-structural-parent-authorization',
 }
 
-export type VerifiedStructuralParentAuthorization = {
-  readonly kind: StructuralParentAuthorizationKind.Verified;
-};
+export class VerifiedStructuralParentAuthorization {
+  readonly kind = StructuralParentAuthorizationKind.Verified;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(
+    key: typeof AUTHORITY_ISSUANCE,
+  ): VerifiedStructuralParentAuthorization {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new VerifiedStructuralParentAuthorization();
+    capability.seal();
+    return capability;
+  }
+}
 
 export type VerifiedStructuralChildContext = {
   readonly task: string;
@@ -151,11 +164,9 @@ export class StructuralExpertParentAuthorization {
           childVerificationRequest,
         );
     }
-    const value = {
-      kind: StructuralParentAuthorizationKind.Verified,
-    } as const;
-    const authorization: VerifiedStructuralParentAuthorization =
-      Object.freeze(value);
+    const value =
+      VerifiedStructuralParentAuthorization.issue(AUTHORITY_ISSUANCE);
+    const authorization: VerifiedStructuralParentAuthorization = value;
     const authorizationRecord: StructuralAuthorizationRecord = {
       digest: StructuralExpertParentAuthorization.authorizationDigest(input),
       childContexts,
@@ -298,3 +309,5 @@ type AssertVerifiedChildRequest = {
   readonly input: VerifyChildProjectionsRequest;
   readonly projection: StructuralChildProjection;
 };
+
+const AUTHORITY_ISSUANCE = Symbol('expert-authority-issuance');

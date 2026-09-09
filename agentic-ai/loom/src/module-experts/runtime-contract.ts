@@ -68,7 +68,11 @@ export class ModuleExpertIsolation {
       await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
         sharedRequest,
       );
-    return { ...isolation, selectedContextPaths };
+    return ModuleExpertRuntimeIsolation.admit({
+      key: ISOLATION_TRANSITION,
+      isolation,
+      selectedContextPaths,
+    });
   }
 
   static async createReadOnlyExpertRuntimeIsolation(
@@ -150,27 +154,30 @@ export class ModuleExpertIsolation {
         ModuleExpertIsolation.moduleExpertIsolatedThreadOptions(
           isolatedThreadOptionsRequest,
         );
-      let disposed = false;
-      return {
-        codexHome,
-        codexOptions,
-        repositorySnapshot,
-        threadOptions,
-        dispose: async () => {
-          if (disposed) return;
-          disposed = true;
-          try {
-            if (authenticationBroker) authenticationBroker.dispose();
-          } finally {
+      return ReadOnlyExpertRuntimeIsolation.admit({
+        key: ISOLATION_TRANSITION,
+        resources: {
+          codexHome,
+          codexOptions,
+          repositorySnapshot,
+          threadOptions,
+          dispose: async () => {
             try {
-              if (contextServer) await contextServer.dispose();
+              if (authenticationBroker) authenticationBroker.dispose();
             } finally {
-              const removeOptions: RmOptions = { recursive: true, force: true };
-              rmSync(codexHome, removeOptions);
+              try {
+                if (contextServer) await contextServer.dispose();
+              } finally {
+                const removeOptions: RmOptions = {
+                  recursive: true,
+                  force: true,
+                };
+                rmSync(codexHome, removeOptions);
+              }
             }
-          }
+          },
         },
-      };
+      });
     } catch (error) {
       try {
         if (authenticationBroker) authenticationBroker.dispose();
@@ -320,26 +327,26 @@ export class ModuleExpertIsolation {
       },
     };
     const listener = Bun.listen(listenerOptions);
-    let disposed = false;
-    return {
-      commandArgs: [
-        '-e',
-        MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
-        '--',
-        socketPath,
-        state.nonce,
-      ],
-      dispose: () => {
-        if (disposed) return;
-        disposed = true;
-        if (state.credential) state.credential.fill(0);
-        state.credential = false;
-        state.requests.clear();
-        listener.stop(true);
-        const removeOptions: RmOptions = { force: true };
-        rmSync(socketPath, removeOptions);
+    return ModuleExpertAuthenticationBroker.admit({
+      key: ISOLATION_TRANSITION,
+      resources: {
+        commandArgs: [
+          '-e',
+          MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
+          '--',
+          socketPath,
+          state.nonce,
+        ],
+        dispose: () => {
+          if (state.credential) state.credential.fill(0);
+          state.credential = false;
+          state.requests.clear();
+          listener.stop(true);
+          const removeOptions: RmOptions = { force: true };
+          rmSync(socketPath, removeOptions);
+        },
       },
-    };
+    });
   }
 
   private static redeemAuthenticationCredential(
@@ -719,7 +726,7 @@ export type ReadOnlyExpertRuntimeIsolationRequest = {
   readonly workingDirectory: string;
 };
 
-export type ReadOnlyExpertRuntimeIsolation = {
+type ReadOnlyIsolationResources = {
   readonly codexHome: string;
   readonly codexOptions: ModuleExpertCodexOptions;
   readonly repositorySnapshot: string;
@@ -727,16 +734,12 @@ export type ReadOnlyExpertRuntimeIsolation = {
   readonly dispose: () => Promise<void>;
 };
 
-export type ModuleExpertRuntimeIsolation = ReadOnlyExpertRuntimeIsolation & {
-  readonly selectedContextPaths: readonly string[];
-};
-
 export type ModuleExpertRuntimeIsolationUse<TResult> = {
   readonly isolationRequest: ModuleExpertRuntimeIsolationRequest;
   readonly run: (isolation: ModuleExpertRuntimeIsolation) => Promise<TResult>;
 };
 
-type ModuleExpertAuthenticationBroker = {
+type AuthenticationBrokerResources = {
   readonly commandArgs: readonly string[];
   readonly dispose: () => void;
 };
@@ -806,3 +809,121 @@ type ModuleExpertSnapshotPathsRequest = {
   readonly profile: ModuleExpertProfile;
   readonly selectedContextPaths: readonly string[];
 };
+
+const ISOLATION_TRANSITION = Symbol('expert-isolation-transition');
+enum IsolationLifetime {
+  Live = 'live',
+  Releasing = 'releasing',
+  Released = 'released',
+}
+type IsolationRelease =
+  | { readonly phase: IsolationLifetime.Live }
+  | {
+      readonly phase: IsolationLifetime.Releasing | IsolationLifetime.Released;
+      readonly completion: Promise<void>;
+    };
+type AdmitReadOnlyIsolation = {
+  readonly key: typeof ISOLATION_TRANSITION;
+  readonly resources: ReadOnlyIsolationResources;
+};
+/** Only the successful setup transition can issue live SDK configuration. */
+export class ReadOnlyExpertRuntimeIsolation {
+  private lifetime: IsolationRelease = { phase: IsolationLifetime.Live };
+  private constructor(private readonly resources: ReadOnlyIsolationResources) {}
+  static admit(
+    request: AdmitReadOnlyIsolation,
+  ): ReadOnlyExpertRuntimeIsolation {
+    if (request.key !== ISOLATION_TRANSITION)
+      throw new Error('Invalid isolation transition.');
+    return new ReadOnlyExpertRuntimeIsolation(request.resources);
+  }
+  private assertLive(): void {
+    if (this.lifetime.phase !== IsolationLifetime.Live)
+      throw new Error('Expert isolation has been disposed.');
+  }
+  get codexHome(): string {
+    this.assertLive();
+    return this.resources.codexHome;
+  }
+  get codexOptions(): ModuleExpertCodexOptions {
+    this.assertLive();
+    return this.resources.codexOptions;
+  }
+  get repositorySnapshot(): string {
+    this.assertLive();
+    return this.resources.repositorySnapshot;
+  }
+  get threadOptions(): ThreadOptions {
+    this.assertLive();
+    return this.resources.threadOptions;
+  }
+  dispose(): Promise<void> {
+    if (this.lifetime.phase !== IsolationLifetime.Live)
+      return this.lifetime.completion;
+    const completion = Promise.resolve()
+      .then(() => this.resources.dispose())
+      .finally(() => {
+        this.lifetime = { phase: IsolationLifetime.Released, completion };
+      });
+    this.lifetime = { phase: IsolationLifetime.Releasing, completion };
+    return completion;
+  }
+}
+type AdmitModuleIsolation = {
+  readonly key: typeof ISOLATION_TRANSITION;
+  readonly isolation: ReadOnlyExpertRuntimeIsolation;
+  readonly selectedContextPaths: readonly string[];
+};
+export class ModuleExpertRuntimeIsolation {
+  private constructor(private readonly admitted: AdmitModuleIsolation) {}
+  static admit(request: AdmitModuleIsolation): ModuleExpertRuntimeIsolation {
+    if (request.key !== ISOLATION_TRANSITION)
+      throw new Error('Invalid module isolation transition.');
+    return new ModuleExpertRuntimeIsolation(request);
+  }
+  get selectedContextPaths(): readonly string[] {
+    return this.admitted.selectedContextPaths;
+  }
+  get codexHome(): string {
+    return this.admitted.isolation.codexHome;
+  }
+  get codexOptions(): ModuleExpertCodexOptions {
+    return this.admitted.isolation.codexOptions;
+  }
+  get repositorySnapshot(): string {
+    return this.admitted.isolation.repositorySnapshot;
+  }
+  get threadOptions(): ThreadOptions {
+    return this.admitted.isolation.threadOptions;
+  }
+  dispose(): Promise<void> {
+    return this.admitted.isolation.dispose();
+  }
+}
+type AdmitAuthenticationBroker = {
+  readonly key: typeof ISOLATION_TRANSITION;
+  readonly resources: AuthenticationBrokerResources;
+};
+class ModuleExpertAuthenticationBroker {
+  private phase = IsolationLifetime.Live;
+  private constructor(
+    private readonly resources: AuthenticationBrokerResources,
+  ) {}
+  static admit(
+    request: AdmitAuthenticationBroker,
+  ): ModuleExpertAuthenticationBroker {
+    if (request.key !== ISOLATION_TRANSITION)
+      throw new Error('Invalid authentication broker transition.');
+    return new ModuleExpertAuthenticationBroker(request.resources);
+  }
+  get commandArgs(): readonly string[] {
+    if (this.phase !== IsolationLifetime.Live)
+      throw new Error('Authentication broker has been disposed.');
+    return this.resources.commandArgs;
+  }
+  dispose(): void {
+    if (this.phase !== IsolationLifetime.Live) return;
+    this.phase = IsolationLifetime.Released;
+    this.resources.dispose();
+  }
+}

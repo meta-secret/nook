@@ -2,6 +2,7 @@
 import {
   SKILL_TOOLS_LIST_INVOKE,
   ExecutableSkillActions,
+  type SkillActionResult,
 } from './skill-action-registry.ts';
 
 import {
@@ -82,7 +83,7 @@ export class ExecutableSkillCli {
         ok: true,
         family: decoded.request.family,
         operation: decoded.request.operation,
-        result: ExecutableSkillActions.executeSkillAction(decoded.request),
+        result: decoded.request.execute(),
       };
       const finalRequest: FinalSkillCliResponseRequest = {
         exitCode: 0,
@@ -208,7 +209,7 @@ type SkillSuccessResponse = {
   readonly ok: true;
   readonly family: string;
   readonly operation: string;
-  readonly result: ReturnType<typeof ExecutableSkillActions.executeSkillAction>;
+  readonly result: SkillActionResult;
 };
 
 export type FinalSkillCliResponseRequest = {

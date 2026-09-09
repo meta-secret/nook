@@ -201,6 +201,7 @@ export class DelegationRunFinalization {
     const lease =
       await DelegationRunJournal.acquireDelegationLifecycleLock(lockInput);
     try {
+      lease.assertHeld(loaded.runDirectory);
       const reloaded =
         await DelegationRunJournal.loadDelegationRunState(loadInput);
       if (reloaded.plan.sourceCommit !== input.request.sourceCommit) {
@@ -212,7 +213,7 @@ export class DelegationRunFinalization {
       };
       return await DelegationRunFinalization.finalizeWhileLocked(lockedInput);
     } finally {
-      await DelegationRunJournal.releaseDelegationLifecycleLock(lease);
+      await lease.release();
     }
   }
 

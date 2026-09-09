@@ -64,21 +64,65 @@ export type StructuralRuntimeIdentity = {
   readonly instruction: string;
 };
 
-export type StructuralRuntimeSession = {
-  readonly kind: StructuralRuntimeCapabilityKind.Session;
-};
+export class StructuralRuntimeSession {
+  readonly kind = StructuralRuntimeCapabilityKind.Session;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(key: typeof AUTHORITY_ISSUANCE): StructuralRuntimeSession {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new StructuralRuntimeSession();
+    capability.seal();
+    return capability;
+  }
+}
 
-export type StructuralJournalAuthority = {
-  readonly kind: StructuralRuntimeCapabilityKind.JournalAuthority;
-};
+export class StructuralJournalAuthority {
+  readonly kind = StructuralRuntimeCapabilityKind.JournalAuthority;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(key: typeof AUTHORITY_ISSUANCE): StructuralJournalAuthority {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new StructuralJournalAuthority();
+    capability.seal();
+    return capability;
+  }
+}
 
-export type StructuralJournalBinding = {
-  readonly kind: StructuralRuntimeCapabilityKind.JournalBinding;
-};
+export class StructuralJournalBinding {
+  readonly kind = StructuralRuntimeCapabilityKind.JournalBinding;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(key: typeof AUTHORITY_ISSUANCE): StructuralJournalBinding {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new StructuralJournalBinding();
+    capability.seal();
+    return capability;
+  }
+}
 
-export type StructuralCompletionAuthority = {
-  readonly kind: StructuralRuntimeCapabilityKind.CompletionAuthority;
-};
+export class StructuralCompletionAuthority {
+  readonly kind = StructuralRuntimeCapabilityKind.CompletionAuthority;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(key: typeof AUTHORITY_ISSUANCE): StructuralCompletionAuthority {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new StructuralCompletionAuthority();
+    capability.seal();
+    return capability;
+  }
+}
 
 export type TrustedStructuralExecution = {
   readonly completion: AgentExecutionCompletion;
@@ -242,14 +286,11 @@ export class StructuralExpertRuntimeAuthority {
       StructuralExpertRuntimeAuthority.structuralIsolationRequest(
         isolationInput,
       );
-    const sessionValue: StructuralRuntimeSession = {
-      kind: StructuralRuntimeCapabilityKind.Session,
-    };
-    const session = Object.freeze(sessionValue);
-    const journalAuthorityValue: StructuralJournalAuthority = {
-      kind: StructuralRuntimeCapabilityKind.JournalAuthority,
-    };
-    const journalAuthority = Object.freeze(journalAuthorityValue);
+    const sessionValue = StructuralRuntimeSession.issue(AUTHORITY_ISSUANCE);
+    const session = sessionValue;
+    const journalAuthorityValue =
+      StructuralJournalAuthority.issue(AUTHORITY_ISSUANCE);
+    const journalAuthority = journalAuthorityValue;
     const identityDigest = StructuralExpertRuntimeAuthority.digest(identity);
     const sessionRecord: StructuralSessionRecord = {
       identity,
@@ -298,10 +339,9 @@ export class StructuralExpertRuntimeAuthority {
       consumeRequest,
     );
     const completion = isolatedExecution.completion;
-    const authorityValue: StructuralCompletionAuthority = {
-      kind: StructuralRuntimeCapabilityKind.CompletionAuthority,
-    };
-    const authority = Object.freeze(authorityValue);
+    const authorityValue =
+      StructuralCompletionAuthority.issue(AUTHORITY_ISSUANCE);
+    const authority = authorityValue;
     const completionRecord: StructuralCompletionRecord = {
       session: input.session,
       identityDigest: record.identityDigest,
@@ -334,10 +374,8 @@ export class StructuralExpertRuntimeAuthority {
     StructuralExpertRuntimeAuthority.JOURNAL_AUTHORITIES.delete(
       input.authority,
     );
-    const bindingValue: StructuralJournalBinding = {
-      kind: StructuralRuntimeCapabilityKind.JournalBinding,
-    };
-    const binding = Object.freeze(bindingValue);
+    const bindingValue = StructuralJournalBinding.issue(AUTHORITY_ISSUANCE);
+    const binding = bindingValue;
     StructuralExpertRuntimeAuthority.JOURNAL_BINDINGS.set(binding, record);
     return binding;
   }
@@ -451,3 +489,5 @@ type StructuralInstructionInput = {
   readonly instruction: string;
   readonly profile: StructuralExpertProfile;
 };
+
+const AUTHORITY_ISSUANCE = Symbol('expert-authority-issuance');

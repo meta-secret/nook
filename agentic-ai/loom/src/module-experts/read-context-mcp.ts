@@ -53,15 +53,15 @@ export class ModuleExpertRepositoryContext {
       },
     };
     const server = Bun.serve(serverOptions);
-    let disposed = false;
-    return {
-      url: `http://127.0.0.1:${server.port}/${endpoint}`,
-      dispose: async () => {
-        if (disposed) return;
-        disposed = true;
-        await server.stop(true);
+    return ModuleExpertReadContextServer.admit({
+      key: CONTEXT_SERVER_TRANSITION,
+      resources: {
+        url: `http://127.0.0.1:${server.port}/${endpoint}`,
+        dispose: async () => {
+          await server.stop(true);
+        },
       },
-    };
+    });
   }
 
   private static async handleHttpRequest(
@@ -841,7 +841,7 @@ export type ModuleExpertReadContextServerRequest = {
   readonly repositoryRoot: string;
 };
 
-export type ModuleExpertReadContextServer = {
+type ReadContextServerResources = {
   readonly dispose: () => Promise<void>;
   readonly url: string;
 };
@@ -931,3 +931,47 @@ type IntegerValueRequest = {
   readonly minimum: number;
   readonly maximum: number;
 };
+
+const CONTEXT_SERVER_TRANSITION = Symbol('read-context-server-transition');
+enum ContextServerPhase {
+  Listening = 'listening',
+  Stopping = 'stopping',
+  Stopped = 'stopped',
+}
+type ContextServerLifetime =
+  | { readonly phase: ContextServerPhase.Listening }
+  | {
+      readonly phase: ContextServerPhase.Stopping | ContextServerPhase.Stopped;
+      readonly completion: Promise<void>;
+    };
+type AdmitReadContextServer = {
+  readonly key: typeof CONTEXT_SERVER_TRANSITION;
+  readonly resources: ReadContextServerResources;
+};
+export class ModuleExpertReadContextServer {
+  private lifetime: ContextServerLifetime = {
+    phase: ContextServerPhase.Listening,
+  };
+  private constructor(private readonly resources: ReadContextServerResources) {}
+  static admit(request: AdmitReadContextServer): ModuleExpertReadContextServer {
+    if (request.key !== CONTEXT_SERVER_TRANSITION)
+      throw new Error('Invalid context server transition.');
+    return new ModuleExpertReadContextServer(request.resources);
+  }
+  get url(): string {
+    if (this.lifetime.phase !== ContextServerPhase.Listening)
+      throw new Error('Read context server has been disposed.');
+    return this.resources.url;
+  }
+  dispose(): Promise<void> {
+    if (this.lifetime.phase !== ContextServerPhase.Listening)
+      return this.lifetime.completion;
+    const completion = Promise.resolve()
+      .then(() => this.resources.dispose())
+      .finally(() => {
+        this.lifetime = { phase: ContextServerPhase.Stopped, completion };
+      });
+    this.lifetime = { phase: ContextServerPhase.Stopping, completion };
+    return completion;
+  }
+}

@@ -702,7 +702,9 @@ describe('module expert invocation runtime', () => {
       parent: request.parent,
       now: () => '2026-08-22T00:00:00.000Z',
     };
-    const journal = new AgentAttemptJournal<string>(journalConfiguration);
+    const preparedJournal = new AgentAttemptJournal<string>(
+      journalConfiguration,
+    );
     const terminal: CompletedTaskTerminal<string> = {
       kind: TaskTerminalKind.Completed,
       task: request.task,
@@ -720,7 +722,7 @@ describe('module expert invocation runtime', () => {
     };
 
     try {
-      await journal.initialize();
+      const journal = await preparedJournal.initialize();
       const processing = await journal.finalize(terminal);
       const [defaulted1 = []] = [request.selectedContextPaths];
       const forgedResult: ModuleExpertInvocationResult = {

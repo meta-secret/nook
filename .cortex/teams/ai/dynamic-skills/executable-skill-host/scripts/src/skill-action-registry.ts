@@ -78,8 +78,16 @@ export class ExecutableSkillActions {
 
   static decodeSkillActionRequest(
     value: UntrustedSkillYamlNode,
-  ): SkillActionDecodeOutcome {
-    return new ExecutableSkillActions(value).execute();
+  ): SkillActionAdmissionOutcome {
+    const decoded = new ExecutableSkillActions(value).execute();
+    if (!decoded.ok) return decoded;
+    return {
+      ok: true,
+      request: AdmittedSkillAction.admit({
+        key: SKILL_ADMISSION,
+        request: decoded.request,
+      }),
+    };
   }
 
   private execute(): SkillActionDecodeOutcome {
@@ -114,21 +122,6 @@ export class ExecutableSkillActions {
       message: 'Unknown skill request family.',
     };
     return ExecutableSkillActions.invalidRequest(request);
-  }
-
-  static executeSkillAction(request: SkillActionRequest): SkillActionResult {
-    if (request.family === SkillRequestFamily.ToolsList) {
-      return ExecutableSkillActions.listDiscoverableSkillActions();
-    }
-    if (request.family === SkillRequestFamily.CortexArticleStructure) {
-      return executeCortexArticleAction(request.request);
-    }
-    if (request.family === SkillRequestFamily.CortexDocumentMap) {
-      return executeCortexDocumentMapAction(request.request);
-    }
-    return request.family === SkillRequestFamily.CortexConsistency
-      ? executeCortexConsistencyAction(request.request)
-      : executeDelegationVisualizationAction(request.request);
   }
 
   static defaultSkillBlueprint(): string {
@@ -650,3 +643,42 @@ export { CortexContractFindingCode } from '../../../cortex-consistency/scripts/s
 
 export const SKILL_PROVIDER_RESULT_BYTE_LIMIT =
   CORTEX_ARTICLE_RESULT_BYTE_LIMIT;
+
+const SKILL_ADMISSION = Symbol('validated-executable-skill-action');
+type AdmittedSkillActionRequest = {
+  readonly key: typeof SKILL_ADMISSION;
+  readonly request: SkillActionRequest;
+};
+export type SkillActionAdmissionOutcome =
+  | { readonly ok: true; readonly request: AdmittedSkillAction }
+  | { readonly ok: false; readonly path: string; readonly message: string };
+/** Validation issues the only executable capability; wire requests remain DTOs. */
+export class AdmittedSkillAction {
+  private constructor(private readonly request: SkillActionRequest) {}
+  static admit(admission: AdmittedSkillActionRequest): AdmittedSkillAction {
+    if (admission.key !== SKILL_ADMISSION)
+      throw new Error('Invalid executable skill admission.');
+    return new AdmittedSkillAction(admission.request);
+  }
+  get family(): SkillActionRequest['family'] {
+    return this.request.family;
+  }
+  get operation(): SkillActionRequest['operation'] {
+    return this.request.operation;
+  }
+  execute(): SkillActionResult {
+    const request = this.request;
+    if (request.family === SkillRequestFamily.ToolsList) {
+      return ExecutableSkillActions.listDiscoverableSkillActions();
+    }
+    if (request.family === SkillRequestFamily.CortexArticleStructure) {
+      return executeCortexArticleAction(request.request);
+    }
+    if (request.family === SkillRequestFamily.CortexDocumentMap) {
+      return executeCortexDocumentMapAction(request.request);
+    }
+    return request.family === SkillRequestFamily.CortexConsistency
+      ? executeCortexConsistencyAction(request.request)
+      : executeDelegationVisualizationAction(request.request);
+  }
+}
