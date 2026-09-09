@@ -1,3 +1,4 @@
+import type { ManifestFailure } from '../lib/dependency-popularity/scan.ts';
 import { err, ok, type Result } from 'neverthrow';
 import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
 import type { DependencyPopularityRequest } from '../codec/args/dependency-popularity.ts';
@@ -23,7 +24,7 @@ import type { EvaluatePopularityArgs } from '../lib/dependency-popularity/evalua
 export class DependencyPopularityCommand {
   constructor(private readonly request: DependencyPopularityRequest) {}
   async execute(): Promise<
-    Result<DependencyPopularityReport, RegistryFailure>
+    Result<DependencyPopularityReport, RegistryFailure | ManifestFailure>
   > {
     const request = this.request;
     const thresholds: PopularityThresholds = {
@@ -35,11 +36,12 @@ export class DependencyPopularityCommand {
     const npmPackages: string[] = [];
     const rustCrates: string[] = [];
     if (request.includeRepositoryManifests) {
-      const scanned = RepositoryDependencyInventory.scanRepositoryManifests(
+      const scanned = new RepositoryDependencyInventory(
         RepositoryRoot.find(),
-      );
-      npmPackages.push(...scanned.npmPackages);
-      rustCrates.push(...scanned.rustCrates);
+      ).scanRepositoryManifests();
+      if (scanned.isErr()) return err(scanned.error);
+      npmPackages.push(...scanned.value.npmPackages);
+      rustCrates.push(...scanned.value.rustCrates);
     }
 
     const findings: PopularityFinding[] = [];

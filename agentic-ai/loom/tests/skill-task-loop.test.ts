@@ -1,3 +1,5 @@
+import { ok } from 'neverthrow';
+import assert from 'node:assert/strict';
 import {
   mkdir,
   mkdtemp,
@@ -201,9 +203,9 @@ test('skills tasks delegate discovery and execution to the canonical gate', asyn
   expect(taskfile).toContain('NOOK_SKILL_REQUEST_YAML:');
   expect(taskfile).toContain('--tools-list');
   const consumers: string[] = [];
-  for (const file of ExecutableSkillRepository.readTrackedFiles(
-    REPOSITORY_ROOT,
-  )) {
+  const tracked = ExecutableSkillRepository.readTrackedFiles(REPOSITORY_ROOT);
+  assert(tracked.isOk());
+  for (const file of tracked.value) {
     if (!SkillProviderConfigRuntimeScenario.isRunnableConfiguration(file.path))
       continue;
     const source = await readFile(join(REPOSITORY_ROOT, file.path), 'utf8');
@@ -221,10 +223,10 @@ test('verify runs every discovered package in deterministic order', async () => 
       repoRoot: fixture.repoRoot,
       runner: (command: ExecutableSkillCommandRequest) => {
         requests.push(command);
-        return 0;
+        return ok(0);
       },
     } as const;
-    ExecutableSkillPackageGate.run(request);
+    assert(new ExecutableSkillPackageGate(request).execute().isOk());
     expect(requests.map((request) => request.cwd)).toEqual(
       fixture.packageRoots.map((root) => join(fixture.repoRoot, root)),
     );
@@ -246,10 +248,10 @@ test('install keeps the frozen lockfile contract', async () => {
       repoRoot: fixture.repoRoot,
       runner: (command: ExecutableSkillCommandRequest) => {
         requests.push(command);
-        return 0;
+        return ok(0);
       },
     } as const;
-    ExecutableSkillPackageGate.run(request);
+    assert(new ExecutableSkillPackageGate(request).execute().isOk());
     expect(requests.map((command) => command.arguments)).toEqual([
       ['install', '--frozen-lockfile'],
     ]);
@@ -270,10 +272,12 @@ test('a failing discovered package stops the gate', async () => {
       repoRoot: fixture.repoRoot,
       runner: (command: ExecutableSkillCommandRequest) => {
         requests.push(command);
-        return 23;
+        return ok(23);
       },
     } as const;
-    expect(() => ExecutableSkillPackageGate.run(request)).toThrow('status 23');
+    const execution = new ExecutableSkillPackageGate(request).execute();
+    assert(execution.isErr());
+    expect(execution.error.message).toContain('status 23');
     expect(requests).toHaveLength(1);
   } finally {
     await rm(fixture.repoRoot, REMOVE_OPTIONS);
@@ -291,10 +295,12 @@ test('structural findings fail before any package command runs', async () => {
       repoRoot: fixture.repoRoot,
       runner: (command: ExecutableSkillCommandRequest) => {
         requests.push(command);
-        return 0;
+        return ok(0);
       },
     } as const;
-    expect(() => ExecutableSkillPackageGate.run(request)).toThrow('findings');
+    const execution = new ExecutableSkillPackageGate(request).execute();
+    assert(execution.isErr());
+    expect(execution.error.message).toContain('findings');
     expect(requests).toEqual([]);
   } finally {
     await rm(fixture.repoRoot, REMOVE_OPTIONS);
@@ -317,12 +323,12 @@ test('a symlinked package path fails before execution', async () => {
       repoRoot: fixture.repoRoot,
       runner: (command: ExecutableSkillCommandRequest) => {
         requests.push(command);
-        return 0;
+        return ok(0);
       },
     } as const;
-    expect(() => ExecutableSkillPackageGate.run(request)).toThrow(
-      'real directories',
-    );
+    const execution = new ExecutableSkillPackageGate(request).execute();
+    assert(execution.isErr());
+    expect(execution.error.message).toContain('real directories');
     expect(requests).toEqual([]);
   } finally {
     await rm(fixture.repoRoot, REMOVE_OPTIONS);

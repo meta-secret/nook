@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,8 +34,11 @@ describe('scanRepositoryNpmPackages', () => {
   test('reads Loom and validated executable-application dependencies', () => {
     const repositoryRoot = path.join(import.meta.dir, '../../..');
     const parse = spyOn(JSON, 'parse');
-    const names =
-      RepositoryDependencyInventory.scanRepositoryNpmPackages(repositoryRoot);
+    const inventory = new RepositoryDependencyInventory(
+      repositoryRoot,
+    ).scanRepositoryNpmPackages();
+    assert(inventory.isOk());
+    const names = inventory.value;
     expect(names).toContain('diff');
     expect(names).toContain('typescript');
     expect(names.some((name) => name.startsWith('@types/'))).toBe(false);
@@ -59,12 +63,11 @@ describe('scanRepositoryNpmPackages', () => {
     const addOptions = { cmd: ['git', 'add', '--', '.cortex'], cwd: root };
     Bun.spawnSync(initOptions);
     Bun.spawnSync(addOptions);
-    let detail = '';
-    try {
-      RepositoryDependencyInventory.scanRepositoryNpmPackages(root);
-    } catch (error) {
-      detail = error instanceof Error ? error.message : '';
-    }
+    const inventory = new RepositoryDependencyInventory(
+      root,
+    ).scanRepositoryNpmPackages();
+    assert(inventory.isErr());
+    const detail = inventory.error.message;
     expect(detail).toContain('Executable-skill package audit failed');
     expect(Buffer.byteLength(detail)).toBeLessThanOrEqual(35_000);
     expect(detail).not.toContain('/dev/null');

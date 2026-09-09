@@ -1,3 +1,4 @@
+import type { ManifestFailure } from '../lib/dependency-popularity/scan.ts';
 import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
 import type { PrePushFailure } from '../commands/pre-push.ts';
 import {
@@ -252,6 +253,7 @@ export class LoomRequestCatalog {
       | PrLandFailure
       | PrePushFailure
       | RegistryFailure
+      | ManifestFailure
     >
   > {
     switch (request.family) {

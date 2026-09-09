@@ -1,7 +1,9 @@
+import { err, ok, type Result } from 'neverthrow';
+import type { ExecutableRepositoryFailure } from '../../executable-skills/repository.ts';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { ExecutableSkillRepository } from '../../executable-skills/repository.ts';
-import { LoomFailureCode, LoomFailure } from '../../loom-failure.ts';
+import { LoomFailureCode } from '../../loom-failure.ts';
 import {
   UntrustedYamlPropertyPresence,
   type UntrustedYamlNode,
@@ -17,49 +19,50 @@ export type ManifestDependencies = {
 
 /** Owns the repository dependency inventory registry and its capability transitions. */
 export class RepositoryDependencyInventory {
-  private constructor() {}
+  constructor(private readonly repoRoot: string) {}
   private static readonly REPOSITORY_NPM_MANIFESTS = [
     'agentic-ai/loom/package.json',
   ] as const;
 
-  static scanRepositoryManifests(repoRoot: string): ManifestDependencies {
-    return {
-      npmPackages:
-        RepositoryDependencyInventory.scanRepositoryNpmPackages(repoRoot),
-      rustCrates: RepositoryDependencyInventory.readExternalWorkspaceCrates(
-        path.join(repoRoot, 'nook-app/nook-platform'),
-      ),
-    };
+  scanRepositoryManifests(): Result<ManifestDependencies, ManifestFailure> {
+    const npmPackages = this.scanRepositoryNpmPackages();
+    if (npmPackages.isErr()) return err(npmPackages.error);
+    const rustCrates = this.readExternalWorkspaceCrates(
+      path.join(this.repoRoot, 'nook-app/nook-platform'),
+    );
+    if (rustCrates.isErr()) return err(rustCrates.error);
+    return ok({ npmPackages: npmPackages.value, rustCrates: rustCrates.value });
   }
 
-  static scanRepositoryNpmPackages(repoRoot: string): readonly string[] {
+  scanRepositoryNpmPackages(): Result<readonly string[], ManifestFailure> {
+    const repoRoot = this.repoRoot;
     const names = new Set<string>();
     const inspection = ExecutableSkillRepository.inspectDependencies(repoRoot);
-    if (inspection.findings.length > 0) {
+    if (inspection.isErr()) return err(inspection.error);
+    if (inspection.value.findings.length > 0) {
       const failureArgs: LoomFailureDetailArgs = {
         code: LoomFailureCode.ValidationFailed,
-        text: `Executable-skill package audit failed: ${JSON.stringify(inspection.findings)}`,
+        text: `Executable-skill package audit failed: ${JSON.stringify(inspection.value.findings)}`,
       };
-      LoomFailure.detail(failureArgs);
+      return err({ code: failureArgs.code, message: failureArgs.text });
     }
-    for (const name of inspection.npmPackages) names.add(name);
+    for (const name of inspection.value.npmPackages) names.add(name);
     for (const manifestPath of RepositoryDependencyInventory.REPOSITORY_NPM_MANIFESTS) {
-      for (const name of RepositoryDependencyInventory.readNpmPackages(
-        path.join(repoRoot, manifestPath),
-      )) {
-        names.add(name);
-      }
+      const packages = this.readNpmPackages(path.join(repoRoot, manifestPath));
+      if (packages.isErr()) return err(packages.error);
+      for (const name of packages.value) names.add(name);
     }
-    return [...names].sort();
+    return ok([...names].sort());
   }
 
-  private static readNpmPackages(packageJsonPath: string): readonly string[] {
-    const text = readFileSync(packageJsonPath, 'utf8');
-    const json = UntrustedYamlBoundary.fromHost(
-      JSON.parse(text) as UntrustedYamlNode,
-    );
+  private readNpmPackages(
+    packageJsonPath: string,
+  ): Result<readonly string[], ManifestFailure> {
+    const document = new ManifestDocument(packageJsonPath).read();
+    if (document.isErr()) return err(document.error);
+    const json = document.value;
     if (!UntrustedYamlBoundary.isRecord(json)) {
-      return [];
+      return ok([]);
     }
     const names = new Set<string>();
     for (const section of ['dependencies', 'devDependencies'] as const) {
@@ -81,19 +84,22 @@ export class RepositoryDependencyInventory {
         names.add(name);
       }
     }
-    return [...names].sort();
+    return ok([...names].sort());
   }
 
-  private static readExternalWorkspaceCrates(
+  private readExternalWorkspaceCrates(
     platformRoot: string,
-  ): readonly string[] {
+  ): Result<readonly string[], ManifestFailure> {
     const cargo = Bun.which('cargo');
     if (typeof cargo !== 'string' || cargo.length === 0) {
       const loomFailureDetailArgs5: LoomFailureDetailArgs = {
         code: LoomFailureCode.CommandFailedToStart,
         text: 'cargo is required to scan Rust workspace dependencies',
       };
-      LoomFailure.detail(loomFailureDetailArgs5);
+      return err({
+        code: loomFailureDetailArgs5.code,
+        message: loomFailureDetailArgs5.text,
+      });
     }
     const resultArgs = {
       cmd: [cargo, 'metadata', '--format-version', '1'],
@@ -101,24 +107,40 @@ export class RepositoryDependencyInventory {
       stdout: 'pipe' as const,
       stderr: 'pipe' as const,
     };
-    const result = Bun.spawnSync(resultArgs);
+    let result: ReturnType<typeof Bun.spawnSync>;
+    try {
+      result = Bun.spawnSync(resultArgs);
+    } catch {
+      return err({
+        code: LoomFailureCode.CommandFailedToStart,
+        message: 'cargo metadata failed to start',
+      });
+    }
     if (result.exitCode !== 0) {
       const stderr = new TextDecoder().decode(result.stderr).trim();
       const loomFailureDetailArgs4: LoomFailureDetailArgs = {
         code: LoomFailureCode.CommandFailed,
         text: `cargo metadata failed while scanning crates: ${stderr}`,
       };
-      LoomFailure.detail(loomFailureDetailArgs4);
+      return err({
+        code: loomFailureDetailArgs4.code,
+        message: loomFailureDetailArgs4.text,
+      });
     }
-    const metadata = UntrustedYamlBoundary.fromHost(
-      JSON.parse(new TextDecoder().decode(result.stdout)) as UntrustedYamlNode,
-    );
+    const decoded = new ManifestJson(
+      new TextDecoder().decode(result.stdout),
+    ).decode();
+    if (decoded.isErr()) return err(decoded.error);
+    const metadata = decoded.value;
     if (!UntrustedYamlBoundary.isRecord(metadata)) {
       const loomFailureDetailArgs3: LoomFailureDetailArgs = {
         code: LoomFailureCode.ValidationFailed,
         text: 'cargo metadata returned an unexpected packages payload',
       };
-      LoomFailure.detail(loomFailureDetailArgs3);
+      return err({
+        code: loomFailureDetailArgs3.code,
+        message: loomFailureDetailArgs3.text,
+      });
     }
     const packagesPropertyArgs: UntrustedYamlPropertyArgs = {
       record: metadata,
@@ -134,7 +156,10 @@ export class RepositoryDependencyInventory {
         code: LoomFailureCode.ValidationFailed,
         text: 'cargo metadata returned an unexpected packages payload',
       };
-      LoomFailure.detail(loomFailureDetailArgs2);
+      return err({
+        code: loomFailureDetailArgs2.code,
+        message: loomFailureDetailArgs2.text,
+      });
     }
     const workspaceMembersPropertyArgs: UntrustedYamlPropertyArgs = {
       record: metadata,
@@ -152,7 +177,10 @@ export class RepositoryDependencyInventory {
         code: LoomFailureCode.ValidationFailed,
         text: 'cargo metadata returned an unexpected workspace_members payload',
       };
-      LoomFailure.detail(loomFailureDetailArgs);
+      return err({
+        code: loomFailureDetailArgs.code,
+        message: loomFailureDetailArgs.text,
+      });
     }
     const workspaceMembers = new Set(
       workspaceMembersProperty.value.filter(
@@ -221,6 +249,45 @@ export class RepositoryDependencyInventory {
         names.add(nameProperty.value);
       }
     }
-    return [...names].sort();
+    return ok([...names].sort());
+  }
+}
+
+export type ManifestFailure =
+  | ExecutableRepositoryFailure
+  | {
+      readonly code: LoomFailureCode;
+      readonly message: string;
+    };
+class ManifestDocument {
+  constructor(private readonly filePath: string) {}
+  read(): Result<UntrustedYamlNode, ManifestFailure> {
+    let text: string;
+    try {
+      text = readFileSync(this.filePath, 'utf8');
+    } catch {
+      return err({
+        code: LoomFailureCode.FileReadFailed,
+        message: `Cannot read dependency manifest: ${this.filePath}`,
+      });
+    }
+    return new ManifestJson(text).decode();
+  }
+}
+class ManifestJson {
+  constructor(private readonly text: string) {}
+  decode(): Result<UntrustedYamlNode, ManifestFailure> {
+    try {
+      return ok(
+        UntrustedYamlBoundary.fromHost(
+          JSON.parse(this.text) as UntrustedYamlNode,
+        ),
+      );
+    } catch {
+      return err({
+        code: LoomFailureCode.ValidationFailed,
+        message: 'Dependency manifest JSON is invalid',
+      });
+    }
   }
 }

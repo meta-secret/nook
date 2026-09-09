@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {
   SkillProviderConfigBoundaryScenario,
   CONFIGURATION_SCRIPT_EXTENSION,
@@ -33,7 +34,8 @@ const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 
 test('only the Loom semantic adapter reaches the provider', async () => {
   const tracked = ExecutableSkillRepository.readTrackedFiles(REPOSITORY_ROOT);
-  const allPaths = tracked.map((file) => file.path);
+  assert(tracked.isOk());
+  const allPaths = tracked.value.map((file) => file.path);
   const productionPaths = allPaths
     .filter((path) => path.startsWith('agentic-ai/loom/src/'))
     .filter((path) => EXECUTABLE_SOURCE_EXTENSION.test(path))
@@ -118,9 +120,9 @@ test('only the Loom semantic adapter reaches the provider', async () => {
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
   const taskfilePattern = /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u;
-  const allPaths = ExecutableSkillRepository.readTrackedFiles(
-    REPOSITORY_ROOT,
-  ).map((file) => file.path);
+  const tracked = ExecutableSkillRepository.readTrackedFiles(REPOSITORY_ROOT);
+  assert(tracked.isOk());
+  const allPaths = tracked.value.map((file) => file.path);
   const runnablePaths = allPaths.filter(
     SkillProviderConfigRuntimeScenario.isRunnableConfiguration,
   );

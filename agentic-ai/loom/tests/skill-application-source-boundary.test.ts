@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { join, posix } from 'node:path';
 
 import { expect, test } from 'bun:test';
@@ -280,8 +281,9 @@ type ExecutableSkillSourceProfile = typeof ExecutableSkillSource.analyze;
 test('all tracked executable application sources pass the AST capability gate', async () => {
   const trackedFiles =
     ExecutableSkillRepository.readTrackedFiles(REPOSITORY_ROOT);
-  const tracked = trackedFiles.map((file) => file.path);
-  const packageRoots = ExecutableSkillRepository.packages(trackedFiles)
+  assert(trackedFiles.isOk());
+  const tracked = trackedFiles.value.map((file) => file.path);
+  const packageRoots = ExecutableSkillRepository.packages(trackedFiles.value)
     .map((skillPackage) => skillPackage.scriptsRoot)
     .filter((root) =>
       ExecutableSkillSource.isApplicationSourcePath(`${root}/src/index.ts`),

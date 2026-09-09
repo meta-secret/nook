@@ -14,13 +14,17 @@ if (
   ) ||
   typeof repoRoot !== 'string'
 ) {
-  throw new Error(
-    `Usage: package-gate-cli.ts <${EXECUTABLE_SKILL_GATE_ACTIONS.join('|')}> <repository-root>`,
+  process.stderr.write(
+    `Usage: package-gate-cli.ts <${EXECUTABLE_SKILL_GATE_ACTIONS.join('|')}> <repository-root>\n`,
   );
+  process.exitCode = 1;
+} else {
+  const execution = new ExecutableSkillPackageGate({
+    action: action as ExecutableSkillGateAction,
+    repoRoot,
+  }).execute();
+  if (execution.isErr()) {
+    process.stderr.write(`${execution.error.message}\n`);
+    process.exitCode = 1;
+  }
 }
-
-const request = {
-  action: action as ExecutableSkillGateAction,
-  repoRoot,
-} as const;
-ExecutableSkillPackageGate.run(request);

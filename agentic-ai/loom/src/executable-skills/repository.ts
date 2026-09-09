@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import {
   ExecutableSkillFindingCollector,
   ExecutableSkillFindingPath,
@@ -141,37 +142,47 @@ type AuditLockRequest = {
   readonly skillPackage: ExecutableSkillPackage;
 };
 
+export enum ExecutableRepositoryFailureKind {
+  Git = 'git',
+  TrackedRecord = 'trackedRecord',
+}
+export type ExecutableRepositoryFailure = {
+  readonly kind: ExecutableRepositoryFailureKind;
+  readonly message: string;
+};
+
 export class ExecutableSkillRepository {
   private readonly collector = new ExecutableSkillFindingCollector();
   private constructor(
     private readonly request: AuditExecutableSkillPackageFilesRequest,
   ) {}
-  static readTrackedFiles(repoRoot: string): readonly TrackedRepositoryFile[] {
+  static readTrackedFiles(
+    repoRoot: string,
+  ): Result<readonly TrackedRepositoryFile[], ExecutableRepositoryFailure> {
     const options: ExecFileSyncOptionsWithStringEncoding = {
       cwd: repoRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     };
-    const output = execFileSync('git', ['ls-files', '--stage', '-z'], options);
-    return output
-      .split('\0')
-      .filter((record) => record.length > 0)
-      .map((value) => ExecutableSkillRepository.parseTrackedRecord(value));
-  }
-
-  private static parseTrackedRecord(record: string): TrackedRepositoryFile {
-    const match = /^(\d{6}) [0-9a-f]+ (\d+)\t([\s\S]+)$/u.exec(record);
-    const mode = match?.at(1);
-    const stage = match?.at(2);
-    const trackedPath = match?.at(3);
-    if (
-      typeof mode !== 'string' ||
-      stage !== '0' ||
-      typeof trackedPath !== 'string'
-    ) {
-      throw new Error('git ls-files returned an invalid tracked-file record');
+    let output: string;
+    try {
+      output = execFileSync('git', ['ls-files', '--stage', '-z'], options);
+    } catch {
+      return err({
+        kind: ExecutableRepositoryFailureKind.Git,
+        message:
+          'git ls-files failed while reading executable-skill repository',
+      });
     }
-    return { mode, path: trackedPath };
+    const files: TrackedRepositoryFile[] = [];
+    for (const record of output
+      .split('\0')
+      .filter((record) => record.length > 0)) {
+      const parsed = new ExecutableTrackedRecord(record).decode();
+      if (parsed.isErr()) return err(parsed.error);
+      files.push(parsed.value);
+    }
+    return ok(files);
   }
 
   static packageFromPath(trackedPath: string): ExecutableSkillPackage | false {
@@ -206,25 +217,30 @@ export class ExecutableSkillRepository {
 
   static auditTracked(
     repoRoot: string,
-  ): readonly ExecutableSkillPackageFinding[] {
-    if (!existsSync(path.join(repoRoot, '.git'))) return [];
+  ): Result<
+    readonly ExecutableSkillPackageFinding[],
+    ExecutableRepositoryFailure
+  > {
+    if (!existsSync(path.join(repoRoot, '.git'))) return ok([]);
     const tracked = ExecutableSkillRepository.readTrackedFiles(repoRoot);
+    if (tracked.isErr()) return err(tracked.error);
     const request: AuditExecutableSkillPackageFilesRequest = {
       repoRoot,
-      tracked,
+      tracked: tracked.value,
     };
-    return ExecutableSkillRepository.auditFiles(request);
+    return ok(ExecutableSkillRepository.auditFiles(request));
   }
 
   static inspectDependencies(
     repoRoot: string,
-  ): ExecutableSkillDependencyInspection {
+  ): Result<ExecutableSkillDependencyInspection, ExecutableRepositoryFailure> {
     const tracked = ExecutableSkillRepository.readTrackedFiles(repoRoot);
+    if (tracked.isErr()) return err(tracked.error);
     const request: AuditExecutableSkillPackageFilesRequest = {
       repoRoot,
-      tracked,
+      tracked: tracked.value,
     };
-    return new ExecutableSkillRepository(request).inspect();
+    return ok(new ExecutableSkillRepository(request).inspect());
   }
 
   static auditFiles(
@@ -925,5 +941,26 @@ export class ExecutableSkillRepository {
     return (
       typeof value === 'number' && Number.isSafeInteger(value) && value > 0
     );
+  }
+}
+
+class ExecutableTrackedRecord {
+  constructor(private readonly record: string) {}
+  decode(): Result<TrackedRepositoryFile, ExecutableRepositoryFailure> {
+    const match = /^(\d{6}) [0-9a-f]+ (\d+)\t([\s\S]+)$/u.exec(this.record);
+    const mode = match?.at(1);
+    const stage = match?.at(2);
+    const trackedPath = match?.at(3);
+    if (
+      typeof mode !== 'string' ||
+      stage !== '0' ||
+      typeof trackedPath !== 'string'
+    ) {
+      return err({
+        kind: ExecutableRepositoryFailureKind.TrackedRecord,
+        message: 'git ls-files returned an invalid tracked-file record',
+      });
+    }
+    return ok({ mode, path: trackedPath });
   }
 }

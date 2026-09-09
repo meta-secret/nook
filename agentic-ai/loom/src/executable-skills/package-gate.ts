@@ -1,3 +1,5 @@
+import { err, ok, type Result } from 'neverthrow';
+import type { ExecutableRepositoryFailure } from './repository.ts';
 import path from 'node:path';
 
 import {
@@ -6,12 +8,7 @@ import {
 } from './repository.ts';
 
 export class ExecutableSkillPackageGate {
-  private constructor(
-    private readonly request: ExecutableSkillPackageGateRequest,
-  ) {}
-  static run(request: ExecutableSkillPackageGateRequest): void {
-    return new ExecutableSkillPackageGate(request).execute();
-  }
+  constructor(private readonly request: ExecutableSkillPackageGateRequest) {}
   private commandArguments(
     action: ExecutableSkillGateAction,
   ): readonly string[] {
@@ -19,46 +16,55 @@ export class ExecutableSkillPackageGate {
     return ['run', action];
   }
 
-  private runCommand(request: ExecutableSkillCommandRequest): number {
+  private runCommand(
+    request: ExecutableSkillCommandRequest,
+  ): Result<number, PackageGateFailure> {
     let exitCode: number;
-    if (request.arguments.at(0) === 'install') {
-      const options: PackageGateSpawnOptions = {
-        cmd: ['bun', 'install', '--frozen-lockfile'],
-        cwd: request.cwd,
-        stderr: 'inherit',
-        stdout: 'inherit',
-      };
-      exitCode = Bun.spawnSync(options).exitCode;
-    } else if (request.arguments.at(1) === 'format') {
-      const options: PackageGateSpawnOptions = {
-        cmd: ['bun', 'run', 'format'],
-        cwd: request.cwd,
-        stderr: 'inherit',
-        stdout: 'inherit',
-      };
-      exitCode = Bun.spawnSync(options).exitCode;
-    } else {
-      const options: PackageGateSpawnOptions = {
-        cmd: ['bun', 'run', 'verify'],
-        cwd: request.cwd,
-        stderr: 'inherit',
-        stdout: 'inherit',
-      };
-      exitCode = Bun.spawnSync(options).exitCode;
+    try {
+      if (request.arguments.at(0) === 'install') {
+        const options: PackageGateSpawnOptions = {
+          cmd: ['bun', 'install', '--frozen-lockfile'],
+          cwd: request.cwd,
+          stderr: 'inherit',
+          stdout: 'inherit',
+        };
+        exitCode = Bun.spawnSync(options).exitCode;
+      } else if (request.arguments.at(1) === 'format') {
+        const options: PackageGateSpawnOptions = {
+          cmd: ['bun', 'run', 'format'],
+          cwd: request.cwd,
+          stderr: 'inherit',
+          stdout: 'inherit',
+        };
+        exitCode = Bun.spawnSync(options).exitCode;
+      } else {
+        const options: PackageGateSpawnOptions = {
+          cmd: ['bun', 'run', 'verify'],
+          cwd: request.cwd,
+          stderr: 'inherit',
+          stdout: 'inherit',
+        };
+        exitCode = Bun.spawnSync(options).exitCode;
+      }
+      return ok(exitCode);
+    } catch {
+      return err({
+        message: `Executable skill command failed to start in ${request.cwd}`,
+      });
     }
-    return exitCode;
   }
 
-  private execute(): void {
+  execute(): Result<void, PackageGateFailure> {
     const request = this.request;
     const tracked = ExecutableSkillRepository.readTrackedFiles(
       request.repoRoot,
     );
-    const auditRequest = { repoRoot: request.repoRoot, tracked };
+    if (tracked.isErr()) return err(tracked.error);
+    const auditRequest = { repoRoot: request.repoRoot, tracked: tracked.value };
     const findings = ExecutableSkillRepository.auditFiles(auditRequest);
     if (findings.length > 0) {
       const diagnostic = { findings };
-      throw new Error(JSON.stringify(diagnostic));
+      return err({ message: JSON.stringify(diagnostic) });
     }
     const [runner = (value) => this.runCommand(value)] = [request.runner];
     const arguments_ = this.commandArguments(request.action);
@@ -68,26 +74,31 @@ export class ExecutableSkillPackageGate {
         cwd: path.join(request.repoRoot, EXECUTABLE_SKILL_WORKSPACE_ROOT),
       };
       const exitCode = runner(commandRequest);
-      if (exitCode !== 0) {
-        throw new Error(
-          `Executable skill workspace install failed with status ${exitCode}`,
-        );
+      if (exitCode.isErr()) return err(exitCode.error);
+      if (exitCode.value !== 0) {
+        return err({
+          message: `Executable skill workspace install failed with status ${exitCode.value}`,
+        });
       }
-      return;
+      return ok(undefined);
     }
-    for (const skillPackage of ExecutableSkillRepository.packages(tracked)) {
+    for (const skillPackage of ExecutableSkillRepository.packages(
+      tracked.value,
+    )) {
       const cwd = path.join(request.repoRoot, skillPackage.scriptsRoot);
       const commandRequest: ExecutableSkillCommandRequest = {
         arguments: arguments_,
         cwd,
       };
       const exitCode = runner(commandRequest);
-      if (exitCode !== 0) {
-        throw new Error(
-          `Executable skill ${request.action} failed for ${skillPackage.scriptsRoot} with status ${exitCode}`,
-        );
+      if (exitCode.isErr()) return err(exitCode.error);
+      if (exitCode.value !== 0) {
+        return err({
+          message: `Executable skill ${request.action} failed for ${skillPackage.scriptsRoot} with status ${exitCode.value}`,
+        });
       }
     }
+    return ok(undefined);
   }
 }
 
@@ -107,7 +118,7 @@ export type ExecutableSkillCommandRequest = {
 
 export type ExecutableSkillCommandRunner = (
   request: ExecutableSkillCommandRequest,
-) => number;
+) => Result<number, PackageGateFailure>;
 
 export type ExecutableSkillPackageGateRequest = {
   readonly action: ExecutableSkillGateAction;
@@ -121,3 +132,6 @@ type PackageGateSpawnOptions = {
   readonly stderr: 'inherit';
   readonly stdout: 'inherit';
 };
+
+export type PackageGateFailure =
+  ExecutableRepositoryFailure | { readonly message: string };

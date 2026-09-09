@@ -1,3 +1,4 @@
+import type { ExecutableRepositoryFailure } from '../executable-skills/repository.ts';
 import { CortexMarkdownSource } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import { err, ok, type Result } from 'neverthrow';
 import type { CortexArticleRequestDecodeError } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/decode-error.ts';
@@ -232,6 +233,8 @@ export class CortexAuditCommand {
     ];
     const executableSkillPackageFindings =
       ExecutableSkillRepository.auditTracked(repoRoot);
+    if (executableSkillPackageFindings.isErr())
+      return err(executableSkillPackageFindings.error);
     const skillFiles = skillDirectories
       .flatMap((skillsDir) =>
         existsSync(skillsDir)
@@ -306,7 +309,7 @@ export class CortexAuditCommand {
 
     return ok({
       brokenLinks,
-      invalidExecutableSkillPackages: executableSkillPackageFindings,
+      invalidExecutableSkillPackages: executableSkillPackageFindings.value,
       missingFromIndex,
       orphanIndexRows,
       prohibitedHarnessSkillPaths,
@@ -318,7 +321,7 @@ export class CortexAuditCommand {
       contractFindings,
       auditOk:
         brokenLinks.length === 0 &&
-        executableSkillPackageFindings.length === 0 &&
+        executableSkillPackageFindings.value.length === 0 &&
         missingFromIndex.length === 0 &&
         orphanIndexRows.length === 0 &&
         prohibitedHarnessSkillPaths.length === 0 &&
@@ -506,4 +509,6 @@ type IsPersistentCortexMarkdownFileArgs = {
 };
 
 export type CortexAuditFailure =
-  CortexArticleRequestDecodeError | CortexDocumentMapFailure;
+  | CortexArticleRequestDecodeError
+  | CortexDocumentMapFailure
+  | ExecutableRepositoryFailure;

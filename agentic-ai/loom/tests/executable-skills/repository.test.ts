@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {
   mkdir,
   mkdtemp,
@@ -512,9 +513,9 @@ test('parses NUL-separated tracked paths without newline ambiguity', async () =>
       mode: '100644',
       path: trackedPath,
     };
-    expect(ExecutableSkillRepository.readTrackedFiles(repoRoot)).toContainEqual(
-      expectedFile,
-    );
+    const tracked = ExecutableSkillRepository.readTrackedFiles(repoRoot);
+    assert(tracked.isOk());
+    expect(tracked.value).toContainEqual(expectedFile);
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
   }
