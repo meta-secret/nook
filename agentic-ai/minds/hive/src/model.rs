@@ -1,4 +1,3 @@
-use serde::de;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -236,7 +235,8 @@ pub struct BlockerRequest {
     pub prompt: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "WireTerminalResult")]
 pub enum TerminalResult {
     Completed {
         summary: String,
@@ -365,16 +365,6 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
                 })
             }
         }
-    }
-}
-
-impl<'de> Deserialize<'de> for TerminalResult {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let wire = WireTerminalResult::deserialize(deserializer)?;
-        Self::try_from(wire).map_err(de::Error::custom)
     }
 }
 

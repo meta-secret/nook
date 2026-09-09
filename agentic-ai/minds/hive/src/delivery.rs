@@ -21,10 +21,12 @@ use self::workbench::WorkbenchCompletionCheck;
 mod command;
 mod main_run;
 mod readiness;
+mod wire;
 mod workbench;
+use wire::WireDeliveryPullRequest;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(from = "WireDeliveryPullRequest")]
 struct DeliveryPullRequest {
     number: u64,
     title: String,
@@ -34,7 +36,6 @@ struct DeliveryPullRequest {
     is_cross_repository: bool,
     labels: Vec<DeliveryLabel>,
     merge_commit: Option<DeliveryCommit>,
-    #[serde(default, deserialize_with = "null_to_default")]
     status_check_rollup: Vec<DeliveryCheck>,
 }
 
@@ -61,14 +62,6 @@ struct DeliveryCheck {
     started_at: String,
     #[serde(default)]
     workflow_name: String,
-}
-
-fn null_to_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de> + Default,
-{
-    Option::<T>::deserialize(deserializer).map(Option::unwrap_or_default)
 }
 
 #[derive(Debug, Deserialize)]
@@ -689,7 +682,10 @@ mod tests {
             }"#,
         )?;
         assert_eq!(with_context.status_check_rollup[0].name, "CodeRabbit");
-        assert_eq!(with_context.status_check_rollup[0].conclusion, "SUCCESS");
+        assert_eq!(
+            with_context.status_check_rollup[0].conclusion,
+            CheckConclusion::Success
+        );
         assert!(with_context.status_check_rollup[0].workflow_name.is_empty());
 
         let without_checks: DeliveryPullRequest = serde_json::from_str(
