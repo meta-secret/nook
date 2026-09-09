@@ -1,9 +1,9 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{ALERT_LIMIT, STALE_ACTIVITY_MS, STUCK_CANCELLATION_MS};
 use crate::observer::ObserverCopy;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObserverSnapshot {
     pub generated_at: i64,
     pub copy: ObserverCopy,
@@ -14,7 +14,7 @@ pub struct ObserverSnapshot {
     pub alerts_truncated: bool,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ObservedAlert {
     pub id: String,
     pub kind: AlertKind,
@@ -24,7 +24,7 @@ pub struct ObservedAlert {
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum AlertKind {
     TaskFailed,
@@ -46,14 +46,14 @@ impl AlertKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum AlertSeverity {
     Critical,
     Warning,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObservedAgent {
     pub id: String,
     pub pod_name: String,
@@ -61,7 +61,7 @@ pub struct ObservedAgent {
     pub last_seen_at: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObservedTask {
     pub id: String,
     pub kind: String,
@@ -91,13 +91,13 @@ pub struct ObservedTask {
     pub activity: Vec<ObservedActivity>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObservedDependency {
     pub id: String,
     pub status: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObservedActivity {
     pub id: String,
     pub kind: String,
@@ -123,19 +123,19 @@ impl ObservedAlert {
                         AlertKind::DependencyFailed,
                         AlertSeverity::Critical,
                         task.updated_at,
-                        copy.alert_dependency_failed,
+                        copy.alert_dependency_failed.as_str(),
                     ),
                     "FAILED" => (
                         AlertKind::TaskFailed,
                         AlertSeverity::Critical,
                         task.latest_attempt_completed_at.max(task.updated_at),
-                        copy.alert_task_failed,
+                        copy.alert_task_failed.as_str(),
                     ),
                     "BLOCKED" => (
                         AlertKind::DependencyBlocked,
                         AlertSeverity::Warning,
                         task.updated_at,
-                        copy.alert_dependency_blocked,
+                        copy.alert_dependency_blocked.as_str(),
                     ),
                     "RUNNING"
                         if now
@@ -152,14 +152,14 @@ impl ObservedAlert {
                                 .max(task.latest_attempt_started_at)
                                 .max(task.created_at)
                                 + STALE_ACTIVITY_MS,
-                            copy.alert_activity_stale,
+                            copy.alert_activity_stale.as_str(),
                         )
                     }
                     "CANCELLING" if now - task.updated_at > STUCK_CANCELLATION_MS => (
                         AlertKind::CancellationStuck,
                         AlertSeverity::Warning,
                         task.updated_at + STUCK_CANCELLATION_MS,
-                        copy.alert_cancellation_stuck,
+                        copy.alert_cancellation_stuck.as_str(),
                     ),
                     _ => return None,
                 };
@@ -350,6 +350,54 @@ mod tests {
             dependency_failure: false,
             dependencies: Vec::new(),
             activity: Vec::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl ObservedTask {
+    pub(super) fn fixture(id: &str) -> ObservedTask {
+        let status = "RUNNING";
+        let updated_at = 1000;
+        ObservedTask {
+            id: id.to_owned(),
+            kind: "main-repair".to_owned(),
+            kind_label: "Main repair".to_owned(),
+            trigger_kind: "manual-cli".to_owned(),
+            trigger: "Manual dispatch".to_owned(),
+            status: status.to_owned(),
+            source_commit: String::new(),
+            priority: 0,
+            attempt_count: 1,
+            max_attempts: 3,
+            created_at: updated_at - 1_000,
+            updated_at,
+            lease_until: 0,
+            agent_id: String::new(),
+            pod_name: String::new(),
+            latest_attempt_status: status.to_owned(),
+            latest_attempt_started_at: 0,
+            latest_attempt_completed_at: 0,
+            latest_activity_at: 0,
+            latest_error: String::new(),
+            latest_summary: String::new(),
+            dependency_failure: false,
+            dependencies: Vec::new(),
+            activity: Vec::new(),
+        }
+    }
+}
+#[cfg(test)]
+impl ObserverSnapshot {
+    pub(super) fn fixture(locale: &str) -> Self {
+        Self {
+            generated_at: 1000,
+            copy: ObserverCopy::for_locale(locale),
+            agents: Vec::new(),
+            active_task_count: 2,
+            tasks: Vec::new(),
+            alerts: Vec::new(),
+            alerts_truncated: false,
         }
     }
 }

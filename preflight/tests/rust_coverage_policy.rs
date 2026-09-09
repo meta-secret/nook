@@ -1,24 +1,27 @@
 use anyhow::{Context, bail};
-use serde_json::Value;
+use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 #[test]
 fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root()?;
-    let policy = read_json(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
-    let enforced = string_set(&policy, "enforced_packages")?;
-    let excluded = excluded_packages(&policy)?;
+    let policy =
+        CoveragePolicy::read(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
+    let enforced = policy.enforced_packages.clone();
+    let excluded: BTreeMap<_, _> = policy
+        .excluded_packages
+        .iter()
+        .map(|entry| (entry.package.clone(), entry.reason.clone()))
+        .collect();
     let excluded_names = excluded.keys().cloned().collect::<BTreeSet<_>>();
     let discovered = discover_packages(&root)?;
     let classified: BTreeSet<_> = enforced.union(&excluded_names).cloned().collect();
     let discovered_names = discovered.keys().cloned().collect::<BTreeSet<_>>();
     assert_eq!(discovered_names, classified);
     assert!(enforced.is_disjoint(&excluded_names));
-    assert!(matches!(policy["lines_percent"].as_f64(), Some(floor) if floor >= 90.0));
-    let package_floors = policy["package_lines_percent"]
-        .as_object()
-        .context("package_lines_percent must be an object")?;
+    assert!(policy.lines_percent >= 90.0);
+    let package_floors = &policy.package_lines_percent;
     let floor_names = package_floors.keys().cloned().collect::<BTreeSet<_>>();
     assert_eq!(floor_names, enforced);
     for (package, floor) in package_floors {
@@ -28,7 +31,7 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
             "hive" => 60.0,
             _ => 90.0,
         };
-        assert!(floor.as_f64().is_some_and(|floor| floor >= expected));
+        assert!(*floor >= expected);
     }
     assert_eq!(
         excluded["nook-fuzz"],
@@ -54,8 +57,9 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let preflight = read(&root.join("preflight/Dockerfile"))?;
     let minds_manifest = read(&root.join("agentic-ai/minds/Cargo.toml"))?;
     let fuzz_manifest = read(&root.join("nook-app/nook-platform/fuzz/Cargo.toml"))?;
-    let policy = read_json(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
-    let enforced = string_set(&policy, "enforced_packages")?;
+    let policy =
+        CoveragePolicy::read(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
+    let enforced = policy.enforced_packages.clone();
     for package in &enforced {
         assert!(
             [&product, &nightly, &platform_tasks, &hive, &preflight]
@@ -209,37 +213,22 @@ fn repository_root() -> anyhow::Result<PathBuf> {
 fn read(path: &Path) -> anyhow::Result<String> {
     fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
 }
-fn read_json(path: &Path) -> anyhow::Result<Value> {
-    serde_json::from_str(&read(path)?).with_context(|| format!("parse {}", path.display()))
+#[derive(Deserialize)]
+struct CoveragePolicy {
+    lines_percent: f64,
+    enforced_packages: BTreeSet<String>,
+    excluded_packages: Vec<ExcludedPackage>,
+    package_lines_percent: BTreeMap<String, f64>,
 }
-fn string_set(value: &Value, key: &str) -> anyhow::Result<BTreeSet<String>> {
-    value[key]
-        .as_array()
-        .with_context(|| format!("{key} must be an array"))?
-        .iter()
-        .map(|entry| {
-            entry
-                .as_str()
-                .map(str::to_owned)
-                .with_context(|| format!("{key} entries must be strings"))
-        })
-        .collect()
+#[derive(Deserialize)]
+struct ExcludedPackage {
+    package: String,
+    reason: String,
 }
-fn excluded_packages(value: &Value) -> anyhow::Result<BTreeMap<String, String>> {
-    value["excluded_packages"]
-        .as_array()
-        .context("excluded_packages must be an array")?
-        .iter()
-        .map(|entry| {
-            let package = entry["package"]
-                .as_str()
-                .context("excluded package must name a package")?;
-            let reason = entry["reason"]
-                .as_str()
-                .context("excluded package must state a reason")?;
-            Ok((package.to_owned(), reason.to_owned()))
-        })
-        .collect()
+impl CoveragePolicy {
+    fn read(path: &Path) -> anyhow::Result<Self> {
+        serde_json::from_str(&read(path)?).with_context(|| format!("parse {}", path.display()))
+    }
 }
 fn discover_packages(root: &Path) -> anyhow::Result<BTreeMap<String, PathBuf>> {
     let mut manifests = Vec::new();

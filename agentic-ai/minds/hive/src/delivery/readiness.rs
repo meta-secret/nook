@@ -16,7 +16,7 @@ impl DeliveryReadiness<'_> {
             pull_request,
         } = self;
         let number = pull_request.number.to_string();
-        let repository_state: serde_json::Value = serde_json::from_str(
+        let repository_state: GithubRepositoryIdentity = serde_json::from_str(
             &(DeliveryCommand {
                 repository: repository,
                 arguments: &["repo", "view", "--json", "nameWithOwner"],
@@ -25,10 +25,7 @@ impl DeliveryReadiness<'_> {
             .await?,
         )
         .hive_context("GitHub returned invalid repository identity")?;
-        let name_with_owner = repository_state
-            .get("nameWithOwner")
-            .and_then(serde_json::Value::as_str)
-            .hive_context("GitHub repository identity omitted nameWithOwner")?;
+        let name_with_owner = repository_state.name_with_owner;
         let (owner, name) = name_with_owner
             .split_once('/')
             .hive_context("GitHub repository identity is malformed")?;
@@ -50,7 +47,7 @@ impl DeliveryReadiness<'_> {
                 arguments.extend(["-F".to_owned(), format!("cursor={value}")]);
             }
             let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
-            let review: serde_json::Value = serde_json::from_str(
+            let review: GithubReviewResponse = serde_json::from_str(
                 &(DeliveryCommand {
                     repository: repository,
                     arguments: &references,
@@ -59,32 +56,16 @@ impl DeliveryReadiness<'_> {
                 .await?,
             )
             .hive_context("GitHub returned invalid Hive review state")?;
-            let threads = review
-                .pointer("/data/repository/pullRequest/reviewThreads")
-                .hive_context("GitHub review response omitted review threads")?;
+            let threads = review.data.repository.pull_request.review_threads;
             unresolved += threads
-                .get("nodes")
-                .and_then(serde_json::Value::as_array)
-                .hive_context("GitHub review response omitted review thread nodes")?
+                .nodes
                 .iter()
-                .filter(|thread| {
-                    thread
-                        .get("isResolved")
-                        .and_then(serde_json::Value::as_bool)
-                        == Some(false)
-                })
+                .filter(|thread| !thread.is_resolved)
                 .count();
-            if threads
-                .pointer("/pageInfo/hasNextPage")
-                .and_then(serde_json::Value::as_bool)
-                != Some(true)
-            {
+            if !threads.page_info.has_next_page {
                 break;
             }
-            cursor = threads
-                .pointer("/pageInfo/endCursor")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned);
+            cursor = threads.page_info.end_cursor;
             if cursor.is_none() {
                 return Err(crate::HiveError::message(
                     "GitHub review pagination omitted its cursor",
@@ -99,7 +80,7 @@ impl DeliveryReadiness<'_> {
         }
         DeliveryReadiness::validate_non_thread_feedback(repository, pull_request.number).await?;
 
-        let deployments: serde_json::Value = serde_json::from_str(
+        let deployments: Vec<GithubDeployment> = serde_json::from_str(
             &(DeliveryCommand {
                 repository: repository,
                 arguments: &[
@@ -120,13 +101,8 @@ impl DeliveryReadiness<'_> {
         )
         .hive_context("GitHub returned invalid deployment state")?;
         let mut state = None;
-        for deployment_id in deployments
-            .as_array()
-            .hive_context("GitHub deployment response is not an array")?
-            .iter()
-            .filter_map(|deployment| deployment.get("id").and_then(serde_json::Value::as_u64))
-        {
-            let statuses: serde_json::Value = serde_json::from_str(
+        for deployment_id in deployments.iter().map(|deployment| deployment.id) {
+            let statuses: Vec<GithubDeploymentStatus> = serde_json::from_str(
                 &(DeliveryCommand {
                     repository: repository,
                     arguments: &[
@@ -142,12 +118,7 @@ impl DeliveryReadiness<'_> {
                 .await?,
             )
             .hive_context("GitHub returned invalid deployment status")?;
-            state = statuses
-                .as_array()
-                .and_then(|items| items.first())
-                .and_then(|status| status.get("state"))
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned);
+            state = statuses.into_iter().next().map(|status| status.state);
             if state.is_some() {
                 break;
             }
@@ -242,5 +213,67 @@ mod tests {
             "Automated summary: checks passed.\nThis report is informational."
         ));
         Ok(())
+    }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubRepositoryIdentity {
+    name_with_owner: String,
+}
+#[derive(serde::Deserialize)]
+struct GithubReviewResponse {
+    data: GithubReviewData,
+}
+#[derive(serde::Deserialize)]
+struct GithubReviewData {
+    repository: GithubReviewRepository,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubReviewRepository {
+    pull_request: GithubReviewPullRequest,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubReviewPullRequest {
+    review_threads: GithubReviewThreads,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubReviewThreads {
+    nodes: Vec<GithubReviewThread>,
+    page_info: GithubReviewPage,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubReviewThread {
+    is_resolved: bool,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubReviewPage {
+    has_next_page: bool,
+    end_cursor: Option<String>,
+}
+#[derive(serde::Deserialize)]
+struct GithubDeployment {
+    id: u64,
+}
+#[derive(serde::Deserialize)]
+struct GithubDeploymentStatus {
+    state: String,
+}
+
+#[cfg(test)]
+mod typed_response_tests {
+    use super::*;
+    #[test]
+    fn malformed_review_resolution_cannot_count_as_resolved() {
+        assert!(serde_json::from_str::<GithubReviewResponse>(r#"{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":"false"}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}"#).is_err());
+    }
+    #[test]
+    fn deployment_identifiers_must_be_numeric() {
+        assert!(serde_json::from_str::<Vec<GithubDeployment>>(r#"[{"id":"123"}]"#).is_err());
     }
 }

@@ -524,7 +524,7 @@ class ReviewSnapshotEvidence {
     const requestReactions =
       codexReviewSettled || cleanComment || codexRequests.length === 0
         ? []
-        : ((
+        : (
             await Promise.all(
               codexRequests.map((request) =>
                 reactionSource.octokit.paginate(
@@ -541,7 +541,7 @@ class ReviewSnapshotEvidence {
                 ),
               ),
             )
-          ).flat() as CommentReaction[]);
+          ).flat();
     const approvalReaction = requestReactions.some(
       (reaction) =>
         reaction.content === "+1" &&
@@ -843,11 +843,6 @@ type PullReview = {
   state: GitHubText;
   submittedAt: GitHubText;
   user: unknown;
-};
-
-type CommentReaction = {
-  content?: string;
-  user?: unknown;
 };
 
 export class CodexReviewRevision {

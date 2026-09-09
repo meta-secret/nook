@@ -292,9 +292,12 @@ impl AuthBroker {
         let auth = async_fs::read_to_string(private_auth)
             .await
             .hive_context("failed to read rotated broker credentials")?;
+        // The upstream credential document is opaque: preserve every provider field verbatim.
         serde_json::from_str::<serde_json::Value>(&auth)
             .hive_context("rotated broker credentials are not valid JSON")?;
-        let patch = serde_json::json!({ "stringData": { "auth.json": auth } });
+        let patch = KubernetesAuthPatch {
+            string_data: KubernetesAuthSecret { auth_json: auth },
+        };
         let patch_path = auth_home.join("secret-patch.json");
         let header_path = auth_home.join("kubernetes-auth-header");
         async_fs::write(&patch_path, serde_json::to_vec(&patch)?).await?;
@@ -456,4 +459,15 @@ mod tests {
         malformed_server.await??;
         Ok(())
     }
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct KubernetesAuthPatch {
+    string_data: KubernetesAuthSecret,
+}
+#[derive(serde::Serialize)]
+struct KubernetesAuthSecret {
+    #[serde(rename = "auth.json")]
+    auth_json: String,
 }

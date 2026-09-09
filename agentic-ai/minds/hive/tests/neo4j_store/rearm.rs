@@ -391,14 +391,11 @@ pub async fn verify_blocked_release_retry(
         "a member that remains blocked must retain an operator-visible reason"
     );
     let observed_parent = store
-        .observer_task_value(parent.id.as_str(), "en")
+        .observer_task_view(parent.id.as_str(), "en")
         .await?
         .context("retried blocked parent must be visible to the observer")?;
     assert_eq!(
-        observed_parent
-            .get("latest_error")
-            .and_then(serde_json::Value::as_str),
-        Some("waiting for retried dependencies"),
+        observed_parent.latest_error, "waiting for retried dependencies",
         "Control Center must prefer the current blocked reason over a stale attempt error"
     );
     let revived_leaf = store.claim(agent, 300).await?.into_claimed()?;

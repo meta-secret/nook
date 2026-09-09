@@ -19,7 +19,12 @@ use codex::{
 use thiserror::Error;
 use tokio::sync::mpsc;
 
-use crate::model::TaskActivity;
+use crate::model::{TaskActivity, TerminalResult};
+mod output;
+use output::CodexTurnOutput;
+pub use output::{
+    PlannedFeature, PlannedTask, PlannedTaskPriority, PlannedTaskResources, PlannerOutput,
+};
 
 mod activity;
 mod progress;
@@ -78,7 +83,7 @@ pub trait CodexRunner {
     fn run<'a>(
         &'a self,
         prompt: &'a str,
-    ) -> impl Future<Output = Result<String, CodexError>> + Send + 'a;
+    ) -> impl Future<Output = Result<PlannerOutput, CodexError>> + Send + 'a;
 }
 
 #[derive(Clone)]
@@ -102,7 +107,7 @@ impl InProcessCodexRunner {
         }
     }
 
-    async fn run_turn(&self, prompt: &str, kind: TurnKind) -> Result<String, CodexError> {
+    async fn run_turn(&self, prompt: &str, kind: TurnKind) -> Result<CodexTurnOutput, CodexError> {
         let primary_result = self.attempt_turn(prompt, kind.clone(), &self.options).await;
         if let Err(error) = primary_result {
             if self.options.model != SOL_EXHAUSTED_CODEX_MODEL
@@ -133,7 +138,7 @@ impl InProcessCodexRunner {
         prompt: &str,
         kind: TurnKind,
         options: &CodexOptions,
-    ) -> Result<String, CodexError> {
+    ) -> Result<CodexTurnOutput, CodexError> {
         let config = CodexOptions::new_config(options).await?;
         let state_db = init_state_db(&config).await;
         let auth_manager =
@@ -214,9 +219,18 @@ impl InProcessCodexRunner {
         Ok(response)
     }
 
-    pub async fn execute_task(&self, task_id: &str, prompt: &str) -> Result<String, CodexError> {
-        self.run_turn(prompt, TurnKind::Task(task_id.to_owned()))
-            .await
+    pub async fn execute_task(
+        &self,
+        task_id: &str,
+        prompt: &str,
+    ) -> Result<TerminalResult, CodexError> {
+        match self
+            .run_turn(prompt, TurnKind::Task(task_id.to_owned()))
+            .await?
+        {
+            CodexTurnOutput::Task(result) => Ok(result),
+            CodexTurnOutput::Planning(_) => Err(CodexError::UnexpectedOutput),
+        }
     }
 }
 
@@ -236,6 +250,10 @@ pub enum CodexError {
     EmptyResponse,
     #[error("the embedded Codex output schema is invalid: {0}")]
     OutputSchema(#[source] serde_json::Error),
+    #[error("Codex completed with an invalid structured response: {0}")]
+    OutputDecode(#[source] serde_json::Error),
+    #[error("Codex returned a response for a different turn kind")]
+    UnexpectedOutput,
 }
 
 impl CodexError {
@@ -290,8 +308,13 @@ impl CodexRunner for InProcessCodexRunner {
     fn run<'a>(
         &'a self,
         prompt: &'a str,
-    ) -> impl Future<Output = Result<String, CodexError>> + Send + 'a {
-        self.run_turn(prompt, TurnKind::Planning)
+    ) -> impl Future<Output = Result<PlannerOutput, CodexError>> + Send + 'a {
+        async move {
+            match self.run_turn(prompt, TurnKind::Planning).await? {
+                CodexTurnOutput::Planning(plan) => Ok(plan),
+                CodexTurnOutput::Task(_) => Err(CodexError::UnexpectedOutput),
+            }
+        }
     }
 }
 
@@ -329,13 +352,15 @@ impl CodexOptions {
                 .insert("GITHUB_TOKEN".to_owned(), github_token.clone());
         }
         let model_reasoning_effort =
-            serde_json::from_value(serde_json::Value::String(options.reasoning_effort.clone()))
-                .map_err(|error| {
-                    CodexError::Configuration(format!(
-                        "invalid reasoning effort `{}`: {error}",
-                        options.reasoning_effort
-                    ))
-                })?;
+            serde::Deserialize::deserialize(serde::de::value::StringDeserializer::<
+                serde_json::Error,
+            >::new(options.reasoning_effort.clone()))
+            .map_err(|error| {
+                CodexError::Configuration(format!(
+                    "invalid reasoning effort `{}`: {error}",
+                    options.reasoning_effort
+                ))
+            })?;
 
         let mut config = Config::load_default_with_cli_overrides_for_codex_home(
             codex_home.to_path_buf(),
@@ -389,7 +414,7 @@ struct CodexTurn<'a> {
     activity_sender: Option<&'a mpsc::UnboundedSender<TaskActivity>>,
 }
 impl CodexTurn<'_> {
-    async fn submit_and_wait(self) -> Result<String, CodexError> {
+    async fn submit_and_wait(self) -> Result<CodexTurnOutput, CodexError> {
         let Self {
             thread,
             prompt,
@@ -401,6 +426,7 @@ impl CodexTurn<'_> {
             TurnKind::Planning => OUTPUT_SCHEMA,
             TurnKind::Task(_) => TASK_OUTPUT_SCHEMA,
         };
+        // The SDK requires an arbitrary JSON Schema document at this transport boundary.
         let output_schema = serde_json::from_str(schema).map_err(CodexError::OutputSchema)?;
         let request = TurnInputRequest::user_input(vec![UserInput::Text {
             text: prompt.to_owned(),
@@ -422,10 +448,10 @@ impl CodexTurn<'_> {
 
         let stderr = io::stderr();
         let decorate = stderr.is_terminal() && env::var_os("NO_COLOR").is_none();
-        let mut progress = match kind {
+        let mut progress = match &kind {
             TurnKind::Planning => TurnProgress::Planning(ProgressReporter::new(stderr, decorate)),
             TurnKind::Task(task_id) => {
-                TurnProgress::Task(TaskProgressReporter::new(stderr, decorate, task_id))
+                TurnProgress::Task(TaskProgressReporter::new(stderr, decorate, task_id.clone()))
             }
         };
         loop {
@@ -454,10 +480,11 @@ impl CodexTurn<'_> {
             }
             match event.msg {
                 EventMsg::TurnComplete(event) => {
-                    return event
+                    let text = event
                         .last_agent_message
                         .filter(|message| !message.trim().is_empty())
-                        .ok_or(CodexError::EmptyResponse);
+                        .ok_or(CodexError::EmptyResponse)?;
+                    return CodexTurnOutput::decode(&kind, &text).map_err(CodexError::OutputDecode);
                 }
                 EventMsg::Error(event) => return Err(CodexError::Run(event.message)),
                 EventMsg::TurnAborted(event) => {

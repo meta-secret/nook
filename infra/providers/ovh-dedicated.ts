@@ -1,6 +1,48 @@
-import {createHash} from "node:crypto";
-import {chmod,mkdir,readFile,rename,rm,stat,writeFile} from "node:fs/promises";
-import {dirname,resolve} from "node:path";
+import {
+  type OvhCredentials,
+  type OvhServer,
+  ArcTier,
+  EndpointMode,
+  CliAction,
+  HttpMethod,
+  ProvisionResult,
+  RecoveryMarkerStatus,
+  OvhServerState,
+  OvhTaskStatus,
+  DedicatedServerField,
+  type OvhTask,
+  type CompatibleTemplates,
+  type DedicatedServerDefinition,
+  type DedicatedServerInventory,
+  type CliArguments,
+  type ApiRequest,
+  type SignatureInput,
+  type ReinstallRequest,
+  type ProvisionContext,
+  type HostIdentity,
+  type HostIdentityInput,
+  type PreparedReinstall,
+  type OvhRecoveryMarker,
+  type AbsentRecoveryMarker,
+  type PendingRecoveryMarker,
+  type RecoveryMarkerState,
+} from "./ovh-dedicated-contracts";
+export {
+  OvhTaskStatus,
+  type OvhRecoveryMarker,
+} from "./ovh-dedicated-contracts";
+import { OvhDocument } from "./ovh-dedicated-document";
+import { createHash } from "node:crypto";
+import {
+  chmod,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 class OvhDedicatedRequireString {
   constructor(private readonly request: { label: string; value: string }) {}
@@ -81,9 +123,7 @@ class OvhDedicatedLoadRecoveryMarker {
     if (!(await new OvhDedicatedPathExists(path).execute())) {
       return { status: RecoveryMarkerStatus.Absent };
     }
-    const marker = JSON.parse(
-      await readFile(path, "utf8"),
-    ) as OvhRecoveryMarker;
+    const marker = OvhDocument.recoveryMarker(await readFile(path, "utf8"));
     if (
       !new OvhDedicatedRecoveryMarkerMatches({ ...input, marker }).execute()
     ) {
@@ -356,9 +396,9 @@ class OvhDedicatedLoadInventory {
   async execute(): Promise<DedicatedServerInventory> {
     const path = this.request;
 
-    const parsed = Bun.YAML.parse(
-      await readFile(path, "utf8"),
-    ) as DedicatedServerInventory;
+    const parsed = OvhDocument.inventory(
+      Bun.YAML.parse(await readFile(path, "utf8")),
+    );
     if (!parsed.servers || typeof parsed.servers !== "object") {
       throw new Error("OVH server inventory has no servers mapping");
     }
@@ -371,7 +411,7 @@ class OvhDedicatedParseCredentials {
   async execute(): Promise<OvhCredentials> {
     const path = this.request;
 
-    const parsed = JSON.parse(await readFile(path, "utf8")) as OvhCredentials;
+    const parsed = OvhDocument.credentials(await readFile(path, "utf8"));
     const requiredCredentials: Array<[string, string]> = [
       ["applicationKey", parsed.applicationKey],
       ["applicationSecret", parsed.applicationSecret],
@@ -409,7 +449,8 @@ class OvhDedicatedLoadCredentials {
       method: HttpMethod.Get,
       path: "/auth/currentCredential",
     };
-    await new OvhDedicatedOvhApi<boolean>({
+    await new OvhDedicatedOvhApi({
+      decode: OvhDocument.credentialValidation,
       credentials: candidate,
       request: validationRequest,
     }).execute();
@@ -450,6 +491,7 @@ class OvhDedicatedOvhApi<T> {
     private readonly request: {
       credentials: OvhCredentials;
       request: ApiRequest;
+      decode: (text: string) => T;
     },
   ) {}
   async execute(): Promise<T> {
@@ -490,7 +532,7 @@ class OvhDedicatedOvhApi<T> {
         `OVH API ${input.request.method} ${input.request.path} failed: HTTP_${response.status}`,
       );
     }
-    return JSON.parse(responseBody) as T;
+    return input.decode(responseBody);
   }
 }
 
@@ -534,7 +576,8 @@ class OvhDedicatedGetServer {
       method: HttpMethod.Get,
       path: `/dedicated/server/${encodeURIComponent(input.definition.serviceName)}`,
     };
-    const server = await new OvhDedicatedOvhApi<OvhServer>({
+    const server = await new OvhDedicatedOvhApi({
+      decode: OvhDocument.server,
       credentials: input.credentials,
       request,
     }).execute();
@@ -560,7 +603,8 @@ class OvhDedicatedRequireCompatibleTemplate {
       method: HttpMethod.Get,
       path: `/dedicated/server/${encodeURIComponent(input.definition.serviceName)}/install/compatibleTemplates`,
     };
-    const templates = await new OvhDedicatedOvhApi<CompatibleTemplates>({
+    const templates = await new OvhDedicatedOvhApi({
+      decode: OvhDocument.compatibleTemplates,
       credentials: input.credentials,
       request,
     }).execute();
@@ -620,7 +664,8 @@ class OvhDedicatedWaitForTask {
         method: HttpMethod.Get,
         path: `/dedicated/server/${encodeURIComponent(input.definition.serviceName)}/task/${input.taskId}`,
       };
-      const task = await new OvhDedicatedOvhApi<OvhTask>({
+      const task = await new OvhDedicatedOvhApi({
+        decode: OvhDocument.task,
         credentials: input.credentials,
         request,
       }).execute();
@@ -689,7 +734,8 @@ class OvhDedicatedProvision {
       definition: input.definition,
       hostname: input.hostname,
     }).execute();
-    const task = await new OvhDedicatedOvhApi<OvhTask>({
+    const task = await new OvhDedicatedOvhApi({
+      decode: OvhDocument.task,
       credentials: input.credentials,
       request,
     }).execute();
@@ -710,184 +756,6 @@ class OvhDedicatedProvision {
     return ProvisionResult.Reinstalled;
   }
 }
-
-interface OvhCredentials {
-  applicationKey: string;
-  applicationSecret: string;
-  consumerKey: string;
-  endpoint: string;
-}
-
-interface OvhServer {
-  commercialRange: string;
-  datacenter: string;
-  ip: string;
-  name: string;
-  os: string;
-  state: string;
-}
-
-enum ArcTier {
-  Overflow = "overflow",
-  Primary = "primary",
-  Secondary = "secondary",
-}
-
-enum EndpointMode {
-  Direct = "direct",
-  Roaming = "roaming",
-}
-
-enum CliAction {
-  Field = "field",
-  HostFingerprint = "host-fingerprint",
-  Inspect = "inspect",
-  Provision = "provision",
-  RecoveryComplete = "recovery-complete",
-  ReinstallRequired = "reinstall-required",
-}
-
-enum HttpMethod {
-  Get = "GET",
-  Post = "POST",
-}
-
-enum ProvisionResult {
-  Reinstalled = "reinstalled",
-  Unchanged = "unchanged",
-}
-
-enum RecoveryMarkerStatus {
-  Absent = "absent",
-  Pending = "pending",
-}
-
-enum OvhServerState {
-  Ready = "ok",
-}
-
-export enum OvhTaskStatus {
-  Cancelled = "cancelled",
-  CustomerError = "customerError",
-  Doing = "doing",
-  Done = "done",
-  Init = "init",
-  OvhError = "ovhError",
-  Todo = "todo",
-}
-
-enum DedicatedServerField {
-  ArcTier = "arcTier",
-  EndpointMode = "endpointMode",
-  ExpectedCommercialRange = "expectedCommercialRange",
-  ExpectedDatacenter = "expectedDatacenter",
-  Hostname = "hostname",
-  MeshAddress = "meshAddress",
-  OperatingSystem = "operatingSystem",
-  PublicAddress = "publicAddress",
-  ServiceName = "serviceName",
-  SshPublicKeyFile = "sshPublicKeyFile",
-  SshUser = "sshUser",
-}
-
-interface OvhTask {
-  status: OvhTaskStatus;
-  taskId: number;
-}
-
-interface CompatibleTemplates {
-  ovh: string[];
-}
-
-interface DedicatedServerDefinition {
-  arcTier: ArcTier;
-  endpointMode: EndpointMode;
-  expectedCommercialRange: string;
-  expectedDatacenter: string;
-  meshAddress: string;
-  operatingSystem: string;
-  publicAddress: string;
-  serviceName: string;
-  sshPublicKeyFile: string;
-  sshUser: string;
-}
-
-interface DedicatedServerInventory {
-  servers: Record<string, DedicatedServerDefinition>;
-}
-
-interface CliArguments {
-  action: CliAction;
-  allowReinstall: boolean;
-  field: DedicatedServerField;
-  inventoryFile: string;
-  node: string;
-}
-
-interface ApiRequest {
-  body?: string;
-  method: HttpMethod;
-  path: string;
-}
-
-interface SignatureInput {
-  applicationSecret: string;
-  body: string;
-  consumerKey: string;
-  method: string;
-  timestamp: number;
-  url: string;
-}
-
-interface ReinstallRequest {
-  customizations: {
-    hostname: string;
-    postInstallationScript: string;
-    sshKey: string;
-  };
-  operatingSystem: string;
-}
-
-interface ProvisionContext {
-  allowReinstall: boolean;
-  credentials: OvhCredentials;
-  definition: DedicatedServerDefinition;
-  hostname: string;
-}
-
-interface HostIdentity {
-  fingerprint: string;
-  privateKey: string;
-  publicKey: string;
-}
-
-interface HostIdentityInput {
-  allowCreate: boolean;
-  hostname: string;
-}
-
-interface PreparedReinstall {
-  hostIdentity: HostIdentity;
-  publicKey: string;
-}
-
-export interface OvhRecoveryMarker {
-  hostname: string;
-  operatingSystem: string;
-  serviceName: string;
-  version: 1;
-}
-
-interface AbsentRecoveryMarker {
-  status: RecoveryMarkerStatus.Absent;
-}
-
-interface PendingRecoveryMarker {
-  marker: OvhRecoveryMarker;
-  status: RecoveryMarkerStatus.Pending;
-}
-
-type RecoveryMarkerState = AbsentRecoveryMarker | PendingRecoveryMarker;
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const homeDirectory = process.env.HOME;

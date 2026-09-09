@@ -42,9 +42,9 @@ impl WasmModuleSources<'_> {
 
 impl WasmModuleSources<'_> {
     pub(super) fn tsconfig_alias_path(config: &Path, module: &str) -> Option<PathBuf> {
-        let value: serde_json::Value =
+        let value: TypeScriptAliasConfiguration =
             serde_json::from_str(&fs::read_to_string(config).ok()?).ok()?;
-        let paths = value.get("compilerOptions")?.get("paths")?.as_object()?;
+        let paths = value.compiler_options.paths;
         paths.iter().find_map(|(alias, targets)| {
             let suffix = if let Some(prefix) = alias.strip_suffix('*') {
                 module.strip_prefix(prefix)?
@@ -53,7 +53,7 @@ impl WasmModuleSources<'_> {
             } else {
                 return None;
             };
-            let target = targets.as_array()?.first()?.as_str()?;
+            let target = targets.first()?.as_str();
             let target = target.strip_suffix('*').unwrap_or(target);
             Some(WasmModuleSources::normalize_local_module_path(
                 &config.parent()?.join(format!("{target}{suffix}")),
@@ -228,4 +228,14 @@ mod tests {
         fs::remove_dir_all(root)?;
         Ok(())
     }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TypeScriptAliasConfiguration {
+    compiler_options: TypeScriptAliasOptions,
+}
+#[derive(serde::Deserialize)]
+struct TypeScriptAliasOptions {
+    paths: std::collections::BTreeMap<String, Vec<String>>,
 }

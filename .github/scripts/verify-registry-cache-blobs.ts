@@ -29,6 +29,41 @@ interface ManifestInput {
   reference: string;
 }
 
+class RegistryManifest {
+  static decode(text: string): RegistryDocument {
+    const value: unknown = JSON.parse(text);
+    if (!RegistryManifest.document(value))
+      throw new Error("registry manifest has an invalid schema");
+    return value;
+  }
+  private static record(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && !!value && !Array.isArray(value);
+  }
+  private static descriptor(value: unknown): value is RegistryDescriptor {
+    return (
+      RegistryManifest.record(value) &&
+      typeof value.digest === "string" &&
+      /^sha256:[0-9a-f]{64}$/.test(value.digest) &&
+      typeof value.size === "number" &&
+      Number.isSafeInteger(value.size) &&
+      value.size >= 0 &&
+      typeof value.mediaType === "string"
+    );
+  }
+  private static document(value: unknown): value is RegistryDocument {
+    return (
+      RegistryManifest.record(value) &&
+      (!("config" in value) || RegistryManifest.descriptor(value.config)) &&
+      (!("layers" in value) ||
+        (Array.isArray(value.layers) &&
+          value.layers.every(RegistryManifest.descriptor))) &&
+      (!("manifests" in value) ||
+        (Array.isArray(value.manifests) &&
+          value.manifests.every(RegistryManifest.descriptor)))
+    );
+  }
+}
+
 const registryRef = process.argv[2];
 if (!registryRef) {
   throw new Error("usage: bun verify-registry-cache-blobs.ts <registry-ref>");
@@ -136,9 +171,7 @@ const collectManifest = async (input: ManifestInput): Promise<void> => {
       );
     }
   }
-  const document = JSON.parse(
-    new TextDecoder().decode(bytes),
-  ) as RegistryDocument;
+  const document = RegistryManifest.decode(new TextDecoder().decode(bytes));
   const { layers = [], manifests = [] } = document;
   if (document.config) registerBlobDescriptor(document.config);
   for (const layer of layers) registerBlobDescriptor(layer);

@@ -5,6 +5,7 @@ import {
   KubernetesApiError,
   ReaperController,
   type ApiRequest,
+  type ApiJsonRequest,
   type KubernetesApi,
   type NetworkPolicy,
   type NetworkPolicyPatch,
@@ -48,17 +49,19 @@ class MockApi implements KubernetesApi {
   readyEndpoint = true;
   conflictOnce = true;
 
-  async json<T>(input: ApiRequest): Promise<T> {
+  async json<T>(input: ApiJsonRequest<T>): Promise<T> {
     if (input.path.endsWith("/services/hive-neo4j")) {
-      return { spec: { clusterIP: serviceCidr.replace("/32", "") } } as T;
+      return input.decode(
+        JSON.stringify({ spec: { clusterIP: serviceCidr.replace("/32", "") } }),
+      );
     }
     if (input.path.endsWith("/endpoints/hive-neo4j")) {
       const addresses = this.readyEndpoint
         ? [{ ip: newEndpoint.replace("/32", "") }]
         : [];
-      return { subsets: [{ addresses }] } as T;
+      return input.decode(JSON.stringify({ subsets: [{ addresses }] }));
     }
-    const [policyName = ("")] = [input.path.split("/").at(-1)];
+    const [policyName = ""] = [input.path.split("/").at(-1)];
     this.policyReads += 1;
     if (!this.policies.has(policyName)) {
       throw new Error(`unexpected API path: ${input.path}`);
@@ -71,7 +74,7 @@ class MockApi implements KubernetesApi {
       ];
       this.policies.set(policyName, structuredClone(stored));
     }
-    return stored as T;
+    return input.decode(JSON.stringify(stored));
   }
 
   async request(input: ApiRequest): Promise<string> {
@@ -168,8 +171,9 @@ class ReapApi implements KubernetesApi {
     this.initialRead = input.initialRead;
   }
 
-  async json<T>(input: ApiRequest): Promise<T> {
-    this.requests.push(structuredClone(input));
+  async json<T>(input: ApiJsonRequest<T>): Promise<T> {
+    const { decode, ...request } = input;
+    this.requests.push(structuredClone(request));
     if (this.initialRead === ReapReadResult.Missing) {
       throw new KubernetesApiError(404);
     }
@@ -177,9 +181,11 @@ class ReapApi implements KubernetesApi {
       throw new KubernetesApiError(500);
     }
     const name = this.initialRead === ReapReadResult.Hive ? "hive" : "not-hive";
-    return {
-      metadata: { labels: { "app.kubernetes.io/name": name } },
-    } as T;
+    return decode(
+      JSON.stringify({
+        metadata: { labels: { "app.kubernetes.io/name": name } },
+      }),
+    );
   }
 
   async request(input: ApiRequest): Promise<string> {
@@ -203,7 +209,7 @@ function reaperController(input: {
   pollAttempts?: number;
   sleeps?: number[];
 }): ReaperController {
-  const [sleeps = ([])] = [input.sleeps];
+  const [sleeps = []] = [input.sleeps];
   const [pollAttempts = 2] = [input.pollAttempts];
   const options: ReaperControllerOptions = {
     api: input.api,

@@ -9,13 +9,14 @@ export class ToolOutputValue {
       return [];
     }
 
-    const record = value as { resultSuffix?: unknown; durationMs?: unknown };
+    const record = value;
     const lines: string[] = [];
 
-    if (typeof record.durationMs === "number") {
+    if ("durationMs" in record && typeof record.durationMs === "number") {
       lines.push(`task duration ${record.durationMs}ms`);
     }
     if (
+      "resultSuffix" in record &&
       typeof record.resultSuffix === "string" &&
       record.resultSuffix.trim().length > 0
     ) {
@@ -37,22 +38,29 @@ export class ToolOutputValue {
       return [];
     }
 
-    const { stdout, stderr } = value as { stdout?: unknown; stderr?: unknown };
     const lines: string[] = [];
 
-    if (typeof stdout === "string" && stdout.length > 0) {
+    if (
+      "stdout" in value &&
+      typeof value.stdout === "string" &&
+      value.stdout.length > 0
+    ) {
       lines.push(
         ...new ToolOutputBlock({
           label: "stdout",
-          text: stdout,
+          text: value.stdout,
         }).format(),
       );
     }
-    if (typeof stderr === "string" && stderr.length > 0) {
+    if (
+      "stderr" in value &&
+      typeof value.stderr === "string" &&
+      value.stderr.length > 0
+    ) {
       lines.push(
         ...new ToolOutputBlock({
           label: "stderr",
-          text: stderr,
+          text: value.stderr,
         }).format(),
       );
     }
@@ -63,6 +71,8 @@ export class ToolOutputValue {
   readShellText(): string {
     const value = this.value;
 
+    if (!value || typeof value !== "object") return "";
+    const fields = Object.entries(value);
     for (const key of [
       "text",
       "content",
@@ -73,7 +83,9 @@ export class ToolOutputValue {
       "chunk",
       "bytes",
     ]) {
-      const candidate = value[key];
+      const entry = fields.find(([name]) => name === key);
+      if (!entry) continue;
+      const candidate: unknown = entry[1];
       if (typeof candidate === "string" && candidate.length > 0) {
         return candidate;
       }
@@ -85,7 +97,7 @@ export class ToolOutputValue {
     const value = this.value;
 
     if (value && typeof value === "object" && "exitCode" in value) {
-      const exitCode = (value as { exitCode?: unknown }).exitCode;
+      const exitCode = value.exitCode;
       if (typeof exitCode === "number") {
         return exitCode;
       }
@@ -243,34 +255,28 @@ export class ShellOutputEvent {
     if (!event || typeof event !== "object") {
       return "";
     }
-    const eventRecord = event as Record<string, unknown>;
+    // Host SDK streaming events admit several protobuf envelopes; inspect only text fields.
+    const eventRecord = event;
 
     const direct = new ToolOutputValue(eventRecord).readShellText();
     if (direct) {
       return direct;
     }
 
-    const nested = eventRecord.value;
-    if (nested && typeof nested === "object") {
-      const fromNested = new ToolOutputValue(
-        nested as Record<string, unknown>,
-      ).readShellText();
-      if (fromNested) {
-        return fromNested;
-      }
-    }
-
-    const protobufCase =
-      typeof eventRecord.case === "string" ? eventRecord.case : "";
-    if (protobufCase.includes("stdout") || protobufCase.includes("stderr")) {
-      if (typeof eventRecord.value === "string") {
-        return eventRecord.value;
-      }
+    if ("value" in eventRecord) {
+      const nested = eventRecord.value;
       if (nested && typeof nested === "object") {
-        return new ToolOutputValue(
-          nested as Record<string, unknown>,
-        ).readShellText();
+        const fromNested = new ToolOutputValue(nested).readShellText();
+        if (fromNested) return fromNested;
       }
+      if (
+        "case" in eventRecord &&
+        typeof eventRecord.case === "string" &&
+        (eventRecord.case.includes("stdout") ||
+          eventRecord.case.includes("stderr")) &&
+        typeof nested === "string"
+      )
+        return nested;
     }
 
     return "";
@@ -306,7 +312,9 @@ class ToolArgument {
     if (!args || typeof args !== "object") {
       return "";
     }
-    const value = (args as Record<string, unknown>)[key];
+    const entry = Object.entries(args).find(([name]) => name === key);
+    if (!entry) return "";
+    const value: unknown = entry[1];
     return typeof value === "string" ? value : "";
   }
 }
@@ -334,7 +342,7 @@ class ToolFailure {
     const error = this.request;
 
     if (error && typeof error === "object" && "message" in error) {
-      const message = (error as { message?: unknown }).message;
+      const message = error.message;
       if (typeof message === "string") {
         return message;
       }

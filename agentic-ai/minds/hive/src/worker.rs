@@ -230,7 +230,7 @@ impl<S: TaskStore> Worker<S> {
                         codex_options
                             .reasoning_effort
                             .clone_from(&self.config.reasoning_effort);
-                        let resolution = InProcessCodexRunner::with_external_auth(
+                        let result = InProcessCodexRunner::with_external_auth(
                             codex_options,
                             external_auth.clone(),
                         )
@@ -243,10 +243,6 @@ impl<S: TaskStore> Worker<S> {
                         )
                         .await
                         .hive_context("embedded Codex dependency resolution failed")?;
-                        let result: TerminalResult = serde_json::from_str(&resolution)
-                            .hive_context(
-                                "Codex returned an invalid dependency resolution result",
-                            )?;
                         if !matches!(result, TerminalResult::Completed { .. }) {
                             return Err(crate::HiveError::message(
                                 "Codex could not integrate dependency artifacts",
@@ -266,13 +262,11 @@ impl<S: TaskStore> Worker<S> {
                     codex_options
                         .reasoning_effort
                         .clone_from(&self.config.reasoning_effort);
-                    let raw_result =
+                    let result =
                         InProcessCodexRunner::with_external_auth(codex_options, external_auth)
                             .execute_task(task.id.as_str(), &prompt)
                             .await
                             .hive_context("embedded Codex execution failed")?;
-                    let result: TerminalResult = serde_json::from_str(&raw_result)
-                        .hive_context("Codex returned an invalid terminal result")?;
                     if let TerminalResult::Blocked {
                         summary, blocker, ..
                     } = &result

@@ -1,6 +1,21 @@
-class CommentPreviewUrlExpectJson<T> {
+interface PreviewComment {
+  id: number;
+  body: string;
+}
+class CommentPreviewUrlExpectJson {
+  private static isComment(value: unknown): value is PreviewComment {
+    return (
+      typeof value === "object" &&
+      !!value &&
+      "id" in value &&
+      typeof value.id === "number" &&
+      Number.isSafeInteger(value.id) &&
+      "body" in value &&
+      typeof value.body === "string"
+    );
+  }
   constructor(private readonly request: Response) {}
-  async execute(): Promise<T> {
+  async execute(): Promise<PreviewComment[]> {
     const response = this.request;
 
     const text = await response.text();
@@ -9,7 +24,13 @@ class CommentPreviewUrlExpectJson<T> {
         `GitHub API request failed (${response.status}): ${text}`,
       );
     }
-    return JSON.parse(text) as T;
+    const value: unknown = JSON.parse(text);
+    if (
+      !Array.isArray(value) ||
+      !value.every(CommentPreviewUrlExpectJson.isComment)
+    )
+      throw new Error("GitHub comments response has an invalid schema");
+    return value;
   }
 }
 
@@ -54,11 +75,7 @@ const listComments = () =>
   fetch(
     `https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}/comments`,
     { headers },
-  ).then((response) =>
-    new CommentPreviewUrlExpectJson<Array<{ id: number; body: string }>>(
-      response,
-    ).execute(),
-  );
+  ).then((response) => new CommentPreviewUrlExpectJson(response).execute());
 
 const updateComment = (comment_id: number) =>
   fetch(

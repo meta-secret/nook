@@ -18,7 +18,6 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use neo4rs::query;
-use serde_json::Value;
 use time::OffsetDateTime;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
@@ -126,11 +125,11 @@ impl ObserverCoordinator {
         while let Some(line) = lines.next_line().await? {
             let response = match serde_json::from_str::<ObserverRequest>(&line) {
                 Ok(ObserverRequest::Snapshot { locale }) => store
-                    .observer_snapshot_value(&locale)
+                    .observer_snapshot_view(&locale)
                     .await
                     .map(ObserverResponse::Snapshot),
                 Ok(ObserverRequest::Task { task_id, locale }) => store
-                    .observer_task_value(&task_id, &locale)
+                    .observer_task_view(&task_id, &locale)
                     .await
                     .map(ObserverResponse::Task),
                 Err(error) => Err(crate::HiveError::message(format!(
@@ -169,9 +168,9 @@ async fn health() -> StatusCode {
 async fn overview<S: ObserverStore>(
     State(state): State<ObserverState<S>>,
     Query(locale): Query<LocaleQuery>,
-) -> Result<Json<Value>, ObserverError> {
+) -> Result<Json<ObserverSnapshot>, ObserverError> {
     Ok(Json(
-        state.store.observer_snapshot_value(&locale.locale).await?,
+        state.store.observer_snapshot_view(&locale.locale).await?,
     ))
 }
 
@@ -179,10 +178,10 @@ async fn task_detail<S: ObserverStore>(
     State(state): State<ObserverState<S>>,
     Path(task_id): Path<String>,
     Query(locale): Query<LocaleQuery>,
-) -> Result<Json<Value>, ObserverError> {
+) -> Result<Json<ObservedTask>, ObserverError> {
     state
         .store
-        .observer_task_value(&task_id, &locale.locale)
+        .observer_task_view(&task_id, &locale.locale)
         .await?
         .map(Json)
         .ok_or_else(|| ObserverError::not_found("task was not found"))
@@ -215,7 +214,9 @@ impl IntoResponse for ObserverError {
     fn into_response(self) -> response::Response {
         (
             self.status,
-            Json(serde_json::json!({ "error": self.message })),
+            Json(ObserverErrorBody {
+                error: self.message,
+            }),
         )
             .into_response()
     }
@@ -595,30 +596,26 @@ impl Neo4jTaskStore {
 
 #[async_trait]
 impl ObserverStore for Neo4jTaskStore {
-    async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value> {
-        Ok(serde_json::to_value(self.observer_snapshot(locale).await?)?)
+    async fn observer_snapshot_view(&self, locale: &str) -> crate::HiveResult<ObserverSnapshot> {
+        self.observer_snapshot(locale).await
     }
 
-    async fn observer_task_value(
+    async fn observer_task_view(
         &self,
         task_id: &str,
         locale: &str,
-    ) -> crate::HiveResult<Option<Value>> {
-        self.observer_task(task_id, locale)
-            .await?
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(Into::into)
+    ) -> crate::HiveResult<Option<ObservedTask>> {
+        self.observer_task(task_id, locale).await
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::{ObservedTask, ObserverSnapshot};
     use async_trait::async_trait;
     use axum::extract::{Path, Query, State};
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
-    use serde_json::{Value, json};
     use std::io;
     use std::net;
     use std::time;
@@ -639,22 +636,23 @@ mod tests {
 
     #[async_trait]
     impl ObserverStore for FixtureStore {
-        async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value> {
+        async fn observer_snapshot_view(
+            &self,
+            locale: &str,
+        ) -> crate::HiveResult<ObserverSnapshot> {
             match self {
-                Self::Ready => Ok(json!({"locale": locale, "tasks": 2})),
+                Self::Ready => Ok(ObserverSnapshot::fixture(locale)),
                 Self::Failed => Err(crate::HiveError::message("database unavailable")),
             }
         }
 
-        async fn observer_task_value(
+        async fn observer_task_view(
             &self,
             task_id: &str,
             locale: &str,
-        ) -> crate::HiveResult<Option<Value>> {
+        ) -> crate::HiveResult<Option<ObservedTask>> {
             match self {
-                Self::Ready if task_id == "task-1" => {
-                    Ok(Some(json!({"id": task_id, "locale": locale})))
-                }
+                Self::Ready if task_id == "task-1" => Ok(Some(ObservedTask::fixture(task_id))),
                 Self::Ready => Ok(None),
                 Self::Failed => Err(crate::HiveError::message("database unavailable")),
             }
@@ -723,7 +721,8 @@ mod tests {
             Ok(snapshot) => snapshot.0,
             Err(_) => return Err(crate::HiveError::message("ready overview failed")),
         };
-        assert_eq!(snapshot, json!({"locale": "ru", "tasks": 2}));
+        assert_eq!(snapshot.active_task_count, 2);
+        assert_eq!(snapshot.copy.overview, "Обзор");
         let task = match task_detail(
             State(state.clone()),
             Path("task-1".into()),
@@ -736,7 +735,7 @@ mod tests {
             Ok(task) => task.0,
             Err(_) => return Err(crate::HiveError::message("known task was not returned")),
         };
-        assert_eq!(task, json!({"id": "task-1", "locale": "en"}));
+        assert_eq!(task.id, "task-1");
 
         let Err(missing) = task_detail(
             State(state),
@@ -791,10 +790,10 @@ mod tests {
         assert!(health.starts_with("HTTP/1.1 204 No Content"));
         let overview = http_get(address, "/api/overview?locale=ru").await?;
         assert!(overview.starts_with("HTTP/1.1 200 OK"));
-        assert!(overview.contains(r#"{"locale":"ru","tasks":2}"#));
+        assert!(overview.contains(r#""overview":"Обзор""#));
         let task = http_get(address, "/api/tasks/task-1?locale=en").await?;
         assert!(task.starts_with("HTTP/1.1 200 OK"));
-        assert!(task.contains(r#"{"id":"task-1","locale":"en"}"#));
+        assert!(task.contains(r#""id":"task-1""#));
         let missing = http_get(address, "/api/tasks/missing?locale=en").await?;
         assert!(missing.starts_with("HTTP/1.1 404 Not Found"));
         let dashboard = http_get(address, "/").await?;
@@ -809,4 +808,9 @@ mod tests {
         assert!(cancelled.is_cancelled());
         Ok(())
     }
+}
+
+#[derive(serde::Serialize)]
+struct ObserverErrorBody {
+    error: String,
 }

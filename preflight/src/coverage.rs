@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde::{Deserialize, de::DeserializeOwned};
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -277,19 +277,11 @@ impl CoverageArtifact<'_> {
         let directory = self.directory;
         let expected_commit = self.expected_commit;
         let manifest_path = directory.join("manifest.json");
-        let manifest = CoverageDocument {
+        let manifest: CoverageManifest = CoverageDocument {
             path: &manifest_path,
         }
         .read_json()?;
-        let schema_version = manifest
-            .get("schema_version")
-            .and_then(Value::as_u64)
-            .ok_or_else(|| {
-                CoverageDocument {
-                    path: &manifest_path,
-                }
-                .invalid_data("missing integer schema_version")
-            })?;
+        let schema_version = manifest.schema_version;
         if schema_version != COVERAGE_ARTIFACT_SCHEMA_VERSION {
             return Err(CoverageDocument {
                 path: &manifest_path,
@@ -298,15 +290,7 @@ impl CoverageArtifact<'_> {
                 "schema_version {schema_version} does not match {COVERAGE_ARTIFACT_SCHEMA_VERSION}"
             )));
         }
-        let commit = manifest
-            .get("commit_sha")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                CoverageDocument {
-                    path: &manifest_path,
-                }
-                .invalid_data("missing string commit_sha")
-            })?;
+        let commit = manifest.commit_sha;
         if commit != expected_commit {
             return Err(CoverageDocument {
                 path: &manifest_path,
@@ -329,29 +313,20 @@ impl CoverageArtifact<'_> {
 impl CoverageDocument<'_> {
     fn line_percent(&self) -> io::Result<f64> {
         let path = self.path;
-        let report = self.read_json()?;
-        let percent = report
-            .pointer("/data/0/totals/lines/percent")
-            .and_then(Value::as_f64)
-            .ok_or_else(|| {
-                CoverageDocument { path: path }
-                    .invalid_data("missing numeric data[0].totals.lines.percent")
-            })?;
-        self.validate_percent(percent)
+        let report: LlvmCoverageSummary = self.read_json()?;
+        let entry = report
+            .data
+            .first()
+            .ok_or_else(|| self.invalid_data("missing data[0]"))?;
+        self.validate_percent(entry.totals.lines.percent)
     }
 }
 
 impl CoverageDocument<'_> {
     fn floor_percent(&self) -> io::Result<f64> {
         let path = self.path;
-        let floor = self
-            .read_json()?
-            .get("lines_percent")
-            .and_then(Value::as_f64)
-            .ok_or_else(|| {
-                CoverageDocument { path: path }.invalid_data("missing numeric lines_percent")
-            })?;
-        self.validate_percent(floor)
+        let floor: CoverageFloor = self.read_json()?;
+        self.validate_percent(floor.lines_percent)
     }
 }
 
@@ -368,7 +343,7 @@ impl CoverageDocument<'_> {
 }
 
 impl CoverageDocument<'_> {
-    fn read_json(&self) -> io::Result<Value> {
+    fn read_json<T: DeserializeOwned>(&self) -> io::Result<T> {
         let path = self.path;
         let contents = fs::read(path)?;
         serde_json::from_slice(&contents)
@@ -415,4 +390,49 @@ struct CoverageDocument<'a> {
 }
 struct GithubOutput<'a> {
     path: &'a Path,
+}
+
+#[derive(Deserialize)]
+struct CoverageManifest {
+    schema_version: u64,
+    commit_sha: String,
+}
+#[derive(Deserialize)]
+struct CoverageFloor {
+    lines_percent: f64,
+}
+#[derive(Deserialize)]
+struct LlvmCoverageSummary {
+    data: Vec<LlvmCoverageData>,
+}
+#[derive(Deserialize)]
+struct LlvmCoverageData {
+    totals: LlvmCoverageTotals,
+}
+#[derive(Deserialize)]
+struct LlvmCoverageTotals {
+    lines: LlvmLineCoverage,
+}
+#[derive(Deserialize)]
+struct LlvmLineCoverage {
+    percent: f64,
+}
+
+#[cfg(test)]
+mod typed_document_tests {
+    use super::*;
+    #[test]
+    fn coverage_documents_reject_wrong_field_types() {
+        assert!(
+            serde_json::from_str::<CoverageManifest>(
+                r#"{"schema_version":"1","commit_sha":"abc"}"#
+            )
+            .is_err()
+        );
+        assert!(serde_json::from_str::<CoverageFloor>(r#"{"lines_percent":"90"}"#).is_err());
+        assert!(
+            serde_json::from_str::<LlvmCoverageSummary>(r#"{"data":[{"totals":{"lines":{}}}]}"#)
+                .is_err()
+        );
+    }
 }

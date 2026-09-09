@@ -3,158 +3,163 @@ use serde::{Deserialize, Serialize};
 use std::io;
 use tokio::time as async_time;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObserverCopy {
-    pub product_name: &'static str,
-    pub product_description: &'static str,
-    pub overview: &'static str,
-    pub workers: &'static str,
-    pub queue: &'static str,
-    pub needs_attention: &'static str,
-    pub recent_activity: &'static str,
-    pub all_tasks: &'static str,
-    pub search_tasks: &'static str,
-    pub no_tasks: &'static str,
-    pub no_tasks_description: &'static str,
-    pub no_search_results: &'static str,
-    pub no_search_results_description: &'static str,
-    pub no_attention: &'static str,
-    pub no_attention_description: &'static str,
-    pub task_details: &'static str,
-    pub trigger: &'static str,
-    pub source_revision: &'static str,
-    pub current_attempt: &'static str,
-    pub dependencies: &'static str,
-    pub timeline: &'static str,
-    pub no_activity: &'static str,
-    pub no_dependencies: &'static str,
-    pub attempt: &'static str,
-    pub last_seen: &'static str,
-    pub updated: &'static str,
-    pub stale: &'static str,
-    pub healthy: &'static str,
-    pub idle: &'static str,
-    pub running: &'static str,
-    pub ready: &'static str,
-    pub blocked: &'static str,
-    pub failed: &'static str,
-    pub critical: &'static str,
-    pub warning: &'static str,
-    pub alert_task_failed: &'static str,
-    pub alert_dependency_failed: &'static str,
-    pub alert_dependency_blocked: &'static str,
-    pub alert_activity_stale: &'static str,
-    pub alert_cancellation_stuck: &'static str,
-    pub cancelling: &'static str,
-    pub cancelled: &'static str,
-    pub completed: &'static str,
-    pub unavailable: &'static str,
-    pub unavailable_description: &'static str,
-    pub retry_connection: &'static str,
-    pub close_details: &'static str,
+    pub product_name: String,
+    pub product_description: String,
+    pub overview: String,
+    pub workers: String,
+    pub queue: String,
+    pub needs_attention: String,
+    pub recent_activity: String,
+    pub all_tasks: String,
+    pub search_tasks: String,
+    pub no_tasks: String,
+    pub no_tasks_description: String,
+    pub no_search_results: String,
+    pub no_search_results_description: String,
+    pub no_attention: String,
+    pub no_attention_description: String,
+    pub task_details: String,
+    pub trigger: String,
+    pub source_revision: String,
+    pub current_attempt: String,
+    pub dependencies: String,
+    pub timeline: String,
+    pub no_activity: String,
+    pub no_dependencies: String,
+    pub attempt: String,
+    pub last_seen: String,
+    pub updated: String,
+    pub stale: String,
+    pub healthy: String,
+    pub idle: String,
+    pub running: String,
+    pub ready: String,
+    pub blocked: String,
+    pub failed: String,
+    pub critical: String,
+    pub warning: String,
+    pub alert_task_failed: String,
+    pub alert_dependency_failed: String,
+    pub alert_dependency_blocked: String,
+    pub alert_activity_stale: String,
+    pub alert_cancellation_stuck: String,
+    pub cancelling: String,
+    pub cancelled: String,
+    pub completed: String,
+    pub unavailable: String,
+    pub unavailable_description: String,
+    pub retry_connection: String,
+    pub close_details: String,
 }
 
 impl ObserverCopy {
     pub(super) fn for_locale(locale: &str) -> Self {
         if locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-") {
             return Self {
-                product_name: "Центр управления Hive",
-                product_description: "Задачи агентов, исполнители и история работы в одном месте",
-                overview: "Обзор",
-                workers: "Исполнители",
-                queue: "Очередь",
-                needs_attention: "Требует внимания",
-                recent_activity: "Последние действия",
-                all_tasks: "Все задачи",
-                search_tasks: "Поиск задач",
-                no_tasks: "Задач пока нет",
-                no_tasks_description: "Новые задачи появятся здесь после запуска Hive.",
-                no_search_results: "Ничего не найдено",
-                no_search_results_description: "Измените запрос, чтобы увидеть другие задачи.",
-                no_attention: "Вмешательство не требуется",
-                no_attention_description: "Заблокированных, устаревших или неудачных задач нет.",
-                task_details: "Сведения о задаче",
-                trigger: "Источник",
-                source_revision: "Исходная ревизия",
-                current_attempt: "Текущая попытка",
-                dependencies: "Зависимости",
-                timeline: "Ход работы",
-                no_activity: "Агент ещё не записал действий.",
-                no_dependencies: "У этой задачи нет зависимостей.",
-                attempt: "Попытка",
-                last_seen: "Последняя активность",
-                updated: "Обновлено",
-                stale: "Нет связи",
-                healthy: "На связи",
-                idle: "Ожидает",
-                running: "Выполняется",
-                ready: "Готова",
-                blocked: "Заблокирована",
-                failed: "Ошибка",
-                critical: "Критично",
-                warning: "Предупреждение",
-                alert_task_failed: "Все разрешённые попытки завершились ошибкой",
-                alert_dependency_failed: "Задача не запустилась из-за ошибки зависимости",
-                alert_dependency_blocked: "Задача ожидает завершения зависимости",
-                alert_activity_stale: "Агент давно не записывал действий",
-                alert_cancellation_stuck: "Отмена не была подтверждена вовремя",
-                cancelling: "Отменяется",
-                cancelled: "Отменена",
-                completed: "Завершена",
-                unavailable: "Hive сейчас недоступен",
-                unavailable_description: "Не удалось получить состояние наблюдателя.",
-                retry_connection: "Повторить",
-                close_details: "Закрыть сведения",
+                product_name: "Центр управления Hive".to_owned(),
+                product_description: "Задачи агентов, исполнители и история работы в одном месте"
+                    .to_owned(),
+                overview: "Обзор".to_owned(),
+                workers: "Исполнители".to_owned(),
+                queue: "Очередь".to_owned(),
+                needs_attention: "Требует внимания".to_owned(),
+                recent_activity: "Последние действия".to_owned(),
+                all_tasks: "Все задачи".to_owned(),
+                search_tasks: "Поиск задач".to_owned(),
+                no_tasks: "Задач пока нет".to_owned(),
+                no_tasks_description: "Новые задачи появятся здесь после запуска Hive.".to_owned(),
+                no_search_results: "Ничего не найдено".to_owned(),
+                no_search_results_description: "Измените запрос, чтобы увидеть другие задачи."
+                    .to_owned(),
+                no_attention: "Вмешательство не требуется".to_owned(),
+                no_attention_description: "Заблокированных, устаревших или неудачных задач нет."
+                    .to_owned(),
+                task_details: "Сведения о задаче".to_owned(),
+                trigger: "Источник".to_owned(),
+                source_revision: "Исходная ревизия".to_owned(),
+                current_attempt: "Текущая попытка".to_owned(),
+                dependencies: "Зависимости".to_owned(),
+                timeline: "Ход работы".to_owned(),
+                no_activity: "Агент ещё не записал действий.".to_owned(),
+                no_dependencies: "У этой задачи нет зависимостей.".to_owned(),
+                attempt: "Попытка".to_owned(),
+                last_seen: "Последняя активность".to_owned(),
+                updated: "Обновлено".to_owned(),
+                stale: "Нет связи".to_owned(),
+                healthy: "На связи".to_owned(),
+                idle: "Ожидает".to_owned(),
+                running: "Выполняется".to_owned(),
+                ready: "Готова".to_owned(),
+                blocked: "Заблокирована".to_owned(),
+                failed: "Ошибка".to_owned(),
+                critical: "Критично".to_owned(),
+                warning: "Предупреждение".to_owned(),
+                alert_task_failed: "Все разрешённые попытки завершились ошибкой".to_owned(),
+                alert_dependency_failed: "Задача не запустилась из-за ошибки зависимости"
+                    .to_owned(),
+                alert_dependency_blocked: "Задача ожидает завершения зависимости".to_owned(),
+                alert_activity_stale: "Агент давно не записывал действий".to_owned(),
+                alert_cancellation_stuck: "Отмена не была подтверждена вовремя".to_owned(),
+                cancelling: "Отменяется".to_owned(),
+                cancelled: "Отменена".to_owned(),
+                completed: "Завершена".to_owned(),
+                unavailable: "Hive сейчас недоступен".to_owned(),
+                unavailable_description: "Не удалось получить состояние наблюдателя.".to_owned(),
+                retry_connection: "Повторить".to_owned(),
+                close_details: "Закрыть сведения".to_owned(),
             };
         }
         Self {
-            product_name: "Hive Control Center",
-            product_description: "Agent tasks, workers, and execution history in one place",
-            overview: "Overview",
-            workers: "Workers",
-            queue: "Queue",
-            needs_attention: "Needs attention",
-            recent_activity: "Recent activity",
-            all_tasks: "All tasks",
-            search_tasks: "Search tasks",
-            no_tasks: "No tasks yet",
-            no_tasks_description: "New work will appear here when Hive is triggered.",
-            no_search_results: "No matching tasks",
-            no_search_results_description: "Adjust the search to see other tasks.",
-            no_attention: "Nothing needs intervention",
-            no_attention_description: "There are no blocked, stale, or failed tasks.",
-            task_details: "Task details",
-            trigger: "Trigger",
-            source_revision: "Source revision",
-            current_attempt: "Current attempt",
-            dependencies: "Dependencies",
-            timeline: "Timeline",
-            no_activity: "The agent has not recorded any activity yet.",
-            no_dependencies: "This task has no dependencies.",
-            attempt: "Attempt",
-            last_seen: "Last seen",
-            updated: "Updated",
-            stale: "Stale",
-            healthy: "Healthy",
-            idle: "Idle",
-            running: "Running",
-            ready: "Ready",
-            blocked: "Blocked",
-            failed: "Failed",
-            critical: "Critical",
-            warning: "Warning",
-            alert_task_failed: "All permitted attempts have failed",
-            alert_dependency_failed: "Task could not start because a dependency failed",
-            alert_dependency_blocked: "Task is waiting for a dependency",
-            alert_activity_stale: "Agent activity has gone stale",
-            alert_cancellation_stuck: "Cancellation was not acknowledged in time",
-            cancelling: "Cancelling",
-            cancelled: "Cancelled",
-            completed: "Completed",
-            unavailable: "Hive is unavailable",
-            unavailable_description: "The observer state could not be loaded.",
-            retry_connection: "Try again",
-            close_details: "Close details",
+            product_name: "Hive Control Center".to_owned(),
+            product_description: "Agent tasks, workers, and execution history in one place"
+                .to_owned(),
+            overview: "Overview".to_owned(),
+            workers: "Workers".to_owned(),
+            queue: "Queue".to_owned(),
+            needs_attention: "Needs attention".to_owned(),
+            recent_activity: "Recent activity".to_owned(),
+            all_tasks: "All tasks".to_owned(),
+            search_tasks: "Search tasks".to_owned(),
+            no_tasks: "No tasks yet".to_owned(),
+            no_tasks_description: "New work will appear here when Hive is triggered.".to_owned(),
+            no_search_results: "No matching tasks".to_owned(),
+            no_search_results_description: "Adjust the search to see other tasks.".to_owned(),
+            no_attention: "Nothing needs intervention".to_owned(),
+            no_attention_description: "There are no blocked, stale, or failed tasks.".to_owned(),
+            task_details: "Task details".to_owned(),
+            trigger: "Trigger".to_owned(),
+            source_revision: "Source revision".to_owned(),
+            current_attempt: "Current attempt".to_owned(),
+            dependencies: "Dependencies".to_owned(),
+            timeline: "Timeline".to_owned(),
+            no_activity: "The agent has not recorded any activity yet.".to_owned(),
+            no_dependencies: "This task has no dependencies.".to_owned(),
+            attempt: "Attempt".to_owned(),
+            last_seen: "Last seen".to_owned(),
+            updated: "Updated".to_owned(),
+            stale: "Stale".to_owned(),
+            healthy: "Healthy".to_owned(),
+            idle: "Idle".to_owned(),
+            running: "Running".to_owned(),
+            ready: "Ready".to_owned(),
+            blocked: "Blocked".to_owned(),
+            failed: "Failed".to_owned(),
+            critical: "Critical".to_owned(),
+            warning: "Warning".to_owned(),
+            alert_task_failed: "All permitted attempts have failed".to_owned(),
+            alert_dependency_failed: "Task could not start because a dependency failed".to_owned(),
+            alert_dependency_blocked: "Task is waiting for a dependency".to_owned(),
+            alert_activity_stale: "Agent activity has gone stale".to_owned(),
+            alert_cancellation_stuck: "Cancellation was not acknowledged in time".to_owned(),
+            cancelling: "Cancelling".to_owned(),
+            cancelled: "Cancelled".to_owned(),
+            completed: "Completed".to_owned(),
+            unavailable: "Hive is unavailable".to_owned(),
+            unavailable_description: "The observer state could not be loaded.".to_owned(),
+            retry_connection: "Try again".to_owned(),
+            close_details: "Close details".to_owned(),
         }
     }
 }
@@ -173,12 +178,12 @@ impl ObserverCopy {
 
 #[async_trait]
 pub trait ObserverStore: Clone + Send + Sync + 'static {
-    async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value>;
-    async fn observer_task_value(
+    async fn observer_snapshot_view(&self, locale: &str) -> crate::HiveResult<ObserverSnapshot>;
+    async fn observer_task_view(
         &self,
         task_id: &str,
         locale: &str,
-    ) -> crate::HiveResult<Option<Value>>;
+    ) -> crate::HiveResult<Option<ObservedTask>>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -191,8 +196,8 @@ pub(super) enum ObserverRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "result", content = "value", rename_all = "snake_case")]
 pub(super) enum ObserverResponse {
-    Snapshot(Value),
-    Task(Option<Value>),
+    Snapshot(ObserverSnapshot),
+    Task(Option<ObservedTask>),
     Error(String),
 }
 
@@ -244,7 +249,7 @@ impl ObserverCoordinatorStore {
 
 #[async_trait]
 impl ObserverStore for ObserverCoordinatorStore {
-    async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value> {
+    async fn observer_snapshot_view(&self, locale: &str) -> crate::HiveResult<ObserverSnapshot> {
         match self
             .request(ObserverRequest::Snapshot {
                 locale: locale.to_owned(),
@@ -260,11 +265,11 @@ impl ObserverStore for ObserverCoordinatorStore {
         }
     }
 
-    async fn observer_task_value(
+    async fn observer_task_view(
         &self,
         task_id: &str,
         locale: &str,
-    ) -> crate::HiveResult<Option<Value>> {
+    ) -> crate::HiveResult<Option<ObservedTask>> {
         match self
             .request(ObserverRequest::Task {
                 task_id: task_id.to_owned(),
@@ -301,8 +306,8 @@ mod tests {
             let (reader, mut writer) = stream.into_split();
             let mut requests = BufReader::new(reader).lines();
             let responses = [
-                ObserverResponse::Snapshot(serde_json::json!({"ready": 2})),
-                ObserverResponse::Task(Some(serde_json::json!({"id": "task-7"}))),
+                ObserverResponse::Snapshot(super::super::ObserverSnapshot::fixture("en")),
+                ObserverResponse::Task(Some(super::super::ObservedTask::fixture("task-7"))),
                 ObserverResponse::Task(None),
                 ObserverResponse::Error("coordinator unavailable".into()),
             ];
@@ -329,14 +334,17 @@ mod tests {
 
         assert_eq!(ObserverCopy::default_locale(), "en");
         assert_eq!(
-            client.observer_snapshot_value("en").await?,
-            serde_json::json!({"ready": 2})
+            client.observer_snapshot_view("en").await?.active_task_count,
+            2
         );
         assert_eq!(
-            client.observer_task_value("task-7", "ru").await?,
-            Some(serde_json::json!({"id": "task-7"}))
+            client
+                .observer_task_view("task-7", "ru")
+                .await?
+                .map(|task| task.id),
+            Some("task-7".to_owned())
         );
-        let Err(mismatch) = client.observer_snapshot_value("en").await else {
+        let Err(mismatch) = client.observer_snapshot_view("en").await else {
             return Err(crate::HiveError::message(
                 "task response satisfied a snapshot request",
             ));
@@ -346,13 +354,13 @@ mod tests {
                 .to_string()
                 .contains("unexpected observer coordinator response")
         );
-        let Err(remote_error) = client.observer_task_value("task-8", "en").await else {
+        let Err(remote_error) = client.observer_task_view("task-8", "en").await else {
             return Err(crate::HiveError::message(
                 "remote observer error did not cross the private channel",
             ));
         };
         assert!(remote_error.to_string().contains("coordinator unavailable"));
-        let Err(closed) = client.observer_snapshot_value("en").await else {
+        let Err(closed) = client.observer_snapshot_view("en").await else {
             return Err(crate::HiveError::message(
                 "closed observer channel returned state",
             ));
