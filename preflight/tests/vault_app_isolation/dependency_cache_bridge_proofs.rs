@@ -21,16 +21,16 @@ const WASM_FINGERPRINT_ALLOWLIST: &[&str] = &[
 
 #[test]
 fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
-    let root = repository_root();
-    let root_tasks = read(&root, "Taskfile.yml");
-    let app_tasks = read(&root, "nook-app/Taskfile.yml");
-    let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
-    let guard = read(&root, ".github/scripts/rust-deps-cache-publish-guard.sh");
-    let promoter = read(&root, ".github/scripts/rust-deps-cache-promote.sh");
-    let promotion_workflow = read(&root, ".github/workflows/remote.yml");
-    let hosted_setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
-    let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let root = RepositoryFixture::repository_root();
+    let root_tasks = (&root).read("Taskfile.yml");
+    let app_tasks = (&root).read("nook-app/Taskfile.yml");
+    let docker_tasks = (&root).read("nook-app/nook-platform/docker/Taskfile.yml");
+    let guard = (&root).read(".github/scripts/rust-deps-cache-publish-guard.sh");
+    let promoter = (&root).read(".github/scripts/rust-deps-cache-promote.sh");
+    let promotion_workflow = (&root).read(".github/workflows/remote.yml");
+    let hosted_setup = (&root).read(".github/actions/nook-docker-setup/action.yml");
+    let rust_bake = (&root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let core_bake = (&root).read("nook-app/nook-platform/nook-core/docker-bake.hcl");
 
     assert!(
         root_tasks.contains("NOOK_REGISTRY_CACHE_LOCAL_DEPS_PUBLISH:")
@@ -158,11 +158,8 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
 
 #[test]
 fn theorem_loom_release_dependencies_are_source_free_and_main_seeded() {
-    let root = repository_root();
-    let product = read(
-        &root,
-        "nook-app/nook-platform/docker/rust/product.Dockerfile",
-    );
+    let root = RepositoryFixture::repository_root();
+    let product = (&root).read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     let dependency_boundary = product
         .find("FROM builder-core-deps AS rust-platform")
         .expect("rust-platform source boundary must exist");
@@ -187,19 +184,16 @@ fn theorem_loom_release_dependencies_are_source_free_and_main_seeded() {
 
 #[test]
 fn theorem_wasm_node_consumer_uses_portable_dependencies() -> anyhow::Result<()> {
-    let root = repository_root();
-    let app_bake = read(&root, "nook-app/docker-bake.hcl");
-    let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let wasm_bake = read(&root, "nook-app/nook-platform/nook-wasm/docker-bake.hcl");
-    let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
-    let product = read(
-        &root,
-        "nook-app/nook-platform/docker/rust/product.Dockerfile",
-    );
-    let tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
-    let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
-    let main = read(&root, ".github/workflows/main.yml");
-    let pr = read(&root, ".github/workflows/pr.yml");
+    let root = RepositoryFixture::repository_root();
+    let app_bake = (&root).read("nook-app/docker-bake.hcl");
+    let rust_bake = (&root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let wasm_bake = (&root).read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    let core_bake = (&root).read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let product = (&root).read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let tasks = (&root).read("nook-app/nook-platform/docker/Taskfile.yml");
+    let setup = (&root).read(".github/actions/nook-docker-setup/action.yml");
+    let main = (&root).read(".github/workflows/main.yml");
+    let pr = (&root).read(".github/workflows/pr.yml");
 
     let builder = bake_target_body(&wasm_bake, "builder-wasm");
     assert!(
@@ -230,7 +224,7 @@ fn theorem_wasm_node_consumer_uses_portable_dependencies() -> anyhow::Result<()>
         "      - name: Publish verified WASM BuildKit cache\n",
     );
     let pr_node = section(&pr, "  wasm-node-test:\n", "  verify:\n");
-    let ci_tasks = read(&root, "nook-app/ci/Taskfile.yml");
+    let ci_tasks = (&root).read("nook-app/ci/Taskfile.yml");
     assert!(
         main_node.contains("task ci:main:wasm-node-test")
             && !main_node.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
@@ -247,9 +241,9 @@ fn theorem_wasm_node_consumer_uses_portable_dependencies() -> anyhow::Result<()>
 
 #[test]
 fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
-    let root = repository_root();
-    let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
-    let script = read(&root, ".github/scripts/rust-deps-cache-fingerprint.sh");
+    let root = RepositoryFixture::repository_root();
+    let setup = (&root).read(".github/actions/nook-docker-setup/action.yml");
+    let script = (&root).read(".github/scripts/rust-deps-cache-fingerprint.sh");
     for input in WASM_FINGERPRINT_ALLOWLIST {
         let marker = if input.contains("/**") {
             format!("'{input}'")
@@ -316,15 +310,12 @@ fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
 
 #[test]
 fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
-    let root = repository_root();
-    let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
-    let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
-    let blob_verifier = read(&root, ".github/scripts/verify-registry-cache-blobs.ts");
-    let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
-    let product_dockerfile = read(
-        &root,
-        "nook-app/nook-platform/docker/rust/product.Dockerfile",
-    );
+    let root = RepositoryFixture::repository_root();
+    let docker_tasks = (&root).read("nook-app/nook-platform/docker/Taskfile.yml");
+    let verifier = (&root).read(".github/scripts/verify-wasm-gha-cache.sh");
+    let blob_verifier = (&root).read(".github/scripts/verify-registry-cache-blobs.ts");
+    let core_bake = (&root).read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let product_dockerfile = (&root).read("nook-app/nook-platform/docker/rust/product.Dockerfile");
 
     let native = docker_tasks
         .split("docker:ci:cache:publish:native:")

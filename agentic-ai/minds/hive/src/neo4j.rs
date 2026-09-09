@@ -5,8 +5,8 @@ use serde::Serialize;
 use tokio::time as async_time;
 use uuid::Uuid;
 
-use self::claim_retry::{CLAIM_RETRY_LIMIT, transient_claim_retry_delay};
-use crate::install_rustls_crypto_provider;
+use self::claim_retry::CLAIM_RETRY_LIMIT;
+use crate::HIVE_TLS_PROVIDER;
 use crate::model::{
     ActivityLease, AgentId, Artifact, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
     CompletionArtifact, DependencyResult, EnqueueTask, LeaseToken, TaskActivity, TaskId,
@@ -41,7 +41,7 @@ pub struct QueueTaskStatus {
 #[async_trait]
 impl TaskStore for Neo4jTaskStore {
     async fn migrate(&self) -> crate::HiveResult<()> {
-        migration::migrate(&self.graph).await
+        self.migrate_schema().await
     }
 
     async fn register_agent(&self, agent_id: &AgentId, pod_name: &str) -> crate::HiveResult<()> {
@@ -413,7 +413,7 @@ impl TaskStore for Neo4jTaskStore {
 
             match result {
                 Ok(claimed) => return Ok(claimed),
-                Err(error) => match transient_claim_retry_delay(retry, &error) {
+                Err(error) => match Neo4jTaskStore::transient_claim_retry_delay(retry, &error) {
                     Some(delay) => async_time::sleep(delay).await,
                     None => return Err(error),
                 },

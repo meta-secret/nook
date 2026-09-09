@@ -1,19 +1,792 @@
 import { Octokit } from "@octokit/rest";
 
 import {
-  codexReviewRequestMarker,
-  cursorReviewRequestMarker,
-  isCleanCodexReviewComment,
-  isCodexCleanReviewStatusComment,
-  isCodexReviewStatusBody,
-  isCodexReviewer,
-  isCursorReviewStatusBody,
-  isCursorReviewer,
-  isSubmittedReviewState,
-  isTrustedCodexReviewRequestComment,
-  isTrustedExactHeadReviewRequest,
+  CodexReviewRevision,
+  CursorReviewRevision,
+  ReviewCommentBody,
+  ReviewActor,
+  SubmittedReviewState,
+  GitHubReviewIsTrustedCodexReviewRequestComment,
+  GitHubReviewIsTrustedExactHeadReviewRequest,
 } from "./github-review.js";
-import { createLogger } from "./logger.js";
+import { Logger } from "./logger.js";
+export class GitHubEnvironment {
+  constructor(private readonly environment: NodeJS.ProcessEnv) {}
+  resolveGitHubToken(): string {
+    const token =
+      this.environment.NOOK_GITHUB_PAT?.trim() ||
+      this.environment.GITHUB_TOKEN?.trim() ||
+      this.environment.GH_TOKEN?.trim();
+    if (!token) {
+      throw new Error("NOOK_GITHUB_PAT, GITHUB_TOKEN, or GH_TOKEN is required");
+    }
+    return token;
+  }
+
+  createOctokit(): Octokit {
+    return new Octokit({ auth: this.resolveGitHubToken() });
+  }
+}
+
+export interface GitHubClientReadPullRequestRevisionRequest {
+  readonly repoRef: RepoRef;
+  readonly prNumber: number;
+  readonly signal?: AbortSignal;
+}
+
+export interface GitHubClientFindOpenPrRequest {
+  readonly subject1: RepoRef;
+  readonly headBranch: string;
+}
+
+export interface GitHubClientBranchExistsOnOriginRequest {
+  readonly subject1: RepoRef;
+  readonly branch: string;
+}
+
+export interface GitHubClientInspectPrFeedbackRequest {
+  readonly repoRef: RepoRef;
+  readonly prNumber: number;
+  readonly options?: InspectPrFeedbackOptions;
+}
+
+export class GitHubClient {
+  constructor(private readonly value: Octokit) {}
+  async readPullRequestRevision(
+    request: GitHubClientReadPullRequestRevisionRequest,
+  ): Promise<PullRequestRevision> {
+    const octokit = this.value;
+    const { repoRef, prNumber, signal } = request;
+
+    const { owner, repo } = repoRef;
+    const { data: pr } = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+      ...(signal ? { request: { signal } } : {}),
+    });
+    return {
+      baseRef: pr.base.ref,
+      baseSha: pr.base.sha,
+      headSha: pr.head.sha,
+    };
+  }
+
+  async findOpenPr(
+    request: GitHubClientFindOpenPrRequest,
+  ): Promise<OpenPrLookup> {
+    const octokit = this.value;
+    const { subject1, headBranch } = request;
+    const { owner, repo } = subject1;
+
+    const { data } = await octokit.rest.pulls.list({
+      owner,
+      repo,
+      state: "open",
+      head: `${owner}:${headBranch}`,
+      per_page: 1,
+    });
+    const match = data[0];
+    return match
+      ? {
+          kind: OpenPrLookupKind.Found,
+          number: match.number,
+          baseBranch: match.base.ref,
+        }
+      : { kind: OpenPrLookupKind.NotFound };
+  }
+
+  async branchExistsOnOrigin(
+    request: GitHubClientBranchExistsOnOriginRequest,
+  ): Promise<boolean> {
+    const octokit = this.value;
+    const { subject1, branch } = request;
+    const { owner, repo } = subject1;
+
+    try {
+      await octokit.rest.repos.getBranch({ owner, repo, branch });
+      return true;
+    } catch (err: unknown) {
+      if (new GitHubFailure(err).isNotFound()) {
+        return false;
+      }
+      throw err;
+    }
+  }
+
+  async inspectPrFeedback(
+    request: GitHubClientInspectPrFeedbackRequest,
+  ): Promise<PrFeedbackSummary> {
+    const octokit = this.value;
+    const { repoRef, prNumber, options = {} } = request;
+
+    const { owner, repo } = repoRef;
+    const { expectedRevision, signal } = options;
+    const { data: pr } = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+      ...(signal ? { request: { signal } } : {}),
+    });
+    if (expectedRevision) {
+      new PullRequestRevisionConstraint({
+        expected: expectedRevision,
+        actual: {
+          baseRef: pr.base.ref,
+          baseSha: pr.base.sha,
+          headSha: pr.head.sha,
+        },
+      }).enforce();
+    }
+    const [issueComments, reviews, reviewComments] = await Promise.all([
+      octokit.paginate(octokit.rest.issues.listComments, {
+        owner,
+        repo,
+        issue_number: prNumber,
+        per_page: 100,
+        ...(signal ? { request: { signal } } : {}),
+      }),
+      octokit.paginate(octokit.rest.pulls.listReviews, {
+        owner,
+        repo,
+        pull_number: prNumber,
+        per_page: 100,
+        ...(signal ? { request: { signal } } : {}),
+      }),
+      octokit.paginate(octokit.rest.pulls.listReviewComments, {
+        owner,
+        repo,
+        pull_number: prNumber,
+        per_page: 100,
+        ...(signal ? { request: { signal } } : {}),
+      }),
+    ]);
+    const retiredAutomationComments = issueComments.filter((comment) => {
+      const { body = "" } = comment;
+      return new GitHubIsRetiredHeadTransitionAutomationComment({
+        body,
+        user: comment.user,
+      }).execute();
+    });
+    await Promise.all(
+      retiredAutomationComments.map((comment) =>
+        octokit.rest.issues.deleteComment({
+          owner,
+          repo,
+          comment_id: comment.id,
+          ...(signal ? { request: { signal } } : {}),
+        }),
+      ),
+    );
+    const activeIssueComments = issueComments.filter(
+      (comment) =>
+        !retiredAutomationComments.some((retired) => retired.id === comment.id),
+    );
+    let unresolvedThreads = 0;
+    enum PaginationKind {
+      FirstPage = "first-page",
+      NextPage = "next-page",
+      Complete = "complete",
+    }
+
+    let pagination:
+      | { kind: PaginationKind.FirstPage }
+      | { kind: PaginationKind.NextPage; cursor: string }
+      | { kind: PaginationKind.Complete } = { kind: PaginationKind.FirstPage };
+    while (pagination.kind !== PaginationKind.Complete) {
+      const page: ReviewThreadPage = await octokit.graphql<ReviewThreadPage>(
+        REVIEW_THREADS_QUERY,
+        {
+          owner,
+          repo,
+          number: prNumber,
+          ...(signal ? { request: { signal } } : {}),
+          ...(pagination.kind === PaginationKind.NextPage
+            ? { cursor: pagination.cursor }
+            : {}),
+        },
+      );
+      const threads: ReviewThreads = page.repository.pullRequest.reviewThreads;
+      unresolvedThreads += threads.nodes.filter(
+        (thread) => !thread.isResolved,
+      ).length;
+      pagination =
+        threads.pageInfo.hasNextPage && threads.pageInfo.endCursor
+          ? {
+              kind: PaginationKind.NextPage,
+              cursor: threads.pageInfo.endCursor,
+            }
+          : { kind: PaginationKind.Complete };
+    }
+
+    const handledIssueCommentIds = new Set<number>();
+    pagination = { kind: PaginationKind.FirstPage };
+    while (pagination.kind !== PaginationKind.Complete) {
+      const page: IssueCommentStatePage =
+        await octokit.graphql<IssueCommentStatePage>(
+          ISSUE_COMMENT_STATES_QUERY,
+          {
+            owner,
+            repo,
+            number: prNumber,
+            ...(signal ? { request: { signal } } : {}),
+            ...(pagination.kind === PaginationKind.NextPage
+              ? { cursor: pagination.cursor }
+              : {}),
+          },
+        );
+      const comments = page.repository.pullRequest.comments;
+      for (const comment of comments.nodes) {
+        if (
+          comment.isMinimized &&
+          comment.minimizedReason === "resolved" &&
+          typeof comment.databaseId === "number"
+        ) {
+          handledIssueCommentIds.add(comment.databaseId);
+        }
+      }
+      pagination =
+        comments.pageInfo.hasNextPage && comments.pageInfo.endCursor
+          ? {
+              kind: PaginationKind.NextPage,
+              cursor: comments.pageInfo.endCursor,
+            }
+          : { kind: PaginationKind.Complete };
+    }
+
+    const marker = new CodexReviewRevision({
+      headSha: pr.head.sha,
+      baseSha: pr.base.sha,
+    }).marker();
+    const cursorMarker = new CursorReviewRevision(pr.head.sha).marker();
+    const reviewRequests = activeIssueComments.filter((comment) => {
+      const { body = "" } = comment;
+      return new GitHubReviewIsTrustedExactHeadReviewRequest({
+        authorAssociation: comment.author_association,
+        body,
+        marker,
+        user: comment.user,
+      }).execute();
+    });
+    const cursorReviewRequests = activeIssueComments.filter((comment) =>
+      comment.body?.includes(cursorMarker),
+    );
+    const currentHeadReview = reviews.some(
+      (review) =>
+        review.commit_id === pr.head.sha &&
+        new SubmittedReviewState(review.state).matches() &&
+        new ReviewActor(review.user).isCodexReviewer(),
+    );
+    const currentHeadCursorReview = reviews.some(
+      (review) =>
+        review.commit_id === pr.head.sha &&
+        new SubmittedReviewState(review.state).matches() &&
+        new ReviewActor(review.user).isCursorReviewer(),
+    );
+    const requestReactions = (
+      await Promise.all(
+        reviewRequests.map((request) =>
+          octokit.paginate(octokit.rest.reactions.listForIssueComment, {
+            owner,
+            repo,
+            comment_id: request.id,
+            per_page: 100,
+            ...(signal ? { request: { signal } } : {}),
+          }),
+        ),
+      )
+    ).flat();
+    const approvalReaction = requestReactions.some(
+      (reaction) =>
+        reaction.content === "+1" &&
+        new ReviewActor(reaction.user).isCodexReviewer(),
+    );
+    const cleanComment = activeIssueComments.some((comment) => {
+      const { body = "" } = comment;
+      return new ReviewCommentBody(body).isCleanCodexReviewComment({
+        actor: comment.user,
+        headSha: pr.head.sha,
+      });
+    });
+
+    const substantiveComments = activeIssueComments.filter((comment) => {
+      const { body = "" } = comment;
+      return (
+        !new GitHubIsRepositoryStatusComment({
+          authorAssociation: comment.author_association,
+          body,
+          cursorMarker,
+          marker,
+          user: comment.user,
+        }).execute() &&
+        !new ReviewCommentBody(body).isCodexCleanReviewStatusComment({
+          actor: comment.user,
+        }) &&
+        !new ReviewBodyClassification(body).isNonActionable()
+      );
+    });
+    const unhandledComments = substantiveComments.filter(
+      (comment) => !handledIssueCommentIds.has(comment.id),
+    );
+    const substantiveReviews = reviews.filter((review) => {
+      if (
+        !new SubmittedReviewState(review.state).matches() ||
+        review.state === "APPROVED"
+      ) {
+        return false;
+      }
+      if (review.state === "CHANGES_REQUESTED") {
+        return true;
+      }
+      const [body = ""] = [review.body?.trim()];
+      return (
+        body.length > 0 &&
+        !new ReviewCommentBody(body).isCodexReviewStatusBody({
+          actor: review.user,
+        }) &&
+        !new ReviewCommentBody(body).isCursorReviewStatusBody({
+          actor: review.user,
+        }) &&
+        !new ReviewBodyClassification(body).isNonActionable()
+      );
+    });
+    const reviewIdsWithInlineComments = new Set(
+      reviewComments
+        .map((comment) => comment.pull_request_review_id)
+        .filter((reviewId): reviewId is number => typeof reviewId === "number"),
+    );
+    const unthreadedReviewFindings = substantiveReviews.filter(
+      (review) => !reviewIdsWithInlineComments.has(review.id),
+    );
+
+    const normalizedReviewComments: ReviewFindingComment[] = reviewComments.map(
+      (comment) => {
+        const reviewerLogin = comment.user?.login;
+        return {
+          isReply: typeof comment.in_reply_to_id === "number",
+          reviewerLogin: typeof reviewerLogin === "string" ? reviewerLogin : "",
+          reviewId:
+            typeof comment.pull_request_review_id === "number"
+              ? comment.pull_request_review_id
+              : 0,
+        };
+      },
+    );
+    const normalizedReviews: ReviewFindingReview[] = reviews.map((review) => {
+      const [body = ""] = [review.body?.trim()];
+      const [reviewerLogin = ""] = [review.user?.login];
+      return {
+        active: new SubmittedReviewState(review.state).matches(),
+        actionable: new GitHubIsActionableReviewBody({
+          body,
+          state: review.state,
+          user: review.user,
+        }).execute(),
+        reviewId: review.id,
+        reviewerLogin,
+      };
+    });
+    const findingBatchRequest: AutomatedFindingBatchRequest = {
+      comments: normalizedReviewComments,
+      reviews: normalizedReviews,
+    };
+
+    return {
+      codexReview: {
+        approvalReaction,
+        cleanComment,
+        currentHeadReview,
+        requested: reviewRequests.length > 0,
+        settled: currentHeadReview || approvalReaction || cleanComment,
+      },
+      cursorReview: {
+        currentHeadReview: currentHeadCursorReview,
+        requested: cursorReviewRequests.length > 0,
+        settled: currentHeadCursorReview,
+      },
+      findingBatches: new AutomatedFindingHistory(
+        findingBatchRequest,
+      ).countBatches(),
+      substantiveComments: substantiveComments.length,
+      substantiveReviews: substantiveReviews.length,
+      unhandledComments: unhandledComments.length,
+      unthreadedReviewFindings: unthreadedReviewFindings.length,
+      unresolvedThreads,
+    };
+  }
+  async createFixPr(request: FixPullRequestInput): Promise<number> {
+    const octokit = this.value;
+    const {
+      repoRef,
+      headBranch,
+      runId,
+      fixLabel = "main CI",
+      baseBranch = "main",
+    } = request;
+    const { owner, repo } = repoRef;
+    const title =
+      process.env.AGENT_PR_TITLE?.trim() || `Fix ${fixLabel} (run ${runId})`;
+    const requestedBody =
+      process.env.AGENT_PR_BODY?.trim() ||
+      [
+        "## Summary",
+        `Auto-fix for failed ${fixLabel} run ${runId}.`,
+        "",
+        "## Test plan",
+        "- [ ] CI green on this PR",
+      ].join("\n");
+
+    try {
+      const { data } = await octokit.rest.pulls.create({
+        owner,
+        repo,
+        title,
+        head: headBranch,
+        base: baseBranch,
+        body: requestedBody,
+      });
+      return data.number;
+    } catch (err: unknown) {
+      const existing = await new GitHubClient(octokit).findOpenPr({
+        subject1: repoRef,
+        headBranch: headBranch,
+      });
+      if (existing.kind === OpenPrLookupKind.Found) {
+        if (existing.baseBranch !== baseBranch) {
+          throw new Error(
+            `Open PR for ${headBranch} targets ${existing.baseBranch}, expected ${baseBranch}`,
+          );
+        }
+        return existing.number;
+      }
+      throw err;
+    }
+  }
+}
+
+export class PullRequestChangedPath {
+  constructor(private readonly value: string) {}
+  isRustEcosystemPath(): boolean {
+    const path = this.value;
+
+    return (
+      path === ".github/workflows/rust-ecosystem.yml" ||
+      path === ".github/workflows/rust-ecosystem-checks.yml" ||
+      path === "deny.toml" ||
+      path === "nook-app/nook-platform/Cargo.lock" ||
+      path === "nook-app/nook-platform/.insta.yaml" ||
+      path.startsWith("nook-app/nook-platform/.cargo/") ||
+      path.startsWith("nook-app/nook-platform/fuzz/") ||
+      path.startsWith("preflight/") ||
+      path.startsWith("agentic-ai/minds/") ||
+      (path.startsWith("nook-app/") &&
+        (path.endsWith(".rs") || path.endsWith("/Cargo.toml")))
+    );
+  }
+
+  isWebResearchPath(): boolean {
+    const path = this.value;
+
+    return (
+      path === ".github/workflows/web-research.yml" ||
+      path.startsWith("nook-app/nook-web/nook-web-research/")
+    );
+  }
+
+  isMainPrIgnoredPath(): boolean {
+    const path = this.value;
+
+    return (
+      path.startsWith(".cortex/") ||
+      path.startsWith(".cursor/") ||
+      path.startsWith("agentic-ai/") ||
+      new PullRequestChangedPath(path).isWebResearchPath()
+    );
+  }
+}
+
+export class GitHubRepositoryName {
+  constructor(private readonly request: string) {}
+  parse(): RepoRef {
+    const fullName = this.request;
+
+    const [owner, repo] = fullName.split("/");
+    if (!owner || !repo) {
+      throw new Error(`Invalid GITHUB_REPOSITORY: ${fullName}`);
+    }
+    return { owner, repo };
+  }
+}
+
+export interface GitHubSamePullRequestRevisionRequest {
+  readonly left: PullRequestRevision;
+  readonly right: PullRequestRevision;
+}
+
+export class PullRequestRevisionComparison {
+  constructor(private readonly request: GitHubSamePullRequestRevisionRequest) {}
+  matches(): boolean {
+    const { left, right } = this.request;
+
+    return (
+      left.baseRef === right.baseRef &&
+      left.baseSha === right.baseSha &&
+      left.headSha === right.headSha
+    );
+  }
+}
+
+export interface GitHubAssertPullRequestRevisionRequest {
+  readonly expected: PullRequestRevision;
+  readonly actual: PullRequestRevision;
+}
+
+export class PullRequestRevisionConstraint {
+  constructor(
+    private readonly request: GitHubAssertPullRequestRevisionRequest,
+  ) {}
+  enforce(): void {
+    const { expected, actual } = this.request;
+
+    if (
+      new PullRequestRevisionComparison({
+        left: expected,
+        right: actual,
+      }).matches()
+    )
+      return;
+    throw new Error(
+      `Pull request revision changed from ${expected.headSha}/${expected.baseSha}/${expected.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
+    );
+  }
+}
+
+export class PullRequestWorkflowSelection {
+  constructor(private readonly request: string[]) {}
+  names(): RequiredPrWorkflow[] {
+    const paths = this.request;
+
+    const required: RequiredPrWorkflow[] = [];
+
+    if (
+      paths.some((path) => new PullRequestChangedPath(path).isWebResearchPath())
+    ) {
+      required.push(WEB_RESEARCH_PR_WORKFLOW);
+    }
+    // Product PRs run ecosystem jobs inside pr.yml. Only minds-only PRs still
+    // require the thin rust-ecosystem.yml entry point.
+    if (
+      paths.some((path) =>
+        new PullRequestChangedPath(path).isRustEcosystemPath(),
+      ) &&
+      paths.every((path) =>
+        new PullRequestChangedPath(path).isMainPrIgnoredPath(),
+      )
+    ) {
+      required.push(RUST_ECOSYSTEM_PR_WORKFLOW);
+    }
+    if (
+      paths.some(
+        (path) => !new PullRequestChangedPath(path).isMainPrIgnoredPath(),
+      )
+    ) {
+      required.push(MAIN_PR_WORKFLOW);
+    }
+
+    return required;
+  }
+}
+
+export class PullRequestCheckSelection {
+  constructor(private readonly request: string[]) {}
+  names(): string[] {
+    const paths = this.request;
+
+    return new PullRequestWorkflowSelection(paths)
+      .names()
+      .map((workflow) => workflow.checkName);
+  }
+}
+
+export class AutomatedFindingHistory {
+  constructor(private readonly request: AutomatedFindingBatchRequest) {}
+  countBatches(): number {
+    const request = this.request;
+
+    const reviewIds = new Set<number>();
+    const activeAutomatedReviewIds = new Set(
+      request.reviews
+        .filter((review) => {
+          const reviewer = { login: review.reviewerLogin };
+          return (
+            review.active &&
+            (new ReviewActor(reviewer).isCodexReviewer() ||
+              new ReviewActor(reviewer).isCursorReviewer())
+          );
+        })
+        .map((review) => review.reviewId),
+    );
+    for (const comment of request.comments) {
+      if (comment.isReply) continue;
+      if (activeAutomatedReviewIds.has(comment.reviewId)) {
+        reviewIds.add(comment.reviewId);
+      }
+    }
+    for (const review of request.reviews) {
+      if (!review.actionable) continue;
+      const reviewer = { login: review.reviewerLogin };
+      if (
+        !new ReviewActor(reviewer).isCodexReviewer() &&
+        !new ReviewActor(reviewer).isCursorReviewer()
+      )
+        continue;
+      if (review.reviewId > 0) reviewIds.add(review.reviewId);
+    }
+    return reviewIds.size;
+  }
+}
+
+class GitHubFailure {
+  constructor(private readonly request: unknown) {}
+  isNotFound(): boolean {
+    const err = this.request;
+
+    return (
+      err instanceof Error &&
+      "status" in err &&
+      (err as { status: number }).status === 404
+    );
+  }
+}
+
+export class GitHubIsRepositoryStatusComment {
+  constructor(private readonly request: RepositoryStatusCommentInput) {}
+  execute(): boolean {
+    const input = this.request;
+
+    const trimmed = input.body.trimStart();
+    return (
+      (new GitHubActor(input.user).isActionsBot() &&
+        (trimmed.startsWith("### Preview deployed") ||
+          trimmed.startsWith("### Web research preview") ||
+          trimmed.startsWith("<!-- nook-ui-demo -->") ||
+          trimmed.startsWith("<!-- nook-core-coverage -->"))) ||
+      new GitHubReviewIsTrustedCodexReviewRequestComment({
+        authorAssociation: input.authorAssociation,
+        body: input.body,
+        user: input.user,
+      }).execute() ||
+      (["OWNER", "MEMBER", "COLLABORATOR"].includes(input.authorAssociation) &&
+        /^cursor review\n\n<!-- nook-cursor-review:[^\s<>]+ -->$/.test(
+          input.body.trim(),
+        )) ||
+      new ImplementationHandoffComment(trimmed).matches() ||
+      (new ReviewActor(input.user).isCodexReviewer() &&
+        trimmed.startsWith(
+          "You have reached your Codex usage limits for code reviews.",
+        )) ||
+      (new ReviewActor(input.user).isCodexReviewer() &&
+        trimmed.startsWith("<!-- codex-pull-request-review-summary -->")) ||
+      (new ReviewActor(input.user).isCursorReviewer() &&
+        trimmed.startsWith("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->"))
+    );
+  }
+}
+
+class GitHubActor {
+  constructor(private readonly request: RepositoryStatusCommentInput["user"]) {}
+  isActionsBot(): boolean {
+    const user = this.request;
+
+    return (
+      typeof user === "object" &&
+      !!user &&
+      "login" in user &&
+      user.login === "github-actions[bot]"
+    );
+  }
+}
+
+class GitHubIsRetiredHeadTransitionAutomationComment {
+  constructor(
+    private readonly request: {
+      readonly body: string;
+      readonly user: unknown;
+    },
+  ) {}
+  execute(): boolean {
+    const input = this.request;
+
+    return (
+      new GitHubActor(input.user).isActionsBot() &&
+      input.body.trim().endsWith("\nExact-head delivery boundary (automated).")
+    );
+  }
+}
+
+export class ReviewBodyClassification {
+  constructor(private readonly request: string) {}
+  isNonActionable(): boolean {
+    const body = this.request;
+
+    const normalized = body
+      .trim()
+      .toLowerCase()
+      .replace(/[.!\s]+$/g, "");
+    return [
+      "lgtm",
+      "looks good",
+      "looks good to me",
+      "nice work",
+      "no issues",
+      "no issues found",
+      "thank you",
+      "thanks",
+    ].includes(normalized);
+  }
+}
+
+class GitHubIsActionableReviewBody {
+  constructor(
+    private readonly request: {
+      readonly body: string;
+      readonly state: string;
+      readonly user: unknown;
+    },
+  ) {}
+  execute(): boolean {
+    const input = this.request;
+
+    if (
+      !new ReviewActor(input.user).isCodexReviewer() &&
+      !new ReviewActor(input.user).isCursorReviewer()
+    ) {
+      return false;
+    }
+    if (!new SubmittedReviewState(input.state).matches()) return false;
+    if (input.state === "APPROVED") return false;
+    if (input.state === "CHANGES_REQUESTED") return true;
+    return (
+      input.body.length > 0 &&
+      !new ReviewCommentBody(input.body).isCodexReviewStatusBody({
+        actor: input.user,
+      }) &&
+      !new ReviewCommentBody(input.body).isCursorReviewStatusBody({
+        actor: input.user,
+      }) &&
+      !new ReviewBodyClassification(input.body).isNonActionable()
+    );
+  }
+}
+
+class ImplementationHandoffComment {
+  constructor(private readonly request: string) {}
+  matches(): boolean {
+    const body = this.request;
+
+    return AGENT_IMPLEMENTATION_HANDOFF_COMMENT.test(body.trim());
+  }
+}
 
 export {
   CODEX_AVAILABILITY_PROBE,
@@ -27,7 +800,7 @@ export {
   requestExactHeadReview,
 } from "./github-review.js";
 
-const log = createLogger("github");
+const log = new Logger("github");
 
 export type RepoRef = { owner: string; repo: string };
 
@@ -46,153 +819,7 @@ export type OpenPrLookup =
   | { kind: OpenPrLookupKind.Found; number: number; baseBranch: string }
   | { kind: OpenPrLookupKind.NotFound };
 
-export function parseRepository(fullName: string): RepoRef {
-  const [owner, repo] = fullName.split("/");
-  if (!owner || !repo) {
-    throw new Error(`Invalid GITHUB_REPOSITORY: ${fullName}`);
-  }
-  return { owner, repo };
-}
-
 /** PAT preferred — PRs from GITHUB_TOKEN do not trigger pull_request workflows. */
-export function resolveGitHubToken(): string {
-  const token =
-    process.env.NOOK_GITHUB_PAT?.trim() ||
-    process.env.GITHUB_TOKEN?.trim() ||
-    process.env.GH_TOKEN?.trim();
-  if (!token) {
-    throw new Error("NOOK_GITHUB_PAT, GITHUB_TOKEN, or GH_TOKEN is required");
-  }
-  return token;
-}
-
-export function createOctokit(): Octokit {
-  return new Octokit({ auth: resolveGitHubToken() });
-}
-
-export async function readPullRequestRevision(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  prNumber: number,
-  signal?: AbortSignal,
-): Promise<PullRequestRevision> {
-  const { owner, repo } = repoRef;
-  const { data: pr } = await octokit.rest.pulls.get({
-    owner,
-    repo,
-    pull_number: prNumber,
-    ...(signal ? { request: { signal } } : {}),
-  });
-  return {
-    baseRef: pr.base.ref,
-    baseSha: pr.base.sha,
-    headSha: pr.head.sha,
-  };
-}
-
-export function samePullRequestRevision(
-  left: PullRequestRevision,
-  right: PullRequestRevision,
-): boolean {
-  return (
-    left.baseRef === right.baseRef &&
-    left.baseSha === right.baseSha &&
-    left.headSha === right.headSha
-  );
-}
-
-export function assertPullRequestRevision(
-  expected: PullRequestRevision,
-  actual: PullRequestRevision,
-): void {
-  if (samePullRequestRevision(expected, actual)) return;
-  throw new Error(
-    `Pull request revision changed from ${expected.headSha}/${expected.baseSha}/${expected.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
-  );
-}
-
-export async function findOpenPr(
-  octokit: Octokit,
-  { owner, repo }: RepoRef,
-  headBranch: string,
-): Promise<OpenPrLookup> {
-  const { data } = await octokit.rest.pulls.list({
-    owner,
-    repo,
-    state: "open",
-    head: `${owner}:${headBranch}`,
-    per_page: 1,
-  });
-  const match = data[0];
-  return match
-    ? {
-        kind: OpenPrLookupKind.Found,
-        number: match.number,
-        baseBranch: match.base.ref,
-      }
-    : { kind: OpenPrLookupKind.NotFound };
-}
-
-export async function branchExistsOnOrigin(
-  octokit: Octokit,
-  { owner, repo }: RepoRef,
-  branch: string,
-): Promise<boolean> {
-  try {
-    await octokit.rest.repos.getBranch({ owner, repo, branch });
-    return true;
-  } catch (err: unknown) {
-    if (isNotFound(err)) {
-      return false;
-    }
-    throw err;
-  }
-}
-
-export async function createFixPr(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  headBranch: string,
-  runId: string,
-  fixLabel = "main CI",
-  baseBranch = "main",
-): Promise<number> {
-  const { owner, repo } = repoRef;
-  const title =
-    process.env.AGENT_PR_TITLE?.trim() || `Fix ${fixLabel} (run ${runId})`;
-  const requestedBody =
-    process.env.AGENT_PR_BODY?.trim() ||
-    [
-      "## Summary",
-      `Auto-fix for failed ${fixLabel} run ${runId}.`,
-      "",
-      "## Test plan",
-      "- [ ] CI green on this PR",
-    ].join("\n");
-
-  try {
-    const { data } = await octokit.rest.pulls.create({
-      owner,
-      repo,
-      title,
-      head: headBranch,
-      base: baseBranch,
-      body: requestedBody,
-    });
-    return data.number;
-  } catch (err: unknown) {
-    const existing = await findOpenPr(octokit, repoRef, headBranch);
-    if (existing.kind === OpenPrLookupKind.Found) {
-      if (existing.baseBranch !== baseBranch) {
-        throw new Error(
-          `Open PR for ${headBranch} targets ${existing.baseBranch}, expected ${baseBranch}`,
-        );
-      }
-      return existing.number;
-    }
-    throw err;
-  }
-}
 
 const MAIN_PR_CHECK = "Verify and preview";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
@@ -232,44 +859,6 @@ const RUST_ECOSYSTEM_PR_WORKFLOW: RequiredPrWorkflow = {
   workflowFile: "rust-ecosystem.yml",
   workflowName: "Rust ecosystem checks",
 };
-
-function isRustEcosystemPath(path: string): boolean {
-  return (
-    path === ".github/workflows/rust-ecosystem.yml" ||
-    path === ".github/workflows/rust-ecosystem-checks.yml" ||
-    path === "deny.toml" ||
-    path === "nook-app/nook-platform/Cargo.lock" ||
-    path === "nook-app/nook-platform/.insta.yaml" ||
-    path.startsWith("nook-app/nook-platform/.cargo/") ||
-    path.startsWith("nook-app/nook-platform/fuzz/") ||
-    path.startsWith("preflight/") ||
-    path.startsWith("agentic-ai/minds/") ||
-    (path.startsWith("nook-app/") &&
-      (path.endsWith(".rs") || path.endsWith("/Cargo.toml")))
-  );
-}
-
-export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
-  const required: RequiredPrWorkflow[] = [];
-
-  if (paths.some(isWebResearchPath)) {
-    required.push(WEB_RESEARCH_PR_WORKFLOW);
-  }
-  // Product PRs run ecosystem jobs inside pr.yml. Only minds-only PRs still
-  // require the thin rust-ecosystem.yml entry point.
-  if (paths.some(isRustEcosystemPath) && paths.every(isMainPrIgnoredPath)) {
-    required.push(RUST_ECOSYSTEM_PR_WORKFLOW);
-  }
-  if (paths.some((path) => !isMainPrIgnoredPath(path))) {
-    required.push(MAIN_PR_WORKFLOW);
-  }
-
-  return required;
-}
-
-export function requiredPrCheckNames(paths: string[]): string[] {
-  return requiredPrWorkflows(paths).map((workflow) => workflow.checkName);
-}
 
 type ReviewThreadPage = {
   repository: {
@@ -364,282 +953,6 @@ type RepositoryStatusCommentInput = {
   user: unknown;
 };
 
-export async function inspectPrFeedback(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  prNumber: number,
-  options: InspectPrFeedbackOptions = {},
-): Promise<PrFeedbackSummary> {
-  const { owner, repo } = repoRef;
-  const { expectedRevision, signal } = options;
-  const { data: pr } = await octokit.rest.pulls.get({
-    owner,
-    repo,
-    pull_number: prNumber,
-    ...(signal ? { request: { signal } } : {}),
-  });
-  if (expectedRevision) {
-    assertPullRequestRevision(expectedRevision, {
-      baseRef: pr.base.ref,
-      baseSha: pr.base.sha,
-      headSha: pr.head.sha,
-    });
-  }
-  const [issueComments, reviews, reviewComments] = await Promise.all([
-    octokit.paginate(octokit.rest.issues.listComments, {
-      owner,
-      repo,
-      issue_number: prNumber,
-      per_page: 100,
-      ...(signal ? { request: { signal } } : {}),
-    }),
-    octokit.paginate(octokit.rest.pulls.listReviews, {
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: 100,
-      ...(signal ? { request: { signal } } : {}),
-    }),
-    octokit.paginate(octokit.rest.pulls.listReviewComments, {
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: 100,
-      ...(signal ? { request: { signal } } : {}),
-    }),
-  ]);
-  const retiredAutomationComments = issueComments.filter((comment) => {
-    const { body = "" } = comment;
-    return isRetiredHeadTransitionAutomationComment({
-      body,
-      user: comment.user,
-    });
-  });
-  await Promise.all(
-    retiredAutomationComments.map((comment) =>
-      octokit.rest.issues.deleteComment({
-        owner,
-        repo,
-        comment_id: comment.id,
-        ...(signal ? { request: { signal } } : {}),
-      }),
-    ),
-  );
-  const activeIssueComments = issueComments.filter(
-    (comment) =>
-      !retiredAutomationComments.some((retired) => retired.id === comment.id),
-  );
-  let unresolvedThreads = 0;
-  enum PaginationKind {
-    FirstPage = "first-page",
-    NextPage = "next-page",
-    Complete = "complete",
-  }
-
-  let pagination:
-    | { kind: PaginationKind.FirstPage }
-    | { kind: PaginationKind.NextPage; cursor: string }
-    | { kind: PaginationKind.Complete } = { kind: PaginationKind.FirstPage };
-  while (pagination.kind !== PaginationKind.Complete) {
-    const page: ReviewThreadPage = await octokit.graphql<ReviewThreadPage>(
-      REVIEW_THREADS_QUERY,
-      {
-        owner,
-        repo,
-        number: prNumber,
-        ...(signal ? { request: { signal } } : {}),
-        ...(pagination.kind === PaginationKind.NextPage
-          ? { cursor: pagination.cursor }
-          : {}),
-      },
-    );
-    const threads: ReviewThreads = page.repository.pullRequest.reviewThreads;
-    unresolvedThreads += threads.nodes.filter(
-      (thread) => !thread.isResolved,
-    ).length;
-    pagination =
-      threads.pageInfo.hasNextPage && threads.pageInfo.endCursor
-        ? { kind: PaginationKind.NextPage, cursor: threads.pageInfo.endCursor }
-        : { kind: PaginationKind.Complete };
-  }
-
-  const handledIssueCommentIds = new Set<number>();
-  pagination = { kind: PaginationKind.FirstPage };
-  while (pagination.kind !== PaginationKind.Complete) {
-    const page: IssueCommentStatePage =
-      await octokit.graphql<IssueCommentStatePage>(
-        ISSUE_COMMENT_STATES_QUERY,
-        {
-          owner,
-          repo,
-          number: prNumber,
-          ...(signal ? { request: { signal } } : {}),
-          ...(pagination.kind === PaginationKind.NextPage
-            ? { cursor: pagination.cursor }
-            : {}),
-        },
-      );
-    const comments = page.repository.pullRequest.comments;
-    for (const comment of comments.nodes) {
-      if (
-        comment.isMinimized &&
-        comment.minimizedReason === "resolved" &&
-        typeof comment.databaseId === "number"
-      ) {
-        handledIssueCommentIds.add(comment.databaseId);
-      }
-    }
-    pagination =
-      comments.pageInfo.hasNextPage && comments.pageInfo.endCursor
-        ? { kind: PaginationKind.NextPage, cursor: comments.pageInfo.endCursor }
-        : { kind: PaginationKind.Complete };
-  }
-
-  const marker = codexReviewRequestMarker(pr.head.sha, pr.base.sha);
-  const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
-  const reviewRequests = activeIssueComments.filter((comment) => {
-    const { body = "" } = comment;
-    return isTrustedExactHeadReviewRequest({
-      authorAssociation: comment.author_association,
-      body,
-      marker,
-      user: comment.user,
-    });
-  });
-  const cursorReviewRequests = activeIssueComments.filter((comment) =>
-    comment.body?.includes(cursorMarker),
-  );
-  const currentHeadReview = reviews.some(
-    (review) =>
-      review.commit_id === pr.head.sha &&
-      isSubmittedReviewState(review.state) &&
-      isCodexReviewer(review.user),
-  );
-  const currentHeadCursorReview = reviews.some(
-    (review) =>
-      review.commit_id === pr.head.sha &&
-      isSubmittedReviewState(review.state) &&
-      isCursorReviewer(review.user),
-  );
-  const requestReactions = (
-    await Promise.all(
-      reviewRequests.map((request) =>
-        octokit.paginate(octokit.rest.reactions.listForIssueComment, {
-          owner,
-          repo,
-          comment_id: request.id,
-          per_page: 100,
-          ...(signal ? { request: { signal } } : {}),
-        }),
-      ),
-    )
-  ).flat();
-  const approvalReaction = requestReactions.some(
-    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
-  );
-  const cleanComment = activeIssueComments.some((comment) => {
-    const { body = "" } = comment;
-    return isCleanCodexReviewComment(body, comment.user, pr.head.sha);
-  });
-
-  const substantiveComments = activeIssueComments.filter((comment) => {
-    const { body = "" } = comment;
-    return (
-      !isRepositoryStatusComment({
-        authorAssociation: comment.author_association,
-        body,
-        cursorMarker,
-        marker,
-        user: comment.user,
-      }) &&
-      !isCodexCleanReviewStatusComment(body, comment.user) &&
-      !isNonActionableReviewBody(body)
-    );
-  });
-  const unhandledComments = substantiveComments.filter(
-    (comment) => !handledIssueCommentIds.has(comment.id),
-  );
-  const substantiveReviews = reviews.filter((review) => {
-    if (
-      !isSubmittedReviewState(review.state) ||
-      review.state === "APPROVED"
-    ) {
-      return false;
-    }
-    if (review.state === "CHANGES_REQUESTED") {
-      return true;
-    }
-    const [body = ("")] = [review.body?.trim()];
-    return (
-      body.length > 0 &&
-      !isCodexReviewStatusBody(body, review.user) &&
-      !isCursorReviewStatusBody(body, review.user) &&
-      !isNonActionableReviewBody(body)
-    );
-  });
-  const reviewIdsWithInlineComments = new Set(
-    reviewComments
-      .map((comment) => comment.pull_request_review_id)
-      .filter((reviewId): reviewId is number => typeof reviewId === "number"),
-  );
-  const unthreadedReviewFindings = substantiveReviews.filter(
-    (review) => !reviewIdsWithInlineComments.has(review.id),
-  );
-
-  const normalizedReviewComments: ReviewFindingComment[] = reviewComments.map(
-    (comment) => {
-      const reviewerLogin = comment.user?.login;
-      return {
-        isReply: typeof comment.in_reply_to_id === "number",
-        reviewerLogin: typeof reviewerLogin === "string" ? reviewerLogin : "",
-        reviewId:
-          typeof comment.pull_request_review_id === "number"
-            ? comment.pull_request_review_id
-            : 0,
-      };
-    },
-  );
-  const normalizedReviews: ReviewFindingReview[] = reviews.map((review) => {
-    const [body = ""] = [review.body?.trim()];
-    const [reviewerLogin = ""] = [review.user?.login];
-    return {
-      active: isSubmittedReviewState(review.state),
-      actionable: isActionableReviewBody({
-        body,
-        state: review.state,
-        user: review.user,
-      }),
-      reviewId: review.id,
-      reviewerLogin,
-    };
-  });
-  const findingBatchRequest: AutomatedFindingBatchRequest = {
-    comments: normalizedReviewComments,
-    reviews: normalizedReviews,
-  };
-
-  return {
-    codexReview: {
-      approvalReaction,
-      cleanComment,
-      currentHeadReview,
-      requested: reviewRequests.length > 0,
-      settled: currentHeadReview || approvalReaction || cleanComment,
-    },
-    cursorReview: {
-      currentHeadReview: currentHeadCursorReview,
-      requested: cursorReviewRequests.length > 0,
-      settled: currentHeadCursorReview,
-    },
-    findingBatches: countAutomatedFindingBatches(findingBatchRequest),
-    substantiveComments: substantiveComments.length,
-    substantiveReviews: substantiveReviews.length,
-    unhandledComments: unhandledComments.length,
-    unthreadedReviewFindings: unthreadedReviewFindings.length,
-    unresolvedThreads,
-  };
-}
-
 type ReviewFindingComment = {
   readonly isReply: boolean;
   readonly reviewerLogin: string;
@@ -658,153 +971,13 @@ type AutomatedFindingBatchRequest = {
   readonly reviews: readonly ReviewFindingReview[];
 };
 
-export function countAutomatedFindingBatches(
-  request: AutomatedFindingBatchRequest,
-): number {
-  const reviewIds = new Set<number>();
-  const activeAutomatedReviewIds = new Set(
-    request.reviews
-      .filter((review) => {
-        const reviewer = { login: review.reviewerLogin };
-        return (
-          review.active &&
-          (isCodexReviewer(reviewer) || isCursorReviewer(reviewer))
-        );
-      })
-      .map((review) => review.reviewId),
-  );
-  for (const comment of request.comments) {
-    if (comment.isReply) continue;
-    if (activeAutomatedReviewIds.has(comment.reviewId)) {
-      reviewIds.add(comment.reviewId);
-    }
-  }
-  for (const review of request.reviews) {
-    if (!review.actionable) continue;
-    const reviewer = { login: review.reviewerLogin };
-    if (!isCodexReviewer(reviewer) && !isCursorReviewer(reviewer)) continue;
-    if (review.reviewId > 0) reviewIds.add(review.reviewId);
-  }
-  return reviewIds.size;
-}
-
-function isNotFound(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    "status" in err &&
-    (err as { status: number }).status === 404
-  );
-}
-
-function isWebResearchPath(path: string): boolean {
-  return (
-    path === ".github/workflows/web-research.yml" ||
-    path.startsWith("nook-app/nook-web/nook-web-research/")
-  );
-}
-
-function isMainPrIgnoredPath(path: string): boolean {
-  return (
-    path.startsWith(".cortex/") ||
-    path.startsWith(".cursor/") ||
-    path.startsWith("agentic-ai/") ||
-    isWebResearchPath(path)
-  );
-}
-
-export function isRepositoryStatusComment(
-  input: RepositoryStatusCommentInput,
-): boolean {
-  const trimmed = input.body.trimStart();
-  return (
-    (isGitHubActionsBot(input.user) &&
-      (trimmed.startsWith("### Preview deployed") ||
-        trimmed.startsWith("### Web research preview") ||
-        trimmed.startsWith("<!-- nook-ui-demo -->") ||
-        trimmed.startsWith("<!-- nook-core-coverage -->"))) ||
-    isTrustedCodexReviewRequestComment({
-      authorAssociation: input.authorAssociation,
-      body: input.body,
-      user: input.user,
-    }) ||
-    (["OWNER", "MEMBER", "COLLABORATOR"].includes(input.authorAssociation) &&
-      /^cursor review\n\n<!-- nook-cursor-review:[^\s<>]+ -->$/.test(
-        input.body.trim(),
-      )) ||
-    isAgentImplementationHandoffComment(trimmed) ||
-    (isCodexReviewer(input.user) &&
-      trimmed.startsWith(
-        "You have reached your Codex usage limits for code reviews.",
-      )) ||
-    (isCodexReviewer(input.user) &&
-      trimmed.startsWith("<!-- codex-pull-request-review-summary -->")) ||
-    (isCursorReviewer(input.user) &&
-      trimmed.startsWith("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->"))
-  );
-}
-
-function isGitHubActionsBot(
-  user: RepositoryStatusCommentInput["user"],
-): boolean {
-  return (
-    typeof user === "object" &&
-    !!user &&
-    "login" in user &&
-    user.login === "github-actions[bot]"
-  );
-}
-
-function isRetiredHeadTransitionAutomationComment(input: {
-  readonly body: string;
-  readonly user: unknown;
-}): boolean {
-  return (
-    isGitHubActionsBot(input.user) &&
-    input.body
-      .trim()
-      .endsWith("\nExact-head delivery boundary (automated).")
-  );
-}
-
-export function isNonActionableReviewBody(body: string): boolean {
-  const normalized = body
-    .trim()
-    .toLowerCase()
-    .replace(/[.!\s]+$/g, "");
-  return [
-    "lgtm",
-    "looks good",
-    "looks good to me",
-    "nice work",
-    "no issues",
-    "no issues found",
-    "thank you",
-    "thanks",
-  ].includes(normalized);
-}
-
-function isActionableReviewBody(input: {
-  readonly body: string;
-  readonly state: string;
-  readonly user: unknown;
-}): boolean {
-  if (!isCodexReviewer(input.user) && !isCursorReviewer(input.user)) {
-    return false;
-  }
-  if (!isSubmittedReviewState(input.state)) return false;
-  if (input.state === "APPROVED") return false;
-  if (input.state === "CHANGES_REQUESTED") return true;
-  return (
-    input.body.length > 0 &&
-    !isCodexReviewStatusBody(input.body, input.user) &&
-    !isCursorReviewStatusBody(input.body, input.user) &&
-    !isNonActionableReviewBody(input.body)
-  );
-}
-
 const AGENT_IMPLEMENTATION_HANDOFF_COMMENT =
   /^@[a-z0-9-]+ this workflow assigned you PR #\d+\. Continue only this PR's recorded scope through review, exact-head validation, and squash merge\.$/;
 
-function isAgentImplementationHandoffComment(body: string): boolean {
-  return AGENT_IMPLEMENTATION_HANDOFF_COMMENT.test(body.trim());
+export interface FixPullRequestInput {
+  readonly repoRef: RepoRef;
+  readonly headBranch: string;
+  readonly runId: string;
+  readonly fixLabel?: string;
+  readonly baseBranch?: string;
 }

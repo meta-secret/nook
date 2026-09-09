@@ -1,5 +1,36 @@
 import { resolve } from "node:path";
 
+class HomeSshContractRead {
+  constructor(private readonly request: string) {}
+  async execute(): Promise<string> {
+    const relative = this.request;
+
+    return Bun.file(resolve(root, relative)).text();
+  }
+}
+
+class HomeSshContractRequireFragment {
+  constructor(private readonly request: ContractInput) {}
+  execute(): void {
+    const input = this.request;
+
+    if (!input.source.includes(input.fragment)) {
+      throw new Error(`${input.label} is missing ${input.fragment}`);
+    }
+  }
+}
+
+class HomeSshContractForbidFragment {
+  constructor(private readonly request: ContractInput) {}
+  execute(): void {
+    const input = this.request;
+
+    if (input.source.includes(input.fragment)) {
+      throw new Error(`${input.label} contains prohibited ${input.fragment}`);
+    }
+  }
+}
+
 const root = resolve(import.meta.dir, "../..");
 
 interface ContractInput {
@@ -8,26 +39,16 @@ interface ContractInput {
   source: string;
 }
 
-async function read(relative: string): Promise<string> {
-  return Bun.file(resolve(root, relative)).text();
-}
-
-function requireFragment(input: ContractInput): void {
-  if (!input.source.includes(input.fragment)) {
-    throw new Error(`${input.label} is missing ${input.fragment}`);
-  }
-}
-
-function forbidFragment(input: ContractInput): void {
-  if (input.source.includes(input.fragment)) {
-    throw new Error(`${input.label} contains prohibited ${input.fragment}`);
-  }
-}
-
-const installer = await read("infra/operator-ssh.ts");
-const inventory = await read("infra/k0s/config/operator-ssh.yaml");
-const tasks = await read("infra/tasks/operator-ssh.yml");
-const rootTasks = await read("infra/Taskfile.yml");
+const installer = await new HomeSshContractRead(
+  "infra/operator-ssh.ts",
+).execute();
+const inventory = await new HomeSshContractRead(
+  "infra/k0s/config/operator-ssh.yaml",
+).execute();
+const tasks = await new HomeSshContractRead(
+  "infra/tasks/operator-ssh.yml",
+).execute();
+const rootTasks = await new HomeSshContractRead("infra/Taskfile.yml").execute();
 
 for (const fragment of [
   "ssh-keyscan",
@@ -42,11 +63,11 @@ for (const fragment of [
   "return await realpath(path)",
   "SSH config path is a dangling symbolic link",
 ]) {
-  requireFragment({
+  new HomeSshContractRequireFragment({
     fragment,
     label: "operator SSH installer",
     source: installer,
-  });
+  }).execute();
 }
 
 for (const fragment of [
@@ -54,7 +75,11 @@ for (const fragment of [
   "accept-new",
   "cloudflared access ssh",
 ]) {
-  forbidFragment({ fragment, label: "operator SSH installer", source: installer });
+  new HomeSshContractForbidFragment({
+    fragment,
+    label: "operator SSH installer",
+    source: installer,
+  }).execute();
 }
 
 for (const fragment of [
@@ -62,18 +87,22 @@ for (const fragment of [
   "accessFallback: ssh.bynull.link",
   "hostKeyFingerprint: SHA256:",
 ]) {
-  requireFragment({ fragment, label: "operator SSH inventory", source: inventory });
+  new HomeSshContractRequireFragment({
+    fragment,
+    label: "operator SSH inventory",
+    source: inventory,
+  }).execute();
 }
 
-requireFragment({
+new HomeSshContractRequireFragment({
   fragment: "ssh:home:configure:",
   label: "operator SSH tasks",
   source: tasks,
-});
-requireFragment({
+}).execute();
+new HomeSshContractRequireFragment({
   fragment: 'INFRA_MESH_SSH_TARGET: \'{{default "nook-home-lan"',
   label: "infrastructure root Taskfile",
   source: rootTasks,
-});
+}).execute();
 
 console.log("Home operator SSH contract: ok");

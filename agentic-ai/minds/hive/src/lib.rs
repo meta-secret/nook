@@ -22,18 +22,25 @@ pub use neo4j::Neo4jTaskStore;
 pub use store::TaskStore;
 pub use worker::{Worker, WorkerConfig};
 
-static RUSTLS_PROVIDER_INSTALL: OnceLock<Result<(), &'static str>> = OnceLock::new();
+pub struct HiveTlsProvider {
+    installation: OnceLock<Result<(), &'static str>>,
+}
+pub static HIVE_TLS_PROVIDER: HiveTlsProvider = HiveTlsProvider {
+    installation: OnceLock::new(),
+};
 
 #[cfg(test)]
 pub(crate) static GIT_PROCESS_TEST_LOCK: async_sync::Mutex<()> = async_sync::Mutex::const_new(());
 
-pub fn install_rustls_crypto_provider() -> HiveResult<()> {
-    match RUSTLS_PROVIDER_INSTALL.get_or_init(|| {
-        aws_lc_rs::default_provider()
-            .install_default()
-            .map_err(|_| "failed to install the AWS-LC rustls crypto provider")
-    }) {
-        Ok(()) => Ok(()),
-        Err(message) => Err(HiveError::message(*message)),
+impl HiveTlsProvider {
+    pub fn install(&self) -> HiveResult<()> {
+        match self.installation.get_or_init(|| {
+            aws_lc_rs::default_provider()
+                .install_default()
+                .map_err(|_| "failed to install the AWS-LC rustls crypto provider")
+        }) {
+            Ok(()) => Ok(()),
+            Err(message) => Err(HiveError::message(*message)),
+        }
     }
 }

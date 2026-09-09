@@ -1,20 +1,41 @@
 use std::{env, fs, path::PathBuf};
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 #[test]
 fn kubernetes_cache_proof_reuses_production_workloads() {
-    let overlay = read("infra/sim/kubernetes-cache/kustomization.yaml");
+    let overlay =
+        RepositoryFixture::repository_root().read("infra/sim/kubernetes-cache/kustomization.yaml");
     for required in [
         "../../k0s/manifests/namespaces.yaml",
         "../../k0s/manifests/registry/zot.yaml",
@@ -38,9 +59,11 @@ fn kubernetes_cache_proof_reuses_production_workloads() {
 
 #[test]
 fn kubernetes_cache_cluster_is_pinned_isolated_and_bounded() {
-    let contracts = read("infra/sim/kubernetes-cache/contracts.ts");
-    let runtime = read("infra/sim/kubernetes-cache/runtime.ts");
-    let proof = read("infra/sim/kubernetes-cache/prove.ts");
+    let contracts =
+        RepositoryFixture::repository_root().read("infra/sim/kubernetes-cache/contracts.ts");
+    let runtime =
+        RepositoryFixture::repository_root().read("infra/sim/kubernetes-cache/runtime.ts");
+    let proof = RepositoryFixture::repository_root().read("infra/sim/kubernetes-cache/prove.ts");
     for required in [
         "k3d version ${K3D_VERSION}",
         "refusing to replace existing k3d cluster",
@@ -83,10 +106,12 @@ fn kubernetes_cache_cluster_is_pinned_isolated_and_bounded() {
 
 #[test]
 fn kubernetes_cache_clients_prove_security_and_portability() {
-    let contracts = read("infra/sim/kubernetes-cache/contracts.ts");
-    let jobs = read("infra/sim/kubernetes-cache/jobs.ts");
-    let proof = read("infra/sim/kubernetes-cache/prove.ts");
-    let platform = read("infra/sim/kubernetes-cache/platform.ts");
+    let contracts =
+        RepositoryFixture::repository_root().read("infra/sim/kubernetes-cache/contracts.ts");
+    let jobs = RepositoryFixture::repository_root().read("infra/sim/kubernetes-cache/jobs.ts");
+    let proof = RepositoryFixture::repository_root().read("infra/sim/kubernetes-cache/prove.ts");
+    let platform =
+        RepositoryFixture::repository_root().read("infra/sim/kubernetes-cache/platform.ts");
     for required in [
         "automountServiceAccountToken: false",
         "allowPrivilegeEscalation: false",
@@ -160,10 +185,10 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
 
 #[test]
 fn kubernetes_cache_proof_has_one_local_entrypoint() {
-    let task = read("infra/tasks/kubernetes-cache.yml");
-    let batch = read(".github/scripts/remote-task-batch.sh");
-    let workflow = read(".github/workflows/remote.yml");
-    let root_readme = read("README.md");
+    let task = RepositoryFixture::repository_root().read("infra/tasks/kubernetes-cache.yml");
+    let batch = RepositoryFixture::repository_root().read(".github/scripts/remote-task-batch.sh");
+    let workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
+    let root_readme = RepositoryFixture::repository_root().read("README.md");
     assert!(task.contains("bun run infra/sim/kubernetes-cache/prove.ts"));
     assert!(root_readme.contains("task infra:kubernetes-cache:prove"));
     assert!(

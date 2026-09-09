@@ -1,5 +1,6 @@
 use crate::HiveContext;
-use neo4rs::{Graph, query};
+use crate::neo4j::Neo4jTaskStore;
+use neo4rs::query;
 
 const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_task_id IF NOT EXISTS FOR (node:Task) REQUIRE node.id IS UNIQUE",
@@ -12,98 +13,100 @@ const CONSTRAINTS: &[&str] = &[
 ];
 const LATEST_SCHEMA_VERSION: i64 = 9;
 
-pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
-    let mut rows = graph
-        .execute(query(
-            "MATCH (migration:HiveSchemaMigration)
-                 RETURN max(migration.version) AS version",
-        ))
-        .await?;
-    let installed_version = rows
-        .next()
-        .await?
-        .and_then(|row| row.get::<i64>("version").ok())
-        .unwrap_or(0);
-    if installed_version > LATEST_SCHEMA_VERSION {
-        return Err(crate::HiveError::message(format!(
-            "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
-        )));
-    }
-    if installed_version == 1 {
+impl Neo4jTaskStore {
+    pub(super) async fn migrate_schema(&self) -> crate::HiveResult<()> {
+        let graph = &self.graph;
         let mut rows = graph
             .execute(query(
-                "MATCH (task:Task)
-                     WHERE task.source_commit IS NULL
-                     RETURN count(task) AS legacy_tasks",
+                "MATCH (migration:HiveSchemaMigration)
+                 RETURN max(migration.version) AS version",
             ))
             .await?;
-        let legacy_tasks = rows
+        let installed_version = rows
             .next()
             .await?
-            .and_then(|row| row.get::<i64>("legacy_tasks").ok())
+            .and_then(|row| row.get::<i64>("version").ok())
             .unwrap_or(0);
-        if legacy_tasks > 0 {
+        if installed_version > LATEST_SCHEMA_VERSION {
             return Err(crate::HiveError::message(format!(
-                "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
-                     drain or remove those legacy tasks before upgrading to schema 2"
+                "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
             )));
         }
-    }
-    if installed_version < 3 {
-        graph
-            .run(query(
-                "MATCH (task:Task)
+        if installed_version == 1 {
+            let mut rows = graph
+                .execute(query(
+                    "MATCH (task:Task)
+                     WHERE task.source_commit IS NULL
+                     RETURN count(task) AS legacy_tasks",
+                ))
+                .await?;
+            let legacy_tasks = rows
+                .next()
+                .await?
+                .and_then(|row| row.get::<i64>("legacy_tasks").ok())
+                .unwrap_or(0);
+            if legacy_tasks > 0 {
+                return Err(crate::HiveError::message(format!(
+                    "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
+                     drain or remove those legacy tasks before upgrading to schema 2"
+                )));
+            }
+        }
+        if installed_version < 3 {
+            graph
+                .run(query(
+                    "MATCH (task:Task)
                      WHERE task.manual_retry_used IS NULL
                      SET task.manual_retry_used = false",
-            ))
-            .await
-            .hive_context("failed to initialize schema-3 manual retry state")?;
-    }
-    if installed_version < 4 {
-        graph
-            .run(query(
-                "MATCH (task:Task)
+                ))
+                .await
+                .hive_context("failed to initialize schema-3 manual retry state")?;
+        }
+        if installed_version < 4 {
+            graph
+                .run(query(
+                    "MATCH (task:Task)
                      SET task.last_retry_release =
                        coalesce(task.last_retry_release, '')
                      REMOVE task.manual_retry_used",
-            ))
-            .await
-            .hive_context("failed to initialize schema-4 release-scoped retry state")?;
-    }
-    if installed_version < 7 {
-        graph
-            .run(query(
-                "MATCH (task:Task)
+                ))
+                .await
+                .hive_context("failed to initialize schema-4 release-scoped retry state")?;
+        }
+        if installed_version < 7 {
+            graph
+                .run(query(
+                    "MATCH (task:Task)
                      OPTIONAL MATCH (activity:TaskActivity)-[:FOR_TASK]->(task)
                      WITH task, max(activity.created_at) AS latest_activity_at
                      WHERE latest_activity_at IS NOT NULL
                      SET task.latest_activity_at = latest_activity_at",
-            ))
-            .await
-            .hive_context("failed to backfill schema-7 latest activity state")?;
-    }
-    if installed_version < 8 {
-        graph
-            .run(query(
-                "MATCH (task:Task)
+                ))
+                .await
+                .hive_context("failed to backfill schema-7 latest activity state")?;
+        }
+        if installed_version < 8 {
+            graph
+                .run(query(
+                    "MATCH (task:Task)
                      WHERE task.obsolete IS NULL
                      SET task.obsolete = false",
-            ))
-            .await
-            .hive_context("failed to backfill schema-8 task retirement state")?;
-        graph
-            .run(query(
-                "MATCH (attempt:Attempt)
+                ))
+                .await
+                .hive_context("failed to backfill schema-8 task retirement state")?;
+            graph
+                .run(query(
+                    "MATCH (attempt:Attempt)
                      WHERE attempt.obsolete IS NULL
                      SET attempt.obsolete = false",
-            ))
-            .await
-            .hive_context("failed to backfill schema-8 attempt retirement state")?;
-    }
-    if installed_version < 9 {
-        graph
-            .run(query(
-                "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(dependency:Task)
+                ))
+                .await
+                .hive_context("failed to backfill schema-8 attempt retirement state")?;
+        }
+        if installed_version < 9 {
+            graph
+                .run(query(
+                    "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(dependency:Task)
                      WHERE dependency.status = 'COMPLETED'
                      WITH blocker, dependency, edge,
                           blocker.status AS prior_status
@@ -128,24 +131,25 @@ pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
                          END,
                          blocker.updated_at = timestamp(),
                          blocker.version = coalesce(blocker.version, 0) + 1",
-            ))
-            .await
-            .hive_context("failed to preserve and detach schema-9 blocker dependencies")?;
-    }
-    for statement in CONSTRAINTS {
+                ))
+                .await
+                .hive_context("failed to preserve and detach schema-9 blocker dependencies")?;
+        }
+        for statement in CONSTRAINTS {
+            graph
+                .run(query(statement))
+                .await
+                .with_hive_context(|| format!("failed to apply graph migration: {statement}"))?;
+        }
         graph
-            .run(query(statement))
-            .await
-            .with_hive_context(|| format!("failed to apply graph migration: {statement}"))?;
-    }
-    graph
-        .run(
-            query(
-                "MERGE (migration:HiveSchemaMigration {version: $version})
+            .run(
+                query(
+                    "MERGE (migration:HiveSchemaMigration {version: $version})
                      ON CREATE SET migration.applied_at = timestamp()",
+                )
+                .param("version", LATEST_SCHEMA_VERSION),
             )
-            .param("version", LATEST_SCHEMA_VERSION),
-        )
-        .await?;
-    Ok(())
+            .await?;
+        Ok(())
+    }
 }

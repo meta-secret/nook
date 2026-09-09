@@ -1,20 +1,41 @@
 use std::path::PathBuf;
 use std::{env, fs};
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
-fn read(relative_path: &str) -> anyhow::Result<String> {
-    Ok(fs::read_to_string(repository_root().join(relative_path))?)
+impl RepositoryFixture {
+    fn read(&self, relative_path: &str) -> anyhow::Result<String> {
+        Ok(fs::read_to_string(self.join(relative_path))?)
+    }
 }
 
 #[test]
 fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
-    let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
+    let checks =
+        RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml")?;
     let dependency_policy = checks
         .split_once("  dependency-policy:")
         .and_then(|(_, jobs)| jobs.split_once("\n  deterministic-tests:"))
@@ -42,7 +63,8 @@ struct DependencyPolicyCacheContract {
 impl DependencyPolicyCacheContract {
     fn load() -> anyhow::Result<Self> {
         Ok(Self {
-            dockerfile: read("nook-app/nook-platform/docker/rust/policy-tools.Dockerfile")?,
+            dockerfile: RepositoryFixture::repository_root()
+                .read("nook-app/nook-platform/docker/rust/policy-tools.Dockerfile")?,
         })
     }
 
@@ -85,14 +107,20 @@ impl DependencyPolicyCacheContract {
 
 #[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
-    let entry = read(".github/workflows/rust-ecosystem.yml")?;
-    let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
-    let main = read(".github/workflows/main.yml")?;
-    let pr = read(".github/workflows/pr.yml")?;
-    let quality = read(".cortex/teams/sre/workflows/quality.md")?;
-    let workspace = read("nook-app/nook-platform/Cargo.toml")?;
-    let dylint_manifest = read("nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml")?;
-    let rust_lineage_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile")?;
+    let entry =
+        RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem.yml")?;
+    let checks =
+        RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml")?;
+    let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml")?;
+    let pr = RepositoryFixture::repository_root().read(".github/workflows/pr.yml")?;
+    let quality =
+        RepositoryFixture::repository_root().read(".cortex/teams/sre/workflows/quality.md")?;
+    let workspace =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/Cargo.toml")?;
+    let dylint_manifest = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml")?;
+    let rust_lineage_dockerfile = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile")?;
     let rust_dockerfile = [
         "nook-app/nook-platform/docker/rust/product.Dockerfile",
         "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
@@ -102,11 +130,16 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     .map(read)
     .collect::<anyhow::Result<Vec<_>>>()?
     .join("\n");
-    let rust_bake = read("nook-app/nook-platform/docker/rust/docker-bake.hcl")?;
-    let replication = read("nook-app/nook-platform/nook-replication/src/replica_store.rs")?;
-    let fuzz_target = read("nook-app/nook-platform/fuzz/fuzz_targets/wire_parsers.rs")?;
-    let fuzz_manifest = read("nook-app/nook-platform/fuzz/Cargo.toml")?;
-    let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
+    let rust_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/docker-bake.hcl")?;
+    let replication = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/nook-replication/src/replica_store.rs")?;
+    let fuzz_target = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/fuzz/fuzz_targets/wire_parsers.rs")?;
+    let fuzz_manifest =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/fuzz/Cargo.toml")?;
+    let readiness =
+        RepositoryFixture::repository_root().read("agentic-ai/ci-agent/src/main/github.ts")?;
     let dependency_policy = checks
         .split_once("  dependency-policy:")
         .and_then(|(_, jobs)| jobs.split_once("  deterministic-tests:"))
@@ -223,11 +256,13 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         5,
         "every Bake-backed ecosystem job must seed Main and isolate PR cache writes"
     );
-    let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml")?;
-    let platform_tasks = read("nook-app/nook-platform/Taskfile.yml")?;
-    let preflight_tasks = read("preflight/Taskfile.yml")?;
-    let minds_tasks = read("agentic-ai/minds/Taskfile.yml")?;
-    let root_tasks = read("Taskfile.yml")?;
+    let docker_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/docker/Taskfile.yml")?;
+    let platform_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml")?;
+    let preflight_tasks = RepositoryFixture::repository_root().read("preflight/Taskfile.yml")?;
+    let minds_tasks = RepositoryFixture::repository_root().read("agentic-ai/minds/Taskfile.yml")?;
+    let root_tasks = RepositoryFixture::repository_root().read("Taskfile.yml")?;
     for marker in [
         "docker:rust-base:",
         "rust-base-restore",
@@ -289,7 +324,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     assert!(
         docker_tasks.contains("rust-ecosystem-dependency-policy")
-            && !repository_root()
+            && !RepositoryFixture::repository_root()
                 .join("nook-app/nook-platform/docker/rust/dependency-policy.Dockerfile")
                 .exists(),
         "dependency policy must use the parameterized policy-tools Dockerfile target"
@@ -349,7 +384,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "docker/rust Dockerfiles are missing ecosystem marker {marker}"
         );
     }
-    let nightly_dockerfile = read("nook-app/nook-platform/docker/rust/nightly.Dockerfile")?;
+    let nightly_dockerfile = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/nightly.Dockerfile")?;
     assert!(
         !nightly_dockerfile.contains("rust-platform-nightly")
             && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint")
@@ -419,7 +455,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && rust_bake.contains("cache-from = rust_ecosystem_fuzz_cache_from"),
         "dylint/fuzz full-graph leaf scopes must replace the standalone nightly cache lane"
     );
-    let preflight_bake = read("preflight/docker-bake.hcl")?;
+    let preflight_bake = RepositoryFixture::repository_root().read("preflight/docker-bake.hcl")?;
     let policy_tools_from = rust_bake
         .split("rust_ecosystem_policy_tools_cache_from =")
         .nth(1)
@@ -537,9 +573,13 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
 
-    assert!(repository_root().join("deny.toml").is_file());
     assert!(
-        repository_root()
+        RepositoryFixture::repository_root()
+            .join("deny.toml")
+            .is_file()
+    );
+    assert!(
+        RepositoryFixture::repository_root()
             .join("nook-app/nook-platform/.insta.yaml")
             .is_file()
     );
@@ -569,7 +609,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "agentic-ai/minds/clippy.toml",
         "nook-app/nook-platform/fuzz/clippy.toml",
     ] {
-        let clippy = read(relative)?;
+        let clippy = RepositoryFixture::repository_root().read(relative)?;
         assert!(
             clippy.contains("allow-expect-in-tests = false"),
             "{relative} must deny expect in tests"
@@ -586,7 +626,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
 
 #[test]
 fn ecosystem_policy_replaces_generic_custom_scanners_only() -> anyhow::Result<()> {
-    let quality = read(".cortex/teams/sre/workflows/quality.md")?;
+    let quality =
+        RepositoryFixture::repository_root().read(".cortex/teams/sre/workflows/quality.md")?;
 
     assert!(quality.contains("Ecosystem tools before bespoke preflight"));
     assert!(quality.contains("Keep `preflight` for Nook-specific"));

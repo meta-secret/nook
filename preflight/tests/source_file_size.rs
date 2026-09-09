@@ -3,19 +3,37 @@ use std::{env, fs};
 
 use nook_preflight::source_size::{
     AUTHORED_SOURCE_LINE_LIMIT, SOURCE_SIZE_REMEDIATION, UNIT_TEST_COLOCATION_REMEDIATION,
-    external_rust_unit_test_modules, source_size_violations,
 };
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
 #[test]
 fn authored_source_files_stay_within_hard_limits() -> anyhow::Result<()> {
-    let violations = source_size_violations(&repository_root())?;
+    let violations =
+        SourceRepository::new(&RepositoryFixture::repository_root()).source_size_violations()?;
     assert!(
         violations.is_empty(),
         "{SOURCE_SIZE_REMEDIATION}\n{violations:#?}"
@@ -25,7 +43,8 @@ fn authored_source_files_stay_within_hard_limits() -> anyhow::Result<()> {
 
 #[test]
 fn rust_unit_tests_stay_with_their_focused_implementation() -> anyhow::Result<()> {
-    let violations = external_rust_unit_test_modules(&repository_root())?;
+    let violations = SourceRepository::new(&RepositoryFixture::repository_root())
+        .external_rust_unit_test_modules()?;
     assert!(
         violations.is_empty(),
         "{UNIT_TEST_COLOCATION_REMEDIATION}\n{violations:#?}"
@@ -36,7 +55,7 @@ fn rust_unit_tests_stay_with_their_focused_implementation() -> anyhow::Result<()
 #[test]
 fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()> {
     assert_eq!(AUTHORED_SOURCE_LINE_LIMIT, 1_000);
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let agents = fs::read_to_string(root.join(".cortex/AGENTS.md"))?;
     let canonical =
         fs::read_to_string(root.join(".cortex/shared/dynamic-skills/source-file-size.md"))?;
@@ -75,9 +94,10 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
 
 #[test]
 fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let workflow = fs::read_to_string(root.join(".github/workflows/repository-policy.yml"))?;
-    let taskfile = fs::read_to_string(repository_root().join("preflight/Taskfile.yml"))?;
+    let taskfile =
+        fs::read_to_string(RepositoryFixture::repository_root().join("preflight/Taskfile.yml"))?;
 
     assert!(
         !root

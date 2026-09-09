@@ -2,23 +2,42 @@ use std::{env, fs, path::PathBuf};
 
 use anyhow::{Context, Result};
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> Result<String> {
-    fs::read_to_string(repository_root().join(path))
-        .with_context(|| format!("failed to read {path}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> Result<String> {
+        fs::read_to_string(self.join(path)).with_context(|| format!("failed to read {path}"))
+    }
 }
 
 #[test]
 fn head_transition_marker_and_stabilization_routes_are_absent() -> Result<()> {
     let workflow_name = ["pr-head", "stabilization.yml"].join("-");
     assert!(
-        !repository_root()
+        !RepositoryFixture::repository_root()
             .join(".github/workflows")
             .join(&workflow_name)
             .exists(),
@@ -30,7 +49,7 @@ fn head_transition_marker_and_stabilization_routes_are_absent() -> Result<()> {
         ["nook-head", "transition"].join("-"),
     ];
     for relative_root in [".github/workflows", ".github/scripts", ".task"] {
-        let mut pending = vec![repository_root().join(relative_root)];
+        let mut pending = vec![RepositoryFixture::repository_root().join(relative_root)];
         while let Some(directory) = pending.pop() {
             for entry in fs::read_dir(&directory)? {
                 let entry = entry?;
@@ -56,7 +75,8 @@ fn head_transition_marker_and_stabilization_routes_are_absent() -> Result<()> {
 
 #[test]
 fn obsolete_validation_cancellation_is_marker_free_and_head_bound() -> Result<()> {
-    let cancellation = read(".github/workflows/pr-obsolete-validation.yml")?;
+    let cancellation = RepositoryFixture::repository_root()
+        .read(".github/workflows/pr-obsolete-validation.yml")?;
     for required in [
         "pull_request_target:",
         "types: [edited, synchronize]",

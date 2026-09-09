@@ -1,4 +1,4 @@
-use super::repository_root;
+use super::RepositoryFixture;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -75,7 +75,7 @@ fn manifest_specs(manifest_path: PathBuf) -> anyhow::Result<BTreeSet<String>> {
 
 #[test]
 fn every_nook_web_app_behavior_spec_belongs_to_exactly_one_gate() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let e2e_directory = root.join("nook-app/nook-web/nook-web-app/e2e");
     let mut discovered = BTreeSet::new();
     collect_behavior_specs(&e2e_directory, &e2e_directory, &mut discovered)?;

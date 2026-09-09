@@ -6,16 +6,36 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
-fn read(root: &Path, path: &str) -> String {
-    fs::read_to_string(root.join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {

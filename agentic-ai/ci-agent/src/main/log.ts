@@ -3,14 +3,14 @@
 import type { InteractionUpdate, ToolCall } from "@cursor/sdk";
 
 import { AgentTextLog, ShellStreamLog } from "./interaction-log.js";
-import { createLogger } from "./logger.js";
+import { Logger } from "./logger.js";
 import {
-  extractShellOutputChunk,
-  formatToolCompleted,
-  formatToolStarted,
+  ShellOutputEvent,
+  CompletedToolCall,
+  StartedToolCall,
 } from "./tool-summary.js";
 
-const log = createLogger("cursor");
+const log = new Logger("cursor");
 
 export class CiInteractionLogger {
   private readonly agentText = new AgentTextLog();
@@ -26,7 +26,7 @@ export class CiInteractionLogger {
       case "thinking-delta":
         break;
       case "shell-output-delta": {
-        const chunk = extractShellOutputChunk(update.event);
+        const chunk = new ShellOutputEvent(update.event).text();
         if (chunk) {
           this.agentText.closeBlock();
           this.shellStream.write(chunk);
@@ -36,7 +36,7 @@ export class CiInteractionLogger {
       case "tool-call-started":
         this.agentText.closeBlock();
         this.shellStream.closeBlock();
-        log.info(formatToolStarted(update.toolCall));
+        log.info(new StartedToolCall(update.toolCall).format());
         if (update.toolCall.type === "shell") {
           this.shellStream.openBlock();
         }
@@ -69,21 +69,16 @@ export class CiInteractionLogger {
   }
 
   private logToolCompleted(toolCall: ToolCall): void {
-    const lines = formatToolCompleted(toolCall, {
-      includeShellOutput: !this.shellStream.hasStreamed(),
-    });
+    const lines = new CompletedToolCall({
+      toolCall: toolCall,
+      options: {
+        includeShellOutput: !this.shellStream.hasStreamed(),
+      },
+    }).format();
     for (const line of lines) {
       log.info(line);
     }
   }
 }
 
-const defaultLogger = new CiInteractionLogger();
-
-export function logInteractionUpdate(update: InteractionUpdate): void {
-  defaultLogger.log(update);
-}
-
-export function finishInteractionLog(): void {
-  defaultLogger.finish();
-}
+export const defaultInteractionLogger = new CiInteractionLogger();

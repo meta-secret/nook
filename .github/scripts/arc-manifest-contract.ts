@@ -1,71 +1,33 @@
+import type {
+  WorkflowManifest,
+  WorkflowJob,
+  ArcContainerPodTemplate,
+  ArcContainerHook,
+  ArcValues,
+  ArcVolume,
+  ArcContainer,
+  ArcEnvironmentVariable,
+  ResourceEnvelope,
+} from "./arc-manifest-model";
 import { resolve } from "node:path";
 import { readdir } from "node:fs/promises";
 
-import { assertHiveRenderContract } from "./arc-hive-render-contract";
+import { ArcHiveRenderContractAssertHiveRenderContract } from "./arc-hive-render-contract";
 import { ArcWorkerRestoreContract } from "./arc-worker-restore-contract";
 import { DockerfileFrontendContract } from "./dockerfile-frontend-contract";
 import { DockerCacheSelectionContract } from "./docker-cache-selection-contract";
 import { TextContract } from "./text-contract";
 
+class ArcManifestContractRead {
+  constructor(private readonly request: string) {}
+  async execute(): Promise<string> {
+    const relative = this.request;
+
+    return Bun.file(resolve(root, relative)).text();
+  }
+}
+
 const root = resolve(import.meta.dir, "../..");
-
-async function read(relative: string): Promise<string> {
-  return Bun.file(resolve(root, relative)).text();
-}
-
-interface ResourceEnvelope {
-  requests?: {
-    cpu?: string;
-    memory?: string;
-    "ephemeral-storage"?: string;
-  };
-  limits?: {
-    cpu?: string;
-    memory?: string;
-    "ephemeral-storage"?: string;
-  };
-}
-
-type ArcEnvironmentVariable =
-  | { name: string; value: string }
-  | {
-      name: string;
-      valueFrom: { fieldRef: { fieldPath: string } };
-    };
-
-interface ArcContainer {
-  name: string;
-  env?: ArcEnvironmentVariable[];
-  resources?: ResourceEnvelope;
-}
-
-interface ArcVolume {
-  name: string;
-  hostPath?: { path: string };
-}
-
-interface ArcValues {
-  runnerScaleSetName: string;
-  minRunners: number;
-  maxRunners: number;
-  template: {
-    spec: {
-      runtimeClassName?: string;
-      automountServiceAccountToken: boolean;
-      initContainers: ArcContainer[];
-      containers: ArcContainer[];
-      volumes: ArcVolume[];
-    };
-  };
-}
-
-interface ArcContainerHook {
-  data: { "content.yaml": string };
-}
-
-interface ArcContainerPodTemplate {
-  spec: { initContainers: ArcContainer[]; containers: ArcContainer[] };
-}
 
 class ArcPlacementScenario {
   constructor(
@@ -105,10 +67,7 @@ class ArcActivationScenario {
 }
 
 class ArcContainerResourceContract {
-  static assertCpuUnconstrained(
-    container: ArcContainer,
-    label: string,
-  ): void {
+  static assertCpuUnconstrained(container: ArcContainer, label: string): void {
     const resources = container.resources;
     if (!resources) {
       return;
@@ -129,46 +88,37 @@ class ArcContainerResourceContract {
   }
 }
 
-interface WorkflowJob {
-  if?: string;
-  "runs-on"?: string;
-  steps?: Array<{ run?: string; uses?: string }>;
-  uses?: string;
-}
-
-interface WorkflowManifest {
-  jobs?: Record<string, WorkflowJob>;
-}
-
-const runnersSource = await read(
+const runnersSource = await new ArcManifestContractRead(
   "infra/k0s/manifests/arc/runner-scale-set-values.yaml",
-);
+).execute();
 const runners = new TextContract({
   label: "ARC runner scale set",
   source: runnersSource,
 });
-const containerRunnersSource = await read(
+const containerRunnersSource = await new ArcManifestContractRead(
   "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
-);
+).execute();
 const containerRunners = new TextContract({
   label: "ARC Kubernetes container scale set",
   source: containerRunnersSource,
 });
-const containerHookSource = await read(
+const containerHookSource = await new ArcManifestContractRead(
   "infra/k0s/manifests/arc/container-hook.yaml",
-);
+).execute();
 const containerHook = new TextContract({
   label: "ARC Kubernetes container hook",
   source: containerHookSource,
 });
-const containerJobNodesSource = await read(
+const containerJobNodesSource = await new ArcManifestContractRead(
   "infra/k0s/config/arc-container-job-nodes",
-);
+).execute();
 const containerJobNodes = new TextContract({
   label: "ARC container-job node inventory",
   source: containerJobNodesSource,
 });
-const buildkitSource = await read("infra/k0s/manifests/arc/buildkit.yaml");
+const buildkitSource = await new ArcManifestContractRead(
+  "infra/k0s/manifests/arc/buildkit.yaml",
+).execute();
 const buildkit = new TextContract({
   label: "ARC persistent BuildKit",
   source: buildkitSource,
@@ -189,9 +139,13 @@ const buildkitContainer = new TextContract({
 });
 const network = new TextContract({
   label: "ARC network policy",
-  source: await read("infra/k0s/manifests/arc/network-policy.yaml"),
+  source: await new ArcManifestContractRead(
+    "infra/k0s/manifests/arc/network-policy.yaml",
+  ).execute(),
 });
-const arcTasksSource = await read("infra/tasks/arc.yml");
+const arcTasksSource = await new ArcManifestContractRead(
+  "infra/tasks/arc.yml",
+).execute();
 const tasks = new TextContract({
   label: "ARC operations",
   source: arcTasksSource,
@@ -227,25 +181,37 @@ registryTransport.forbidAll(["nook-buildkit-0", "rollout restart", "uncordon"]);
 tasks.forbid("- task: arc:network:configure");
 new TextContract({
   label: "ARC TCP boot module",
-  source: await read("infra/k0s/config/nook-tcp-congestion-control.conf"),
+  source: await new ArcManifestContractRead(
+    "infra/k0s/config/nook-tcp-congestion-control.conf",
+  ).execute(),
 }).require("tcp_bbr\n");
 new TextContract({
   label: "ARC TCP congestion policy",
-  source: await read("infra/k0s/config/99-nook-tcp-congestion-control.conf"),
+  source: await new ArcManifestContractRead(
+    "infra/k0s/config/99-nook-tcp-congestion-control.conf",
+  ).execute(),
 }).require("net.ipv4.tcp_congestion_control = bbr\n");
 const dockerSetup = new TextContract({
   label: "Docker setup action",
-  source: await read(".github/actions/nook-docker-setup/action.yml"),
+  source: await new ArcManifestContractRead(
+    ".github/actions/nook-docker-setup/action.yml",
+  ).execute(),
 });
 const runtimeSmoke = new TextContract({
   label: "ARC BuildKit smoke",
-  source: await read(".github/scripts/arc-runtime-smoke.sh"),
+  source: await new ArcManifestContractRead(
+    ".github/scripts/arc-runtime-smoke.sh",
+  ).execute(),
 });
 const mainWorkflow = new TextContract({
   label: "Main workflow",
-  source: await read(".github/workflows/main.yml"),
+  source: await new ArcManifestContractRead(
+    ".github/workflows/main.yml",
+  ).execute(),
 });
-const prWorkflowSource = await read(".github/workflows/pr.yml");
+const prWorkflowSource = await new ArcManifestContractRead(
+  ".github/workflows/pr.yml",
+).execute();
 const prWorkflow = new TextContract({
   label: "PR workflow",
   source: prWorkflowSource,
@@ -266,45 +232,59 @@ const authSensitiveJob = new TextContract({
 });
 const hiveWorkflow = new TextContract({
   label: "Hive workflow",
-  source: await read(".github/workflows/hive.yml"),
+  source: await new ArcManifestContractRead(
+    ".github/workflows/hive.yml",
+  ).execute(),
 });
-const repositoryPolicySource = await read(
+const repositoryPolicySource = await new ArcManifestContractRead(
   ".github/workflows/repository-policy.yml",
-);
+).execute();
 const repositoryPolicyWorkflow = new TextContract({
   label: "repository policy workflow",
   source: repositoryPolicySource,
 });
 const webResearchWorkflow = new TextContract({
   label: "web research workflow",
-  source: await read(".github/workflows/web-research.yml"),
+  source: await new ArcManifestContractRead(
+    ".github/workflows/web-research.yml",
+  ).execute(),
 });
 const nodeSetup = new TextContract({
   label: "ARC shell Node setup",
-  source: await read(".github/actions/nook-node-setup/action.yml"),
+  source: await new ArcManifestContractRead(
+    ".github/actions/nook-node-setup/action.yml",
+  ).execute(),
 });
 const webTasks = new TextContract({
   label: "web browser tasks",
-  source: await read("nook-app/nook-web/Taskfile.yml"),
+  source: await new ArcManifestContractRead(
+    "nook-app/nook-web/Taskfile.yml",
+  ).execute(),
 });
 const webDockerTasks = new TextContract({
   label: "web Docker browser tasks",
-  source: await read("nook-app/nook-web/docker/Taskfile.yml"),
+  source: await new ArcManifestContractRead(
+    "nook-app/nook-web/docker/Taskfile.yml",
+  ).execute(),
 });
 const extensionTasks = new TextContract({
   label: "extension browser tasks",
-  source: await read("nook-app/nook-web/nook-web-extension/Taskfile.yml"),
+  source: await new ArcManifestContractRead(
+    "nook-app/nook-web/nook-web-extension/Taskfile.yml",
+  ).execute(),
 });
-const wasmCacheProofSource = await read(
+const wasmCacheProofSource = await new ArcManifestContractRead(
   ".github/scripts/verify-wasm-gha-cache.sh",
-);
+).execute();
 const wasmCacheProof = new TextContract({
   label: "portable WASM cache proof",
   source: wasmCacheProofSource,
 });
 const remoteWorkflow = new TextContract({
   label: "Remote workflow",
-  source: await read(".github/workflows/remote.yml"),
+  source: await new ArcManifestContractRead(
+    ".github/workflows/remote.yml",
+  ).execute(),
 });
 const values = Bun.YAML.parse(runnersSource) as ArcValues;
 if (
@@ -412,7 +392,10 @@ const jobContainer = containerPodTemplate.spec.containers.find(
 if (!jobContainer) {
   throw new Error("ARC container hook must retain its job container");
 }
-ArcContainerResourceContract.assertNoEnvelope(jobContainer, "ARC job container");
+ArcContainerResourceContract.assertNoEnvelope(
+  jobContainer,
+  "ARC job container",
+);
 
 runners.requireAll([
   "maxSkew: 2",
@@ -907,7 +890,7 @@ remoteWorkflow.require(
 await ArcWorkerRestoreContract.assert(root);
 await DockerCacheSelectionContract.assert(root);
 await DockerfileFrontendContract.assert(root);
-await assertHiveRenderContract({ root });
+await new ArcHiveRenderContractAssertHiveRenderContract({ root }).execute();
 
 const hostedUntrustedBoundary = new Set([
   "hive.yml#verify-fork",

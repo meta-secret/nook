@@ -3,7 +3,7 @@ use anyhow::Context;
 
 #[test]
 fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     assert_workflow_runtime_contract(&root);
     assert_docker_setup_contract(&root);
     assert_pr_workflow_contract(&root)?;
@@ -18,7 +18,7 @@ fn assert_workflow_runtime_contract(root: &Path) {
         ".github/workflows/main.yml",
         ".github/workflows/release.yml",
     ] {
-        let content = read(root, workflow);
+        let content = (root).read(workflow);
         for run_scoped_image in [
             "DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}",
             "DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
@@ -29,11 +29,11 @@ fn assert_workflow_runtime_contract(root: &Path) {
             );
         }
     }
-    let pr = read(root, ".github/workflows/pr.yml");
-    let main = read(root, ".github/workflows/main.yml");
-    let release = read(root, ".github/workflows/release.yml");
-    let ecosystem = read(root, ".github/workflows/rust-ecosystem-checks.yml");
-    let ecosystem_entry = read(root, ".github/workflows/rust-ecosystem.yml");
+    let pr = (root).read(".github/workflows/pr.yml");
+    let main = (root).read(".github/workflows/main.yml");
+    let release = (root).read(".github/workflows/release.yml");
+    let ecosystem = (root).read(".github/workflows/rust-ecosystem-checks.yml");
+    let ecosystem_entry = (root).read(".github/workflows/rust-ecosystem.yml");
     assert!(
         pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
             && release.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
@@ -74,7 +74,7 @@ fn assert_workflow_runtime_contract(root: &Path) {
         ".github/workflows/hive.yml",
         ".github/workflows/web-research.yml",
     ] {
-        let source = read(root, workflow);
+        let source = (root).read(workflow);
         assert!(
             source.contains(
                 "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}",
@@ -82,9 +82,9 @@ fn assert_workflow_runtime_contract(root: &Path) {
             "{workflow} must not request PR-isolated cache writes for push or input-free manual events"
         );
     }
-    let hive = read(root, ".github/workflows/hive.yml");
-    let research = read(root, ".github/workflows/web-research.yml");
-    let repository_policy = read(root, ".github/workflows/repository-policy.yml");
+    let hive = (root).read(".github/workflows/hive.yml");
+    let research = (root).read(".github/workflows/web-research.yml");
+    let repository_policy = (root).read(".github/workflows/repository-policy.yml");
     for (workflow, source) in [
         ("Hive", &hive),
         ("web research", &research),
@@ -117,14 +117,12 @@ fn assert_workflow_runtime_contract(root: &Path) {
 }
 
 fn assert_docker_setup_contract(root: &Path) {
-    let setup = read(root, ".github/actions/nook-docker-setup/action.yml");
-    let pr = read(root, ".github/workflows/pr.yml");
-    let arc_values = read(root, "infra/k0s/manifests/arc/runner-scale-set-values.yaml");
-    let container_values = read(
-        root,
-        "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
-    );
-    let container_hook = read(root, "infra/k0s/manifests/arc/container-hook.yaml");
+    let setup = (root).read(".github/actions/nook-docker-setup/action.yml");
+    let pr = (root).read(".github/workflows/pr.yml");
+    let arc_values = (root).read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
+    let container_values =
+        (root).read("infra/k0s/manifests/arc/container-runner-scale-set-values.yaml");
+    let container_hook = (root).read("infra/k0s/manifests/arc/container-hook.yaml");
     for required in [
         "docker/setup-buildx-action@v4",
         "Preload hosted BuildKit from Zot",
@@ -228,7 +226,7 @@ fn assert_docker_setup_contract(root: &Path) {
 }
 
 fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
-    let pr = read(root, ".github/workflows/pr.yml");
+    let pr = (root).read(".github/workflows/pr.yml");
     for required in [
         "name: Native Rust verification",
         "name: WASM build and artifact",
@@ -299,7 +297,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         );
     }
 
-    let coverage = read(root, ".github/workflows/pr-coverage.yml");
+    let coverage = (root).read(".github/workflows/pr-coverage.yml");
     for required in [
         "workflow_call:",
         "name: Rust coverage report",
@@ -432,7 +430,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR close cancellation must not create a skipped PR source run"
     );
 
-    let linear_ui_demo = read(root, ".github/workflows/linear-ui-demo.yml");
+    let linear_ui_demo = (root).read(".github/workflows/linear-ui-demo.yml");
     assert!(
         pr.contains(
             "group: pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}"
@@ -452,7 +450,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "trusted UI demo artifact publication must stay disabled while close transitions remain active"
     );
 
-    let trusted_handoff = read(root, ".github/workflows/pr-validation-handoff.yml");
+    let trusted_handoff = (root).read(".github/workflows/pr-validation-handoff.yml");
     for required in [
         "name: PR validation handoff",
         "github.event.workflow_run.conclusion == 'success'",
@@ -551,7 +549,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR preview must deploy only after required Native Rust, WASM, web, Node, authentication e2e, and enabled UI demo verification succeeds"
     );
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e-shard:\n");
-    let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
+    let coverage_workflow = (root).read(".github/workflows/pr-coverage.yml");
     assert!(
         coverage_job.contains("needs: rust")
             && coverage_job.contains("uses: ./.github/workflows/pr-coverage.yml")
@@ -618,12 +616,12 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
 }
 
 fn assert_preflight_reporter_contract(root: &Path) {
-    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
+    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
     assert!(
         ci_tasks.contains("PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'"),
         "native PR CI must export the preflight reporter with its coverage artifact"
     );
-    let preflight_dockerfile = read(root, "preflight/Dockerfile");
+    let preflight_dockerfile = (root).read("preflight/Dockerfile");
     for required in [
         "FROM rust-base AS chef",
         "FROM rust-base AS deps",
@@ -649,7 +647,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
             && !preflight_dockerfile.contains("FROM rust@"),
         "preflight must reuse rust-base instead of installing a floating Rust tag"
     );
-    let preflight_bake = read(root, "preflight/docker-bake.hcl");
+    let preflight_bake = (root).read("preflight/docker-bake.hcl");
     for required in [
         "target \"preflight-test\"",
         "target \"preflight-cli-export\"",
@@ -662,7 +660,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
             "preflight Bake wiring is missing: {required}"
         );
     }
-    let preflight_tasks = read(root, "preflight/Taskfile.yml");
+    let preflight_tasks = (root).read("preflight/Taskfile.yml");
     for required in [
         "preflight:export:",
         "preflight-cli-export",
@@ -690,8 +688,8 @@ fn assert_preflight_reporter_contract(root: &Path) {
 }
 
 fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
-    let pr = read(root, ".github/workflows/pr.yml");
-    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
+    let pr = (root).read(".github/workflows/pr.yml");
+    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
     let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
     let preflight = rust_host
         .find("task: preflight")
@@ -732,7 +730,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     let verify_job = section(&pr, "  verify:\n", "  preview:\n");
     let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
-    let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
+    let coverage_workflow = (root).read(".github/workflows/pr-coverage.yml");
     assert!(
         !verify_job.contains("Download Rust coverage handoff")
             && !verify_job.contains("Waiting for native coverage artifact")
@@ -767,7 +765,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && deploy.contains("NOOK_HOST_PAGES_DEPLOY: \"1\""),
         "PR preview deploy must invoke the host Pages script that owns concurrent uploads"
     );
-    let deploy_script = read(root, ".github/scripts/ci-pr-deploy-and-verify-previews.sh");
+    let deploy_script = (root).read(".github/scripts/ci-pr-deploy-and-verify-previews.sh");
     assert!(
         deploy_script.contains("deploy_pages()")
             && deploy_script.contains("NOOK_HOST_PAGES_DEPLOY")
@@ -782,7 +780,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && deploy_script.contains("wait_for_deploy"),
         "independent Cloudflare preview uploads must prewarm pinned Wrangler, run concurrently, and all succeed before alias verification"
     );
-    let host_deploy = read(root, ".github/scripts/ci-pr-host-pages-deploy.sh");
+    let host_deploy = (root).read(".github/scripts/ci-pr-host-pages-deploy.sh");
     assert!(
         host_deploy.contains("npx --yes \"wrangler@${wrangler_version}\"")
             && host_deploy.contains("NOOK_WRANGLER_VERSION:-4.114.0")
@@ -794,7 +792,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && !ci_tasks.contains("bun add wrangler"),
         "preview deploys must use the dependency-locked Wrangler binary instead of installing it at runtime"
     );
-    let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
+    let e2e_pr = (root).read(".github/workflows/e2e-pr.yml");
     assert!(
         e2e_pr.contains("cache-write: \"false\"")
             && e2e_pr.contains(
@@ -827,7 +825,7 @@ pub(super) fn assert_main_web_e2e_core_contract(ci: &str) {
 }
 
 pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
-    let e2e_builder = read(root, ".github/scripts/e2e-build-if-needed.sh");
+    let e2e_builder = (root).read(".github/scripts/e2e-build-if-needed.sh");
     assert_eq!(
         e2e_builder.matches("bun run build:unified").count(),
         1,
@@ -851,7 +849,7 @@ pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
 }
 
 fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> {
-    let release = read(root, ".github/workflows/release.yml");
+    let release = (root).read(".github/workflows/release.yml");
     let release_source = release
         .find("- name: Checkout release source")
         .context("release workflow must check out release source")?;
@@ -882,7 +880,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
             && release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE\""),
         "historical release refs must use current workflow tooling against the immutable source root"
     );
-    let main = read(root, ".github/workflows/main.yml");
+    let main = (root).read(".github/workflows/main.yml");
     let main_ui_demo_job = section(&main, "  ui-demos:\n", "  deploy:\n");
     for required in [
         "\n  rust:\n",
@@ -917,7 +915,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         !root.join(".github/scripts/main-post-web-e2e.sh").exists(),
         "same-runner Main suite coordinator was replaced by multi-job consumers"
     );
-    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
+    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
     let web_ci = section(
         &ci_tasks,
         "  ci:main:web-e2e:ci:\n",
@@ -943,7 +941,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         !root.join(".github/workflows/runner-cleanup.yml").exists(),
         "legacy registered-runner Docker cleanup must not return after ARC migration"
     );
-    let prune_script = read(root, ".github/scripts/docker-prune-stale.sh");
+    let prune_script = (root).read(".github/scripts/docker-prune-stale.sh");
     assert!(
         prune_script.contains("--filter until=168h"),
         "runner cleanup must preserve the recent delivery cache"
@@ -954,8 +952,8 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
 #[test]
 fn release_deploy_trusts_only_exact_actions_workspace_before_git_resolution() -> anyhow::Result<()>
 {
-    let root = repository_root();
-    let release = read(&root, ".github/workflows/release.yml");
+    let root = RepositoryFixture::repository_root();
+    let release = (&root).read(".github/workflows/release.yml");
     let deploy = release
         .split_once("\n  deploy:\n")
         .context("release workflow must define the deploy job")?

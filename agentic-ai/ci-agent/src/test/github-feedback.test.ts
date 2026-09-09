@@ -2,39 +2,41 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  countAutomatedFindingBatches,
-  isNonActionableReviewBody,
-  isRepositoryStatusComment,
+  AutomatedFindingHistory,
+  ReviewBodyClassification,
+  GitHubIsRepositoryStatusComment,
   isTrustedExactHeadReviewRequest,
 } from "../main/github.js";
 
 test("countAutomatedFindingBatches groups root bot findings by review", () => {
-  const batches = countAutomatedFindingBatches({
-    comments: [{
-      isReply: false,
-      reviewerLogin: "chatgpt-codex-connector[bot]",
-      reviewId: 10,
-    },
-    {
-      isReply: false,
-      reviewerLogin: "chatgpt-codex-connector[bot]",
-      reviewId: 10,
-    },
-    {
-      isReply: false,
-      reviewerLogin: "cursor[bot]",
-      reviewId: 11,
-    },
-    {
-      isReply: true,
-      reviewerLogin: "cypherkitty",
-      reviewId: 10,
-    },
-    {
-      isReply: false,
-      reviewerLogin: "human-reviewer",
-      reviewId: 12,
-    }],
+  const batches = new AutomatedFindingHistory({
+    comments: [
+      {
+        isReply: false,
+        reviewerLogin: "chatgpt-codex-connector[bot]",
+        reviewId: 10,
+      },
+      {
+        isReply: false,
+        reviewerLogin: "chatgpt-codex-connector[bot]",
+        reviewId: 10,
+      },
+      {
+        isReply: false,
+        reviewerLogin: "cursor[bot]",
+        reviewId: 11,
+      },
+      {
+        isReply: true,
+        reviewerLogin: "cypherkitty",
+        reviewId: 10,
+      },
+      {
+        isReply: false,
+        reviewerLogin: "human-reviewer",
+        reviewId: 12,
+      },
+    ],
     reviews: [
       {
         active: true,
@@ -61,13 +63,13 @@ test("countAutomatedFindingBatches groups root bot findings by review", () => {
         reviewId: 14,
       },
     ],
-  });
+  }).countBatches();
 
   assert.equal(batches, 4);
 });
 
 test("countAutomatedFindingBatches excludes dismissed review comments", () => {
-  const batches = countAutomatedFindingBatches({
+  const batches = new AutomatedFindingHistory({
     comments: [
       {
         isReply: false,
@@ -94,7 +96,7 @@ test("countAutomatedFindingBatches excludes dismissed review comments", () => {
         reviewId: 11,
       },
     ],
-  });
+  }).countBatches();
 
   assert.equal(batches, 1);
 });
@@ -142,43 +144,43 @@ test("exact-head iteration markers require a trusted exact request", () => {
 test("only a trusted canonical request marker is repository status", () => {
   const marker = "<!-- nook-codex-review:head-sha -->";
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       authorAssociation: "OWNER",
       body: `@codex review\n\n${marker}`,
       cursorMarker: "<!-- nook-cursor-review:head-sha -->",
       marker,
       user: { login: "cypherkitty" },
-    }),
+    }).execute(),
     true,
   );
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       authorAssociation: "OWNER",
       body: `Finding quoting ${marker}`,
       cursorMarker: "<!-- nook-cursor-review:head-sha -->",
       marker,
       user: { login: "cypherkitty" },
-    }),
+    }).execute(),
     false,
   );
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       authorAssociation: "NONE",
       body: `@codex review\n\n${marker}`,
       cursorMarker: "<!-- nook-cursor-review:head-sha -->",
       marker,
       user: { login: "cypherkitty" },
-    }),
+    }).execute(),
     false,
   );
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       authorAssociation: "OWNER",
       body: "@codex review\n\n<!-- nook-codex-review:older-head -->",
       cursorMarker: "<!-- nook-cursor-review:head-sha -->",
       marker,
       user: { login: "cypherkitty" },
-    }),
+    }).execute(),
     true,
   );
 });
@@ -193,17 +195,17 @@ test("provider status text is authenticated before exclusion", () => {
     marker: "<!-- nook-codex-review:head-sha -->",
   };
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       ...base,
       user: { login: "chatgpt-codex-connector[bot]" },
-    }),
+    }).execute(),
     true,
   );
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       ...base,
       user: { login: "human-reviewer" },
-    }),
+    }).execute(),
     false,
   );
 });
@@ -221,43 +223,43 @@ test("Codex review summary status is authenticated by exact actor and marker", (
   ].join("\n");
 
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       ...base,
       body: summary,
       user: { login: "chatgpt-codex-connector[bot]" },
-    }),
+    }).execute(),
     true,
   );
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       ...base,
       body: summary,
       user: { login: "human-reviewer" },
-    }),
+    }).execute(),
     false,
   );
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       ...base,
       body: summary,
       user: { login: "chatgpt-codex-connector" },
-    }),
+    }).execute(),
     false,
   );
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       ...base,
       body: "<!-- codex-pull-request-review-summary-lookalike -->",
       user: { login: "chatgpt-codex-connector[bot]" },
-    }),
+    }).execute(),
     false,
   );
   assert.equal(
-    isRepositoryStatusComment({
+    new GitHubIsRepositoryStatusComment({
       ...base,
       body: `Actionable finding\n\n${summary}`,
       user: { login: "chatgpt-codex-connector[bot]" },
-    }),
+    }).execute(),
     false,
   );
 });
@@ -275,26 +277,37 @@ test("workflow status markers are authenticated before exclusion", () => {
     "<!-- nook-core-coverage -->",
   ]) {
     assert.equal(
-      isRepositoryStatusComment({
+      new GitHubIsRepositoryStatusComment({
         ...base,
         body,
         user: { login: "github-actions[bot]" },
-      }),
+      }).execute(),
       true,
     );
     assert.equal(
-      isRepositoryStatusComment({
+      new GitHubIsRepositoryStatusComment({
         ...base,
         body,
         user: { login: "human-reviewer" },
-      }),
+      }).execute(),
       false,
     );
   }
 });
 
 test("common praise is non-actionable", () => {
-  assert.equal(isNonActionableReviewBody("Looks good to me."), true);
-  assert.equal(isNonActionableReviewBody("No issues found!"), true);
-  assert.equal(isNonActionableReviewBody("This drops the head guard."), false);
+  assert.equal(
+    new ReviewBodyClassification("Looks good to me.").isNonActionable(),
+    true,
+  );
+  assert.equal(
+    new ReviewBodyClassification("No issues found!").isNonActionable(),
+    true,
+  );
+  assert.equal(
+    new ReviewBodyClassification(
+      "This drops the head guard.",
+    ).isNonActionable(),
+    false,
+  );
 });

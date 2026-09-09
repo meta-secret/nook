@@ -15,18 +15,17 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
-  assertGitMetadataBaselineUnchanged,
-  assertNoPersistedGitCredentials,
-  assertPublishedFixIdentity,
-  assertRepositoryBaselineUnchanged,
-  assertRustDependencyUpdateChangeSet,
+  DependencyFixAssertGitMetadataBaselineUnchanged,
+  GitConfiguration,
+  DependencyFixAssertPublishedFixIdentity,
+  DependencyFixAssertRepositoryBaselineUnchanged,
+  DependencyFixRepository,
   CI_FIX_SKIPPED,
   CiFixOutcomeKind,
-  isolationForFixProfile,
-  resolveCiAgentFixProfile,
-  runRustDependencyUpdateValidation,
-  verifyPublishedFix,
-  withValidationEnvironment,
+  DependencyFixIsolationForFixProfile,
+  CiFixProfileName,
+  DependencyFixVerifyPublishedFix,
+  DependencyFixWithValidationEnvironment,
 } from "../main/fix.js";
 import type { CiFixOutcome } from "../main/fix.js";
 import { AgentIsolation } from "../main/run-agent.js";
@@ -37,14 +36,19 @@ const OTHER_SHA = "b".repeat(40);
 const execFileAsync = promisify(execFile);
 
 test("rust dependency update profile selects strict isolation", () => {
-  const profile = resolveCiAgentFixProfile("rust-dependency-update");
-  assert.equal(isolationForFixProfile(profile), AgentIsolation.Strict);
+  const profile = new CiFixProfileName("rust-dependency-update").parse();
   assert.equal(
-    isolationForFixProfile(resolveCiAgentFixProfile()),
+    new DependencyFixIsolationForFixProfile(profile).execute(),
+    AgentIsolation.Strict,
+  );
+  assert.equal(
+    new DependencyFixIsolationForFixProfile(
+      new CiFixProfileName().parse(),
+    ).execute(),
     AgentIsolation.Legacy,
   );
   assert.throws(
-    () => resolveCiAgentFixProfile("rust-dependency-update-typo"),
+    () => new CiFixProfileName("rust-dependency-update-typo").parse(),
     /Unsupported CI_AGENT_FIX_PROFILE/,
   );
 });
@@ -74,68 +78,72 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
   };
   const originalEnvironment = { ...hostEnvironment };
   try {
-    await withValidationEnvironment(hostEnvironment, async (environment) => {
-      for (const secret of [
-        "CURSOR_API_KEY",
-        "NOOK_GITHUB_PAT",
-        "SCCACHE_S3_ACCESS_KEY_FILE",
-      ])
-        assert.equal(secret in environment, false);
-      assert.notEqual(environment.HOME, trustedHome);
-      assert.equal(environment.NOOK_ARC_HIVE, "1");
-      assert.equal(environment.NOOK_BUILDKIT_REMOTE, "1");
-      assert.equal(
-        await readFile(
-          join(environment.HOME!, ".docker", "buildx", "instances", builder),
-          "utf8",
-        ),
-        "trusted-instance",
-      );
-      const docker = (args: string[]) =>
-        execFileAsync("docker", args, { env: environment });
-      for (const args of [
-        ["buildx", "build", "."],
-        [
-          "buildx",
-          "create",
-          "--name",
-          builder,
-          "--driver",
-          "docker-container",
-          "--bootstrap",
-        ],
-        ["buildx", "rm", "--force", builder],
-        ["run", "image"],
-      ])
-        await docker(args);
-      await assert.rejects(docker(["buildx", "rm", "--force", "other"]));
-      for (const blocked of [
-        ["run", "--network", "host", "image"],
-        ["run", "--network=host", "image"],
-      ])
-        await assert.rejects(docker(blocked), /network override/);
-      await assert.rejects(
-        docker(["exec", "container", "cargo", "test"]),
-        /Blocked Docker operation/,
-      );
-      const names: string[] = [];
-      await runRustDependencyUpdateValidation(
-        "/repo",
-        environment,
-        async (_command, args, { env }) => {
-          names.push(String(args[0]));
-          assert.equal(env.HOME, environment.HOME);
-          assert.equal(
-            env.NOOK_VALIDATION_DOCKER,
-            environment.NOOK_VALIDATION_DOCKER,
-          );
-          assert.equal(env.SCCACHE_OPTIONAL, "1");
-          assert.equal(env.NOOK_ARC_HIVE, "1");
-          assert.equal(env.BUILDX_BUILDER, builder);
-        },
-      );
-      assert.deepEqual(names, ["docker:ecosystem:fuzz", "hive:verify"]);
-    });
+    await new DependencyFixWithValidationEnvironment({
+      environment: hostEnvironment,
+      operation: async (environment) => {
+        for (const secret of [
+          "CURSOR_API_KEY",
+          "NOOK_GITHUB_PAT",
+          "SCCACHE_S3_ACCESS_KEY_FILE",
+        ])
+          assert.equal(secret in environment, false);
+        assert.notEqual(environment.HOME, trustedHome);
+        assert.equal(environment.NOOK_ARC_HIVE, "1");
+        assert.equal(environment.NOOK_BUILDKIT_REMOTE, "1");
+        assert.equal(
+          await readFile(
+            join(environment.HOME!, ".docker", "buildx", "instances", builder),
+            "utf8",
+          ),
+          "trusted-instance",
+        );
+        const docker = (args: string[]) =>
+          execFileAsync("docker", args, { env: environment });
+        for (const args of [
+          ["buildx", "build", "."],
+          [
+            "buildx",
+            "create",
+            "--name",
+            builder,
+            "--driver",
+            "docker-container",
+            "--bootstrap",
+          ],
+          ["buildx", "rm", "--force", builder],
+          ["run", "image"],
+        ])
+          await docker(args);
+        await assert.rejects(docker(["buildx", "rm", "--force", "other"]));
+        for (const blocked of [
+          ["run", "--network", "host", "image"],
+          ["run", "--network=host", "image"],
+        ])
+          await assert.rejects(docker(blocked), /network override/);
+        await assert.rejects(
+          docker(["exec", "container", "cargo", "test"]),
+          /Blocked Docker operation/,
+        );
+        const names: string[] = [];
+        await new DependencyFixRepository(
+          "/repo",
+        ).runRustDependencyUpdateValidation({
+          sanitizedEnvironment: environment,
+          runner: async (_command, args, { env }) => {
+            names.push(String(args[0]));
+            assert.equal(env.HOME, environment.HOME);
+            assert.equal(
+              env.NOOK_VALIDATION_DOCKER,
+              environment.NOOK_VALIDATION_DOCKER,
+            );
+            assert.equal(env.SCCACHE_OPTIONAL, "1");
+            assert.equal(env.NOOK_ARC_HIVE, "1");
+            assert.equal(env.BUILDX_BUILDER, builder);
+          },
+        });
+        assert.deepEqual(names, ["docker:ecosystem:fuzz", "hive:verify"]);
+      },
+    }).execute();
     assert.equal(
       await readFile(log, "utf8"),
       `buildx build --network none .\nbuildx create --name ${builder} --driver docker-container --bootstrap\nbuildx rm --force ${builder}\nrun --network none image\n`,
@@ -181,7 +189,11 @@ test("baseline Git state mutations fail closed", () => {
     { currentHeadSha: baseline.headSha, currentIndexTreeSha: SHA },
   ])
     assert.throws(
-      () => assertRepositoryBaselineUnchanged({ baseline, ...current }),
+      () =>
+        new DependencyFixAssertRepositoryBaselineUnchanged({
+          baseline,
+          ...current,
+        }).execute(),
       /baseline (?:HEAD|index)/,
     );
   const gitMetadata = {
@@ -199,7 +211,10 @@ test("baseline Git state mutations fail closed", () => {
   ])
     assert.throws(
       () =>
-        assertGitMetadataBaselineUnchanged({ baseline: gitMetadata, current }),
+        new DependencyFixAssertGitMetadataBaselineUnchanged({
+          baseline: gitMetadata,
+          current,
+        }).execute(),
       /changed trusted Git metadata/,
     );
 });
@@ -216,9 +231,8 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       await mkdir(join(root, path, ".."), { recursive: true });
       await writeFile(join(root, path), "trusted change\n");
     }
-    await assertRustDependencyUpdateChangeSet(
-      root,
-      allowed.map((path) => ({ path, status: " M" })),
+    await new DependencyFixRepository(root).assertRustDependencyUpdateChangeSet(
+      { changes: allowed.map((path) => ({ path, status: " M" })) },
     );
     const rejects = (
       path: string,
@@ -227,7 +241,10 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       lookup = async () => "",
     ) =>
       assert.rejects(
-        assertRustDependencyUpdateChangeSet(root, [{ path, status }], lookup),
+        new DependencyFixRepository(root).assertRustDependencyUpdateChangeSet({
+          changes: [{ path, status }],
+          baselineModeForPath: lookup,
+        }),
         message,
       );
 
@@ -240,11 +257,12 @@ test("dependency update scope accepts only regular Rust mission files", async ()
     const pinned =
       'hickory = { git = "https://github.com/meta-secret/hickory-dns.git" }\n';
     await writeFile(join(root, "nook-app/nook-platform/Cargo.toml"), pinned);
-    await assertRustDependencyUpdateChangeSet(
-      root,
-      [{ path: "nook-app/nook-platform/Cargo.toml", status: " M" }],
-      async () => "",
-      async () => pinned,
+    await new DependencyFixRepository(root).assertRustDependencyUpdateChangeSet(
+      {
+        changes: [{ path: "nook-app/nook-platform/Cargo.toml", status: " M" }],
+        baselineModeForPath: async () => "",
+        baselineContentForPath: async () => pinned,
+      },
     );
     await writeFile(
       join(root, "nook-app/nook-platform/Cargo.toml"),
@@ -290,7 +308,7 @@ test("persisted Git authentication config fails without exposing values", () => 
     { key: "credential.https://github.com.helper", value: "store" },
   ])
     assert.throws(
-      () => assertNoPersistedGitCredentials([entry]),
+      () => new GitConfiguration([entry]).assertCredentialFree(),
       (error) => {
         assert.match(String(error), /credential detected/);
         assert.doesNotMatch(String(error), /should-not-appear/);
@@ -320,7 +338,10 @@ test("publication outcomes and exact identity fail closed", async () => {
     [CI_FIX_SKIPPED.kind, published.kind],
     [CiFixOutcomeKind.Skipped, CiFixOutcomeKind.Published],
   );
-  assert.equal(assertPublishedFixIdentity(PUBLISHED_IDENTITY), SHA);
+  assert.equal(
+    new DependencyFixAssertPublishedFixIdentity(PUBLISHED_IDENTITY).execute(),
+    SHA,
+  );
   const mismatches = [
     { actualPrNumber: 1209 },
     { actualHeadRef: "fix/other" },
@@ -330,11 +351,15 @@ test("publication outcomes and exact identity fail closed", async () => {
   ] as const;
   for (const mismatch of mismatches)
     assert.throws(
-      () => assertPublishedFixIdentity({ ...PUBLISHED_IDENTITY, ...mismatch }),
+      () =>
+        new DependencyFixAssertPublishedFixIdentity({
+          ...PUBLISHED_IDENTITY,
+          ...mismatch,
+        }).execute(),
       /Published (?:PR|remote branch)/,
     );
   const verify = (remoteHeadSha: string, expectedHeadSha = SHA) =>
-    verifyPublishedFix({
+    new DependencyFixVerifyPublishedFix({
       expectedBaseRef: "main",
       expectedHeadRef: "fix/rust-dependencies-42",
       expectedHeadSha,
@@ -345,7 +370,7 @@ test("publication outcomes and exact identity fail closed", async () => {
         number: 1208,
       }),
       fetchRemoteHeadSha: async () => remoteHeadSha,
-    });
+    }).execute();
   assert.equal(await verify(SHA), SHA);
   await assert.rejects(verify(OTHER_SHA), /remote branch SHA/);
   await assert.rejects(verify(SHA, OTHER_SHA), /PR head SHA/);

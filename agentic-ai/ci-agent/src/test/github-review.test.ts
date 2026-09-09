@@ -7,11 +7,101 @@ import {
   ExactHeadReviewFallback,
   ExactHeadReviewProvider,
   ExactHeadReviewRevisionState,
-  codexReviewRequestMarker,
-  cursorReviewRequestMarker,
-  requestExactHeadReview,
+  CodexReviewRevision,
+  CursorReviewRevision,
+  GitHubReviewClient,
 } from "../main/github-review.js";
 import type { PullRequestRevision } from "../main/github.js";
+
+class GithubReviewMockOctokit {
+  constructor(
+    private readonly request: {
+      comments?: MockComment[];
+      createCalls?: { count: number };
+      createdBodies?: string[];
+      reactions?: Array<{ content: string; user: { login: string } }>;
+      revisions?: PullRequestRevision[];
+      reviews?: MockReview[];
+      sha?: string;
+    },
+  ) {}
+  execute(): Octokit {
+    const input = this.request;
+
+    const [
+      comments = new Array<MockComment>(),
+      createdBodies = new Array<string>(),
+      reviews = [],
+      sha = "head-sha",
+      reactions = [],
+    ] = [
+      input.comments,
+      input.createdBodies,
+      input.reviews,
+      input.sha,
+      input.reactions,
+    ];
+    for (const comment of comments) {
+      if (!Object.hasOwn(comment, "author_association")) {
+        comment.author_association = "OWNER";
+      }
+    }
+    let revisionReads = 0;
+    return {
+      rest: {
+        issues: {
+          createComment: async ({ body }: { body: string }) => {
+            if (input.createCalls) {
+              input.createCalls.count += 1;
+            }
+            createdBodies.push(body);
+            comments.push({
+              author_association: "OWNER",
+              body,
+              created_at: "2026-09-01T02:00:00.000Z",
+              id: comments.length + 1,
+            });
+            return { data: { id: comments.length } };
+          },
+          listComments: async () => ({ data: comments }),
+        },
+        pulls: {
+          get: async () => {
+            const revision =
+              input.revisions?.[
+                Math.min(revisionReads, input.revisions.length - 1)
+              ];
+            revisionReads += 1;
+            const [baseRef = "main", baseSha = "base-sha", headSha = sha] = [
+              revision?.baseRef,
+              revision?.baseSha,
+              revision?.headSha,
+            ];
+            return {
+              data: {
+                base: {
+                  ref: baseRef,
+                  sha: baseSha,
+                },
+                head: { sha: headSha },
+              },
+            };
+          },
+          listReviews: async () => ({ data: reviews }),
+        },
+        reactions: {
+          listForIssueComment: async () => ({
+            data: reactions,
+          }),
+        },
+      },
+      paginate: async (
+        route: (args: unknown) => Promise<{ data: unknown[] }>,
+        args: unknown,
+      ) => (await route(args)).data,
+    } as unknown as Octokit;
+  }
+}
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 const headSha = "0123456789abcdef0123456789abcdef01234567";
@@ -32,78 +122,18 @@ type MockReview = {
   user: { login: string };
 };
 
-function mockOctokit(input: {
-  comments?: MockComment[];
-  createCalls?: { count: number };
-  createdBodies?: string[];
-  reactions?: Array<{ content: string; user: { login: string } }>;
-  revisions?: PullRequestRevision[];
-  reviews?: MockReview[];
-  sha?: string;
-}): Octokit {
-  const [comments = new Array<MockComment>(), createdBodies = new Array<string>(), reviews = [], sha = "head-sha", reactions = []] = [input.comments, input.createdBodies, input.reviews, input.sha, input.reactions];
-  for (const comment of comments) {
-    if (!Object.hasOwn(comment, "author_association")) {
-      comment.author_association = "OWNER";
-    }
-  }
-  let revisionReads = 0;
-  return {
-    rest: {
-      issues: {
-        createComment: async ({ body }: { body: string }) => {
-          if (input.createCalls) {
-            input.createCalls.count += 1;
-          }
-          createdBodies.push(body);
-          comments.push({
-            author_association: "OWNER",
-            body,
-            created_at: "2026-09-01T02:00:00.000Z",
-            id: comments.length + 1,
-          });
-          return { data: { id: comments.length } };
-        },
-        listComments: async () => ({ data: comments }),
-      },
-      pulls: {
-        get: async () => {
-          const revision = input.revisions?.[
-            Math.min(revisionReads, input.revisions.length - 1)
-          ];
-          revisionReads += 1;
-          const [baseRef = "main", baseSha = "base-sha", headSha = sha] = [revision?.baseRef, revision?.baseSha, revision?.headSha];
-          return {
-            data: {
-              base: {
-                ref: baseRef,
-                sha: baseSha,
-              },
-              head: { sha: headSha },
-            },
-          };
-        },
-        listReviews: async () => ({ data: reviews }),
-      },
-      reactions: {
-        listForIssueComment: async () => ({
-          data: reactions,
-        }),
-      },
-    },
-    paginate: async (
-      route: (args: unknown) => Promise<{ data: unknown[] }>,
-      args: unknown,
-    ) => (await route(args)).data,
-  } as unknown as Octokit;
-}
-
 test("requestExactHeadReview posts one exact-head Codex marker", async () => {
   const createdBodies: string[] = [];
-  const octokit = mockOctokit({ createdBodies });
+  const octokit = new GithubReviewMockOctokit({ createdBodies }).execute();
 
-  const first = await requestExactHeadReview(octokit, repoRef, 410);
-  const second = await requestExactHeadReview(octokit, repoRef, 410);
+  const first = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
+  const second = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.deepEqual(first, {
     fallback: ExactHeadReviewFallback.None,
@@ -131,16 +161,20 @@ test("requestExactHeadReview detects a revision change before Codex contact", as
     baseSha: "base-sha",
     headSha: "head-sha",
   };
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     createCalls,
     revisions: [expected, { ...expected, headSha: "changed-head" }],
-  });
+  }).execute();
 
   await assert.rejects(
-    requestExactHeadReview(octokit, repoRef, 410, {
-      revision: {
-        revision: expected,
-        state: ExactHeadReviewRevisionState.Bound,
+    new GitHubReviewClient(octokit).requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+      options: {
+        revision: {
+          revision: expected,
+          state: ExactHeadReviewRevisionState.Bound,
+        },
       },
     }),
     /Pull request revision changed.*no review was requested/,
@@ -150,17 +184,17 @@ test("requestExactHeadReview detects a revision change before Codex contact", as
 
 test("review request identity changes with the base revision", () => {
   assert.notEqual(
-    codexReviewRequestMarker(headSha, "base-one"),
-    codexReviewRequestMarker(headSha, "base-two"),
+    new CodexReviewRevision({ headSha: headSha, baseSha: "base-one" }).marker(),
+    new CodexReviewRevision({ headSha: headSha, baseSha: "base-two" }).marker(),
   );
 });
 
 test("an old same-head review cannot settle a new base-bound request", async () => {
   const createdBodies: string[] = [];
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
-        body: `@codex review\n\n${codexReviewRequestMarker(headSha, "old-base")}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: headSha, baseSha: "old-base" }).marker()}`,
         id: 1,
       },
     ],
@@ -173,55 +207,63 @@ test("an old same-head review cannot settle a new base-bound request", async () 
       },
     ],
     sha: headSha,
-  });
+  }).execute();
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410);
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.equal(result.requested, true);
   assert.deepEqual(createdBodies, [
-    `@codex review\n\n${codexReviewRequestMarker(headSha, "base-sha")}`,
+    `@codex review\n\n${new CodexReviewRevision({ headSha: headSha, baseSha: "base-sha" }).marker()}`,
   ]);
 });
 
-
 test("requestExactHeadReview ignores an untrusted exact-head marker", async () => {
   const createdBodies: string[] = [];
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
         author_association: "NONE",
-        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
         id: 1,
       },
     ],
     createdBodies,
     sha: headSha,
-  });
+  }).execute();
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410);
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.equal(result.requested, true);
   assert.deepEqual(createdBodies, [
-    `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+    `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
   ]);
 });
 
 test("requestExactHeadReview keeps a workflow-token request idempotent", async () => {
   const createdBodies: string[] = [];
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
         author_association: "CONTRIBUTOR",
-        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
         id: 1,
         user: { login: "github-actions[bot]" },
       },
     ],
     createdBodies,
     sha: headSha,
-  });
+  }).execute();
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410);
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.equal(result.requested, false);
   assert.deepEqual(createdBodies, []);
@@ -229,10 +271,10 @@ test("requestExactHeadReview keeps a workflow-token request idempotent", async (
 
 test("requestExactHeadReview reports an exact-head Codex approval reaction as settled", async () => {
   const createCalls = { count: 0 };
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
-        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
         id: 1,
       },
     ],
@@ -241,9 +283,12 @@ test("requestExactHeadReview reports an exact-head Codex approval reaction as se
       { content: "+1", user: { login: "chatgpt-codex-connector[bot]" } },
     ],
     sha: headSha,
-  });
+  }).execute();
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410);
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.None,
@@ -257,10 +302,10 @@ test("requestExactHeadReview reports an exact-head Codex approval reaction as se
 
 test("requestExactHeadReview does not treat an eye reaction as settled", async () => {
   const createCalls = { count: 0 };
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
-        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
         id: 1,
       },
     ],
@@ -269,9 +314,12 @@ test("requestExactHeadReview does not treat an eye reaction as settled", async (
       { content: "eyes", user: { login: "chatgpt-codex-connector[bot]" } },
     ],
     sha: headSha,
-  });
+  }).execute();
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410);
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.equal(result.requested, false);
   assert.equal(result.settled, false);
@@ -280,10 +328,10 @@ test("requestExactHeadReview does not treat an eye reaction as settled", async (
 
 test("requestExactHeadReview does not request a fallback after a Codex usage limit", async () => {
   const createdBodies: string[] = [];
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
-        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
         id: 1,
       },
       {
@@ -294,10 +342,14 @@ test("requestExactHeadReview does not request a fallback after a Codex usage lim
     ],
     createdBodies,
     sha: headSha,
-  });
+  }).execute();
 
-  const fallback = await requestExactHeadReview(octokit, repoRef, 410);
-  const idempotent = await requestExactHeadReview(octokit, repoRef, 410);
+  const fallback = await new GitHubReviewClient(octokit).requestExactHeadReview(
+    { repoRef: repoRef, prNumber: 410 },
+  );
+  const idempotent = await new GitHubReviewClient(
+    octokit,
+  ).requestExactHeadReview({ repoRef: repoRef, prNumber: 410 });
 
   assert.deepEqual(fallback, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
@@ -318,10 +370,10 @@ test("requestExactHeadReview does not request a fallback after a Codex usage lim
 
 test("requestExactHeadReview recognizes a clean Codex comment for the exact head", async () => {
   const createCalls = { count: 0 };
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
-        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
         id: 1,
       },
       {
@@ -332,9 +384,12 @@ test("requestExactHeadReview recognizes a clean Codex comment for the exact head
     ],
     createCalls,
     sha: headSha,
-  });
+  }).execute();
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410);
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.None,
@@ -349,7 +404,11 @@ test("requestExactHeadReview recognizes a clean Codex comment for the exact head
 test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () => {
   const createdBodies: string[] = [];
   const comments: MockComment[] = [];
-  const octokit = mockOctokit({ comments, createdBodies, sha: headSha });
+  const octokit = new GithubReviewMockOctokit({
+    comments,
+    createdBodies,
+    sha: headSha,
+  }).execute();
   const clock = {
     async waitMs(): Promise<void> {
       comments.push({
@@ -360,10 +419,14 @@ test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () =
     },
   };
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410, {
-    availability: {
-      clock,
-      probe: { intervalMs: 1, timeoutMs: 20 },
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+    options: {
+      availability: {
+        clock,
+        probe: { intervalMs: 1, timeoutMs: 20 },
+      },
     },
   });
 
@@ -375,16 +438,16 @@ test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () =
     settled: false,
   });
   assert.deepEqual(createdBodies, [
-    `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+    `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
   ]);
 });
 
 test("requestExactHeadReview still prefers Codex on a new head after an older usage-limit comment", async () => {
   const createdBodies: string[] = [];
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
-        body: `@codex review\n\n${codexReviewRequestMarker("old-head-sha")}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: "old-head-sha" }).marker()}`,
         id: 1,
       },
       {
@@ -395,9 +458,12 @@ test("requestExactHeadReview still prefers Codex on a new head after an older us
     ],
     createdBodies,
     sha: headSha,
-  });
+  }).execute();
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410);
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.None,
@@ -407,24 +473,27 @@ test("requestExactHeadReview still prefers Codex on a new head after an older us
     settled: false,
   });
   assert.deepEqual(createdBodies, [
-    `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+    `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
   ]);
 });
 
 test("requestExactHeadReview does not request Cursor while Codex is pending", async () => {
   const createdBodies: string[] = [];
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
-        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
         id: 1,
       },
     ],
     createdBodies,
     sha: headSha,
-  });
+  }).execute();
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410);
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.None,
@@ -438,10 +507,10 @@ test("requestExactHeadReview does not request Cursor while Codex is pending", as
 
 test("requestExactHeadReview ignores an inactive Cursor review fallback", async () => {
   const createCalls = { count: 0 };
-  const octokit = mockOctokit({
+  const octokit = new GithubReviewMockOctokit({
     comments: [
       {
-        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        body: `@codex review\n\n${new CodexReviewRevision({ headSha: headSha }).marker()}`,
         id: 1,
       },
       {
@@ -450,7 +519,7 @@ test("requestExactHeadReview ignores an inactive Cursor review fallback", async 
         user: { login: "chatgpt-codex-connector[bot]" },
       },
       {
-        body: `cursor review\n\n${cursorReviewRequestMarker(headSha)}`,
+        body: `cursor review\n\n${new CursorReviewRevision(headSha).marker()}`,
         id: 3,
       },
     ],
@@ -464,9 +533,12 @@ test("requestExactHeadReview ignores an inactive Cursor review fallback", async 
       },
     ],
     sha: headSha,
-  });
+  }).execute();
 
-  const result = await requestExactHeadReview(octokit, repoRef, 410);
+  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
+    repoRef: repoRef,
+    prNumber: 410,
+  });
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,

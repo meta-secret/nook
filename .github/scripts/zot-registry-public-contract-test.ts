@@ -1,65 +1,194 @@
 import { resolve } from "node:path";
 
+class ZotRegistryPublicContractTestRead {
+  constructor(private readonly request: string) {}
+  async execute(): Promise<string> {
+    const relative = this.request;
+
+    return Bun.file(resolve(root, relative)).text();
+  }
+}
+
+class ZotRegistryPublicContractTestRequireFragment {
+  constructor(
+    private readonly request: {
+      source: string;
+      fragment: string;
+      message: string;
+    },
+  ) {}
+  execute(): void {
+    const input = this.request;
+
+    if (!input.source.includes(input.fragment)) {
+      throw new Error(input.message);
+    }
+  }
+}
+
+class ZotRegistryPublicContractTestForbidFragment {
+  constructor(
+    private readonly request: {
+      source: string;
+      fragment: string;
+      message: string;
+    },
+  ) {}
+  execute(): void {
+    const input = this.request;
+
+    if (input.source.includes(input.fragment)) {
+      throw new Error(input.message);
+    }
+  }
+}
+
+class ZotRegistryPublicContractTestCountFragment {
+  constructor(
+    private readonly request: {
+      source: string;
+      fragment: string;
+      expected: number;
+      message: string;
+    },
+  ) {}
+  execute(): void {
+    const input = this.request;
+
+    const actual = input.source.split(input.fragment).length - 1;
+    if (actual !== input.expected) {
+      throw new Error(
+        `${input.message}: expected ${input.expected}, found ${actual}`,
+      );
+    }
+  }
+}
+
+class ZotRegistryPublicContractTestRequireBefore {
+  constructor(
+    private readonly request: {
+      source: string;
+      first: string;
+      second: string;
+      message: string;
+    },
+  ) {}
+  execute(): void {
+    const input = this.request;
+
+    const first = input.source.indexOf(input.first);
+    const second = input.source.indexOf(input.second);
+    if (first < 0 || second < 0 || first >= second) {
+      throw new Error(input.message);
+    }
+  }
+}
+
+interface ZotRegistryPublicContractTestQuarantineDispositionRequest {
+  readonly taints: ArcTaint[];
+  readonly owner: string;
+}
+
+class ZotRegistryPublicContractTestQuarantineDisposition {
+  constructor(
+    private readonly request: ZotRegistryPublicContractTestQuarantineDispositionRequest,
+  ) {}
+  execute(): QuarantineDisposition {
+    const { taints, owner } = this.request;
+
+    if (
+      owner !== "" &&
+      owner !== "registry-controller-owned-v1" &&
+      owner !== "registry-controller-borrowed-v1"
+    ) {
+      return QuarantineDisposition.Reject;
+    }
+    const matching = taints.filter(
+      (taint) => taint.key === "nook.nokey.sh/arc-build",
+    );
+    if (matching.length === 0) {
+      return owner === "registry-controller-borrowed-v1"
+        ? QuarantineDisposition.Reject
+        : QuarantineDisposition.Owned;
+    }
+    if (
+      matching.length === 1 &&
+      matching[0]?.value === "preparing" &&
+      matching[0]?.effect === "NoSchedule"
+    ) {
+      return owner === "registry-controller-owned-v1"
+        ? QuarantineDisposition.Owned
+        : QuarantineDisposition.Borrowed;
+    }
+    return QuarantineDisposition.Reject;
+  }
+}
+
+class ZotRegistryPublicContractTestReleaseRemovesTaint {
+  constructor(private readonly request: QuarantineDisposition) {}
+  execute(): boolean {
+    const disposition = this.request;
+
+    if (disposition === QuarantineDisposition.Reject) {
+      throw new Error("rejected quarantine has no release authority");
+    }
+    return disposition === QuarantineDisposition.Owned;
+  }
+}
+
+interface ZotRegistryPublicContractTestDidInvocationChangeRequest {
+  readonly previous: string;
+  readonly current: string;
+}
+
+class ZotRegistryPublicContractTestDidInvocationChange {
+  constructor(
+    private readonly request: ZotRegistryPublicContractTestDidInvocationChangeRequest,
+  ) {}
+  execute(): boolean {
+    const { previous, current } = this.request;
+
+    return previous !== current;
+  }
+}
+
+interface ZotRegistryPublicContractTestResourceVersionGuardMatchesRequest {
+  readonly expected: string;
+  readonly observed: string;
+}
+
+class ZotRegistryPublicContractTestResourceVersionGuardMatches {
+  constructor(
+    private readonly request: ZotRegistryPublicContractTestResourceVersionGuardMatchesRequest,
+  ) {}
+  execute(): boolean {
+    const { expected, observed } = this.request;
+
+    return expected === observed;
+  }
+}
+
 const root = resolve(import.meta.dir, "../..");
 
-async function read(relative: string): Promise<string> {
-  return Bun.file(resolve(root, relative)).text();
-}
-
-function requireFragment(input: {
-  source: string;
-  fragment: string;
-  message: string;
-}): void {
-  if (!input.source.includes(input.fragment)) {
-    throw new Error(input.message);
-  }
-}
-
-function forbidFragment(input: {
-  source: string;
-  fragment: string;
-  message: string;
-}): void {
-  if (input.source.includes(input.fragment)) {
-    throw new Error(input.message);
-  }
-}
-
-function countFragment(input: {
-  source: string;
-  fragment: string;
-  expected: number;
-  message: string;
-}): void {
-  const actual = input.source.split(input.fragment).length - 1;
-  if (actual !== input.expected) {
-    throw new Error(
-      `${input.message}: expected ${input.expected}, found ${actual}`,
-    );
-  }
-}
-
-function requireBefore(input: {
-  source: string;
-  first: string;
-  second: string;
-  message: string;
-}): void {
-  const first = input.source.indexOf(input.first);
-  const second = input.source.indexOf(input.second);
-  if (first < 0 || second < 0 || first >= second) {
-    throw new Error(input.message);
-  }
-}
-
-const registryTask = await read("infra/tasks/registry.yml");
-const k0sTask = await read("infra/tasks/k0s.yml");
-const workerTask = await read("infra/tasks/k0s-workers.yml");
-const workerRestoreTask = await read("infra/tasks/k0s-worker-restore.yml");
+const registryTask = await new ZotRegistryPublicContractTestRead(
+  "infra/tasks/registry.yml",
+).execute();
+const k0sTask = await new ZotRegistryPublicContractTestRead(
+  "infra/tasks/k0s.yml",
+).execute();
+const workerTask = await new ZotRegistryPublicContractTestRead(
+  "infra/tasks/k0s-workers.yml",
+).execute();
+const workerRestoreTask = await new ZotRegistryPublicContractTestRead(
+  "infra/tasks/k0s-worker-restore.yml",
+).execute();
 const workerTaskFamily = [workerTask, workerRestoreTask].join("\n");
-const workerMesh = await read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
-const completeDeploy = await read("infra/tasks/host-services.yml");
+const workerMesh = await new ZotRegistryPublicContractTestRead(
+  "infra/k0s/scripts/k0s-worker-mesh-reconcile",
+).execute();
+const completeDeploy = await new ZotRegistryPublicContractTestRead(
+  "infra/tasks/host-services.yml",
+).execute();
 const controllerAuthReconcile = registryTask.slice(
   registryTask.indexOf("  registry:containerd-auth:reconcile:"),
   registryTask.indexOf("  registry:credential:sync:"),
@@ -67,13 +196,27 @@ const controllerAuthReconcile = registryTask.slice(
 if (!controllerAuthReconcile) {
   throw new Error("controller registry-auth reconciliation task is missing");
 }
-const zot = await read("infra/k0s/manifests/registry/zot.yaml");
-const traefik = await read("infra/traefik-dynamic.yaml");
-const compose = await read("infra/compose.yaml");
-const hosts = await read("infra/k0s/config/registry-hosts.toml");
-const criRegistry = await read("infra/k0s/config/cri-registry.toml");
-const hive = await read("infra/tasks/hive.yml");
-const sccache = await read("infra/tasks/sccache.yml");
+const zot = await new ZotRegistryPublicContractTestRead(
+  "infra/k0s/manifests/registry/zot.yaml",
+).execute();
+const traefik = await new ZotRegistryPublicContractTestRead(
+  "infra/traefik-dynamic.yaml",
+).execute();
+const compose = await new ZotRegistryPublicContractTestRead(
+  "infra/compose.yaml",
+).execute();
+const hosts = await new ZotRegistryPublicContractTestRead(
+  "infra/k0s/config/registry-hosts.toml",
+).execute();
+const criRegistry = await new ZotRegistryPublicContractTestRead(
+  "infra/k0s/config/cri-registry.toml",
+).execute();
+const hive = await new ZotRegistryPublicContractTestRead(
+  "infra/tasks/hive.yml",
+).execute();
+const sccache = await new ZotRegistryPublicContractTestRead(
+  "infra/tasks/sccache.yml",
+).execute();
 const sccacheBucketEnsure = sccache.slice(
   sccache.indexOf("  sccache:bucket:ensure:"),
   sccache.indexOf("  sccache:check:"),
@@ -95,34 +238,34 @@ for (const fragment of [
     fragment,
     message: `missing registry contract: ${fragment}`,
   };
-  requireFragment(assertion);
+  new ZotRegistryPublicContractTestRequireFragment(assertion).execute();
 }
 for (const fragment of [
   "grep -Eq \"^${username}\"':[$]2[ay][$]'",
   "grep -Eq \"^${remote_username}\"':[$]2[ay][$]'",
 ]) {
-  requireFragment({
+  new ZotRegistryPublicContractTestRequireFragment({
     source: registryTask,
     fragment,
     message: `registry bcrypt guard must use literal-dollar classes: ${fragment}`,
-  });
+  }).execute();
 }
-forbidFragment({
+new ZotRegistryPublicContractTestForbidFragment({
   source: registryTask,
   fragment: "':\\$2[ay]\\$'",
   message:
     "registry bcrypt guard must not rely on Task-sensitive dollar escapes",
-});
-forbidFragment({
+}).execute();
+new ZotRegistryPublicContractTestForbidFragment({
   source: controllerAuthReconcile,
   fragment: "metadata.labels.nook\\.nokey\\.sh/arc-build}')\" != true",
   message: "controller auth cleanup must support an ARC-qualified controller",
-});
-forbidFragment({
+}).execute();
+new ZotRegistryPublicContractTestForbidFragment({
   source: controllerAuthReconcile,
   fragment: "--overwrite",
   message: "controller quarantine must not overwrite concurrent ownership",
-});
+}).execute();
 for (const fragment of [
   "quarantine_taint_owned=false",
   "registry-controller-owned-v1",
@@ -135,56 +278,56 @@ for (const fragment of [
   '--type=json --patch "$release_patch"',
   "Controller quarantine changed during atomic release",
 ]) {
-  requireFragment({
+  new ZotRegistryPublicContractTestRequireFragment({
     source: controllerAuthReconcile,
     fragment,
     message: `controller quarantine ownership is missing: ${fragment}`,
-  });
+  }).execute();
 }
 for (const fragment of ["kubectl annotate", "kubectl taint"]) {
-  forbidFragment({
+  new ZotRegistryPublicContractTestForbidFragment({
     source: controllerAuthReconcile,
     fragment,
     message: `controller quarantine must use atomic Node patches, not ${fragment}`,
-  });
+  }).execute();
 }
-requireBefore({
+new ZotRegistryPublicContractTestRequireBefore({
   source: controllerAuthReconcile,
   first: '--type=json --patch "$quarantine_patch"',
   second: "actions.github.com/scale-set-name",
   message: "controller quarantine must block scheduling before the ARC drain",
-});
-requireBefore({
+}).execute();
+new ZotRegistryPublicContractTestRequireBefore({
   source: controllerAuthReconcile,
   first: "actions.github.com/scale-set-name",
   second: "sudo -n systemctl restart k0scontroller.service",
   message: "controller ARC drain must finish before restart",
-});
-requireBefore({
+}).execute();
+new ZotRegistryPublicContractTestRequireBefore({
   source: controllerAuthReconcile,
   first: 'sudo -n install -m 0600 "$marker_next" "$marker"',
   second: 'if test "$restart_required" = true; then',
   message: "owned controller quarantine must remain until cleanup is proven",
-});
-countFragment({
+}).execute();
+new ZotRegistryPublicContractTestCountFragment({
   source: controllerAuthReconcile,
   fragment: "sudo -n systemctl restart k0scontroller.service",
   expected: 1,
   message: "controller auth cleanup must restart exactly once",
-});
-countFragment({
+}).execute();
+new ZotRegistryPublicContractTestCountFragment({
   source: controllerAuthReconcile,
   fragment:
     '{op: "test", path: "/metadata/resourceVersion", value: $resource_version}',
   expected: 4,
   message: "every controller quarantine mutation must guard resourceVersion",
-});
-countFragment({
+}).execute();
+new ZotRegistryPublicContractTestCountFragment({
   source: workerMesh,
   fragment: "sudo -n systemctl restart k0sworker.service",
   expected: 1,
   message: "worker auth cleanup must restart exactly once",
-});
+}).execute();
 
 type ArcTaint = { key: string; value: string; effect: string };
 enum QuarantineDisposition {
@@ -193,36 +336,6 @@ enum QuarantineDisposition {
   Reject = "reject",
 }
 
-function quarantineDisposition(
-  taints: ArcTaint[],
-  owner: string,
-): QuarantineDisposition {
-  if (
-    owner !== "" &&
-    owner !== "registry-controller-owned-v1" &&
-    owner !== "registry-controller-borrowed-v1"
-  ) {
-    return QuarantineDisposition.Reject;
-  }
-  const matching = taints.filter(
-    (taint) => taint.key === "nook.nokey.sh/arc-build",
-  );
-  if (matching.length === 0) {
-    return owner === "registry-controller-borrowed-v1"
-      ? QuarantineDisposition.Reject
-      : QuarantineDisposition.Owned;
-  }
-  if (
-    matching.length === 1 &&
-    matching[0]?.value === "preparing" &&
-    matching[0]?.effect === "NoSchedule"
-  ) {
-    return owner === "registry-controller-owned-v1"
-      ? QuarantineDisposition.Owned
-      : QuarantineDisposition.Borrowed;
-  }
-  return QuarantineDisposition.Reject;
-}
 const controllerQuarantineFixtures = [
   {
     name: "ARC-qualified controller without a taint",
@@ -299,18 +412,15 @@ for (const fixture of controllerQuarantineFixtures) {
     );
   }
   if (
-    quarantineDisposition([...fixture.taints], fixture.owner) !==
-    fixture.expected
+    new ZotRegistryPublicContractTestQuarantineDisposition({
+      taints: [...fixture.taints],
+      owner: fixture.owner,
+    }).execute() !== fixture.expected
   ) {
     throw new Error(`controller quarantine fixture failed: ${fixture.name}`);
   }
 }
-function releaseRemovesTaint(disposition: QuarantineDisposition): boolean {
-  if (disposition === QuarantineDisposition.Reject) {
-    throw new Error("rejected quarantine has no release authority");
-  }
-  return disposition === QuarantineDisposition.Owned;
-}
+
 for (const fixture of [
   {
     name: "owned release removes its taint",
@@ -323,31 +433,33 @@ for (const fixture of [
     removesTaint: false,
   },
 ] as const) {
-  if (releaseRemovesTaint(fixture.disposition) !== fixture.removesTaint) {
+  if (
+    new ZotRegistryPublicContractTestReleaseRemovesTaint(
+      fixture.disposition,
+    ).execute() !== fixture.removesTaint
+  ) {
     throw new Error(`controller release fixture failed: ${fixture.name}`);
   }
 }
 const previousWorkerInvocation = "0123456789abcdef0123456789abcdef";
-function didInvocationChange(previous: string, current: string): boolean {
-  return previous !== current;
-}
+
 if (
-  !didInvocationChange(
-    previousWorkerInvocation,
-    "11111111111111111111111111111111",
-  )
+  !new ZotRegistryPublicContractTestDidInvocationChange({
+    previous: previousWorkerInvocation,
+    current: "11111111111111111111111111111111",
+  }).execute()
 ) {
   throw new Error("changed worker InvocationID fixture was rejected");
 }
-if (didInvocationChange(previousWorkerInvocation, previousWorkerInvocation)) {
+if (
+  new ZotRegistryPublicContractTestDidInvocationChange({
+    previous: previousWorkerInvocation,
+    current: previousWorkerInvocation,
+  }).execute()
+) {
   throw new Error("unchanged worker InvocationID fixture was accepted");
 }
-function resourceVersionGuardMatches(
-  expected: string,
-  observed: string,
-): boolean {
-  return expected === observed;
-}
+
 for (const fixture of [
   {
     name: "acquisition resourceVersion conflict",
@@ -369,8 +481,10 @@ for (const fixture of [
   },
 ] as const) {
   if (
-    resourceVersionGuardMatches(fixture.expected, fixture.observed) !==
-    fixture.accepted
+    new ZotRegistryPublicContractTestResourceVersionGuardMatches({
+      expected: fixture.expected,
+      observed: fixture.observed,
+    }).execute() !== fixture.accepted
   ) {
     throw new Error(`resourceVersion fixture failed: ${fixture.name}`);
   }
@@ -381,7 +495,7 @@ for (const fragment of ["kubectl port-forward --", "port-forward --address"]) {
     fragment,
     message: `prohibited registry path: ${fragment}`,
   };
-  forbidFragment(assertion);
+  new ZotRegistryPublicContractTestForbidFragment(assertion).execute();
 }
 for (const fragment of [
   "clusterIP: 10.96.90.10",
@@ -403,7 +517,7 @@ for (const fragment of [
     fragment,
     message: `missing Zot contract: ${fragment}`,
   };
-  requireFragment(assertion);
+  new ZotRegistryPublicContractTestRequireFragment(assertion).execute();
 }
 if (!/cidr:\s*10\.0\.0\.0\/8/.test(zot)) {
   throw new Error("Zot ingress must retain the private-network CIDR");
@@ -419,7 +533,7 @@ for (const fragment of [
     fragment,
     message: `missing Traefik contract: ${fragment}`,
   };
-  requireFragment(assertion);
+  new ZotRegistryPublicContractTestRequireFragment(assertion).execute();
 }
 for (const fragment of ["127.0.0.1:6379", "HostSNI("]) {
   const assertion = {
@@ -427,7 +541,7 @@ for (const fragment of ["127.0.0.1:6379", "HostSNI("]) {
     fragment,
     message: `prohibited Traefik contract: ${fragment}`,
   };
-  forbidFragment(assertion);
+  new ZotRegistryPublicContractTestForbidFragment(assertion).execute();
 }
 for (const fragment of [
   "network_mode: host",
@@ -441,7 +555,7 @@ for (const fragment of [
     fragment,
     message: `missing Compose contract: ${fragment}`,
   };
-  requireFragment(assertion);
+  new ZotRegistryPublicContractTestRequireFragment(assertion).execute();
 }
 for (const fragment of ["\n  redis:", "443:443", "5000:5000", "6380"]) {
   const assertion = {
@@ -449,37 +563,32 @@ for (const fragment of ["\n  redis:", "443:443", "5000:5000", "6380"]) {
     fragment,
     message: `prohibited Compose contract: ${fragment}`,
   };
-  forbidFragment(assertion);
+  new ZotRegistryPublicContractTestForbidFragment(assertion).execute();
 }
 const hostsAssertion = {
   source: hosts,
   fragment: 'server = "https://registry.dev.nokey.sh"',
   message: "containerd must use the authenticated public registry endpoint",
 };
-requireFragment(hostsAssertion);
-requireFragment({
+new ZotRegistryPublicContractTestRequireFragment(hostsAssertion).execute();
+new ZotRegistryPublicContractTestRequireFragment({
   source: criRegistry,
   fragment: 'config_path = "/etc/k0s/containerd.d/certs.d"',
   message: "containerd must load registry hosts through config_path",
-});
-for (const source of [
-  registryTask,
-  k0sTask,
-  workerTaskFamily,
-  workerMesh,
-]) {
-  forbidFragment({
+}).execute();
+for (const source of [registryTask, k0sTask, workerTaskFamily, workerMesh]) {
+  new ZotRegistryPublicContractTestForbidFragment({
     source,
     fragment: "registry.configs",
     message:
       "deprecated containerd registry.configs authentication is prohibited",
-  });
-  requireFragment({
+  }).execute();
+  new ZotRegistryPublicContractTestRequireFragment({
     source,
     fragment: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
     message:
       "every k0s convergence path must remove deprecated containerd authentication",
-  });
+  }).execute();
 }
 for (const fragment of [
   "registry:containerd-auth:reconcile:",
@@ -495,23 +604,23 @@ for (const fragment of [
   'sudo -n test ! -e "$auth_file"',
   "- task: registry:containerd-auth:reconcile",
 ]) {
-  requireFragment({
+  new ZotRegistryPublicContractTestRequireFragment({
     source: registryTask,
     fragment,
     message: `controller registry-auth reconciliation is missing: ${fragment}`,
-  });
+  }).execute();
 }
 for (const source of [k0sTask, workerTaskFamily, workerMesh]) {
-  requireFragment({
+  new ZotRegistryPublicContractTestRequireFragment({
     source,
     fragment: "/var/lib/k0s/nook-containerd-auth-clean-invocation",
     message: "k0s convergence must record the clean containerd invocation",
-  });
-  requireFragment({
+  }).execute();
+  new ZotRegistryPublicContractTestRequireFragment({
     source,
     fragment: "--property=InvocationID --value",
     message: "k0s convergence must bind cleanup to a systemd invocation",
-  });
+  }).execute();
 }
 for (const fragment of [
   "inspect_worker_containerd_auth",
@@ -523,11 +632,11 @@ for (const fragment of [
   'wait_for_node_ready "$node_name"',
   "Worker containerd auth state changed during reconciliation",
 ]) {
-  requireFragment({
+  new ZotRegistryPublicContractTestRequireFragment({
     source: workerMesh,
     fragment,
     message: `fleet worker registry-auth reconciliation is missing: ${fragment}`,
-  });
+  }).execute();
 }
 const completeInstall = completeDeploy.indexOf("      - task: k0s:install");
 const completeWorkers = completeDeploy.indexOf(
@@ -551,23 +660,23 @@ for (const source of [hosts, hive]) {
     fragment: "127.0.0.1:5000",
     message: "loopback registry references are prohibited",
   };
-  forbidFragment(assertion);
+  new ZotRegistryPublicContractTestForbidFragment(assertion).execute();
 }
 const hiveAssertion = {
   source: hive,
   fragment: "registry.dev.nokey.sh/nook-hive",
   message: "Hive must publish through the public Zot endpoint",
 };
-requireFragment(hiveAssertion);
-requireFragment({
+new ZotRegistryPublicContractTestRequireFragment(hiveAssertion).execute();
+new ZotRegistryPublicContractTestRequireFragment({
   source: sccacheBucketEnsure,
   fragment: "docker.io/amazon/aws-cli:2.27.50@sha256:",
   message: "clean-host sccache bootstrap must not depend on Zot",
-});
-forbidFragment({
+}).execute();
+new ZotRegistryPublicContractTestForbidFragment({
   source: sccacheBucketEnsure,
   fragment: "registry.dev.nokey.sh/amazon/aws-cli",
   message: "sccache bootstrap cannot use Zot before k0s deploys it",
-});
+}).execute();
 
 console.log("Public Zot registry contract: ok");

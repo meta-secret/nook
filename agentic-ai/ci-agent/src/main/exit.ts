@@ -1,5 +1,32 @@
 import { execFileSync } from "node:child_process";
 
+export class CiAgentExit {
+  constructor(private readonly request: number) {}
+  finish(): never {
+    const code = this.request;
+
+    try {
+      const stdout = execFileSync("pgrep", ["-P", String(process.pid)], {
+        encoding: "utf8",
+      });
+      for (const line of stdout.split("\n")) {
+        const childPid = Number(line.trim());
+        if (!Number.isInteger(childPid) || childPid <= 0) {
+          continue;
+        }
+        try {
+          process.kill(childPid, "SIGKILL");
+        } catch {
+          // Child may have already exited.
+        }
+      }
+    } catch {
+      // pgrep exits 1 when there are no children.
+    }
+    process.exit(code);
+  }
+}
+
 /**
  * Force process exit for one-shot CI runs.
  *
@@ -13,24 +40,3 @@ import { execFileSync } from "node:child_process";
  * the event loop alive. Do not signal the whole process group — that SIGTERMs
  * this process and turns a successful run into exit 143.
  */
-export function exitCiAgent(code: number): never {
-  try {
-    const stdout = execFileSync("pgrep", ["-P", String(process.pid)], {
-      encoding: "utf8",
-    });
-    for (const line of stdout.split("\n")) {
-      const childPid = Number(line.trim());
-      if (!Number.isInteger(childPid) || childPid <= 0) {
-        continue;
-      }
-      try {
-        process.kill(childPid, "SIGKILL");
-      } catch {
-        // Child may have already exited.
-      }
-    }
-  } catch {
-    // pgrep exits 1 when there are no children.
-  }
-  process.exit(code);
-}

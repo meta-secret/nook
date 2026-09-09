@@ -1,4 +1,4 @@
-import { formatLogLine, LogLevel } from "./logger.js";
+import { LogRecord, LogLevel } from "./logger.js";
 
 export type LogWriter = {
   log: (line?: string) => void;
@@ -11,7 +11,7 @@ export class AgentTextLog {
   private open = false;
   private atLineStart = true;
 
-  constructor(private readonly writer: LogWriter = consoleWriter()) {}
+  constructor(private readonly writer: LogWriter = new ConsoleLogWriter()) {}
 
   write(delta: string): void {
     if (!delta) {
@@ -41,7 +41,11 @@ export class AgentTextLog {
 
   private openBlock(): void {
     this.writer.log(
-      formatLogLine(LogLevel.Info, "ci-agent/cursor/agent", "agent output"),
+      new LogRecord({
+        level: LogLevel.Info,
+        component: "ci-agent/cursor/agent",
+        message: "agent output",
+      }).format(),
     );
     this.open = true;
     this.atLineStart = true;
@@ -78,7 +82,7 @@ export class ShellStreamLog {
   private streamed = false;
   private atLineStart = true;
 
-  constructor(private readonly writer: LogWriter = consoleWriter()) {}
+  constructor(private readonly writer: LogWriter = new ConsoleLogWriter()) {}
 
   hasStreamed(): boolean {
     return this.streamed;
@@ -98,7 +102,11 @@ export class ShellStreamLog {
 
     if (!this.streamed) {
       this.writer.log(
-        formatLogLine(LogLevel.Info, "ci-agent/cursor/shell", "output"),
+        new LogRecord({
+          level: LogLevel.Info,
+          component: "ci-agent/cursor/shell",
+          message: "output",
+        }).format(),
       );
       this.streamed = true;
     }
@@ -142,13 +150,11 @@ export class ShellStreamLog {
   }
 }
 
-function consoleWriter(): LogWriter {
-  return {
-    log: (line = "") => {
-      console.log(line);
-    },
-    write: (chunk) => {
-      process.stdout.write(chunk);
-    },
-  };
+class ConsoleLogWriter implements LogWriter {
+  log(line = ""): void {
+    console.log(line);
+  }
+  write(chunk: string): void {
+    process.stdout.write(chunk);
+  }
 }

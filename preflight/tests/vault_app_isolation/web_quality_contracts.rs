@@ -1,9 +1,9 @@
-use super::{read, repository_root};
+use super::RepositoryFixture;
 
 #[test]
 fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
-    let root = repository_root();
-    let manifest = read(&root, "nook-app/nook-web/nook-web-app/package.json");
+    let root = RepositoryFixture::repository_root();
+    let manifest = (&root).read("nook-app/nook-web/nook-web-app/package.json");
     for required in [
         "\"fast-check\":",
         "\"eslint-plugin-no-unsanitized\":",
@@ -16,7 +16,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
-    let app_tasks = read(&root, "nook-app/Taskfile.yml");
+    let app_tasks = (&root).read("nook-app/Taskfile.yml");
     for required in [
         "cd \"{{.RESEARCH_ROOT}}\" && bun run format",
         "cd \"{{.RESEARCH_ROOT}}\" && bun run format:check",
@@ -26,13 +26,13 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
             "sealed formatting must retain the research command `{required}`"
         );
     }
-    let web_toolchain = read(&root, "nook-app/nook-web/docker/toolchain.Dockerfile");
+    let web_toolchain = (&root).read("nook-app/nook-web/docker/toolchain.Dockerfile");
     assert!(
         web_toolchain.contains("nook-web-research && bun install --frozen-lockfile"),
         "sealed formatting must use the research package's pinned dependencies"
     );
 
-    let research_manifest = read(&root, "nook-app/nook-web/nook-web-research/package.json");
+    let research_manifest = (&root).read("nook-app/nook-web/nook-web-research/package.json");
     for required in [
         "\"security\": \"bun audit --prod --audit-level=high\"",
         "\"check\": \"bun run security",
@@ -45,7 +45,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
-    let web_eslint = read(&root, "nook-app/nook-web/eslint.config.js");
+    let web_eslint = (&root).read("nook-app/nook-web/eslint.config.js");
     assert!(
         !web_eslint.contains("'max-params': 'off'")
             && !web_eslint.contains("\"max-params\": \"off\""),
@@ -54,9 +54,9 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
     let eslint = format!(
         "{}\n{}\n{}\n{}",
         web_eslint,
-        read(&root, "nook-app/nook-web/no-raw-object-arguments-rule.js",),
-        read(&root, "nook-app/nook-web/typed-api-analysis.js"),
-        read(&root, "nook-app/nook-web/typed-api-rules.js")
+        (&root).read("nook-app/nook-web/no-raw-object-arguments-rule.js"),
+        (&root).read("nook-app/nook-web/typed-api-analysis.js"),
+        (&root).read("nook-app/nook-web/typed-api-rules.js")
     );
     for required in [
         "import { typedApiRules } from './typed-api-rules.js'",
@@ -119,10 +119,8 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
             "the web static-analysis config must retain `{required}`"
         );
     }
-    let translation_html = read(
-        &root,
-        "nook-app/nook-web/nook-web-app/src/landing/translation-html.js",
-    );
+    let translation_html =
+        (&root).read("nook-app/nook-web/nook-web-app/src/landing/translation-html.js");
     for required in [
         "DOMPurify.sanitize",
         "ALLOWED_TAGS: ['br', 'code']",
@@ -135,7 +133,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
-    let typed_project = read(&root, "nook-app/nook-web/tsconfig.eslint.json");
+    let typed_project = (&root).read("nook-app/nook-web/tsconfig.eslint.json");
     for required in [
         "nook-web-extension/src/**/*.ts",
         "nook-web-extension/src/**/*.svelte",
@@ -146,7 +144,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
-    let extension_manifest = read(&root, "nook-app/nook-web/nook-web-extension/package.json");
+    let extension_manifest = (&root).read("nook-app/nook-web/nook-web-extension/package.json");
     assert!(
         extension_manifest.contains(
             "eslint --config eslint.config.js nook-web-extension/scripts nook-web-extension/src nook-web-extension/e2e nook-web-extension/playwright.config.ts"
@@ -154,10 +152,8 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "the extension lint command must retain its production source tree"
     );
 
-    let typed_api_tests = read(
-        &root,
-        "nook-app/nook-web/nook-web-extension/scripts/eslint-typed-api-contract.test.js",
-    );
+    let typed_api_tests = (&root)
+        .read("nook-app/nook-web/nook-web-extension/scripts/eslint-typed-api-contract.test.js");
     for required in [
         "rejects object literals expanded from a named spread array",
         "rejects object literals assigned to a spread array name",
@@ -168,10 +164,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
-    let property_tests = read(
-        &root,
-        "nook-app/nook-web/nook-web-app/tests/unit/lib/log.test.ts",
-    );
+    let property_tests = (&root).read("nook-app/nook-web/nook-web-app/tests/unit/lib/log.test.ts");
     assert!(
         property_tests.contains("fc.property(")
             && property_tests.contains("never persists query or fragment secrets"),

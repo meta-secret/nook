@@ -30,7 +30,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ObserverSnapshot,
   } from './types';
   import { ObservedAlertSeverity, ObservedExecutionStatus } from './types';
-  import { emergencyCopy } from './emergency-copy';
+  import { EmergencyCopyCatalog } from './emergency-copy';
   import {
     DurableTaskLookupKind,
     DetailPanelMountKind,
@@ -72,7 +72,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   const copy = $derived(
     snapshotState.kind === ObserverFeedKind.Loaded
       ? snapshotState.snapshot.copy
-      : emergencyCopy(navigator.language || 'en'),
+      : new EmergencyCopyCatalog(navigator.language || 'en').read(),
   );
   const selectedState = $derived.by<SelectedTask>(() => {
     if (selectedIdState.kind === TaskSelectionKind.None) {

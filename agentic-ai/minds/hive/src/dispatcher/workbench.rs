@@ -1,3 +1,7 @@
+pub struct WorkbenchCheckout<'scan> {
+    pub repository_url: &'scan str,
+    pub checkout: &'scan Path,
+}
 use std::path::Path;
 use std::process;
 use std::time::Duration;
@@ -8,119 +12,135 @@ use tokio::process::Command;
 
 use crate::HiveContext;
 
-pub(super) async fn sync_workbench_checkout(
-    repository_url: &str,
-    checkout: &Path,
-) -> crate::HiveResult<String> {
-    if checkout.join(".git").is_dir() {
-        git(checkout, workbench_fetch_arguments()).await?;
-        git(
+impl WorkbenchCheckout<'_> {
+    pub async fn sync_workbench_checkout(self) -> crate::HiveResult<String> {
+        let Self {
+            repository_url,
             checkout,
-            &["checkout", "--detach", "--force", "origin/main"],
-        )
-        .await?;
-    } else {
-        if checkout.exists() {
-            return Err(crate::HiveError::message(format!(
-                "Workbench checkout {} exists without Git metadata",
-                checkout.display()
-            )));
+        } = self;
+        if checkout.join(".git").is_dir() {
+            WorkbenchCheckout::git(checkout, WorkbenchCheckout::workbench_fetch_arguments())
+                .await?;
+            WorkbenchCheckout::git(
+                checkout,
+                &["checkout", "--detach", "--force", "origin/main"],
+            )
+            .await?;
+        } else {
+            if checkout.exists() {
+                return Err(crate::HiveError::message(format!(
+                    "Workbench checkout {} exists without Git metadata",
+                    checkout.display()
+                )));
+            }
+            let parent = checkout
+                .parent()
+                .hive_context("Workbench checkout has no parent directory")?;
+            async_fs::create_dir_all(parent).await?;
+            let mut command = Command::new("git");
+            command
+                .args(WorkbenchCheckout::workbench_git_transport_arguments())
+                .args(["clone", "--depth=1", "--branch=main", "--"])
+                .arg(repository_url)
+                .arg(checkout);
+            let output =
+                WorkbenchCheckout::bounded_command_output(command, "Workbench clone").await?;
+            if !output.status.success() {
+                return Err(crate::HiveError::message(format!(
+                    "Workbench clone failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                )));
+            }
+            WorkbenchCheckout::git(
+                checkout,
+                &["checkout", "--detach", "--force", "origin/main"],
+            )
+            .await?;
         }
-        let parent = checkout
-            .parent()
-            .hive_context("Workbench checkout has no parent directory")?;
-        async_fs::create_dir_all(parent).await?;
+        let local_main = WorkbenchCheckout::git(checkout, &["branch", "--list", "main"]).await?;
+        if !local_main.is_empty() {
+            WorkbenchCheckout::git(checkout, &["branch", "--delete", "--force", "main"]).await?;
+        }
+        WorkbenchCheckout::git(checkout, &["reflog", "expire", "--expire=now", "--all"]).await?;
+        WorkbenchCheckout::git(checkout, WorkbenchCheckout::workbench_cleanup_arguments()).await?;
+        let output = WorkbenchCheckout::git(checkout, &["rev-parse", "HEAD"]).await?;
+        let revision = String::from_utf8(output)
+            .hive_context("Workbench revision is not UTF-8")?
+            .trim()
+            .to_owned();
+        if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(crate::HiveError::message(
+                "Workbench checkout returned an invalid revision",
+            ));
+        }
+        Ok(revision)
+    }
+}
+
+impl WorkbenchCheckout<'_> {
+    fn workbench_cleanup_arguments() -> &'static [&'static str] {
+        &["gc", "--prune=now", "--no-detach"]
+    }
+}
+
+impl WorkbenchCheckout<'_> {
+    fn workbench_fetch_arguments() -> &'static [&'static str] {
+        &[
+            "fetch",
+            "--no-auto-maintenance",
+            "--depth=1",
+            "origin",
+            "+main:refs/remotes/origin/main",
+        ]
+    }
+}
+
+impl WorkbenchCheckout<'_> {
+    async fn git(checkout: &Path, args: &[&str]) -> crate::HiveResult<Vec<u8>> {
         let mut command = Command::new("git");
         command
-            .args(workbench_git_transport_arguments())
-            .args(["clone", "--depth=1", "--branch=main", "--"])
-            .arg(repository_url)
-            .arg(checkout);
-        let output = bounded_command_output(command, "Workbench clone").await?;
+            .args(WorkbenchCheckout::workbench_git_transport_arguments())
+            .arg("-C")
+            .arg(checkout)
+            .args(args);
+        let output =
+            WorkbenchCheckout::bounded_command_output(command, "Workbench Git operation").await?;
         if !output.status.success() {
             return Err(crate::HiveError::message(format!(
-                "Workbench clone failed: {}",
+                "Workbench Git operation failed: {}",
                 String::from_utf8_lossy(&output.stderr).trim()
             )));
         }
-        git(
-            checkout,
-            &["checkout", "--detach", "--force", "origin/main"],
-        )
-        .await?;
+        Ok(output.stdout)
     }
-    let local_main = git(checkout, &["branch", "--list", "main"]).await?;
-    if !local_main.is_empty() {
-        git(checkout, &["branch", "--delete", "--force", "main"]).await?;
+}
+
+impl WorkbenchCheckout<'_> {
+    fn workbench_git_transport_arguments() -> &'static [&'static str] {
+        &[
+            "-c",
+            "http.lowSpeedLimit=1",
+            "-c",
+            "http.lowSpeedTime=60",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+        ]
     }
-    git(checkout, &["reflog", "expire", "--expire=now", "--all"]).await?;
-    git(checkout, workbench_cleanup_arguments()).await?;
-    let output = git(checkout, &["rev-parse", "HEAD"]).await?;
-    let revision = String::from_utf8(output)
-        .hive_context("Workbench revision is not UTF-8")?
-        .trim()
-        .to_owned();
-    if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(crate::HiveError::message(
-            "Workbench checkout returned an invalid revision",
-        ));
+}
+
+impl WorkbenchCheckout<'_> {
+    async fn bounded_command_output(
+        mut command: Command,
+        operation: &str,
+    ) -> crate::HiveResult<process::Output> {
+        command.kill_on_drop(true);
+        async_time::timeout(Duration::from_secs(300), command.output())
+            .await
+            .map_err(|_| crate::HiveError::message(format!("{operation} exceeded 300 seconds")))?
+            .with_hive_context(|| format!("start {operation}"))
     }
-    Ok(revision)
-}
-
-fn workbench_cleanup_arguments() -> &'static [&'static str] {
-    &["gc", "--prune=now", "--no-detach"]
-}
-
-fn workbench_fetch_arguments() -> &'static [&'static str] {
-    &[
-        "fetch",
-        "--no-auto-maintenance",
-        "--depth=1",
-        "origin",
-        "+main:refs/remotes/origin/main",
-    ]
-}
-
-async fn git(checkout: &Path, args: &[&str]) -> crate::HiveResult<Vec<u8>> {
-    let mut command = Command::new("git");
-    command
-        .args(workbench_git_transport_arguments())
-        .arg("-C")
-        .arg(checkout)
-        .args(args);
-    let output = bounded_command_output(command, "Workbench Git operation").await?;
-    if !output.status.success() {
-        return Err(crate::HiveError::message(format!(
-            "Workbench Git operation failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    Ok(output.stdout)
-}
-
-fn workbench_git_transport_arguments() -> &'static [&'static str] {
-    &[
-        "-c",
-        "http.lowSpeedLimit=1",
-        "-c",
-        "http.lowSpeedTime=60",
-        "-c",
-        "maintenance.auto=false",
-        "-c",
-        "gc.auto=0",
-    ]
-}
-
-async fn bounded_command_output(
-    mut command: Command,
-    operation: &str,
-) -> crate::HiveResult<process::Output> {
-    command.kill_on_drop(true);
-    async_time::timeout(Duration::from_secs(300), command.output())
-        .await
-        .map_err(|_| crate::HiveError::message(format!("{operation} exceeded 300 seconds")))?
-        .with_hive_context(|| format!("start {operation}"))
 }
 
 #[cfg(test)]
@@ -134,10 +154,7 @@ mod tests {
     use std::time;
     use tokio::time as async_time;
 
-    use super::{
-        sync_workbench_checkout, workbench_cleanup_arguments, workbench_fetch_arguments,
-        workbench_git_transport_arguments,
-    };
+    use super::WorkbenchCheckout;
 
     #[tokio::test]
     async fn workbench_checkout_reuses_the_same_public_git_snapshot() -> crate::HiveResult<()> {
@@ -158,10 +175,10 @@ mod tests {
             }
             Ok(())
         };
-        git(&["init", "--initial-branch=main"])?;
+        WorkbenchCheckout::git(&["init", "--initial-branch=main"])?;
         fs::write(origin.path().join("README.md"), "first\n")?;
-        git(&["add", "README.md"])?;
-        git(&[
+        WorkbenchCheckout::git(&["add", "README.md"])?;
+        WorkbenchCheckout::git(&[
             "-c",
             "user.name=Hive Test",
             "-c",
@@ -172,13 +189,23 @@ mod tests {
         ])?;
 
         let repository_url = origin.path().to_string_lossy();
-        let first = sync_workbench_checkout(&repository_url, &checkout_path).await?;
-        let unchanged = sync_workbench_checkout(&repository_url, &checkout_path).await?;
+        let first = (WorkbenchCheckout {
+            repository_url: &repository_url,
+            checkout: &checkout_path,
+        })
+        .sync_workbench_checkout()
+        .await?;
+        let unchanged = (WorkbenchCheckout {
+            repository_url: &repository_url,
+            checkout: &checkout_path,
+        })
+        .sync_workbench_checkout()
+        .await?;
         assert_eq!(first, unchanged);
 
         fs::write(origin.path().join("README.md"), "second\n")?;
-        git(&["add", "README.md"])?;
-        git(&[
+        WorkbenchCheckout::git(&["add", "README.md"])?;
+        WorkbenchCheckout::git(&[
             "-c",
             "user.name=Hive Test",
             "-c",
@@ -187,7 +214,12 @@ mod tests {
             "-m",
             "second",
         ])?;
-        let changed = sync_workbench_checkout(&repository_url, &checkout_path).await?;
+        let changed = (WorkbenchCheckout {
+            repository_url: &repository_url,
+            checkout: &checkout_path,
+        })
+        .sync_workbench_checkout()
+        .await?;
         assert_ne!(first, changed);
         assert_eq!(
             fs::read_to_string(checkout_path.join("README.md"))?,
@@ -215,7 +247,11 @@ mod tests {
             .status()?;
         assert!(status.success());
         let (before_zombies, _) = git_process_ids(repository.path())?;
-        super::git(repository.path(), workbench_cleanup_arguments()).await?;
+        super::git(
+            repository.path(),
+            WorkbenchCheckout::workbench_cleanup_arguments(),
+        )
+        .await?;
         async_time::sleep(time::Duration::from_millis(100)).await;
 
         let (after_zombies, matching_repository) = git_process_ids(repository.path())?;
@@ -280,7 +316,7 @@ mod tests {
     #[test]
     fn workbench_cleanup_cannot_detach_from_the_dispatcher() {
         assert_eq!(
-            workbench_cleanup_arguments(),
+            WorkbenchCheckout::workbench_cleanup_arguments(),
             ["gc", "--prune=now", "--no-detach"]
         );
     }
@@ -288,11 +324,11 @@ mod tests {
     #[test]
     fn workbench_fetch_cannot_start_automatic_maintenance() {
         assert!(
-            workbench_fetch_arguments().contains(&"--no-auto-maintenance"),
+            WorkbenchCheckout::workbench_fetch_arguments().contains(&"--no-auto-maintenance"),
             "Workbench fetch must not orphan automatic Git maintenance"
         );
         assert!(
-            workbench_git_transport_arguments()
+            WorkbenchCheckout::workbench_git_transport_arguments()
                 .windows(2)
                 .any(|arguments| arguments == ["-c", "maintenance.auto=false"]),
             "all Workbench Git commands must disable automatic maintenance"

@@ -9,16 +9,36 @@ use std::{
     path::{Path, PathBuf},
 };
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn directory_has_files(path: &Path) -> bool {
@@ -32,9 +52,11 @@ fn directory_has_files(path: &Path) -> bool {
 
 #[test]
 fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Result<()> {
-    let workflow = read(".github/workflows/agent-implement.yml");
-    let plan_script = read(".github/scripts/ci-agent-plan.sh");
-    let record_validator = read(".github/scripts/workbench-records.cjs");
+    let workflow =
+        RepositoryFixture::repository_root().read(".github/workflows/agent-implement.yml");
+    let plan_script = RepositoryFixture::repository_root().read(".github/scripts/ci-agent-plan.sh");
+    let record_validator =
+        RepositoryFixture::repository_root().read(".github/scripts/workbench-records.cjs");
 
     for required in [
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
@@ -281,11 +303,15 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 
 #[test]
 fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
-    let agent_map = read(".cortex/AGENTS.md");
-    let coding_workflow = read(".cortex/gizmo/workflows/mission-delivery.md");
-    let issue_workflow = read(".cortex/gizmo/workflows/issues.md");
-    let pull_request_workflow = read(".cortex/gizmo/workflows/pull-requests.md");
-    let ownership_skill = read(".cortex/gizmo/dynamic-skills/agent-feature-ownership.md");
+    let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
+    let coding_workflow =
+        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/mission-delivery.md");
+    let issue_workflow =
+        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/issues.md");
+    let pull_request_workflow =
+        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/pull-requests.md");
+    let ownership_skill = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo/dynamic-skills/agent-feature-ownership.md");
     let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
 
     assert!(
@@ -330,23 +356,34 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 
 #[test]
 fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> anyhow::Result<()> {
-    let agent_map = read(".cortex/AGENTS.md");
-    let ownership = read(".cortex/gizmo/architecture/team-ownership.md");
-    let document_map = read(".cortex/teams/ai/dynamic-skills/cortex-document-map/SKILL.md");
-    let workflow = read(".cortex/gizmo/workflows/team-oriented-development.md");
-    let web_contract = read(".cortex/teams/web-dev/AGENTS.md");
-    let sre_contract = read(".cortex/teams/sre/AGENTS.md");
-    let security_contract = read(".cortex/teams/security/AGENTS.md");
-    let security_graph = read(".cortex/teams/security/knowledge-graph.md");
-    let security_architecture =
-        read(".cortex/teams/security/architecture/security-architecture.md");
-    let cryptography = read(".cortex/teams/security/references/cryptography.md");
-    let web_graph = read(".cortex/teams/web-dev/knowledge-graph.md");
-    let shared_graph = read(".cortex/shared/knowledge-graph.md");
-    let agent_plan = read(".github/prompts/agent-plan.md");
-    let issues_workflow = read(".cortex/gizmo/workflows/issues.md");
-    let loom_tools = read(".cortex/teams/ai/references/loom-tools.md");
-    let workbench_validator = read(".github/scripts/workbench-records.cjs");
+    let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
+    let ownership =
+        RepositoryFixture::repository_root().read(".cortex/gizmo/architecture/team-ownership.md");
+    let document_map = RepositoryFixture::repository_root()
+        .read(".cortex/teams/ai/dynamic-skills/cortex-document-map/SKILL.md");
+    let workflow = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo/workflows/team-oriented-development.md");
+    let web_contract = RepositoryFixture::repository_root().read(".cortex/teams/web-dev/AGENTS.md");
+    let sre_contract = RepositoryFixture::repository_root().read(".cortex/teams/sre/AGENTS.md");
+    let security_contract =
+        RepositoryFixture::repository_root().read(".cortex/teams/security/AGENTS.md");
+    let security_graph =
+        RepositoryFixture::repository_root().read(".cortex/teams/security/knowledge-graph.md");
+    let security_architecture = RepositoryFixture::repository_root()
+        .read(".cortex/teams/security/architecture/security-architecture.md");
+    let cryptography = RepositoryFixture::repository_root()
+        .read(".cortex/teams/security/references/cryptography.md");
+    let web_graph =
+        RepositoryFixture::repository_root().read(".cortex/teams/web-dev/knowledge-graph.md");
+    let shared_graph =
+        RepositoryFixture::repository_root().read(".cortex/shared/knowledge-graph.md");
+    let agent_plan = RepositoryFixture::repository_root().read(".github/prompts/agent-plan.md");
+    let issues_workflow =
+        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/issues.md");
+    let loom_tools =
+        RepositoryFixture::repository_root().read(".cortex/teams/ai/references/loom-tools.md");
+    let workbench_validator =
+        RepositoryFixture::repository_root().read(".github/scripts/workbench-records.cjs");
     let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
     let normalized_agent_plan = agent_plan.split_whitespace().collect::<Vec<_>>().join(" ");
     let normalized_workflow = workflow.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -512,10 +549,10 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         "browser-extension-release-security.md",
         "user-facing-security-abstractions.md",
     ] {
-        let security_path = repository_root()
+        let security_path = RepositoryFixture::repository_root()
             .join(".cortex/teams/security/dynamic-skills")
             .join(skill);
-        let web_path = repository_root()
+        let web_path = RepositoryFixture::repository_root()
             .join(".cortex/teams/web-dev/dynamic-skills")
             .join(skill);
         assert!(security_path.is_file(), "security must own {skill}");
@@ -548,10 +585,10 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         "typescript-no-unknown.md",
         "typescript-single-parameter.md",
     ] {
-        let web_path = repository_root()
+        let web_path = RepositoryFixture::repository_root()
             .join(".cortex/teams/web-dev/dynamic-skills")
             .join(skill);
-        let shared_path = repository_root()
+        let shared_path = RepositoryFixture::repository_root()
             .join(".cortex/shared/dynamic-skills")
             .join(skill);
         assert!(web_path.is_file(), "web development must own {skill}");
@@ -583,7 +620,7 @@ fn feature_slice_gizmos_are_passive_workbench_records() {
     ];
     let policy = policy_paths
         .iter()
-        .map(|path| read(path))
+        .map(|path| RepositoryFixture::repository_root().read(path))
         .collect::<Vec<_>>()
         .join("\n")
         .split_whitespace()
@@ -624,9 +661,11 @@ fn feature_slice_gizmos_are_passive_workbench_records() {
 
 #[test]
 fn pr_workbench_suite_loads_sequential_contract_tests() {
-    let pr_workflow = read(".github/workflows/pr.yml");
-    let pr_suite = read(".github/scripts/workbench-records.test.cjs");
-    let mapping_suite = read(".github/scripts/workbench-gizmo-mapping.test.cjs");
+    let pr_workflow = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
+    let pr_suite =
+        RepositoryFixture::repository_root().read(".github/scripts/workbench-records.test.cjs");
+    let mapping_suite = RepositoryFixture::repository_root()
+        .read(".github/scripts/workbench-gizmo-mapping.test.cjs");
 
     assert!(
         pr_workflow.contains("node --test .github/scripts/workbench-records.test.cjs"),
@@ -650,9 +689,11 @@ fn pr_workbench_suite_loads_sequential_contract_tests() {
 
 #[test]
 fn workbench_plans_enforce_one_or_strictly_sequential_prs() {
-    let validator = read(".github/scripts/workbench-records.cjs");
-    let prompt = read(".github/prompts/agent-plan.md");
-    let pull_requests = read(".cortex/gizmo/workflows/pull-requests.md");
+    let validator =
+        RepositoryFixture::repository_root().read(".github/scripts/workbench-records.cjs");
+    let prompt = RepositoryFixture::repository_root().read(".github/prompts/agent-plan.md");
+    let pull_requests =
+        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/pull-requests.md");
     let normalized_pull_requests = pull_requests
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -684,13 +725,17 @@ fn workbench_plans_enforce_one_or_strictly_sequential_prs() {
 
 #[test]
 fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()> {
-    let gitignore = read(".gitignore");
-    let agent_map = read(".cortex/AGENTS.md");
-    let coding_workflow = read(".cortex/gizmo/workflows/mission-delivery.md");
-    let pull_request_workflow = read(".cortex/gizmo/workflows/pull-requests.md");
-    let self_improvement = read(".cortex/teams/ai/dynamic-skills/self-improvement.md");
-    let agent_tasks = read(".task/agentic-ai.yml");
-    let readiness_guard = read("agentic-ai/loom/src/commands/cortex-session-clean.ts");
+    let gitignore = RepositoryFixture::repository_root().read(".gitignore");
+    let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
+    let coding_workflow =
+        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/mission-delivery.md");
+    let pull_request_workflow =
+        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/pull-requests.md");
+    let self_improvement = RepositoryFixture::repository_root()
+        .read(".cortex/teams/ai/dynamic-skills/self-improvement.md");
+    let agent_tasks = RepositoryFixture::repository_root().read(".task/agentic-ai.yml");
+    let readiness_guard = RepositoryFixture::repository_root()
+        .read("agentic-ai/loom/src/commands/cortex-session-clean.ts");
 
     assert!(
         gitignore.lines().any(|line| line == ".cortex/.session/"),
@@ -734,7 +779,7 @@ fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()>
             == 2
             && readiness_guard
                 .contains("PR readiness requires removing temporary Cortex session memory")
-            && !repository_root()
+            && !RepositoryFixture::repository_root()
                 .join(".github/scripts/assert-cortex-session-clean.sh")
                 .exists(),
         "host and Hive readiness must reject leftover temporary session memory"
@@ -744,8 +789,10 @@ fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()>
 
 #[test]
 fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
-    let collector = read(".github/workflows/main-build-stats.yml");
-    let publisher = read(".github/scripts/workbench-publish.cjs");
+    let collector =
+        RepositoryFixture::repository_root().read(".github/workflows/main-build-stats.yml");
+    let publisher =
+        RepositoryFixture::repository_root().read(".github/scripts/workbench-publish.cjs");
 
     for required in [
         "repository: meta-secret/nook-workbench",
@@ -764,7 +811,7 @@ fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
         "Main statistics must not create Nook bookkeeping PRs or files"
     );
     assert!(
-        !directory_has_files(&repository_root().join(".stats")),
+        !directory_has_files(&RepositoryFixture::repository_root().join(".stats")),
         "statistics must live only in Nook Workbench"
     );
     assert!(
@@ -777,7 +824,9 @@ fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
 
     for path in [".github/workflows/main.yml", ".github/workflows/pr.yml"] {
         assert!(
-            !read(path).contains(".stats/**"),
+            !RepositoryFixture::repository_root()
+                .read(path)
+                .contains(".stats/**"),
             "{path} must not retain obsolete statistics path exceptions"
         );
     }
@@ -786,12 +835,14 @@ fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
 
 #[test]
 fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
-    let prompt = read(".github/prompts/agent-implement.md");
-    let plan_prompt = read(".github/prompts/agent-plan.md");
-    let plan_script = read(".github/scripts/ci-agent-plan.sh");
-    let prompt_loader = read("agentic-ai/ci-agent/src/main/prompt.ts");
-    let ignore = read(".gitignore");
-    let workflow = read(".github/workflows/agent-implement.yml");
+    let prompt = RepositoryFixture::repository_root().read(".github/prompts/agent-implement.md");
+    let plan_prompt = RepositoryFixture::repository_root().read(".github/prompts/agent-plan.md");
+    let plan_script = RepositoryFixture::repository_root().read(".github/scripts/ci-agent-plan.sh");
+    let prompt_loader =
+        RepositoryFixture::repository_root().read("agentic-ai/ci-agent/src/main/prompt.ts");
+    let ignore = RepositoryFixture::repository_root().read(".gitignore");
+    let workflow =
+        RepositoryFixture::repository_root().read(".github/workflows/agent-implement.yml");
 
     for required in [
         ".nook-workbench-worklog.md",
@@ -892,12 +943,15 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "Refusing source-task file inside the public Nook checkout",
     ] {
         assert!(
-            read(".github/scripts/workbench-publish.cjs").contains(required),
+            RepositoryFixture::repository_root()
+                .read(".github/scripts/workbench-publish.cjs")
+                .contains(required),
             "interactive Workbench publisher is missing plan validation: {required}"
         );
     }
-    let pre_push_task = read(".task/agentic-ai.yml");
-    let budget_guard = read(".github/scripts/pr-authored-budget.ts");
+    let pre_push_task = RepositoryFixture::repository_root().read(".task/agentic-ai.yml");
+    let budget_guard =
+        RepositoryFixture::repository_root().read(".github/scripts/pr-authored-budget.ts");
     assert!(
         workflow.contains("uses unsupported stacked-PR metadata")
             && !workflow.contains("core.setOutput('multi_pr', 'true')")

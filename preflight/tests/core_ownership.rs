@@ -1,20 +1,18 @@
+use nook_preflight::RustBoundaryState;
+use nook_preflight::RustMacroInventory;
+use nook_preflight::RustWasmNames;
+use nook_preflight::TypeScriptDomainBoundary;
 use std::path::PathBuf;
 use std::{env, fs};
 
-use nook_preflight::{
-    authored_rust_macro_definitions, portable_core_browser_dependencies,
-    rust_test_untyped_json_assertions, rust_tsify_implicit_absence_overrides,
-    rust_wasm_callable_name_overrides, rust_wasm_domain_boundary_escape_hatches,
-    typescript_domain_boundary_boilerplate, typescript_extension_persistence_policy,
-    typescript_generic_optional_state, typescript_implicit_application_state,
-    typescript_json_round_trip_clones, typescript_mutable_void_state,
-    typescript_null_absence_sentinels, typescript_raw_string_discriminants,
-    typescript_svelte_state_modeling_violations,
-};
+use nook_preflight::{RustBoundarySources, RustTestSources};
 
 #[test]
 fn authored_rust_defines_no_macros() -> anyhow::Result<()> {
-    let violations = authored_rust_macro_definitions(&repository_root())?;
+    let violations = (RustMacroInventory {
+        root: &RepositoryFixture::repository_root(),
+    })
+    .authored_rust_macro_definitions()?;
     assert!(
         violations.is_empty(),
         "authored Rust must use explicit items and control flow instead of repository-defined macros: {violations:#?}"
@@ -24,7 +22,10 @@ fn authored_rust_defines_no_macros() -> anyhow::Result<()> {
 
 #[test]
 fn rust_wasm_callables_keep_their_authored_names_in_javascript() -> anyhow::Result<()> {
-    let violations = rust_wasm_callable_name_overrides(&repository_root())?;
+    let violations = (RustWasmNames {
+        root: &RepositoryFixture::repository_root(),
+    })
+    .rust_wasm_callable_name_overrides()?;
     assert!(
         violations.is_empty(),
         "Rust WASM functions and methods must keep their authored names through generated JavaScript and TypeScript call sites; js_name and generated-binding import aliases make cross-language navigation incoherent: {violations:#?}"
@@ -34,7 +35,10 @@ fn rust_wasm_callables_keep_their_authored_names_in_javascript() -> anyhow::Resu
 
 #[test]
 fn rust_tests_assert_known_json_through_typed_contracts() -> anyhow::Result<()> {
-    let violations = rust_test_untyped_json_assertions(&repository_root())?;
+    let violations = (RustTestSources {
+        root: &RepositoryFixture::repository_root(),
+    })
+    .rust_test_untyped_json_assertions()?;
     assert!(
         violations.is_empty(),
         "known JSON test contracts must round-trip through concrete Rust types; raw Value indexing and is_null assertions are forbidden: {violations:#?}"
@@ -45,7 +49,10 @@ fn rust_tests_assert_known_json_through_typed_contracts() -> anyhow::Result<()> 
 #[test]
 fn rust_tsify_boundaries_never_override_domain_state_with_absence_sentinels() -> anyhow::Result<()>
 {
-    let violations = rust_tsify_implicit_absence_overrides(&repository_root())?;
+    let violations = (RustBoundaryState {
+        root: &RepositoryFixture::repository_root(),
+    })
+    .rust_tsify_implicit_absence_overrides()?;
     assert!(
         violations.is_empty(),
         "Rust-owned Tsify contracts must use named state enums instead of undefined, null, or void type overrides: {violations:#?}"
@@ -53,16 +60,34 @@ fn rust_tsify_boundaries_never_override_domain_state_with_absence_sentinels() ->
     Ok(())
 }
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
 #[test]
 fn event_log_crate_keeps_the_portable_dependency_direction() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let event_log =
         fs::read_to_string(root.join("nook-app/nook-platform/nook-event-log/Cargo.toml"))?;
     assert!(event_log.contains("nook-auth2 ="));
@@ -85,7 +110,7 @@ fn event_log_crate_keeps_the_portable_dependency_direction() -> anyhow::Result<(
 
 #[test]
 fn shared_application_primitives_have_one_leaf_crate() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let common =
         fs::read_to_string(root.join("nook-app/nook-platform/nook-app-common/Cargo.toml"))?;
     for forbidden in [
@@ -133,7 +158,10 @@ fn shared_application_primitives_have_one_leaf_crate() -> anyhow::Result<()> {
 
 #[test]
 fn portable_core_does_not_import_browser_runtime_crates() -> anyhow::Result<()> {
-    let violations = portable_core_browser_dependencies(&repository_root())?;
+    let violations = (RustBoundarySources {
+        root: &RepositoryFixture::repository_root(),
+    })
+    .portable_core_browser_dependencies()?;
     assert!(
         violations.is_empty(),
         "portable Rust crates must stay browser-independent: {violations:#?}"
@@ -143,7 +171,10 @@ fn portable_core_does_not_import_browser_runtime_crates() -> anyhow::Result<()> 
 
 #[test]
 fn typescript_domain_boundary_stays_generated_and_direct() -> anyhow::Result<()> {
-    let violations = typescript_domain_boundary_boilerplate(&repository_root())?;
+    let violations = (TypeScriptDomainBoundary {
+        root: &RepositoryFixture::repository_root(),
+    })
+    .typescript_domain_boundary_boilerplate()?;
     assert!(
         violations.is_empty(),
         "vault domain schemas belong in Rust; use generated WASM types and direct exports instead of TypeScript mirrors or forwarding wrappers: {violations:#?}"
@@ -153,7 +184,9 @@ fn typescript_domain_boundary_stays_generated_and_direct() -> anyhow::Result<()>
 
 #[test]
 fn typescript_does_not_clone_through_json_serialization() -> anyhow::Result<()> {
-    let violations = typescript_json_round_trip_clones(&repository_root())?;
+    let violations = TypeScriptDomainBoundary::typescript_json_round_trip_clones(
+        &RepositoryFixture::repository_root(),
+    )?;
     assert!(
         violations.is_empty(),
         "authored TypeScript and Svelte must use direct values or $state.snapshot at reactive boundaries, never JSON parse/stringify cloning: {violations:#?}"
@@ -163,7 +196,9 @@ fn typescript_does_not_clone_through_json_serialization() -> anyhow::Result<()> 
 
 #[test]
 fn extension_persistence_decisions_stay_in_companion_rust() -> anyhow::Result<()> {
-    let violations = typescript_extension_persistence_policy(&repository_root())?;
+    let violations = TypeScriptDomainBoundary::typescript_extension_persistence_policy(
+        &RepositoryFixture::repository_root(),
+    )?;
     assert!(
         violations.is_empty(),
         "TypeScript may observe IndexedDB, but companion Rust must classify extension database and store presence: {violations:#?}"
@@ -173,7 +208,9 @@ fn extension_persistence_decisions_stay_in_companion_rust() -> anyhow::Result<()
 
 #[test]
 fn authored_javascript_typescript_and_svelte_never_use_null() -> anyhow::Result<()> {
-    let violations = typescript_null_absence_sentinels(&repository_root())?;
+    let violations = TypeScriptApplicationState::typescript_null_absence_sentinels(
+        &RepositoryFixture::repository_root(),
+    )?;
     assert!(
         violations.is_empty(),
         "authored JavaScript, TypeScript, and Svelte must normalize external null without authoring null values or types: {violations:#?}"
@@ -183,7 +220,9 @@ fn authored_javascript_typescript_and_svelte_never_use_null() -> anyhow::Result<
 
 #[test]
 fn typescript_svelte_state_keeps_domain_ids_precise() -> anyhow::Result<()> {
-    let violations = typescript_svelte_state_modeling_violations(&repository_root())?;
+    let violations = TypeScriptDomainBoundary::typescript_svelte_state_modeling_violations(
+        &RepositoryFixture::repository_root(),
+    )?;
     assert!(
         violations.is_empty(),
         "redundant optional expressions are forbidden, Rust-owned identifiers must stay typed, and domain state unions must be Rust/WASM enums: {violations:#?}"
@@ -193,7 +232,10 @@ fn typescript_svelte_state_keeps_domain_ids_precise() -> anyhow::Result<()> {
 
 #[test]
 fn authored_javascript_typescript_and_svelte_never_use_undefined() -> anyhow::Result<()> {
-    let violations = typescript_implicit_application_state(&repository_root())?;
+    let violations = (TypeScriptApplicationState {
+        root: &RepositoryFixture::repository_root(),
+    })
+    .typescript_implicit_application_state()?;
     assert!(
         violations.is_empty(),
         "authored JavaScript, TypeScript, and Svelte must use explicit state and boundary adapters instead of undefined: {violations:#?}"
@@ -203,7 +245,9 @@ fn authored_javascript_typescript_and_svelte_never_use_undefined() -> anyhow::Re
 
 #[test]
 fn typescript_value_contracts_never_hide_absence_behind_void() -> anyhow::Result<()> {
-    let violations = typescript_mutable_void_state(&repository_root())?;
+    let violations = TypeScriptApplicationState::typescript_mutable_void_state(
+        &RepositoryFixture::repository_root(),
+    )?;
     assert!(
         violations.is_empty(),
         "TypeScript and Svelte value contracts must use explicit state, never T | void in storage, parameters, returns, or nested generics: {violations:#?}"
@@ -213,7 +257,9 @@ fn typescript_value_contracts_never_hide_absence_behind_void() -> anyhow::Result
 
 #[test]
 fn typescript_state_names_explain_the_domain_transition() -> anyhow::Result<()> {
-    let violations = typescript_generic_optional_state(&repository_root())?;
+    let violations = TypeScriptApplicationState::typescript_generic_optional_state(
+        &RepositoryFixture::repository_root(),
+    )?;
     assert!(
         violations.is_empty(),
         "generic Option-style wrappers are forbidden; use domain-specific union names and variants: {violations:#?}"
@@ -223,7 +269,9 @@ fn typescript_state_names_explain_the_domain_transition() -> anyhow::Result<()> 
 
 #[test]
 fn typescript_closed_vocabularies_use_enums() -> anyhow::Result<()> {
-    let violations = typescript_raw_string_discriminants(&repository_root())?;
+    let violations = TypeScriptApplicationState::typescript_raw_string_discriminants(
+        &RepositoryFixture::repository_root(),
+    )?;
     assert!(
         violations.is_empty(),
         "closed TypeScript and Svelte discriminants must reference named enum members instead of raw string literal types: {violations:#?}"
@@ -233,7 +281,9 @@ fn typescript_closed_vocabularies_use_enums() -> anyhow::Result<()> {
 
 #[test]
 fn rust_wasm_domain_boundary_stays_real_and_typed() -> anyhow::Result<()> {
-    let violations = rust_wasm_domain_boundary_escape_hatches(&repository_root())?;
+    let violations = TypeScriptDomainBoundary::rust_wasm_domain_boundary_escape_hatches(
+        &RepositoryFixture::repository_root(),
+    )?;
     assert!(
         violations.is_empty(),
         "WASM domain DTOs must use real Rust ABI types; unchecked TypeScript hints and raw provider/auth JsValue signatures are forbidden: {violations:#?}"
@@ -244,7 +294,7 @@ fn rust_wasm_domain_boundary_stays_real_and_typed() -> anyhow::Result<()> {
 #[test]
 fn remote_vault_recovery_requires_core_confirmed_connect_state() -> anyhow::Result<()> {
     let source = fs::read_to_string(
-        repository_root()
+        RepositoryFixture::repository_root()
             .join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/connection.ts"),
     )?;
     assert!(

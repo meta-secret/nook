@@ -161,12 +161,14 @@ impl ObserverCopy {
 
 #[derive(Debug, Deserialize)]
 pub(super) struct LocaleQuery {
-    #[serde(default = "default_locale")]
+    #[serde(default = "ObserverCopy::default_locale")]
     pub(super) locale: String,
 }
 
-pub(super) fn default_locale() -> String {
-    "en".to_owned()
+impl ObserverCopy {
+    pub(super) fn default_locale() -> String {
+        "en".to_owned()
+    }
 }
 
 #[async_trait]
@@ -283,7 +285,7 @@ impl ObserverStore for ObserverCoordinatorStore {
 #[cfg(test)]
 mod tests {
     use super::{
-        ObserverCoordinatorStore, ObserverRequest, ObserverResponse, ObserverStore, default_locale,
+        ObserverCoordinatorStore, ObserverCopy, ObserverRequest, ObserverResponse, ObserverStore,
     };
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::net::UnixListener;
@@ -325,7 +327,7 @@ mod tests {
         });
         let client = ObserverCoordinatorStore::connect(&socket).await?;
 
-        assert_eq!(default_locale(), "en");
+        assert_eq!(ObserverCopy::default_locale(), "en");
         assert_eq!(
             client.observer_snapshot_value("en").await?,
             serde_json::json!({"ready": 2})

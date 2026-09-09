@@ -1,3 +1,11 @@
+pub struct SourceRepository<'a> {
+    root: &'a std::path::Path,
+}
+impl<'a> SourceRepository<'a> {
+    pub fn new(root: &'a std::path::Path) -> Self {
+        Self { root }
+    }
+}
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -49,11 +57,14 @@ pub struct ExternalUnitTestModuleViolation {
 ///
 /// Returns an error when the repository tree or a candidate source file cannot
 /// be read as UTF-8.
-pub fn source_size_violations(root: &Path) -> io::Result<Vec<SourceSizeViolation>> {
-    let mut violations = Vec::new();
-    scan_directory(root, root, &mut violations)?;
-    violations.sort_by(|left, right| left.path.cmp(&right.path));
-    Ok(violations)
+impl SourceRepository<'_> {
+    pub fn source_size_violations(&self) -> io::Result<Vec<SourceSizeViolation>> {
+        let root = self.root;
+        let mut violations = Vec::new();
+        SourceRepository::scan_directory(root, root, &mut violations)?;
+        violations.sort_by(|left, right| left.path.cmp(&right.path));
+        Ok(violations)
+    }
 }
 
 /// Finds Rust unit-test modules stored in separate files under `src`.
@@ -65,293 +76,331 @@ pub fn source_size_violations(root: &Path) -> io::Result<Vec<SourceSizeViolation
 ///
 /// Returns an error when an authored Rust source or referenced test module
 /// cannot be read or parsed.
-pub fn external_rust_unit_test_modules(
-    root: &Path,
-) -> io::Result<Vec<ExternalUnitTestModuleViolation>> {
-    let mut violations = Vec::new();
-    scan_external_unit_tests(root, root, &mut violations)?;
-    violations.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then_with(|| left.line.cmp(&right.line))
-    });
-    Ok(violations)
+impl SourceRepository<'_> {
+    pub fn external_rust_unit_test_modules(
+        &self,
+    ) -> io::Result<Vec<ExternalUnitTestModuleViolation>> {
+        let root = self.root;
+        let mut violations = Vec::new();
+        SourceRepository::scan_external_unit_tests(root, root, &mut violations)?;
+        violations.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then_with(|| left.line.cmp(&right.line))
+        });
+        Ok(violations)
+    }
 }
 
-fn scan_directory(
-    root: &Path,
-    directory: &Path,
-    violations: &mut Vec<SourceSizeViolation>,
-) -> io::Result<()> {
-    let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
-    entries.sort_by_key(fs::DirEntry::file_name);
+impl SourceRepository<'_> {
+    fn scan_directory(
+        root: &Path,
+        directory: &Path,
+        violations: &mut Vec<SourceSizeViolation>,
+    ) -> io::Result<()> {
+        let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
+        entries.sort_by_key(fs::DirEntry::file_name);
 
-    for entry in entries {
-        let path = entry.path();
-        let relative_path = path.strip_prefix(root).map_err(io::Error::other)?;
-        let file_type = entry.file_type()?;
+        for entry in entries {
+            let path = entry.path();
+            let relative_path = path.strip_prefix(root).map_err(io::Error::other)?;
+            let file_type = entry.file_type()?;
 
-        if file_type.is_dir() {
-            if !is_excluded_directory(relative_path) {
-                scan_directory(root, &path, violations)?;
+            if file_type.is_dir() {
+                if !SourceRepository::is_excluded_directory(relative_path) {
+                    SourceRepository::scan_directory(root, &path, violations)?;
+                }
+                continue;
             }
-            continue;
-        }
 
-        if !file_type.is_file() || is_excluded_path(relative_path) {
-            continue;
-        }
+            if !file_type.is_file() || SourceRepository::is_excluded_path(relative_path) {
+                continue;
+            }
 
-        let Some(limit) = source_line_limit(relative_path) else {
-            continue;
-        };
-        let source = fs::read_to_string(&path)?;
-        let lines = source.lines().count();
-        if lines > limit {
-            violations.push(SourceSizeViolation {
-                path: relative_path.to_path_buf(),
-                lines,
-                limit,
+            let Some(limit) = SourceRepository::source_line_limit(relative_path) else {
+                continue;
+            };
+            let source = fs::read_to_string(&path)?;
+            let lines = source.lines().count();
+            if lines > limit {
+                violations.push(SourceSizeViolation {
+                    path: relative_path.to_path_buf(),
+                    lines,
+                    limit,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+impl SourceRepository<'_> {
+    fn scan_external_unit_tests(
+        root: &Path,
+        directory: &Path,
+        violations: &mut Vec<ExternalUnitTestModuleViolation>,
+    ) -> io::Result<()> {
+        let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
+        entries.sort_by_key(fs::DirEntry::file_name);
+
+        for entry in entries {
+            let path = entry.path();
+            let relative_path = path.strip_prefix(root).map_err(io::Error::other)?;
+            let file_type = entry.file_type()?;
+
+            if file_type.is_dir() {
+                if !SourceRepository::is_excluded_directory(relative_path) {
+                    SourceRepository::scan_external_unit_tests(root, &path, violations)?;
+                }
+                continue;
+            }
+            if !file_type.is_file()
+                || SourceRepository::is_excluded_path(relative_path)
+                || path.extension().and_then(|value| value.to_str()) != Some("rs")
+                || !relative_path
+                    .components()
+                    .any(|component| component.as_os_str() == "src")
+            {
+                continue;
+            }
+
+            let source = fs::read_to_string(&path)?;
+            let syntax = syn::parse_file(&source).map_err(SourceRepository::invalid_rust_source)?;
+            SourceRepository::collect_external_unit_test_modules(
+                root,
+                relative_path,
+                path.parent().unwrap_or_else(|| Path::new("")),
+                &SourceRepository::module_directory_for_source(&path),
+                &syntax.items,
+                false,
+                violations,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl SourceRepository<'_> {
+    fn collect_external_unit_test_modules(
+        root: &Path,
+        source_path: &Path,
+        include_directory: &Path,
+        module_directory: &Path,
+        items: &[Item],
+        test_context: bool,
+        violations: &mut Vec<ExternalUnitTestModuleViolation>,
+    ) -> io::Result<()> {
+        for item in items {
+            match item {
+                Item::Mod(module) => {
+                    let module_test_context =
+                        test_context || SourceRepository::is_cfg_test(&module.attrs);
+                    if let Some((_, nested_items)) = &module.content {
+                        SourceRepository::collect_external_unit_test_modules(
+                            root,
+                            source_path,
+                            include_directory,
+                            &module_directory.join(module.ident.to_string()),
+                            nested_items,
+                            module_test_context,
+                            violations,
+                        )?;
+                    } else if module_test_context {
+                        SourceRepository::record_external_unit_test_module(
+                            root,
+                            source_path,
+                            module.ident.span().start().line,
+                            &SourceRepository::external_module_path(module_directory, module),
+                            violations,
+                        )?;
+                    }
+                }
+                Item::Macro(item_macro)
+                    if (test_context || SourceRepository::is_cfg_test(&item_macro.attrs))
+                        && item_macro.mac.path.is_ident("include") =>
+                {
+                    if let Some(path) =
+                        SourceRepository::included_source_path(include_directory, item_macro)
+                    {
+                        SourceRepository::record_external_unit_test_module(
+                            root,
+                            source_path,
+                            item_macro.mac.path.span().start().line,
+                            &path,
+                            violations,
+                        )?;
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+}
+
+impl SourceRepository<'_> {
+    fn record_external_unit_test_module(
+        root: &Path,
+        source_path: &Path,
+        line: usize,
+        test_module: &Path,
+        violations: &mut Vec<ExternalUnitTestModuleViolation>,
+    ) -> io::Result<()> {
+        if test_module.is_file() {
+            violations.push(ExternalUnitTestModuleViolation {
+                path: source_path.to_path_buf(),
+                line,
+                test_module: test_module
+                    .strip_prefix(root)
+                    .map_err(io::Error::other)?
+                    .to_path_buf(),
             });
         }
-    }
-    Ok(())
-}
-
-fn scan_external_unit_tests(
-    root: &Path,
-    directory: &Path,
-    violations: &mut Vec<ExternalUnitTestModuleViolation>,
-) -> io::Result<()> {
-    let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
-    entries.sort_by_key(fs::DirEntry::file_name);
-
-    for entry in entries {
-        let path = entry.path();
-        let relative_path = path.strip_prefix(root).map_err(io::Error::other)?;
-        let file_type = entry.file_type()?;
-
-        if file_type.is_dir() {
-            if !is_excluded_directory(relative_path) {
-                scan_external_unit_tests(root, &path, violations)?;
-            }
-            continue;
-        }
-        if !file_type.is_file()
-            || is_excluded_path(relative_path)
-            || path.extension().and_then(|value| value.to_str()) != Some("rs")
-            || !relative_path
-                .components()
-                .any(|component| component.as_os_str() == "src")
-        {
-            continue;
-        }
-
-        let source = fs::read_to_string(&path)?;
-        let syntax = syn::parse_file(&source).map_err(invalid_rust_source)?;
-        collect_external_unit_test_modules(
-            root,
-            relative_path,
-            path.parent().unwrap_or_else(|| Path::new("")),
-            &module_directory_for_source(&path),
-            &syntax.items,
-            false,
-            violations,
-        )?;
-    }
-    Ok(())
-}
-
-fn collect_external_unit_test_modules(
-    root: &Path,
-    source_path: &Path,
-    include_directory: &Path,
-    module_directory: &Path,
-    items: &[Item],
-    test_context: bool,
-    violations: &mut Vec<ExternalUnitTestModuleViolation>,
-) -> io::Result<()> {
-    for item in items {
-        match item {
-            Item::Mod(module) => {
-                let module_test_context = test_context || is_cfg_test(&module.attrs);
-                if let Some((_, nested_items)) = &module.content {
-                    collect_external_unit_test_modules(
-                        root,
-                        source_path,
-                        include_directory,
-                        &module_directory.join(module.ident.to_string()),
-                        nested_items,
-                        module_test_context,
-                        violations,
-                    )?;
-                } else if module_test_context {
-                    record_external_unit_test_module(
-                        root,
-                        source_path,
-                        module.ident.span().start().line,
-                        &external_module_path(module_directory, module),
-                        violations,
-                    )?;
-                }
-            }
-            Item::Macro(item_macro)
-                if (test_context || is_cfg_test(&item_macro.attrs))
-                    && item_macro.mac.path.is_ident("include") =>
-            {
-                if let Some(path) = included_source_path(include_directory, item_macro) {
-                    record_external_unit_test_module(
-                        root,
-                        source_path,
-                        item_macro.mac.path.span().start().line,
-                        &path,
-                        violations,
-                    )?;
-                }
-            }
-            _ => {}
-        }
-    }
-    Ok(())
-}
-
-fn record_external_unit_test_module(
-    root: &Path,
-    source_path: &Path,
-    line: usize,
-    test_module: &Path,
-    violations: &mut Vec<ExternalUnitTestModuleViolation>,
-) -> io::Result<()> {
-    if test_module.is_file() {
-        violations.push(ExternalUnitTestModuleViolation {
-            path: source_path.to_path_buf(),
-            line,
-            test_module: test_module
-                .strip_prefix(root)
-                .map_err(io::Error::other)?
-                .to_path_buf(),
-        });
-    }
-    Ok(())
-}
-
-fn included_source_path(include_directory: &Path, item_macro: &ItemMacro) -> Option<PathBuf> {
-    syn::parse2::<LitStr>(item_macro.mac.tokens.clone())
-        .ok()
-        .map(|path| include_directory.join(path.value()))
-}
-
-fn is_cfg_test(attributes: &[Attribute]) -> bool {
-    attributes
-        .iter()
-        .any(|attribute| attribute.path().is_ident("cfg") && meta_contains_test(&attribute.meta))
-}
-
-fn meta_contains_test(meta: &Meta) -> bool {
-    meta_contains_test_with_polarity(meta, false)
-}
-
-fn meta_contains_test_with_polarity(meta: &Meta, negated: bool) -> bool {
-    match meta {
-        Meta::Path(path) => path.is_ident("test") && !negated,
-        Meta::NameValue(_) => false,
-        Meta::List(list) => list
-            .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
-            .is_ok_and(|nested| {
-                let nested_negated = negated ^ list.path.is_ident("not");
-                nested
-                    .iter()
-                    .any(|meta| meta_contains_test_with_polarity(meta, nested_negated))
-            }),
+        Ok(())
     }
 }
 
-fn module_directory_for_source(source_path: &Path) -> PathBuf {
-    let parent = source_path.parent().unwrap_or_else(|| Path::new(""));
-    match source_path.file_stem().and_then(|stem| stem.to_str()) {
-        Some("lib" | "main" | "mod") | None => parent.to_path_buf(),
-        Some(stem) => parent.join(stem),
+impl SourceRepository<'_> {
+    fn included_source_path(include_directory: &Path, item_macro: &ItemMacro) -> Option<PathBuf> {
+        syn::parse2::<LitStr>(item_macro.mac.tokens.clone())
+            .ok()
+            .map(|path| include_directory.join(path.value()))
     }
 }
 
-fn external_module_path(module_directory: &Path, module: &ItemMod) -> PathBuf {
-    if let Some(path) = module.attrs.iter().find_map(path_attribute) {
-        return module_directory.join(path);
-    }
-
-    let module_name = module.ident.to_string();
-    let direct = module_directory.join(format!("{module_name}.rs"));
-    if direct.is_file() {
-        direct
-    } else {
-        module_directory.join(module_name).join("mod.rs")
-    }
-}
-
-fn path_attribute(attribute: &Attribute) -> Option<String> {
-    if !attribute.path().is_ident("path") {
-        return None;
-    }
-    let Meta::NameValue(name_value) = &attribute.meta else {
-        return None;
-    };
-    let Expr::Lit(expression) = &name_value.value else {
-        return None;
-    };
-    let Lit::Str(path) = &expression.lit else {
-        return None;
-    };
-    Some(path.value())
-}
-
-fn invalid_rust_source(error: syn::Error) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, error)
-}
-
-fn source_line_limit(path: &Path) -> Option<usize> {
-    let extension = path.extension()?.to_str()?;
-    SOURCE_EXTENSIONS
-        .contains(&extension)
-        .then_some(AUTHORED_SOURCE_LINE_LIMIT)
-}
-
-fn is_excluded_directory(path: &Path) -> bool {
-    if is_excluded_path(path) {
-        return true;
-    }
-    let names = path
-        .components()
-        .filter_map(|component| {
-            let Component::Normal(name) = component else {
-                return None;
-            };
-            name.to_str()
+impl SourceRepository<'_> {
+    fn is_cfg_test(attributes: &[Attribute]) -> bool {
+        attributes.iter().any(|attribute| {
+            attribute.path().is_ident("cfg")
+                && SourceRepository::meta_contains_test(&attribute.meta)
         })
-        .collect::<Vec<_>>();
-    let source_index = names.iter().position(|name| *name == "src");
-    names.iter().enumerate().any(|(index, name)| {
-        ALWAYS_EXCLUDED_DIRECTORY_NAMES.contains(name)
-            || (OUTPUT_DIRECTORY_NAMES.contains(name)
-                && source_index.is_none_or(|source_index| index < source_index))
-    })
+    }
 }
 
-fn is_excluded_path(path: &Path) -> bool {
-    let normalized = path.to_string_lossy().replace('\\', "/");
-    EXCLUDED_REPOSITORY_PREFIXES.iter().any(|prefix| {
-        normalized == *prefix
-            || normalized
-                .strip_prefix(prefix)
-                .is_some_and(|suffix| suffix.starts_with('/'))
-    })
+impl SourceRepository<'_> {
+    fn meta_contains_test(meta: &Meta) -> bool {
+        SourceRepository::meta_contains_test_with_polarity(meta, false)
+    }
+}
+
+impl SourceRepository<'_> {
+    fn meta_contains_test_with_polarity(meta: &Meta, negated: bool) -> bool {
+        match meta {
+            Meta::Path(path) => path.is_ident("test") && !negated,
+            Meta::NameValue(_) => false,
+            Meta::List(list) => list
+                .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+                .is_ok_and(|nested| {
+                    let nested_negated = negated ^ list.path.is_ident("not");
+                    nested.iter().any(|meta| {
+                        SourceRepository::meta_contains_test_with_polarity(meta, nested_negated)
+                    })
+                }),
+        }
+    }
+}
+
+impl SourceRepository<'_> {
+    fn module_directory_for_source(source_path: &Path) -> PathBuf {
+        let parent = source_path.parent().unwrap_or_else(|| Path::new(""));
+        match source_path.file_stem().and_then(|stem| stem.to_str()) {
+            Some("lib" | "main" | "mod") | None => parent.to_path_buf(),
+            Some(stem) => parent.join(stem),
+        }
+    }
+}
+
+impl SourceRepository<'_> {
+    fn external_module_path(module_directory: &Path, module: &ItemMod) -> PathBuf {
+        if let Some(path) = module
+            .attrs
+            .iter()
+            .find_map(SourceRepository::path_attribute)
+        {
+            return module_directory.join(path);
+        }
+
+        let module_name = module.ident.to_string();
+        let direct = module_directory.join(format!("{module_name}.rs"));
+        if direct.is_file() {
+            direct
+        } else {
+            module_directory.join(module_name).join("mod.rs")
+        }
+    }
+}
+
+impl SourceRepository<'_> {
+    fn path_attribute(attribute: &Attribute) -> Option<String> {
+        if !attribute.path().is_ident("path") {
+            return None;
+        }
+        let Meta::NameValue(name_value) = &attribute.meta else {
+            return None;
+        };
+        let Expr::Lit(expression) = &name_value.value else {
+            return None;
+        };
+        let Lit::Str(path) = &expression.lit else {
+            return None;
+        };
+        Some(path.value())
+    }
+}
+
+impl SourceRepository<'_> {
+    fn invalid_rust_source(error: syn::Error) -> io::Error {
+        io::Error::new(io::ErrorKind::InvalidData, error)
+    }
+}
+
+impl SourceRepository<'_> {
+    fn source_line_limit(path: &Path) -> Option<usize> {
+        let extension = path.extension()?.to_str()?;
+        SOURCE_EXTENSIONS
+            .contains(&extension)
+            .then_some(AUTHORED_SOURCE_LINE_LIMIT)
+    }
+}
+
+impl SourceRepository<'_> {
+    fn is_excluded_directory(path: &Path) -> bool {
+        if SourceRepository::is_excluded_path(path) {
+            return true;
+        }
+        let names = path
+            .components()
+            .filter_map(|component| {
+                let Component::Normal(name) = component else {
+                    return None;
+                };
+                name.to_str()
+            })
+            .collect::<Vec<_>>();
+        let source_index = names.iter().position(|name| *name == "src");
+        names.iter().enumerate().any(|(index, name)| {
+            ALWAYS_EXCLUDED_DIRECTORY_NAMES.contains(name)
+                || (OUTPUT_DIRECTORY_NAMES.contains(name)
+                    && source_index.is_none_or(|source_index| index < source_index))
+        })
+    }
+}
+
+impl SourceRepository<'_> {
+    fn is_excluded_path(path: &Path) -> bool {
+        let normalized = path.to_string_lossy().replace('\\', "/");
+        EXCLUDED_REPOSITORY_PREFIXES.iter().any(|prefix| {
+            normalized == *prefix
+                || normalized
+                    .strip_prefix(prefix)
+                    .is_some_and(|suffix| suffix.starts_with('/'))
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        AUTHORED_SOURCE_LINE_LIMIT, ExternalUnitTestModuleViolation, SourceSizeViolation,
-        external_rust_unit_test_modules, source_size_violations,
-    };
+    use super::{AUTHORED_SOURCE_LINE_LIMIT, ExternalUnitTestModuleViolation, SourceSizeViolation};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -382,7 +431,7 @@ mod tests {
         )?;
 
         assert_eq!(
-            source_size_violations(&root)?,
+            SourceRepository::new(&root).source_size_violations()?,
             vec![
                 SourceSizeViolation {
                     path: PathBuf::from("over-limit.html"),
@@ -436,7 +485,7 @@ mod tests {
         )?;
 
         assert_eq!(
-            source_size_violations(&root)?,
+            SourceRepository::new(&root).source_size_violations()?,
             vec![SourceSizeViolation {
                 path: PathBuf::from("src/coverage/owned.ts"),
                 lines: AUTHORED_SOURCE_LINE_LIMIT + 1,
@@ -465,8 +514,16 @@ mod tests {
             "#[test]\nfn generated() {}\n",
         )?;
 
-        assert!(source_size_violations(&root)?.is_empty());
-        assert!(external_rust_unit_test_modules(&root)?.is_empty());
+        assert!(
+            SourceRepository::new(&root)
+                .source_size_violations()?
+                .is_empty()
+        );
+        assert!(
+            SourceRepository::new(&root)
+                .external_rust_unit_test_modules()?
+                .is_empty()
+        );
         fs::remove_dir_all(root)?;
         Ok(())
     }
@@ -524,7 +581,7 @@ mod tests {
         )?;
 
         assert_eq!(
-            external_rust_unit_test_modules(&root)?,
+            SourceRepository::new(&root).external_rust_unit_test_modules()?,
             vec![
                 ExternalUnitTestModuleViolation {
                     path: PathBuf::from("crate/src/external.rs"),

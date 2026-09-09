@@ -2,15 +2,10 @@ use super::*;
 
 #[test]
 fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<()> {
-    let root = repository_root();
-    let manifest = read(
-        &root,
-        "nook-app/nook-web/nook-web-extension/src/manifest.ts",
-    );
-    let vault_target = read(
-        &root,
-        "nook-app/nook-web/nook-web-extension/src/lib/simple-vault-target.ts",
-    );
+    let root = RepositoryFixture::repository_root();
+    let manifest = (&root).read("nook-app/nook-web/nook-web-extension/src/manifest.ts");
+    let vault_target =
+        (&root).read("nook-app/nook-web/nook-web-extension/src/lib/simple-vault-target.ts");
     for required_contract in [
         "nook_vault_app_exclude_match_patterns(simpleVaultBaseUrl)",
         "exclude_matches: vaultAppExclusions",
@@ -29,10 +24,8 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
             && vault_target.contains("default_simple_vault_url"),
         "extension vault targeting must call companion WASM host policy"
     );
-    let vault_host_policy = read(
-        &root,
-        "nook-app/nook-platform/nook-companion-core/src/vault_host_policy.rs",
-    );
+    let vault_host_policy =
+        (&root).read("nook-app/nook-platform/nook-companion-core/src/vault_host_policy.rs");
     for production_boundary in [
         "https://simple.nokey.sh/",
         "https://simple.dev.nokey.sh/*",
@@ -46,7 +39,7 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
         );
     }
 
-    let release = read(&root, ".github/workflows/release.yml");
+    let release = (&root).read(".github/workflows/release.yml");
     for required in [
         "task ci:release:deploy-vaults",
         "task ci:release:attach-prod-domains",
@@ -61,7 +54,7 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
         !release.contains("gh release "),
         "release publication must not assume the self-hosted runner has the GitHub CLI"
     );
-    let deploy_script = read(&root, ".github/scripts/ci-release-deploy-vaults.sh");
+    let deploy_script = (&root).read(".github/scripts/ci-release-deploy-vaults.sh");
     for required in [
         "nook-vault-simple/dist",
         "nook-vault-sentinel/dist",
@@ -80,7 +73,7 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
             "release vault deployment must run directly in its Kubernetes Pod: {forbidden}"
         );
     }
-    let domains_script = read(&root, ".github/scripts/ci-release-attach-prod-domains.sh");
+    let domains_script = (&root).read(".github/scripts/ci-release-attach-prod-domains.sh");
     for required in [
         "simple.nokey.sh:nokey-simple",
         "sentinel.nokey.sh:nokey-sentinel",
@@ -96,15 +89,15 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
 
 #[test]
 fn development_and_release_wasm_build_modes_stay_separate() -> anyhow::Result<()> {
-    let root = repository_root();
-    let main = read(&root, ".github/workflows/main.yml");
+    let root = RepositoryFixture::repository_root();
+    let main = (&root).read(".github/workflows/main.yml");
     assert!(main.contains("WASM_BUILD_MODE=dev"));
     assert!(
         !main.contains("WASM_BUILD_MODE=prod") && !main.contains("WASM_BUILD_MODE: prod"),
         "main must not serialize production wasm optimization for development artifacts"
     );
 
-    let release = read(&root, ".github/workflows/release.yml");
+    let release = (&root).read(".github/workflows/release.yml");
     assert!(release.contains("WASM_BUILD_MODE: prod"));
     assert!(
         !release.contains("WASM_BUILD_MODE=dev"),
@@ -115,8 +108,8 @@ fn development_and_release_wasm_build_modes_stay_separate() -> anyhow::Result<()
 
 #[test]
 fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<()> {
-    let root = repository_root();
-    let main = read(&root, ".github/workflows/main.yml");
+    let root = RepositoryFixture::repository_root();
+    let main = (&root).read(".github/workflows/main.yml");
     for required in [
         "bash .github/scripts/ci-main-deploy-development.sh",
         "bash .github/scripts/ci-main-configure-dev-domains.sh",
@@ -137,7 +130,7 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
         "development artifacts must embed their stable isolated channel origins"
     );
 
-    let deploy_script = read(&root, ".github/scripts/ci-main-deploy-development.sh");
+    let deploy_script = (&root).read(".github/scripts/ci-main-deploy-development.sh");
     for required in [
         "bash \"$ROOT/.github/scripts/ci-pr-host-pages-deploy.sh\"",
         "deploy nokey-sh development nook-app/nook-web/nook-web-app/dist/site",
@@ -150,7 +143,7 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
         );
     }
 
-    let domains_script = read(&root, ".github/scripts/ci-main-configure-dev-domains.sh");
+    let domains_script = (&root).read(".github/scripts/ci-main-configure-dev-domains.sh");
     for required in [
         "site_pages_host=\"development.nokey-sh.pages.dev\"",
         "simple_pages_host=\"development.nokey-simple.pages.dev\"",
@@ -178,33 +171,31 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
         );
     }
 
-    let pull_request = read(&root, ".github/workflows/pr.yml");
+    let pull_request = (&root).read(".github/workflows/pr.yml");
     assert!(
         pull_request.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh"),
         "PR preview deploy must invoke the host Pages script"
     );
-    let pr_deploy_script = read(&root, ".github/scripts/ci-pr-deploy-and-verify-previews.sh");
+    let pr_deploy_script = (&root).read(".github/scripts/ci-pr-deploy-and-verify-previews.sh");
     assert!(
         pr_deploy_script.contains("EXTENSION_CACHE_BUST=\"$HEAD_SHA-$attempt\""),
         "PR extension verification must bypass mutable artifact caches on every convergence attempt"
     );
 
-    let release = read(&root, ".github/workflows/release.yml");
+    let release = (&root).read(".github/workflows/release.yml");
     assert!(
         release.contains("task ci:release:verify-extension"),
         "release extension verification must invoke the Taskfile entry"
     );
-    let release_extension = read(&root, ".github/scripts/ci-release-verify-extension.sh");
+    let release_extension = (&root).read(".github/scripts/ci-release-verify-extension.sh");
     assert!(
         release_extension.contains("EXTENSION_CACHE_BUST=\"$RELEASE_SHA-$attempt\"")
             && release_extension.contains("Waiting for exact-release extension artifacts"),
         "release extension verification must retry cache-busted exact-release artifacts"
     );
 
-    let verifier = read(
-        &root,
-        "nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh",
-    );
+    let verifier =
+        (&root).read("nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh");
     for required in [
         "cache_busted_url()",
         "fetch_from_selected_origin \"$(cache_busted_url \"$EXTENSION_METADATA_URL\")\"",
@@ -218,13 +209,13 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
         );
     }
 
-    let docker_tasks = read(&root, "nook-app/nook-web/docker/Taskfile.yml");
+    let docker_tasks = (&root).read("nook-app/nook-web/docker/Taskfile.yml");
     assert!(
         docker_tasks.contains("-e CF_PAGES_DIST_DIR"),
         "the selected Cloudflare artifact directory must reach the sealed deploy container"
     );
 
-    let ci_tasks = read(&root, "nook-app/ci/Taskfile.yml");
+    let ci_tasks = (&root).read("nook-app/ci/Taskfile.yml");
     assert!(
         ci_tasks.contains("*) deploy_dir=\"{{.REPO_ROOT}}/$deploy_dir\" ;;"),
         "repo-relative Cloudflare artifact directories must resolve from the repository root"

@@ -4,20 +4,41 @@ use std::{env, fs, path::PathBuf};
 
 use anyhow::Context;
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
-    let setup = read(".github/actions/nook-docker-setup/action.yml");
+    let setup =
+        RepositoryFixture::repository_root().read(".github/actions/nook-docker-setup/action.yml");
     assert!(
         setup.contains("\"${{ github.action_path }}/../../scripts/cache-telemetry.cjs\" start")
     );
@@ -27,7 +48,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX="));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED="));
     assert!(setup.contains("GHA_CACHE_SEED_SCOPE_SUFFIX="));
-    let fingerprint = read(".github/scripts/rust-deps-cache-fingerprint.sh");
+    let fingerprint =
+        RepositoryFixture::repository_root().read(".github/scripts/rust-deps-cache-fingerprint.sh");
     for fingerprint_input in [
         ".github/scripts/rust-deps-cache-fingerprint.sh",
         "nook-app/nook-platform/Cargo.toml",
@@ -97,11 +119,15 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
 
     assert_release_cache_fingerprint_contract()?;
 
-    let app_bake = read("nook-app/docker-bake.hcl");
-    let rust_bake = read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let web_image_bake = read("nook-app/nook-web/docker/web.docker-bake.hcl");
-    let web_toolchain_bake = read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
-    let web_app_bake = read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
+    let app_bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
+    let rust_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let web_image_bake =
+        RepositoryFixture::repository_root().read("nook-app/nook-web/docker/web.docker-bake.hcl");
+    let web_toolchain_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+    let web_app_bake =
+        RepositoryFixture::repository_root().read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
     let bake =
         format!("{app_bake}\n{rust_bake}\n{web_image_bake}\n{web_toolchain_bake}\n{web_app_bake}");
     assert!(app_bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
@@ -145,16 +171,19 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             && !wasm_source_cache.contains("nook-rust-deps-v4"),
         "WASM source cache-from must not import shorter rust-base or native rust-deps parents"
     );
-    let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml");
-    let platform_tasks = read("nook-app/nook-platform/Taskfile.yml");
-    let wasm_cache_verifier = read(".github/scripts/verify-wasm-gha-cache.sh");
+    let docker_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/docker/Taskfile.yml");
+    let platform_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml");
+    let wasm_cache_verifier =
+        RepositoryFixture::repository_root().read(".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         wasm_cache_verifier.contains("GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE")
             && wasm_cache_verifier.contains("nook/buildcache/${cache_scope}:buildcache")
             && !docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
         "dedicated Main WASM cache publication must require GHA_RUST_WASM_DEPS_SCOPE while the normal ARC publisher never invokes the verifier"
     );
-    let root_tasks = read("Taskfile.yml");
+    let root_tasks = RepositoryFixture::repository_root().read("Taskfile.yml");
     assert!(
         root_tasks.contains("GHA_CACHE_ENABLED:")
             && root_tasks.contains("NOOK_REGISTRY_CACHE:-1")
@@ -178,7 +207,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             && docker_tasks.contains("task: registry-cache:publish:wasm"),
         "Task Bake must enable clean git-commit publication plus dirty-safe formatter dependency publication"
     );
-    let arc_sccache_health = read("nook-app/nook-platform/docker/sccache-health.Dockerfile");
+    let arc_sccache_health = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/sccache-health.Dockerfile");
     assert!(
         platform_tasks.contains("${GITHUB_ACTIONS:-}")
             && platform_tasks.contains("${NOOK_ARC_RUNNER:-}")
@@ -190,9 +220,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             && arc_sccache_health.contains("type=secret,id=sccache_s3_secret_key"),
         "ARC sccache preflight must fail closed through private BuildKit without a Docker runtime"
     );
-    let git_scope = read(".github/scripts/git-cache-scope.sh");
-    let publish_guard = read(".github/scripts/git-cache-scope-publish-guard.sh");
-    let deps_publish_guard = read(".github/scripts/rust-deps-cache-publish-guard.sh");
+    let git_scope = RepositoryFixture::repository_root().read(".github/scripts/git-cache-scope.sh");
+    let publish_guard = RepositoryFixture::repository_root()
+        .read(".github/scripts/git-cache-scope-publish-guard.sh");
+    let deps_publish_guard = RepositoryFixture::repository_root()
+        .read(".github/scripts/rust-deps-cache-publish-guard.sh");
     assert!(
         deps_publish_guard.contains("git -C \"$repo_root\" diff --quiet HEAD")
             && deps_publish_guard.contains("cache recipe is dirty")
@@ -314,7 +346,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "WASM deps must use the exact v5 scope alone when present and the fingerprinted Main scope only in cold fallback"
     );
 
-    let wasm_bake = read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    let wasm_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
     let focused_artifacts = wasm_bake
         .split_once("target \"focused-web-artifacts\"")
         .context("focused WASM artifact target must exist")?
@@ -333,7 +366,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         .0;
     assert!(focused_web.contains("cache-to   = web_cache_to"));
 
-    let core_bake = read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let core_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/nook-core/docker-bake.hcl");
     let wasm_dependencies = core_bake
         .split_once("target \"builder-wasm-deps\"")
         .context("core bake file must define the WASM dependency target")?
@@ -355,7 +389,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
 }
 
 fn assert_release_cache_fingerprint_contract() -> anyhow::Result<()> {
-    let release = read(".github/workflows/release.yml");
+    let release = RepositoryFixture::repository_root().read(".github/workflows/release.yml");
     let release_source = release
         .find("- name: Checkout release source")
         .context("release workflow must check out release source")?;
@@ -373,7 +407,8 @@ fn assert_release_cache_fingerprint_contract() -> anyhow::Result<()> {
 
 #[test]
 fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Result<()> {
-    let reporter = read("nook-app/nook-platform/docker/sccache-report.sh");
+    let reporter = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/sccache-report.sh");
     for required in [
         "--show-stats --stats-format=json",
         "NOOK_SCCACHE_STATS",
@@ -402,21 +437,25 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
         );
     }
 
-    let rust_base = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let rust_base = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(rust_base.contains("sccache-report.sh /usr/local/bin/nook-sccache-report"));
-    let product = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let product = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(
         product.contains("nook-sccache-report"),
         "product.Dockerfile must report compiler cache outcomes"
     );
     assert!(
-        read("nook-app/nook-platform/docker/rust/product.Dockerfile")
+        RepositoryFixture::repository_root()
+            .read("nook-app/nook-platform/docker/rust/product.Dockerfile")
             .matches("nook-sccache-report")
             .count()
             >= 12
     );
     assert!(
-        read("nook-app/nook-platform/docker/rust/product.Dockerfile")
+        RepositoryFixture::repository_root()
+            .read("nook-app/nook-platform/docker/rust/product.Dockerfile")
             .matches("nook-sccache-report")
             .count()
             >= 3
@@ -424,7 +463,8 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
 
     assert_delivery_cache_scope_contract()?;
 
-    let telemetry_action = read(".github/actions/nook-cache-telemetry/action.yml");
+    let telemetry_action = RepositoryFixture::repository_root()
+        .read(".github/actions/nook-cache-telemetry/action.yml");
     for required in [
         "cache-telemetry.cjs collect",
         "cache-telemetry-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}",
@@ -436,7 +476,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
         );
     }
 
-    let pr = read(".github/workflows/pr.yml");
+    let pr = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
     let buildkit_jobs = pr
         .matches("uses: ./.github/actions/nook-docker-setup")
         .count();
@@ -446,10 +486,11 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
             == buildkit_jobs,
         "every Buildx-backed PR job must preserve cache telemetry"
     );
-    let main = read(".github/workflows/main.yml");
+    let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml");
     assert!(main.contains("uses: ./.github/actions/nook-cache-telemetry"));
 
-    let main_stats = read(".github/workflows/main-build-stats.yml");
+    let main_stats =
+        RepositoryFixture::repository_root().read(".github/workflows/main-build-stats.yml");
     for required in [
         "Download completed Main cache telemetry",
         "cache-telemetry-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-*",
@@ -487,7 +528,7 @@ fn rust_build_targets_inherit_the_sccache_configuration() -> anyhow::Result<()> 
             .as_slice(),
         ),
     ] {
-        let bake = read(path);
+        let bake = RepositoryFixture::repository_root().read(path);
         for target in targets {
             let start = format!("target \"{target}\" {{");
             let body = bake

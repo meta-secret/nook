@@ -6,11 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 
 import type { CiAgentConfig } from "../main/config.js";
-import {
-  loadPrompt,
-  resolveAgentTask,
-  resolveMajorChangeAuthorization,
-} from "../main/prompt.js";
+import { AgentPrompt, AgentPromptEnvironment } from "../main/prompt.js";
 
 const ENV_KEYS = [
   "AGENT_PROMPT",
@@ -28,26 +24,41 @@ afterEach(() => {
 
 describe("resolveMajorChangeAuthorization", () => {
   it("defaults to not authorized", () => {
-    assert.equal(resolveMajorChangeAuthorization(), "not-authorized");
+    assert.equal(
+      new AgentPromptEnvironment(process.env).resolveMajorChangeAuthorization(),
+      "not-authorized",
+    );
   });
 
   it("accepts only the exact trusted workflow value", () => {
     process.env.MAJOR_CHANGE_AUTHORIZED = "true";
-    assert.equal(resolveMajorChangeAuthorization(), "authorized");
+    assert.equal(
+      new AgentPromptEnvironment(process.env).resolveMajorChangeAuthorization(),
+      "authorized",
+    );
 
     process.env.MAJOR_CHANGE_AUTHORIZED = "TRUE";
-    assert.equal(resolveMajorChangeAuthorization(), "not-authorized");
+    assert.equal(
+      new AgentPromptEnvironment(process.env).resolveMajorChangeAuthorization(),
+      "not-authorized",
+    );
   });
 });
 
 describe("resolveAgentTask", () => {
   it("prefers AGENT_PROMPT when set", () => {
     process.env.AGENT_PROMPT = "  Ship the feature  ";
-    assert.equal(resolveAgentTask(), "Ship the feature");
+    assert.equal(
+      new AgentPromptEnvironment(process.env).resolveAgentTask(),
+      "Ship the feature",
+    );
   });
 
   it("throws when the explicit prompt is missing", () => {
-    assert.throws(() => resolveAgentTask(), /AGENT_PROMPT is required/);
+    assert.throws(
+      () => new AgentPromptEnvironment(process.env).resolveAgentTask(),
+      /AGENT_PROMPT is required/,
+    );
   });
 });
 
@@ -83,7 +94,10 @@ describe("loadPrompt", () => {
     };
     process.env.AGENT_PROMPT = "bounded task";
     try {
-      assert.equal(await loadPrompt(config), "Trusted: bounded task");
+      assert.equal(
+        await new AgentPrompt(config).load(),
+        "Trusted: bounded task",
+      );
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
@@ -126,9 +140,12 @@ describe("loadPrompt", () => {
       .update(plan)
       .digest("hex");
     try {
-      assert.equal(await loadPrompt(config), `Trusted plan:\n${plan}`);
+      assert.equal(
+        await new AgentPrompt(config).load(),
+        `Trusted plan:\n${plan}`,
+      );
       await writeFile(join(repoRoot, ".nook-workbench-plan.md"), "changed");
-      await assert.rejects(loadPrompt(config), /plan hash changed/);
+      await assert.rejects(new AgentPrompt(config).load(), /plan hash changed/);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
@@ -157,9 +174,12 @@ describe("loadPrompt", () => {
       modelId: "test-model",
     };
     try {
-      assert.equal(await loadPrompt(config), "Report:\nserde 1.0 -> 1.1\n");
+      assert.equal(
+        await new AgentPrompt(config).load(),
+        "Report:\nserde 1.0 -> 1.1\n",
+      );
       process.env.RUST_DEPS_OUTDATED_REPORT = join(parent, "secrets.env");
-      await assert.rejects(loadPrompt(config), /path is invalid/);
+      await assert.rejects(new AgentPrompt(config).load(), /path is invalid/);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

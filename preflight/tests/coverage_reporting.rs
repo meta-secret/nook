@@ -1,8 +1,8 @@
 #![allow(clippy::unnecessary_wraps)]
 
 use nook_preflight::coverage::{
-    CoverageArtifactValidation, classify_coverage_inputs, coverage_report,
-    validate_coverage_artifact,
+    CoverageArtifact, CoverageArtifactValidation, CoverageInputChanges, CoverageReport,
+    CoverageReportComparison,
 };
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,7 +14,7 @@ static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[test]
 fn classifies_source_and_build_only_coverage_inputs() -> anyhow::Result<()> {
-    let source = classify_coverage_inputs([
+    let source = CoverageInputChanges::classify_coverage_inputs([
         "README.md",
         "nook-app/nook-platform/nook-core/src/lib.rs",
         "nook-app/nook-platform/nook-authenticator-domain/src/lib.rs",
@@ -26,21 +26,24 @@ fn classifies_source_and_build_only_coverage_inputs() -> anyhow::Result<()> {
     assert!(source.coverage_inputs_changed);
     assert!(source.base_coverage_required);
 
-    let portable_foundations = classify_coverage_inputs([
+    let portable_foundations = CoverageInputChanges::classify_coverage_inputs([
         "nook-app/nook-platform/nook-authenticator-domain/src/lib.rs",
         "nook-app/nook-platform/nook-companion-core/src/lib.rs",
     ]);
     assert!(portable_foundations.coverage_inputs_changed);
     assert!(portable_foundations.base_coverage_required);
 
-    let build_only = classify_coverage_inputs([
+    let build_only = CoverageInputChanges::classify_coverage_inputs([
         "nook-app/nook-platform/docker/rust/product.Dockerfile",
         "nook-app/nook-platform/nook-core/docker-bake.hcl",
     ]);
     assert!(build_only.coverage_inputs_changed);
     assert!(!build_only.base_coverage_required);
 
-    let unrelated = classify_coverage_inputs(["README.md", "nook-app/nook-web/package.json"]);
+    let unrelated = CoverageInputChanges::classify_coverage_inputs([
+        "README.md",
+        "nook-app/nook-web/package.json",
+    ]);
     assert!(!unrelated.coverage_inputs_changed);
     assert!(!unrelated.base_coverage_required);
     Ok(())
@@ -56,20 +59,21 @@ fn validates_commit_keyed_coverage_artifacts() -> anyhow::Result<()> {
     )?;
 
     assert_eq!(
-        validate_coverage_artifact(&root, "abc123"),
-        CoverageArtifactValidation {
-            valid: true,
-            reason: None,
+        CoverageArtifact {
+            directory: &root,
+            expected_commit: "abc123"
         }
+        .validate(),
+        CoverageArtifactValidation::Valid
     );
 
-    let wrong_commit = validate_coverage_artifact(&root, "def456");
-    assert!(!wrong_commit.valid);
+    let wrong_commit = CoverageArtifact {
+        directory: &root,
+        expected_commit: "def456",
+    }
+    .validate();
     assert!(
-        wrong_commit
-            .reason
-            .as_deref()
-            .is_some_and(|reason| reason.contains("does not match def456"))
+        matches!(wrong_commit, CoverageArtifactValidation::Invalid { reason } if reason.contains("does not match def456"))
     );
     fs::remove_dir_all(root)?;
     Ok(())
@@ -83,7 +87,10 @@ fn reports_coverage_from_structured_json() -> anyhow::Result<()> {
     write_coverage_directory(&current, 92.625, 90.0)?;
     write_coverage_directory(&base, 91.125, 90.0)?;
 
-    let report = coverage_report(&current, &base)?;
+    let report = CoverageReport::coverage_report(CoverageReportComparison {
+        current_directory: &current,
+        base_directory: &base,
+    })?;
 
     assert_close(report.current, 92.625);
     assert_close(report.base, 91.125);
@@ -116,9 +123,12 @@ fn rejects_human_summary_text_in_place_of_llvm_cov_json() -> anyhow::Result<()> 
     write_coverage_directory(&base, 91.0, 90.0)?;
     fs::write(current.join("summary.json"), "TOTAL 123 120 92.00%\n")?;
 
-    let error = coverage_report(&current, &base)
-        .err()
-        .ok_or_else(|| anyhow::anyhow!("coverage reporting test should reject invalid input"))?;
+    let error = CoverageReport::coverage_report(CoverageReportComparison {
+        current_directory: &current,
+        base_directory: &base,
+    })
+    .err()
+    .ok_or_else(|| anyhow::anyhow!("coverage reporting test should reject invalid input"))?;
 
     assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     assert!(error.to_string().contains("summary.json"));

@@ -1,3 +1,6 @@
+pub struct RustBoundaryState<'scan> {
+    pub root: &'scan Path,
+}
 use std::ffi::OsStr;
 use std::fs;
 use std::io;
@@ -24,257 +27,322 @@ use crate::Violation;
 /// # Errors
 ///
 /// Returns an error when the Rust source tree cannot be read or parsed.
-pub fn rust_tsify_implicit_absence_overrides(root: &Path) -> io::Result<Vec<Violation>> {
-    let source_root = root.join("nook-app");
-    let mut files = Vec::new();
-    collect_rust_files(&source_root, &mut files)?;
+impl RustBoundaryState<'_> {
+    pub fn rust_tsify_implicit_absence_overrides(self) -> io::Result<Vec<Violation>> {
+        let Self { root } = self;
+        let source_root = root.join("nook-app");
+        let mut files = Vec::new();
+        RustBoundaryState::collect_rust_files(&source_root, &mut files)?;
 
-    let mut violations = Vec::new();
-    for path in files {
-        let source = fs::read_to_string(&path)?;
-        let syntax = syn::parse_file(&source).map_err(io::Error::other)?;
-        let relative_path = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
-        collect_item_violations(&syntax.items, &relative_path, &mut violations);
-    }
-
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    violations.dedup();
-    Ok(violations)
-}
-
-fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
-    if !directory.exists() {
-        return Ok(());
-    }
-
-    for entry in fs::read_dir(directory)? {
-        let path = entry?.path();
-        if path.is_dir() {
-            if !path
-                .file_name()
-                .and_then(OsStr::to_str)
-                .is_some_and(|name| matches!(name, "target" | "node_modules"))
-            {
-                collect_rust_files(&path, files)?;
-            }
-        } else if path.extension().is_some_and(|extension| extension == "rs") {
-            files.push(path);
+        let mut violations = Vec::new();
+        for path in files {
+            let source = fs::read_to_string(&path)?;
+            let syntax = syn::parse_file(&source).map_err(io::Error::other)?;
+            let relative_path = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
+            RustBoundaryState::collect_item_violations(
+                &syntax.items,
+                &relative_path,
+                &mut violations,
+            );
         }
+
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        violations.dedup();
+        Ok(violations)
     }
-    Ok(())
 }
 
-fn collect_item_violations(items: &[syn::Item], path: &Path, violations: &mut Vec<Violation>) {
-    for item in items {
-        match item {
-            syn::Item::Const(item) => collect_attribute_violations(&item.attrs, path, violations),
-            syn::Item::Enum(item) => {
-                collect_attribute_violations(&item.attrs, path, violations);
-                let exported_by_tsify = derives_tsify(&item.attrs);
-                for variant in &item.variants {
-                    collect_attribute_violations(&variant.attrs, path, violations);
-                    for field in &variant.fields {
-                        collect_attribute_violations(&field.attrs, path, violations);
-                        if exported_by_tsify && type_contains_option(&field.ty) {
+impl RustBoundaryState<'_> {
+    fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
+        if !directory.exists() {
+            return Ok(());
+        }
+
+        for entry in fs::read_dir(directory)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                if !path
+                    .file_name()
+                    .and_then(OsStr::to_str)
+                    .is_some_and(|name| matches!(name, "target" | "node_modules"))
+                {
+                    RustBoundaryState::collect_rust_files(&path, files)?;
+                }
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                files.push(path);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl RustBoundaryState<'_> {
+    fn collect_item_violations(items: &[syn::Item], path: &Path, violations: &mut Vec<Violation>) {
+        for item in items {
+            match item {
+                syn::Item::Const(item) => {
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations)
+                }
+                syn::Item::Enum(item) => {
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
+                    let exported_by_tsify = RustBoundaryState::derives_tsify(&item.attrs);
+                    for variant in &item.variants {
+                        RustBoundaryState::collect_attribute_violations(
+                            &variant.attrs,
+                            path,
+                            violations,
+                        );
+                        for field in &variant.fields {
+                            RustBoundaryState::collect_attribute_violations(
+                                &field.attrs,
+                                path,
+                                violations,
+                            );
+                            if exported_by_tsify
+                                && RustBoundaryState::type_contains_option(&field.ty)
+                            {
+                                violations.push(Violation {
+                                    path: path.to_path_buf(),
+                                    line: RustBoundaryState::span_line(field.ty.span()),
+                                });
+                            }
+                        }
+                    }
+                }
+                syn::Item::Fn(item) => {
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
+                    if RustBoundaryState::has_wasm_bindgen(&item.attrs) {
+                        RustBoundaryState::collect_function_signature_violations(
+                            item, path, violations,
+                        );
+                    }
+                }
+                syn::Item::Impl(item) => {
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
+                    let exported_by_wasm_bindgen = RustBoundaryState::has_wasm_bindgen(&item.attrs);
+                    for impl_item in &item.items {
+                        if let syn::ImplItem::Fn(function) = impl_item {
+                            RustBoundaryState::collect_attribute_violations(
+                                &function.attrs,
+                                path,
+                                violations,
+                            );
+                            if (exported_by_wasm_bindgen
+                                || RustBoundaryState::has_wasm_bindgen(&function.attrs))
+                                && matches!(function.vis, Visibility::Public(_))
+                            {
+                                RustBoundaryState::collect_method_signature_violations(
+                                    function, path, violations,
+                                );
+                            }
+                        }
+                    }
+                }
+                syn::Item::Mod(item) => {
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
+                    if let Some((_, nested)) = &item.content {
+                        RustBoundaryState::collect_item_violations(nested, path, violations);
+                    }
+                }
+                syn::Item::Static(item) => {
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations)
+                }
+                syn::Item::Struct(item) => {
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
+                    let exported_by_tsify = RustBoundaryState::derives_tsify(&item.attrs);
+                    for field in &item.fields {
+                        RustBoundaryState::collect_attribute_violations(
+                            &field.attrs,
+                            path,
+                            violations,
+                        );
+                        if exported_by_tsify && RustBoundaryState::type_contains_option(&field.ty) {
                             violations.push(Violation {
                                 path: path.to_path_buf(),
-                                line: span_line(field.ty.span()),
+                                line: RustBoundaryState::span_line(field.ty.span()),
                             });
                         }
                     }
                 }
-            }
-            syn::Item::Fn(item) => {
-                collect_attribute_violations(&item.attrs, path, violations);
-                if has_wasm_bindgen(&item.attrs) {
-                    collect_function_signature_violations(item, path, violations);
-                }
-            }
-            syn::Item::Impl(item) => {
-                collect_attribute_violations(&item.attrs, path, violations);
-                let exported_by_wasm_bindgen = has_wasm_bindgen(&item.attrs);
-                for impl_item in &item.items {
-                    if let syn::ImplItem::Fn(function) = impl_item {
-                        collect_attribute_violations(&function.attrs, path, violations);
-                        if (exported_by_wasm_bindgen || has_wasm_bindgen(&function.attrs))
-                            && matches!(function.vis, Visibility::Public(_))
-                        {
-                            collect_method_signature_violations(function, path, violations);
+                syn::Item::Trait(item) => {
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
+                    for trait_item in &item.items {
+                        if let syn::TraitItem::Fn(function) = trait_item {
+                            RustBoundaryState::collect_attribute_violations(
+                                &function.attrs,
+                                path,
+                                violations,
+                            );
                         }
                     }
                 }
-            }
-            syn::Item::Mod(item) => {
-                collect_attribute_violations(&item.attrs, path, violations);
-                if let Some((_, nested)) = &item.content {
-                    collect_item_violations(nested, path, violations);
+                syn::Item::Type(item) => {
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations)
                 }
+                _ => {}
             }
-            syn::Item::Static(item) => collect_attribute_violations(&item.attrs, path, violations),
-            syn::Item::Struct(item) => {
-                collect_attribute_violations(&item.attrs, path, violations);
-                let exported_by_tsify = derives_tsify(&item.attrs);
-                for field in &item.fields {
-                    collect_attribute_violations(&field.attrs, path, violations);
-                    if exported_by_tsify && type_contains_option(&field.ty) {
-                        violations.push(Violation {
-                            path: path.to_path_buf(),
-                            line: span_line(field.ty.span()),
-                        });
-                    }
-                }
-            }
-            syn::Item::Trait(item) => {
-                collect_attribute_violations(&item.attrs, path, violations);
-                for trait_item in &item.items {
-                    if let syn::TraitItem::Fn(function) = trait_item {
-                        collect_attribute_violations(&function.attrs, path, violations);
-                    }
-                }
-            }
-            syn::Item::Type(item) => collect_attribute_violations(&item.attrs, path, violations),
-            _ => {}
         }
     }
 }
 
-fn collect_function_signature_violations(
-    function: &ItemFn,
-    path: &Path,
-    violations: &mut Vec<Violation>,
-) {
-    collect_signature_violations(&function.sig, path, violations);
+impl RustBoundaryState<'_> {
+    fn collect_function_signature_violations(
+        function: &ItemFn,
+        path: &Path,
+        violations: &mut Vec<Violation>,
+    ) {
+        RustBoundaryState::collect_signature_violations(&function.sig, path, violations);
+    }
 }
 
-fn collect_method_signature_violations(
-    function: &ImplItemFn,
-    path: &Path,
-    violations: &mut Vec<Violation>,
-) {
-    collect_signature_violations(&function.sig, path, violations);
+impl RustBoundaryState<'_> {
+    fn collect_method_signature_violations(
+        function: &ImplItemFn,
+        path: &Path,
+        violations: &mut Vec<Violation>,
+    ) {
+        RustBoundaryState::collect_signature_violations(&function.sig, path, violations);
+    }
 }
 
-fn collect_signature_violations(
-    signature: &Signature,
-    path: &Path,
-    violations: &mut Vec<Violation>,
-) {
-    for input in &signature.inputs {
-        if let FnArg::Typed(argument) = input
-            && type_contains_option(&argument.ty)
+impl RustBoundaryState<'_> {
+    fn collect_signature_violations(
+        signature: &Signature,
+        path: &Path,
+        violations: &mut Vec<Violation>,
+    ) {
+        for input in &signature.inputs {
+            if let FnArg::Typed(argument) = input
+                && RustBoundaryState::type_contains_option(&argument.ty)
+            {
+                violations.push(Violation {
+                    path: path.to_path_buf(),
+                    line: RustBoundaryState::span_line(argument.ty.span()),
+                });
+            }
+        }
+        if let ReturnType::Type(_, output) = &signature.output
+            && RustBoundaryState::type_contains_option(output)
         {
             violations.push(Violation {
                 path: path.to_path_buf(),
-                line: span_line(argument.ty.span()),
-            });
-        }
-    }
-    if let ReturnType::Type(_, output) = &signature.output
-        && type_contains_option(output)
-    {
-        violations.push(Violation {
-            path: path.to_path_buf(),
-            line: span_line(output.span()),
-        });
-    }
-}
-
-fn derives_tsify(attributes: &[Attribute]) -> bool {
-    attributes.iter().any(|attribute| {
-        if !attribute.path().is_ident("derive") {
-            return false;
-        }
-        let mut derives_tsify = false;
-        let parsed = attribute.parse_nested_meta(|meta| {
-            if meta
-                .path
-                .segments
-                .last()
-                .is_some_and(|segment| segment.ident == "Tsify")
-            {
-                derives_tsify = true;
-            }
-            Ok(())
-        });
-        parsed.is_ok() && derives_tsify
-    })
-}
-
-fn has_wasm_bindgen(attributes: &[Attribute]) -> bool {
-    attributes
-        .iter()
-        .any(|attribute| attribute.path().is_ident("wasm_bindgen"))
-}
-
-fn type_contains_option(value: &Type) -> bool {
-    struct OptionVisitor {
-        found: bool,
-    }
-
-    impl<'ast> Visit<'ast> for OptionVisitor {
-        fn visit_type_path(&mut self, path: &'ast syn::TypePath) {
-            if path
-                .path
-                .segments
-                .iter()
-                .any(|segment| segment.ident == "Option")
-            {
-                self.found = true;
-                return;
-            }
-            visit::visit_type_path(self, path);
-        }
-    }
-
-    let mut visitor = OptionVisitor { found: false };
-    visitor.visit_type(value);
-    visitor.found
-}
-
-fn collect_attribute_violations(
-    attributes: &[Attribute],
-    path: &Path,
-    violations: &mut Vec<Violation>,
-) {
-    for attribute in attributes {
-        if tsify_type_override(attribute)
-            .as_deref()
-            .is_some_and(contains_absence_sentinel)
-        {
-            violations.push(Violation {
-                path: path.to_path_buf(),
-                line: span_line(attribute.span()),
+                line: RustBoundaryState::span_line(output.span()),
             });
         }
     }
 }
 
-fn tsify_type_override(attribute: &Attribute) -> Option<String> {
-    if !attribute.path().is_ident("tsify") {
-        return None;
-    }
-    let mut type_override = None;
-    attribute
-        .parse_nested_meta(|meta| {
-            if meta.path.is_ident("type") {
-                type_override = Some(meta.value()?.parse::<LitStr>()?.value());
-            } else if meta.input.peek(Token![=]) {
-                let _ = meta.value()?.parse::<Expr>()?;
+impl RustBoundaryState<'_> {
+    fn derives_tsify(attributes: &[Attribute]) -> bool {
+        attributes.iter().any(|attribute| {
+            if !attribute.path().is_ident("derive") {
+                return false;
             }
-            Ok(())
+            let mut derives_tsify = false;
+            let parsed = attribute.parse_nested_meta(|meta| {
+                if meta
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "Tsify")
+                {
+                    derives_tsify = true;
+                }
+                Ok(())
+            });
+            parsed.is_ok() && derives_tsify
         })
-        .ok()?;
-    type_override
+    }
 }
 
-fn contains_absence_sentinel(value: &str) -> bool {
-    value
-        .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
-        .any(|token| matches!(token, "undefined" | "null" | "void"))
+impl RustBoundaryState<'_> {
+    fn has_wasm_bindgen(attributes: &[Attribute]) -> bool {
+        attributes
+            .iter()
+            .any(|attribute| attribute.path().is_ident("wasm_bindgen"))
+    }
 }
 
-fn span_line(span: Span) -> usize {
-    span.start().line
+impl RustBoundaryState<'_> {
+    fn type_contains_option(value: &Type) -> bool {
+        struct OptionVisitor {
+            found: bool,
+        }
+
+        impl<'ast> Visit<'ast> for OptionVisitor {
+            fn visit_type_path(&mut self, path: &'ast syn::TypePath) {
+                if path
+                    .path
+                    .segments
+                    .iter()
+                    .any(|segment| segment.ident == "Option")
+                {
+                    self.found = true;
+                    return;
+                }
+                visit::visit_type_path(self, path);
+            }
+        }
+
+        let mut visitor = OptionVisitor { found: false };
+        visitor.visit_type(value);
+        visitor.found
+    }
+}
+
+impl RustBoundaryState<'_> {
+    fn collect_attribute_violations(
+        attributes: &[Attribute],
+        path: &Path,
+        violations: &mut Vec<Violation>,
+    ) {
+        for attribute in attributes {
+            if RustBoundaryState::tsify_type_override(attribute)
+                .as_deref()
+                .is_some_and(RustBoundaryState::contains_absence_sentinel)
+            {
+                violations.push(Violation {
+                    path: path.to_path_buf(),
+                    line: RustBoundaryState::span_line(attribute.span()),
+                });
+            }
+        }
+    }
+}
+
+impl RustBoundaryState<'_> {
+    fn tsify_type_override(attribute: &Attribute) -> Option<String> {
+        if !attribute.path().is_ident("tsify") {
+            return None;
+        }
+        let mut type_override = None;
+        attribute
+            .parse_nested_meta(|meta| {
+                if meta.path.is_ident("type") {
+                    type_override = Some(meta.value()?.parse::<LitStr>()?.value());
+                } else if meta.input.peek(Token![=]) {
+                    let _ = meta.value()?.parse::<Expr>()?;
+                }
+                Ok(())
+            })
+            .ok()?;
+        type_override
+    }
+}
+
+impl RustBoundaryState<'_> {
+    fn contains_absence_sentinel(value: &str) -> bool {
+        value
+            .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+            .any(|token| matches!(token, "undefined" | "null" | "void"))
+    }
+}
+
+impl RustBoundaryState<'_> {
+    fn span_line(span: Span) -> usize {
+        span.start().line
+    }
 }
 
 #[cfg(test)]
@@ -324,7 +392,8 @@ value
 "#,
         )?;
 
-        let violations = rust_tsify_implicit_absence_overrides(&root)?;
+        let violations =
+            (RustBoundaryState { root: &root }).rust_tsify_implicit_absence_overrides()?;
         assert_eq!(
             violations,
             vec![

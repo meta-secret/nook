@@ -2,7 +2,7 @@ use super::*;
 
 impl Neo4jTaskStore {
     pub async fn connect(uri: &str, username: &str, password: &str) -> crate::HiveResult<Self> {
-        install_rustls_crypto_provider()?;
+        HIVE_TLS_PROVIDER.install()?;
         let config = ConfigBuilder::default()
             .uri(uri)
             .user(username)

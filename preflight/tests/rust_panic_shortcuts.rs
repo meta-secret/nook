@@ -1,3 +1,5 @@
+use nook_preflight::RustBoundaryState;
+use nook_preflight::RustMacroInventory;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
@@ -6,18 +8,36 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{Attribute, ItemFn, ItemMod, ItemUse, Macro, UseTree};
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .map_or_else(
-                    || PathBuf::from(env!("CARGO_MANIFEST_DIR")),
-                    Path::to_path_buf,
-                )
-        },
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || {
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .parent()
+                        .map_or_else(
+                            || PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+                            Path::to_path_buf,
+                        )
+                },
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
 fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
@@ -30,7 +50,7 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> 
                 path.file_name().and_then(|name| name.to_str()),
                 Some(".git" | "target")
             ) {
-                collect_rust_files(&path, files)?;
+                RustBoundaryState::RustMacroInventory::collect_rust_files(&path, files)?;
             }
         } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
             files.push(path);
@@ -65,7 +85,7 @@ fn rust_test_sources_are_classified_without_exempting_production_modules() {
 
 #[test]
 fn every_rust_workspace_denies_panic_shortcut_lints() -> Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     for relative in [
         "nook-app/nook-platform/Cargo.toml",
         "agentic-ai/minds/Cargo.toml",
@@ -85,7 +105,7 @@ fn every_rust_workspace_denies_panic_shortcut_lints() -> Result<()> {
 
 #[test]
 fn every_rust_workspace_keeps_panic_shortcuts_denied_in_tests() -> Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     for relative in [
         "nook-app/nook-platform/clippy.toml",
         "agentic-ai/minds/clippy.toml",
@@ -108,9 +128,9 @@ fn every_rust_workspace_keeps_panic_shortcuts_denied_in_tests() -> Result<()> {
 
 #[test]
 fn anyhow_is_available_only_to_rust_tests() -> Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let mut files = Vec::new();
-    collect_rust_files(&root, &mut files)?;
+    RustBoundaryState::RustMacroInventory::collect_rust_files(&root, &mut files)?;
 
     let mut violations = Vec::new();
     for path in files {

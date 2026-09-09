@@ -6,20 +6,14 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { promisify } from "node:util";
 
-import {
-  configureGitForCi,
-  countAuthoredNumstat,
-  hasWorkingTreeChanges,
-  pushFixBranch,
-  summarizeAuthoredNumstat,
-} from "../main/git.js";
+import { CiRepository, AuthoredNumstat } from "../main/git.js";
 
 const execFileAsync = promisify(execFile);
 
 describe("countAuthoredNumstat", () => {
   it("counts only authored additions", () => {
     const numstat = "12\t3\tsrc/domain.ts\0" + "4\t5\ttests/domain.test.ts\0";
-    assert.equal(countAuthoredNumstat(numstat), 16);
+    assert.equal(new AuthoredNumstat(numstat).countAuthoredNumstat(), 16);
   });
 
   it("reports generated, lock, snapshot, vendor, binary, and pure rename rows separately", () => {
@@ -39,7 +33,7 @@ describe("countAuthoredNumstat", () => {
       "src/new.ts",
       "",
     ].join("\0");
-    assert.equal(countAuthoredNumstat(numstat), 8);
+    assert.equal(new AuthoredNumstat(numstat).countAuthoredNumstat(), 8);
     const expectedReportedOnly = {
       binaryFiles: 1,
       generatedLines: 26,
@@ -51,31 +45,30 @@ describe("countAuthoredNumstat", () => {
       vendoredLines: 19,
     };
     assert.deepEqual(
-      summarizeAuthoredNumstat(numstat).reportedOnly,
+      new AuthoredNumstat(numstat).summarizeAuthoredNumstat().reportedOnly,
       expectedReportedOnly,
     );
   });
 
   it("does not treat source hidden by binary attributes as an excludable binary", () => {
     const numstat = "-\t-\tsrc/domain.ts\0";
-    const summary = summarizeAuthoredNumstat(numstat);
+    const summary = new AuthoredNumstat(numstat).summarizeAuthoredNumstat();
     assert.equal(summary.reportedOnly.binaryFiles, 0);
     assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 1);
   });
 
   it("fails closed when a binary source rename hides line counts", () => {
     const numstat = "-\t-\t\0src/old.ts\0src/new.ts\0";
-    const summary = summarizeAuthoredNumstat(numstat);
+    const summary = new AuthoredNumstat(numstat).summarizeAuthoredNumstat();
     assert.equal(summary.reportedOnly.pureRenameFiles, 0);
     assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 1);
   });
 
   it("reports a deleted binary source file without requiring an addition count", () => {
     const numstat = "-\t-\tsrc/obsolete.ts\0";
-    const summary = summarizeAuthoredNumstat(
-      numstat,
-      new Set(["src/obsolete.ts"]),
-    );
+    const summary = new AuthoredNumstat(numstat).summarizeAuthoredNumstat({
+      deletedPaths: new Set(["src/obsolete.ts"]),
+    });
     assert.equal(summary.authoredLines, 0);
     assert.equal(summary.reportedOnly.binaryFiles, 1);
     assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 0);
@@ -83,9 +76,10 @@ describe("countAuthoredNumstat", () => {
 
   it("skips malformed NUL-delimited records explicitly", () => {
     const numstat = "8\t1\tsrc/domain.ts\0malformed\0";
-    assert.equal(countAuthoredNumstat(numstat), 8);
+    assert.equal(new AuthoredNumstat(numstat).countAuthoredNumstat(), 8);
     assert.equal(
-      summarizeAuthoredNumstat(numstat).reportedOnly.malformedRecords,
+      new AuthoredNumstat(numstat).summarizeAuthoredNumstat().reportedOnly
+        .malformedRecords,
       1,
     );
   });
@@ -97,12 +91,12 @@ describe("implementation working tree", () => {
     const repoRoot = join(tempRoot, "repo");
     const globalConfig = join(tempRoot, "global.gitconfig");
     const hadGlobalConfig = Object.hasOwn(process.env, "GIT_CONFIG_GLOBAL");
-    const [previousGlobalConfig = ("")] = [process.env.GIT_CONFIG_GLOBAL];
+    const [previousGlobalConfig = ""] = [process.env.GIT_CONFIG_GLOBAL];
     process.env.GIT_CONFIG_GLOBAL = globalConfig;
     try {
       await mkdir(repoRoot);
       await execFileAsync("git", ["-C", repoRoot, "init"]);
-      await configureGitForCi(repoRoot);
+      await new CiRepository(repoRoot).configureGitForCi();
       await writeFile(join(repoRoot, "README.md"), "base\n");
       await execFileAsync("git", ["-C", repoRoot, "add", "README.md"]);
       await execFileAsync("git", ["-C", repoRoot, "commit", "-m", "base"]);
@@ -113,7 +107,10 @@ describe("implementation working tree", () => {
         "safe.directory",
       ]);
       assert.deepEqual(stdout.trim().split("\n"), [repoRoot, "*"]);
-      assert.equal(await hasWorkingTreeChanges(repoRoot), false);
+      assert.equal(
+        await new CiRepository(repoRoot).hasWorkingTreeChanges(),
+        false,
+      );
     } finally {
       if (hadGlobalConfig) process.env.GIT_CONFIG_GLOBAL = previousGlobalConfig;
       else delete process.env.GIT_CONFIG_GLOBAL;
@@ -157,7 +154,10 @@ describe("implementation working tree", () => {
       await writeFile(join(repoRoot, "README.md"), "trusted update\n");
       process.env.NOOK_GITHUB_PAT = "publication-secret";
 
-      await pushFixBranch(repoRoot, "fix/dependency-update", "42");
+      await new CiRepository(repoRoot).pushFixBranch({
+        fixBranch: "fix/dependency-update",
+        runId: "42",
+      });
 
       await assert.rejects(access(marker), /ENOENT/);
       const { stdout } = await execFileAsync("git", [
@@ -208,9 +208,15 @@ describe("implementation working tree", () => {
         ".nook-workbench-plan.md",
         ".nook-workbench-worklog.md",
       ]);
-      assert.equal(await hasWorkingTreeChanges(repoRoot), false);
+      assert.equal(
+        await new CiRepository(repoRoot).hasWorkingTreeChanges(),
+        false,
+      );
       await writeFile(join(repoRoot, "README.md"), "authored change\n");
-      assert.equal(await hasWorkingTreeChanges(repoRoot), true);
+      assert.equal(
+        await new CiRepository(repoRoot).hasWorkingTreeChanges(),
+        true,
+      );
     } finally {
       await rm(repoRoot, { recursive: true, force: true });
     }

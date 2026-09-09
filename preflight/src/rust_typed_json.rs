@@ -1,3 +1,6 @@
+pub struct RustTestSources<'scan> {
+    pub root: &'scan Path,
+}
 use crate::Violation;
 use std::collections::HashSet;
 use std::fs;
@@ -16,53 +19,59 @@ use syn::{Attribute, Expr, ExprIndex, ExprMethodCall, ItemFn, ItemMod, Local, Ma
 /// # Errors
 ///
 /// Returns an error when authored Rust cannot be read or parsed.
-pub fn rust_test_untyped_json_assertions(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut files = Vec::new();
-    collect_rust_files(root, &mut files)?;
+impl RustTestSources<'_> {
+    pub fn rust_test_untyped_json_assertions(self) -> io::Result<Vec<Violation>> {
+        let Self { root } = self;
+        let mut files = Vec::new();
+        RustTestSources::collect_rust_files(root, &mut files)?;
 
-    let mut violations = Vec::new();
-    for path in files {
-        let source = fs::read_to_string(&path)?;
-        let syntax = syn::parse_file(&source).map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("failed to parse authored Rust {}: {error}", path.display()),
-            )
-        })?;
-        let mut visitor = TypedJsonAssertionVisitor {
-            in_test: path
-                .components()
-                .any(|component| component.as_os_str() == "tests"),
-            ..TypedJsonAssertionVisitor::default()
-        };
-        visitor.visit_file(&syntax);
-        visitor.lines.sort_unstable();
-        visitor.lines.dedup();
-        violations.extend(visitor.lines.into_iter().map(|line| Violation {
-            path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-            line,
-        }));
+        let mut violations = Vec::new();
+        for path in files {
+            let source = fs::read_to_string(&path)?;
+            let syntax = syn::parse_file(&source).map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("failed to parse authored Rust {}: {error}", path.display()),
+                )
+            })?;
+            let mut visitor = TypedJsonAssertionVisitor {
+                in_test: path
+                    .components()
+                    .any(|component| component.as_os_str() == "tests"),
+                ..TypedJsonAssertionVisitor::default()
+            };
+            visitor.visit_file(&syntax);
+            visitor.lines.sort_unstable();
+            visitor.lines.dedup();
+            violations.extend(visitor.lines.into_iter().map(|line| Violation {
+                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                line,
+            }));
+        }
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        Ok(violations)
     }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    Ok(violations)
 }
 
-fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
-    for entry in fs::read_dir(directory)? {
-        let entry = entry?;
-        let path = entry.path();
-        if entry.file_type()?.is_dir() {
-            if !matches!(
-                path.file_name().and_then(|name| name.to_str()),
-                Some(".git" | "node_modules" | "target")
-            ) {
-                collect_rust_files(&path, files)?;
+impl RustTestSources<'_> {
+    fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
+        for entry in fs::read_dir(directory)? {
+            let entry = entry?;
+            let path = entry.path();
+            if entry.file_type()?.is_dir() {
+                if !matches!(
+                    path.file_name().and_then(|name| name.to_str()),
+                    Some(".git" | "node_modules" | "target")
+                ) {
+                    RustTestSources::collect_rust_files(&path, files)?;
+                }
+            } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+                files.push(path);
             }
-        } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
-            files.push(path);
         }
+        Ok(())
     }
-    Ok(())
 }
 
 #[derive(Default)]

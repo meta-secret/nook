@@ -82,7 +82,9 @@ export class DockerCacheSelectionContract {
     DockerCacheSelectionContract.assertHiveProfile(script.run);
   }
 
-  private static selectionStep(runs: DockerSetupActionRuns): DockerSetupRunStep {
+  private static selectionStep(
+    runs: DockerSetupActionRuns,
+  ): DockerSetupRunStep {
     for (const step of runs.steps) {
       if (step.name === "Select hosted BuildKit cache" && "run" in step) {
         return step;

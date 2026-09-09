@@ -9,58 +9,61 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const { PATH: executablePath = "" } = process.env;
+class ServicesNetworkRepairTestRepairSource {
+  constructor(private readonly request: string) {}
+  execute(): string {
+    const remoteDirectory = this.request;
 
-const root = resolve(import.meta.dir, "../..");
-const taskfile = resolve(root, "infra/tasks/host-services.yml");
-const taskStart = "  services:repair-network:\n";
-const scriptStart = "        set -euo pipefail\n";
-const scriptEnd = "        REMOTE\n";
-
-function repairSource(remoteDirectory: string): string {
-  const source = readFileSync(taskfile, "utf8").split(taskStart)[1];
-  const embedded = source.split(scriptStart)[1].split(scriptEnd)[0];
-  const dedented = embedded.replace(/^ {8}/gm, "");
-  return `#!/usr/bin/env bash\nset -euo pipefail\n${dedented}`.replace(
-    'remote_dir="{{.INFRA_REMOTE_DIR}}"',
-    `remote_dir=${remoteDirectory}`,
-  );
+    const source = readFileSync(taskfile, "utf8").split(taskStart)[1];
+    const embedded = source.split(scriptStart)[1].split(scriptEnd)[0];
+    const dedented = embedded.replace(/^ {8}/gm, "");
+    return `#!/usr/bin/env bash\nset -euo pipefail\n${dedented}`.replace(
+      'remote_dir="{{.INFRA_REMOTE_DIR}}"',
+      `remote_dir=${remoteDirectory}`,
+    );
+  }
 }
 
-function executable(input: { path: string; source: string }): void {
-  writeFileSync(input.path, input.source);
-  chmodSync(input.path, 0o755);
+class ServicesNetworkRepairTestExecutable {
+  constructor(private readonly request: { path: string; source: string }) {}
+  execute(): void {
+    const input = this.request;
+
+    writeFileSync(input.path, input.source);
+    chmodSync(input.path, 0o755);
+  }
 }
 
-interface RepairResult {
-  code: number;
-  commands: string;
-}
+class ServicesNetworkRepairTestRunCase {
+  constructor(
+    private readonly request: { existing: string[]; version: string },
+  ) {}
+  execute(): RepairResult {
+    const input = this.request;
 
-function runCase(input: { existing: string[]; version: string }): RepairResult {
-  const work = mkdtempSync(join(tmpdir(), "nook-network-repair-"));
-  try {
-    writeFileSync(join(work, "compose.yaml"), "services: {}\n");
-    const mockBin = join(work, "bin");
-    const state = join(work, "state");
-    const log = join(work, "commands.log");
-    mkdirSync(mockBin);
-    mkdirSync(state);
-    for (const item of input.existing) {
-      writeFileSync(join(state, item), "");
-    }
-    const dockerMock = {
-      path: join(mockBin, "docker"),
-      source: `#!/usr/bin/env bash
+    const work = mkdtempSync(join(tmpdir(), "nook-network-repair-"));
+    try {
+      writeFileSync(join(work, "compose.yaml"), "services: {}\n");
+      const mockBin = join(work, "bin");
+      const state = join(work, "state");
+      const log = join(work, "commands.log");
+      mkdirSync(mockBin);
+      mkdirSync(state);
+      for (const item of input.existing) {
+        writeFileSync(join(state, item), "");
+      }
+      const dockerMock = {
+        path: join(mockBin, "docker"),
+        source: `#!/usr/bin/env bash
 set -euo pipefail
 printf 'docker %s\\n' "$*" >> "$MOCK_LOG"
 if test "\${1:-}" = version; then printf '%s\\n' "$MOCK_DOCKER_VERSION"; fi
 `,
-    };
-    executable(dockerMock);
-    const sudoMock = {
-      path: join(mockBin, "sudo"),
-      source: `#!/usr/bin/env bash
+      };
+      new ServicesNetworkRepairTestExecutable(dockerMock).execute();
+      const sudoMock = {
+        path: join(mockBin, "sudo"),
+        source: `#!/usr/bin/env bash
 set -euo pipefail
 if test "\${1:-}" = -n; then shift; fi
 printf 'sudo %s\\n' "$*" >> "$MOCK_LOG"
@@ -85,39 +88,53 @@ case "$operation" in
   *) exit 2 ;;
 esac
 `,
-    };
-    executable(sudoMock);
-    const curlMock = {
-      path: join(mockBin, "curl"),
-      source: "#!/bin/sh\nprintf '200\\n'\n",
-    };
-    executable(curlMock);
-    const harness = {
-      path: join(work, "harness.sh"),
-      source: repairSource(work),
-    };
-    executable(harness);
-    const processInput = {
-      cmd: [harness.path],
-      env: {
-        ...process.env,
-        PATH: `${mockBin}:${executablePath}`,
-        MOCK_LOG: log,
-        MOCK_STATE: state,
-        MOCK_DOCKER_VERSION: input.version,
-      },
-      stdout: "pipe" as const,
-      stderr: "pipe" as const,
-    };
-    const result = Bun.spawnSync(processInput);
-    return { code: result.exitCode, commands: readFileSync(log, "utf8") };
-  } finally {
-    rmSync(work, { recursive: true, force: true });
+      };
+      new ServicesNetworkRepairTestExecutable(sudoMock).execute();
+      const curlMock = {
+        path: join(mockBin, "curl"),
+        source: "#!/bin/sh\nprintf '200\\n'\n",
+      };
+      new ServicesNetworkRepairTestExecutable(curlMock).execute();
+      const harness = {
+        path: join(work, "harness.sh"),
+        source: new ServicesNetworkRepairTestRepairSource(work).execute(),
+      };
+      new ServicesNetworkRepairTestExecutable(harness).execute();
+      const processInput = {
+        cmd: [harness.path],
+        env: {
+          ...process.env,
+          PATH: `${mockBin}:${executablePath}`,
+          MOCK_LOG: log,
+          MOCK_STATE: state,
+          MOCK_DOCKER_VERSION: input.version,
+        },
+        stdout: "pipe" as const,
+        stderr: "pipe" as const,
+      };
+      const result = Bun.spawnSync(processInput);
+      return { code: result.exitCode, commands: readFileSync(log, "utf8") };
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
   }
 }
 
+const { PATH: executablePath = "" } = process.env;
+
+const root = resolve(import.meta.dir, "../..");
+const taskfile = resolve(root, "infra/tasks/host-services.yml");
+const taskStart = "  services:repair-network:\n";
+const scriptStart = "        set -euo pipefail\n";
+const scriptEnd = "        REMOTE\n";
+
+interface RepairResult {
+  code: number;
+  commands: string;
+}
+
 const missingInput = { existing: [], version: "26.1.4" };
-const missing = runCase(missingInput);
+const missing = new ServicesNetworkRepairTestRunCase(missingInput).execute();
 if (missing.code !== 0)
   throw new Error(`missing-chain case exited ${missing.code}`);
 for (const command of [
@@ -140,7 +157,7 @@ const partialInput = {
   existing: ["nat-DOCKER", "filter-DOCKER", "filter-DOCKER-ISOLATION-STAGE-1"],
   version: "26.1.4",
 };
-const partial = runCase(partialInput);
+const partial = new ServicesNetworkRepairTestRunCase(partialInput).execute();
 if (partial.code !== 0)
   throw new Error(`partial-chain case exited ${partial.code}`);
 for (const command of [
@@ -161,7 +178,9 @@ for (const fragment of [
 }
 
 const unsupportedInput = { existing: [], version: "27.0.1" };
-const unsupported = runCase(unsupportedInput);
+const unsupported = new ServicesNetworkRepairTestRunCase(
+  unsupportedInput,
+).execute();
 if (unsupported.code !== 1)
   throw new Error(`unsupported-version case exited ${unsupported.code}`);
 for (const fragment of [

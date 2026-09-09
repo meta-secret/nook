@@ -51,16 +51,36 @@ impl Drop for TemporaryDirectory {
     }
 }
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn files_under(path: &Path, excluded_roots: &[PathBuf]) -> anyhow::Result<Vec<PathBuf>> {
@@ -249,7 +269,7 @@ fn harness_specific_authority_violations(authority: &str) -> Vec<String> {
 
 #[test]
 fn root_agents_routes_every_worker_to_cortex() {
-    let root_agents = read("AGENTS.md");
+    let root_agents = RepositoryFixture::repository_root().read("AGENTS.md");
 
     assert!(
         root_agents.contains("[`.cortex/AGENTS.md`](.cortex/AGENTS.md)")
@@ -260,7 +280,7 @@ fn root_agents_routes_every_worker_to_cortex() {
 
 #[test]
 fn cortex_prohibits_speculative_recovery_engines() {
-    let cortex_agents = read(".cortex/AGENTS.md");
+    let cortex_agents = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
 
     for required in [
         "Implement the smallest direct path that satisfies the accepted scope.",
@@ -281,10 +301,11 @@ fn cortex_prohibits_speculative_recovery_engines() {
 #[test]
 fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
     let authority = [
-        read(".cortex/AGENTS.md"),
-        read(".cortex/gizmo/AGENTS.md"),
-        read(".cortex/gizmo/workflows/team-oriented-development.md"),
-        read(".cortex/gizmo/workflows/subagent-delegation.md"),
+        RepositoryFixture::repository_root().read(".cortex/AGENTS.md"),
+        RepositoryFixture::repository_root().read(".cortex/gizmo/AGENTS.md"),
+        RepositoryFixture::repository_root()
+            .read(".cortex/gizmo/workflows/team-oriented-development.md"),
+        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/subagent-delegation.md"),
     ]
     .join("\n")
     .split_whitespace()
@@ -320,7 +341,7 @@ fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
 
 #[test]
 fn repository_agent_authority_is_harness_neutral() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let executable_dependencies = validated_executable_workspace_dependencies(&root)?;
     let mut authority_files = vec![root.join("AGENTS.md")];
     for authority_root in [".cortex", ".github/prompts"] {
@@ -382,7 +403,9 @@ fn harness_neutral_authority_detector_allows_harness_owned_explanation() {
 
 #[test]
 fn codex_agent_profiles_are_removed() -> anyhow::Result<()> {
-    let profiles_root = repository_root().join(".codex").join("agents");
+    let profiles_root = RepositoryFixture::repository_root()
+        .join(".codex")
+        .join("agents");
     let toml_files = files_under(&profiles_root, &[])?
         .into_iter()
         .filter(|path| {

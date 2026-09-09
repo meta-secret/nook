@@ -1,3 +1,4 @@
+use crate::codex::activity::LocalExecutionRecord;
 use std::collections::HashMap;
 use std::env;
 use std::future::Future;
@@ -22,7 +23,7 @@ use crate::model::TaskActivity;
 
 mod activity;
 mod progress;
-use activity::{record_local_execution, task_activity_from_event};
+
 use progress::*;
 
 const OUTPUT_SCHEMA: &str = include_str!("planner-output.schema.json");
@@ -104,7 +105,9 @@ impl InProcessCodexRunner {
     async fn run_turn(&self, prompt: &str, kind: TurnKind) -> Result<String, CodexError> {
         let primary_result = self.attempt_turn(prompt, kind.clone(), &self.options).await;
         if let Err(error) = primary_result {
-            if self.options.model != SOL_EXHAUSTED_CODEX_MODEL && is_sol_exhausted_error(&error) {
+            if self.options.model != SOL_EXHAUSTED_CODEX_MODEL
+                && CodexError::is_sol_exhausted_error(&error)
+            {
                 let mut fallback_options = self.options.clone();
                 fallback_options.model = SOL_EXHAUSTED_CODEX_MODEL.to_owned();
                 fallback_options.reasoning_effort = SOL_EXHAUSTED_CODEX_REASONING_EFFORT.to_owned();
@@ -131,7 +134,7 @@ impl InProcessCodexRunner {
         kind: TurnKind,
         options: &CodexOptions,
     ) -> Result<String, CodexError> {
-        let config = new_config(options).await?;
+        let config = CodexOptions::new_config(options).await?;
         let state_db = init_state_db(&config).await;
         let auth_manager =
             AuthManager::shared_from_config(&config, /* enable_codex_api_key_env */ false)
@@ -194,13 +197,14 @@ impl InProcessCodexRunner {
                 .unwrap_or(&options.repo_root)
                 .join(".hive-local-executions.jsonl")
         });
-        let turn_result = submit_and_wait(
-            &thread,
-            prompt,
-            kind,
-            execution_log.as_deref(),
-            options.activity_sender.as_ref(),
-        )
+        let turn_result = (CodexTurn {
+            thread: &thread,
+            prompt: prompt,
+            kind: kind,
+            execution_log: execution_log.as_deref(),
+            activity_sender: options.activity_sender.as_ref(),
+        })
+        .submit_and_wait()
         .await;
         let shutdown_result = thread.shutdown_and_wait().await;
         let _ = thread_manager.remove_thread(&thread_id).await;
@@ -234,48 +238,52 @@ pub enum CodexError {
     OutputSchema(#[source] serde_json::Error),
 }
 
-fn is_sol_exhausted_error(error: &CodexError) -> bool {
-    match error {
-        CodexError::Run(message) => is_sol_exhaustion_message(message),
-        _ => false,
+impl CodexError {
+    fn is_sol_exhausted_error(error: &CodexError) -> bool {
+        match error {
+            CodexError::Run(message) => CodexError::is_sol_exhaustion_message(message),
+            _ => false,
+        }
     }
 }
 
-fn is_sol_exhaustion_message(message: &str) -> bool {
-    let message = message.to_ascii_lowercase();
+impl CodexError {
+    fn is_sol_exhaustion_message(message: &str) -> bool {
+        let message = message.to_ascii_lowercase();
 
-    const SOL_EXHAUSTION_MARKERS: [&str; 8] = [
-        "sol exhausted",
-        "sol budget",
-        "sol limit",
-        "sol quota",
-        "out of sol",
-        "insufficient sol",
-        "no sol",
-        "usage limit",
-    ];
-    if SOL_EXHAUSTION_MARKERS
-        .iter()
-        .any(|marker| message.contains(marker))
-    {
-        return true;
+        const SOL_EXHAUSTION_MARKERS: [&str; 8] = [
+            "sol exhausted",
+            "sol budget",
+            "sol limit",
+            "sol quota",
+            "out of sol",
+            "insufficient sol",
+            "no sol",
+            "usage limit",
+        ];
+        if SOL_EXHAUSTION_MARKERS
+            .iter()
+            .any(|marker| message.contains(marker))
+        {
+            return true;
+        }
+
+        if message.contains("quota")
+            && (message.contains("exceed")
+                || message.contains("exhaust")
+                || message.contains("depleted")
+                || message.contains("remaining"))
+        {
+            return true;
+        }
+
+        message.contains("rate limit")
+            || message.contains("too many requests")
+            || message.contains("not enough credits")
+            || message.contains("insufficient credits")
+            || message.contains("credits remaining")
+            || message.contains("429")
     }
-
-    if message.contains("quota")
-        && (message.contains("exceed")
-            || message.contains("exhaust")
-            || message.contains("depleted")
-            || message.contains("remaining"))
-    {
-        return true;
-    }
-
-    message.contains("rate limit")
-        || message.contains("too many requests")
-        || message.contains("not enough credits")
-        || message.contains("insufficient credits")
-        || message.contains("credits remaining")
-        || message.contains("429")
 }
 
 impl CodexRunner for InProcessCodexRunner {
@@ -287,181 +295,196 @@ impl CodexRunner for InProcessCodexRunner {
     }
 }
 
-async fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
-    let codex_home =
-        find_codex_home().map_err(|error| CodexError::Configuration(error.to_string()))?;
-    let cwd = AbsolutePathBuf::from_absolute_path_checked(&options.repo_root)
-        .map_err(|error| CodexError::Configuration(error.to_string()))?;
-    let model_provider_id = OPENAI_PROVIDER_ID.to_string();
-    let model_providers = built_in_model_providers(/* openai_base_url */ None);
-    let model_provider = model_providers
-        .get(&model_provider_id)
-        .cloned()
-        .ok_or_else(|| CodexError::Configuration("OpenAI model provider is unavailable".into()))?;
-    let permission_profile = match options.access {
-        CodexAccess::ReadOnly => PermissionProfile::read_only(),
-        CodexAccess::WorkspaceWrite => PermissionProfile::Disabled,
-    };
-    let mut permissions = Permissions::from_approval_and_profile(
-        Constrained::allow_any(AskForApproval::Never),
-        Constrained::allow_any(permission_profile),
-    )
-    .map_err(|error| CodexError::Configuration(error.to_string()))?;
-    if let Some(github_token) = &options.github_token {
-        permissions
-            .shell_environment_policy
-            .r#set
-            .insert("GH_TOKEN".to_owned(), github_token.clone());
-        permissions
-            .shell_environment_policy
-            .r#set
-            .insert("GITHUB_TOKEN".to_owned(), github_token.clone());
-    }
-    let model_reasoning_effort =
-        serde_json::from_value(serde_json::Value::String(options.reasoning_effort.clone()))
-            .map_err(|error| {
-                CodexError::Configuration(format!(
-                    "invalid reasoning effort `{}`: {error}",
-                    options.reasoning_effort
-                ))
+impl CodexOptions {
+    async fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
+        let codex_home =
+            find_codex_home().map_err(|error| CodexError::Configuration(error.to_string()))?;
+        let cwd = AbsolutePathBuf::from_absolute_path_checked(&options.repo_root)
+            .map_err(|error| CodexError::Configuration(error.to_string()))?;
+        let model_provider_id = OPENAI_PROVIDER_ID.to_string();
+        let model_providers = built_in_model_providers(/* openai_base_url */ None);
+        let model_provider = model_providers
+            .get(&model_provider_id)
+            .cloned()
+            .ok_or_else(|| {
+                CodexError::Configuration("OpenAI model provider is unavailable".into())
             })?;
-
-    let mut config = Config::load_default_with_cli_overrides_for_codex_home(
-        codex_home.to_path_buf(),
-        Vec::new(),
-    )
-    .await
-    .map_err(|error| CodexError::Configuration(error.to_string()))?;
-    config.model = Some(options.model.clone());
-    config.model_provider_id = model_provider_id;
-    config.model_provider = model_provider;
-    config.model_providers = model_providers;
-    config.model_reasoning_effort = Some(model_reasoning_effort);
-    config.permissions = permissions;
-    config.cwd = cwd.clone();
-    config.workspace_roots = vec![cwd];
-    config.workspace_roots_explicit = true;
-    config.mcp_servers = Constrained::allow_any(HashMap::new());
-    config.non_prefixed_mcp_tool_servers = None;
-    config.agents_enabled = false;
-    config.agent_max_threads = Some(1);
-    config.ephemeral = true;
-    config.codex_self_exe = options.arg0_paths.codex_self_exe.clone();
-    config.codex_linux_sandbox_exe = options.arg0_paths.codex_linux_sandbox_exe.clone();
-    config.main_execve_wrapper_exe = options.arg0_paths.main_execve_wrapper_exe.clone();
-    config.web_search_mode = Constrained::allow_any(WebSearchMode::Disabled);
-    config.web_search_config = None;
-    config.orchestrator_skills_enabled = false;
-    config.orchestrator_mcp_enabled = false;
-    config.include_permissions_instructions = false;
-    config.include_apps_instructions = false;
-    config.include_collaboration_mode_instructions = false;
-    config.include_skill_instructions = false;
-    config.include_environment_context = false;
-    config.active_project = ProjectConfig { trust_level: None };
-    config.check_for_update_on_startup = false;
-    config.analytics_enabled = Some(false);
-    config.feedback_enabled = false;
-    config
-        .features
-        .set(Features::with_defaults())
+        let permission_profile = match options.access {
+            CodexAccess::ReadOnly => PermissionProfile::read_only(),
+            CodexAccess::WorkspaceWrite => PermissionProfile::Disabled,
+        };
+        let mut permissions = Permissions::from_approval_and_profile(
+            Constrained::allow_any(AskForApproval::Never),
+            Constrained::allow_any(permission_profile),
+        )
         .map_err(|error| CodexError::Configuration(error.to_string()))?;
-    Ok(config)
+        if let Some(github_token) = &options.github_token {
+            permissions
+                .shell_environment_policy
+                .r#set
+                .insert("GH_TOKEN".to_owned(), github_token.clone());
+            permissions
+                .shell_environment_policy
+                .r#set
+                .insert("GITHUB_TOKEN".to_owned(), github_token.clone());
+        }
+        let model_reasoning_effort =
+            serde_json::from_value(serde_json::Value::String(options.reasoning_effort.clone()))
+                .map_err(|error| {
+                    CodexError::Configuration(format!(
+                        "invalid reasoning effort `{}`: {error}",
+                        options.reasoning_effort
+                    ))
+                })?;
+
+        let mut config = Config::load_default_with_cli_overrides_for_codex_home(
+            codex_home.to_path_buf(),
+            Vec::new(),
+        )
+        .await
+        .map_err(|error| CodexError::Configuration(error.to_string()))?;
+        config.model = Some(options.model.clone());
+        config.model_provider_id = model_provider_id;
+        config.model_provider = model_provider;
+        config.model_providers = model_providers;
+        config.model_reasoning_effort = Some(model_reasoning_effort);
+        config.permissions = permissions;
+        config.cwd = cwd.clone();
+        config.workspace_roots = vec![cwd];
+        config.workspace_roots_explicit = true;
+        config.mcp_servers = Constrained::allow_any(HashMap::new());
+        config.non_prefixed_mcp_tool_servers = None;
+        config.agents_enabled = false;
+        config.agent_max_threads = Some(1);
+        config.ephemeral = true;
+        config.codex_self_exe = options.arg0_paths.codex_self_exe.clone();
+        config.codex_linux_sandbox_exe = options.arg0_paths.codex_linux_sandbox_exe.clone();
+        config.main_execve_wrapper_exe = options.arg0_paths.main_execve_wrapper_exe.clone();
+        config.web_search_mode = Constrained::allow_any(WebSearchMode::Disabled);
+        config.web_search_config = None;
+        config.orchestrator_skills_enabled = false;
+        config.orchestrator_mcp_enabled = false;
+        config.include_permissions_instructions = false;
+        config.include_apps_instructions = false;
+        config.include_collaboration_mode_instructions = false;
+        config.include_skill_instructions = false;
+        config.include_environment_context = false;
+        config.active_project = ProjectConfig { trust_level: None };
+        config.check_for_update_on_startup = false;
+        config.analytics_enabled = Some(false);
+        config.feedback_enabled = false;
+        config
+            .features
+            .set(Features::with_defaults())
+            .map_err(|error| CodexError::Configuration(error.to_string()))?;
+        Ok(config)
+    }
 }
 
-async fn submit_and_wait(
-    thread: &CodexThread,
-    prompt: &str,
+struct CodexTurn<'a> {
+    thread: &'a CodexThread,
+    prompt: &'a str,
     kind: TurnKind,
-    execution_log: Option<&Path>,
-    activity_sender: Option<&mpsc::UnboundedSender<TaskActivity>>,
-) -> Result<String, CodexError> {
-    let schema = match &kind {
-        TurnKind::Planning => OUTPUT_SCHEMA,
-        TurnKind::Task(_) => TASK_OUTPUT_SCHEMA,
-    };
-    let output_schema = serde_json::from_str(schema).map_err(CodexError::OutputSchema)?;
-    let request = TurnInputRequest::user_input(vec![UserInput::Text {
-        text: prompt.to_owned(),
-        text_elements: Vec::new(),
-    }])
-    .on_start(TurnStartOptions {
-        final_output_json_schema: Some(output_schema),
-        ..TurnStartOptions::default()
-    });
-    let submission = thread
-        .start_turn_if_idle(request)
-        .await
-        .map_err(|error| CodexError::Run(error.to_string()))?;
-    if let StartIfIdleSubmission::NotSubmitted { reason } = submission {
-        return Err(CodexError::Run(format!(
-            "Codex rejected the initial Hive turn: {reason:?}"
-        )));
-    }
-
-    let stderr = io::stderr();
-    let decorate = stderr.is_terminal() && env::var_os("NO_COLOR").is_none();
-    let mut progress = match kind {
-        TurnKind::Planning => TurnProgress::Planning(ProgressReporter::new(stderr, decorate)),
-        TurnKind::Task(task_id) => {
-            TurnProgress::Task(TaskProgressReporter::new(stderr, decorate, task_id))
-        }
-    };
-    loop {
-        let event = thread
-            .next_event()
+    execution_log: Option<&'a Path>,
+    activity_sender: Option<&'a mpsc::UnboundedSender<TaskActivity>>,
+}
+impl CodexTurn<'_> {
+    async fn submit_and_wait(self) -> Result<String, CodexError> {
+        let Self {
+            thread,
+            prompt,
+            kind,
+            execution_log,
+            activity_sender,
+        } = self;
+        let schema = match &kind {
+            TurnKind::Planning => OUTPUT_SCHEMA,
+            TurnKind::Task(_) => TASK_OUTPUT_SCHEMA,
+        };
+        let output_schema = serde_json::from_str(schema).map_err(CodexError::OutputSchema)?;
+        let request = TurnInputRequest::user_input(vec![UserInput::Text {
+            text: prompt.to_owned(),
+            text_elements: Vec::new(),
+        }])
+        .on_start(TurnStartOptions {
+            final_output_json_schema: Some(output_schema),
+            ..TurnStartOptions::default()
+        });
+        let submission = thread
+            .start_turn_if_idle(request)
             .await
             .map_err(|error| CodexError::Run(error.to_string()))?;
-        progress
-            .observe(&event.msg)
-            .map_err(|error| CodexError::Run(format!("failed to write progress: {error}")))?;
-        if let (Some(sender), Some(activity)) =
-            (activity_sender, task_activity_from_event(&event.msg))
-        {
-            let _ = sender.send(activity);
+        if let StartIfIdleSubmission::NotSubmitted { reason } = submission {
+            return Err(CodexError::Run(format!(
+                "Codex rejected the initial Hive turn: {reason:?}"
+            )));
         }
-        if let (Some(path), EventMsg::ExecCommandEnd(execution)) = (execution_log, &event.msg) {
-            record_local_execution(
-                path,
-                &execution.command,
-                execution.exit_code,
-                execution.duration,
-            )
-            .await
-            .map_err(|error| CodexError::Run(format!("record local execution: {error:#}")))?;
-        }
-        match event.msg {
-            EventMsg::TurnComplete(event) => {
-                return event
-                    .last_agent_message
-                    .filter(|message| !message.trim().is_empty())
-                    .ok_or(CodexError::EmptyResponse);
+
+        let stderr = io::stderr();
+        let decorate = stderr.is_terminal() && env::var_os("NO_COLOR").is_none();
+        let mut progress = match kind {
+            TurnKind::Planning => TurnProgress::Planning(ProgressReporter::new(stderr, decorate)),
+            TurnKind::Task(task_id) => {
+                TurnProgress::Task(TaskProgressReporter::new(stderr, decorate, task_id))
             }
-            EventMsg::Error(event) => return Err(CodexError::Run(event.message)),
-            EventMsg::TurnAborted(event) => {
-                return Err(CodexError::Run(format!("turn aborted: {:?}", event.reason)));
+        };
+        loop {
+            let event = thread
+                .next_event()
+                .await
+                .map_err(|error| CodexError::Run(error.to_string()))?;
+            progress
+                .observe(&event.msg)
+                .map_err(|error| CodexError::Run(format!("failed to write progress: {error}")))?;
+            if let (Some(sender), Some(activity)) = (
+                activity_sender,
+                TaskActivity::task_activity_from_event(&event.msg),
+            ) {
+                let _ = sender.send(activity);
             }
-            EventMsg::ExecApprovalRequest(_) | EventMsg::ApplyPatchApprovalRequest(_) => {
-                return Err(CodexError::Run(
-                    "Codex turn unexpectedly requested approval".into(),
-                ));
+            if let (Some(path), EventMsg::ExecCommandEnd(execution)) = (execution_log, &event.msg) {
+                LocalExecutionRecord::record_local_execution(
+                    path,
+                    &execution.command,
+                    execution.exit_code,
+                    execution.duration,
+                )
+                .await
+                .map_err(|error| CodexError::Run(format!("record local execution: {error:#}")))?;
             }
-            EventMsg::RequestPermissions(_) => {
-                return Err(CodexError::Run(
-                    "Codex turn requested additional permissions".into(),
-                ));
+            match event.msg {
+                EventMsg::TurnComplete(event) => {
+                    return event
+                        .last_agent_message
+                        .filter(|message| !message.trim().is_empty())
+                        .ok_or(CodexError::EmptyResponse);
+                }
+                EventMsg::Error(event) => return Err(CodexError::Run(event.message)),
+                EventMsg::TurnAborted(event) => {
+                    return Err(CodexError::Run(format!("turn aborted: {:?}", event.reason)));
+                }
+                EventMsg::ExecApprovalRequest(_) | EventMsg::ApplyPatchApprovalRequest(_) => {
+                    return Err(CodexError::Run(
+                        "Codex turn unexpectedly requested approval".into(),
+                    ));
+                }
+                EventMsg::RequestPermissions(_) => {
+                    return Err(CodexError::Run(
+                        "Codex turn requested additional permissions".into(),
+                    ));
+                }
+                EventMsg::RequestUserInput(_) => {
+                    return Err(CodexError::Run(
+                        "Codex turn requested interactive user input".into(),
+                    ));
+                }
+                EventMsg::DynamicToolCallRequest(_) => {
+                    return Err(CodexError::Run(
+                        "Codex turn requested an unsupported dynamic tool".into(),
+                    ));
+                }
+                _ => {}
             }
-            EventMsg::RequestUserInput(_) => {
-                return Err(CodexError::Run(
-                    "Codex turn requested interactive user input".into(),
-                ));
-            }
-            EventMsg::DynamicToolCallRequest(_) => {
-                return Err(CodexError::Run(
-                    "Codex turn requested an unsupported dynamic tool".into(),
-                ));
-            }
-            _ => {}
         }
     }
 }
@@ -500,7 +523,7 @@ mod tests {
             github_token: None,
             activity_sender: None,
         };
-        let config = new_config(&options).await?;
+        let config = CodexOptions::new_config(&options).await?;
 
         assert_eq!(config.model.as_deref(), Some("test-model"));
         assert_eq!(
@@ -544,10 +567,10 @@ mod tests {
 
     #[test]
     fn detects_usage_limit_as_sol_exhaustion() {
-        assert!(is_sol_exhaustion_message(
+        assert!(CodexError::is_sol_exhaustion_message(
             "embedded Codex execution failed: you've hit your usage limit. Visit the usage page"
         ));
-        assert!(!is_sol_exhaustion_message(
+        assert!(!CodexError::is_sol_exhaustion_message(
             "embedded Codex execution failed: unknown network timeout while reaching Codex"
         ));
     }
@@ -558,7 +581,7 @@ mod tests {
         let github_token = "test-token".to_owned();
         let mut options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
         options.github_token = Some(github_token.clone());
-        let config = new_config(&options).await?;
+        let config = CodexOptions::new_config(&options).await?;
 
         assert_eq!(
             config.permissions.permission_profile(),
@@ -625,7 +648,7 @@ mod tests {
     -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
-        let config = new_config(&options).await?;
+        let config = CodexOptions::new_config(&options).await?;
 
         assert_eq!(options.access, CodexAccess::WorkspaceWrite);
         assert_eq!(
@@ -742,30 +765,62 @@ mod tests {
 
     #[test]
     fn progress_helpers_bound_untrusted_text_and_classify_validation() {
-        assert_eq!(compact_task_id("short-task"), "short-task");
-        let compact = compact_task_id("a-very-long-task-identifier-that-must-be-bounded");
+        assert_eq!(
+            (TaskProgressLabel {
+                task_id: "short-task"
+            })
+            .compact_task_id(),
+            "short-task"
+        );
+        let compact = (TaskProgressLabel {
+            task_id: "a-very-long-task-identifier-that-must-be-bounded",
+        })
+        .compact_task_id();
         assert_eq!(compact.chars().count(), 30);
         assert!(compact.ends_with('…'));
         assert_eq!(
-            compact_text("  several   spaced words  ", 40),
+            (ProgressText {
+                message: "  several   spaced words  "
+            })
+            .compact_text(40),
             "several spaced words"
         );
-        assert_eq!(compact_text("sensitive detail", 1), "…");
-        assert!(is_verification_command(&["cargo".into(), "clippy".into()]));
-        assert!(is_verification_command(&[
+        assert_eq!(
+            (ProgressText {
+                message: "sensitive detail"
+            })
+            .compact_text(1),
+            "…"
+        );
+        assert!(InspectionSummary::is_verification_command(&[
+            "cargo".into(),
+            "clippy".into()
+        ]));
+        assert!(InspectionSummary::is_verification_command(&[
             "bun".into(),
             "run".into(),
             "test".into()
         ]));
-        assert!(!is_verification_command(&["git".into(), "status".into()]));
-        assert!(matches!(agent_color("worker-a"), "36" | "35" | "34" | "33"));
+        assert!(!InspectionSummary::is_verification_command(&[
+            "git".into(),
+            "status".into()
+        ]));
+        assert!(matches!(
+            (TaskProgressLabel {
+                task_id: "worker-a"
+            })
+            .agent_color(),
+            "36" | "35" | "34" | "33"
+        ));
 
-        let files = inspection_file_hints("sed -n 1,20p src/lib.rs README.md config.toml");
+        let files = InspectionSummary::inspection_file_hints(
+            "sed -n 1,20p src/lib.rs README.md config.toml",
+        );
         assert_eq!(
             files.as_deref(),
             Some("src/lib.rs · README.md · config.toml")
         );
-        assert!(inspection_file_hints("git status").is_none());
+        assert!(InspectionSummary::inspection_file_hints("git status").is_none());
     }
 
     #[test]
@@ -793,7 +848,7 @@ mod tests {
     async fn local_execution_records_only_sanitized_validation_metadata() -> crate::HiveResult<()> {
         let root = tempfile::tempdir()?;
         let log = root.path().join("events.jsonl");
-        record_local_execution(
+        LocalExecutionRecord::record_local_execution(
             &log,
             &["/bin/sh".into(), "-c".into(), "cargo test -p hive".into()],
             1,
@@ -811,7 +866,7 @@ mod tests {
         assert_eq!(record.reason, "embedded_codex_validation");
 
         let absent = root.path().join("absent.jsonl");
-        record_local_execution(
+        LocalExecutionRecord::record_local_execution(
             &absent,
             &["git".into(), "status".into()],
             0,

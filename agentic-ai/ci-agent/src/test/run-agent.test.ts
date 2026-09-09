@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  restoreHostEnvironment,
-  sanitizeAgentEnvironment,
+  AgentRuntimeRestoreHostEnvironment,
+  AgentRuntimeSanitizeAgentEnvironment,
 } from "../main/run-agent.js";
 
 test("agent subprocess environment retains only non-credential execution settings", () => {
@@ -17,7 +17,7 @@ test("agent subprocess environment retains only non-credential execution setting
     WASM_BUILD_MODE: "prod",
   };
 
-  sanitizeAgentEnvironment(environment);
+  new AgentRuntimeSanitizeAgentEnvironment(environment).execute();
 
   assert.deepEqual(environment, {
     HOME: "/tmp/home",
@@ -38,7 +38,10 @@ test("host environment is restored exactly after sandboxed execution", () => {
     PATH: "/usr/bin",
   };
 
-  restoreHostEnvironment(original, environment);
+  new AgentRuntimeRestoreHostEnvironment({
+    snapshot: original,
+    environment: environment,
+  }).execute();
 
   assert.deepEqual(environment, original);
 });

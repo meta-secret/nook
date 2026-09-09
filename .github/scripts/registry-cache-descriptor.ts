@@ -1,29 +1,34 @@
+export class RegistryCacheDescriptorRegisterRegistryDescriptor {
+  constructor(private readonly request: RegistryDescriptorRegistration) {}
+  execute(): void {
+    const input = this.request;
+
+    const existing = input.collection.get(input.descriptor.digest);
+    if (
+      existing &&
+      (existing.size !== input.descriptor.size ||
+        existing.mediaType !== input.descriptor.mediaType)
+    ) {
+      throw new Error(
+        `${input.descriptor.digest} has conflicting ${input.kind} descriptors: ${JSON.stringify(existing)} and ${JSON.stringify(input.descriptor)}`,
+      );
+    }
+    input.collection.set(input.descriptor.digest, input.descriptor);
+  }
+}
 export interface RegistryDescriptor {
-  digest: string
-  mediaType: string
-  size: number
+  digest: string;
+  mediaType: string;
+  size: number;
 }
 
 export enum RegistryDescriptorKind {
-  Blob = 'blob',
-  Manifest = 'manifest',
+  Blob = "blob",
+  Manifest = "manifest",
 }
 
 export interface RegistryDescriptorRegistration {
-  collection: Map<string, RegistryDescriptor>
-  descriptor: RegistryDescriptor
-  kind: RegistryDescriptorKind
-}
-
-export function registerRegistryDescriptor(input: RegistryDescriptorRegistration): void {
-  const existing = input.collection.get(input.descriptor.digest)
-  if (
-    existing &&
-    (existing.size !== input.descriptor.size || existing.mediaType !== input.descriptor.mediaType)
-  ) {
-    throw new Error(
-      `${input.descriptor.digest} has conflicting ${input.kind} descriptors: ${JSON.stringify(existing)} and ${JSON.stringify(input.descriptor)}`,
-    )
-  }
-  input.collection.set(input.descriptor.digest, input.descriptor)
+  collection: Map<string, RegistryDescriptor>;
+  descriptor: RegistryDescriptor;
+  kind: RegistryDescriptorKind;
 }

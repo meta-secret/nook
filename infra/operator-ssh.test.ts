@@ -1,14 +1,9 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import {describe,expect,test} from "bun:test";
+import {mkdtemp,realpath,rm,symlink,writeFile} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 
-import {
-  ensureInclude,
-  renderManagedConfig,
-  requireInventory,
-  writableConfigPath,
-} from "./operator-ssh";
+import {OperatorSshEnsureInclude,OperatorSshRenderManagedConfig,OperatorSshRequireInventory,OperatorSshWritableConfigPath} from "./operator-ssh";
 
 const home = {
   accessFallback: "ssh.example.invalid",
@@ -22,10 +17,10 @@ const home = {
 
 describe("operator SSH configuration", () => {
   test("renders a strict browserless LAN alias", () => {
-    const rendered = renderManagedConfig({
+    const rendered = new OperatorSshRenderManagedConfig({
       ...home,
       accessFallback: "ssh.bynull.link",
-    });
+    }).execute();
     expect(rendered).toContain("Host nook-home-lan");
     expect(rendered).toContain("StrictHostKeyChecking yes");
     expect(rendered).toContain("PasswordAuthentication no");
@@ -34,11 +29,13 @@ describe("operator SSH configuration", () => {
   });
 
   test("prepends the managed include exactly once", () => {
-    const once = ensureInclude("Host existing\n  HostName example.invalid\n");
+    const once = new OperatorSshEnsureInclude(
+      "Host existing\n  HostName example.invalid\n",
+    ).execute();
     expect(once.startsWith("Include ~/.ssh/config.d/nook-infra.conf\n")).toBe(
       true,
     );
-    expect(ensureInclude(once)).toBe(once);
+    expect(new OperatorSshEnsureInclude(once).execute()).toBe(once);
   });
 
   test("loads the managed host before wildcard fragments and unsafe options", () => {
@@ -48,11 +45,9 @@ describe("operator SSH configuration", () => {
       "Include ~/.ssh/config.d/*.conf",
       "",
     ].join("\n");
-    const configured = ensureInclude(original);
+    const configured = new OperatorSshEnsureInclude(original).execute();
     expect(
-      configured.startsWith(
-        "Include ~/.ssh/config.d/nook-infra.conf\n\n",
-      ),
+      configured.startsWith("Include ~/.ssh/config.d/nook-infra.conf\n\n"),
     ).toBe(true);
     expect(configured).toContain("Include ~/.ssh/config.d/*.conf");
   });
@@ -64,7 +59,7 @@ describe("operator SSH configuration", () => {
       "  Include ~/.ssh/config.d/nook-infra.conf",
       "",
     ].join("\n");
-    const configured = ensureInclude(original);
+    const configured = new OperatorSshEnsureInclude(original).execute();
     expect(
       configured.startsWith("Include ~/.ssh/config.d/nook-infra.conf\n"),
     ).toBe(true);
@@ -80,7 +75,9 @@ describe("operator SSH configuration", () => {
       const link = join(fixture, "config");
       await writeFile(target, "Host existing\n", "utf8");
       await symlink(target, link);
-      expect(await writableConfigPath(link)).toBe(await realpath(target));
+      expect(await new OperatorSshWritableConfigPath(link).execute()).toBe(
+        await realpath(target),
+      );
     } finally {
       await rm(fixture, { force: true, recursive: true });
     }
@@ -91,7 +88,7 @@ describe("operator SSH configuration", () => {
     try {
       const link = join(fixture, "config");
       await symlink(join(fixture, "missing-config"), link);
-      expect(writableConfigPath(link)).rejects.toThrow(
+      expect(new OperatorSshWritableConfigPath(link).execute()).rejects.toThrow(
         "dangling symbolic link",
       );
     } finally {
@@ -100,23 +97,29 @@ describe("operator SSH configuration", () => {
   });
 
   test("rejects a non-private address", () => {
-    expect(() => requireInventory({ ...home, address: "203.0.113.10" })).toThrow(
-      "private LAN address",
-    );
+    expect(() =>
+      new OperatorSshRequireInventory({
+        ...home,
+        address: "203.0.113.10",
+      }).execute(),
+    ).toThrow("private LAN address");
   });
 
   test("rejects malformed private-looking addresses", () => {
     expect(() =>
-      requireInventory({ ...home, address: "192.168.999.140" }),
+      new OperatorSshRequireInventory({
+        ...home,
+        address: "192.168.999.140",
+      }).execute(),
     ).toThrow("private LAN address");
   });
 
   test("requires a distinct Cloudflare fallback", () => {
     expect(() =>
-      requireInventory({
+      new OperatorSshRequireInventory({
         ...home,
         accessFallback: "nook-home-lan",
-      }),
+      }).execute(),
     ).toThrow("distinct hostname");
   });
 });

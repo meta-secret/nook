@@ -1,12 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import {describe,expect,test} from "bun:test";
 
-import {
-  createOvhSignature,
-  isTerminalTaskFailure,
-  OvhTaskStatus,
-  recoveryMarkerMatches,
-  requiresReinstall,
-} from "./ovh-dedicated";
+import {OvhDedicatedCreateOvhSignature,OvhDedicatedIsTerminalTaskFailure,OvhTaskStatus,OvhDedicatedRecoveryMarkerMatches,OvhDedicatedRequiresReinstall} from "./ovh-dedicated";
 
 describe("OVH dedicated provider", () => {
   test("signs the canonical OVH request material", () => {
@@ -18,7 +12,7 @@ describe("OVH dedicated provider", () => {
       timestamp: 1_700_000_000,
       url: "https://api.us.ovhcloud.com/1.0/dedicated/server",
     };
-    expect(createOvhSignature(input)).toBe(
+    expect(new OvhDedicatedCreateOvhSignature(input).execute()).toBe(
       "$1$fb37e9a312d2e1a8a8653b0cac91c4ed7195ca7a",
     );
   });
@@ -33,8 +27,10 @@ describe("OVH dedicated provider", () => {
       ...blankInput,
       currentOperatingSystem: "debian13_64",
     };
-    expect(requiresReinstall(blankInput)).toBeTrue();
-    expect(requiresReinstall(convergedInput)).toBeFalse();
+    expect(new OvhDedicatedRequiresReinstall(blankInput).execute()).toBeTrue();
+    expect(
+      new OvhDedicatedRequiresReinstall(convergedInput).execute(),
+    ).toBeFalse();
   });
 
   test("refuses to replace an installed OS without disaster recovery", () => {
@@ -43,7 +39,9 @@ describe("OVH dedicated provider", () => {
       currentOperatingSystem: "debian12_64",
       desiredOperatingSystem: "debian13_64",
     };
-    expect(() => requiresReinstall(input)).toThrow("refusing to replace");
+    expect(() => new OvhDedicatedRequiresReinstall(input).execute()).toThrow(
+      "refusing to replace",
+    );
   });
 
   test("honors an explicit same-OS disaster-recovery reinstall", () => {
@@ -52,14 +50,24 @@ describe("OVH dedicated provider", () => {
       currentOperatingSystem: "debian13_64",
       desiredOperatingSystem: "debian13_64",
     };
-    expect(requiresReinstall(input)).toBeTrue();
+    expect(new OvhDedicatedRequiresReinstall(input).execute()).toBeTrue();
   });
 
   test("recognizes every OVH terminal reinstall failure", () => {
-    expect(isTerminalTaskFailure(OvhTaskStatus.Cancelled)).toBeTrue();
-    expect(isTerminalTaskFailure(OvhTaskStatus.CustomerError)).toBeTrue();
-    expect(isTerminalTaskFailure(OvhTaskStatus.OvhError)).toBeTrue();
-    expect(isTerminalTaskFailure(OvhTaskStatus.Doing)).toBeFalse();
+    expect(
+      new OvhDedicatedIsTerminalTaskFailure(OvhTaskStatus.Cancelled).execute(),
+    ).toBeTrue();
+    expect(
+      new OvhDedicatedIsTerminalTaskFailure(
+        OvhTaskStatus.CustomerError,
+      ).execute(),
+    ).toBeTrue();
+    expect(
+      new OvhDedicatedIsTerminalTaskFailure(OvhTaskStatus.OvhError).execute(),
+    ).toBeTrue();
+    expect(
+      new OvhDedicatedIsTerminalTaskFailure(OvhTaskStatus.Doing).execute(),
+    ).toBeFalse();
   });
 
   test("accepts only the exact durable recovery operation", () => {
@@ -82,18 +90,18 @@ describe("OVH dedicated provider", () => {
       version: 1,
     } as const;
     expect(
-      recoveryMarkerMatches({
+      new OvhDedicatedRecoveryMarkerMatches({
         definition,
         hostname: "nook-rise-s-2",
         marker,
-      }),
+      }).execute(),
     ).toBeTrue();
     expect(
-      recoveryMarkerMatches({
+      new OvhDedicatedRecoveryMarkerMatches({
         definition,
         hostname: "nook-rise-s-1",
         marker,
-      }),
+      }).execute(),
     ).toBeFalse();
   });
 });

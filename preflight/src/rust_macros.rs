@@ -1,3 +1,6 @@
+pub struct RustMacroInventory<'scan> {
+    pub root: &'scan Path,
+}
 use std::ffi::OsStr;
 use std::fs;
 use std::io;
@@ -29,53 +32,59 @@ const EXCLUDED_DIRECTORIES: &[&str] = &[
 /// # Errors
 ///
 /// Returns an error when authored Rust cannot be read or parsed.
-pub fn authored_rust_macro_definitions(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut files = Vec::new();
-    collect_rust_files(root, &mut files)?;
+impl RustMacroInventory<'_> {
+    pub fn authored_rust_macro_definitions(self) -> io::Result<Vec<Violation>> {
+        let Self { root } = self;
+        let mut files = Vec::new();
+        RustMacroInventory::collect_rust_files(root, &mut files)?;
 
-    let mut violations = Vec::new();
-    for path in files {
-        let source = fs::read_to_string(&path)?;
-        let syntax = syn::parse_file(&source).map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("failed to parse {}: {error}", path.display()),
-            )
-        })?;
-        let mut visitor = MacroDefinitionVisitor::default();
-        visitor.visit_file(&syntax);
-        violations.extend(visitor.lines.into_iter().map(|line| Violation {
-            path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-            line,
-        }));
+        let mut violations = Vec::new();
+        for path in files {
+            let source = fs::read_to_string(&path)?;
+            let syntax = syn::parse_file(&source).map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("failed to parse {}: {error}", path.display()),
+                )
+            })?;
+            let mut visitor = MacroDefinitionVisitor::default();
+            visitor.visit_file(&syntax);
+            violations.extend(visitor.lines.into_iter().map(|line| Violation {
+                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                line,
+            }));
+        }
+
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        violations.dedup();
+        Ok(violations)
     }
-
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    violations.dedup();
-    Ok(violations)
 }
 
-fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
-    for entry in fs::read_dir(directory)? {
-        let entry = entry?;
-        let file_type = entry.file_type()?;
-        if file_type.is_symlink() {
-            continue;
-        }
-        let path = entry.path();
-        if file_type.is_dir() {
-            if !path
-                .file_name()
-                .and_then(OsStr::to_str)
-                .is_some_and(|name| EXCLUDED_DIRECTORIES.contains(&name))
-            {
-                collect_rust_files(&path, files)?;
+impl RustMacroInventory<'_> {
+    fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
+        for entry in fs::read_dir(directory)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if file_type.is_symlink() {
+                continue;
             }
-        } else if path.extension().is_some_and(|extension| extension == "rs") {
-            files.push(path);
+            let path = entry.path();
+            if file_type.is_dir() {
+                if !path
+                    .file_name()
+                    .and_then(OsStr::to_str)
+                    .is_some_and(|name| EXCLUDED_DIRECTORIES.contains(&name))
+                {
+                    RustMacroInventory::collect_rust_files(&path, files)?;
+                }
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                files.push(path);
+            }
         }
+        Ok(())
     }
-    Ok(())
 }
 
 #[derive(Default)]
@@ -122,7 +131,7 @@ mod tests {
 
     use super::MacroDefinitionVisitor;
     #[cfg(unix)]
-    use super::authored_rust_macro_definitions;
+    use super::RustMacroInventory;
     use syn::visit::Visit;
 
     #[test]
@@ -168,7 +177,7 @@ mod tests {
             "macro_rules! third_party { () => {}; }",
         )?;
 
-        let violations = authored_rust_macro_definitions(&root)?;
+        let violations = (RustMacroInventory { root: &root }).authored_rust_macro_definitions()?;
 
         fs::remove_dir_all(root)?;
         assert!(violations.is_empty());
@@ -187,7 +196,7 @@ mod tests {
         symlink(&external, root.join("linked-directory"))?;
         symlink(&external_source, root.join("linked.rs"))?;
 
-        let violations = authored_rust_macro_definitions(&root)?;
+        let violations = (RustMacroInventory { root: &root }).authored_rust_macro_definitions()?;
 
         fs::remove_dir_all(root)?;
         fs::remove_dir_all(external)?;

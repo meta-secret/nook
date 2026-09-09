@@ -8,20 +8,40 @@ use std::{
 
 use anyhow::{Context, Result};
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn read_fallible(path: &str) -> Result<String> {
-    fs::read_to_string(repository_root().join(path))
+    fs::read_to_string(RepositoryFixture::repository_root().join(path))
         .with_context(|| format!("failed to read {path}"))
 }
 
@@ -41,15 +61,15 @@ fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
 
 fn remote_batch_command(args: &[&str]) -> io::Result<process::Output> {
     Command::new("bash")
-        .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+        .arg(RepositoryFixture::repository_root().join(".github/scripts/remote-task-batch.sh"))
         .args(args)
         .output()
 }
 
 #[test]
 fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
-    let root_tasks = read("Taskfile.yml");
-    let remote_tasks = read(".task/remote-execution.yml");
+    let root_tasks = RepositoryFixture::repository_root().read("Taskfile.yml");
+    let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
 
     assert!(root_tasks.contains("taskfile: .task/remote-execution.yml"));
     for required in [
@@ -185,8 +205,9 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
     assert!(arbitrary.status.success());
     assert_eq!(String::from_utf8(arbitrary.stdout)?, "30\n");
 
-    let batch_script = read(".github/scripts/remote-task-batch.sh");
-    let workflow = read(".github/workflows/remote.yml");
+    let batch_script =
+        RepositoryFixture::repository_root().read(".github/scripts/remote-task-batch.sh");
+    let workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
     assert!(batch_script.contains("timeout --kill-after=1m"));
     assert!(!batch_script.contains("timeout --foreground"));
     assert!(!batch_script.contains("is_catalog_task"));
@@ -271,7 +292,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     let summary = fixture.join("summary.md");
     let system_path = env::var("PATH")?;
     let output = Command::new("bash")
-        .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+        .arg(RepositoryFixture::repository_root().join(".github/scripts/remote-task-batch.sh"))
         .args(["--run", "preflight,rust:ci,arbitrary:task,hive:verify"])
         .env("PATH", format!("{}:{system_path}", fixture.display()))
         .env("TASK_LOG", &task_log)
@@ -346,7 +367,7 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
         let timeout_marker = fixture.join("timeout.marker");
         let system_path = env::var("PATH")?;
         let output = Command::new("bash")
-            .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+            .arg(RepositoryFixture::repository_root().join(".github/scripts/remote-task-batch.sh"))
             .args(["--run", "preflight,rust:ci"])
             .env("PATH", format!("{}:{system_path}", fixture.display()))
             .env("TASK_LOG", &task_log)
@@ -374,12 +395,15 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
 
 #[test]
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
-    let remote_tasks = read(".task/remote-execution.yml");
+    let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
     assert!(remote_tasks.contains(".github/scripts/require-current-base.sh origin main"));
     assert!(remote_tasks.contains("baseRefName"));
 
     let status = Command::new("bash")
-        .arg(repository_root().join(".github/scripts/require-current-base.test.sh"))
+        .arg(
+            RepositoryFixture::repository_root()
+                .join(".github/scripts/require-current-base.test.sh"),
+        )
         .status()?;
     assert!(status.success(), "base freshness behavior tests must pass");
     Ok(())
@@ -387,9 +411,10 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
 
 #[test]
 fn arc_workflow_runs_named_task_targets() -> Result<()> {
-    let remote_tasks = read(".task/remote-execution.yml");
-    let workflow = read(".github/workflows/remote.yml");
-    let batch_script = read(".github/scripts/remote-task-batch.sh");
+    let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
+    let workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
+    let batch_script =
+        RepositoryFixture::repository_root().read(".github/scripts/remote-task-batch.sh");
 
     assert_eq!(
         workflow.matches("runs-on: ubuntu-latest").count(),
@@ -496,7 +521,8 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
     );
     assert!(batch_script.contains("docker buildx use \"$builder\""));
     assert!(batch_script.contains("if ! restore_hosted_builder; then"));
-    let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
+    let docker_setup =
+        RepositoryFixture::repository_root().read(".github/actions/nook-docker-setup/action.yml");
     assert!(docker_setup.contains(
         "NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}"
     ));
@@ -525,21 +551,27 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
 
 #[test]
 fn frequent_remote_checks_use_narrow_source_sealed_images() -> Result<()> {
-    let app_tasks = read("nook-app/Taskfile.yml");
-    let core_tasks = read("nook-app/nook-platform/Taskfile.yml");
-    let web_tasks = read("nook-app/nook-web/Taskfile.yml");
-    let extension_tasks = read("nook-app/nook-web/nook-web-extension/Taskfile.yml");
-    let product_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let app_tasks = RepositoryFixture::repository_root().read("nook-app/Taskfile.yml");
+    let core_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml");
+    let web_tasks = RepositoryFixture::repository_root().read("nook-app/nook-web/Taskfile.yml");
+    let extension_tasks = RepositoryFixture::repository_root()
+        .read("nook-app/nook-web/nook-web-extension/Taskfile.yml");
+    let product_dockerfile = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     let test_dockerfile = docker_stage(&product_dockerfile, "nook-rust-test");
     let lint_dockerfile = docker_stage(&product_dockerfile, "nook-rust-lint");
     let coverage_dockerfile = docker_stage(&product_dockerfile, "nook-rust-coverage");
-    let product_dockerignore =
-        read("nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore");
-    let core_bake = read("nook-app/nook-platform/nook-core/docker-bake.hcl");
-    let wasm_bake = read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
-    let web_app_bake = read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
+    let product_dockerignore = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore");
+    let core_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let wasm_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    let web_app_bake =
+        RepositoryFixture::repository_root().read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
     let wasm_dockerfile = product_dockerfile.as_str();
-    let shared_bake = read("nook-app/docker-bake.hcl");
+    let shared_bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
     let bake = format!("{shared_bake}\n{core_bake}\n{wasm_bake}\n{web_app_bake}");
 
     let focused_web_setup = app_tasks
@@ -690,7 +722,7 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() -> Result<()> {
 
 #[test]
 fn broad_remote_tasks_export_native_layers_without_main_write_access() {
-    let bake = read("nook-app/docker-bake.hcl");
+    let bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
     let prepare = bake
         .split("group \"prepare\" {\n")
         .nth(1)
@@ -701,7 +733,7 @@ fn broad_remote_tasks_export_native_layers_without_main_write_access() {
         "broad setup must select builder-debug so its dedicated Zot exporter runs"
     );
 
-    let pr = read(".github/workflows/pr.yml");
+    let pr = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
     assert!(!pr.contains("secrets.NOOK_REGISTRY_USERNAME"));
     assert!(!pr.contains("secrets.NOOK_REGISTRY_PASSWORD"));
     assert!(pr.contains("secrets.NOOK_REGISTRY_REMOTE_USERNAME"));
@@ -723,9 +755,10 @@ fn broad_remote_tasks_export_native_layers_without_main_write_access() {
 
 #[test]
 fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
-    let remote_tasks = read(".task/remote-execution.yml");
-    let pr = read(".github/workflows/pr.yml");
-    let remote_doc = read(".cortex/teams/sre/workflows/remote-execution.md");
+    let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
+    let pr = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
+    let remote_doc = RepositoryFixture::repository_root()
+        .read(".cortex/teams/sre/workflows/remote-execution.md");
 
     assert!(pr.contains("types: [labeled]"));
     assert!(
@@ -803,7 +836,13 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
 }
 
 fn workflow_or_remote_tasks(required: &str) -> bool {
-    read(".github/workflows/remote.yml").contains(required)
-        || read("nook-app/nook-platform/docker/Taskfile.yml").contains(required)
-        || read("nook-app/nook-web/docker/Taskfile.yml").contains(required)
+    RepositoryFixture::repository_root()
+        .read(".github/workflows/remote.yml")
+        .contains(required)
+        || RepositoryFixture::repository_root()
+            .read("nook-app/nook-platform/docker/Taskfile.yml")
+            .contains(required)
+        || RepositoryFixture::repository_root()
+            .read("nook-app/nook-web/docker/Taskfile.yml")
+            .contains(required)
 }

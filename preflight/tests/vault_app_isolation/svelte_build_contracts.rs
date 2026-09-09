@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn svelte_build_surfaces_support_runtime_typescript_enums() {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     for path in [
         "nook-app/nook-web/nook-web-app/svelte.config.js",
         "nook-app/nook-web/nook-vault-simple/svelte.config.js",
@@ -11,30 +11,21 @@ fn svelte_build_surfaces_support_runtime_typescript_enums() {
         "nook-app/nook-web/nook-web-extension/e2e/mock-auth/svelte.config.js",
         "agentic-ai/minds/hive-console/svelte.config.js",
     ] {
-        let config = read(&root, path);
+        let config = (&root).read(path);
         assert!(
             config.contains("vitePreprocess({ script: true })"),
             "{path} must preprocess TypeScript script blocks so Svelte components can use runtime enums"
         );
     }
 
-    let extension_build = read(
-        &root,
-        "nook-app/nook-web/nook-web-extension/scripts/build.ts",
-    );
+    let extension_build = (&root).read("nook-app/nook-web/nook-web-extension/scripts/build.ts");
     assert!(
         extension_build.contains("svelte({ preprocess: vitePreprocess({ script: true }) })"),
         "the config-free extension popup build must preprocess TypeScript script blocks"
     );
 
-    let dashboard = read(
-        &root,
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/DevicesAccessDashboard.svelte",
-    );
-    let dashboard_state = read(
-        &root,
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state.ts",
-    );
+    let dashboard = (&root).read("nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/DevicesAccessDashboard.svelte");
+    let dashboard_state = (&root).read("nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state.ts");
     assert!(dashboard_state.contains("export enum DashboardLoadKind"));
     assert!(dashboard_state.contains("kind: typeof DashboardLoadKind.Ready; view: ReadyView"));
     assert!(dashboard.contains("DashboardLoadKind,"));

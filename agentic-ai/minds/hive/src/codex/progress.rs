@@ -1,3 +1,9 @@
+pub(super) struct TaskProgressLabel<'a> {
+    pub(super) task_id: &'a str,
+}
+pub(super) struct ProgressText<'a> {
+    pub(super) message: &'a str,
+}
 use super::*;
 
 pub(super) enum TurnProgress<W> {
@@ -82,7 +88,7 @@ impl<W: Write> TaskProgressReporter<W> {
                 &format!("Repository command exited with status {exit_code}"),
             );
         }
-        if is_verification_command(command) {
+        if InspectionSummary::is_verification_command(command) {
             return self.line(
                 "32",
                 "✓",
@@ -109,10 +115,19 @@ impl<W: Write> TaskProgressReporter<W> {
         message: &str,
     ) -> io::Result<()> {
         let symbol = self.paint(color, symbol);
-        let task_id = compact_task_id(&self.task_id);
-        let task_id = self.paint(agent_color(&self.task_id), &format!("{task_id:<30}"));
+        let task_id = (TaskProgressLabel {
+            task_id: &self.task_id,
+        })
+        .compact_task_id();
+        let task_id = self.paint(
+            (TaskProgressLabel {
+                task_id: &self.task_id,
+            })
+            .agent_color(),
+            &format!("{task_id:<30}"),
+        );
         let kind = self.paint("2", &format!("{kind:<7}"));
-        let message = compact_text(message, 140);
+        let message = (ProgressText { message: message }).compact_text(140);
         writeln!(self.writer, "    {symbol}  {task_id} {kind} · {message}")?;
         self.writer.flush()
     }
@@ -126,52 +141,63 @@ impl<W: Write> TaskProgressReporter<W> {
     }
 }
 
-pub(super) fn compact_task_id(task_id: &str) -> String {
-    const WIDTH: usize = 30;
-    if task_id.chars().count() <= WIDTH {
-        return task_id.to_owned();
+impl TaskProgressLabel<'_> {
+    pub(super) fn compact_task_id(&self) -> String {
+        let task_id = self.task_id;
+        const WIDTH: usize = 30;
+        if task_id.chars().count() <= WIDTH {
+            return task_id.to_owned();
+        }
+        let prefix = task_id.chars().take(WIDTH - 1).collect::<String>();
+        format!("{prefix}…")
     }
-    let prefix = task_id.chars().take(WIDTH - 1).collect::<String>();
-    format!("{prefix}…")
 }
 
-pub(super) fn agent_color(task_id: &str) -> &'static str {
-    const COLORS: [&str; 4] = ["36", "35", "34", "33"];
-    let index = task_id
-        .bytes()
-        .fold(0usize, |hash, byte| hash.wrapping_mul(31) + byte as usize)
-        % COLORS.len();
-    COLORS[index]
-}
-
-pub(super) fn compact_text(message: &str, limit: usize) -> String {
-    let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
-    if normalized.chars().count() <= limit {
-        return normalized;
+impl TaskProgressLabel<'_> {
+    pub(super) fn agent_color(&self) -> &'static str {
+        let task_id = self.task_id;
+        const COLORS: [&str; 4] = ["36", "35", "34", "33"];
+        let index = task_id
+            .bytes()
+            .fold(0usize, |hash, byte| hash.wrapping_mul(31) + byte as usize)
+            % COLORS.len();
+        COLORS[index]
     }
-    let prefix = normalized
-        .chars()
-        .take(limit.saturating_sub(1))
-        .collect::<String>();
-    format!("{prefix}…")
 }
 
-pub(super) fn is_verification_command(command: &[String]) -> bool {
-    let command = command.join(" ").to_ascii_lowercase();
-    [
-        "cargo test",
-        "cargo clippy",
-        "cargo fmt",
-        "task ",
-        "bun test",
-        "bun run test",
-        "npm test",
-        "npm run test",
-        "pytest",
-        "go test",
-    ]
-    .iter()
-    .any(|marker| command.contains(marker))
+impl ProgressText<'_> {
+    pub(super) fn compact_text(&self, limit: usize) -> String {
+        let message = self.message;
+        let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
+        if normalized.chars().count() <= limit {
+            return normalized;
+        }
+        let prefix = normalized
+            .chars()
+            .take(limit.saturating_sub(1))
+            .collect::<String>();
+        format!("{prefix}…")
+    }
+}
+
+impl InspectionSummary {
+    pub(super) fn is_verification_command(command: &[String]) -> bool {
+        let command = command.join(" ").to_ascii_lowercase();
+        [
+            "cargo test",
+            "cargo clippy",
+            "cargo fmt",
+            "task ",
+            "bun test",
+            "bun run test",
+            "npm test",
+            "npm run test",
+            "pytest",
+            "go test",
+        ]
+        .iter()
+        .any(|marker| command.contains(marker))
+    }
 }
 
 pub(super) struct ProgressReporter<W> {
@@ -263,7 +289,7 @@ impl<W: Write> ProgressReporter<W> {
     pub(super) fn inspection(&mut self, command: &[String]) -> io::Result<()> {
         self.finish_reasoning()?;
         self.inspection_step += 1;
-        let summary = summarize_inspection(command);
+        let summary = InspectionSummary::summarize_inspection(command);
         let number = self.paint("36", &format!("{:02}", self.inspection_step));
         let title = self.paint("1", summary.title);
         writeln!(self.writer, "  {number}  {title}")?;
@@ -353,50 +379,54 @@ pub(super) struct InspectionSummary {
     detail: Option<String>,
 }
 
-pub(super) fn summarize_inspection(command: &[String]) -> InspectionSummary {
-    let command_text = command.join(" ");
-    let title = if command_text.contains("AGENTS.md") {
-        "Discovering project instructions"
-    } else if command_text.contains(".cortex/") {
-        "Reading architecture and project guidance"
-    } else if command_text.contains("rg -n") || command_text.contains("rg --line-number") {
-        "Searching implementation"
-    } else if command_text.contains("rg --files") {
-        "Mapping repository structure"
-    } else if command_text.contains("sed -n") {
-        "Reading implementation context"
-    } else if command_text.contains("cargo ") || command_text.contains("task ") {
-        "Checking repository behavior"
-    } else {
-        "Inspecting repository"
-    };
+impl InspectionSummary {
+    pub(super) fn summarize_inspection(command: &[String]) -> InspectionSummary {
+        let command_text = command.join(" ");
+        let title = if command_text.contains("AGENTS.md") {
+            "Discovering project instructions"
+        } else if command_text.contains(".cortex/") {
+            "Reading architecture and project guidance"
+        } else if command_text.contains("rg -n") || command_text.contains("rg --line-number") {
+            "Searching implementation"
+        } else if command_text.contains("rg --files") {
+            "Mapping repository structure"
+        } else if command_text.contains("sed -n") {
+            "Reading implementation context"
+        } else if command_text.contains("cargo ") || command_text.contains("task ") {
+            "Checking repository behavior"
+        } else {
+            "Inspecting repository"
+        };
 
-    InspectionSummary {
-        title,
-        detail: inspection_file_hints(&command_text),
+        InspectionSummary {
+            title,
+            detail: InspectionSummary::inspection_file_hints(&command_text),
+        }
     }
 }
 
-pub(super) fn inspection_file_hints(command: &str) -> Option<String> {
-    let mut files = Vec::new();
-    for token in command.split_whitespace() {
-        let token = token.trim_matches(|character: char| {
-            matches!(character, '\'' | '"' | ';' | ',' | '(' | ')' | ':' | '\\')
-        });
-        let looks_like_file = [".md", ".rs", ".ts", ".svelte", ".yml", ".yaml", ".toml"]
-            .iter()
-            .any(|extension| token.ends_with(extension));
-        if looks_like_file
-            && !token.starts_with('!')
-            && !token.contains('*')
-            && !files.contains(&token)
-        {
-            files.push(token);
+impl InspectionSummary {
+    pub(super) fn inspection_file_hints(command: &str) -> Option<String> {
+        let mut files = Vec::new();
+        for token in command.split_whitespace() {
+            let token = token.trim_matches(|character: char| {
+                matches!(character, '\'' | '"' | ';' | ',' | '(' | ')' | ':' | '\\')
+            });
+            let looks_like_file = [".md", ".rs", ".ts", ".svelte", ".yml", ".yaml", ".toml"]
+                .iter()
+                .any(|extension| token.ends_with(extension));
+            if looks_like_file
+                && !token.starts_with('!')
+                && !token.contains('*')
+                && !files.contains(&token)
+            {
+                files.push(token);
+            }
+            if files.len() == 3 {
+                break;
+            }
         }
-        if files.len() == 3 {
-            break;
-        }
-    }
 
-    (!files.is_empty()).then(|| files.join(" · "))
+        (!files.is_empty()).then(|| files.join(" · "))
+    }
 }

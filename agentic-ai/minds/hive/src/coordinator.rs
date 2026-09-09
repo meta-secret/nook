@@ -328,130 +328,151 @@ impl TaskStore for CoordinatorTaskStore {
     }
 }
 
-pub async fn run_coordinator<S: TaskStore>(socket: PathBuf, store: S) -> crate::HiveResult<()> {
-    if let Some(parent) = socket.parent() {
-        async_fs::create_dir_all(parent)
-            .await
-            .with_hive_context(|| {
-                format!("create coordinator socket directory {}", parent.display())
-            })?;
-    }
-    remove_socket_if_present(&socket).await?;
-    let listener = UnixListener::bind(&socket)
-        .with_hive_context(|| format!("bind Hive coordinator socket {}", socket.display()))?;
-    let (stream, _) = listener
-        .accept()
-        .await
-        .hive_context("accept worker coordinator channel")?;
-    drop(listener);
-    remove_socket_if_present(&socket).await?;
-
-    let (reader, mut writer) = stream.into_split();
-    let mut lines = BufReader::new(reader).lines();
-    while let Some(line) = lines
-        .next_line()
-        .await
-        .hive_context("read worker coordinator request")?
-    {
-        let response = match serde_json::from_str::<Request>(&line) {
-            Ok(request) => handle_request(&store, request)
+pub struct CoordinatorServer<S> {
+    pub socket: PathBuf,
+    pub store: S,
+}
+impl<S: TaskStore> CoordinatorServer<S> {
+    pub async fn run_coordinator(self) -> crate::HiveResult<()> {
+        let Self { socket, store } = self;
+        if let Some(parent) = socket.parent() {
+            async_fs::create_dir_all(parent)
                 .await
-                .unwrap_or_else(|error| Response::Error(format!("{error:#}"))),
-            Err(error) => Response::Error(format!("decode coordinator request: {error}")),
-        };
-        writer
-            .write_all(
-                &serde_json::to_vec(&response).hive_context("serialize coordinator response")?,
-            )
+                .with_hive_context(|| {
+                    format!("create coordinator socket directory {}", parent.display())
+                })?;
+        }
+        (CoordinatorSocket { path: &socket })
+            .remove_if_present()
+            .await?;
+        let listener = UnixListener::bind(&socket)
+            .with_hive_context(|| format!("bind Hive coordinator socket {}", socket.display()))?;
+        let (stream, _) = listener
+            .accept()
             .await
-            .hive_context("write coordinator response")?;
-        writer.write_all(b"\n").await?;
-        writer.flush().await?;
-    }
-    Ok(())
-}
+            .hive_context("accept worker coordinator channel")?;
+        drop(listener);
+        (CoordinatorSocket { path: &socket })
+            .remove_if_present()
+            .await?;
 
-async fn handle_request<S: TaskStore>(store: &S, request: Request) -> crate::HiveResult<Response> {
-    match request {
-        Request::Migrate => {
-            store.migrate().await?;
-            Ok(Response::Unit)
+        let (reader, mut writer) = stream.into_split();
+        let mut lines = BufReader::new(reader).lines();
+        while let Some(line) = lines
+            .next_line()
+            .await
+            .hive_context("read worker coordinator request")?
+        {
+            let response = match serde_json::from_str::<Request>(&line) {
+                Ok(request) => request
+                    .dispatch(&store)
+                    .await
+                    .unwrap_or_else(|error| Response::Error(format!("{error:#}"))),
+                Err(error) => Response::Error(format!("decode coordinator request: {error}")),
+            };
+            writer
+                .write_all(
+                    &serde_json::to_vec(&response)
+                        .hive_context("serialize coordinator response")?,
+                )
+                .await
+                .hive_context("write coordinator response")?;
+            writer.write_all(b"\n").await?;
+            writer.flush().await?;
         }
-        Request::RegisterAgent { agent_id, pod_name } => {
-            store.register_agent(&agent_id, &pod_name).await?;
-            Ok(Response::Unit)
-        }
-        Request::Claim {
-            agent_id,
-            lease_seconds,
-        } => Ok(Response::Claim(
-            store.claim(&agent_id, lease_seconds).await?,
-        )),
-        Request::Heartbeat {
-            task_id,
-            agent_id,
-            lease_token,
-            lease_seconds,
-        } => Ok(Response::Accepted(
-            store
-                .heartbeat(&task_id, &agent_id, &lease_token, lease_seconds)
-                .await?,
-        )),
-        Request::RecordActivity {
-            lease,
-            agent_id,
-            activity,
-        } => Ok(Response::Accepted(
-            store.record_activity(&lease, &agent_id, &activity).await?,
-        )),
-        Request::AcknowledgeCancellation { task, agent_id } => Ok(Response::Accepted(
-            store.acknowledge_cancellation(&task, &agent_id).await?,
-        )),
-        Request::Release { task, agent_id } => {
-            Ok(Response::Accepted(store.release(&task, &agent_id).await?))
-        }
-        Request::Complete {
-            task,
-            agent_id,
-            obsolete,
-            summary,
-            artifact,
-        } => Ok(Response::Accepted(
-            store
-                .complete(&task, &agent_id, obsolete, &summary, &artifact)
-                .await?,
-        )),
-        Request::Fail {
-            task,
-            agent_id,
-            error,
-        } => Ok(Response::Accepted(
-            store.fail(&task, &agent_id, &error).await?,
-        )),
-        Request::Block {
-            task,
-            agent_id,
-            blocker,
-            reason,
-        } => Ok(Response::Accepted(
-            store.block(&task, &agent_id, &blocker, &reason).await?,
-        )),
+        Ok(())
     }
 }
 
-async fn remove_socket_if_present(path: &Path) -> crate::HiveResult<()> {
-    match async_fs::remove_file(path).await {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => {
-            Err(error).with_hive_context(|| format!("remove stale socket {}", path.display()))
+impl Request {
+    async fn dispatch<S: TaskStore>(self, store: &S) -> crate::HiveResult<Response> {
+        match self {
+            Request::Migrate => {
+                store.migrate().await?;
+                Ok(Response::Unit)
+            }
+            Request::RegisterAgent { agent_id, pod_name } => {
+                store.register_agent(&agent_id, &pod_name).await?;
+                Ok(Response::Unit)
+            }
+            Request::Claim {
+                agent_id,
+                lease_seconds,
+            } => Ok(Response::Claim(
+                store.claim(&agent_id, lease_seconds).await?,
+            )),
+            Request::Heartbeat {
+                task_id,
+                agent_id,
+                lease_token,
+                lease_seconds,
+            } => Ok(Response::Accepted(
+                store
+                    .heartbeat(&task_id, &agent_id, &lease_token, lease_seconds)
+                    .await?,
+            )),
+            Request::RecordActivity {
+                lease,
+                agent_id,
+                activity,
+            } => Ok(Response::Accepted(
+                store.record_activity(&lease, &agent_id, &activity).await?,
+            )),
+            Request::AcknowledgeCancellation { task, agent_id } => Ok(Response::Accepted(
+                store.acknowledge_cancellation(&task, &agent_id).await?,
+            )),
+            Request::Release { task, agent_id } => {
+                Ok(Response::Accepted(store.release(&task, &agent_id).await?))
+            }
+            Request::Complete {
+                task,
+                agent_id,
+                obsolete,
+                summary,
+                artifact,
+            } => Ok(Response::Accepted(
+                store
+                    .complete(&task, &agent_id, obsolete, &summary, &artifact)
+                    .await?,
+            )),
+            Request::Fail {
+                task,
+                agent_id,
+                error,
+            } => Ok(Response::Accepted(
+                store.fail(&task, &agent_id, &error).await?,
+            )),
+            Request::Block {
+                task,
+                agent_id,
+                blocker,
+                reason,
+            } => Ok(Response::Accepted(
+                store.block(&task, &agent_id, &blocker, &reason).await?,
+            )),
+        }
+    }
+}
+
+struct CoordinatorSocket<'a> {
+    path: &'a Path,
+}
+impl CoordinatorSocket<'_> {
+    async fn remove_if_present(&self) -> crate::HiveResult<()> {
+        let path = self.path;
+        match async_fs::remove_file(path).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(error) => {
+                Err(error).with_hive_context(|| format!("remove stale socket {}", path.display()))
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CoordinatorTaskStore, Request, run_coordinator};
+    use super::{CoordinatorServer, CoordinatorTaskStore, Request};
     use crate::model::{
         ActivityKind, ActivityLease, AgentId, AttemptId, CompletionArtifact, LeaseToken,
         TaskActivity, TaskId,
@@ -497,8 +518,14 @@ mod tests {
         backing.enqueue(&task("complete-me", Vec::new())?).await?;
         let server_store = backing.clone();
         let server_socket = socket.clone();
-        let server =
-            tokio::spawn(async move { run_coordinator(server_socket, server_store).await });
+        let server = tokio::spawn(async move {
+            (CoordinatorServer {
+                socket: server_socket,
+                store: server_store,
+            })
+            .run_coordinator()
+            .await
+        });
         let client = CoordinatorTaskStore::connect(&socket).await?;
         let agent = AgentId::new("worker-1")?;
 

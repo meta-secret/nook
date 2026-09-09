@@ -1,5 +1,36 @@
 import { resolve } from "node:path";
 
+class OvhDedicatedContractRead {
+  constructor(private readonly request: string) {}
+  async execute(): Promise<string> {
+    const relative = this.request;
+
+    return Bun.file(resolve(root, relative)).text();
+  }
+}
+
+class OvhDedicatedContractRequireFragment {
+  constructor(private readonly request: ContractInput) {}
+  execute(): void {
+    const input = this.request;
+
+    if (!input.source.includes(input.fragment)) {
+      throw new Error(`${input.label} is missing ${input.fragment}`);
+    }
+  }
+}
+
+class OvhDedicatedContractForbidFragment {
+  constructor(private readonly request: ContractInput) {}
+  execute(): void {
+    const input = this.request;
+
+    if (input.source.includes(input.fragment)) {
+      throw new Error(`${input.label} contains prohibited ${input.fragment}`);
+    }
+  }
+}
+
 const root = resolve(import.meta.dir, "../..");
 
 interface ContractInput {
@@ -25,27 +56,15 @@ interface ServerInventory {
   servers: Record<string, ServerDefinition>;
 }
 
-async function read(relative: string): Promise<string> {
-  return Bun.file(resolve(root, relative)).text();
-}
-
-function requireFragment(input: ContractInput): void {
-  if (!input.source.includes(input.fragment)) {
-    throw new Error(`${input.label} is missing ${input.fragment}`);
-  }
-}
-
-function forbidFragment(input: ContractInput): void {
-  if (input.source.includes(input.fragment)) {
-    throw new Error(`${input.label} contains prohibited ${input.fragment}`);
-  }
-}
-
-const provider = await read("infra/providers/ovh-dedicated.ts");
-const tasks = await read("infra/tasks/providers.yml");
-const inventorySource = await read(
+const provider = await new OvhDedicatedContractRead(
+  "infra/providers/ovh-dedicated.ts",
+).execute();
+const tasks = await new OvhDedicatedContractRead(
+  "infra/tasks/providers.yml",
+).execute();
+const inventorySource = await new OvhDedicatedContractRead(
   "infra/providers/ovh-dedicated-servers.yaml",
-);
+).execute();
 const inventory = Bun.YAML.parse(inventorySource) as ServerInventory;
 
 for (const fragment of [
@@ -74,7 +93,11 @@ for (const fragment of [
   "requireCompatibleTemplate",
   "validateServer",
 ]) {
-  requireFragment({ fragment, label: "OVH provider", source: provider });
+  new OvhDedicatedContractRequireFragment({
+    fragment,
+    label: "OVH provider",
+    source: provider,
+  }).execute();
 }
 
 for (const fragment of [
@@ -82,7 +105,11 @@ for (const fragment of [
   "applicationSecret}",
   "consumerKey}",
 ]) {
-  forbidFragment({ fragment, label: "OVH provider", source: provider });
+  new OvhDedicatedContractForbidFragment({
+    fragment,
+    label: "OVH provider",
+    source: provider,
+  }).execute();
 }
 
 for (const fragment of [
@@ -108,7 +135,11 @@ for (const fragment of [
   "INFRA_WORKER_MESH_ADDRESS",
   "INFRA_WORKER_ARC_TIER",
 ]) {
-  requireFragment({ fragment, label: "OVH Taskfile", source: tasks });
+  new OvhDedicatedContractRequireFragment({
+    fragment,
+    label: "OVH Taskfile",
+    source: tasks,
+  }).execute();
 }
 
 for (const fragment of [
@@ -117,12 +148,21 @@ for (const fragment of [
   'if ! sudo -n k0s kubectl get node "$node"',
   '"$known_hosts.merged"',
 ]) {
-  forbidFragment({ fragment, label: "OVH Taskfile", source: tasks });
+  new OvhDedicatedContractForbidFragment({
+    fragment,
+    label: "OVH Taskfile",
+    source: tasks,
+  }).execute();
 }
 
 const expectedServers = ["nook-rise-s-1", "nook-rise-s-2"];
-if (Object.keys(inventory.servers).sort().join("\n") !== expectedServers.join("\n")) {
-  throw new Error("OVH inventory must declare both Rise-S workers exactly once");
+if (
+  Object.keys(inventory.servers).sort().join("\n") !==
+  expectedServers.join("\n")
+) {
+  throw new Error(
+    "OVH inventory must declare both Rise-S workers exactly once",
+  );
 }
 const meshAddresses = new Set<string>();
 for (const [hostname, server] of Object.entries(inventory.servers)) {
@@ -135,7 +175,9 @@ for (const [hostname, server] of Object.entries(inventory.servers)) {
     !/^10\.202\.0\.[2-9][0-9]?$/.test(server.meshAddress) ||
     !/^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(hostname)
   ) {
-    throw new Error(`OVH inventory entry ${hostname} violates the worker contract`);
+    throw new Error(
+      `OVH inventory entry ${hostname} violates the worker contract`,
+    );
   }
   if (meshAddresses.has(server.meshAddress)) {
     throw new Error("OVH inventory reuses a private mesh address");
@@ -150,7 +192,11 @@ for (const fragment of [
   "password",
   "token",
 ]) {
-  forbidFragment({ fragment, label: "OVH inventory", source: inventorySource });
+  new OvhDedicatedContractForbidFragment({
+    fragment,
+    label: "OVH inventory",
+    source: inventorySource,
+  }).execute();
 }
 
 console.log("OVH dedicated provisioning contract: ok");

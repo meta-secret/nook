@@ -4,42 +4,55 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 
 import {
-  createFixPr,
-  requiredPrCheckNames,
-  requiredPrWorkflows,
+  GitHubClient,
+  PullRequestCheckSelection,
+  PullRequestWorkflowSelection,
 } from "../main/github.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 
 test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
-  assert.deepEqual(requiredPrCheckNames([".cortex/AGENTS.md"]), []);
   assert.deepEqual(
-    requiredPrCheckNames(["nook-app/nook-platform/nook-core/src/lib.rs"]),
+    new PullRequestCheckSelection([".cortex/AGENTS.md"]).names(),
+    [],
+  );
+  assert.deepEqual(
+    new PullRequestCheckSelection([
+      "nook-app/nook-platform/nook-core/src/lib.rs",
+    ]).names(),
     ["Verify and preview"],
   );
   assert.deepEqual(
-    requiredPrCheckNames(["nook-app/nook-platform/.cargo/config.toml"]),
+    new PullRequestCheckSelection([
+      "nook-app/nook-platform/.cargo/config.toml",
+    ]).names(),
     ["Verify and preview"],
   );
-  assert.deepEqual(requiredPrCheckNames(["preflight/Cargo.lock"]), [
-    "Verify and preview",
-  ]);
-  assert.deepEqual(requiredPrCheckNames(["agentic-ai/minds/Cargo.lock"]), [
-    "Rust ecosystem checks",
-  ]);
   assert.deepEqual(
-    requiredPrCheckNames(["nook-app/nook-web/nook-web-research/src/main.ts"]),
+    new PullRequestCheckSelection(["preflight/Cargo.lock"]).names(),
+    ["Verify and preview"],
+  );
+  assert.deepEqual(
+    new PullRequestCheckSelection(["agentic-ai/minds/Cargo.lock"]).names(),
+    ["Rust ecosystem checks"],
+  );
+  assert.deepEqual(
+    new PullRequestCheckSelection([
+      "nook-app/nook-web/nook-web-research/src/main.ts",
+    ]).names(),
     ["Build and deploy research catalog"],
   );
   assert.deepEqual(
-    requiredPrCheckNames([
+    new PullRequestCheckSelection([
       "nook-app/nook-platform/nook-core/src/lib.rs",
       "nook-app/nook-web/nook-web-research/src/main.ts",
-    ]),
+    ]).names(),
     ["Build and deploy research catalog", "Verify and preview"],
   );
   assert.deepEqual(
-    requiredPrWorkflows(["nook-app/nook-platform/nook-core/src/lib.rs"]),
+    new PullRequestWorkflowSelection([
+      "nook-app/nook-platform/nook-core/src/lib.rs",
+    ]).names(),
     [
       {
         checkName: "Verify and preview",
@@ -55,13 +68,16 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
       },
     ],
   );
-  assert.deepEqual(requiredPrWorkflows(["agentic-ai/minds/Cargo.lock"]), [
-    {
-      checkName: "Rust ecosystem checks",
-      workflowFile: "rust-ecosystem.yml",
-      workflowName: "Rust ecosystem checks",
-    },
-  ]);
+  assert.deepEqual(
+    new PullRequestWorkflowSelection(["agentic-ai/minds/Cargo.lock"]).names(),
+    [
+      {
+        checkName: "Rust ecosystem checks",
+        workflowFile: "rust-ecosystem.yml",
+        workflowName: "Rust ecosystem checks",
+      },
+    ],
+  );
 });
 test("createFixPr leaves the PR body free of automatic merge control markers", async () => {
   let createdBody = "";
@@ -81,14 +97,13 @@ test("createFixPr leaves the PR body free of automatic merge control markers", a
   const priorBody = process.env.AGENT_PR_BODY;
   process.env.AGENT_PR_BODY = "## Summary\n\nOpen this PR for review.";
   try {
-    const prNumber = await createFixPr(
-      octokit,
-      repoRef,
-      "agent/fix",
-      "run-42",
-      "focused issue",
-      "codex/predecessor",
-    );
+    const prNumber = await new GitHubClient(octokit).createFixPr({
+      repoRef: repoRef,
+      headBranch: "agent/fix",
+      runId: "run-42",
+      fixLabel: "focused issue",
+      baseBranch: "codex/predecessor",
+    });
     assert.equal(prNumber, 347);
     assert.equal(createdBase, "codex/predecessor");
     assert.equal(createdBody, "## Summary\n\nOpen this PR for review.");

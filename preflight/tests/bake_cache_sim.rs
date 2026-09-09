@@ -1,16 +1,36 @@
 use std::path::PathBuf;
 use std::{env, fs};
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl std::ops::Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<std::path::Path> for RepositoryFixture {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
-fn read(relative_path: &str) -> String {
-    fs::read_to_string(repository_root().join(relative_path))
-        .unwrap_or_else(|error| panic!("failed to read {relative_path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, relative_path: &str) -> String {
+        fs::read_to_string(self.join(relative_path))
+            .unwrap_or_else(|error| panic!("failed to read {relative_path}: {error}"))
+    }
 }
 
 #[test]
@@ -36,15 +56,16 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         format!("{sim}/inputs/consumer.txt"),
     ] {
         assert!(
-            repository_root().join(&path).is_file(),
+            RepositoryFixture::repository_root().join(&path).is_file(),
             "missing bake-cache sim fixture {path}"
         );
     }
 
-    let bake = read(&format!("{sim}/docker-bake.hcl"));
-    let tasks = read("infra/tasks/bake-cache.yml");
-    let zot = read(&format!("{sim}/zot-config.json"));
-    let quality = read(".cortex/teams/sre/workflows/quality.md");
+    let bake = RepositoryFixture::repository_root().read(&format!("{sim}/docker-bake.hcl"));
+    let tasks = RepositoryFixture::repository_root().read("infra/tasks/bake-cache.yml");
+    let zot = RepositoryFixture::repository_root().read(&format!("{sim}/zot-config.json"));
+    let quality =
+        RepositoryFixture::repository_root().read(".cortex/teams/sre/workflows/quality.md");
 
     assert!(
         zot.contains("\"compat\": [\"docker2s2\"]") && zot.contains("anonymousPolicy"),
@@ -98,7 +119,9 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     );
     assert!(
         !combined_leaf.contains("contexts =")
-            && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS base"),
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/combined-nightly.Dockerfile"))
+                .contains("AS base"),
         "fixed control must keep base, parent, and leaf in one Dockerfile lineage"
     );
     let leaf_from = assignment_body(&bake, "leaf_cache_from");
@@ -162,11 +185,21 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("buildx inspect \"$builder\" --bootstrap")
             && tasks.contains("bake-sim-crate-a-expensive")
             && tasks.contains("bake-sim-crate-b-expensive")
-            && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS crate-a")
-            && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS crate-b")
-            && read(&format!("{sim}/hive.Dockerfile")).contains("AS fetched-dependencies")
-            && read(&format!("{sim}/hive.Dockerfile")).contains("AS test-dependencies")
-            && read(&format!("{sim}/hive.Dockerfile")).contains("AS clippy-dependencies")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/combined-nightly.Dockerfile"))
+                .contains("AS crate-a")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/combined-nightly.Dockerfile"))
+                .contains("AS crate-b")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/hive.Dockerfile"))
+                .contains("AS fetched-dependencies")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/hive.Dockerfile"))
+                .contains("AS test-dependencies")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/hive.Dockerfile"))
+                .contains("AS clippy-dependencies")
             && tasks.contains("bake-sim-hive-cargo-fetch")
             && tasks.contains("nook-bake-sim-y-pr-a-retry")
             && tasks.contains("nook-bake-sim-y-pr-b-retry")

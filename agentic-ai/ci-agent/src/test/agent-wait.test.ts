@@ -1,30 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatDuration, waitWithHeartbeat } from "../main/agent-wait.js";
+import { ElapsedDuration, AgentWait } from "../main/agent-wait.js";
 
 test("formatDuration renders human-readable durations", () => {
-  assert.equal(formatDuration(45_000), "45s");
-  assert.equal(formatDuration(125_000), "2m 5s");
-  assert.equal(formatDuration(3_725_000), "1h 2m 5s");
+  assert.equal(new ElapsedDuration(45_000).format(), "45s");
+  assert.equal(new ElapsedDuration(125_000).format(), "2m 5s");
+  assert.equal(new ElapsedDuration(3_725_000).format(), "1h 2m 5s");
 });
 
 test("waitWithHeartbeat resolves when work completes", async () => {
-  const result = await waitWithHeartbeat(
-    "Test",
-    async () => "done",
-    { timeoutMs: 5_000, heartbeatMs: 60_000 },
-  );
+  const result = await new AgentWait({
+    label: "Test",
+    wait: async () => "done",
+    options: { timeoutMs: 5_000, heartbeatMs: 60_000 },
+  }).complete();
   assert.equal(result, "done");
 });
 
 test("waitWithHeartbeat rejects on timeout", async () => {
   await assert.rejects(
-    waitWithHeartbeat(
-      "Test",
-      () => new Promise(() => {}),
-      { timeoutMs: 50, heartbeatMs: 60_000 },
-    ),
+    new AgentWait({
+      label: "Test",
+      wait: () => new Promise(() => {}),
+      options: { timeoutMs: 50, heartbeatMs: 60_000 },
+    }).complete(),
     /timed out/,
   );
 });

@@ -1,3 +1,4 @@
+use nook_preflight::dockerfile_cache::DockerfileRepository;
 use std::{env, path::PathBuf};
 
 #[test]
@@ -7,7 +8,7 @@ fn dockerfiles_do_not_use_buildkit_cache_mounts() -> anyhow::Result<()> {
         PathBuf::from,
     );
 
-    let violations = nook_preflight::dockerfile_cache_mounts(&repository_root)?;
+    let violations = DockerfileRepository::new(&repository_root).dockerfile_cache_mounts()?;
 
     assert!(
         violations.is_empty(),

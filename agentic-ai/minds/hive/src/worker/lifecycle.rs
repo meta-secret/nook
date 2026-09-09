@@ -25,106 +25,142 @@ pub(super) enum ClaimStep {
     Stopped,
 }
 
-pub(super) async fn claim_once<S: TaskStore>(
-    store: &S,
-    agent_id: &AgentId,
-    lease_seconds: i64,
-    shutdown: watch::Receiver<bool>,
-    lifecycle_marker: &Path,
-) -> HiveResult<ClaimStep> {
-    let claim = store.claim(agent_id, lease_seconds);
-    match finish_claim_during_shutdown(claim, shutdown).await {
-        ClaimWindow::Stopped => {
-            mark_interrupted(lifecycle_marker).await?;
-            Ok(ClaimStep::Stopped)
-        }
-        ClaimWindow::CompletedDuringShutdown(outcome) => {
-            match outcome {
-                Ok(ClaimOutcome::Claimed(task)) => {
-                    release_during_shutdown(store, &task, agent_id).await;
-                }
-                Ok(ClaimOutcome::NoTask) => {}
-                Err(error) => {
-                    mark_interrupted(lifecycle_marker).await?;
-                    return Err(error);
-                }
-            }
-            mark_interrupted(lifecycle_marker).await?;
-            Ok(ClaimStep::Stopped)
-        }
-        ClaimWindow::Completed(Ok(ClaimOutcome::Claimed(task))) => Ok(ClaimStep::Claimed(task)),
-        ClaimWindow::Completed(Ok(ClaimOutcome::NoTask)) => Ok(ClaimStep::NoTask),
-        ClaimWindow::Completed(Err(error)) => Err(error),
-    }
-}
-
-async fn release_during_shutdown<S: TaskStore>(store: &S, task: &ClaimedTask, agent_id: &AgentId) {
-    loop {
-        match store.release(task, agent_id).await {
-            Ok(_) => return,
-            Err(_) => async_time::sleep(Duration::from_millis(250)).await,
-        }
-    }
-}
-
-pub(super) async fn mark_interrupted(lifecycle_marker: &Path) -> HiveResult<()> {
-    async_fs::write(lifecycle_marker, b"rollout-before-execution")
+impl<S: TaskStore> TaskClaim<'_, S> {
+    pub(super) async fn claim(self) -> HiveResult<ClaimStep> {
+        let Self {
+            store,
+            agent_id,
+            lease_seconds,
+            shutdown,
+            lifecycle_marker,
+        } = self;
+        let claim = store.claim(agent_id, lease_seconds);
+        match ClaimWindow::finish(ClaimCompletion {
+            claim: claim,
+            shutdown: shutdown,
+        })
         .await
-        .hive_context("mark interrupted Pod for replacement")
-}
-
-pub(super) async fn finish_claim_during_shutdown<F, T>(
-    claim: F,
-    shutdown: watch::Receiver<bool>,
-) -> ClaimWindow<T>
-where
-    F: Future<Output = T>,
-{
-    if *shutdown.borrow() {
-        return ClaimWindow::Stopped;
-    }
-    tokio::pin!(claim);
-    tokio::select! {
-        biased;
-        requested = shutdown_requested(shutdown) => {
-            if requested.is_err() {
-                return ClaimWindow::Stopped;
+        {
+            ClaimWindow::Stopped => {
+                WorkerCompletionMarker {
+                    path: lifecycle_marker,
+                }
+                .mark_interrupted()
+                .await?;
+                Ok(ClaimStep::Stopped)
             }
-            ClaimWindow::CompletedDuringShutdown(claim.await)
+            ClaimWindow::CompletedDuringShutdown(outcome) => {
+                match outcome {
+                    Ok(ClaimOutcome::Claimed(task)) => {
+                        ShutdownLease { store, agent_id }
+                            .release_during_shutdown(&task)
+                            .await;
+                    }
+                    Ok(ClaimOutcome::NoTask) => {}
+                    Err(error) => {
+                        WorkerCompletionMarker {
+                            path: lifecycle_marker,
+                        }
+                        .mark_interrupted()
+                        .await?;
+                        return Err(error);
+                    }
+                }
+                WorkerCompletionMarker {
+                    path: lifecycle_marker,
+                }
+                .mark_interrupted()
+                .await?;
+                Ok(ClaimStep::Stopped)
+            }
+            ClaimWindow::Completed(Ok(ClaimOutcome::Claimed(task))) => Ok(ClaimStep::Claimed(task)),
+            ClaimWindow::Completed(Ok(ClaimOutcome::NoTask)) => Ok(ClaimStep::NoTask),
+            ClaimWindow::Completed(Err(error)) => Err(error),
         }
-        result = &mut claim => ClaimWindow::Completed(result),
     }
 }
 
-pub(super) async fn shutdown_requested(mut shutdown: watch::Receiver<bool>) -> HiveResult<()> {
-    shutdown
-        .wait_for(|requested| *requested)
-        .await
-        .map(|_| ())
-        .hive_context("worker termination signal relay stopped")
+impl<S: TaskStore> ShutdownLease<'_, S> {
+    async fn release_during_shutdown(&self, task: &ClaimedTask) {
+        let store = self.store;
+        let agent_id = self.agent_id;
+        loop {
+            match store.release(task, agent_id).await {
+                Ok(_) => return,
+                Err(_) => async_time::sleep(Duration::from_millis(250)).await,
+            }
+        }
+    }
 }
 
-pub(super) fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> HiveResult<()> {
-    fs::create_dir_all(workspace)?;
-    let startup_marker = workspace.join(".hive-worker-started");
-    let startup_file = fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(&startup_marker);
-    let mut startup_file = match startup_file {
-        Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-            fs::write(workspace.join(".hive-task-finished"), pod_name)?;
-            return Err(error)
-                .hive_context("refusing to restart a Hive worker inside an existing Pod");
+impl WorkerCompletionMarker<'_> {
+    pub(super) async fn mark_interrupted(&self) -> HiveResult<()> {
+        let lifecycle_marker = self.path;
+        async_fs::write(lifecycle_marker, b"rollout-before-execution")
+            .await
+            .hive_context("mark interrupted Pod for replacement")
+    }
+}
+
+impl<T> ClaimWindow<T> {
+    pub(super) async fn finish<F>(request: ClaimCompletion<F>) -> ClaimWindow<T>
+    where
+        F: Future<Output = T>,
+    {
+        let ClaimCompletion { claim, shutdown } = request;
+        if *shutdown.borrow() {
+            return ClaimWindow::Stopped;
         }
-        Err(error) => {
-            return Err(error).hive_context("failed to establish Hive worker lifecycle");
+        tokio::pin!(claim);
+        tokio::select! {
+            biased;
+            requested = WorkerShutdown { receiver: shutdown }.requested() => {
+                if requested.is_err() {
+                    return ClaimWindow::Stopped;
+                }
+                ClaimWindow::CompletedDuringShutdown(claim.await)
+            }
+            result = &mut claim => ClaimWindow::Completed(result),
         }
-    };
-    startup_file.write_all(pod_name.as_bytes())?;
-    startup_file.sync_all()?;
-    Ok(())
+    }
+}
+
+impl WorkerShutdown {
+    pub(super) async fn requested(self) -> HiveResult<()> {
+        let mut shutdown = self.receiver;
+        shutdown
+            .wait_for(|requested| *requested)
+            .await
+            .map(|_| ())
+            .hive_context("worker termination signal relay stopped")
+    }
+}
+
+impl WorkerStartup<'_> {
+    pub(super) fn establish(&self) -> HiveResult<()> {
+        let workspace = self.workspace;
+        let pod_name = self.pod_name;
+        fs::create_dir_all(workspace)?;
+        let startup_marker = workspace.join(".hive-worker-started");
+        let startup_file = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&startup_marker);
+        let mut startup_file = match startup_file {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                fs::write(workspace.join(".hive-task-finished"), pod_name)?;
+                return Err(error)
+                    .hive_context("refusing to restart a Hive worker inside an existing Pod");
+            }
+            Err(error) => {
+                return Err(error).hive_context("failed to establish Hive worker lifecycle");
+            }
+        };
+        startup_file.write_all(pod_name.as_bytes())?;
+        startup_file.sync_all()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -138,8 +174,8 @@ mod tests {
     use async_trait::async_trait;
 
     use super::{
-        ClaimStep, ClaimWindow, claim_once, establish_worker_lifecycle,
-        finish_claim_during_shutdown,
+        ClaimCompletion, ClaimStep, ClaimWindow, TaskClaim, WorkerCompletionMarker, WorkerShutdown,
+        WorkerStartup,
     };
     use crate::model::{
         ActivityLease, AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
@@ -152,13 +188,13 @@ mod tests {
         let (claim_tx, claim_rx) = oneshot::channel();
         let (started_tx, started_rx) = oneshot::channel();
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
-        let claim = tokio::spawn(finish_claim_during_shutdown(
-            async move {
+        let claim = tokio::spawn(ClaimWindow::finish(ClaimCompletion {
+            claim: async move {
                 let _ = started_tx.send(());
                 claim_rx.await
             },
-            shutdown_rx,
-        ));
+            shutdown: shutdown_rx,
+        }));
 
         started_rx.await?;
         shutdown_tx.send(true)?;
@@ -184,7 +220,11 @@ mod tests {
         shutdown_tx.send(true)?;
 
         assert!(matches!(
-            finish_claim_during_shutdown(async { panic!("claim was polled") }, shutdown_rx).await,
+            ClaimWindow::finish(ClaimCompletion {
+                claim: async { panic!("claim was polled") },
+                shutdown: shutdown_rx
+            })
+            .await,
             ClaimWindow::Stopped
         ));
         Ok(())
@@ -202,7 +242,15 @@ mod tests {
         let claim_agent = agent.clone();
         let claim_marker = marker.clone();
         let claim = tokio::spawn(async move {
-            claim_once(&claim_store, &claim_agent, 3600, shutdown_rx, &claim_marker).await
+            TaskClaim {
+                store: &claim_store,
+                agent_id: &claim_agent,
+                lease_seconds: 3600,
+                shutdown: shutdown_rx,
+                lifecycle_marker: &claim_marker,
+            }
+            .claim()
+            .await
         });
 
         store.claim_started.notified().await;
@@ -220,10 +268,18 @@ mod tests {
     fn a_restarted_process_cannot_reuse_the_same_pod_workspace() -> anyhow::Result<()> {
         let workspace = tempfile::tempdir()?;
 
-        establish_worker_lifecycle(workspace.path(), "pod-a")?;
-        let error = establish_worker_lifecycle(workspace.path(), "pod-a")
-            .err()
-            .ok_or_else(|| anyhow::anyhow!("the second worker process must be rejected"))?;
+        WorkerStartup {
+            workspace: workspace.path(),
+            pod_name: "pod-a",
+        }
+        .establish()?;
+        let error = WorkerStartup {
+            workspace: workspace.path(),
+            pod_name: "pod-a",
+        }
+        .establish()
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("the second worker process must be rejected"))?;
 
         assert!(
             error
@@ -395,4 +451,30 @@ mod tests {
             unreachable!("not used by claim lifecycle test")
         }
     }
+}
+
+pub(super) struct TaskClaim<'a, S> {
+    pub(super) store: &'a S,
+    pub(super) agent_id: &'a AgentId,
+    pub(super) lease_seconds: i64,
+    pub(super) shutdown: watch::Receiver<bool>,
+    pub(super) lifecycle_marker: &'a Path,
+}
+struct ShutdownLease<'a, S> {
+    store: &'a S,
+    agent_id: &'a AgentId,
+}
+pub(super) struct WorkerCompletionMarker<'a> {
+    pub(super) path: &'a Path,
+}
+pub(super) struct WorkerStartup<'a> {
+    pub(super) workspace: &'a Path,
+    pub(super) pod_name: &'a str,
+}
+pub(super) struct WorkerShutdown {
+    pub(super) receiver: watch::Receiver<bool>,
+}
+pub(super) struct ClaimCompletion<F> {
+    pub(super) claim: F,
+    pub(super) shutdown: watch::Receiver<bool>,
 }

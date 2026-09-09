@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 #[test]
 fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
-    let root = repository_root()?;
+    let root = RepositoryFixture::repository_root()?;
     let policy = read_json(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
     let enforced = string_set(&policy, "enforced_packages")?;
     let excluded = excluded_packages(&policy)?;
@@ -42,7 +42,7 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
 }
 #[test]
 fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow::Result<()> {
-    let root = repository_root()?;
+    let root = RepositoryFixture::repository_root()?;
     let product = read(&root.join("nook-app/nook-platform/docker/rust/product.Dockerfile"))?;
     let nightly = read(&root.join("nook-app/nook-platform/docker/rust/nightly.Dockerfile"))?;
     let docker_tasks = read(&root.join("nook-app/nook-platform/docker/Taskfile.yml"))?;

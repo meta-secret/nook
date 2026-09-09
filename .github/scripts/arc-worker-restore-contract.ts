@@ -75,13 +75,12 @@ class WorkerTokenCleanupContract {
       source: source.slice(sessionStart, sessionEnd),
     });
     session.count({
-      fragment:
-        'ssh -o BatchMode=yes -J "$controller_target" "$worker_target"',
+      fragment: 'ssh -o BatchMode=yes -J "$controller_target" "$worker_target"',
       expected: 1,
     });
     session.requireAll([
       "printf '%s' \"$token\"",
-      'IFS= read -r worker_mesh_address',
+      "IFS= read -r worker_mesh_address",
       'token_temp="$(mktemp)"',
       "trap cleanup_worker_token EXIT",
       'cat > "$token_temp"',
@@ -315,7 +314,9 @@ class WorkerServiceStateContract {
         WorkerReclaimInputState.ActiveWithoutUnit
       ] !== WorkerReclaimOutcome.Rejected
     ) {
-      throw new Error("k0s worker reclaim accepted active service without unit");
+      throw new Error(
+        "k0s worker reclaim accepted active service without unit",
+      );
     }
     const contract = new TextContract({
       label: "k0s worker service-state transition",
@@ -386,14 +387,8 @@ class ArcWorkloadDrainContract {
       },
     };
     const fixtures = new Map([
-      [
-        RunnerDrainCase.ScaleSetOnly,
-        { expected: [1, 1], pods: [scaleSetPod] },
-      ],
-      [
-        RunnerDrainCase.BrowserOnly,
-        { expected: [1, 1], pods: [browserPod] },
-      ],
+      [RunnerDrainCase.ScaleSetOnly, { expected: [1, 1], pods: [scaleSetPod] }],
+      [RunnerDrainCase.BrowserOnly, { expected: [1, 1], pods: [browserPod] }],
       [
         RunnerDrainCase.Both,
         { expected: [2, 2], pods: [scaleSetPod, browserPod] },

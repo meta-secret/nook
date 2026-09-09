@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { AgentTextLog, ShellStreamLog, type LogWriter } from "../main/interaction-log.js";
+import {
+  AgentTextLog,
+  ShellStreamLog,
+  type LogWriter,
+} from "../main/interaction-log.js";
 
 function captureLog() {
   const lines: string[] = [];
@@ -15,7 +19,12 @@ function captureLog() {
   return { lines, streamed, writer };
 }
 
-function assertLogLines(lines: string[], component: string, message: string, count = 1): void {
+function assertLogLines(
+  lines: string[],
+  component: string,
+  message: string,
+  count = 1,
+): void {
   assert.equal(lines.length, count);
   for (const line of lines) {
     assert.match(
@@ -37,7 +46,10 @@ test("AgentTextLog opens a block and streams agent text incrementally", () => {
   log.closeBlock();
 
   assertLogLines(lines, "ci-agent/cursor/agent", "agent output");
-  assert.equal(streamed.text, "    The run may still be finishing;\n    I'll check the logs.\n");
+  assert.equal(
+    streamed.text,
+    "    The run may still be finishing;\n    I'll check the logs.\n",
+  );
 });
 
 test("AgentTextLog closes an in-progress line before the next block", () => {

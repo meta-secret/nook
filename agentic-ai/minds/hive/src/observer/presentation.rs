@@ -108,124 +108,131 @@ pub struct ObservedActivity {
     pub attempt_number: i64,
 }
 
-pub(super) fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<ObservedAlert> {
-    let copy = ObserverCopy::for_locale(locale);
-    let mut alerts = tasks
-        .iter()
-        .filter_map(|task| {
-            let (kind, severity, first_observed_at, reason) = match task.status.as_str() {
-                "FAILED" if task.dependency_failure => (
-                    AlertKind::DependencyFailed,
-                    AlertSeverity::Critical,
-                    task.updated_at,
-                    copy.alert_dependency_failed,
-                ),
-                "FAILED" => (
-                    AlertKind::TaskFailed,
-                    AlertSeverity::Critical,
-                    task.latest_attempt_completed_at.max(task.updated_at),
-                    copy.alert_task_failed,
-                ),
-                "BLOCKED" => (
-                    AlertKind::DependencyBlocked,
-                    AlertSeverity::Warning,
-                    task.updated_at,
-                    copy.alert_dependency_blocked,
-                ),
-                "RUNNING"
-                    if now
-                        - task
-                            .latest_activity_at
-                            .max(task.latest_attempt_started_at)
-                            .max(task.created_at)
-                        > STALE_ACTIVITY_MS =>
-                {
-                    (
-                        AlertKind::ActivityStale,
+impl ObservedAlert {
+    pub(super) fn derive_alerts(
+        tasks: &[ObservedTask],
+        now: i64,
+        locale: &str,
+    ) -> Vec<ObservedAlert> {
+        let copy = ObserverCopy::for_locale(locale);
+        let mut alerts = tasks
+            .iter()
+            .filter_map(|task| {
+                let (kind, severity, first_observed_at, reason) = match task.status.as_str() {
+                    "FAILED" if task.dependency_failure => (
+                        AlertKind::DependencyFailed,
+                        AlertSeverity::Critical,
+                        task.updated_at,
+                        copy.alert_dependency_failed,
+                    ),
+                    "FAILED" => (
+                        AlertKind::TaskFailed,
+                        AlertSeverity::Critical,
+                        task.latest_attempt_completed_at.max(task.updated_at),
+                        copy.alert_task_failed,
+                    ),
+                    "BLOCKED" => (
+                        AlertKind::DependencyBlocked,
                         AlertSeverity::Warning,
-                        task.latest_activity_at
-                            .max(task.latest_attempt_started_at)
-                            .max(task.created_at)
-                            + STALE_ACTIVITY_MS,
-                        copy.alert_activity_stale,
-                    )
-                }
-                "CANCELLING" if now - task.updated_at > STUCK_CANCELLATION_MS => (
-                    AlertKind::CancellationStuck,
-                    AlertSeverity::Warning,
-                    task.updated_at + STUCK_CANCELLATION_MS,
-                    copy.alert_cancellation_stuck,
-                ),
-                _ => return None,
-            };
-            Some(ObservedAlert {
-                id: format!("{}:{}", kind.as_str(), task.id),
-                kind,
-                severity,
-                task_id: task.id.clone(),
-                first_observed_at,
-                reason: reason.to_owned(),
+                        task.updated_at,
+                        copy.alert_dependency_blocked,
+                    ),
+                    "RUNNING"
+                        if now
+                            - task
+                                .latest_activity_at
+                                .max(task.latest_attempt_started_at)
+                                .max(task.created_at)
+                            > STALE_ACTIVITY_MS =>
+                    {
+                        (
+                            AlertKind::ActivityStale,
+                            AlertSeverity::Warning,
+                            task.latest_activity_at
+                                .max(task.latest_attempt_started_at)
+                                .max(task.created_at)
+                                + STALE_ACTIVITY_MS,
+                            copy.alert_activity_stale,
+                        )
+                    }
+                    "CANCELLING" if now - task.updated_at > STUCK_CANCELLATION_MS => (
+                        AlertKind::CancellationStuck,
+                        AlertSeverity::Warning,
+                        task.updated_at + STUCK_CANCELLATION_MS,
+                        copy.alert_cancellation_stuck,
+                    ),
+                    _ => return None,
+                };
+                Some(ObservedAlert {
+                    id: format!("{}:{}", kind.as_str(), task.id),
+                    kind,
+                    severity,
+                    task_id: task.id.clone(),
+                    first_observed_at,
+                    reason: reason.to_owned(),
+                })
             })
-        })
-        .collect::<Vec<_>>();
-    alerts.sort_by(|left, right| {
-        left.severity
-            .cmp(&right.severity)
-            .then_with(|| left.first_observed_at.cmp(&right.first_observed_at))
-            .then_with(|| left.task_id.cmp(&right.task_id))
-    });
-    alerts.truncate(ALERT_LIMIT);
-    alerts
-}
-
-pub(super) fn localized_task_kind(kind: &str, locale: &str) -> String {
-    let russian =
-        locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
-    match (kind, russian) {
-        ("main-repair", true) => "Восстановление main".to_owned(),
-        ("blocker", true) => "Блокирующая задача".to_owned(),
-        ("main-repair", false) => "Main repair".to_owned(),
-        ("blocker", false) => "Blocking task".to_owned(),
-        (_, _) => kind.replace('-', " "),
+            .collect::<Vec<_>>();
+        alerts.sort_by(|left, right| {
+            left.severity
+                .cmp(&right.severity)
+                .then_with(|| left.first_observed_at.cmp(&right.first_observed_at))
+                .then_with(|| left.task_id.cmp(&right.task_id))
+        });
+        alerts.truncate(ALERT_LIMIT);
+        alerts
     }
 }
 
-pub(super) fn localized_activity<'a>(key: &'a str, locale: &str) -> &'a str {
-    let russian =
-        locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
-    match (key, russian) {
-        ("activity.agent_started", true) => "Агент начал работу",
-        ("activity.command_running", true) => "Выполняется команда репозитория",
-        ("activity.command_completed", true) => "Команда репозитория завершена",
-        ("activity.command_failed", true) => "Команда репозитория завершилась с ошибкой",
-        ("activity.applying_changes", true) => "Применяются изменения репозитория",
-        ("activity.change_failed", true) => "Не удалось применить изменение",
-        ("activity.warning", true) => "Агент сообщил предупреждение",
-        ("activity.connection_retry", true) => "Агент повторяет подключение",
-        ("activity.model_rerouted", true) => "Модель агента переключена",
-        ("activity.result_ready", true) => "Агент вернул структурированный результат",
-        ("activity.execution_stopped", true) => "Выполнение агента остановлено",
-        ("activity.agent_started", false) => "Agent started",
-        ("activity.command_running", false) => "Running repository command",
-        ("activity.command_completed", false) => "Repository command completed",
-        ("activity.command_failed", false) => "Repository command failed",
-        ("activity.applying_changes", false) => "Applying repository changes",
-        ("activity.change_failed", false) => "Repository change could not be applied",
-        ("activity.warning", false) => "Agent reported a warning",
-        ("activity.connection_retry", false) => "Agent connection retry",
-        ("activity.model_rerouted", false) => "Agent model rerouted",
-        ("activity.result_ready", false) => "Agent returned a structured result",
-        ("activity.execution_stopped", false) => "Agent execution stopped",
-        _ => key,
+impl ObservedTask {
+    pub(super) fn localized_task_kind(kind: &str, locale: &str) -> String {
+        let russian =
+            locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
+        match (kind, russian) {
+            ("main-repair", true) => "Восстановление main".to_owned(),
+            ("blocker", true) => "Блокирующая задача".to_owned(),
+            ("main-repair", false) => "Main repair".to_owned(),
+            ("blocker", false) => "Blocking task".to_owned(),
+            (_, _) => kind.replace('-', " "),
+        }
+    }
+}
+
+impl ObservedTask {
+    pub(super) fn localized_activity<'a>(key: &'a str, locale: &str) -> &'a str {
+        let russian =
+            locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
+        match (key, russian) {
+            ("activity.agent_started", true) => "Агент начал работу",
+            ("activity.command_running", true) => "Выполняется команда репозитория",
+            ("activity.command_completed", true) => "Команда репозитория завершена",
+            ("activity.command_failed", true) => "Команда репозитория завершилась с ошибкой",
+            ("activity.applying_changes", true) => "Применяются изменения репозитория",
+            ("activity.change_failed", true) => "Не удалось применить изменение",
+            ("activity.warning", true) => "Агент сообщил предупреждение",
+            ("activity.connection_retry", true) => "Агент повторяет подключение",
+            ("activity.model_rerouted", true) => "Модель агента переключена",
+            ("activity.result_ready", true) => "Агент вернул структурированный результат",
+            ("activity.execution_stopped", true) => "Выполнение агента остановлено",
+            ("activity.agent_started", false) => "Agent started",
+            ("activity.command_running", false) => "Running repository command",
+            ("activity.command_completed", false) => "Repository command completed",
+            ("activity.command_failed", false) => "Repository command failed",
+            ("activity.applying_changes", false) => "Applying repository changes",
+            ("activity.change_failed", false) => "Repository change could not be applied",
+            ("activity.warning", false) => "Agent reported a warning",
+            ("activity.connection_retry", false) => "Agent connection retry",
+            ("activity.model_rerouted", false) => "Agent model rerouted",
+            ("activity.result_ready", false) => "Agent returned a structured result",
+            ("activity.execution_stopped", false) => "Agent execution stopped",
+            _ => key,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        AlertKind, AlertSeverity, ObservedTask, STALE_ACTIVITY_MS, derive_alerts,
-        localized_activity, localized_task_kind,
-    };
+    use super::{AlertKind, AlertSeverity, ObservedAlert, ObservedTask, STALE_ACTIVITY_MS};
     use crate::observer::ObserverCopy;
 
     #[test]
@@ -236,16 +243,19 @@ mod tests {
         assert_eq!(english.product_name, "Hive Control Center");
         assert_eq!(russian.product_name, "Центр управления Hive");
         assert_eq!(
-            localized_activity("activity.command_failed", "en"),
+            ObservedTask::localized_activity("activity.command_failed", "en"),
             "Repository command failed"
         );
         assert_eq!(
-            localized_activity("activity.command_failed", "ru"),
+            ObservedTask::localized_activity("activity.command_failed", "ru"),
             "Команда репозитория завершилась с ошибкой"
         );
-        assert_eq!(localized_task_kind("main-repair", "en"), "Main repair");
         assert_eq!(
-            localized_task_kind("main-repair", "ru"),
+            ObservedTask::localized_task_kind("main-repair", "en"),
+            "Main repair"
+        );
+        assert_eq!(
+            ObservedTask::localized_task_kind("main-repair", "ru"),
             "Восстановление main"
         );
     }
@@ -264,7 +274,7 @@ mod tests {
         let cancelling = observed_task("cancelling", "CANCELLING", now - 6 * 60_000);
         let healthy = observed_task("healthy", "RUNNING", now - 30_000);
 
-        let alerts = derive_alerts(
+        let alerts = ObservedAlert::derive_alerts(
             &[blocked, stale, cancelling, healthy, failed.clone()],
             now,
             "en",
@@ -281,7 +291,7 @@ mod tests {
         assert_eq!(alerts[3].task_id, "blocked");
 
         failed.status = "COMPLETED".to_owned();
-        assert!(derive_alerts(&[failed], now, "en").is_empty());
+        assert!(ObservedAlert::derive_alerts(&[failed], now, "en").is_empty());
     }
 
     #[test]
@@ -292,7 +302,7 @@ mod tests {
         failed.latest_attempt_started_at = now - 20_000;
         failed.dependency_failure = true;
 
-        let alerts = derive_alerts(&[failed], now, "en");
+        let alerts = ObservedAlert::derive_alerts(&[failed], now, "en");
         assert_eq!(alerts[0].kind, AlertKind::DependencyFailed);
         assert_eq!(
             alerts[0].reason,
@@ -306,7 +316,7 @@ mod tests {
         let tasks = (0..140)
             .map(|index| observed_task(&format!("failed-{index:03}"), "FAILED", now - index))
             .collect::<Vec<_>>();
-        let alerts = derive_alerts(&tasks, now, "ru");
+        let alerts = ObservedAlert::derive_alerts(&tasks, now, "ru");
         assert_eq!(alerts.len(), 100);
         assert_eq!(
             alerts[0].reason,
