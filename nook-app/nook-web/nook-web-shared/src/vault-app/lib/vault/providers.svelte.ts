@@ -1,3 +1,4 @@
+import type { NookVaultManager } from '$app-wasm'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { err as storageErr, ok as storageOk, type Result } from 'neverthrow'
 import {
@@ -272,23 +273,36 @@ export class VaultProviderActions {
     return state.storageMode === LOCAL_PROVIDER_TYPE
   }
 
-  syncOAuthRemoteRefFromManager(): void {
+  syncOAuthRemoteRefFromManager(): Result<void, StorageOperationFailure> {
     const state = this.state
+    const draft = state.oauthFileDraft
     if (
       state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
-      !state.hasManager ||
-      state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
-    ) {
-      return
-    }
-    const updated = update_oauth_remote_ref(
-      $state.snapshot(state.oauthFileDraft.config),
-      ((v) => (v ? v : ''))(state.requireManager().storage_remote_ref),
+      draft.kind !== OAuthFileDraftKind.Configured
     )
+      return storageOk(undefined)
+    const manager = state.admitManager()
+    if (manager.isErr()) return storageErr(manager.error)
+    let updated: ReturnType<typeof update_oauth_remote_ref>
     try {
-      if (updated.state === NookOAuthRemoteConfigurationUpdateState.Updated) {
-        state.configureOauthFile(updated.config)
+      updated = update_oauth_remote_ref(
+        $state.snapshot(draft.config),
+        manager.value.storage_remote_ref,
+      )
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure))
+    }
+    try {
+      let config: typeof draft.config
+      try {
+        if (updated.state !== NookOAuthRemoteConfigurationUpdateState.Updated)
+          return storageOk(undefined)
+        config = updated.config
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure))
       }
+      state.configureOauthFile(config)
+      return storageOk(undefined)
     } finally {
       updated.free()
     }
@@ -395,7 +409,7 @@ export class VaultProviderActions {
   > {
     const state = this.state
     const ensureLocalAuthProviderSnapshotArgs: Parameters<
-      ReturnType<typeof state.requireManager>['ensure_local_auth_provider_snapshot']
+      NookVaultManager['ensure_local_auth_provider_snapshot']
     >[0] = {
       providers: state.providers,
       activeVaultStoreId:
@@ -431,7 +445,7 @@ export class VaultProviderActions {
   async persistProviders({ opts }: ProviderPersistence) {
     const state = this.state
     const request: Parameters<
-      ReturnType<typeof state.requireManager>['persist_auth_providers_snapshot']
+      NookVaultManager['persist_auth_providers_snapshot']
     >[0] = {
       snapshot: {
         providers: opts.providers ?? state.providers,

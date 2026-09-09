@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { describe, expect, test } from 'vitest'
 import {
@@ -111,9 +112,7 @@ const directorySnapshot = {
   selectionKind: NookIdentityDirectorySelectionKind.Selected,
   selectedIdentityId: 'personal',
   identity: (index: number) =>
-    index === 0
-      ? identitySnapshot(identities[0])
-      : identitySnapshot(identities[1]),
+    index === 0 ? identitySnapshot(identities[0]) : identitySnapshot(identities[1]),
   device_access: () => accessSnapshot,
   free,
 }
@@ -121,7 +120,7 @@ const directorySnapshot = {
 const managerMethods = {
   device_access_snapshot_request: () => ({
     resolve: async () => {
-      throw new Error('dashboard must use identity-bound access evidence')
+      expect.fail('dashboard must use identity-bound access evidence')
     },
     free,
   }),
@@ -140,7 +139,7 @@ const vaultFields = {
   t: (key: string) => key,
   deviceProtectionStatus: DeviceProtectionStatus.Unlocked,
   localVaults: [],
-  requireManager: () => manager,
+  admitManager: () => ok(manager),
 }
 function createVault(): VaultState {
   return Object.assign(Object.create(VaultState.prototype), vaultFields)
@@ -165,13 +164,9 @@ describe('identity directory selection', () => {
 
     expect(rendered.getByRole('heading', { name: 'Work' })).toBeTruthy()
     expect(rendered.getByText('Nook on work phone')).toBeTruthy()
+    expect(rendered.getByTestId('devices-access-other-identity-notice')).toBeTruthy()
     expect(
-      rendered.getByTestId('devices-access-other-identity-notice'),
-    ).toBeTruthy()
-    expect(
-      rendered
-        .getByTestId('devices-access-layout-graph')
-        .hasAttribute('disabled'),
+      rendered.getByTestId('devices-access-layout-graph').hasAttribute('disabled'),
     ).toBe(true)
     expect(
       rendered
@@ -212,9 +207,7 @@ describe('identity directory selection', () => {
       ).toBe('true'),
     )
     expect(
-      rendered
-        .getByTestId('devices-access-layout-graph')
-        .hasAttribute('disabled'),
+      rendered.getByTestId('devices-access-layout-graph').hasAttribute('disabled'),
     ).toBe(true)
     expect(rendered.getByTestId('devices-access-key-inventory')).toBeTruthy()
   })

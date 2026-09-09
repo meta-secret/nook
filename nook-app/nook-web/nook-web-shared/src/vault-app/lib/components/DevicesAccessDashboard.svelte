@@ -6,6 +6,9 @@ FIRST VIEWPORT: The complete local identity directory and one selected-identity 
 FORM: A quiet master-detail layout makes identity ownership primary while a compact switch chooses either the key inventory or relationship graph.
 -->
 <script lang="ts">
+  import { err, ok } from 'neverthrow'
+  import { SelectedIdentityVault } from './devices-access/selected-identity-vault'
+  import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { onDestroy, untrack } from 'svelte'
   import { ArrowLeft, Fingerprint, RefreshCw } from '@lucide/svelte'
@@ -29,10 +32,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   import IdentityDirectoryRail from './devices-access/IdentityDirectoryRail.svelte'
   import IdentityKeyInventory from './devices-access/IdentityKeyInventory.svelte'
   import IdentityRepresentationSwitch from './devices-access/IdentityRepresentationSwitch.svelte'
-  import {
-    type VaultAccessView,
-    AccessChainPresentation,
-  } from './devices-access/access-chain'
+  import { AccessChainPresentation } from './devices-access/access-chain'
   import IdentityBridgeGraph from './devices-access/IdentityBridgeGraph.svelte'
   import IdentityBridgeNavigation from './devices-access/IdentityBridgeNavigation.svelte'
   import {
@@ -41,6 +41,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     IdentityDirectorySelectionKind,
     type IdentityDirectoryView,
     IdentityDirectoryReader,
+    IdentityDirectoryPresentation,
   } from './devices-access/identity-directory-view'
   import {
     IdentityBridgeDeviceIconKind,
@@ -174,9 +175,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     ) {
       return
     }
-    const identitySelection = IdentityDirectoryReader.selectedIdentity(
+    const identitySelection = new IdentityDirectoryPresentation(
       directoryLoadState.view,
-    )
+    ).selectedIdentity()
     if (identitySelection.kind === IdentityDirectorySelectionKind.Empty) {
       selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
       return
@@ -211,15 +212,22 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     }
     const credentialFingerprint = loadState.view.credentialId.value
     const appId = loadState.view.deviceId.value
-    try {
-      await vault
-        .requireManager()
-        .set_device_access_passkey_name(appId, credentialFingerprint, name)
-      return (await reloadSnapshots()) === DashboardLoadKind.Ready
-    } catch {
-      vault.errorMsg = vault.t(I18N_KEYS.DevicesAccessProviderSaveFailed)
+    const manager = vault.admitManager()
+    if (manager.isErr()) {
+      vault.errorMsg = vault.t(manager.error.translationKey)
       return false
     }
+    try {
+      await manager.value.set_device_access_passkey_name(
+        appId,
+        credentialFingerprint,
+        name,
+      )
+    } catch (failure) {
+      vault.errorMsg = vault.t(new NativeVaultStorageFailure(failure).translationKey)
+      return false
+    }
+    return (await reloadSnapshots()) === DashboardLoadKind.Ready
   }
 
   async function beginAddIdentity(): Promise<void> {
@@ -232,12 +240,18 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
             : '1',
       },
     }
-    try {
-      await vault.enqueueStorage(() =>
-        vault.requireManager().begin_local_identity_creation(vault.t(labelArgs)),
-      )
-    } catch {
-      vault.errorMsg = vault.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired)
+    const created = await vault.enqueueStorage(async () => {
+      const manager = vault.admitManager()
+      if (manager.isErr()) return err(manager.error)
+      try {
+        await manager.value.begin_local_identity_creation(vault.t(labelArgs))
+        return ok(undefined)
+      } catch (failure) {
+        return err(new NativeVaultStorageFailure(failure))
+      }
+    })
+    if (created.isErr()) {
+      vault.errorMsg = vault.t(created.error.translationKey)
       return
     }
     vault.dismissError()
@@ -249,13 +263,26 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
 
   async function finishPendingIdentityCreationCancellation(): Promise<void> {
     if (!identityCreationPending || identityCreationActionInFlight) return
-    vault.requireManager().cancel_local_identity_creation()
+    const manager = vault.admitManager()
+    if (manager.isErr()) {
+      vault.errorMsg = vault.t(manager.error.translationKey)
+      return
+    }
+    try {
+      manager.value.cancel_local_identity_creation()
+    } catch (failure) {
+      vault.errorMsg = vault.t(new NativeVaultStorageFailure(failure).translationKey)
+      return
+    }
     identityCreationPending = false
     identityCreationCleanupRequested = false
     identityCreationOpen = false
-    vault.deviceProtectionStatus = await vault
-      .requireManager()
-      .device_protection_status()
+    try {
+      vault.deviceProtectionStatus = await manager.value.device_protection_status()
+    } catch (failure) {
+      vault.errorMsg = vault.t(new NativeVaultStorageFailure(failure).translationKey)
+      return
+    }
     vault.dismissError()
   }
 
@@ -285,12 +312,18 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   })
 
   async function useIdentity(identityId: string): Promise<void> {
-    try {
-      await vault.enqueueStorage(() =>
-        vault.requireManager().activate_local_identity(identityId),
-      )
-    } catch {
-      vault.errorMsg = vault.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired)
+    const activated = await vault.enqueueStorage(async () => {
+      const manager = vault.admitManager()
+      if (manager.isErr()) return err(manager.error)
+      try {
+        await manager.value.activate_local_identity(identityId)
+        return ok(undefined)
+      } catch (failure) {
+        return err(new NativeVaultStorageFailure(failure))
+      }
+    })
+    if (activated.isErr()) {
+      vault.errorMsg = vault.t(activated.error.translationKey)
       return
     }
     // Establish the cross-shell transition before clearing authentication.
@@ -300,9 +333,17 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     vault.devicesAccessIdentityProtectionOpen = true
     vault.deviceProtectionStatus = DeviceProtectionStatus.Loading
     clearPriorIdentitySession()
-    vault.deviceProtectionStatus = await vault
-      .requireManager()
-      .device_protection_status()
+    const manager = vault.admitManager()
+    if (manager.isErr()) {
+      vault.errorMsg = vault.t(manager.error.translationKey)
+      return
+    }
+    try {
+      vault.deviceProtectionStatus = await manager.value.device_protection_status()
+    } catch (failure) {
+      vault.errorMsg = vault.t(new NativeVaultStorageFailure(failure).translationKey)
+      return
+    }
     vault.deviceId = ''
     vault.devicePublicKey = ''
     await reloadSnapshots()
@@ -319,24 +360,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     }
   }
 
-  function selectedVaultLabel(vaults: readonly VaultAccessView[]): string {
-    if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
-      for (const entry of vaults) {
-        if (entry.storeId === selectedVault.storeId) return entry.label
-      }
-    }
-    return vault.t(I18N_KEYS.DevicesAccessBridgeVault)
-  }
-
-  function selectedVaultVerified(vaults: readonly VaultAccessView[]): boolean {
-    if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
-      for (const entry of vaults) {
-        if (entry.storeId === selectedVault.storeId) return entry.verified
-      }
-    }
-    return false
-  }
-
   async function reloadSnapshots(): Promise<DashboardLoadKind> {
     const generation = ++snapshotLoadGeneration
     // A re-read keeps the current readout on screen. Blanking it would move
@@ -347,58 +370,60 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     if (untrack(() => directoryLoadState.kind) !== IdentityDirectoryLoadKind.Ready) {
       directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading }
     }
-    try {
-      const snapshot = await new IdentityDirectoryReader(
-        vault.requireManager(),
-      ).load()
-      if (generation !== snapshotLoadGeneration) {
-        return DashboardLoadKind.Loading
-      }
-      const browsedIdentityId = untrack(() =>
-        directoryLoadState.kind === IdentityDirectoryLoadKind.Ready &&
-        directoryLoadState.view.selection.kind ===
-          IdentityDirectorySelectionKind.Selected
-          ? directoryLoadState.view.selection.identityId
-          : '',
-      )
-      const preservedDirectory: IdentityDirectoryView =
-        browsedIdentityId.length > 0 &&
-        snapshot.directory.identities.some(
-          (identity) => identity.identityId === browsedIdentityId,
-        )
-          ? {
-              ...snapshot.directory,
-              selection: {
-                kind: IdentityDirectorySelectionKind.Selected,
-                identityId: browsedIdentityId,
-              } as const,
-            }
-          : snapshot.directory
-      loadState = { kind: DashboardLoadKind.Ready, view: snapshot.access }
-      directoryLoadState = {
-        kind: IdentityDirectoryLoadKind.Ready,
-        view: preservedDirectory,
-      }
-      const identitySelection =
-        IdentityDirectoryReader.selectedIdentity(preservedDirectory)
-      if (
-        identitySelection.kind === IdentityDirectorySelectionKind.Selected &&
-        identitySelection.identity.localAccess ===
-          NookIdentityLocalAccessKind.OtherInstallation
-      ) {
-        selectedRepresentation = DevicesAccessRepresentationKind.List
-      }
-      resetSelectedVaultForIdentity()
-      return DashboardLoadKind.Ready
-    } catch {
-      if (generation === snapshotLoadGeneration) {
-        loadState = { kind: DashboardLoadKind.Failed }
-        directoryLoadState = { kind: IdentityDirectoryLoadKind.Failed }
-      }
-      return generation === snapshotLoadGeneration
-        ? DashboardLoadKind.Failed
-        : DashboardLoadKind.Loading
+    const manager = vault.admitManager()
+    if (manager.isErr()) return failSnapshotLoad(generation)
+    const loaded = await new IdentityDirectoryReader(manager.value).load()
+    if (loaded.isErr()) return failSnapshotLoad(generation)
+    const snapshot = loaded.value
+    if (generation !== snapshotLoadGeneration) {
+      return DashboardLoadKind.Loading
     }
+    const browsedIdentityId = untrack(() =>
+      directoryLoadState.kind === IdentityDirectoryLoadKind.Ready &&
+      directoryLoadState.view.selection.kind ===
+        IdentityDirectorySelectionKind.Selected
+        ? directoryLoadState.view.selection.identityId
+        : '',
+    )
+    const preservedDirectory: IdentityDirectoryView =
+      browsedIdentityId.length > 0 &&
+      snapshot.directory.identities.some(
+        (identity) => identity.identityId === browsedIdentityId,
+      )
+        ? {
+            ...snapshot.directory,
+            selection: {
+              kind: IdentityDirectorySelectionKind.Selected,
+              identityId: browsedIdentityId,
+            } as const,
+          }
+        : snapshot.directory
+    loadState = { kind: DashboardLoadKind.Ready, view: snapshot.access }
+    directoryLoadState = {
+      kind: IdentityDirectoryLoadKind.Ready,
+      view: preservedDirectory,
+    }
+    const identitySelection = new IdentityDirectoryPresentation(
+      preservedDirectory,
+    ).selectedIdentity()
+    if (
+      identitySelection.kind === IdentityDirectorySelectionKind.Selected &&
+      identitySelection.identity.localAccess ===
+        NookIdentityLocalAccessKind.OtherInstallation
+    ) {
+      selectedRepresentation = DevicesAccessRepresentationKind.List
+    }
+    resetSelectedVaultForIdentity()
+    return DashboardLoadKind.Ready
+  }
+
+  function failSnapshotLoad(generation: number): DashboardLoadKind {
+    if (generation === snapshotLoadGeneration) {
+      loadState = { kind: DashboardLoadKind.Failed }
+      directoryLoadState = { kind: IdentityDirectoryLoadKind.Failed }
+      return DashboardLoadKind.Failed
+    }
+    return DashboardLoadKind.Loading
   }
 
   $effect(() => {
@@ -492,7 +517,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   {:else}
     {@const accessView = loadState.view}
     {@const directory = directoryLoadState.view}
-    {@const identitySelection = IdentityDirectoryReader.selectedIdentity(directory)}
+    {@const identitySelection = new IdentityDirectoryPresentation(
+      directory,
+    ).selectedIdentity()}
     {@const selectedIdentityId =
       directory.selection.kind === IdentityDirectorySelectionKind.Selected
         ? directory.selection.identityId
@@ -650,10 +677,13 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
               {@const verifiedVaultCount = view.vaults.filter(
                 (entry) => entry.verified,
               ).length}
-              {@const selectedVaultIsVerified = selectedVaultVerified(
-                identity.vaults,
-              )}
-              {@const selectedVaultName = selectedVaultLabel(identity.vaults)}
+              {@const selectedVaultView = new SelectedIdentityVault({
+                selection: selectedVault,
+                vaults: identity.vaults,
+                fallbackLabel: vault.t(I18N_KEYS.DevicesAccessBridgeVault),
+              })}
+              {@const selectedVaultIsVerified = selectedVaultView.verified}
+              {@const selectedVaultName = selectedVaultView.label}
               {@const selectedVaultExists =
                 selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected}
               {@const deviceIdentifier = view.deviceId.displayText(() =>

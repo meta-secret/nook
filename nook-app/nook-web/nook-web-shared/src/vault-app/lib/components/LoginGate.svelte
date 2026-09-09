@@ -776,7 +776,11 @@
                       isBusy={isVerifying}
                       onRecover={() => vault.confirmRecoverRemoteVault()}
                       onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
-                      onDismiss={() => vault.clearRemoteVaultRecovery()}
+                      onDismiss={() => {
+                        const cleared = vault.clearRemoteVaultRecovery()
+                        if (cleared.isErr())
+                          vault.errorMsg = vault.t(cleared.error.translationKey)
+                      }}
                     />
                   {/if}
                 {/snippet}

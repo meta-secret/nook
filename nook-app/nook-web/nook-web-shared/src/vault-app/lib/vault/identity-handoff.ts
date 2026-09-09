@@ -84,6 +84,21 @@ export class AdoptedBrowserIdentity {
       return err(new NativeVaultStorageFailure(failure))
     }
   }
+  discard(): Result<void, VaultStorageFailure> {
+    if (this.handle.kind === BrowserAdoptionHandleKind.Consumed) return ok(undefined)
+    const handle = this.take()
+    if (handle.isErr()) return err(handle.error)
+    try {
+      handle.value.free()
+      return ok(undefined)
+    } catch {
+      return err(
+        new VaultStorageFailure(
+          VaultStorageFailureKind.IdentityHandoffCleanupFailed,
+        ),
+      )
+    }
+  }
   rollback(manager: NookVaultManager): Result<void, VaultStorageFailure> {
     // A failed consuming Rust transition already performs its existing cleanup.
     if (this.handle.kind === BrowserAdoptionHandleKind.Consumed) return ok(undefined)

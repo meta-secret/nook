@@ -1,3 +1,4 @@
+import { ok, type Result } from 'neverthrow'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 vi.mock('$app-wasm', async (importOriginal) => {
@@ -10,8 +11,8 @@ vi.mock('$app-wasm', async (importOriginal) => {
 
 vi.mock('$lib/runtime/browser-data', () => ({
   browserDataLifecycle: {
-    quiesceOtherTabsForLocalRecovery: vi.fn(async () => {}),
-    reloadQuiescedTabsAfterLocalRecovery: vi.fn(async () => {}),
+    quiesceOtherTabsForLocalRecovery: vi.fn(async () => ok(undefined)),
+    reloadQuiescedTabsAfterLocalRecovery: vi.fn(async () => ok(undefined)),
   },
 }))
 
@@ -46,17 +47,17 @@ describe('device protection recovery', () => {
       providersLoaded: false,
       githubPat: '',
       storageMode: 'local',
-      enqueueExclusiveStorage: async <Value>(
-        operation: () => Promise<Value>,
-      ): Promise<Value> => operation(),
-      requireManager: () => manager,
+      enqueueExclusiveStorage: async <Value, Failure>(
+        operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
+      ): Promise<Result<Value, Failure>> => operation(),
+      admitManager: () => ok(manager),
       adoptLocalDataStorageGeneration: vi.fn(),
       clearUnlockedSession: vi.fn(),
       clearOauthFile: vi.fn(),
       clearLocalFolder: vi.fn(),
       showSuccess: vi.fn(),
       t: vi.fn(() => 'Recovery failed'),
-    } satisfies DeviceProtectionRecoveryRequest['state']
+    } satisfies ConstructorParameters<typeof DeviceProtectionRecoveryActions>[0]
 
     const request: DeviceProtectionRecoveryRequest = {
       expectedAppId: '0123456789abcdef',

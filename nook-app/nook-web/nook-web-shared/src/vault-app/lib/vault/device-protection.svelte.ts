@@ -1,3 +1,4 @@
+import type { NookVaultManager } from '$app-wasm'
 import type { OAuthFailure } from '$lib/auth/oauth-failure'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { err as storageErr, ok as storageOk, type Result } from 'neverthrow'
@@ -70,7 +71,7 @@ interface DeviceProtectionUnlockRequest {
 }
 
 type DeviceProtectionRecoveryManager = Pick<
-  ReturnType<VaultState['requireManager']>,
+  NookVaultManager,
   | 'local_identity_recovery_app_id'
   | 'reset_device_protection_for_recovery'
   | 'device_protection_status'
@@ -97,7 +98,10 @@ type DeviceProtectionRecoveryState = Pick<
   | 'showSuccess'
   | 't'
 > & {
-  requireManager: () => DeviceProtectionRecoveryManager
+  admitManager: () => Result<
+    DeviceProtectionRecoveryManager,
+    StorageOperationFailure
+  >
 }
 
 export type DeviceProtectionRecoveryRequest = {

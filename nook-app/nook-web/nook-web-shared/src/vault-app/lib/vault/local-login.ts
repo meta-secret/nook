@@ -329,8 +329,13 @@ export class VaultLoginActions {
       if (
         state.externalIdentityHandoff.kind === BrowserIdentityHandoffKind.Adopted
       ) {
+        const manager = state.admitManager()
+        if (manager.isErr()) {
+          state.errorMsg = state.t(manager.error.translationKey)
+          return
+        }
         const required = state.externalIdentityHandoff.adoption.requiresConnect(
-          state.requireManager(),
+          manager.value,
         )
         if (required.isErr()) {
           state.errorMsg = state.t(required.error.translationKey)
@@ -374,14 +379,17 @@ export class VaultLoginActions {
       }
       for (const record of rawRecords.value) record.free()
       if (handoffAwaitingVaultCreation) {
+        const manager = state.admitManager()
+        if (manager.isErr()) {
+          state.errorMsg = state.t(manager.error.translationKey)
+          return
+        }
         const handoff = state.externalIdentityHandoff
         state.externalIdentityHandoff = {
           kind: BrowserIdentityHandoffKind.Inactive,
         }
         if (handoff.kind === BrowserIdentityHandoffKind.Adopted) {
-          const confirmed = handoff.adoption.afterVerifiedConnect(
-            state.requireManager(),
-          )
+          const confirmed = handoff.adoption.afterVerifiedConnect(manager.value)
           if (confirmed.isErr()) {
             state.errorMsg = state.t(confirmed.error.translationKey)
             return
@@ -459,18 +467,17 @@ export class VaultLoginActions {
       if (creationState === LocalVaultCreationState.Pending) {
         const failureMessage = state.errorMsg
         if (handoffAwaitingVaultCreation) {
-          try {
-            const handoff = state.externalIdentityHandoff
-            state.externalIdentityHandoff = {
-              kind: BrowserIdentityHandoffKind.Inactive,
-            }
-            if (handoff.kind === BrowserIdentityHandoffKind.Adopted) {
-              const rolledBack = handoff.adoption.rollback(state.requireManager())
-              if (rolledBack.isErr())
-                log.warn('failed vault creation handoff rollback failed')
-            }
-          } catch {
-            log.warn('failed vault creation handoff rollback failed')
+          const handoff = state.externalIdentityHandoff
+          state.externalIdentityHandoff = {
+            kind: BrowserIdentityHandoffKind.Inactive,
+          }
+          if (handoff.kind === BrowserIdentityHandoffKind.Adopted) {
+            const manager = state.admitManager()
+            const rollback = manager.isOk()
+              ? handoff.adoption.rollback(manager.value)
+              : handoff.adoption.discard()
+            if (manager.isErr() || rollback.isErr())
+              log.warn('failed vault creation handoff rollback failed')
           }
           state.deviceId = ''
           state.devicePublicKey = ''

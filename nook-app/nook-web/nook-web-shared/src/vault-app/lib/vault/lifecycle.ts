@@ -122,12 +122,12 @@ export class VaultInitializationActions {
       }
       state.openManager(manager.value)
       const configuredApplication = configured_vault_application()
-      if (state.requireManager().vaultApplication !== configuredApplication) {
+      if (manager.value.vaultApplication !== configuredApplication) {
         const tArgs: Parameters<typeof state.t>[0] = {
           key: I18N_KEYS.AppCapabilityMismatch,
           replacements: {
             app: String(configuredApplication),
-            wasm: String(state.requireManager().vaultApplication),
+            wasm: String(manager.value.vaultApplication),
           },
         }
         state.errorMsg = state.t(tArgs)
@@ -139,12 +139,34 @@ export class VaultInitializationActions {
         preferWasm: true,
       }
       await state.updateLocale(updateLocaleArgs)
-      state.deviceProtectionStatus = await state
-        .requireManager()
-        .device_protection_status()
-      const persistedDeviceMode = await state
-        .requireManager()
-        .device_protection_device_mode()
+      const protectionStatus = await state.enqueueStorage(async () => {
+        const admitted = state.admitManager()
+        if (admitted.isErr()) return storageErr(admitted.error)
+        try {
+          return storageOk(await admitted.value.device_protection_status())
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure))
+        }
+      })
+      if (protectionStatus.isErr()) {
+        state.errorMsg = state.t(protectionStatus.error.translationKey)
+        return
+      }
+      state.deviceProtectionStatus = protectionStatus.value
+      const protectionMode = await state.enqueueStorage(async () => {
+        const admitted = state.admitManager()
+        if (admitted.isErr()) return storageErr(admitted.error)
+        try {
+          return storageOk(await admitted.value.device_protection_device_mode())
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure))
+        }
+      })
+      if (protectionMode.isErr()) {
+        state.errorMsg = state.t(protectionMode.error.translationKey)
+        return
+      }
+      const persistedDeviceMode = protectionMode.value
       if (persistedDeviceMode === DeviceProtectionDeviceModeState.Standard) {
         state.draftDeviceMode = DeviceMode.Standard
       } else if (

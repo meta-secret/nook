@@ -86,7 +86,10 @@ export class VaultConnectionActions {
         state.loginSetup.providerType === 'local-folder'
       ) {
         const saved = await state.ensureProviderSaved()
-        if (!saved) return
+        if (saved.isErr()) {
+          state.errorMsg = state.t(saved.error.translationKey)
+          return
+        }
         const [provider = state.providers[state.providers.length - 1]] = [
           state.syncProviders[state.syncProviders.length - 1],
         ]
@@ -255,7 +258,11 @@ export class VaultConnectionActions {
       // Load sync providers before unlocking the UI. Otherwise a fast local
       // edit (especially delete, which used to fire-and-forget fan-out) can run
       // while `syncProviders` is still empty and never push the event remotely.
-      state.syncOAuthRemoteRefFromManager()
+      const remoteConfiguration = state.syncOAuthRemoteRefFromManager()
+      if (remoteConfiguration.isErr()) {
+        state.errorMsg = state.t(remoteConfiguration.error.translationKey)
+        return
+      }
       const savedProvider2 = await state.ensureProviderSaved()
       if (savedProvider2.isErr()) {
         state.errorMsg = state.t(savedProvider2.error.translationKey)

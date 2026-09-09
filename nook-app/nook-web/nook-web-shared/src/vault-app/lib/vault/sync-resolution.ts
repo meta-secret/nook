@@ -305,14 +305,17 @@ export class SyncConflictActions {
     }
   }
 
-  clearRemoteVaultRecovery(): void {
+  clearRemoteVaultRecovery() {
     const state = this.state
-    state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None
+    const manager = state.admitManager()
+    if (manager.isErr()) return storageErr(manager.error)
     try {
-      if (state.hasManager) state.requireManager().clear_connect_recovery()
-    } catch {
-      // Engine not ready yet.
+      manager.value.clear_connect_recovery()
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure))
     }
+    state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None
+    return storageOk(undefined)
   }
 
   private async resumeConnectAfterSyncConflict({
