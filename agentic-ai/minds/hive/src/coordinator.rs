@@ -279,18 +279,18 @@ impl TaskStore for CoordinatorTaskStore {
         .await
     }
 
-    async fn complete(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-        obsolete: bool,
-        summary: &str,
-        artifact: &CompletionArtifact,
-    ) -> crate::HiveResult<bool> {
+    async fn complete(&self, completion: crate::model::Completion<'_>) -> crate::HiveResult<bool> {
+        let crate::model::Completion {
+            task,
+            agent_id,
+            relevance,
+            summary,
+            artifact,
+        } = completion;
         self.accepted(Request::Complete {
             task: task.clone(),
             agent_id: agent_id.clone(),
-            obsolete,
+            obsolete: matches!(relevance, crate::model::CompletionRelevance::Obsolete),
             summary: summary.to_owned(),
             artifact: artifact.clone(),
         })
@@ -432,7 +432,17 @@ impl Request {
                 artifact,
             } => Ok(Response::Accepted(
                 store
-                    .complete(&task, &agent_id, obsolete, &summary, &artifact)
+                    .complete(crate::model::Completion {
+                        task: &task,
+                        agent_id: &agent_id,
+                        relevance: if obsolete {
+                            crate::model::CompletionRelevance::Obsolete
+                        } else {
+                            crate::model::CompletionRelevance::Current
+                        },
+                        summary: &summary,
+                        artifact: &artifact,
+                    })
                     .await?,
             )),
             Request::Fail {
@@ -493,11 +503,11 @@ mod tests {
     fn activity_request_carries_only_lease_identity() -> crate::HiveResult<()> {
         let serialized = serde_json::to_string(&Request::RecordActivity {
             lease: ActivityLease {
-                task_id: TaskId::new("task-1")?,
-                attempt_id: AttemptId::new("attempt-1")?,
-                lease_token: LeaseToken::new("lease-1")?,
+                task_id: TaskId::try_from("task-1")?,
+                attempt_id: AttemptId::try_from("attempt-1")?,
+                lease_token: LeaseToken::try_from("lease-1")?,
             },
-            agent_id: AgentId::new("agent-1")?,
+            agent_id: AgentId::try_from("agent-1")?,
             activity: TaskActivity {
                 kind: ActivityKind::Action,
                 message: "activity.command_running".to_owned(),
@@ -527,11 +537,11 @@ mod tests {
             .await
         });
         let client = CoordinatorTaskStore::connect(&socket).await?;
-        let agent = AgentId::new("worker-1")?;
+        let agent = AgentId::try_from("worker-1")?;
 
         client.migrate().await?;
         client.register_agent(&agent, "worker-pod").await?;
-        let claimed = client.claim(&agent, 300).await?.into_claimed()?;
+        let claimed = crate::model::ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
         assert_eq!(claimed.id.as_str(), "complete-me");
         assert!(
             client
@@ -553,25 +563,25 @@ mod tests {
         );
         assert!(!client.acknowledge_cancellation(&claimed, &agent).await?);
         assert!(client.release(&claimed, &agent).await?);
-        let resumed = client.claim(&agent, 300).await?.into_claimed()?;
+        let resumed = crate::model::ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
         assert!(
             client
-                .complete(
-                    &resumed,
-                    &agent,
-                    false,
-                    "completed through coordinator",
-                    &CompletionArtifact::NotProduced,
-                )
+                .complete(crate::model::Completion {
+                    task: &resumed,
+                    agent_id: &agent,
+                    relevance: crate::model::CompletionRelevance::Current,
+                    summary: "completed through coordinator",
+                    artifact: &CompletionArtifact::NotProduced
+                })
                 .await?
         );
 
         backing.enqueue(&task("fail-me", Vec::new())?).await?;
-        let failed = client.claim(&agent, 300).await?.into_claimed()?;
+        let failed = crate::model::ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
         assert!(client.fail(&failed, &agent, "expected failure").await?);
 
         backing.enqueue(&task("block-me", Vec::new())?).await?;
-        let blocked = client.claim(&agent, 300).await?.into_claimed()?;
+        let blocked = crate::model::ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
         let mut blocker = task("prerequisite", Vec::new())?;
         blocker.kind = "blocker".into();
         assert!(

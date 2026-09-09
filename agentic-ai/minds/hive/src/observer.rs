@@ -60,9 +60,9 @@ impl<S: ObserverStore> ObserverServer<S> {
             .await
             .with_hive_context(|| format!("bind Hive observer to {address}"))?;
         (BoundObserverServer {
-            store: store,
-            listener: listener,
-            dashboard: dashboard,
+            store,
+            listener,
+            dashboard,
         })
         .run_observer_on_listener()
         .await
@@ -224,9 +224,21 @@ impl IntoResponse for ObserverError {
 
 impl Neo4jTaskStore {
     pub async fn observer_snapshot(&self, locale: &str) -> crate::HiveResult<ObserverSnapshot> {
-        let overview_tasks = self.observer_tasks("", TASK_LIMIT, locale, false).await?;
+        let overview_tasks = self
+            .observer_tasks(ObserverTaskQuery {
+                task_id: "",
+                limit: TASK_LIMIT,
+                locale,
+                selection: ObserverTaskSelection::All,
+            })
+            .await?;
         let mut attention_tasks = self
-            .observer_tasks("", ALERT_LIMIT as i64 + 1, locale, true)
+            .observer_tasks(ObserverTaskQuery {
+                task_id: "",
+                limit: ALERT_LIMIT as i64 + 1,
+                locale,
+                selection: ObserverTaskSelection::Attention,
+            })
             .await?;
         let alerts_truncated = attention_tasks.len() > ALERT_LIMIT;
         attention_tasks.truncate(ALERT_LIMIT);
@@ -260,7 +272,14 @@ impl Neo4jTaskStore {
         task_id: &str,
         locale: &str,
     ) -> crate::HiveResult<Option<ObservedTask>> {
-        let mut tasks = self.observer_tasks(task_id, 1, locale, false).await?;
+        let mut tasks = self
+            .observer_tasks(ObserverTaskQuery {
+                task_id,
+                limit: 1,
+                locale,
+                selection: ObserverTaskSelection::All,
+            })
+            .await?;
         self.attach_dependencies(&mut tasks).await?;
         self.attach_triggers(&mut tasks, locale).await?;
         self.attach_activity(&mut tasks, locale).await?;
@@ -316,11 +335,14 @@ impl Neo4jTaskStore {
 
     async fn observer_tasks(
         &self,
-        task_id: &str,
-        limit: i64,
-        locale: &str,
-        attention_only: bool,
+        request: ObserverTaskQuery<'_>,
     ) -> crate::HiveResult<Vec<ObservedTask>> {
+        let ObserverTaskQuery {
+            task_id,
+            limit,
+            locale,
+            selection,
+        } = request;
         let mut rows = self
             .graph
             .execute(
@@ -436,7 +458,7 @@ impl Neo4jTaskStore {
                 )
                 .param("task_id", task_id)
                 .param("limit", limit)
-                .param("attention_only", attention_only)
+                .param("attention_only", matches!(selection, ObserverTaskSelection::Attention))
                 .param("attention_age", STALE_ACTIVITY_MS),
             )
             .await?;
@@ -815,4 +837,17 @@ mod tests {
 #[derive(serde::Serialize)]
 struct ObserverErrorBody {
     error: String,
+}
+
+#[derive(Clone, Copy)]
+enum ObserverTaskSelection {
+    All,
+    Attention,
+}
+
+struct ObserverTaskQuery<'a> {
+    task_id: &'a str,
+    limit: i64,
+    locale: &'a str,
+    selection: ObserverTaskSelection,
 }

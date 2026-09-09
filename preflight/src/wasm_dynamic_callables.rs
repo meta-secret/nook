@@ -56,14 +56,14 @@ impl DynamicWasmCallables<'_> {
         for child in node.children(&mut cursor) {
             (DynamicWasmCallables {
                 node: child,
-                source: source,
-                source_path: source_path,
-                callable_names: callable_names,
-                wasm_namespace_bindings: wasm_namespace_bindings,
-                scoped_wasm_namespaces: scoped_wasm_namespaces,
-                bindings: bindings,
-                lines: lines,
-                first_line: first_line,
+                source,
+                source_path,
+                callable_names,
+                wasm_namespace_bindings,
+                scoped_wasm_namespaces,
+                bindings,
+                lines,
+                first_line,
             })
             .collect_scoped_dynamic_callable_bindings();
         }
@@ -112,7 +112,7 @@ impl DynamicWasmCallables<'_> {
             callable_names,
             module: &module,
             first_line,
-            is_parameter: false,
+            binding: BindingContext::Declaration,
         };
         DynamicWasmCallables::record_callable_pattern_bindings(pattern, &context, bindings, lines);
     }
@@ -148,8 +148,8 @@ impl DynamicWasmCallables<'_> {
             .and_then(|receiver| DynamicWasmAliases::loaded_module_specifier(receiver, source))
             .filter(|module| {
                 (WasmModuleSources {
-                    module: module,
-                    source_path: source_path,
+                    module,
+                    source_path,
                 })
                 .is_wasm_callable_source()
             })
@@ -165,7 +165,7 @@ impl DynamicWasmCallables<'_> {
             callable_names,
             module: &module,
             first_line,
-            is_parameter: true,
+            binding: BindingContext::Parameter,
         };
         let mut cursor = arguments.walk();
         for callback in arguments.named_children(&mut cursor) {
@@ -201,7 +201,7 @@ struct PatternContext<'a> {
     callable_names: &'a HashSet<String>,
     module: &'a str,
     first_line: usize,
-    is_parameter: bool,
+    binding: BindingContext,
 }
 
 impl DynamicWasmCallables<'_> {
@@ -236,7 +236,7 @@ impl DynamicWasmCallables<'_> {
             {
                 lines.push(context.first_line + authored.start_position().row);
             }
-            let scoped = if context.is_parameter {
+            let scoped = if matches!(context.binding, BindingContext::Parameter) {
                 DynamicWasmCallables::scoped_parameter_binding(binding, context.source, None)
             } else {
                 ScopedBinding::scoped_binding(binding, context.source, None, None)
@@ -305,4 +305,10 @@ impl DynamicWasmCallables<'_> {
             .or_else(|| node.child_by_field_name("index"))
             .and_then(|property| JavaScriptLiteral::semantic_javascript_name(property, source))
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BindingContext {
+    Declaration,
+    Parameter,
 }

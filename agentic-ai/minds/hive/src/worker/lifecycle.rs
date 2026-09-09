@@ -35,12 +35,7 @@ impl<S: TaskStore> TaskClaim<'_, S> {
             lifecycle_marker,
         } = self;
         let claim = store.claim(agent_id, lease_seconds);
-        match ClaimWindow::finish(ClaimCompletion {
-            claim: claim,
-            shutdown: shutdown,
-        })
-        .await
-        {
+        match ClaimWindow::finish(ClaimCompletion { claim, shutdown }).await {
             ClaimWindow::Stopped => {
                 WorkerCompletionMarker {
                     path: lifecycle_marker,
@@ -235,7 +230,7 @@ mod tests {
         let workspace = tempfile::tempdir()?;
         let marker = workspace.path().join(".hive-task-finished");
         let store = RecordingStore::new(marker.clone())?;
-        let agent = AgentId::new("agent-a")?;
+        let agent = AgentId::try_from("agent-a")?;
         let (_shutdown_tx, shutdown_rx) = watch::channel(false);
         let shutdown_tx = _shutdown_tx;
         let claim_store = store.clone();
@@ -304,13 +299,13 @@ mod tests {
         fn new(marker: PathBuf) -> anyhow::Result<Self> {
             Ok(Self {
                 task: ClaimedTask {
-                    id: TaskId::new("task-a")?,
+                    id: TaskId::try_from("task-a")?,
                     kind: "main-repair".to_owned(),
                     prompt: "repair Main".to_owned(),
                     source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-                    attempt_id: AttemptId::new("attempt-a")?,
+                    attempt_id: AttemptId::try_from("attempt-a")?,
                     attempt_number: 1,
-                    lease_token: LeaseToken::new("lease-a")?,
+                    lease_token: LeaseToken::try_from("lease-a")?,
                     owning_repairs: Vec::new(),
                     dependency_context: Vec::new(),
                     dependency_artifacts: Vec::new(),
@@ -423,12 +418,15 @@ mod tests {
 
         async fn complete(
             &self,
-            _task: &ClaimedTask,
-            _agent_id: &AgentId,
-            _obsolete: bool,
-            _summary: &str,
-            _artifact: &CompletionArtifact,
+            completion: crate::model::Completion<'_>,
         ) -> crate::HiveResult<bool> {
+            let crate::model::Completion {
+                task: _task,
+                agent_id: _agent_id,
+                relevance: _obsolete,
+                summary: _summary,
+                artifact: _artifact,
+            } = completion;
             unreachable!("not used by claim lifecycle test")
         }
 

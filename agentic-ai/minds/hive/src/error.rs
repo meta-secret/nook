@@ -307,7 +307,7 @@ mod tests {
         let Err(json_error) = serde_json::from_str::<serde_json::Value>("{") else {
             return Err(HiveError::message("invalid JSON fixture parsed"));
         };
-        let Err(model_error) = crate::TaskId::new("") else {
+        let Err(model_error) = crate::TaskId::try_from("") else {
             return Err(HiveError::message("empty identifier fixture was accepted"));
         };
         let Err(utf8_error) = String::from_utf8(vec![0xff]) else {

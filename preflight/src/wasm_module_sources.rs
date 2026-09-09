@@ -325,7 +325,7 @@ fn find_factory_return_type(node: tree_sitter::Node<'_>, source: &str, source_pa
         && let Some(wasm_type) = node
             .child_by_field_name("return_type")
             .and_then(|return_type| WasmModuleSources::referenced_wasm_type(return_type, source, source_path, wasm_type_names, imported_bindings))
-            .or_else(|| node.child_by_field_name("body").and_then(|body| WasmModuleSources::inferred_factory_wasm_type(body, body.kind() != "statement_block", source, source_path, wasm_type_names, imported_bindings)))
+            .or_else(|| node.child_by_field_name("body").and_then(|body| WasmModuleSources::inferred_factory_wasm_type(crate::wasm_module_sources::FactoryReturnTraversal { node: body, value_context: if body.kind() != "statement_block" { FactoryValueContext::Returned } else { FactoryValueContext::Expression }, source, source_path, wasm_type_names, imports: imported_bindings })))
     {
         return Some(wasm_type);
     }
@@ -336,8 +336,10 @@ fn find_factory_return_type(node: tree_sitter::Node<'_>, source: &str, source_pa
 
 #[rustfmt::skip]
 impl WasmModuleSources<'_> {
-fn inferred_factory_wasm_type(node: tree_sitter::Node<'_>, returned: bool, source: &str, source_path: &Path, wasm_type_names: &HashSet<String>, imports: &HashMap<String, (String, String)>) -> Option<String> {
-    if returned
+fn inferred_factory_wasm_type(request: FactoryReturnTraversal<'_>) -> Option<String> {
+let FactoryReturnTraversal { node, value_context, source, source_path, wasm_type_names, imports } = request;
+
+    if matches!(value_context, FactoryValueContext::Returned)
         && node.kind() == "new_expression"
         && let Some(local) = node.child_by_field_name("constructor").and_then(|constructor| JavaScriptLiteral::semantic_javascript_name(constructor, source))
         && let Some((module, imported)) = imports.get(&local)
@@ -357,7 +359,7 @@ fn inferred_factory_wasm_type(node: tree_sitter::Node<'_>, returned: bool, sourc
         return None;
     }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor).find_map(|child| WasmModuleSources::inferred_factory_wasm_type(child, returned || node.kind() == "return_statement", source, source_path, wasm_type_names, imports))
+    node.named_children(&mut cursor).find_map(|child| WasmModuleSources::inferred_factory_wasm_type(crate::wasm_module_sources::FactoryReturnTraversal { node: child, value_context: if matches!(value_context, FactoryValueContext::Returned) || node.kind() == "return_statement" { FactoryValueContext::Returned } else { FactoryValueContext::Expression }, source, source_path, wasm_type_names, imports }))
 }
 }
 
@@ -519,7 +521,7 @@ impl WasmModuleSources<'_> {
 impl WasmModuleSources<'_> {
 fn collect_imported_bindings(node: tree_sitter::Node<'_>, source: &str, bindings: &mut HashMap<String, (String, String)>) {
     if node.kind() == "import_statement" {
-        let Some(module) = node.child_by_field_name("source").and_then(|source_node| (JavaScriptLiteral { node: source_node, source: source }).static_javascript_string())
+        let Some(module) = node.child_by_field_name("source").and_then(|source_node| (JavaScriptLiteral { node: source_node, source }).static_javascript_string())
         else {
             return;
         };
@@ -608,7 +610,7 @@ impl WasmModuleSources<'_> {
 #[rustfmt::skip]
 impl WasmModuleSources<'_> {
 fn collect_export_statement(node: tree_sitter::Node<'_>, source: &str, imported_bindings: &HashMap<String, (String, String)>, exports: &mut Vec<ForwardedExport>) {
-    let direct_module = node.child_by_field_name("source").and_then(|source_node| (JavaScriptLiteral { node: source_node, source: source }).static_javascript_string());
+    let direct_module = node.child_by_field_name("source").and_then(|source_node| (JavaScriptLiteral { node: source_node, source }).static_javascript_string());
     let mut saw_specifier = false;
     if node.utf8_text(source.as_bytes()).is_ok_and(|text| text.trim_start().starts_with("export = "))
         && let Some(value) = node.named_child(0)
@@ -916,7 +918,7 @@ impl WasmModuleSources<'_> {
         arguments.named_children(&mut cursor).find_map(|argument| {
             (JavaScriptLiteral {
                 node: argument,
-                source: source,
+                source,
             })
             .static_javascript_string()
         })
@@ -924,3 +926,18 @@ impl WasmModuleSources<'_> {
 }
 
 mod local_resolution;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FactoryValueContext {
+    Expression,
+    Returned,
+}
+
+struct FactoryReturnTraversal<'a> {
+    node: tree_sitter::Node<'a>,
+    value_context: FactoryValueContext,
+    source: &'a str,
+    source_path: &'a Path,
+    wasm_type_names: &'a HashSet<String>,
+    imports: &'a HashMap<String, (String, String)>,
+}

@@ -10,6 +10,8 @@ use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
 use uuid::Uuid;
 
+#[path = "neo4j_store/cancellation.rs"]
+mod cancellation;
 #[path = "neo4j_store/rearm.rs"]
 mod rearm;
 #[path = "neo4j_store/schema.rs"]
@@ -17,7 +19,7 @@ mod schema;
 
 fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
     Ok(EnqueueTask {
-        id: TaskId::new(id)?,
+        id: TaskId::try_from(id)?,
         kind: "integration".to_owned(),
         trigger: TaskTrigger::ManualCli,
         prompt: "Exercise the production task store".to_owned(),
@@ -64,14 +66,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         "duplicate enqueue must not reset task state"
     );
 
-    let agent_a = AgentId::new(format!("agent-a-{suffix}"))?;
-    let agent_b = AgentId::new(format!("agent-b-{suffix}"))?;
-    let agent_c = AgentId::new(format!("agent-c-{suffix}"))?;
+    let agent_a = AgentId::try_from(format!("agent-a-{suffix}"))?;
+    let agent_b = AgentId::try_from(format!("agent-b-{suffix}"))?;
+    let agent_c = AgentId::try_from(format!("agent-c-{suffix}"))?;
     for agent in [&agent_a, &agent_b, &agent_c] {
         store.register_agent(agent, agent.as_str()).await?;
     }
 
-    let dependency_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let dependency_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(dependency_claim.id, dependency.id);
     assert!(
         store.claim(&agent_b, 300).await?.is_idle(),
@@ -86,13 +88,13 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     };
     assert!(
         store
-            .complete(
-                &dependency_claim,
-                &agent_a,
-                false,
-                "dependency complete",
-                &CompletionArtifact::Produced(artifact.clone()),
-            )
+            .complete(hive::model::Completion {
+                task: &dependency_claim,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "dependency complete",
+                artifact: &CompletionArtifact::Produced(artifact.clone())
+            })
             .await?
     );
     let mut promoted_rows = graph
@@ -198,7 +200,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .param("id", dependent.id.as_str()),
         )
         .await?;
-    let retry_claim = store.claim(retry_agent, 300).await?.into_claimed()?;
+    let retry_claim = hive::model::ClaimedTask::try_from(store.claim(retry_agent, 300).await?)?;
     assert_eq!(retry_claim.attempt_number, 2);
     assert!(
         !store
@@ -220,13 +222,13 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     );
     assert!(
         !store
-            .complete(
-                &stale_claim,
-                stale_agent,
-                false,
-                "stale completion",
-                &CompletionArtifact::NotProduced
-            )
+            .complete(hive::model::Completion {
+                task: &stale_claim,
+                agent_id: stale_agent,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "stale completion",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
     let dependent_artifact = Artifact {
@@ -238,18 +240,18 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     };
     assert!(
         store
-            .complete(
-                &retry_claim,
-                retry_agent,
-                false,
-                "retry complete",
-                &CompletionArtifact::Produced(dependent_artifact.clone()),
-            )
+            .complete(hive::model::Completion {
+                task: &retry_claim,
+                agent_id: retry_agent,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "retry complete",
+                artifact: &CompletionArtifact::Produced(dependent_artifact.clone())
+            })
             .await?
     );
     let descendant = task(format!("descendant-{suffix}"), vec![dependent.id.clone()])?;
     store.enqueue(&descendant).await?;
-    let descendant_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let descendant_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(
         descendant_claim.dependency_artifacts,
         vec![artifact.clone(), dependent_artifact],
@@ -257,13 +259,13 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     );
     assert!(
         store
-            .complete(
-                &descendant_claim,
-                &agent_a,
-                false,
-                "descendant complete",
-                &CompletionArtifact::NotProduced
-            )
+            .complete(hive::model::Completion {
+                task: &descendant_claim,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "descendant complete",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
 
@@ -275,7 +277,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         (&left, format!("left-artifact-{suffix}")),
         (&right, format!("right-artifact-{suffix}")),
     ] {
-        let claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        let claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
         assert_eq!(claim.id, branch.id);
         let branch_artifact = Artifact {
             id: branch_artifact_id.clone(),
@@ -286,13 +288,13 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         };
         assert!(
             store
-                .complete(
-                    &claim,
-                    &agent_a,
-                    false,
-                    "branch complete",
-                    &CompletionArtifact::Produced(branch_artifact.clone())
-                )
+                .complete(hive::model::Completion {
+                    task: &claim,
+                    agent_id: &agent_a,
+                    relevance: hive::model::CompletionRelevance::Current,
+                    summary: "branch complete",
+                    artifact: &CompletionArtifact::Produced(branch_artifact.clone())
+                })
                 .await?
         );
     }
@@ -301,7 +303,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         vec![left.id.clone(), right.id.clone()],
     )?;
     store.enqueue(&diamond).await?;
-    let diamond_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let diamond_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(
         diamond_claim
             .dependency_artifacts
@@ -313,13 +315,13 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     );
     assert!(
         store
-            .complete(
-                &diamond_claim,
-                &agent_a,
-                false,
-                "diamond complete",
-                &CompletionArtifact::NotProduced
-            )
+            .complete(hive::model::Completion {
+                task: &diamond_claim,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "diamond complete",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
 
@@ -343,19 +345,19 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
 
     let rollout = task(format!("rollout-{suffix}"), Vec::new())?;
     store.enqueue(&rollout).await?;
-    let interrupted = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let interrupted = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert!(store.release(&interrupted, &agent_a).await?);
-    let resumed = store.claim(&agent_b, 300).await?.into_claimed()?;
+    let resumed = hive::model::ClaimedTask::try_from(store.claim(&agent_b, 300).await?)?;
     assert_eq!(resumed.attempt_number, 1);
     assert!(
         store
-            .complete(
-                &resumed,
-                &agent_b,
-                false,
-                "rollout recovery complete",
-                &CompletionArtifact::NotProduced
-            )
+            .complete(hive::model::Completion {
+                task: &resumed,
+                agent_id: &agent_b,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "rollout recovery complete",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
     let mut rollout_rows = graph
@@ -378,7 +380,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     let mut blocker = task(format!("blocker-{suffix}"), Vec::new())?;
     blocker.priority = 100;
     store.enqueue(&original).await?;
-    let original_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let original_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert!(
         store
             .block(
@@ -389,31 +391,31 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .await?
     );
-    let blocker_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let blocker_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(blocker_claim.id, blocker.id);
     assert!(
         store
-            .complete(
-                &blocker_claim,
-                &agent_a,
-                false,
-                "blocker complete",
-                &CompletionArtifact::NotProduced
-            )
+            .complete(hive::model::Completion {
+                task: &blocker_claim,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "blocker complete",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
-    let resumed_original = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let resumed_original = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(resumed_original.id, original.id);
     assert_eq!(resumed_original.attempt_number, 1);
     assert!(
         store
-            .complete(
-                &resumed_original,
-                &agent_a,
-                false,
-                "original complete",
-                &CompletionArtifact::NotProduced
-            )
+            .complete(hive::model::Completion {
+                task: &resumed_original,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "original complete",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
 
@@ -424,7 +426,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     let cancelled_root = task(format!("cancelled-root-{suffix}"), Vec::new())?;
     let cancelled_blocker = task(format!("cancelled-blocker-{suffix}"), Vec::new())?;
     store.enqueue(&cancelled_root).await?;
-    let cancelled_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let cancelled_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert!(
         store
             .block(
@@ -444,7 +446,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
 
     let reused = task(format!("reused-blocker-original-{suffix}"), Vec::new())?;
     store.enqueue(&reused).await?;
-    let reused_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let reused_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert!(
         store
             .block(
@@ -471,18 +473,18 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .ok_or_else(|| anyhow::anyhow!("completed-blocker reuse row was missing"))?;
     assert_eq!(reused_state.get::<String>("status")?, "READY");
     assert!(reused_state.get::<bool>("cleared_blocked_reason")?);
-    let resumed_reused = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let resumed_reused = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(resumed_reused.id, reused.id);
     assert_eq!(resumed_reused.attempt_number, 1);
     assert!(
         store
-            .complete(
-                &resumed_reused,
-                &agent_a,
-                false,
-                "completed reused-blocker task",
-                &CompletionArtifact::NotProduced,
-            )
+            .complete(hive::model::Completion {
+                task: &resumed_reused,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "completed reused-blocker task",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
 
@@ -493,7 +495,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     )?;
     store.enqueue(&cycle_root).await?;
     store.enqueue(&cycle_dependent).await?;
-    let cycle_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let cycle_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     let mut existing_dependent = cycle_dependent.clone();
     existing_dependent.dependencies.clear();
     assert!(
@@ -508,25 +510,26 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     );
     assert!(
         store
-            .complete(
-                &cycle_claim,
-                &agent_a,
-                false,
-                "cycle root complete",
-                &CompletionArtifact::NotProduced
-            )
+            .complete(hive::model::Completion {
+                task: &cycle_claim,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "cycle root complete",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
-    let cycle_dependent_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let cycle_dependent_claim =
+        hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert!(
         store
-            .complete(
-                &cycle_dependent_claim,
-                &agent_a,
-                false,
-                "cycle dependent complete",
-                &CompletionArtifact::NotProduced,
-            )
+            .complete(hive::model::Completion {
+                task: &cycle_dependent_claim,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "cycle dependent complete",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
 
@@ -538,7 +541,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     )?;
     store.enqueue(&exhausted).await?;
     store.enqueue(&stranded).await?;
-    let exhausted_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let exhausted_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert!(
         store
             .fail(&exhausted_claim, &agent_a, "terminal failure")
@@ -678,18 +681,18 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await?,
         "a distinct repaired release must receive one bounded budget"
     );
-    let release_b_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let release_b_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(release_b_claim.id, repair.id);
     assert_eq!(release_b_claim.attempt_number, 5);
     assert!(
         store
-            .complete(
-                &release_b_claim,
-                &agent_a,
-                false,
-                "platform repaired",
-                &CompletionArtifact::NotProduced,
-            )
+            .complete(hive::model::Completion {
+                task: &release_b_claim,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "platform repaired",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
 
@@ -697,7 +700,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     retired_repair.kind = "main-repair".to_owned();
     retired_repair.max_attempts = 1;
     store.enqueue(&retired_repair).await?;
-    let retired_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let retired_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert!(
         store
             .fail(&retired_claim, &agent_a, "obsolete failure")
@@ -721,7 +724,8 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     let mut reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new())?;
     reused_failed_parent.kind = "main-repair".to_owned();
     store.enqueue(&reused_failed_parent).await?;
-    let reused_failed_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let reused_failed_claim =
+        hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert!(
         store
             .block(
@@ -758,30 +762,30 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await?,
         "a repaired release must rearm the failed blocker chain"
     );
-    let recovered_blocker = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let recovered_blocker = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(recovered_blocker.id, exhausted.id);
     assert!(
         store
-            .complete(
-                &recovered_blocker,
-                &agent_a,
-                false,
-                "sandbox dependency repaired",
-                &CompletionArtifact::NotProduced,
-            )
+            .complete(hive::model::Completion {
+                task: &recovered_blocker,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "sandbox dependency repaired",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
-    let recovered_parent = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let recovered_parent = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(recovered_parent.id, reused_failed_parent.id);
     assert!(
         store
-            .complete(
-                &recovered_parent,
-                &agent_a,
-                false,
-                "dependent repair complete",
-                &CompletionArtifact::NotProduced,
-            )
+            .complete(hive::model::Completion {
+                task: &recovered_parent,
+                agent_id: &agent_a,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "dependent repair complete",
+                artifact: &CompletionArtifact::NotProduced
+            })
             .await?
     );
 
@@ -790,7 +794,8 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     let expired_block_parent = task(format!("expired-block-parent-{suffix}"), Vec::new())?;
     let expired_blocker = task(format!("expired-blocker-{suffix}"), Vec::new())?;
     store.enqueue(&expired_block_parent).await?;
-    let expired_block_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let expired_block_claim =
+        hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     graph
         .run(
             query(
@@ -831,7 +836,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     )?;
     store.enqueue(&lease_exhausted).await?;
     store.enqueue(&lease_stranded).await?;
-    let lease_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    let lease_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
     assert_eq!(lease_claim.id, lease_exhausted.id);
     graph
         .run(
@@ -866,65 +871,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         "final lease failure must propagate to every descendant: {lease_failed_statuses:?}"
     );
 
-    let cancelling = task(format!("cancelling-{suffix}"), Vec::new())?;
-    store.enqueue(&cancelling).await?;
-    let cancelling_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
-    assert_eq!(cancelling_claim.id, cancelling.id);
-    assert!(store.cancel(&cancelling.id, "superseded").await?);
-    assert!(
-        !store
-            .heartbeat(
-                &cancelling_claim.id,
-                &agent_a,
-                &cancelling_claim.lease_token,
-                300,
-            )
-            .await?
-    );
-    let targets = store.cancellation_targets(&cancelling.id).await?;
-    assert_eq!(targets.len(), 1);
-    assert_eq!(targets[0].task_id, cancelling.id);
-    assert_eq!(targets[0].pod_name, agent_a.as_str());
-    assert!(
-        store
-            .acknowledge_cancellation(&cancelling_claim, &agent_a)
-            .await?
-    );
-    assert!(store.cancellation_targets(&cancelling.id).await?.is_empty());
-
-    let forced = task(format!("forced-cancellation-{suffix}"), Vec::new())?;
-    store.enqueue(&forced).await?;
-    let prior_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
-    assert!(store.fail(&prior_claim, &agent_a, "prior failure").await?);
-    let current_claim = store.claim(&agent_b, 300).await?.into_claimed()?;
-    assert!(store.cancel(&forced.id, "superseded").await?);
-    assert!(store.finalize_cancellation(&forced.id).await?);
-    let mut forced_rows = graph
-        .execute(
-            query(
-                "MATCH (task:Task {id: $id})<-[:FOR_TASK]-(attempt:Attempt)
-                 RETURN attempt.status AS status
-                 ORDER BY attempt.number",
-            )
-            .param("id", forced.id.as_str()),
-        )
-        .await?;
-    let mut forced_statuses = Vec::new();
-    while let Some(row) = forced_rows.next().await? {
-        forced_statuses.push(row.get::<String>("status")?);
-    }
-    assert_eq!(forced_statuses, ["FAILED", "CANCELLED"]);
-    assert!(
-        !store
-            .complete(
-                &current_claim,
-                &agent_b,
-                false,
-                "late",
-                &CompletionArtifact::NotProduced,
-            )
-            .await?
-    );
+    cancellation::exercise_cancellation(cancellation::CancellationScenario {
+        store: &store,
+        graph: &graph,
+        agent_a: &agent_a,
+        agent_b: &agent_b,
+        suffix: &suffix,
+    })
+    .await?;
 
     schema::verify_migrations(&store, &graph).await?;
     Ok(())

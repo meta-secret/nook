@@ -22,14 +22,22 @@ impl<W: Write> TurnProgress<W> {
 
 pub(super) struct TaskProgressReporter<W> {
     pub(super) writer: W,
-    decorate: bool,
+    decorate: ProgressDecoration,
     task_id: String,
     step: usize,
     finalizing_announced: bool,
 }
 
 impl<W: Write> TaskProgressReporter<W> {
-    pub(super) fn new(writer: W, decorate: bool, task_id: String) -> Self {
+    pub(super) fn new(request: TaskProgressOutput<W>) -> Self {
+        let TaskProgressOutput {
+            output:
+                ProgressOutput {
+                    writer,
+                    decoration: decorate,
+                },
+            task_id,
+        } = request;
         Self {
             writer,
             decorate,
@@ -127,13 +135,13 @@ impl<W: Write> TaskProgressReporter<W> {
             &format!("{task_id:<30}"),
         );
         let kind = self.paint("2", &format!("{kind:<7}"));
-        let message = (ProgressText { message: message }).compact_text(140);
+        let message = (ProgressText { message }).compact_text(140);
         writeln!(self.writer, "    {symbol}  {task_id} {kind} · {message}")?;
         self.writer.flush()
     }
 
     pub(super) fn paint(&self, code: &str, text: &str) -> String {
-        if self.decorate {
+        if matches!(self.decorate, ProgressDecoration::Ansi) {
             format!("\u{1b}[{code}m{text}\u{1b}[0m")
         } else {
             text.to_owned()
@@ -202,7 +210,7 @@ impl InspectionSummary {
 
 pub(super) struct ProgressReporter<W> {
     pub(super) writer: W,
-    decorate: bool,
+    decorate: ProgressDecoration,
     inspection_step: usize,
     reasoning_open: bool,
     saw_reasoning_delta: bool,
@@ -210,7 +218,11 @@ pub(super) struct ProgressReporter<W> {
 }
 
 impl<W: Write> ProgressReporter<W> {
-    pub(super) fn new(writer: W, decorate: bool) -> Self {
+    pub(super) fn new(output: ProgressOutput<W>) -> Self {
+        let ProgressOutput {
+            writer,
+            decoration: decorate,
+        } = output;
         Self {
             writer,
             decorate,
@@ -358,7 +370,7 @@ impl<W: Write> ProgressReporter<W> {
     }
 
     pub(super) fn paint(&self, code: &str, text: &str) -> String {
-        if self.decorate {
+        if matches!(self.decorate, ProgressDecoration::Ansi) {
             format!("\u{1b}[{code}m{text}\u{1b}[0m")
         } else {
             text.to_owned()
@@ -429,4 +441,19 @@ impl InspectionSummary {
 
         (!files.is_empty()).then(|| files.join(" · "))
     }
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum ProgressDecoration {
+    Plain,
+    Ansi,
+}
+
+pub(super) struct ProgressOutput<W> {
+    pub(super) writer: W,
+    pub(super) decoration: ProgressDecoration,
+}
+pub(super) struct TaskProgressOutput<W> {
+    pub(super) output: ProgressOutput<W>,
+    pub(super) task_id: String,
 }

@@ -79,9 +79,12 @@ impl BrokerExternalAuth {
         unreachable!("bounded auth broker connection loop always returns")
     }
 
-    async fn request(&self, refresh: bool) -> io::Result<CodexAuth> {
+    async fn request(&self, operation: BrokerAuthOperation) -> io::Result<CodexAuth> {
         let mut channel = self.channel.lock().await;
-        let request = serde_json::to_vec(&BrokerRequest { refresh }).map_err(io::Error::other)?;
+        let request = serde_json::to_vec(&BrokerRequest {
+            refresh: matches!(operation, BrokerAuthOperation::Refresh),
+        })
+        .map_err(io::Error::other)?;
         channel.get_mut().write_all(&request).await?;
         channel.get_mut().write_all(b"\n").await?;
         channel.get_mut().flush().await?;
@@ -97,21 +100,21 @@ impl BrokerExternalAuth {
     }
 
     pub async fn validate(&self) -> io::Result<()> {
-        self.request(false).await.map(drop)
+        self.request(BrokerAuthOperation::Resolve).await.map(drop)
     }
 
     pub async fn refresh_and_validate(&self) -> io::Result<()> {
-        self.request(true).await.map(drop)
+        self.request(BrokerAuthOperation::Refresh).await.map(drop)
     }
 }
 
 impl ExternalAuth for BrokerExternalAuth {
     fn resolve(&self) -> ExternalAuthFuture<'_, CodexAuth> {
-        Box::pin(self.request(false))
+        Box::pin(self.request(BrokerAuthOperation::Resolve))
     }
 
     fn refresh(&self, _context: ExternalAuthRefreshContext) -> ExternalAuthFuture<'_, CodexAuth> {
-        Box::pin(self.request(true))
+        Box::pin(self.request(BrokerAuthOperation::Refresh))
     }
 }
 
@@ -470,4 +473,10 @@ struct KubernetesAuthPatch {
 struct KubernetesAuthSecret {
     #[serde(rename = "auth.json")]
     auth_json: String,
+}
+
+#[derive(Clone, Copy)]
+enum BrokerAuthOperation {
+    Resolve,
+    Refresh,
 }

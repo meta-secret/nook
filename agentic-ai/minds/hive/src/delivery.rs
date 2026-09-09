@@ -81,23 +81,20 @@ impl MainRepairDelivery<'_> {
     pub(crate) async fn verify_main_repair_delivery(&self, task_id: &str) -> crate::HiveResult<()> {
         let repository = self.repository;
         let branch = self.branch;
-        let (pull_request, successful_main_sha) = (MainRepairDelivery {
-            repository: repository,
-            branch: branch,
-        })
-        .main_repair_merge_and_main()
-        .await?;
-        DeliveryPullRequest::validate_repository_checks(&pull_request, true)?;
-        DeliveryPullRequest::validate_full_e2e_checks(&pull_request, true)?;
+        let (pull_request, successful_main_sha) = (MainRepairDelivery { repository, branch })
+            .main_repair_merge_and_main()
+            .await?;
+        pull_request.validate_repository_checks(MainMergeEvidence::SuccessfulDescendant)?;
+        pull_request.validate_full_e2e_checks(MainMergeEvidence::SuccessfulDescendant)?;
         (DeliveryReadiness {
-            repository: repository,
+            repository,
             pull_request: &pull_request,
         })
         .validate_review_and_deployment_readiness()
         .await?;
         (WorkbenchCompletionCheck {
-            repository: repository,
-            task_id: task_id,
+            repository,
+            task_id,
             pull_request_number: pull_request.number,
             main_sha: successful_main_sha.as_str(),
         })
@@ -111,13 +108,10 @@ impl MainRepairDelivery<'_> {
     pub(crate) async fn verify_main_repair_merge_and_main(&self) -> crate::HiveResult<()> {
         let repository = self.repository;
         let branch = self.branch;
-        (MainRepairDelivery {
-            repository: repository,
-            branch: branch,
-        })
-        .main_repair_merge_and_main()
-        .await
-        .map(|_| ())
+        (MainRepairDelivery { repository, branch })
+            .main_repair_merge_and_main()
+            .await
+            .map(|_| ())
     }
 }
 
@@ -126,7 +120,7 @@ impl MainRepairDelivery<'_> {
         let repository = self.repository;
         let branch = self.branch;
         let pull_requests: Vec<DeliveryPullRequest> = serde_json::from_str(
-        &(DeliveryCommand { repository: repository, arguments: &[
+        &(DeliveryCommand { repository, arguments: &[
                 "pr",
                 "list",
                 "--state",
@@ -171,7 +165,7 @@ impl MainRepairDelivery<'_> {
 
         let mut runs: Vec<DeliveryRun> = serde_json::from_str(
             &(DeliveryCommand {
-                repository: repository,
+                repository,
                 arguments: &[
                     "run",
                     "list",
@@ -336,36 +330,29 @@ impl DeliveryPullRequest {
 }
 
 impl DeliveryPullRequest {
-    fn validate_full_e2e_checks(
-        pull_request: &DeliveryPullRequest,
-        successful_main_contains_merge: bool,
-    ) -> crate::HiveResult<()> {
-        if !pull_request
-            .labels
-            .iter()
-            .any(|label| label.name == "ci:full-e2e")
-        {
+    fn validate_full_e2e_checks(&self, main_evidence: MainMergeEvidence) -> crate::HiveResult<()> {
+        if !self.labels.iter().any(|label| label.name == "ci:full-e2e") {
             return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks `ci:full-e2e`",
-                pull_request.number, pull_request.head_ref_oid
+                self.number, self.head_ref_oid
             )));
         }
         for required_check in [
             "Full browser e2e (main fix)",
             "Full extension e2e (main fix)",
         ] {
-            let matching = pull_request
+            let matching = self
                 .status_check_rollup
                 .iter()
                 .filter(|check| check.name == required_check)
                 .collect::<Vec<_>>();
-            if !DeliveryCheck::successful_or_merge_cancelled(
-                &matching,
-                successful_main_contains_merge,
-            ) {
+            if !DeliveryCheck::successful_or_merge_cancelled(CheckAcceptance {
+                checks: &matching,
+                main_evidence,
+            }) {
                 return Err(crate::HiveError::message(format!(
                     "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `{}`",
-                    pull_request.number, pull_request.head_ref_oid, required_check
+                    self.number, self.head_ref_oid, required_check
                 )));
             }
         }
@@ -375,25 +362,25 @@ impl DeliveryPullRequest {
 
 impl DeliveryPullRequest {
     fn validate_repository_checks(
-        pull_request: &DeliveryPullRequest,
-        successful_main_contains_merge: bool,
+        &self,
+        main_evidence: MainMergeEvidence,
     ) -> crate::HiveResult<()> {
-        let verify_checks = pull_request
+        let verify_checks = self
             .status_check_rollup
             .iter()
             .filter(|check| check.name == "Verify and preview")
             .collect::<Vec<_>>();
-        if !DeliveryCheck::successful_or_merge_cancelled(
-            &verify_checks,
-            successful_main_contains_merge,
-        ) {
+        if !DeliveryCheck::successful_or_merge_cancelled(CheckAcceptance {
+            checks: &verify_checks,
+            main_evidence,
+        }) {
             return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `Verify and preview`",
-                pull_request.number, pull_request.head_ref_oid
+                self.number, self.head_ref_oid
             )));
         }
         let mut repository_checks = HashMap::<&str, Vec<&DeliveryCheck>>::new();
-        for check in &pull_request.status_check_rollup {
+        for check in &self.status_check_rollup {
             if !check.workflow_name.is_empty() {
                 repository_checks
                     .entry(&check.name)
@@ -442,17 +429,18 @@ impl DeliveryCheck {
 }
 
 impl DeliveryCheck {
-    fn successful_or_merge_cancelled(
-        checks: &[&DeliveryCheck],
-        successful_main_contains_merge: bool,
-    ) -> bool {
+    fn successful_or_merge_cancelled(request: CheckAcceptance<'_>) -> bool {
+        let CheckAcceptance {
+            checks,
+            main_evidence,
+        } = request;
         if checks
             .iter()
             .any(|check| DeliveryCheck::successful_check(check))
         {
             return true;
         }
-        successful_main_contains_merge
+        matches!(main_evidence, MainMergeEvidence::SuccessfulDescendant)
             && checks
                 .iter()
                 .any(|check| check.status == "COMPLETED" && check.conclusion == "CANCELLED")
@@ -468,6 +456,7 @@ impl DeliveryCheck {
 
 #[cfg(test)]
 mod tests {
+    use super::MainMergeEvidence;
     use crate::HiveContext;
     use std::fs;
     use std::path;
@@ -622,7 +611,8 @@ mod tests {
             started_at: "2026-09-04T01:00:00Z".to_owned(),
             workflow_name: "Security".to_owned(),
         });
-        let pending = DeliveryPullRequest::validate_repository_checks(&checks, false)
+        let pending = checks
+            .validate_repository_checks(MainMergeEvidence::NotEstablished)
             .err()
             .ok_or_else(|| crate::HiveError::message("pending repository check was accepted"))?;
         assert!(pending.to_string().contains("still running"));
@@ -634,7 +624,8 @@ mod tests {
         missing_verify
             .status_check_rollup
             .retain(|check| check.name != "Verify and preview");
-        let missing = DeliveryPullRequest::validate_repository_checks(&missing_verify, false)
+        let missing = missing_verify
+            .validate_repository_checks(MainMergeEvidence::NotEstablished)
             .err()
             .ok_or_else(|| {
                 crate::HiveError::message("missing repository verification was accepted")
@@ -645,7 +636,8 @@ mod tests {
         missing_e2e
             .status_check_rollup
             .retain(|check| check.name != "Full browser e2e (main fix)");
-        let missing = DeliveryPullRequest::validate_full_e2e_checks(&missing_e2e, false)
+        let missing = missing_e2e
+            .validate_full_e2e_checks(MainMergeEvidence::NotEstablished)
             .err()
             .ok_or_else(|| crate::HiveError::message("missing browser e2e check was accepted"))?;
         assert!(missing.to_string().contains("Full browser e2e"));
@@ -659,7 +651,7 @@ mod tests {
                 workflow_name: "Advisory".to_owned(),
             });
         }
-        DeliveryPullRequest::validate_repository_checks(&checks, false)?;
+        checks.validate_repository_checks(MainMergeEvidence::NotEstablished)?;
         Ok(())
     }
 
@@ -806,7 +798,8 @@ mod tests {
             .labels
             .retain(|label| label.name != "ci:full-e2e");
 
-        let error = DeliveryPullRequest::validate_full_e2e_checks(&pull_request, false)
+        let error = pull_request
+            .validate_full_e2e_checks(MainMergeEvidence::NotEstablished)
             .err()
             .ok_or_else(|| {
                 crate::HiveError::message("a Hive repair without the opt-in label cannot complete")
@@ -827,7 +820,7 @@ mod tests {
             workflow_name: "PR".to_owned(),
         });
 
-        DeliveryPullRequest::validate_full_e2e_checks(&pull_request, false)?;
+        pull_request.validate_full_e2e_checks(MainMergeEvidence::NotEstablished)?;
         Ok(())
     }
 
@@ -842,7 +835,8 @@ mod tests {
             workflow_name: "Hive".to_owned(),
         });
 
-        let error = DeliveryPullRequest::validate_repository_checks(&pull_request, false)
+        let error = pull_request
+            .validate_repository_checks(MainMergeEvidence::NotEstablished)
             .err()
             .ok_or_else(|| {
                 crate::HiveError::message(
@@ -860,8 +854,8 @@ mod tests {
             check.conclusion = "CANCELLED".to_owned();
         }
 
-        DeliveryPullRequest::validate_repository_checks(&pull_request, true)?;
-        DeliveryPullRequest::validate_full_e2e_checks(&pull_request, true)?;
+        pull_request.validate_repository_checks(MainMergeEvidence::SuccessfulDescendant)?;
+        pull_request.validate_full_e2e_checks(MainMergeEvidence::SuccessfulDescendant)?;
         Ok(())
     }
 
@@ -871,7 +865,8 @@ mod tests {
         pull_request.status_check_rollup[0].conclusion = "FAILURE".to_owned();
         pull_request.status_check_rollup[1].conclusion = "CANCELLED".to_owned();
 
-        let error = DeliveryPullRequest::validate_full_e2e_checks(&pull_request, true)
+        let error = pull_request
+            .validate_full_e2e_checks(MainMergeEvidence::SuccessfulDescendant)
             .err()
             .ok_or_else(|| {
                 crate::HiveError::message("a failed exact-head e2e run remains a delivery failure")
@@ -891,7 +886,8 @@ mod tests {
             workflow_name: "Hive".to_owned(),
         });
 
-        let error = DeliveryPullRequest::validate_repository_checks(&pull_request, true)
+        let error = pull_request
+            .validate_repository_checks(MainMergeEvidence::SuccessfulDescendant)
             .err()
             .ok_or_else(|| {
                 crate::HiveError::message("Main does not exercise Hive-only verification")
@@ -899,4 +895,15 @@ mod tests {
         assert!(error.to_string().contains("Hive Rust"));
         Ok(())
     }
+}
+
+#[derive(Clone, Copy)]
+enum MainMergeEvidence {
+    NotEstablished,
+    SuccessfulDescendant,
+}
+
+struct CheckAcceptance<'a> {
+    checks: &'a [&'a DeliveryCheck],
+    main_evidence: MainMergeEvidence,
 }

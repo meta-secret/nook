@@ -325,7 +325,11 @@ impl<S: TaskStore> Worker<S> {
                     Ok::<TaskDisposition, crate::HiveError>(TaskDisposition::Completed {
                         summary,
                         artifact,
-                        obsolete,
+                        relevance: if obsolete {
+                            crate::model::CompletionRelevance::Obsolete
+                        } else {
+                            crate::model::CompletionRelevance::Current
+                        },
                     })
                 }
                 .await;
@@ -337,13 +341,19 @@ impl<S: TaskStore> Worker<S> {
                     TaskDisposition::Completed {
                         summary,
                         artifact,
-                        obsolete,
+                        relevance,
                     } => {
                         let accepted = self
                             .store
-                            .complete(task, &self.config.agent_id, obsolete, &summary, &artifact)
+                            .complete(crate::model::Completion {
+                                task,
+                                agent_id: &self.config.agent_id,
+                                relevance,
+                                summary: &summary,
+                                artifact: &artifact,
+                            })
                             .await?;
-                        if !accepted && obsolete {
+                        if !accepted && relevance == crate::model::CompletionRelevance::Obsolete {
                             if !self.store.release(task, &self.config.agent_id).await? {
                                 return Err(WorkerCancellationRequested.into());
                             }
@@ -476,7 +486,7 @@ enum TaskDisposition {
     Completed {
         summary: String,
         artifact: CompletionArtifact,
-        obsolete: bool,
+        relevance: crate::model::CompletionRelevance,
     },
     Blocked {
         blocker: EnqueueTask,
@@ -599,13 +609,13 @@ mod tests {
     #[test]
     fn obsolete_completion_is_normalized_for_non_blocker_tasks() -> anyhow::Result<()> {
         let mut task = ClaimedTask {
-            id: TaskId::new("main-failure-recovery")?,
+            id: TaskId::try_from("main-failure-recovery")?,
             kind: "main-repair".to_owned(),
             prompt: "verify the delivered repair".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
+            lease_token: LeaseToken::try_from("lease-1")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
@@ -626,13 +636,13 @@ mod tests {
     #[test]
     fn self_named_external_blocker_defers_without_creating_a_dependency() -> anyhow::Result<()> {
         let task = ClaimedTask {
-            id: TaskId::new("github-actions-pr-42")?,
+            id: TaskId::try_from("github-actions-pr-42")?,
             kind: "main-repair".to_owned(),
             prompt: "Wait for the exact-head workflow".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
+            lease_token: LeaseToken::try_from("lease-1")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
@@ -653,19 +663,19 @@ mod tests {
     #[test]
     fn prerequisite_task_cannot_create_a_child_dependency() -> anyhow::Result<()> {
         let task = ClaimedTask {
-            id: TaskId::new("github-actions-pr-42")?,
+            id: TaskId::try_from("github-actions-pr-42")?,
             kind: "blocker".to_owned(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
+            lease_token: LeaseToken::try_from("lease-1")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
         let blocker = BlockerRequest {
-            id: TaskId::new("github-workflow-token")?,
+            id: TaskId::try_from("github-workflow-token")?,
             title: "Provision workflow token".to_owned(),
             prompt: "Provide a credential with workflow scope.".to_owned(),
         };
@@ -682,19 +692,19 @@ mod tests {
     #[test]
     fn main_repair_can_create_one_prerequisite_task() -> anyhow::Result<()> {
         let task = ClaimedTask {
-            id: TaskId::new("main-failure-recovery")?,
+            id: TaskId::try_from("main-failure-recovery")?,
             kind: "main-repair".to_owned(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
+            lease_token: LeaseToken::try_from("lease-1")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
         let blocker = BlockerRequest {
-            id: TaskId::new("repair-buildkit-cache")?,
+            id: TaskId::try_from("repair-buildkit-cache")?,
             title: "Repair BuildKit cache".to_owned(),
             prompt: "Fix the repository-owned cache path.".to_owned(),
         };
@@ -712,14 +722,14 @@ mod tests {
     #[test]
     fn blocker_prompt_requires_active_pr_ownership() -> anyhow::Result<()> {
         let task = ClaimedTask {
-            id: TaskId::new("github-actions-pr-42")?,
+            id: TaskId::try_from("github-actions-pr-42")?,
             kind: "blocker".to_owned(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
-            owning_repairs: vec![TaskId::new("main-failure-abc-run-42-attempt-1")?],
+            lease_token: LeaseToken::try_from("lease-1")?,
+            owning_repairs: vec![TaskId::try_from("main-failure-abc-run-42-attempt-1")?],
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -738,7 +748,7 @@ mod tests {
         assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
         let targets = ClaimedTask::obsolete_owner_delivery_targets(&[
             task.owning_repairs[0].clone(),
-            TaskId::new("main-failure-def-run-43-attempt-1")?,
+            TaskId::try_from("main-failure-def-run-43-attempt-1")?,
         ]);
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[1].1, "codex/hive-main-failure-def-run-43-attempt-1");
@@ -748,13 +758,13 @@ mod tests {
     #[test]
     fn replacement_worker_inspects_direct_github_delivery_state() -> crate::HiveResult<()> {
         let task = ClaimedTask {
-            id: TaskId::new("main-failure-recovery")?,
+            id: TaskId::try_from("main-failure-recovery")?,
             kind: "main-repair".to_owned(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-recovery")?,
+            attempt_id: AttemptId::try_from("attempt-recovery")?,
             attempt_number: 2,
-            lease_token: LeaseToken::new("lease-recovery")?,
+            lease_token: LeaseToken::try_from("lease-recovery")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
@@ -782,8 +792,8 @@ mod tests {
     -> crate::HiveResult<()> {
         let store = MemoryStore::default();
         store.enqueue(&task("activity-task", Vec::new())?).await?;
-        let agent = AgentId::new("activity-agent")?;
-        let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+        let agent = AgentId::try_from("activity-agent")?;
+        let claimed = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         let (sender, receiver) = mpsc::unbounded_channel();
         assert!(
             sender
@@ -808,7 +818,7 @@ mod tests {
             store: store.clone(),
             agent_id: agent.clone(),
             task: claimed.clone(),
-            receiver: receiver,
+            receiver,
         })
         .persist_activity()
         .await?;
@@ -820,13 +830,13 @@ mod tests {
 
         assert!(
             store
-                .complete(
-                    &claimed,
-                    &agent,
-                    false,
-                    "activity captured",
-                    &CompletionArtifact::NotProduced,
-                )
+                .complete(crate::model::Completion {
+                    task: &claimed,
+                    agent_id: &agent,
+                    relevance: crate::model::CompletionRelevance::Current,
+                    summary: "activity captured",
+                    artifact: &CompletionArtifact::NotProduced
+                })
                 .await?
         );
         let (sender, receiver) = mpsc::unbounded_channel();
@@ -841,10 +851,10 @@ mod tests {
         );
         drop(sender);
         let error = (TaskActivityStream {
-            store: store,
+            store,
             agent_id: agent,
             task: claimed,
-            receiver: receiver,
+            receiver,
         })
         .persist_activity()
         .await

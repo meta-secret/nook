@@ -128,7 +128,7 @@ impl Neo4jTaskStore {
             .await?;
         rows.next()
             .await?
-            .map(|row| Ok(TaskId::new(row.get::<String>("id")?)?))
+            .map(|row| Ok(TaskId::try_from(row.get::<String>("id")?)?))
             .transpose()
     }
 }

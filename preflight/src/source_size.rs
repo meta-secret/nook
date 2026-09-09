@@ -167,13 +167,15 @@ impl SourceRepository<'_> {
             let source = fs::read_to_string(&path)?;
             let syntax = syn::parse_file(&source).map_err(SourceRepository::invalid_rust_source)?;
             SourceRepository::collect_external_unit_test_modules(
-                root,
-                relative_path,
-                path.parent().unwrap_or_else(|| Path::new("")),
-                &SourceRepository::module_directory_for_source(&path),
-                &syntax.items,
-                false,
-                violations,
+                crate::source_size::UnitTestModuleTraversal {
+                    root,
+                    source_path: relative_path,
+                    include_directory: path.parent().unwrap_or_else(|| Path::new("")),
+                    module_directory: &SourceRepository::module_directory_for_source(&path),
+                    items: &syntax.items,
+                    test_context: RustModuleContext::Production,
+                    violations,
+                },
             )?;
         }
         Ok(())
@@ -181,31 +183,40 @@ impl SourceRepository<'_> {
 }
 
 impl SourceRepository<'_> {
-    fn collect_external_unit_test_modules(
-        root: &Path,
-        source_path: &Path,
-        include_directory: &Path,
-        module_directory: &Path,
-        items: &[Item],
-        test_context: bool,
-        violations: &mut Vec<ExternalUnitTestModuleViolation>,
-    ) -> io::Result<()> {
+    fn collect_external_unit_test_modules(request: UnitTestModuleTraversal<'_>) -> io::Result<()> {
+        let UnitTestModuleTraversal {
+            root,
+            source_path,
+            include_directory,
+            module_directory,
+            items,
+            test_context,
+            violations,
+        } = request;
+
         for item in items {
             match item {
                 Item::Mod(module) => {
-                    let module_test_context =
-                        test_context || SourceRepository::is_cfg_test(&module.attrs);
+                    let module_test_context = if matches!(test_context, RustModuleContext::Test)
+                        || SourceRepository::is_cfg_test(&module.attrs)
+                    {
+                        RustModuleContext::Test
+                    } else {
+                        RustModuleContext::Production
+                    };
                     if let Some((_, nested_items)) = &module.content {
                         SourceRepository::collect_external_unit_test_modules(
-                            root,
-                            source_path,
-                            include_directory,
-                            &module_directory.join(module.ident.to_string()),
-                            nested_items,
-                            module_test_context,
-                            violations,
+                            crate::source_size::UnitTestModuleTraversal {
+                                root,
+                                source_path,
+                                include_directory,
+                                module_directory: &module_directory.join(module.ident.to_string()),
+                                items: nested_items,
+                                test_context: module_test_context,
+                                violations,
+                            },
                         )?;
-                    } else if module_test_context {
+                    } else if matches!(module_test_context, RustModuleContext::Test) {
                         SourceRepository::record_external_unit_test_module(
                             root,
                             source_path,
@@ -216,7 +227,8 @@ impl SourceRepository<'_> {
                     }
                 }
                 Item::Macro(item_macro)
-                    if (test_context || SourceRepository::is_cfg_test(&item_macro.attrs))
+                    if (matches!(test_context, RustModuleContext::Test)
+                        || SourceRepository::is_cfg_test(&item_macro.attrs))
                         && item_macro.mac.path.is_ident("include") =>
                 {
                     if let Some(path) =
@@ -632,4 +644,20 @@ mod tests {
         fs::create_dir(&path)?;
         Ok(path)
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RustModuleContext {
+    Production,
+    Test,
+}
+
+struct UnitTestModuleTraversal<'a> {
+    root: &'a Path,
+    source_path: &'a Path,
+    include_directory: &'a Path,
+    module_directory: &'a Path,
+    items: &'a [Item],
+    test_context: RustModuleContext,
+    violations: &'a mut Vec<ExternalUnitTestModuleViolation>,
 }

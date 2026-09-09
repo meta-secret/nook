@@ -233,8 +233,8 @@ impl Cli {
             } => {
                 (AuthBroker {
                     socket_path: socket,
-                    auth_source: auth_source,
-                    auth_home: auth_home,
+                    auth_source,
+                    auth_home,
                 })
                 .run_auth_broker()
                 .await
@@ -260,7 +260,7 @@ impl Cli {
                         task_id,
                         release_id,
                     } => {
-                        let task_id = TaskId::new(task_id)?;
+                        let task_id = TaskId::try_from(task_id)?;
                         if !store.retry_failed_main_task(&task_id, &release_id).await? {
                             return Err(hive::HiveError::message(format!(
                                 "task {task_id} is not a retryable failed Main-repair task"
@@ -272,7 +272,7 @@ impl Cli {
                         Ok(())
                     }
                     QueueAction::Cancel { task_id, reason } => {
-                        let task_id = TaskId::new(task_id)?;
+                        let task_id = TaskId::try_from(task_id)?;
                         if !store.cancel(&task_id, &reason).await? {
                             return Err(hive::HiveError::message(format!(
                                 "task {task_id} is not an active cancellable Hive task"
@@ -290,9 +290,9 @@ impl Cli {
             } => {
                 let store = ObserverCoordinatorStore::connect(&coordinator_socket).await?;
                 (ObserverServer {
-                    store: store,
-                    address: address,
-                    dashboard: dashboard,
+                    store,
+                    address,
+                    dashboard,
                 })
                 .run_observer()
                 .await
@@ -305,12 +305,9 @@ impl Cli {
                 let store =
                     Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                         .await?;
-                (ObserverCoordinator {
-                    socket: socket,
-                    store: store,
-                })
-                .run_observer_coordinator()
-                .await
+                (ObserverCoordinator { socket, store })
+                    .run_observer_coordinator()
+                    .await
             }
             Command::Coordinator { socket } => {
                 let neo4j_password = cli
@@ -320,12 +317,9 @@ impl Cli {
                 let store =
                     Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                         .await?;
-                (CoordinatorServer {
-                    socket: socket,
-                    store: store,
-                })
-                .run_coordinator()
-                .await
+                (CoordinatorServer { socket, store })
+                    .run_coordinator()
+                    .await
             }
             Command::WorkbenchDispatcher {
                 repository_url,
@@ -353,11 +347,11 @@ impl Cli {
                     )
                 })??;
                 (WorkbenchDispatcher {
-                    store: store,
+                    store,
                     repository_url: &repository_url,
                     checkout: &checkout,
                     health_path: &health_path,
-                    poll_seconds: poll_seconds,
+                    poll_seconds,
                 })
                 .run_workbench_dispatcher()
                 .await
@@ -406,7 +400,7 @@ impl Cli {
                 Worker::new(
                     store,
                     WorkerConfig {
-                        agent_id: AgentId::new(agent_id)?,
+                        agent_id: AgentId::try_from(agent_id)?,
                         pod_name,
                         repository_url,
                         workspace,
@@ -458,7 +452,7 @@ impl Cli {
                     .hive_context("invalid dependency id")?;
                 store
                     .enqueue(&EnqueueTask {
-                        id: TaskId::new(id)?,
+                        id: TaskId::try_from(id)?,
                         kind,
                         trigger: TaskTrigger::ManualCli,
                         prompt,

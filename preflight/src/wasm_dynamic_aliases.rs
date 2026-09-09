@@ -60,10 +60,10 @@ impl DynamicWasmAliases<'_> {
         for child in node.children(&mut cursor) {
             (DynamicWasmAliases {
                 node: child,
-                source: source,
-                source_path: source_path,
-                module: module,
-                wasm_namespace_bindings: wasm_namespace_bindings,
+                source,
+                source_path,
+                module,
+                wasm_namespace_bindings,
             })
             .collect_namespace_import_bindings();
         }
@@ -206,11 +206,11 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(node: tree_sitter::Node<
     let mut called_bindings = HashSet::new();
     WasmInstanceFactories::collect_member_alias_receiver_names(node, source, callable_names, &mut member_alias_receivers);
     WasmInstanceFactories::collect_factory_calls_for_receivers(node, source, &member_alias_receivers, &mut called_bindings);
-    (WasmInstanceFactories { node: node, source: source, wasm_class_bindings: wasm_class_bindings, factories: &mut scoped_wasm_factories }).collect_wasm_instance_factories();
+    (WasmInstanceFactories { node, source, wasm_class_bindings, factories: &mut scoped_wasm_factories }).collect_wasm_instance_factories();
     WasmInstanceFactories::collect_imported_wasm_instance_factories(node, source, source_path, wasm_type_names, &called_bindings, &mut imported_wasm_factories);
     DynamicWasmAliases::collect_wasm_runtime_receivers(node, source, &mut scoped_wasm_runtime_receivers);
     WasmInstanceFactories::collect_typed_wasm_instances(node, source, wasm_class_bindings, &mut scoped_wasm_instances);
-    (DynamicWasmCallables { node: node, source: source, source_path: source_path, callable_names: callable_names, wasm_namespace_bindings: wasm_namespace_bindings, scoped_wasm_namespaces: &mut scoped_wasm_namespaces, bindings: &mut scoped_wasm_callables, lines: lines, first_line: first_line }).collect_scoped_dynamic_callable_bindings();
+    (DynamicWasmCallables { node, source, source_path, callable_names, wasm_namespace_bindings, scoped_wasm_namespaces: &mut scoped_wasm_namespaces, bindings: &mut scoped_wasm_callables, lines, first_line }).collect_scoped_dynamic_callable_bindings();
     DynamicWasmAliases::collect_dynamic_wasm_aliases(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &imported_wasm_factories, &scoped_wasm_factories, &scoped_wasm_runtime_receivers, &mut scoped_wasm_namespaces, &mut scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
     WasmMemberAliases::collect_object_literal_aliases_in_tree(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &scoped_wasm_namespaces, &scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
     DynamicWasmAliases::collect_dynamic_wasm_aliases(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &imported_wasm_factories, &scoped_wasm_factories, &scoped_wasm_runtime_receivers, &mut scoped_wasm_namespaces, &mut scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
@@ -231,7 +231,7 @@ fn collect_dynamic_wasm_aliases(node: tree_sitter::Node<'_>, source: &str, sourc
         if !node.utf8_text(source.as_bytes()).is_ok_and(|text| text.contains("||=") || text.contains("??=")) {
             DynamicWasmAliases::invalidate_reassigned_wasm_binding(binding, source, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings);
         }
-        DynamicWasmAliases::collect_binding_aliases(binding, value, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines, true);
+        DynamicWasmAliases::collect_binding_aliases(crate::wasm_dynamic_aliases::BindingAliasObservation { binding, value, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines });
     }
 
     if matches!(
@@ -244,7 +244,7 @@ fn collect_dynamic_wasm_aliases(node: tree_sitter::Node<'_>, source: &str, sourc
         node.child_by_field_name("name")
             .or_else(|| node.child_by_field_name("pattern")),
         node.child_by_field_name("value"),
-    ) && DynamicWasmAliases::collect_binding_aliases(binding, value, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines, true) {
+    ) && DynamicWasmAliases::collect_binding_aliases(crate::wasm_dynamic_aliases::BindingAliasObservation { binding, value, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines }) {
         return;
     }
 
@@ -300,28 +300,29 @@ impl DynamicWasmAliases<'_> {
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 impl DynamicWasmAliases<'_> {
-    fn collect_binding_aliases(
-        binding: tree_sitter::Node<'_>,
-        value: tree_sitter::Node<'_>,
-        source: &str,
-        source_path: &Path,
-        first_line: usize,
-        callable_names: &HashSet<String>,
-        wasm_type_names: &HashSet<String>,
-        wasm_types: &WasmTypeInventory,
-        wasm_namespace_bindings: &HashMap<String, String>,
-        wasm_class_bindings: &HashMap<String, String>,
-        wasm_instance_bindings: &HashMap<String, String>,
-        wasm_instance_factories: &HashMap<String, String>,
-        scoped_wasm_factories: &[ScopedBinding],
-        scoped_wasm_runtime_receivers: &[ScopedBinding],
-        scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
-        scoped_wasm_instances: &mut Vec<ScopedBinding>,
-        scoped_wasm_callables: &mut Vec<ScopedBinding>,
-        imported_callable_bindings: &mut HashSet<String>,
-        lines: &mut Vec<usize>,
-        inspect_object_pattern: bool,
-    ) -> bool {
+    fn collect_binding_aliases(request: BindingAliasObservation<'_>) -> bool {
+        let BindingAliasObservation {
+            binding,
+            value,
+            source,
+            source_path,
+            first_line,
+            callable_names,
+            wasm_type_names,
+            wasm_types,
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            wasm_instance_bindings,
+            wasm_instance_factories,
+            scoped_wasm_factories,
+            scoped_wasm_runtime_receivers,
+            scoped_wasm_namespaces,
+            scoped_wasm_instances,
+            scoped_wasm_callables,
+            imported_callable_bindings,
+            lines,
+        } = request;
+
         let binding = DynamicWasmAliases::unwrap_transparent_expression(binding);
         let value = DynamicWasmAliases::unwrap_transparent_expression(value);
         if binding.kind() == "identifier"
@@ -365,26 +366,25 @@ impl DynamicWasmAliases<'_> {
         ) {
             scoped_wasm_instances.push(instance_binding);
         }
-        if inspect_object_pattern
-            && (WasmMemberAliases {
-                binding: binding,
-                value: value,
-                source: source,
-                source_path: source_path,
-                first_line: first_line,
-                callable_names: callable_names,
-                wasm_type_names: wasm_type_names,
-                wasm_types: wasm_types,
-                wasm_namespace_bindings: wasm_namespace_bindings,
-                wasm_class_bindings: wasm_class_bindings,
-                wasm_instance_bindings: wasm_instance_bindings,
-                scoped_wasm_namespaces: scoped_wasm_namespaces,
-                scoped_wasm_instances: scoped_wasm_instances,
-                scoped_wasm_callables: scoped_wasm_callables,
-                imported_callable_bindings: imported_callable_bindings,
-                lines: lines,
-            })
-            .collect_destructuring_aliases()
+        if (WasmMemberAliases {
+            binding,
+            value,
+            source,
+            source_path,
+            first_line,
+            callable_names,
+            wasm_type_names,
+            wasm_types,
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            wasm_instance_bindings,
+            scoped_wasm_namespaces,
+            scoped_wasm_instances,
+            scoped_wasm_callables,
+            imported_callable_bindings,
+            lines,
+        })
+        .collect_destructuring_aliases()
         {
             return true;
         }
@@ -807,7 +807,7 @@ impl DynamicWasmAliases<'_> {
         if let Some(module) = DynamicWasmAliases::loaded_module_specifier(value, source)
             && (WasmModuleSources {
                 module: &module,
-                source_path: source_path,
+                source_path,
             })
             .is_wasm_callable_source()
         {
@@ -844,7 +844,7 @@ impl DynamicWasmAliases<'_> {
                 .and_then(|argument| {
                     (JavaScriptLiteral {
                         node: argument,
-                        source: source,
+                        source,
                     })
                     .static_javascript_string()
                 });
@@ -949,4 +949,26 @@ impl DynamicWasmAliases<'_> {
             imported_callable_bindings.insert(binding_name.to_owned());
         }
     }
+}
+
+struct BindingAliasObservation<'a> {
+    binding: tree_sitter::Node<'a>,
+    value: tree_sitter::Node<'a>,
+    source: &'a str,
+    source_path: &'a Path,
+    first_line: usize,
+    callable_names: &'a HashSet<String>,
+    wasm_type_names: &'a HashSet<String>,
+    wasm_types: &'a WasmTypeInventory,
+    wasm_namespace_bindings: &'a HashMap<String, String>,
+    wasm_class_bindings: &'a HashMap<String, String>,
+    wasm_instance_bindings: &'a HashMap<String, String>,
+    wasm_instance_factories: &'a HashMap<String, String>,
+    scoped_wasm_factories: &'a [ScopedBinding],
+    scoped_wasm_runtime_receivers: &'a [ScopedBinding],
+    scoped_wasm_namespaces: &'a mut Vec<ScopedBinding>,
+    scoped_wasm_instances: &'a mut Vec<ScopedBinding>,
+    scoped_wasm_callables: &'a mut Vec<ScopedBinding>,
+    imported_callable_bindings: &'a mut HashSet<String>,
+    lines: &'a mut Vec<usize>,
 }

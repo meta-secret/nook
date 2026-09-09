@@ -59,8 +59,8 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             let reconciled =
                 DispatcherHealth::while_recording_dispatcher_progress(health_path, async {
                     match (WorkbenchCheckout {
-                        repository_url: repository_url,
-                        checkout: checkout,
+                        repository_url,
+                        checkout,
                     })
                     .sync_workbench_checkout()
                     .await
@@ -397,7 +397,7 @@ impl TaskId {
         run_id: u64,
         run_attempt: u64,
     ) -> crate::HiveResult<TaskId> {
-        Ok(TaskId::new(format!(
+        Ok(TaskId::try_from(format!(
             "{task_base}-run-{run_id}-attempt-{run_attempt}"
         ))?)
     }
@@ -406,7 +406,7 @@ impl TaskId {
 impl WorkbenchIncidentText<'_> {
     fn main_failure_task_ids(&self, task_base: &str) -> crate::HiveResult<Vec<TaskId>> {
         let body = self.value;
-        let mut task_ids = vec![TaskId::new(task_base)?];
+        let mut task_ids = vec![TaskId::try_from(task_base)?];
         for (run_id, run_attempt) in (WorkbenchIncidentText { value: body }).main_failure_runs() {
             task_ids.push(TaskId::main_failure_task_id(
                 task_base,
@@ -505,12 +505,15 @@ mod tests {
         }
         async fn complete(
             &self,
-            _: &ClaimedTask,
-            _: &AgentId,
-            _: bool,
-            _: &str,
-            _: &CompletionArtifact,
+            completion: crate::model::Completion<'_>,
         ) -> crate::HiveResult<bool> {
+            let crate::model::Completion {
+                task: _,
+                agent_id: _,
+                relevance: _,
+                summary: _,
+                artifact: _,
+            } = completion;
             unreachable!()
         }
         async fn fail(&self, _: &ClaimedTask, _: &AgentId, _: &str) -> crate::HiveResult<bool> {

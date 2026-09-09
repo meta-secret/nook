@@ -267,7 +267,11 @@ impl TypeScriptApplicationState<'_> {
         first_line: usize,
     ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
         TypeScriptApplicationState::typescript_code_raw_string_discriminant_lines_with_policy(
-            source, first_line, false,
+            crate::typescript_state::DiscriminantSource {
+                source,
+                first_line,
+                unregistered_values: UnregisteredDiscriminantPolicy::Allow,
+            },
         )
     }
 }
@@ -278,17 +282,25 @@ impl TypeScriptApplicationState<'_> {
         first_line: usize,
     ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
         TypeScriptApplicationState::typescript_code_raw_string_discriminant_lines_with_policy(
-            source, first_line, true,
+            crate::typescript_state::DiscriminantSource {
+                source,
+                first_line,
+                unregistered_values: UnregisteredDiscriminantPolicy::Reject,
+            },
         )
     }
 }
 
 impl TypeScriptApplicationState<'_> {
     fn typescript_code_raw_string_discriminant_lines_with_policy(
-        source: &str,
-        first_line: usize,
-        flag_unregistered_values: bool,
+        request: DiscriminantSource<'_>,
     ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+        let DiscriminantSource {
+            source,
+            first_line,
+            unregistered_values,
+        } = request;
+
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
         let Some(tree) = parser.parse(source, None) else {
@@ -302,12 +314,14 @@ impl TypeScriptApplicationState<'_> {
         );
         let mut lines = Vec::new();
         TypeScriptApplicationState::collect_raw_string_discriminant_nodes(
-            tree.root_node(),
-            source,
-            first_line,
-            &enum_values,
-            flag_unregistered_values,
-            &mut lines,
+            crate::typescript_state::DiscriminantTraversal {
+                node: tree.root_node(),
+                source,
+                first_line,
+                enum_values: &enum_values,
+                unregistered_values,
+                lines: &mut lines,
+            },
         );
         lines.sort_unstable();
         lines.dedup();
@@ -316,14 +330,16 @@ impl TypeScriptApplicationState<'_> {
 }
 
 impl TypeScriptApplicationState<'_> {
-    fn collect_raw_string_discriminant_nodes(
-        node: tree_sitter::Node<'_>,
-        source: &str,
-        first_line: usize,
-        enum_values: &HashMap<String, HashSet<String>>,
-        flag_unregistered_values: bool,
-        lines: &mut Vec<usize>,
-    ) {
+    fn collect_raw_string_discriminant_nodes(request: DiscriminantTraversal<'_>) {
+        let DiscriminantTraversal {
+            node,
+            source,
+            first_line,
+            enum_values,
+            unregistered_values,
+            lines,
+        } = request;
+
         const DISCRIMINANT_NAMES: [&str; 8] = [
             "action",
             "kind",
@@ -368,7 +384,7 @@ impl TypeScriptApplicationState<'_> {
                         TypeScriptApplicationState::string_literal_value(literal, source)
                     })
                     .is_some_and(|literal| {
-                        flag_unregistered_values
+                        matches!(unregistered_values, UnregisteredDiscriminantPolicy::Reject)
                             || name.is_some_and(|name| {
                                 TypeScriptApplicationState::enum_value_matches_discriminant(
                                     enum_values,
@@ -405,7 +421,7 @@ impl TypeScriptApplicationState<'_> {
                 };
                 TypeScriptApplicationState::is_equality_comparison(node, left, right, source)
                     && literal.zip(discriminant).is_some_and(|(value, name)| {
-                        flag_unregistered_values
+                        matches!(unregistered_values, UnregisteredDiscriminantPolicy::Reject)
                             || TypeScriptApplicationState::enum_value_matches_discriminant(
                                 enum_values,
                                 value,
@@ -420,12 +436,14 @@ impl TypeScriptApplicationState<'_> {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             TypeScriptApplicationState::collect_raw_string_discriminant_nodes(
-                child,
-                source,
-                first_line,
-                enum_values,
-                flag_unregistered_values,
-                lines,
+                crate::typescript_state::DiscriminantTraversal {
+                    node: child,
+                    source,
+                    first_line,
+                    enum_values,
+                    unregistered_values,
+                    lines,
+                },
             );
         }
     }
@@ -835,4 +853,25 @@ type ToolArguments = ToolCall['args'] | void
         );
         Ok(())
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum UnregisteredDiscriminantPolicy {
+    Allow,
+    Reject,
+}
+
+struct DiscriminantSource<'a> {
+    source: &'a str,
+    first_line: usize,
+    unregistered_values: UnregisteredDiscriminantPolicy,
+}
+
+struct DiscriminantTraversal<'a> {
+    node: tree_sitter::Node<'a>,
+    source: &'a str,
+    first_line: usize,
+    enum_values: &'a HashMap<String, HashSet<String>>,
+    unregistered_values: UnregisteredDiscriminantPolicy,
+    lines: &'a mut Vec<usize>,
 }

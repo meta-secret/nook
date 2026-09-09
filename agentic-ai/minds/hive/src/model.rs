@@ -1,6 +1,5 @@
 use serde::de;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
@@ -45,101 +44,8 @@ pub enum ModelError {
     FailedObsolete,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct TaskId(String);
-
-impl TaskId {
-    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(ModelError::EmptyId { kind: "TaskId" });
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for TaskId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct AgentId(String);
-
-impl AgentId {
-    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(ModelError::EmptyId { kind: "AgentId" });
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for AgentId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct AttemptId(String);
-
-impl AttemptId {
-    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(ModelError::EmptyId { kind: "AttemptId" });
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for AttemptId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct LeaseToken(String);
-
-impl LeaseToken {
-    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(ModelError::EmptyId { kind: "LeaseToken" });
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for LeaseToken {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
+mod identity;
+pub use identity::{AgentId, AttemptId, LeaseToken, TaskId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -242,11 +148,14 @@ impl ClaimOutcome {
     pub const fn is_idle(&self) -> bool {
         matches!(self, Self::NoTask)
     }
+}
 
-    pub fn into_claimed(self) -> Result<ClaimedTask, ModelError> {
-        match self {
-            Self::Claimed(task) => Ok(*task),
-            Self::NoTask => Err(ModelError::NoClaimableTask),
+impl TryFrom<ClaimOutcome> for ClaimedTask {
+    type Error = ModelError;
+    fn try_from(outcome: ClaimOutcome) -> Result<Self, Self::Error> {
+        match outcome {
+            ClaimOutcome::Claimed(task) => Ok(*task),
+            ClaimOutcome::NoTask => Err(ModelError::NoClaimableTask),
         }
     }
 }
@@ -432,7 +341,7 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
                     changed_files,
                     tests,
                     blocker: BlockerRequest {
-                        id: TaskId::new(blocker.id)?,
+                        id: TaskId::try_from(blocker.id)?,
                         title: blocker.title,
                         prompt: blocker.prompt,
                     },
@@ -512,7 +421,7 @@ mod tests {
 
     #[test]
     fn enqueue_rejects_self_dependency() -> crate::HiveResult<()> {
-        let task_id = TaskId::new("task-1")?;
+        let task_id = TaskId::try_from("task-1")?;
         let task = EnqueueTask {
             id: task_id.clone(),
             kind: "code".to_owned(),
@@ -531,14 +440,14 @@ mod tests {
     #[test]
     fn enqueue_rejects_blocker_dependency() -> crate::HiveResult<()> {
         let task = EnqueueTask {
-            id: TaskId::new("blocker-2")?,
+            id: TaskId::try_from("blocker-2")?,
             kind: "blocker".to_owned(),
             trigger: TaskTrigger::ManualCli,
             prompt: "Resolve the prerequisite".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             priority: 200,
             max_attempts: 3,
-            dependencies: vec![TaskId::new("blocker-1")?],
+            dependencies: vec![TaskId::try_from("blocker-1")?],
         };
 
         assert_eq!(task.validate(), Err(ModelError::BlockerWithDependencies));
@@ -685,14 +594,14 @@ mod tests {
 
     #[test]
     fn identifiers_triggers_and_activity_kinds_have_stable_wire_values() -> crate::HiveResult<()> {
-        assert_eq!(TaskId::new("task-1")?.to_string(), "task-1");
-        assert_eq!(AgentId::new("agent-1")?.to_string(), "agent-1");
-        assert_eq!(AttemptId::new("attempt-1")?.to_string(), "attempt-1");
-        assert_eq!(LeaseToken::new("lease-1")?.to_string(), "lease-1");
-        assert!(TaskId::new(" ").is_err());
-        assert!(AgentId::new("\n").is_err());
-        assert!(AttemptId::new("\t").is_err());
-        assert!(LeaseToken::new("").is_err());
+        assert_eq!(TaskId::try_from("task-1")?.to_string(), "task-1");
+        assert_eq!(AgentId::try_from("agent-1")?.to_string(), "agent-1");
+        assert_eq!(AttemptId::try_from("attempt-1")?.to_string(), "attempt-1");
+        assert_eq!(LeaseToken::try_from("lease-1")?.to_string(), "lease-1");
+        assert!(TaskId::try_from(" ").is_err());
+        assert!(AgentId::try_from("\n").is_err());
+        assert!(AttemptId::try_from("\t").is_err());
+        assert!(LeaseToken::try_from("").is_err());
 
         assert_eq!(TaskTrigger::AgentDependency.as_str(), "agent-dependency");
         assert_eq!(
@@ -715,7 +624,7 @@ mod tests {
         }
         assert!(ClaimOutcome::NoTask.is_idle());
         assert_eq!(
-            ClaimOutcome::NoTask.into_claimed(),
+            crate::model::ClaimedTask::try_from(ClaimOutcome::NoTask),
             Err(ModelError::NoClaimableTask)
         );
         Ok(())
@@ -724,7 +633,7 @@ mod tests {
     #[test]
     fn enqueue_validation_rejects_each_invalid_domain_field() -> crate::HiveResult<()> {
         let valid = EnqueueTask {
-            id: TaskId::new("task")?,
+            id: TaskId::try_from("task")?,
             kind: "code".into(),
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement behavior".into(),
@@ -862,4 +771,19 @@ mod tests {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionRelevance {
+    Current,
+    Obsolete,
+}
+
+/// A completion proposal; the store still admits it against the live owner and lease.
+pub struct Completion<'a> {
+    pub task: &'a ClaimedTask,
+    pub agent_id: &'a AgentId,
+    pub relevance: CompletionRelevance,
+    pub summary: &'a str,
+    pub artifact: &'a CompletionArtifact,
 }

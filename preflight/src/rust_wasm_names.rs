@@ -10,7 +10,7 @@ use crate::Violation;
 use crate::rust_wasm_attributes::RustWasmAttributes;
 use crate::wasm_direct_aliases::DirectWasmAliases;
 use crate::wasm_dynamic_aliases::DynamicWasmAliases;
-use crate::wasm_inventory::WasmTypeInventory;
+use crate::wasm_inventory::{WasmImplContext, WasmTypeInventory};
 use crate::wasm_local_reexports::LocalWasmReexports;
 use crate::wasm_svelte_sources::WasmSvelteSources;
 use crate::wasm_web_sources::WebSourceInventory;
@@ -49,12 +49,14 @@ impl RustWasmNames<'_> {
                 || relative_path.starts_with("nook-app/nook-platform/nook-companion-wasm/src")
             {
                 WasmTypeInventory::collect_wasm_inventory(
-                    &syntax.items,
-                    false,
-                    &HashSet::new(),
-                    &mut callable_names,
-                    &mut wasm_type_names,
-                    &mut wasm_types,
+                    crate::wasm_inventory::WasmInventoryCollection {
+                        items: &syntax.items,
+                        enclosing_wasm_impl: WasmImplContext::Outside,
+                        inherited_aliases: &HashSet::new(),
+                        callable_names: &mut callable_names,
+                        type_names: &mut wasm_type_names,
+                        types: &mut wasm_types,
+                    },
                 );
             }
         }
@@ -205,11 +207,11 @@ impl RustWasmNames<'_> {
         let mut wasm_instance_bindings = HashMap::new();
         (DirectWasmAliases {
             node: tree.root_node(),
-            source: source,
-            source_path: source_path,
-            first_line: first_line,
-            callable_names: callable_names,
-            wasm_type_names: wasm_type_names,
+            source,
+            source_path,
+            first_line,
+            callable_names,
+            wasm_type_names,
             wasm_namespace_bindings: &mut wasm_namespace_bindings,
             wasm_class_bindings: &mut wasm_class_bindings,
             imported_callable_bindings: &mut imported_callable_bindings,
@@ -232,8 +234,8 @@ impl RustWasmNames<'_> {
         );
         (LocalWasmReexports {
             node: tree.root_node(),
-            source: source,
-            first_line: first_line,
+            source,
+            first_line,
             imported_callable_bindings: &imported_callable_bindings,
             lines: &mut lines,
         })

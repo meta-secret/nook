@@ -243,11 +243,11 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
         .await
         .context("create schema-9 artifact lineage fixture")?;
     store.migrate().await?;
-    let agent = AgentId::new("schema-9-artifact-agent")?;
+    let agent = AgentId::try_from("schema-9-artifact-agent")?;
     store
         .register_agent(&agent, "schema-9-artifact-pod")
         .await?;
-    let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+    let claimed = hive::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
     assert_eq!(claimed.id.as_str(), "schema-9-artifact-consumer");
     assert_eq!(
         claimed
@@ -293,11 +293,11 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
         .await
         .context("create schema-9 active child fixture")?;
     store.migrate().await?;
-    let active_agent = AgentId::new("schema-9-active-agent")?;
+    let active_agent = AgentId::try_from("schema-9-active-agent")?;
     store
         .register_agent(&active_agent, "schema-9-active-pod")
         .await?;
-    let child = store.claim(&active_agent, 300).await?.into_claimed()?;
+    let child = hive::model::ClaimedTask::try_from(store.claim(&active_agent, 300).await?)?;
     assert_eq!(child.id.as_str(), "schema-9-active-child");
     let child_artifact = CompletionArtifact::Produced(Artifact {
         id: "schema-9-active-child-artifact".to_owned(),
@@ -308,13 +308,13 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     });
     assert!(
         store
-            .complete(
-                &child,
-                &active_agent,
-                false,
-                "active child repair completed",
-                &child_artifact,
-            )
+            .complete(hive::model::Completion {
+                task: &child,
+                agent_id: &active_agent,
+                relevance: hive::model::CompletionRelevance::Current,
+                summary: "active child repair completed",
+                artifact: &child_artifact
+            })
             .await?
     );
     let mut transition_rows = graph
@@ -335,7 +335,7 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     assert_eq!(transitioned.get::<String>("parent_status")?, "READY");
     assert_eq!(transitioned.get::<i64>("dependencies")?, 0);
     assert_eq!(transitioned.get::<i64>("lineage")?, 1);
-    let parent = store.claim(&active_agent, 300).await?.into_claimed()?;
+    let parent = hive::model::ClaimedTask::try_from(store.claim(&active_agent, 300).await?)?;
     assert_eq!(parent.id.as_str(), "schema-9-active-parent");
     assert_eq!(parent.dependency_context.len(), 1);
     assert_eq!(

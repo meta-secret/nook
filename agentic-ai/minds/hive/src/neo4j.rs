@@ -186,7 +186,7 @@ impl TaskStore for Neo4jTaskStore {
         let mut targets = Vec::new();
         while let Some(row) = rows.next().await? {
             targets.push(CancellationTarget {
-                task_id: TaskId::new(row.get::<String>("task_id")?)?,
+                task_id: TaskId::try_from(row.get::<String>("task_id")?)?,
                 pod_name: row.get("pod_name")?,
             });
         }
@@ -230,9 +230,9 @@ impl TaskStore for Neo4jTaskStore {
         for retry in 0..CLAIM_RETRY_LIMIT {
             let result = async {
                 let attempt_id =
-                    AttemptId::new(Uuid::new_v4().to_string())?;
+                    AttemptId::try_from(Uuid::new_v4().to_string())?;
                 let lease_token =
-                    LeaseToken::new(Uuid::new_v4().to_string())?;
+                    LeaseToken::try_from(Uuid::new_v4().to_string())?;
                 let mut transaction = self.graph.start_txn().await?;
 
                 transaction
@@ -537,14 +537,14 @@ impl TaskStore for Neo4jTaskStore {
         Ok(rows.next().await?.is_some())
     }
 
-    async fn complete(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-        obsolete: bool,
-        summary: &str,
-        artifact: &CompletionArtifact,
-    ) -> crate::HiveResult<bool> {
+    async fn complete(&self, completion: crate::model::Completion<'_>) -> crate::HiveResult<bool> {
+        let crate::model::Completion {
+            task,
+            agent_id,
+            relevance,
+            summary,
+            artifact,
+        } = completion;
         let mut transaction = self.graph.start_txn().await?;
         let mut rows = transaction
             .execute(
@@ -589,7 +589,7 @@ impl TaskStore for Neo4jTaskStore {
                 .param("attempt_id", task.attempt_id.as_str())
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", task.lease_token.as_str())
-                .param("obsolete", obsolete)
+                .param("obsolete", matches!(relevance, crate::model::CompletionRelevance::Obsolete))
                 .param(
                     "owning_repair_ids",
                     task.owning_repairs

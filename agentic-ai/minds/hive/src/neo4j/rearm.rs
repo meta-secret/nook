@@ -42,7 +42,7 @@ impl Neo4jTaskStore {
             .await?;
         let mut retired_ids = Vec::new();
         while let Some(row) = rows.next(transaction.handle()).await? {
-            retired_ids.push(TaskId::new(row.get::<String>("id")?)?);
+            retired_ids.push(TaskId::try_from(row.get::<String>("id")?)?);
         }
         drop(rows);
 

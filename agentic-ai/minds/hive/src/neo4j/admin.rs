@@ -147,7 +147,7 @@ impl Neo4jTaskStore {
             .await?;
         let mut obsolete_ids = Vec::new();
         while let Some(row) = obsolete_rows.next(transaction.handle()).await? {
-            obsolete_ids.push(TaskId::new(row.get::<String>("id")?)?);
+            obsolete_ids.push(TaskId::try_from(row.get::<String>("id")?)?);
         }
         drop(obsolete_rows);
         for obsolete_id in &obsolete_ids {
@@ -221,7 +221,7 @@ impl Neo4jTaskStore {
             .zip(dependency_summaries)
             .map(|(id, summary)| {
                 Ok(DependencyResult {
-                    id: TaskId::new(id)?,
+                    id: TaskId::try_from(id)?,
                     summary,
                 })
             })
@@ -252,7 +252,7 @@ impl Neo4jTaskStore {
             .collect();
 
         Ok(ClaimedTask {
-            id: TaskId::new(row.get::<String>("id")?)?,
+            id: TaskId::try_from(row.get::<String>("id")?)?,
             kind: row.get("kind")?,
             prompt: row.get("prompt")?,
             source_commit: row.get("source_commit")?,

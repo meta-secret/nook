@@ -204,8 +204,8 @@ impl InProcessCodexRunner {
         });
         let turn_result = (CodexTurn {
             thread: &thread,
-            prompt: prompt,
-            kind: kind,
+            prompt,
+            kind,
             execution_log: execution_log.as_deref(),
             activity_sender: options.activity_sender.as_ref(),
         })
@@ -447,11 +447,24 @@ impl CodexTurn<'_> {
         }
 
         let stderr = io::stderr();
-        let decorate = stderr.is_terminal() && env::var_os("NO_COLOR").is_none();
+        let decorate = if stderr.is_terminal() && env::var_os("NO_COLOR").is_none() {
+            ProgressDecoration::Ansi
+        } else {
+            ProgressDecoration::Plain
+        };
         let mut progress = match &kind {
-            TurnKind::Planning => TurnProgress::Planning(ProgressReporter::new(stderr, decorate)),
+            TurnKind::Planning => TurnProgress::Planning(ProgressReporter::new(ProgressOutput {
+                writer: stderr,
+                decoration: decorate,
+            })),
             TurnKind::Task(task_id) => {
-                TurnProgress::Task(TaskProgressReporter::new(stderr, decorate, task_id.clone()))
+                TurnProgress::Task(TaskProgressReporter::new(TaskProgressOutput {
+                    output: ProgressOutput {
+                        writer: stderr,
+                        decoration: decorate,
+                    },
+                    task_id: task_id.clone(),
+                }))
             }
         };
         loop {
@@ -687,7 +700,10 @@ mod tests {
 
     #[test]
     fn progress_reporter_streams_reasoning_and_deduplicates_plan_status() -> crate::HiveResult<()> {
-        let mut progress = ProgressReporter::new(Vec::new(), false);
+        let mut progress = ProgressReporter::new(ProgressOutput {
+            writer: Vec::new(),
+            decoration: ProgressDecoration::Plain,
+        });
 
         progress.reasoning_delta("Inspecting ")?;
         progress.reasoning_delta("the repository.\n")?;
@@ -705,7 +721,10 @@ mod tests {
 
     #[test]
     fn inspection_progress_hides_shell_commands_behind_readable_steps() -> crate::HiveResult<()> {
-        let mut progress = ProgressReporter::new(Vec::new(), false);
+        let mut progress = ProgressReporter::new(ProgressOutput {
+            writer: Vec::new(),
+            decoration: ProgressDecoration::Plain,
+        });
         let commands = [
             vec![
                 "/bin/zsh".into(),
@@ -740,7 +759,10 @@ mod tests {
 
     #[test]
     fn failed_inspection_includes_the_command_for_debugging() -> crate::HiveResult<()> {
-        let mut progress = ProgressReporter::new(Vec::new(), false);
+        let mut progress = ProgressReporter::new(ProgressOutput {
+            writer: Vec::new(),
+            decoration: ProgressDecoration::Plain,
+        });
         let command = vec!["/bin/zsh".into(), "-lc".into(), "rg missing-file".into()];
 
         progress.failed_inspection(2, &command)?;
@@ -753,7 +775,13 @@ mod tests {
 
     #[test]
     fn task_progress_logs_only_fixed_secret_safe_metadata() -> crate::HiveResult<()> {
-        let mut progress = TaskProgressReporter::new(Vec::new(), false, "core-agent".into());
+        let mut progress = TaskProgressReporter::new(TaskProgressOutput {
+            output: ProgressOutput {
+                writer: Vec::new(),
+                decoration: ProgressDecoration::Plain,
+            },
+            task_id: "core-agent".into(),
+        });
 
         progress.line("36", "●", "start", "Agent started")?;
         progress.command_finished(
@@ -775,7 +803,13 @@ mod tests {
 
     #[test]
     fn task_progress_does_not_reveal_failed_commands_or_output() -> crate::HiveResult<()> {
-        let mut progress = TaskProgressReporter::new(Vec::new(), false, "ui-agent".into());
+        let mut progress = TaskProgressReporter::new(TaskProgressOutput {
+            output: ProgressOutput {
+                writer: Vec::new(),
+                decoration: ProgressDecoration::Plain,
+            },
+            task_id: "ui-agent".into(),
+        });
 
         progress.command_finished(
             &["secret-command".into(), "credential-value".into()],
@@ -853,7 +887,10 @@ mod tests {
     #[test]
     fn progress_rendering_closes_reasoning_and_supports_plain_and_decorated_output()
     -> crate::HiveResult<()> {
-        let mut progress = ProgressReporter::new(Vec::new(), false);
+        let mut progress = ProgressReporter::new(ProgressOutput {
+            writer: Vec::new(),
+            decoration: ProgressDecoration::Plain,
+        });
         progress.reasoning_delta("unfinished")?;
         progress.phase("✓", "Complete", Some("all checks passed"))?;
         progress.note("first\n\n second ")?;
@@ -863,7 +900,13 @@ mod tests {
         assert!(output.contains("↳ first\n  ↳ second"));
         assert!(output.contains("!  Warning"));
 
-        let decorated = TaskProgressReporter::new(Vec::new(), true, "worker".into());
+        let decorated = TaskProgressReporter::new(TaskProgressOutput {
+            output: ProgressOutput {
+                writer: Vec::new(),
+                decoration: ProgressDecoration::Ansi,
+            },
+            task_id: "worker".into(),
+        });
         assert_eq!(
             decorated.paint("31", "failure"),
             "\u{1b}[31mfailure\u{1b}[0m"
