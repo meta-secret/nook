@@ -350,6 +350,7 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<VaultProviderState, "localLoginPreparation" | "vaultArchitecture"> &
   Pick<
     VaultSessionState,
+    | "externalIdentityHandoff"
     | "awaitingJoinApproval"
     | "clearSelectedPasswordEntry"
     | "enrollmentCode"

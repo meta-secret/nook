@@ -120,7 +120,7 @@ export class VaultSecretActions {
     successKey,
     failureKey,
   }: PasswordManagerImportExecution): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager)
       throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
     const manager = state.requireManager();
@@ -162,7 +162,7 @@ export class VaultSecretActions {
   }
 
   private async prepareSecretMutation(): Promise<boolean> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return false;
     const editRestriction = state.editRestriction;
     if (editRestriction.decision !== VaultEditDecision.Allowed) {
@@ -179,7 +179,7 @@ export class VaultSecretActions {
   }
 
   async handleAddSecret({ id, type, data }: SecretCreation) {
-    const state = state;
+    const state = this.state;
     if (!(await this.prepareSecretMutation())) return;
     try {
       await state.enqueueStorage(async () => {
@@ -211,7 +211,7 @@ export class VaultSecretActions {
     json,
     password,
   }: BitwardenVaultImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -227,7 +227,7 @@ export class VaultSecretActions {
   async handleKeePassXcImport({
     csv,
   }: KeePassXcVaultImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs2: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -242,7 +242,7 @@ export class VaultSecretActions {
   async handleLastPassImport({
     csv,
   }: LastPassVaultImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs3: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -257,7 +257,7 @@ export class VaultSecretActions {
   async handleKeeperImport({
     csv,
   }: KeeperVaultImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs4: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -272,7 +272,7 @@ export class VaultSecretActions {
   async handleOnePasswordImport({
     archive,
   }: OnePasswordVaultImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs5: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -287,7 +287,7 @@ export class VaultSecretActions {
   async handleApplePasswordsImport({
     exportBytes,
   }: ApplePasswordsVaultImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs6: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -303,7 +303,7 @@ export class VaultSecretActions {
   async handleChromePasswordsImport({
     csv,
   }: ChromePasswordsVaultImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs7: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -318,7 +318,7 @@ export class VaultSecretActions {
   async handleDashlaneImport({
     exportBytes,
   }: DashlaneVaultImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs8: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -334,7 +334,7 @@ export class VaultSecretActions {
   async handleGoogleAuthenticatorImport({
     migrationUris,
   }: AuthenticatorMigrationImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs9: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -350,7 +350,7 @@ export class VaultSecretActions {
   async handleProtonPassImport({
     exportBytes,
   }: ProtonPassVaultImport): Promise<NookImportResult> {
-    const state = state;
+    const state = this.state;
     const runPasswordManagerImportArgs10: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -363,7 +363,7 @@ export class VaultSecretActions {
   }
 
   async handleDeleteSecret({ id }: SecretDeletion) {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     const editRestriction = state.editRestriction;
     if (editRestriction.decision !== VaultEditDecision.Allowed) {
@@ -412,7 +412,7 @@ export class VaultSecretActions {
   }
 
   async handleReplaceSecret({ oldId, type, data }: SecretReplacement) {
-    const state = state;
+    const state = this.state;
     if (!(await this.prepareSecretMutation())) return;
     try {
       const newId = generate_secret_id();
@@ -435,7 +435,7 @@ export class VaultSecretActions {
   }
 
   async refreshPasswordEntriesList(): Promise<boolean> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return false;
     try {
       if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
@@ -468,7 +468,7 @@ export class VaultSecretActions {
   }
 
   async refreshSecretsFromSession(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       VaultSecretActions.freeSecretRecords(state.secrets);
       state.secrets = [];
@@ -490,7 +490,7 @@ export class VaultSecretActions {
     query,
     requestedOffset,
   }: SecretPageRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     // Publish the request immediately so maintenance refreshes queued behind it
     // cannot re-submit the previous query or page.
@@ -557,7 +557,7 @@ export class VaultSecretActions {
     page,
     query,
   }: ConnectedSecretPageApplication): void {
-    const state = state;
+    const state = this.state;
     const records = page.take_items();
     const total = page.total;
     const offset = page.offset;
@@ -571,7 +571,7 @@ export class VaultSecretActions {
   }
 
   async decryptSecret({ id }: SecretDecryption): Promise<NookSecretRecord> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       throw new Error("Vault manager is not initialized.");
     }
@@ -583,7 +583,7 @@ export class VaultSecretActions {
   async currentAuthenticatorCode({
     id,
   }: AuthenticatorCodeRequest): Promise<AuthenticatorCodeView> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       throw new Error("Vault manager is not initialized.");
     }

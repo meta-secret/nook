@@ -14,7 +14,7 @@ export class VaultIdleSessionActions {
   constructor(private readonly state: VaultState) {}
 
   ensureIdleSessionTracker(): void {
-    const state = state;
+    const state = this.state;
     if (state.hasIdleSessionTracker()) return;
     const idleTimeoutConfig = import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS;
     const idleWarningConfig = import.meta.env.VITE_VAULT_IDLE_WARNING_MS;
@@ -43,20 +43,20 @@ export class VaultIdleSessionActions {
   }
 
   showIdleLockWarning(): void {
-    const state = state;
+    const state = this.state;
     if (!state.isAuthenticated) return;
     state.showSuccess(state.t(I18N_KEYS.SessionIdleWarning));
   }
 
   lockVaultDueToIdle(): void {
-    const state = state;
+    const state = this.state;
     if (!state.isAuthenticated) return;
     state.sessionExpiredByIdle = true;
     state.lockVault();
   }
 
   startIdleSessionTracking() {
-    const state = state;
+    const state = this.state;
     if (!state.isAuthenticated) return;
     state.ensureIdleSessionTracker();
     state.startIdleSessionTracker();
@@ -64,12 +64,12 @@ export class VaultIdleSessionActions {
   }
 
   stopIdleSessionTracking() {
-    const state = state;
+    const state = this.state;
     state.stopIdleSessionTracker();
   }
 
   lockVault() {
-    const state = state;
+    const state = this.state;
     log.info("vault locked");
     state.helpOpen = false;
     state.stopIdleSessionTracking();

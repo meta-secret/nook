@@ -41,7 +41,7 @@ export class VaultConnectionActions {
   }
 
   async loadDb() {
-    const state = state;
+    const state = this.state;
     if (state.isInitializing) {
       state.errorMsg = state.t(I18N_KEYS.ErrorsEngineLoading);
       return;

@@ -54,7 +54,7 @@ export class VaultWorkspaceActions {
   }
 
   private applySettings({ section, accordion }: SettingsViewSelection): void {
-    const state = state;
+    const state = this.state;
     state.helpOpen = false;
     state.settingsSection = section;
     if (section === SettingsSection.Storage) {
@@ -76,7 +76,7 @@ export class VaultWorkspaceActions {
   }
 
   private applyAdmin({ accordion }: AdminViewSelection): void {
-    const state = state;
+    const state = this.state;
     state.helpOpen = false;
     state.cancelProviderSetup();
     state.cancelAddProvider();
@@ -88,7 +88,7 @@ export class VaultWorkspaceActions {
   }
 
   private applyVault(): void {
-    const state = state;
+    const state = this.state;
     state.cancelProviderSetup();
     state.cancelAddProvider();
     state.settingsOpen = false;
@@ -96,7 +96,7 @@ export class VaultWorkspaceActions {
   }
 
   applyWorkspaceRoute({ route }: WorkspaceRouteApplication): void {
-    const state = state;
+    const state = this.state;
     switch (route) {
       case WorkspaceRoute.Vault:
         this.applyVault();
@@ -166,7 +166,7 @@ export class VaultWorkspaceActions {
   }
 
   openSettings({ section, accordion }: OpenSettingsRequest): void {
-    const state = state;
+    const state = this.state;
     VaultWorkspaceActions.pushWorkspaceRoute(
       VaultWorkspaceActions.workspaceRouteForSettings(section),
     );
@@ -180,7 +180,7 @@ export class VaultWorkspaceActions {
   }
 
   openAdmin({ accordion }: AdminPanelOpening): void {
-    const state = state;
+    const state = this.state;
     VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Admin);
     const applyAdminArgs2: Parameters<VaultWorkspaceActions["applyAdmin"]>[0] =
       {
@@ -190,13 +190,13 @@ export class VaultWorkspaceActions {
   }
 
   closeSettings(): void {
-    const state = state;
+    const state = this.state;
     VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Vault);
     this.applyVault();
   }
 
   async deleteLocalData(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isSaving || state.localDataDeletionStarted)
       return;
     state.errorMsg = "";
@@ -223,7 +223,7 @@ export class VaultWorkspaceActions {
   }
 
   async handleRemoteLocalBrowserDataDeletion(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (state.localDataDeletionStarted) return;
     const resetManager = state.hasManager
       ? state.enqueueStorage(() =>
@@ -240,14 +240,14 @@ export class VaultWorkspaceActions {
   }
 
   openHelp(): void {
-    const state = state;
+    const state = this.state;
     VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Help);
     state.settingsOpen = false;
     state.helpOpen = true;
   }
 
   closeHelp(): void {
-    const state = state;
+    const state = this.state;
     VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Vault);
     state.helpOpen = false;
   }

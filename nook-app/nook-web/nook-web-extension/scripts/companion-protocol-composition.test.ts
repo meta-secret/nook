@@ -113,7 +113,6 @@ class CompanionPairingApprovalFixture {
       pairingRequest,
     )
     const authority = extensionProtocol.take_authority()
-    extensionProtocol.free()
     const websiteProtocol = new NookCompanionPairingWebsiteProtocol({
       request: structuredClone(pairingRequest),
       observedAt: 120,
@@ -271,9 +270,10 @@ function discovery(requestId: string): CompanionIdentityDiscoveryObservation {
 }
 
 function beginHandoff(requestId: string) {
-  const endpoint = new NookCompanionExtensionEndpoint(structuredClone(presence))
+  const initial = new NookCompanionExtensionEndpoint(structuredClone(presence))
   const observation = discovery(requestId)
-  const status = endpoint.discover(structuredClone(observation))
+  const endpoint = initial.discover(structuredClone(observation))
+  const status = endpoint.status
   const admissionRequest = {
     discovery: structuredClone(observation),
     status: structuredClone(status),
@@ -293,15 +293,16 @@ function beginHandoff(requestId: string) {
       vault_store_id: extension.vaultStoreId,
     },
   } satisfies CompanionWebsiteHandoffBegin
-  const request = website.begin_companion_identity_handoff(
+  const pending = website.begin_companion_identity_handoff(
     structuredClone(begin),
   )
+  const request = pending.request
   const authorization = {
     request: structuredClone(request),
     observedAt: 120,
     presence: structuredClone(presence),
   } satisfies CompanionIdentityHandoffAuthorization
-  return { authorization, endpoint, request, website }
+  return { authorization, endpoint, request, website, pending }
 }
 
 beforeAll(async () => {
@@ -368,7 +369,8 @@ describe('generated companion protocol composition', () => {
   })
 
   test('completes discovery, atomic authorization and sealing, and website finish', async () => {
-    const { authorization, endpoint, website } = beginHandoff('request-success')
+    const { authorization, endpoint, website, pending } =
+      beginHandoff('request-success')
     const response = await endpoint.authorize_and_seal(
       extension,
       structuredClone(authorization),
@@ -381,9 +383,12 @@ describe('generated companion protocol composition', () => {
       throw new Error('expected the generated response admission to succeed')
     }
 
-    await website.finish_companion_identity_handoff(
+    const adopted = await pending.finish(
+      website,
       structuredClone(admission.response),
     )
+    const committed = await adopted.commit(website)
+    committed.confirm(website)
 
     expect(response.encryptedEnvelope).toContain('BEGIN AGE ENCRYPTED FILE')
     expect(website.device_id).toBe(extension.device_id)
@@ -433,7 +438,7 @@ describe('generated companion protocol composition', () => {
       failure: 'discovery-expired',
     })
 
-    const endpoint = new NookCompanionExtensionEndpoint(
+    const initial = new NookCompanionExtensionEndpoint(
       structuredClone(presence),
     )
     const observation = discovery('request-correlation')
@@ -466,7 +471,8 @@ describe('generated companion protocol composition', () => {
       structuredClone(presence),
     )
     const observation = discovery('request-admission')
-    const unrelated = endpoint.discover(structuredClone(observation))
+    const endpoint = initial.discover(structuredClone(observation))
+    const unrelated = endpoint.status
     unrelated.request_id = 'request-other'
     expect(
       admit_companion_identity_status({
@@ -476,7 +482,7 @@ describe('generated companion protocol composition', () => {
       }),
     ).toEqual({ kind: 'rejected', failure: 'request-mismatch' })
 
-    const wrongVault = endpoint.discover(structuredClone(observation))
+    const wrongVault = endpoint.status
     wrongVault.vault_store_id = 'vault-other'
     expect(
       admit_companion_identity_status({
@@ -486,7 +492,7 @@ describe('generated companion protocol composition', () => {
       }),
     ).toEqual({ kind: 'rejected', failure: 'request-mismatch' })
 
-    const exact = endpoint.discover(structuredClone(observation))
+    const exact = endpoint.status
     endpoint.free()
     expect(
       admit_companion_identity_status({
@@ -507,12 +513,12 @@ describe('generated companion protocol composition', () => {
     await expect(
       first.endpoint.authorize_and_seal(extension, mismatched),
     ).rejects.toThrow()
-    await expect(
+    expect(() =>
       first.endpoint.authorize_and_seal(
         extension,
         structuredClone(first.authorization),
       ),
-    ).rejects.toThrow()
+    ).toThrow()
   })
 
   test('consumes stale authorization and concurrent discovery', async () => {
@@ -524,23 +530,23 @@ describe('generated companion protocol composition', () => {
         structuredClone(stale.authorization),
       ),
     ).rejects.toThrow()
-    await expect(
+    expect(() =>
       stale.endpoint.authorize_and_seal(
         extension,
         structuredClone(stale.authorization),
       ),
-    ).rejects.toThrow()
+    ).toThrow()
 
     const concurrent = beginHandoff('request-concurrent')
     expect(() =>
-      concurrent.endpoint.discover(discovery('request-other')),
+      concurrent.endpoint.rediscover(discovery('request-other')),
     ).toThrow()
-    await expect(
+    expect(() =>
       concurrent.endpoint.authorize_and_seal(
         extension,
         structuredClone(concurrent.authorization),
       ),
-    ).rejects.toThrow()
+    ).toThrow()
   })
 
   test('rejects replay and a forged response at retained website state', async () => {
@@ -550,24 +556,22 @@ describe('generated companion protocol composition', () => {
       extension,
       structuredClone(first.authorization),
     )
-    await expect(
+    expect(() =>
       first.endpoint.authorize_and_seal(
         extension,
         structuredClone(first.authorization),
       ),
-    ).rejects.toThrow()
+    ).toThrow()
 
     const forged = structuredClone(
       response,
     ) satisfies CompanionIdentityHandoffResponse
     forged.request.transaction.discovery.request.requestId = 'request-forged'
-    await expect(
-      first.website.finish_companion_identity_handoff(forged),
-    ).rejects.toThrow('does not match the active request')
-    await expect(
-      first.website.finish_companion_identity_handoff(
-        structuredClone(response),
-      ),
-    ).rejects.toThrow('not pending')
+    await expect(first.pending.finish(first.website, forged)).rejects.toThrow(
+      'does not match the active request',
+    )
+    expect(() =>
+      first.pending.finish(first.website, structuredClone(response)),
+    ).toThrow()
   })
 })

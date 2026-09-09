@@ -1,9 +1,14 @@
+import { ActiveVaultSyncSchedule } from "$lib/vault/sync-schedule";
 import { NookBrowserLocale } from "$app-wasm";
 import {
   EnrollmentLocationKind,
   enrollmentBrowser,
 } from "$lib/enrollment/code";
-import type { VaultIdleSessionTracker } from "$lib/vault/idle-session-tracker";
+import {
+  VaultIdleSessionStartKind,
+  type VaultIdleSessionStart,
+  type VaultIdleSessionTracker,
+} from "$lib/vault/idle-session-tracker";
 import { VaultStateSlices } from "$lib/vault/state/index.svelte";
 import { VaultRuntimeState as VaultRuntimeSliceState } from "$lib/vault/state/runtime.svelte";
 
@@ -33,7 +38,7 @@ enum SyncScheduleKind {
 
 type SyncSchedule =
   | { kind: SyncScheduleKind.Stopped }
-  | { kind: SyncScheduleKind.Scheduled; timer: ReturnType<typeof setInterval> };
+  | { kind: SyncScheduleKind.Scheduled; schedule: ActiveVaultSyncSchedule };
 export enum VaultInitializationKind {
   NotStarted = "not-started",
   Initializing = "initializing",
@@ -101,6 +106,9 @@ export class VaultLifecycleState extends VaultStateSlices {
     this.clearSuccessDismissTimer();
   }
 
+  private activeIdleSession: VaultIdleSessionStart = {
+    kind: VaultIdleSessionStartKind.Unavailable,
+  };
   private idleSessionTracking: IdleSessionTracking = {
     kind: IdleSessionTrackingKind.Inactive,
   };
@@ -110,6 +118,7 @@ export class VaultLifecycleState extends VaultStateSlices {
   }
 
   setIdleSessionTracker(value: VaultIdleSessionTracker): void {
+    this.stopIdleSessionTracker();
     this.idleSessionTracking = {
       kind: IdleSessionTrackingKind.Active,
       tracker: value,
@@ -117,19 +126,22 @@ export class VaultLifecycleState extends VaultStateSlices {
   }
 
   clearIdleSessionTracker(): void {
+    this.stopIdleSessionTracker();
     this.idleSessionTracking = { kind: IdleSessionTrackingKind.Inactive };
   }
 
   startIdleSessionTracker(): void {
     if (this.idleSessionTracking.kind === IdleSessionTrackingKind.Active) {
-      this.idleSessionTracking.tracker.start();
+      this.stopIdleSessionTracker();
+      this.activeIdleSession = this.idleSessionTracking.tracker.start();
     }
   }
 
   stopIdleSessionTracker(): void {
-    if (this.idleSessionTracking.kind === IdleSessionTrackingKind.Active) {
-      this.idleSessionTracking.tracker.stop();
-    }
+    const active = this.activeIdleSession;
+    this.activeIdleSession = { kind: VaultIdleSessionStartKind.Unavailable };
+    if (active.kind === VaultIdleSessionStartKind.Tracking)
+      active.session.stop();
   }
 
   private syncSchedule: SyncSchedule = { kind: SyncScheduleKind.Stopped };
@@ -142,13 +154,13 @@ export class VaultLifecycleState extends VaultStateSlices {
     this.stopScheduledSync();
     this.syncSchedule = {
       kind: SyncScheduleKind.Scheduled,
-      timer: setInterval(callback, intervalMs),
+      schedule: ActiveVaultSyncSchedule.start({ callback, intervalMs }),
     };
   }
 
   stopScheduledSync(): boolean {
     if (this.syncSchedule.kind === SyncScheduleKind.Stopped) return false;
-    clearInterval(this.syncSchedule.timer);
+    this.syncSchedule.schedule.stop();
     this.syncSchedule = { kind: SyncScheduleKind.Stopped };
     return true;
   }

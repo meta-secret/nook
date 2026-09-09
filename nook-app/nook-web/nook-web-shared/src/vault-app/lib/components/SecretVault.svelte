@@ -107,6 +107,7 @@
   );
   let searchPattern = $derived(vault.secretQuery);
   let decryptedSecrets = $state<DecryptedSecrets>({});
+  let secretExposure = new SecretExposure({});
   let expandedSecrets = $state<Record<string, boolean>>({});
   let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden });
   let addSecretOpen = $state(false);
@@ -262,7 +263,8 @@
   }
 
   function resetTransientSecretViews() {
-    new SecretExposure(untrack(() => decryptedSecrets)).free();
+    secretExposure.free();
+    secretExposure = new SecretExposure({});
     decryptedSecrets = {};
     authenticatorCodes = {};
   }
@@ -370,9 +372,7 @@
       id,
       load: (secretId) => vault.decryptSecret(secretId),
     };
-    decryptedSecrets = await new SecretExposure(decryptedSecrets).toggle(
-      toggleSecretExposureArgs,
-    );
+    decryptedSecrets = await secretExposure.toggle(toggleSecretExposureArgs);
     if (revealing) {
       expandedSecrets = { ...expandedSecrets, [id]: true };
       if (
@@ -402,7 +402,7 @@
           return copyToClipboard(copyToClipboardArgs);
         })(),
     };
-    await new SecretExposure(decryptedSecrets).withRecord(exposureRequest);
+    await secretExposure.withRecord(exposureRequest);
   }
 
   async function refreshAuthenticatorCode(id: string) {
@@ -451,7 +451,7 @@
   onDestroy(() => {
     editLoadSequence += 1;
     releaseEditingItem();
-    new SecretExposure(decryptedSecrets).free();
+    secretExposure.free();
   });
 </script>
 

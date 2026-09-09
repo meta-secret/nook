@@ -21,8 +21,4 @@ export class SerialOperationQueue {
   onIdle(): Promise<void> {
     return this.tail;
   }
-
-  reset(): void {
-    this.tail = Promise.resolve();
-  }
 }

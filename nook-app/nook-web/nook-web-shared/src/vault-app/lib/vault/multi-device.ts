@@ -37,17 +37,17 @@ export class VaultDeviceActions {
   constructor(private readonly state: VaultState) {}
 
   async refreshDeviceState() {
-    const state = state;
+    const state = this.state;
     await state.manualSync();
   }
 
   async refreshPendingJoinsFromProviders() {
-    const state = state;
+    const state = this.state;
     await state.hydrateMultiDeviceState();
   }
 
   async approveJoin({ joinDeviceId }: DeviceJoinApproval) {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     state.errorMsg = "";
     state.dismissSuccess();
@@ -81,7 +81,7 @@ export class VaultDeviceActions {
   }
 
   async denyJoin({ joinDeviceId }: DeviceJoinDenial) {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     state.errorMsg = "";
     state.dismissSuccess();
@@ -104,7 +104,7 @@ export class VaultDeviceActions {
   }
 
   async renameDevice({ authId, label }: DeviceRename) {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     state.errorMsg = "";
     state.dismissSuccess();
@@ -130,7 +130,7 @@ export class VaultDeviceActions {
   }
 
   async revokeDevice({ authId }: DeviceRevocation) {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     const isSelf = state.vaultMembers.some(
       (member) =>
@@ -163,7 +163,7 @@ export class VaultDeviceActions {
   }
 
   async confirmJoinRequest() {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     state.errorMsg = "";
     state.dismissSuccess();
@@ -194,12 +194,12 @@ export class VaultDeviceActions {
   }
 
   dismissJoinEnrollment() {
-    const state = state;
+    const state = this.state;
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
   }
 
   async enrollAndConnect() {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     const secretsKey = state.enrollSecretsKey.trim();
     const membersKey = state.enrollMembersKey.trim();

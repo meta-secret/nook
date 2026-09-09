@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    AwaitingVaultName,
+    AwaitingVaultKind,
+    AwaitingExistingVault,
+  } from './vault-auth-workflow-state.svelte'
   import { Check, Fingerprint, Timer } from '@lucide/svelte'
   import ScenarioBar from '../../nook-auth/_shared/ScenarioBar.svelte'
   import { VaultAuthStepMessage } from './vault-auth-workflow-messages'
@@ -25,10 +30,34 @@
     workflow.setPresence(next)
     vaultName = ''
   }
-  const continueAfterName = () => workflow.continueAfterName(vaultName)
-  const chooseSimple = () => workflow.choose(VaultPath.Simple)
-  const chooseSentinel = () => workflow.choose(VaultPath.Sentinel)
-  const goBack = () => workflow.goBack()
+  const continueAfterName = () => {
+    const previous = workflow.phase
+    if (previous instanceof AwaitingVaultName && vaultName.trim())
+      workflow.transition({ previous, next: previous.respond(vaultName) })
+  }
+  const chooseSimple = () => {
+    const previous = workflow.phase
+    if (previous instanceof AwaitingVaultKind)
+      workflow.transition({ previous, next: previous.choose(VaultPath.Simple) })
+  }
+  const chooseSentinel = () => {
+    const previous = workflow.phase
+    if (previous instanceof AwaitingVaultKind)
+      workflow.transition({
+        previous,
+        next: previous.choose(VaultPath.Sentinel),
+      })
+  }
+  const goBack = () => {
+    const previous = workflow.phase
+    if ('back' in previous)
+      workflow.transition({ previous, next: previous.back() })
+  }
+  const identifyExisting = () => {
+    const previous = workflow.phase
+    if (previous instanceof AwaitingExistingVault)
+      workflow.transition({ previous, next: previous.identify() })
+  }
   const openCardStack = () => {
     const launch: SentinelLaunch = {
       ui: SentinelUi.CardStack,
@@ -142,7 +171,7 @@
               {:else if presence === Presence.Existing && index === step && step === 0}
                 <button
                   class="mt-3 rounded-full bg-black px-4 py-2 text-sm text-white"
-                  onclick={() => (workflow.step = 1)}
+                  onclick={identifyExisting}
                 >
                   Continue to unlock
                 </button>

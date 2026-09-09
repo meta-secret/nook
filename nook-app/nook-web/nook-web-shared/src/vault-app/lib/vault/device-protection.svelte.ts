@@ -106,7 +106,7 @@ export class DeviceProtectionActions {
   constructor(private readonly state: VaultState) {}
 
   lockDeviceProtection(): Promise<void> {
-    const state = state;
+    const state = this.state;
     state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
     state.deviceAuthorizationInProgress = false;
     state.deviceId = "";
@@ -144,7 +144,7 @@ export class DeviceProtectionActions {
     mode,
     initializeSession,
   }: AuthorizedDeviceInitialization): Promise<void> {
-    const state = state;
+    const state = this.state;
     state.deviceAuthorizationInProgress = true;
     state.deviceProtectionLockedStatus = mode;
     if (initializeSession) {
@@ -160,7 +160,7 @@ export class DeviceProtectionActions {
   private lockFailedAuthorization({
     deviceIdentityUnlocked,
   }: FailedDeviceAuthorization): void {
-    const state = state;
+    const state = this.state;
     if (
       state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
       deviceIdentityUnlocked
@@ -185,7 +185,7 @@ export class DeviceProtectionActions {
     deviceMode,
     initializeSession,
   }: VaultDeviceProtectionSetupRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isVerifying) return;
     state.isVerifying = true;
     state.errorMsg = "";
@@ -274,7 +274,7 @@ export class DeviceProtectionActions {
   }
 
   async recoverDeviceProtectionWithPasskey(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isVerifying) return;
     state.isVerifying = true;
     state.errorMsg = "";
@@ -364,7 +364,7 @@ export class DeviceProtectionActions {
     confirmPin,
     initializeSession,
   }: PinDeviceProtectionSetupRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isVerifying) return;
     state.isVerifying = true;
     state.errorMsg = "";
@@ -403,7 +403,7 @@ export class DeviceProtectionActions {
   async unlockDeviceProtection({
     initializeSession,
   }: DeviceProtectionUnlockRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isVerifying) return;
     state.isVerifying = true;
     state.errorMsg = "";
@@ -462,7 +462,7 @@ export class DeviceProtectionActions {
     pin,
     initializeSession,
   }: PinDeviceProtectionUnlockRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isVerifying) return;
     state.isVerifying = true;
     state.errorMsg = "";
@@ -501,7 +501,7 @@ export class DeviceProtectionRecoveryActions {
   constructor(private readonly state: DeviceProtectionRecoveryState) {}
 
   private clearQuiescedRecoverySession(): void {
-    const state = state;
+    const state = this.state;
     set_vault_session_locked(true);
     state.clearUnlockedSession(false);
     state.deviceId = "";
@@ -517,7 +517,7 @@ export class DeviceProtectionRecoveryActions {
   private applyPersistedProtectionStatus({
     status,
   }: PersistedProtectionStatusRequest): void {
-    const state = state;
+    const state = this.state;
     state.deviceProtectionStatus = status;
     state.deviceProtectionLockedStatus =
       status === DeviceProtectionStatus.Pin
@@ -526,7 +526,7 @@ export class DeviceProtectionRecoveryActions {
   }
 
   private async refreshPersistedProtectionStatus(): Promise<void> {
-    const state = state;
+    const state = this.state;
     try {
       const status = await state.enqueueExclusiveStorage(() =>
         state.requireManager().device_protection_status(),
@@ -541,7 +541,7 @@ export class DeviceProtectionRecoveryActions {
   async resetDeviceProtectionForRecovery({
     expectedAppId,
   }: DeviceProtectionRecoveryRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isVerifying) return;
     state.isVerifying = true;
     state.errorMsg = "";

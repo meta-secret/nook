@@ -29,7 +29,7 @@ export class ProviderConnectionActions {
   constructor(private readonly state: ProviderActionsContext) {}
 
   async connectStagedProvider(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (state.loginSetup.kind === LoginSetupKind.Active) {
       state.storageMode = state.loginSetup.providerType;
     }
@@ -45,7 +45,7 @@ export class ProviderConnectionActions {
   }
 
   async discoverStagedVaultStoreId(): Promise<string> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.loginSetup.kind !== LoginSetupKind.Active) {
       return "";
     }
@@ -120,7 +120,7 @@ export class ProviderConnectionActions {
   }
 
   async connectAndSyncStagedProvider(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     if (state.isVerifying) return;
     state.isVerifying = true;

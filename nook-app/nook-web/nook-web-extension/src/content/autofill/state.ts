@@ -32,8 +32,24 @@ export enum WidgetHostKind {
 }
 
 export type WidgetHost =
-  | { kind: WidgetHostKind.Detached }
-  | { kind: WidgetHostKind.Attached; element: HTMLElement }
+  { kind: WidgetHostKind.Detached } | AttachedAuthenticationWidget
+
+/** Attached-only DOM capability; detached projections have no element or removal API. */
+export class AttachedAuthenticationWidget {
+  readonly kind = WidgetHostKind.Attached
+  private state = WidgetHostKind.Attached
+  private constructor(private readonly element: HTMLElement) {}
+  static attach(element: HTMLElement): AttachedAuthenticationWidget {
+    if (!element.isConnected)
+      throw new Error('Widget must be attached before activation')
+    return new AttachedAuthenticationWidget(element)
+  }
+  detach(): void {
+    if (this.state === WidgetHostKind.Detached) return
+    this.state = WidgetHostKind.Detached
+    this.element.remove()
+  }
+}
 export enum WidgetWorkflowKeyKind {
   Unassigned = 'unassigned',
   Assigned = 'assigned',
@@ -146,7 +162,8 @@ class WidgetState {
     return this.hostState
   }
   attachHost(element: HTMLElement): void {
-    this.hostState = { kind: WidgetHostKind.Attached, element }
+    if (this.hostState.kind === WidgetHostKind.Attached) this.hostState.detach()
+    this.hostState = AttachedAuthenticationWidget.attach(element)
   }
   get workflowKey(): WidgetWorkflowKey {
     return this.workflowKeyState
@@ -173,6 +190,7 @@ class WidgetState {
     }
   }
   clearRenderedWidget(): void {
+    if (this.hostState.kind === WidgetHostKind.Attached) this.hostState.detach()
     this.hostState = { kind: WidgetHostKind.Detached }
     this.workflowKeyState = { kind: WidgetWorkflowKeyKind.Unassigned }
     this.workflowRootState = { kind: WidgetWorkflowRootKind.Unassigned }

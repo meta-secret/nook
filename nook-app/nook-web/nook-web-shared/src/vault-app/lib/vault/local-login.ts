@@ -1,3 +1,4 @@
+import { BrowserIdentityHandoffKind } from "$lib/vault/identity-handoff";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
@@ -50,7 +51,7 @@ export class VaultLoginActions {
   constructor(private readonly state: VaultState) {}
 
   async reloadProvidersForActiveVault(): Promise<void> {
-    const state = state;
+    const state = this.state;
     const snapshot = await state.enqueueStorage(() =>
       state.requireManager().load_auth_providers_snapshot(),
     );
@@ -62,20 +63,20 @@ export class VaultLoginActions {
   }
 
   beginLoginVaultPicker(): void {
-    const state = state;
+    const state = this.state;
     state.clearSelectedLoginVaultStore();
     state.localLoginPreparation = LocalLoginPreparationState.Idle;
     state.resetVaultSessionState();
   }
 
   async chooseLoginVault({ storeId }: LoginVaultActionRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     await state.selectVaultForUnlock(storeId);
     state.selectLoginVault(storeId);
   }
 
   async switchToVault({ storeId }: LoginVaultActionRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     const switchDecision = state.clientPolicy.vault_switch_target(
       storeId,
       state.hasActiveVaultStore,
@@ -125,7 +126,7 @@ export class VaultLoginActions {
   }
 
   async refreshLocalVaultCatalog(): Promise<void> {
-    const state = state;
+    const state = this.state;
     state.localVaults = await list_local_vaults();
     state.localVaultPresent = await has_active_local_vault();
     const activeSelection = await get_active_vault_selection();
@@ -139,7 +140,7 @@ export class VaultLoginActions {
   }
 
   async prepareLocalLogin(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (
       !state.localVaultPresent ||
       state.localLoginPreparation !== LocalLoginPreparationState.Idle
@@ -164,7 +165,7 @@ export class VaultLoginActions {
   async selectVaultForUnlock({
     storeId,
   }: LoginVaultActionRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     state.errorMsg = "";
     state.dismissSuccess();
     state.isVerifying = true;
@@ -194,7 +195,7 @@ export class VaultLoginActions {
   }
 
   async prepareExistingVaultImportSlot(): Promise<void> {
-    const state = state;
+    const state = this.state;
     await prepare_new_local_vault_slot();
     if (state.hasManager) {
       await state.enqueueStorage(() =>
@@ -209,7 +210,7 @@ export class VaultLoginActions {
   async createLocalVaultWithDeviceKeys({
     label,
   }: LocalVaultCreationRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
       return;
@@ -233,9 +234,12 @@ export class VaultLoginActions {
 
     try {
       await state.initDeviceIdentity();
-      handoffAwaitingVaultCreation = state
-        .requireManager()
-        .extension_identity_handoff_requires_connect();
+      handoffAwaitingVaultCreation =
+        state.externalIdentityHandoff.kind ===
+          BrowserIdentityHandoffKind.Adopted &&
+        state.externalIdentityHandoff.adoption.requiresConnect(
+          state.requireManager(),
+        );
       const creatingAdditionalVault = state.localVaults.length > 0;
       if (creatingAdditionalVault) {
         await prepare_new_local_vault_slot();
@@ -252,6 +256,12 @@ export class VaultLoginActions {
       })) as NookSecretRecord[];
       for (const record of rawRecords) record.free();
       if (handoffAwaitingVaultCreation) {
+        const handoff = state.externalIdentityHandoff;
+        state.externalIdentityHandoff = {
+          kind: BrowserIdentityHandoffKind.Inactive,
+        };
+        if (handoff.kind === BrowserIdentityHandoffKind.Adopted)
+          handoff.adoption.afterVerifiedConnect(state.requireManager());
         handoffAwaitingVaultCreation = false;
       }
       const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
@@ -280,7 +290,12 @@ export class VaultLoginActions {
     } catch (e) {
       if (handoffAwaitingVaultCreation) {
         try {
-          state.requireManager().rollback_extension_identity_handoff();
+          const handoff = state.externalIdentityHandoff;
+          state.externalIdentityHandoff = {
+            kind: BrowserIdentityHandoffKind.Inactive,
+          };
+          if (handoff.kind === BrowserIdentityHandoffKind.Adopted)
+            handoff.adoption.rollback(state.requireManager());
         } catch {
           log.warn("failed vault creation handoff rollback failed");
         }
@@ -305,7 +320,7 @@ export class VaultLoginActions {
     storeId,
     label,
   }: LocalVaultRenameRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     const trimmedStoreId = storeId.trim();
     const trimmedLabel = label.trim();
     if (!trimmedStoreId) return;
@@ -365,7 +380,7 @@ export class VaultLoginActions {
   }
 
   async syncActiveVaultStoreIdToAuth(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (state.activeVault.kind === ActiveVaultKind.Closed) return;
     const storeId = state.activeVault.storeId.trim();
     if (!storeId) return;
@@ -386,7 +401,7 @@ export class VaultLoginActions {
   async activateConnectedExistingVault({
     storeId,
   }: LoginVaultActionRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || !state.isAuthenticated) return;
     const connectedStoreId = VaultLoginActions.requireManagerVaultStoreId(
       state.requireManager(),

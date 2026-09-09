@@ -81,7 +81,7 @@ export class PasswordEnrollmentActions {
   constructor(private readonly state: VaultState) {}
 
   clearEnrollmentCode() {
-    const state = state;
+    const state = this.state;
     state.enrollmentCode = "";
     state.clearActiveEnrollmentEntry();
   }
@@ -89,7 +89,7 @@ export class PasswordEnrollmentActions {
   private applySavedEnrollmentProvider({
     selection,
   }: SavedEnrollmentProviderApplication) {
-    const state = state;
+    const state = this.state;
     if (
       selection.kind === SavedEnrollmentProviderKind.Local ||
       selection.provider.type === "local"
@@ -142,7 +142,7 @@ export class PasswordEnrollmentActions {
   }
 
   private async localVaultHasPasswordEntries(): Promise<boolean> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return false;
     if (!state.localVaultPresent && !(await has_active_local_vault()))
       return false;
@@ -160,7 +160,7 @@ export class PasswordEnrollmentActions {
     code,
     password,
   }: EnrollmentCodeConnection): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
       return;

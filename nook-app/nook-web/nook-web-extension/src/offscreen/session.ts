@@ -1,6 +1,8 @@
+import { ActiveExtensionSessionLease } from './session-lease'
 import initNookWasm, {
   configure_vault_application,
   NookCompanionExtensionEndpoint,
+  type NookDiscoveredCompanionExtensionEndpoint,
   decode_storage_providers,
   NookVaultManager,
   VaultApplication,
@@ -12,7 +14,7 @@ import type {
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
-  ExtensionSessionMessageDispatcher,
+  ListeningExtensionSession,
   type SessionMessageDispatchContext,
 } from './session-message-dispatch'
 import type {
@@ -27,7 +29,11 @@ import {
   type HandleSessionMessageArgs,
   type SessionOperationContext,
 } from './session-operations'
-import { CompanionVaultDiscovery } from './session-vault-operations'
+import {
+  CompanionVaultDiscovery,
+  CompanionDiscoveryEndpointKind,
+  type CompanionDiscoveryEndpoint,
+} from './session-vault-operations'
 import type {
   CompanionExtensionPresence,
   CompanionIdentityDiscoveryObservation,
@@ -67,7 +73,7 @@ type SessionExpirySchedule =
   | { kind: SessionExpiryScheduleKind.Stopped }
   | {
       kind: SessionExpiryScheduleKind.Scheduled
-      timer: ReturnType<typeof setTimeout>
+      lease: ActiveExtensionSessionLease
     }
 
 let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
@@ -78,7 +84,6 @@ let sessionExpirySchedule: SessionExpirySchedule = {
   kind: SessionExpiryScheduleKind.Stopped,
 }
 let sessionGeneration = 0
-let sessionDeadlineAt = 0
 
 enum CompanionEndpointAvailabilityKind {
   Inactive = 'inactive',
@@ -89,7 +94,7 @@ type CompanionEndpointAvailability =
   | { kind: CompanionEndpointAvailabilityKind.Inactive }
   | {
       kind: CompanionEndpointAvailabilityKind.Active
-      endpoint: NookCompanionExtensionEndpoint
+      endpoint: NookDiscoveredCompanionExtensionEndpoint
     }
 
 let companionEndpointAvailability: CompanionEndpointAvailability = {
@@ -143,36 +148,39 @@ async function deviceResult(
 
 function scheduleSessionExpiry(generation: number): void {
   if (sessionExpirySchedule.kind === SessionExpiryScheduleKind.Scheduled) {
-    clearTimeout(sessionExpirySchedule.timer)
+    sessionExpirySchedule.lease.stop()
   }
-  sessionDeadlineAt = Date.now() + SESSION_DURATION_MS
   sessionExpirySchedule = {
     kind: SessionExpiryScheduleKind.Scheduled,
-    timer: setTimeout(() => {
-      if (generation !== sessionGeneration) return
-      sessionExpirySchedule = { kind: SessionExpiryScheduleKind.Stopped }
-      sessionDeadlineAt = 0
-      sessionGeneration += 1
-      releaseCompanionEndpoint()
-      const expiredManager = managerAvailability
-      managerAvailability = { kind: VaultManagerAvailabilityKind.Locked }
-      if (expiredManager.kind === VaultManagerAvailabilityKind.Active) {
-        try {
-          expiredManager.manager.lock_device_identity()
-          expiredManager.manager.free()
-        } catch {
-          // The service worker closes this document immediately if a WASM call
-          // still owns the manager when the session expires.
+    lease: ActiveExtensionSessionLease.start({
+      generation,
+      durationMs: SESSION_DURATION_MS,
+      onExpire: () => {
+        if (generation !== sessionGeneration) return
+        sessionExpirySchedule = { kind: SessionExpiryScheduleKind.Stopped }
+        sessionGeneration += 1
+        releaseCompanionEndpoint()
+        const expiredManager = managerAvailability
+        managerAvailability = { kind: VaultManagerAvailabilityKind.Locked }
+        if (expiredManager.kind === VaultManagerAvailabilityKind.Active) {
+          try {
+            expiredManager.manager.lock_device_identity()
+            expiredManager.manager.free()
+          } catch {
+            // The service worker closes this document immediately if a WASM call
+            // still owns the manager when the session expires.
+          }
         }
-      }
-      sessionMessageDispatcher.replaceOperations(
-        new Error(SESSION_LOCKED_ERROR),
-      )
-      const expiryMessage: Parameters<typeof chrome.runtime.sendMessage>[0] = {
-        type: ExtensionSessionLifecycleMessageType.Expired,
-      }
-      void chrome.runtime.sendMessage(expiryMessage)
-    }, SESSION_DURATION_MS),
+        sessionMessageDispatcher.replaceOperations(
+          new Error(SESSION_LOCKED_ERROR),
+        )
+        const expiryMessage: Parameters<typeof chrome.runtime.sendMessage>[0] =
+          {
+            type: ExtensionSessionLifecycleMessageType.Expired,
+          }
+        void chrome.runtime.sendMessage(expiryMessage)
+      },
+    }),
   }
 }
 
@@ -188,12 +196,11 @@ async function activateSession(): Promise<DeviceResult> {
 function renewSessionExpiry(generation: number): void {
   if (
     generation !== sessionGeneration ||
-    sessionDeadlineAt === 0 ||
-    Date.now() >= sessionDeadlineAt
+    sessionExpirySchedule.kind !== SessionExpiryScheduleKind.Scheduled
   ) {
     throw new Error(SESSION_LOCKED_ERROR)
   }
-  scheduleSessionExpiry(generation)
+  sessionExpirySchedule.lease.renew(generation)
 }
 
 const operationContext: SessionOperationContext = {
@@ -232,17 +239,19 @@ async function handleCompanionIdentityHandoff(
     kind: CompanionEndpointAvailabilityKind.Inactive,
   }
   const generation = sessionGeneration
+  let consumed = false
   try {
     const activeManager = await getManager()
-    const response: CompanionIdentityHandoffResponse = await Reflect.apply(
-      endpoint.authorize_and_seal,
-      endpoint,
-      [activeManager, message.payload.authorization],
-    )
+    consumed = true
+    const response: CompanionIdentityHandoffResponse =
+      await endpoint.authorize_and_seal(
+        activeManager,
+        message.payload.authorization,
+      )
     renewSessionExpiry(generation)
     return { ok: true, response }
   } finally {
-    endpoint.free()
+    if (!consumed) endpoint.free()
   }
 }
 
@@ -251,26 +260,23 @@ async function handleCompanionIdentityDiscovery(
 ) {
   await ensureWasm()
   const activeManager = await getManager()
-  if (
-    companionEndpointAvailability.kind ===
-    CompanionEndpointAvailabilityKind.Inactive
-  ) {
-    const endpoint: NookCompanionExtensionEndpoint = Reflect.construct(
-      NookCompanionExtensionEndpoint,
-      [message.payload.presence],
-    )
-    companionEndpointAvailability = {
-      kind: CompanionEndpointAvailabilityKind.Active,
-      endpoint,
-    }
+  const prior = companionEndpointAvailability
+  companionEndpointAvailability = {
+    kind: CompanionEndpointAvailabilityKind.Inactive,
   }
-  if (
-    companionEndpointAvailability.kind !==
-    CompanionEndpointAvailabilityKind.Active
-  ) {
-    throw new Error('Companion identity discovery endpoint is unavailable.')
-  }
-  const endpoint = companionEndpointAvailability.endpoint
+  const endpoint: CompanionDiscoveryEndpoint =
+    prior.kind === CompanionEndpointAvailabilityKind.Active
+      ? {
+          kind: CompanionDiscoveryEndpointKind.Discovered,
+          endpoint: prior.endpoint,
+        }
+      : {
+          kind: CompanionDiscoveryEndpointKind.Initial,
+          endpoint: new NookCompanionExtensionEndpoint(
+            message.payload.presence,
+          ),
+        }
+
   try {
     // Construction above is the Rust-owned validation boundary for this
     // generated presence projection.
@@ -285,8 +291,12 @@ async function handleCompanionIdentityDiscovery(
     const companionDiscovery = new CompanionVaultDiscovery(
       companionDiscoveryArgs,
     )
-    const status: CompanionIdentityStatus =
-      await companionDiscovery.discover(discovery)
+    const discovered = await companionDiscovery.discover(discovery)
+    companionEndpointAvailability = {
+      kind: CompanionEndpointAvailabilityKind.Active,
+      endpoint: discovered,
+    }
+    const status: CompanionIdentityStatus = discovered.status
     if (status.status !== 'unlocked') releaseCompanionEndpoint()
     return { ok: true, status }
   } catch (error) {
@@ -313,7 +323,5 @@ const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
       return decode_storage_providers(snapshot).providers
     },
   }
-const sessionMessageDispatcher = new ExtensionSessionMessageDispatcher(
-  dispatchContext,
-)
-sessionMessageDispatcher.registerRuntimeListener()
+const sessionMessageDispatcher =
+  ListeningExtensionSession.register(dispatchContext)

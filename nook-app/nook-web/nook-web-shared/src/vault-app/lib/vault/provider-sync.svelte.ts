@@ -57,7 +57,7 @@ export class ProviderSyncActions {
     localStoreId,
     remoteStoreId,
   }: ProviderStoreMismatchConflict): Promise<boolean> {
-    const state = state;
+    const state = this.state;
     const localYaml = await read_local_vault_yaml().catch(() => "");
     const args =
       provider.type === "local-folder"
@@ -89,7 +89,7 @@ export class ProviderSyncActions {
   async syncLocalFolderProvider({
     provider,
   }: LocalFolderProviderSync): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       throw new Error(state.t(I18N_KEYS.ErrorsManagerUninitialized));
     }
@@ -124,7 +124,7 @@ export class ProviderSyncActions {
   private stageLocalFolderMultipleVaultsIssue({
     issue,
   }: StagedLocalFolderMultipleVaultsIssue) {
-    const state = state;
+    const state = this.state;
     log.warn("local folder contains multiple vault logs");
     state.reportLocalFolderMultipleVaults(issue);
   }
@@ -134,7 +134,7 @@ export class ProviderSyncActions {
     visibility,
     failureHandling,
   }: ProviderSyncExecution): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     if (state.syncBlocked) return;
     // A foreground password op (verify/enroll/rotate) borrows the wasm manager;

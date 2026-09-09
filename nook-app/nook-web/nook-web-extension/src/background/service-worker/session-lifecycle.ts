@@ -13,18 +13,61 @@ enum ExtensionSessionDocumentStateKind {
   Open = 'open',
   Closing = 'closing',
 }
-
 type ExtensionSessionDocumentState =
   | { kind: ExtensionSessionDocumentStateKind.Closed }
   | {
       kind: ExtensionSessionDocumentStateKind.Creating
-      operation: Promise<void>
+      operation: Promise<OpenExtensionSessionDocument>
     }
-  | { kind: ExtensionSessionDocumentStateKind.Open }
+  | {
+      kind: ExtensionSessionDocumentStateKind.Open
+      document: OpenExtensionSessionDocument
+    }
   | {
       kind: ExtensionSessionDocumentStateKind.Closing
       operation: Promise<void>
     }
+
+/** The sending capability exists only after browser document creation completes. */
+export interface ExtensionSessionTransport {
+  sendMessage(message: unknown): Promise<unknown>
+}
+
+class OpenExtensionSessionDocument {
+  private active = true
+  private constructor() {}
+  static async create(): Promise<OpenExtensionSessionDocument> {
+    try {
+      await chrome.offscreen.createDocument({
+        url: extensionSessionDocument,
+        reasons: ['WORKERS'],
+        justification:
+          'Keep a user-authorized extension device identity in memory for a 15-minute session.',
+      })
+    } catch (error) {
+      if (!String(error).includes('single offscreen')) throw error
+    }
+    return new OpenExtensionSessionDocument()
+  }
+  sendMessage(message: unknown): Promise<unknown> {
+    if (!this.active)
+      return Promise.reject(new Error('Extension session document closed'))
+    // eslint-disable-next-line max-params -- Promise owns this executor.
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(message, (response) => {
+        const error = chrome.runtime.lastError?.message
+        if (!this.active) reject(new Error('Extension session document closed'))
+        else if (error) reject(new Error(error))
+        else resolve(response)
+      })
+    })
+  }
+  close(): Promise<void> {
+    if (!this.active) return Promise.resolve()
+    this.active = false
+    return chrome.offscreen.closeDocument()
+  }
+}
 
 type AuthenticationSurfaceNotification = {
   type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
@@ -43,53 +86,32 @@ class ExtensionSessionLifecycle {
     kind: ExtensionSessionDocumentStateKind.Closed,
   }
   async ensureExtensionSessionDocument(): Promise<void> {
-    if (
-      this.extensionSessionDocumentState.kind ===
-      ExtensionSessionDocumentStateKind.Closing
-    ) {
-      await this.extensionSessionDocumentState.operation
+    await this.openSessionDocument()
+  }
+
+  async openSessionDocument(): Promise<ExtensionSessionTransport> {
+    const state = this.extensionSessionDocumentState
+    if (state.kind === ExtensionSessionDocumentStateKind.Closing) {
+      await state.operation
+      return this.openSessionDocument()
     }
-    if (
-      this.extensionSessionDocumentState.kind ===
-      ExtensionSessionDocumentStateKind.Open
-    )
-      return
-    if (
-      this.extensionSessionDocumentState.kind ===
-      ExtensionSessionDocumentStateKind.Creating
-    ) {
-      return this.extensionSessionDocumentState.operation
-    }
-    const nookTypedArgs0_0: Parameters<
-      typeof chrome.offscreen.createDocument
-    >[0] = {
-      url: extensionSessionDocument,
-      reasons: ['WORKERS'],
-      justification:
-        'Keep a user-authorized extension device identity in memory for a 15-minute session.',
-    }
-    const operation = chrome.offscreen
-      .createDocument(nookTypedArgs0_0)
-      .catch((error) => {
-        // Manifest V3 permits only one offscreen document. A restarted service
-        // worker may race with the existing session document; it is safe to use
-        // that already-open document.
-        if (String(error).includes('single offscreen')) {
-          return
+    if (state.kind === ExtensionSessionDocumentStateKind.Open)
+      return state.document
+    if (state.kind === ExtensionSessionDocumentStateKind.Creating)
+      return state.operation
+    const operation = OpenExtensionSessionDocument.create().then((document) => {
+      if (
+        this.extensionSessionDocumentState.kind ===
+          ExtensionSessionDocumentStateKind.Creating &&
+        this.extensionSessionDocumentState.operation === operation
+      ) {
+        this.extensionSessionDocumentState = {
+          kind: ExtensionSessionDocumentStateKind.Open,
+          document,
         }
-        throw error
-      })
-      .then(() => {
-        if (
-          this.extensionSessionDocumentState.kind ===
-            ExtensionSessionDocumentStateKind.Creating &&
-          this.extensionSessionDocumentState.operation === operation
-        ) {
-          this.extensionSessionDocumentState = {
-            kind: ExtensionSessionDocumentStateKind.Open,
-          }
-        }
-      })
+      }
+      return document
+    })
     this.extensionSessionDocumentState = {
       kind: ExtensionSessionDocumentStateKind.Creating,
       operation,
@@ -98,13 +120,16 @@ class ExtensionSessionLifecycle {
   }
 
   closeExtensionSessionDocument(): Promise<void> {
-    if (
-      this.extensionSessionDocumentState.kind ===
-      ExtensionSessionDocumentStateKind.Closing
-    ) {
-      return this.extensionSessionDocumentState.operation
-    }
-    const closure = chrome.offscreen.closeDocument().finally(() => {
+    const state = this.extensionSessionDocumentState
+    if (state.kind === ExtensionSessionDocumentStateKind.Closed)
+      return Promise.resolve()
+    if (state.kind === ExtensionSessionDocumentStateKind.Closing)
+      return state.operation
+    const closure = (
+      state.kind === ExtensionSessionDocumentStateKind.Creating
+        ? state.operation.then((document) => document.close())
+        : state.document.close()
+    ).finally(() => {
       if (
         this.extensionSessionDocumentState.kind ===
           ExtensionSessionDocumentStateKind.Closing &&

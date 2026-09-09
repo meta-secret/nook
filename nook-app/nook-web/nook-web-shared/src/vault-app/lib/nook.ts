@@ -1,3 +1,4 @@
+import { vaultApplicationRuntime } from "$lib/runtime/wasm-bootstrap";
 type StoredVaultSynchronization = {
   readonly manager: NookVaultManager;
   readonly mode: string;
@@ -19,7 +20,7 @@ import {
   default_password_generation_options,
   default as initNookWasm,
   generate_id,
-  NookVaultManager as NookVaultManagerClass,
+  configured_vault_application,
   NookSecretFormFields,
   SecretType,
   build_secret_yaml,
@@ -68,9 +69,11 @@ export function isoTimestamp(): string {
 
 export async function getVaultManager(): Promise<NookVaultManager> {
   const loadWasm = async () => {
-    await initNookWasm();
+    const ready = await vaultApplicationRuntime.ensureAppWasm(
+      configured_vault_application(),
+    );
     browserLogRuntime.initWasmLogging();
-    const manager = new NookVaultManagerClass();
+    const manager = ready.createManager();
     drainWasmStatusIntoLog(manager);
     return manager;
   };

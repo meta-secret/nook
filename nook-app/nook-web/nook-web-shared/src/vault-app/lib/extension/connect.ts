@@ -1,3 +1,4 @@
+import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 type ExtensionMessageRequest = {
   readonly extensionId: string;
   readonly message: unknown;
@@ -147,6 +148,59 @@ type ExtensionIdentityHandoffResponse = {
   reason?: unknown;
 };
 
+enum ExtensionResponsePhase {
+  Pending = "pending",
+  Settled = "settled",
+}
+type ExtensionResponseState =
+  | {
+      kind: ExtensionResponsePhase.Pending;
+      timer: ExtensionMessageResponseTimer;
+    }
+  | { kind: ExtensionResponsePhase.Settled };
+
+/** Only a pending response owns timer completion; native callback aliases are invalidated. */
+class PendingExtensionResponse {
+  private state: ExtensionResponseState = {
+    kind: ExtensionResponsePhase.Pending,
+    timer: { kind: ExtensionMessageResponseTimerKind.NotScheduled },
+  };
+  constructor(
+    private readonly request: {
+      browser: typeof globalThis;
+      wait: ExtensionMessageResponseWait;
+      resolve: (delivery: ExtensionMessageDelivery) => void;
+    },
+  ) {
+    if (request.wait.kind === ExtensionMessageResponseWaitKind.Bounded) {
+      this.state = {
+        kind: ExtensionResponsePhase.Pending,
+        timer: {
+          kind: ExtensionMessageResponseTimerKind.Scheduled,
+          handle: request.browser.window.setTimeout(
+            () => this.unavailable(),
+            request.wait.timeoutMs,
+          ),
+        },
+      };
+    }
+  }
+  private settle(delivery: ExtensionMessageDelivery): void {
+    const pending = this.state;
+    if (pending.kind !== ExtensionResponsePhase.Pending) return;
+    this.state = { kind: ExtensionResponsePhase.Settled };
+    if (pending.timer.kind === ExtensionMessageResponseTimerKind.Scheduled)
+      this.request.browser.window.clearTimeout(pending.timer.handle);
+    this.request.resolve(delivery);
+  }
+  unavailable(): void {
+    this.settle({ kind: ExtensionMessageDeliveryKind.Unavailable });
+  }
+  receive(response: unknown): void {
+    this.settle({ kind: ExtensionMessageDeliveryKind.Received, response });
+  }
+}
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: typeof globalThis) {}
@@ -265,62 +319,21 @@ class ExtensionConnectionBrowser {
         resolve(resolveArgs);
         return;
       }
-      let settled = false;
-      let responseTimer: ExtensionMessageResponseTimer = {
-        kind: ExtensionMessageResponseTimerKind.NotScheduled,
-      };
-      const finishUnavailable = () => {
-        if (settled) return;
-        settled = true;
-        if (
-          responseTimer.kind === ExtensionMessageResponseTimerKind.Scheduled
-        ) {
-          this.browser.window.clearTimeout(responseTimer.handle);
-        }
-        responseTimer = {
-          kind: ExtensionMessageResponseTimerKind.NotScheduled,
-        };
-        const resolveArgs2: Parameters<typeof resolve>[0] = {
-          kind: ExtensionMessageDeliveryKind.Unavailable,
-        };
-        resolve(resolveArgs2);
-      };
-      const finishReceived = (response: unknown) => {
-        if (settled) return;
-        settled = true;
-        if (
-          responseTimer.kind === ExtensionMessageResponseTimerKind.Scheduled
-        ) {
-          this.browser.window.clearTimeout(responseTimer.handle);
-        }
-        responseTimer = {
-          kind: ExtensionMessageResponseTimerKind.NotScheduled,
-        };
-        const resolveArgs3: Parameters<typeof resolve>[0] = {
-          kind: ExtensionMessageDeliveryKind.Received,
-          response,
-        };
-        resolve(resolveArgs3);
-      };
-      if (responseWait.kind === ExtensionMessageResponseWaitKind.Bounded) {
-        responseTimer = {
-          kind: ExtensionMessageResponseTimerKind.Scheduled,
-          handle: this.browser.window.setTimeout(
-            finishUnavailable,
-            responseWait.timeoutMs,
-          ),
-        };
-      }
+      const pending = new PendingExtensionResponse({
+        browser: this.browser,
+        wait: responseWait,
+        resolve,
+      });
       function receiveExtensionResponse(response?: unknown): void {
         if (runtime?.lastError?.message) {
-          finishUnavailable();
+          pending.unavailable();
           return;
         }
         if (arguments.length === 0) {
-          finishUnavailable();
+          pending.unavailable();
           return;
         }
-        finishReceived(response);
+        pending.receive(response);
       }
       sendMessage(extensionId, message, receiveExtensionResponse);
     });
@@ -650,7 +663,9 @@ class ExtensionConnectionBrowser {
     );
   }
 
-  async adoptExtensionIdentity(args: ExtensionIdentityAdoption): Promise<void> {
+  async adoptExtensionIdentity(
+    args: ExtensionIdentityAdoption,
+  ): Promise<NookAdoptedExtensionIdentityHandoff> {
     const { manager, request } = args;
     if (request.source === ExtensionIdentityRequestSource.PairedVault) {
       const begin: CompanionWebsiteHandoffBegin = {
@@ -663,7 +678,7 @@ class ExtensionConnectionBrowser {
       const handoff = manager.begin_companion_identity_handoff(begin);
       const message: ExtensionPairedVaultIdentityHandoffRequestMessage = {
         type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
-        payload: handoff,
+        payload: handoff.request,
       };
       const sendArgs: Parameters<typeof this.sendExtensionMessage>[0] = {
         extensionId: request.extensionRuntimeId,
@@ -673,62 +688,90 @@ class ExtensionConnectionBrowser {
           timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
         },
       };
-      const delivery = await this.sendExtensionMessage(sendArgs);
-      if (
-        delivery.kind !== ExtensionMessageDeliveryKind.Received ||
-        !delivery.response ||
-        typeof delivery.response !== "object" ||
-        !("ok" in delivery.response) ||
-        delivery.response.ok !== true ||
-        !("response" in delivery.response)
-      ) {
-        throw new Error("extension-identity-handoff-rejected");
-      }
-      let admission: ReturnType<typeof admit_companion_handoff_response>;
+      let consumed = false;
       try {
-        admission = Reflect.apply(
-          admit_companion_handoff_response,
-          this.browser,
-          [delivery.response.response],
-        );
-      } catch {
-        throw new Error("extension-identity-handoff-rejected");
+        const delivery = await this.sendExtensionMessage(sendArgs);
+        if (
+          delivery.kind !== ExtensionMessageDeliveryKind.Received ||
+          !delivery.response ||
+          typeof delivery.response !== "object" ||
+          !("ok" in delivery.response) ||
+          delivery.response.ok !== true ||
+          !("response" in delivery.response)
+        ) {
+          throw new Error("extension-identity-handoff-rejected");
+        }
+        let admission: ReturnType<typeof admit_companion_handoff_response>;
+        try {
+          admission = Reflect.apply(
+            admit_companion_handoff_response,
+            this.browser,
+            [delivery.response.response],
+          );
+        } catch {
+          throw new Error("extension-identity-handoff-rejected");
+        }
+        if (admission.kind !== "accepted") {
+          throw new Error("extension-identity-handoff-rejected");
+        }
+        consumed = true;
+        return await handoff.finish(manager, admission.response);
+      } catch (error) {
+        if (!consumed) {
+          try {
+            handoff.cancel(manager);
+          } catch {
+            /* Preserve the original delivery error, as the lifecycle cleanup did. */
+          }
+        }
+        throw error;
       }
-      if (admission.kind !== "accepted") {
-        throw new Error("extension-identity-handoff-rejected");
-      }
-      await manager.finish_companion_identity_handoff(admission.response);
-      return;
     }
     const nonce = request.nonce;
-    const recipientPublicKey = manager.begin_extension_identity_handoff();
-    const handoffPayload = {
-      recipientPublicKey,
-      nonce,
-      expectedDeviceId: request.deviceId,
-      expectedDevicePublicKey: request.devicePublicKey,
-      expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
-    };
-    const message: ExtensionIdentityHandoffRequestMessage = {
-      type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
-      payload: handoffPayload,
-    };
-    const requestIdentityEnvelopeArgs: Parameters<
-      typeof this.requestIdentityEnvelope
-    >[0] = { request, message };
-    const { envelope, nextNonce } = await this.requestIdentityEnvelope(
-      requestIdentityEnvelopeArgs,
-    );
-    const context = NookExtensionIdentityHandoffContext.vault_creation();
-    await manager.finish_extension_identity_handoff(
-      envelope,
-      nonce,
-      request.deviceId,
-      request.devicePublicKey,
-      request.deviceSigningPublicKey,
-      context,
-    );
-    request.nonce = nextNonce;
+    const pending = manager.begin_extension_identity_handoff();
+    let consumed = false;
+    try {
+      const recipientPublicKey = pending.recipient_public_key;
+      const handoffPayload = {
+        recipientPublicKey,
+        nonce,
+        expectedDeviceId: request.deviceId,
+        expectedDevicePublicKey: request.devicePublicKey,
+        expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
+      };
+      const message: ExtensionIdentityHandoffRequestMessage = {
+        type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
+        payload: handoffPayload,
+      };
+      const requestIdentityEnvelopeArgs: Parameters<
+        typeof this.requestIdentityEnvelope
+      >[0] = { request, message };
+      const { envelope, nextNonce } = await this.requestIdentityEnvelope(
+        requestIdentityEnvelopeArgs,
+      );
+      const context = NookExtensionIdentityHandoffContext.vault_creation();
+      consumed = true;
+      const adopted = await pending.finish(
+        manager,
+        envelope,
+        nonce,
+        request.deviceId,
+        request.devicePublicKey,
+        request.deviceSigningPublicKey,
+        context,
+      );
+      request.nonce = nextNonce;
+      return adopted;
+    } catch (error) {
+      if (!consumed) {
+        try {
+          pending.cancel(manager);
+        } catch {
+          /* Preserve the original delivery error, as the lifecycle cleanup did. */
+        }
+      }
+      throw error;
+    }
   }
 }
 

@@ -1,3 +1,8 @@
+import {
+  AdoptedBrowserIdentity,
+  BrowserIdentityHandoffKind,
+} from "$lib/vault/identity-handoff";
+import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
@@ -55,7 +60,9 @@ type DeviceIdentityInitialization = {
 };
 
 type ExternalDeviceIdentityAuthorization = {
-  readonly adopt: (manager: NookVaultManager) => Promise<void>;
+  readonly adopt: (
+    manager: NookVaultManager,
+  ) => Promise<NookAdoptedExtensionIdentityHandoff>;
   readonly mode: ExternalDeviceIdentityAuthorizationMode;
 };
 
@@ -78,7 +85,7 @@ export class VaultInitializationActions {
   }
 
   async initOnce(): Promise<void> {
-    const state = state;
+    const state = this.state;
     log.info("app init started");
     state.isInitializing = true;
     let deviceIdentityUnlocked = false;
@@ -219,13 +226,243 @@ export class VaultInitializationActions {
   }
 
   async continueInitializationAfterDeviceUnlock(): Promise<void> {
-    const state = state;
+    if (!this.state.hasManager) return;
+    await DeviceInitializationContinuation.admit(this.state).continue();
+  }
+
+  async initDeviceIdentity({
+    mode,
+  }: DeviceIdentityInitialization): Promise<void> {
+    const state = this.state;
+    if (
+      !state.hasManager ||
+      (!state.deviceProtectionReady &&
+        !state.deviceAuthorizationInProgress &&
+        mode !== DeviceIdentityInitializationMode.AllowPendingAuthorization)
+    ) {
+      throw new Error(
+        state.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired),
+      );
+    }
+    const identity = await state.enqueueStorage(() => ({
+      deviceId: state.requireManager().device_id,
+      devicePublicKey: state.requireManager().device_public_key,
+    }));
+    state.deviceId = identity.deviceId;
+    state.devicePublicKey = identity.devicePublicKey;
+  }
+
+  async authorizeWithExternalDeviceIdentity({
+    adopt,
+    mode,
+  }: ExternalDeviceIdentityAuthorization): Promise<boolean> {
+    const state = this.state;
+    if (!state.hasManager) return false;
+    const priorDeviceProtectionStatus = state.deviceProtectionStatus;
+    state.errorMsg = "";
+    state.isVerifying = true;
+    state.deviceAuthorizationInProgress = true;
+    try {
+      const adoption = await state.enqueueStorage(() =>
+        AdoptedBrowserIdentity.adopt({
+          manager: state.requireManager(),
+          operation: adopt,
+        }),
+      );
+      state.externalIdentityHandoff = {
+        kind: BrowserIdentityHandoffKind.Adopted,
+        adoption,
+      };
+      if (
+        mode === ExternalDeviceIdentityAuthorizationMode.DeferInitialization
+      ) {
+        await state.enqueueStorage(() =>
+          adoption.markExistingVaultImport(state.requireManager()),
+        );
+        const initDeviceIdentityRequest: DeviceIdentityInitialization = {
+          mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
+        };
+        await this.initDeviceIdentity(initDeviceIdentityRequest);
+      } else {
+        await this.continueInitializationAfterDeviceUnlock();
+      }
+      const currentHandoff = state.externalIdentityHandoff;
+      if (
+        currentHandoff.kind === BrowserIdentityHandoffKind.Adopted &&
+        !currentHandoff.adoption.requiresConnect(state.requireManager())
+      ) {
+        state.externalIdentityHandoff = {
+          kind: BrowserIdentityHandoffKind.Inactive,
+        };
+        await state.enqueueStorage(() =>
+          adoption.commit(state.requireManager()),
+        );
+      }
+      state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
+      const adoptedIdentity: { readonly deviceId: string } = {
+        deviceId: state.deviceId,
+      };
+      const context: Parameters<typeof log.infoWithContext>[0] = {
+        message: "extension identity adopted",
+        serializedContext: JSON.stringify(adoptedIdentity),
+      };
+      log.infoWithContext(context);
+      return true;
+    } catch {
+      try {
+        const handoff = state.externalIdentityHandoff;
+        state.externalIdentityHandoff = {
+          kind: BrowserIdentityHandoffKind.Inactive,
+        };
+        if (handoff.kind === BrowserIdentityHandoffKind.Adopted)
+          handoff.adoption.rollback(state.requireManager());
+      } catch {
+        log.warn("extension identity durable rollback failed");
+      }
+      set_vault_session_locked(true);
+      state.clearUnlockedSession(false);
+      state.deviceId = "";
+      state.devicePublicKey = "";
+      state.deviceProtectionStatus =
+        priorDeviceProtectionStatus === DeviceProtectionStatus.Unlocked
+          ? state.deviceProtectionLockedStatus
+          : priorDeviceProtectionStatus;
+      state.errorMsg = state.t(I18N_KEYS.ExtensionConnectIdentityHandoffFailed);
+      log.warn("extension identity handoff failed");
+      return false;
+    } finally {
+      state.deviceAuthorizationInProgress = false;
+      state.isVerifying = false;
+    }
+  }
+
+  async init() {
+    const state = this.state;
+    const initialization = state.vaultInitialization;
+    if (initialization.kind === VaultInitializationKind.Initializing) {
+      return initialization.completion;
+    }
+    const completion = state.initOnce();
+    state.beginInitialization(completion);
+    return completion;
+  }
+
+  async createFreshVault() {
+    const state = this.state;
     if (!state.hasManager) return;
-    const initialization: DeviceIdentityInitialization = {
+    state.errorMsg = "";
+    state.dismissSuccess();
+    state.isVerifying = true;
+    log.info("creating fresh remote vault");
+    try {
+      await state.initDeviceIdentity();
+      const creatingAdditionalVault = state.localVaults.length > 0;
+      if (creatingAdditionalVault) {
+        await prepare_new_local_vault_slot();
+      }
+      const rawRecords = await state.enqueueStorage(async () => {
+        if (creatingAdditionalVault) {
+          state.requireManager().reset_vault_session();
+        }
+        const connectPromise = state
+          .requireManager()
+          .connect_fresh(...state.wasmStorageArgs());
+        const startVaultDiscoveryTimeoutArgs: ConstructorParameters<
+          typeof VaultDiscoveryTimeout
+        >[0] = {
+          message: state.t(I18N_KEYS.ToastsErrorTimeout),
+          timeoutMs: 30_000,
+        };
+        const timeout = new VaultDiscoveryTimeout(
+          startVaultDiscoveryTimeoutArgs,
+        );
+        try {
+          return (await Promise.race([
+            connectPromise,
+            timeout.completion,
+          ])) as NookSecretRecord[];
+        } finally {
+          timeout.cancel();
+        }
+      });
+      for (const record of rawRecords) record.free();
+      const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
+        query: "",
+        requestedOffset: 0,
+      };
+      await state.loadSecretPage(loadPageArgs);
+      state.markVaultUnlocked();
+      state.openActiveVault(
+        localLoginActions.VaultLoginActions.requireManagerVaultStoreId(
+          state.requireManager(),
+        ),
+      );
+      await new localLoginActions.VaultLoginActions(
+        state,
+      ).refreshLocalVaultCatalog();
+      await state.ensureProviderSaved();
+      await state.syncActiveVaultStoreIdToAuth();
+      await state.hydrateMultiDeviceState();
+      state.joinEnrollmentPrompt = JoinEnrollmentState.None;
+      log.info("fresh remote vault created");
+      state.showSuccess(state.t(I18N_KEYS.ToastsVaultCreated));
+      state.startIdleSessionTracking();
+    } catch (e) {
+      state.isAuthenticated = false;
+      const message =
+        e instanceof Error ? e.message : "Failed to create a new vault.";
+      log.warn("fresh vault create failed");
+      state.errorMsg = message;
+    } finally {
+      state.isVerifying = false;
+    }
+  }
+}
+
+/** Browser continuation is admitted only after the existing device-authorization transition. */
+class DeviceInitializationContinuation {
+  private readonly state: VaultState;
+  private readonly manager: NookVaultManager;
+  private constructor(request: {
+    state: VaultState;
+    manager: NookVaultManager;
+  }) {
+    this.state = request.state;
+    this.manager = request.manager;
+  }
+  static admit(state: VaultState): DeviceInitializationContinuation {
+    if (
+      !state.hasManager ||
+      (!state.deviceProtectionReady && !state.deviceAuthorizationInProgress)
+    )
+      throw new Error(
+        state.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired),
+      );
+    return new DeviceInitializationContinuation({
       state,
+      manager: state.requireManager(),
+    });
+  }
+  private requireCurrentManager(): void {
+    if (
+      !this.state.hasManager ||
+      this.state.requireManager() !== this.manager ||
+      (!this.state.deviceProtectionReady &&
+        !this.state.deviceAuthorizationInProgress)
+    )
+      throw new Error(
+        this.state.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired),
+      );
+  }
+  async continue(): Promise<void> {
+    const state = this.state;
+    this.requireCurrentManager();
+    const initialization: DeviceIdentityInitialization = {
       mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
     };
-    await this.initDeviceIdentity(initialization);
+    await new VaultInitializationActions(state).initDeviceIdentity(
+      initialization,
+    );
     if (
       await state.enqueueStorage(() =>
         state.requireManager().has_pending_sentinel_genesis_finalization(),
@@ -297,180 +534,5 @@ export class VaultInitializationActions {
       state.startVaultSync();
     }
     log.info("app init finished");
-  }
-
-  async initDeviceIdentity({
-    mode,
-  }: DeviceIdentityInitialization): Promise<void> {
-    const state = state;
-    if (
-      !state.hasManager ||
-      (!state.deviceProtectionReady &&
-        !state.deviceAuthorizationInProgress &&
-        mode !== DeviceIdentityInitializationMode.AllowPendingAuthorization)
-    ) {
-      throw new Error(
-        state.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired),
-      );
-    }
-    const identity = await state.enqueueStorage(() => ({
-      deviceId: state.requireManager().device_id,
-      devicePublicKey: state.requireManager().device_public_key,
-    }));
-    state.deviceId = identity.deviceId;
-    state.devicePublicKey = identity.devicePublicKey;
-  }
-
-  async authorizeWithExternalDeviceIdentity({
-    adopt,
-    mode,
-  }: ExternalDeviceIdentityAuthorization): Promise<boolean> {
-    const state = state;
-    if (!state.hasManager) return false;
-    const priorDeviceProtectionStatus = state.deviceProtectionStatus;
-    state.errorMsg = "";
-    state.isVerifying = true;
-    state.deviceAuthorizationInProgress = true;
-    try {
-      await state.enqueueStorage(() => adopt(state.requireManager()));
-      if (
-        mode === ExternalDeviceIdentityAuthorizationMode.DeferInitialization
-      ) {
-        await state.enqueueStorage(() =>
-          state
-            .requireManager()
-            .mark_extension_identity_handoff_existing_vault_import(),
-        );
-        const initDeviceIdentityRequest: DeviceIdentityInitialization = {
-          mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
-        };
-        await this.initDeviceIdentity(initDeviceIdentityRequest);
-      } else {
-        await this.continueInitializationAfterDeviceUnlock();
-      }
-      const requiresConnect = state
-        .requireManager()
-        .extension_identity_handoff_requires_connect();
-      if (!requiresConnect) {
-        await state.enqueueStorage(() =>
-          state.requireManager().commit_extension_identity_handoff(),
-        );
-        await state.enqueueStorage(() =>
-          state.requireManager().confirm_extension_identity_handoff(),
-        );
-      }
-      state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-      const adoptedIdentity: { readonly deviceId: string } = {
-        deviceId: state.deviceId,
-      };
-      const context: Parameters<typeof log.infoWithContext>[0] = {
-        message: "extension identity adopted",
-        serializedContext: JSON.stringify(adoptedIdentity),
-      };
-      log.infoWithContext(context);
-      return true;
-    } catch {
-      try {
-        state.requireManager().rollback_extension_identity_handoff();
-      } catch {
-        log.warn("extension identity durable rollback failed");
-      }
-      set_vault_session_locked(true);
-      state.clearUnlockedSession(false);
-      state.deviceId = "";
-      state.devicePublicKey = "";
-      state.deviceProtectionStatus =
-        priorDeviceProtectionStatus === DeviceProtectionStatus.Unlocked
-          ? state.deviceProtectionLockedStatus
-          : priorDeviceProtectionStatus;
-      state.errorMsg = state.t(I18N_KEYS.ExtensionConnectIdentityHandoffFailed);
-      log.warn("extension identity handoff failed");
-      return false;
-    } finally {
-      state.deviceAuthorizationInProgress = false;
-      state.isVerifying = false;
-    }
-  }
-
-  async init() {
-    const state = state;
-    const initialization = state.vaultInitialization;
-    if (initialization.kind === VaultInitializationKind.Initializing) {
-      return initialization.completion;
-    }
-    const completion = state.initOnce();
-    state.beginInitialization(completion);
-    return completion;
-  }
-
-  async createFreshVault() {
-    const state = state;
-    if (!state.hasManager) return;
-    state.errorMsg = "";
-    state.dismissSuccess();
-    state.isVerifying = true;
-    log.info("creating fresh remote vault");
-    try {
-      await state.initDeviceIdentity();
-      const creatingAdditionalVault = state.localVaults.length > 0;
-      if (creatingAdditionalVault) {
-        await prepare_new_local_vault_slot();
-      }
-      const rawRecords = await state.enqueueStorage(async () => {
-        if (creatingAdditionalVault) {
-          state.requireManager().reset_vault_session();
-        }
-        const connectPromise = state
-          .requireManager()
-          .connect_fresh(...state.wasmStorageArgs());
-        const startVaultDiscoveryTimeoutArgs: ConstructorParameters<
-          typeof VaultDiscoveryTimeout
-        >[0] = {
-          message: state.t(I18N_KEYS.ToastsErrorTimeout),
-          timeoutMs: 30_000,
-        };
-        const timeout = new VaultDiscoveryTimeout(
-          startVaultDiscoveryTimeoutArgs,
-        );
-        try {
-          return (await Promise.race([
-            connectPromise,
-            timeout.completion,
-          ])) as NookSecretRecord[];
-        } finally {
-          timeout.cancel();
-        }
-      });
-      for (const record of rawRecords) record.free();
-      const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
-        query: "",
-        requestedOffset: 0,
-      };
-      await state.loadSecretPage(loadPageArgs);
-      state.markVaultUnlocked();
-      state.openActiveVault(
-        localLoginActions.VaultLoginActions.requireManagerVaultStoreId(
-          state.requireManager(),
-        ),
-      );
-      await new localLoginActions.VaultLoginActions(
-        state,
-      ).refreshLocalVaultCatalog();
-      await state.ensureProviderSaved();
-      await state.syncActiveVaultStoreIdToAuth();
-      await state.hydrateMultiDeviceState();
-      state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-      log.info("fresh remote vault created");
-      state.showSuccess(state.t(I18N_KEYS.ToastsVaultCreated));
-      state.startIdleSessionTracking();
-    } catch (e) {
-      state.isAuthenticated = false;
-      const message =
-        e instanceof Error ? e.message : "Failed to create a new vault.";
-      log.warn("fresh vault create failed");
-      state.errorMsg = message;
-    } finally {
-      state.isVerifying = false;
-    }
   }
 }

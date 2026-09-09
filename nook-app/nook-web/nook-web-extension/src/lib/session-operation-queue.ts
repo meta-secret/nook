@@ -170,6 +170,22 @@ class QueuedSessionOperation<T> implements QueuedOperation {
     }
     this.clearTimer(this.state.timer)
     this.state = { kind: OperationStateKind.Running }
+    const running = new RunningSessionOperation(this.configuration)
+    await running.complete()
+    this.state = { kind: OperationStateKind.Settled }
+  }
+}
+
+/** Running work has no queued deadline or cancellation operation. */
+class RunningSessionOperation<T> {
+  private state = OperationStateKind.Running
+  constructor(
+    private readonly configuration: QueuedSessionOperationConfiguration<T>,
+  ) {}
+  async complete(): Promise<void> {
+    if (this.state !== OperationStateKind.Running)
+      throw new Error('Session operation already settled')
+    this.state = OperationStateKind.Settled
     try {
       this.configuration.resolve(await this.configuration.request.operation())
     } catch (error) {
@@ -178,10 +194,13 @@ class QueuedSessionOperation<T> implements QueuedOperation {
           ? error
           : new SessionOperationFailure(SessionOperationFailureKind.Failed),
       )
-    } finally {
-      this.state = { kind: OperationStateKind.Settled }
     }
   }
+}
+
+/** Closed queues expose their terminal reason, never enqueue or drain. */
+export class ClosedSessionOperationQueue {
+  constructor(readonly error: Error) {}
 }
 
 enum QueueStateKind {
@@ -203,12 +222,14 @@ export class SessionOperationQueue {
   private drainState = QueueDrainKind.Idle
   private state: QueueState = { kind: QueueStateKind.Open }
 
-  close(error: Error): void {
-    if (this.state.kind === QueueStateKind.Closed) return
+  close(error: Error): ClosedSessionOperationQueue {
+    if (this.state.kind === QueueStateKind.Closed)
+      return new ClosedSessionOperationQueue(this.state.error)
     this.state = { kind: QueueStateKind.Closed, error }
     const pending = this.entries
     this.entries = []
     for (const entry of pending) entry.cancel(error)
+    return new ClosedSessionOperationQueue(error)
   }
 
   enqueue<T>(request: EnqueueSessionOperationArgs<T>): Promise<T> {

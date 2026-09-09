@@ -46,7 +46,7 @@ export class SentinelUnlockActions {
   }
 
   private replaceUnlockSession({ status }: UnlockSessionReplacement): void {
-    const state = state;
+    const state = this.state;
     const previous = state.sentinelUnlockSession;
     state.sentinelUnlockSession = status;
     if (previous !== status) previous.free();
@@ -69,7 +69,7 @@ export class SentinelUnlockActions {
   }
 
   isSentinelVault(): boolean {
-    const state = state;
+    const state = this.state;
     if (state.vaultArchitecture.vault_type === VaultType.Sentinel) return true;
     if (!state.hasManager) return false;
     try {
@@ -83,7 +83,7 @@ export class SentinelUnlockActions {
   }
 
   sentinelCeremonyIsVisible(): boolean {
-    const state = state;
+    const state = this.state;
     if (
       state.isAuthenticated ||
       state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked
@@ -106,7 +106,7 @@ export class SentinelUnlockActions {
   }
 
   private async getSentinelUnlockStatus(): Promise<SentinelVaultUnlockState> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return SentinelVaultUnlockState.NotSentinel;
     try {
       return await state.enqueueStorage(() =>
@@ -118,7 +118,7 @@ export class SentinelUnlockActions {
   }
 
   async refreshSentinelUnlockStatus(): Promise<SentinelVaultUnlockState> {
-    const state = state;
+    const state = this.state;
     let status = await this.getSentinelUnlockStatus();
     if (
       !state.isAuthenticated &&
@@ -151,7 +151,7 @@ export class SentinelUnlockActions {
   }
 
   async ensureSentinelCeremonyHydrated(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isAuthenticated || state.isVerifying) return;
     await state.initDeviceIdentity();
     try {
@@ -188,7 +188,7 @@ export class SentinelUnlockActions {
   }
 
   async startSentinelUnlock(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isVerifying) return;
     state.errorMsg = "";
     await this.ensureSentinelCeremonyHydrated();
@@ -209,7 +209,7 @@ export class SentinelUnlockActions {
   async addSentinelUnlockResponse({
     response,
   }: SentinelUnlockResponseSubmission): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || !response.trim()) return;
     const status = await state.enqueueStorage(() =>
       state.requireManager().add_sentinel_unlock_response(response.trim()),
@@ -223,7 +223,7 @@ export class SentinelUnlockActions {
   async listSentinelStoredDeliveries(): Promise<
     SentinelStoredDeliverySummary[]
   > {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return [];
     await state.initDeviceIdentity();
     const summaries = await state.enqueueStorage(() =>
@@ -238,7 +238,7 @@ export class SentinelUnlockActions {
     storeId,
     request,
   }: SentinelUnlockResponseCreation): Promise<string> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     if (!storeId.trim() || !request.trim()) return "";
     await state.initDeviceIdentity();
@@ -254,7 +254,7 @@ export class SentinelUnlockActions {
   }
 
   async finalizeSentinelUnlock(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (
       !state.hasManager ||
       state.isVerifying ||
@@ -328,7 +328,7 @@ export class SentinelUnlockActions {
   async surfaceSentinelCeremonyIfNeeded({
     failure,
   }: SentinelCeremonyPresentation): Promise<boolean> {
-    const state = state;
+    const state = this.state;
     if (
       !SentinelUnlockActions.isSentinelCeremonyRequiredError(failure) &&
       !this.isSentinelVault()

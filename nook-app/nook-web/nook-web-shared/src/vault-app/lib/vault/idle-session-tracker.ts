@@ -49,10 +49,10 @@ type SessionState =
   | { kind: SessionStateKind.Stopped }
   | { kind: SessionStateKind.Tracking; timers: ScheduledTimers };
 
-export class VaultIdleSessionTracker {
+export class ActiveVaultIdleSession {
   private state: SessionState = { kind: SessionStateKind.Stopped };
 
-  constructor(
+  private constructor(
     private readonly configuration: VaultIdleSessionTrackerConfiguration,
   ) {}
 
@@ -73,7 +73,10 @@ export class VaultIdleSessionTracker {
   private scheduleTimers(): void {
     if (this.state.kind === SessionStateKind.Tracking)
       this.clearTimers(this.state.timers);
-    const expire = setTimeout(() => expire(), this.configuration.timeoutMs);
+    const expire = setTimeout(
+      () => this.expire(),
+      this.configuration.timeoutMs,
+    );
     let warning: WarningTimer = { kind: WarningTimerKind.NotScheduled };
     const policy = this.configuration.warning;
     if (
@@ -122,12 +125,17 @@ export class VaultIdleSessionTracker {
     if (this.state.kind === SessionStateKind.Tracking) this.scheduleTimers();
   }
 
-  start(): void {
-    if (
-      this.state.kind === SessionStateKind.Tracking ||
-      !("document" in globalThis)
-    )
-      return;
+  static start(
+    configuration: VaultIdleSessionTrackerConfiguration,
+  ): VaultIdleSessionStart {
+    if (!("document" in globalThis))
+      return { kind: VaultIdleSessionStartKind.Unavailable };
+    const session = new ActiveVaultIdleSession(configuration);
+    session.attach();
+    return { kind: VaultIdleSessionStartKind.Tracking, session };
+  }
+
+  private attach(): void {
     for (const event of ACTIVITY_EVENTS) {
       document.addEventListener(event, this.onActivity, { passive: true });
     }
@@ -139,5 +147,26 @@ export class VaultIdleSessionTracker {
       this.clearTimers(this.state.timers);
     this.state = { kind: SessionStateKind.Stopped };
     this.detachActivityListeners();
+  }
+}
+
+export enum VaultIdleSessionStartKind {
+  Unavailable = "unavailable",
+  Tracking = "tracking",
+}
+export type VaultIdleSessionStart =
+  | { kind: VaultIdleSessionStartKind.Unavailable }
+  | {
+      kind: VaultIdleSessionStartKind.Tracking;
+      session: ActiveVaultIdleSession;
+    };
+
+/** Reusable configuration owns no listeners and cannot record activity. */
+export class VaultIdleSessionTracker {
+  constructor(
+    private readonly configuration: VaultIdleSessionTrackerConfiguration,
+  ) {}
+  start(): VaultIdleSessionStart {
+    return ActiveVaultIdleSession.start(this.configuration);
   }
 }

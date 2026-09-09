@@ -68,7 +68,7 @@ export class PasswordEnrollmentIssue {
     password,
     providerId,
   }: EnrollmentCodeIssueRequest): Promise<string> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       throw new Error("Vault engine is not available.");
     }

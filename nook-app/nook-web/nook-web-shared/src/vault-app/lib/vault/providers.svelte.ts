@@ -156,14 +156,14 @@ export class VaultProviderActions {
   }
 
   private stagedProviderType(): StorageProviderType {
-    const state = state;
+    const state = this.state;
     return state.loginSetup.kind === LoginSetupKind.Active
       ? state.loginSetup.providerType
       : state.storageMode;
   }
 
   wasmStorageArgs(): [string, string, string] {
-    const state = state;
+    const state = this.state;
     const syncProvider = new ProviderSelectionActions(state).syncProviders()[0];
     if (state.localVaultPresent) {
       return VaultProviderActions.takeStorageArgsTuple(
@@ -200,7 +200,7 @@ export class VaultProviderActions {
   }
 
   connectStorageArgs(): [string, string, string] {
-    const state = state;
+    const state = this.state;
     if (this.shouldUseJoinProviderForConnect()) {
       return VaultProviderActions.providerWasmArgs(
         new ProviderSelectionActions(state).syncProviders()[0]!,
@@ -210,7 +210,7 @@ export class VaultProviderActions {
   }
 
   shouldUseJoinProviderForConnect(): boolean {
-    const state = state;
+    const state = this.state;
     return state.clientPolicy.should_use_join_provider_for_connect(
       state.isAuthenticated,
       new ProviderSelectionActions(state).syncProviders().length,
@@ -219,7 +219,7 @@ export class VaultProviderActions {
   }
 
   stagedRemoteStorageArgs(): StagedRemoteStorage {
-    const state = state;
+    const state = this.state;
     const type = this.stagedProviderType();
     const staged =
       type === GITHUB_PROVIDER_TYPE
@@ -243,7 +243,7 @@ export class VaultProviderActions {
   }
 
   stagedProviderLabel(): string {
-    const state = state;
+    const state = this.state;
     const providerType = this.stagedProviderType();
     if (providerType === "github") {
       return staged_github_provider_label(state.githubRepo);
@@ -272,7 +272,7 @@ export class VaultProviderActions {
   }
 
   hasRemoteProviderCredentials(): boolean {
-    const state = state;
+    const state = this.state;
     const oauthCredential =
       state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
         ? oauthAccessToken(state.oauthFileDraft.config)
@@ -302,7 +302,7 @@ export class VaultProviderActions {
   }
 
   syncOAuthRemoteRefFromManager(): void {
-    const state = state;
+    const state = this.state;
     if (
       state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
       !state.hasManager ||
@@ -326,7 +326,7 @@ export class VaultProviderActions {
   async assessVaultConnectStatus({
     args,
   }: VaultConnectAssessmentRequest): Promise<VaultAccessStatus> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager)
       throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
     const manager = state.requireManager();
@@ -350,7 +350,7 @@ export class VaultProviderActions {
   async handleRemoteVaultAssessStatus({
     accessStatus,
   }: RemoteVaultAssessmentHandling): Promise<boolean> {
-    const state = state;
+    const state = this.state;
     const decision = state.clientPolicy.remote_vault_assess_decision(
       accessStatus,
       state.loginRequiresExistingVault,
@@ -376,14 +376,14 @@ export class VaultProviderActions {
   }
 
   private resetICloudSignInState() {
-    const state = state;
+    const state = this.state;
     state.icloudOAuthPreparing = false;
     state.icloudOAuthReady = false;
     state.icloudOAuthBusy = false;
   }
 
   async loadProviders({ options }: ProviderLoad) {
-    const state = state;
+    const state = this.state;
     const snapshot = await state.enqueueStorage(() =>
       options.ensureLocalRow
         ? state.requireManager().load_auth_providers_with_local_row()
@@ -402,7 +402,7 @@ export class VaultProviderActions {
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<void> {
-    const state = state;
+    const state = this.state;
     const ensureLocalAuthProviderSnapshotArgs: Parameters<
       ReturnType<
         typeof state.requireManager
@@ -440,7 +440,7 @@ export class VaultProviderActions {
   }
 
   async persistProviders({ opts }: ProviderPersistence) {
-    const state = state;
+    const state = this.state;
     if (!opts.replace && state.localVaultPresent) {
       const snapshot = await state.enqueueStorage(() =>
         state.requireManager().load_auth_providers_snapshot(),
@@ -471,7 +471,7 @@ export class VaultProviderActions {
   }
 
   beginProviderSetup({ request }: ProviderSetup) {
-    const state = state;
+    const state = this.state;
     const { type } = request;
     if (!state.isAuthenticated) {
       state.resetVaultSessionState();
@@ -515,7 +515,7 @@ export class VaultProviderActions {
   }
 
   beginAddProvider() {
-    const state = state;
+    const state = this.state;
     if (!state.isAuthenticated) {
       state.resetVaultSessionState();
     }
@@ -525,7 +525,7 @@ export class VaultProviderActions {
   }
 
   cancelAddProvider() {
-    const state = state;
+    const state = this.state;
     this.resetICloudSignInState();
     state.addProviderOpen = false;
     state.clearLoginSetup();
@@ -535,7 +535,7 @@ export class VaultProviderActions {
   }
 
   cancelProviderSetup() {
-    const state = state;
+    const state = this.state;
     this.resetICloudSignInState();
     if (
       state.addProviderOpen &&
@@ -561,7 +561,7 @@ export class VaultProviderActions {
   }
 
   async removeProvider({ id }: ProviderRemoval): Promise<void> {
-    const state = state;
+    const state = this.state;
     const target = state.providers.find((p) => p.id === id);
     if (!target || target.type === "local") return;
 
@@ -606,7 +606,7 @@ export class ProviderPersistenceActions {
     | ReturnType<typeof scopedProviderVault>
     | ReturnType<typeof unscopedProviderVault>
   > {
-    const state = state;
+    const state = this.state;
     const fromManager = state.hasManager
       ? (
           await state.enqueueStorage(() => state.requireManager().vaultStoreId)
@@ -624,7 +624,7 @@ export class ProviderPersistenceActions {
   }
 
   async ensureProviderSaved(): Promise<boolean> {
-    const state = state;
+    const state = this.state;
     const providerStoreId = await this.providerStoreIdForSave();
     const oauthFile =
       state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
@@ -701,7 +701,7 @@ export class ActiveProviderCredentialsActions {
   constructor(private readonly state: ActiveProviderCredentialsContext) {}
 
   applyActiveProviderCredentials() {
-    const state = state;
+    const state = this.state;
     const currentOauthFile =
       state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
         ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))

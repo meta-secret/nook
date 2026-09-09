@@ -75,7 +75,7 @@ export class SyncConflictActions {
     identityId,
     importedStoreId,
   }: ImportedProviderVaultIdentityActivation): Promise<void> {
-    const state = state;
+    const state = this.state;
     try {
       await state.enqueueStorage(() =>
         state.requireManager().activate_local_identity(identityId),
@@ -114,7 +114,7 @@ export class SyncConflictActions {
     oldSecretId,
     chosenSecretId,
   }: ReplacementConflictResolution): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || state.isSaving) return;
     state.isSaving = true;
     state.errorMsg = "";
@@ -140,7 +140,7 @@ export class SyncConflictActions {
   }
 
   async refreshReplacementConflicts(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       state.clearProjectionConflicts();
       return;
@@ -175,7 +175,7 @@ export class SyncConflictActions {
   }
 
   async resolveSyncConflictKeepLocal(): Promise<void> {
-    const state = state;
+    const state = this.state;
     const review = state.syncConflictReview;
     if (
       review.state !== NookSyncConflictReviewState.RequiresDecision ||
@@ -192,7 +192,7 @@ export class SyncConflictActions {
   }
 
   async resolveSyncConflictKeepRemote(): Promise<void> {
-    const state = state;
+    const state = this.state;
     const review = state.syncConflictReview;
     if (
       review.state !== NookSyncConflictReviewState.RequiresDecision ||
@@ -207,7 +207,7 @@ export class SyncConflictActions {
   }
 
   async confirmRecoverRemoteVault(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     state.errorMsg = "";
     state.isVerifying = true;
@@ -233,7 +233,7 @@ export class SyncConflictActions {
   }
 
   async confirmCreateFreshRemoteVault(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     state.errorMsg = "";
     state.remoteVaultRecoveryState = RemoteVaultRecoveryState.ConnectFresh;
@@ -253,7 +253,7 @@ export class SyncConflictActions {
   }
 
   clearRemoteVaultRecovery(): void {
-    const state = state;
+    const state = this.state;
     state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
     try {
       if (state.hasManager) state.requireManager().clear_connect_recovery();
@@ -266,7 +266,7 @@ export class SyncConflictActions {
     providerId,
     pendingProvider,
   }: SyncConflictResumption): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (state.isAuthenticated) {
       if (!pendingProvider) {
         const syncProviderByIdArgs: Parameters<
@@ -295,7 +295,7 @@ export class SyncConflictActions {
   async resolveSyncConflictImportRemote({
     identitySelection,
   }: ProviderVaultImportRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     const review = state.syncConflictReview;
     if (
       review.state !== NookSyncConflictReviewState.RequiresDecision ||

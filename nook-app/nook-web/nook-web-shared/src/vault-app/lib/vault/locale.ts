@@ -36,7 +36,7 @@ export class VaultLocaleActions {
   }
 
   async updateLocale({ newLocale, preferWasm }: LocaleUpdate): Promise<void> {
-    const state = state;
+    const state = this.state;
     state.locale = newLocale;
     localStorage.setItem("nook_locale", newLocale);
     if ("document" in globalThis) {

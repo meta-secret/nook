@@ -106,7 +106,7 @@ export class VaultSyncActions {
   constructor(private readonly state: SyncActionsContext) {}
 
   async hydrateMultiDeviceState(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || !state.isAuthenticated) return;
     const mergedJoins: JoinRequest[] = [];
     try {
@@ -168,7 +168,7 @@ export class VaultSyncActions {
     visibility,
     freshness,
   }: SyncFromProvidersExecution): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     if (
       !state.clientPolicy.should_sync_from_providers(
@@ -212,7 +212,7 @@ export class VaultSyncActions {
   async runFanOutSyncToProviders({
     visibility,
   }: FanOutSyncExecution): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (state.isFanOutSyncing) return;
     state.isFanOutSyncing = true;
     try {
@@ -231,7 +231,7 @@ export class VaultSyncActions {
   }
 
   async runFanOutSyncAfterLocalSave(): Promise<void> {
-    const state = state;
+    const state = this.state;
     await new ExtensionSyncPublication(
       state,
     ).publishExtensionEventLogUpdateForVault();
@@ -261,7 +261,7 @@ export class VaultSyncActions {
   eventOutboxTarget({
     request,
   }: EventOutboxTargetSelection): EventOutboxTarget {
-    const state = state;
+    const state = this.state;
     if (request.kind === EventOutboxRequestKind.LocalFolder) {
       return {
         kind: EventOutboxTargetKind.LocalFolder,
@@ -297,7 +297,7 @@ export class VaultSyncActions {
   async flushRemoteEventOutboxNow({
     request,
   }: RemoteEventOutboxFlush): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     const eventOutboxTargetArgs: Parameters<
       VaultSyncActions["eventOutboxTarget"]
@@ -333,7 +333,7 @@ export class VaultSyncActions {
     yaml,
     revision,
   }: ProviderSyncMetadataUpdate): Promise<void> {
-    const state = state;
+    const state = this.state;
     try {
       const managerStoreId = state.hasManager
         ? await state.enqueueStorage(() => state.requireManager().vaultStoreId)
@@ -371,12 +371,12 @@ export class VaultSyncActions {
   }
 
   dismissLocalFolderMultipleVaultsIssue(): void {
-    const state = state;
+    const state = this.state;
     state.clearLocalFolderMultipleVaultsIssue();
   }
 
   async disconnectLocalFolderMultipleVaultsProvider(): Promise<void> {
-    const state = state;
+    const state = this.state;
     const health = state.localFolderHealth;
     if (health.state !== NookLocalFolderHealthState.MultipleVaults) return;
     const providerId = health.providerId;
@@ -385,7 +385,7 @@ export class VaultSyncActions {
   }
 
   async chooseReplacementLocalFolderForIssue(): Promise<void> {
-    const state = state;
+    const state = this.state;
     const health = state.localFolderHealth;
     if (health.state !== NookLocalFolderHealthState.MultipleVaults) return;
     const providerId = health.providerId;
@@ -405,7 +405,7 @@ export class VaultSyncActions {
   finishStagedProviderConnectAfterConflict({
     conflict,
   }: StagedProviderConflictCompletion): void {
-    const state = state;
+    const state = this.state;
     if (!conflict.isPendingProvider) return;
     state.clearLoginSetup();
     state.addProviderOpen = false;
@@ -414,7 +414,7 @@ export class VaultSyncActions {
   async ensureProviderSavedAfterConflict({
     conflict,
   }: ProviderConflictPersistence): Promise<string> {
-    const state = state;
+    const state = this.state;
     if (
       !conflict.isPendingProvider &&
       state.providers.some((provider) => provider.id === conflict.providerId)
@@ -437,7 +437,7 @@ export class VaultSyncActions {
   async stageStagedProviderSyncIssue({
     args,
   }: StagedProviderSyncIssueAssessment): Promise<boolean> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return false;
     const manager = state.requireManager();
     const issueResult = manager.take_event_log_sync_issue();
@@ -482,7 +482,7 @@ export class VaultSyncActions {
   }
 
   startVaultSync() {
-    const state = state;
+    const state = this.state;
     state.stopVaultSync();
     const startDecision = state.clientPolicy.vault_sync_timer_start_decision(
       state.isAuthenticated,
@@ -532,14 +532,14 @@ export class VaultSyncActions {
   }
 
   stopVaultSync() {
-    const state = state;
+    const state = this.state;
     if (state.stopScheduledSync()) {
       log.debug("vault sync timer stopped");
     }
   }
 
   async syncFromStorage({ freshness }: StorageSyncExecution) {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     const syncDecision = state.clientPolicy.vault_storage_sync_decision(
       state.syncBlocked,
@@ -637,7 +637,7 @@ export class VaultSyncActions {
   }
 
   async manualSync() {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     if (state.syncBlocked) return;
     if (state.isSyncing) return;
@@ -701,7 +701,7 @@ export class VaultSyncActions {
   async fanOutSyncToProviders({
     visibility,
   }: FanOutSyncExecution): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager || !state.isAuthenticated) return;
     if (state.syncBlocked) return;
     if (state.syncProviders.length === 0) return;
@@ -714,7 +714,7 @@ export class VaultSyncActions {
   }
 
   stageSyncConflict({ conflict }: SyncConflictStaging) {
-    const state = state;
+    const state = this.state;
     log.warn("sync conflict staged");
     state.stageSyncConflict(conflict);
     state.errorMsg = "";

@@ -184,10 +184,6 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     return this.storageQueue.onIdle();
   }
 
-  resetStorageChain(): void {
-    this.storageQueue.reset();
-  }
-
   adoptLocalDataStorageGeneration(): void {
     this.localDataStorageGeneration =
       browserDataLifecycle.captureLocalDataStorageGeneration();

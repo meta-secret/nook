@@ -60,7 +60,7 @@ export class SentinelGenesisActions {
   }
 
   releaseResults(): void {
-    const state = state;
+    const state = this.state;
     const replaceOwnedWasmValuesArgs: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisDelivery> =
       { current: state.sentinelGenesisDeliveries, replacement: [] };
     state.sentinelGenesisDeliveries =
@@ -75,7 +75,7 @@ export class SentinelGenesisActions {
   }
 
   applyStatus({ status }: SentinelGenesisStatusUpdate): void {
-    const state = state;
+    const state = this.state;
     const participants = status.participants;
     state.sentinelGenesisParticipantCount = participants.length;
     const replaceOwnedWasmValuesArgs3: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisParticipantStatus> =
@@ -92,7 +92,7 @@ export class SentinelGenesisActions {
   }
 
   applyFinalizeResult({ result }: SentinelGenesisFinalization): void {
-    const state = state;
+    const state = this.state;
     state.sentinelGenesisPhase = result.phase;
     state.selectSentinelGenesisStore(result.storeId);
     state.openActiveVault(result.storeId);
@@ -110,7 +110,7 @@ export class SentinelGenesisActions {
   }
 
   async start({ args }: SentinelGenesisStart): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     if (state.isVerifying) return;
     state.isVerifying = true;
@@ -152,7 +152,7 @@ export class SentinelGenesisActions {
     payload,
     participantLabel,
   }: SentinelGenesisParticipantResponseAddition): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     if (state.isVerifying) return;
     state.isVerifying = true;
@@ -184,7 +184,7 @@ export class SentinelGenesisActions {
   }
 
   async createPublicKeyAnnouncement(): Promise<string> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     if (state.isVerifying) return "";
     state.isVerifying = true;
@@ -212,7 +212,7 @@ export class SentinelGenesisActions {
   async rememberRequest({
     requestPayload,
   }: SentinelGenesisRequestPayload): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     if (state.isVerifying) return;
     state.isVerifying = true;
@@ -237,7 +237,7 @@ export class SentinelGenesisActions {
   async createParticipantResponse({
     requestPayload,
   }: SentinelGenesisRequestPayload): Promise<string> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     if (state.isVerifying) return "";
     state.isVerifying = true;
@@ -264,7 +264,7 @@ export class SentinelGenesisActions {
   }
 
   async finalize(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     if (state.isVerifying) return;
     state.isVerifying = true;
@@ -297,7 +297,7 @@ export class SentinelGenesisActions {
   async acceptShareDelivery({
     payload,
   }: SentinelGenesisShareDelivery): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     if (state.isVerifying) return;
     state.isVerifying = true;
@@ -324,7 +324,7 @@ export class SentinelGenesisActions {
   }
 
   async completeDelivery(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     if (
       state.sentinelGenesisTarget.kind !== SentinelGenesisTargetKind.Selected ||
@@ -350,7 +350,7 @@ export class SentinelGenesisActions {
   async acceptOnboardingPackage({
     packageJson,
   }: SentinelOnboardingPackageAcceptance): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) throw new Error("Vault engine is not available.");
     state.errorMsg = "";
     const storeId = await state.enqueueStorage(() =>

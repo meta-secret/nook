@@ -194,7 +194,7 @@ class WorkflowUi {
 
   removeWidget(): void {
     if (this.ui.widgetState.host.kind === WidgetHostKind.Attached) {
-      this.ui.widgetState.host.element.remove()
+      this.ui.widgetState.host.detach()
     }
     this.ui.widgetState.clearRenderedWidget()
     this.ui.saveOfferState.clearActiveOffer()

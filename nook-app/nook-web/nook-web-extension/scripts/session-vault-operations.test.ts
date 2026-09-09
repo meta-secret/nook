@@ -1,3 +1,4 @@
+import { CompanionDiscoveryEndpointKind } from '../src/offscreen/session-vault-operations'
 import { describe, expect, test } from 'bun:test'
 import {
   DeviceProtectionStatus,
@@ -322,7 +323,11 @@ class CompanionVaultDiscoveryScenario {
   } as NookVaultManager
 
   private readonly endpoint = {
-    discover: this.reportUnlocked.bind(this),
+    kind: CompanionDiscoveryEndpointKind.Initial,
+    endpoint: {
+      discover: () => ({ status: this.reportUnlocked() }),
+      free: () => {},
+    },
   } as CompanionVaultDiscoveryArgs['endpoint']
 
   constructor(private readonly openOutcome: CompanionVaultOpenOutcome) {}
@@ -369,7 +374,8 @@ describe('companion discovery vault restoration', () => {
       CompanionVaultOpenOutcome.Opened,
     )
 
-    const status = await scenario.discover()
+    const discovered = await scenario.discover()
+    const status = discovered.status
 
     expect(status.status).toBe('unlocked')
     expect(scenario.operationOrder).toEqual([

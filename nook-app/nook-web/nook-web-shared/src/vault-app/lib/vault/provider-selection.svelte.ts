@@ -29,7 +29,7 @@ export class ProviderSelectionActions {
   constructor(private readonly state: ProviderActionsContext) {}
 
   private providerSnapshot() {
-    const state = state;
+    const state = this.state;
     const snapshotArgs: Parameters<typeof $state.snapshot>[0] = {
       providers: state.providers,
       activeVaultStoreId:
@@ -41,7 +41,7 @@ export class ProviderSelectionActions {
   }
 
   async chooseLocalFolder(): Promise<void> {
-    const state = state;
+    const state = this.state;
     this.refreshLocalFolderBackupSupport();
     if (!state.localFolderBackupSupported) {
       throw new Error(
@@ -61,13 +61,13 @@ export class ProviderSelectionActions {
   }
 
   refreshLocalFolderBackupSupport(): void {
-    const state = state;
+    const state = this.state;
     state.localFolderBackupSupported =
       "window" in globalThis && is_local_folder_backup_supported();
   }
 
   localProvider(): LocalProviderLookup {
-    const state = state;
+    const state = this.state;
     const scope = state.hasActiveVaultStore
       ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
       : NookManagerStoreScope.unscoped();
@@ -90,7 +90,7 @@ export class ProviderSelectionActions {
   }
 
   activeProviders(): StorageProvider[] {
-    const state = state;
+    const state = this.state;
     const scope = state.hasActiveVaultStore
       ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
       : NookManagerStoreScope.unscoped();
@@ -103,7 +103,7 @@ export class ProviderSelectionActions {
   }
 
   syncProviders(): StorageProvider[] {
-    const state = state;
+    const state = this.state;
     const scope = state.hasActiveVaultStore
       ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
       : NookManagerStoreScope.unscoped();
@@ -116,7 +116,7 @@ export class ProviderSelectionActions {
   }
 
   showLoginVaultPicker(): boolean {
-    const state = state;
+    const state = this.state;
     return state.clientPolicy.should_show_login_vault_picker(
       state.isAuthenticated,
       state.localVaults.length,

@@ -279,15 +279,9 @@ class ExtensionPairingIdentity {
     void chrome.tabs.create(nookTypedArgs0_2)
   }
 
-  sendSessionMessage(message: unknown): Promise<unknown> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(message, (response) => {
-        const error = chrome.runtime.lastError?.message
-        if (error) reject(new Error(error))
-        else resolve(response)
-      })
-    })
+  async sendSessionMessage(message: unknown): Promise<unknown> {
+    const document = await extensionSessionLifecycle.openSessionDocument()
+    return document.sendMessage(message)
   }
 
   async createIdentityHandoff(

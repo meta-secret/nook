@@ -163,7 +163,10 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const remove = mock(() => {})
-  widgetState.attachHost({ remove } as unknown as HTMLElement)
+  widgetState.attachHost({
+    remove,
+    isConnected: true,
+  } as unknown as HTMLElement)
   widgetState.dismissed = true
   widgetState.busy = true
   const staleOfferId = 'stale-save-offer'

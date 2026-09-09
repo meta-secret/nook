@@ -1,3 +1,4 @@
+import { BrowserIdentityHandoffKind } from "$lib/vault/identity-handoff";
 import type { SessionActionsContext } from "$lib/vault/action-contexts";
 import {
   JoinEnrollmentState,
@@ -25,7 +26,7 @@ export class VaultSessionActions {
   constructor(private readonly state: SessionActionsContext) {}
 
   resetVaultSessionState({ resetManager }: VaultSessionReset): void {
-    const state = state;
+    const state = this.state;
     if (resetManager && state.hasManager) {
       void state
         .enqueueStorage(() => state.requireManager().reset_vault_session())
@@ -60,7 +61,17 @@ export class VaultSessionActions {
   }
 
   markVaultUnlocked(): void {
-    const state = state;
+    const state = this.state;
+    const handoff = state.externalIdentityHandoff;
+    if (
+      handoff.kind === BrowserIdentityHandoffKind.Adopted &&
+      !handoff.adoption.requiresConnect(state.requireManager())
+    ) {
+      state.externalIdentityHandoff = {
+        kind: BrowserIdentityHandoffKind.Inactive,
+      };
+      handoff.adoption.afterVerifiedConnect(state.requireManager());
+    }
     set_vault_session_locked(false);
     state.isAuthenticated = true;
     state.awaitingJoinApproval = false;
@@ -71,7 +82,7 @@ export class VaultSessionActions {
   }
 
   clearUnlockedSession({ resetManager }: UnlockedSessionClearRequest): void {
-    const state = state;
+    const state = this.state;
     state.localLoginPreparation = LocalLoginPreparationState.Idle;
     state.secretPageGeneration += 1;
     state.stopIdleSessionTracking();

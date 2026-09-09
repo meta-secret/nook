@@ -161,7 +161,35 @@ type ExtensionSessionMessageDispatcherenqueueVaultImportArgs = {
   requestedExpiry: RequestedQueueExpiry
 }
 
+enum RuntimeListenerRegistrationKind {
+  Unregistered = 'unregistered',
+  Listening = 'listening',
+}
+
+export class ListeningExtensionSession {
+  private constructor(
+    private readonly operations: {
+      resetOperations(): void
+      replaceOperations(error: Error): void
+    },
+  ) {}
+  static register<Response>(
+    context: SessionMessageDispatchContext<Response>,
+  ): ListeningExtensionSession {
+    const dispatcher = new ExtensionSessionMessageDispatcher(context)
+    dispatcher.registerRuntimeListener()
+    return new ListeningExtensionSession(dispatcher)
+  }
+  resetOperations(): void {
+    this.operations.resetOperations()
+  }
+  replaceOperations(error: Error): void {
+    this.operations.replaceOperations(error)
+  }
+}
+
 export class ExtensionSessionMessageDispatcher<SessionResponse> {
+  private registration = RuntimeListenerRegistrationKind.Unregistered
   private operations = new SessionOperationQueue()
   private operationGeneration = 0
 
@@ -424,6 +452,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
   }
 
   registerRuntimeListener(): void {
+    if (this.registration !== RuntimeListenerRegistrationKind.Unregistered)
+      throw new Error('Runtime listener already registered')
+    this.registration = RuntimeListenerRegistrationKind.Listening
     // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (sender.id !== chrome.runtime.id) return false

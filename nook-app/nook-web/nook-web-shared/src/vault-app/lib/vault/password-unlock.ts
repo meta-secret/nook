@@ -62,7 +62,7 @@ export class VaultPasswordActions {
     label,
     password,
   }: VaultPasswordCreation): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       state.passwordError = "Vault engine is not available.";
       return;
@@ -109,7 +109,7 @@ export class VaultPasswordActions {
     entryId,
     password,
   }: VaultPasswordUpdate): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.deviceProtectionReady) {
       state.passwordError = state.t(
         I18N_KEYS.VaultPasswordsDeviceUnlockRequired,
@@ -152,7 +152,7 @@ export class VaultPasswordActions {
   async removeVaultPasswordEntry({
     entryId,
   }: VaultPasswordRemoval): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.deviceProtectionReady) {
       state.passwordError = state.t(
         I18N_KEYS.VaultPasswordsDeviceUnlockRequired,
@@ -189,7 +189,7 @@ export class VaultPasswordActions {
     entryId,
     password,
   }: PasswordUnlockRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) {
       state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
       return;

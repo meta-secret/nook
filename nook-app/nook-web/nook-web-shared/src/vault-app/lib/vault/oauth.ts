@@ -105,7 +105,7 @@ export class VaultOAuthActions {
   constructor(private readonly state: VaultState) {}
 
   async ensureOAuthTokensFresh(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (
       state.storageMode !== "oauth-file" ||
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
@@ -179,7 +179,7 @@ export class VaultOAuthActions {
   }
 
   async signInWithGoogle(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!googleOAuthSession.isGoogleOAuthConfigured()) {
       state.errorMsg = state.t(I18N_KEYS.ProviderSetupGoogleOauthUnconfigured);
       return;
@@ -237,7 +237,7 @@ export class VaultOAuthActions {
   }
 
   selectGoogleDriveMode({ mode }: GoogleDriveModeSelection): void {
-    const state = state;
+    const state = this.state;
     if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) return;
     const oauthFile = state.oauthFileDraft.config;
     if (oauthFile.preset !== "google-drive") return;
@@ -249,7 +249,7 @@ export class VaultOAuthActions {
   }
 
   selectICloudMode({ mode }: ICloudModeSelection): void {
-    const state = state;
+    const state = this.state;
     if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) return;
     const oauthFile = state.oauthFileDraft.config;
     if (oauthFile.preset !== "icloud") return;
@@ -261,7 +261,7 @@ export class VaultOAuthActions {
   }
 
   async createICloudSharedProvider(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
       oauthAccessToken(state.oauthFileDraft.config).kind ===
@@ -303,7 +303,7 @@ export class VaultOAuthActions {
   async useICloudSharedProvider({
     shareReference,
   }: ICloudSharedProviderAccess): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
       oauthAccessToken(state.oauthFileDraft.config).kind ===
@@ -343,7 +343,7 @@ export class VaultOAuthActions {
   async createGoogleSharedFolder({
     collaboratorEmail,
   }: GoogleSharedFolderCreation): Promise<string> {
-    const state = state;
+    const state = this.state;
     if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) {
       throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedSignInFirst));
     }
@@ -419,7 +419,7 @@ export class VaultOAuthActions {
   async useGoogleSharedFolder({
     folderRef,
   }: GoogleSharedFolderAccess): Promise<string> {
-    const state = state;
+    const state = this.state;
     const accessCredential =
       state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
         ? oauthAccessToken(state.oauthFileDraft.config)
@@ -472,7 +472,7 @@ export class VaultOAuthActions {
   async signInWithICloud({
     clickPreparedControl,
   }: ICloudSignInRequest): Promise<void> {
-    const state = state;
+    const state = this.state;
     log.info("iCloud sign-in requested");
     if (!iCloudOAuthSession.isICloudOAuthConfigured()) {
       state.errorMsg = state.t(I18N_KEYS.ProviderSetupIcloudOauthUnconfigured);
@@ -537,7 +537,7 @@ export class VaultOAuthActions {
   }
 
   async prepareICloudSignIn(): Promise<void> {
-    const state = state;
+    const state = this.state;
     log.info("iCloud sign-in prepare requested");
     if (
       state.icloudOAuthReady ||
@@ -580,7 +580,7 @@ export class VaultOAuthActions {
   private async applyICloudOAuthTokens({
     tokens,
   }: ICloudTokenApplication): Promise<void> {
-    const state = state;
+    const state = this.state;
     state.activateLoginSetup("oauth-file");
     if (!state.addProviderOpen) {
       state.storageMode = "oauth-file";
@@ -623,7 +623,7 @@ export class VaultOAuthActions {
   private ensureSupportedOAuthOrigin({
     provider,
   }: OAuthOriginRequirement): boolean {
-    const state = state;
+    const state = this.state;
     const support = resolveCurrentOAuthOriginSupport(provider);
     if (support.supported) {
       log.info("oauth origin supported");
@@ -644,7 +644,7 @@ export class VaultOAuthActions {
   private async applyGoogleOAuthTokens({
     tokens,
   }: GoogleTokenApplication): Promise<void> {
-    const state = state;
+    const state = this.state;
     const email = await googleOAuthSession.fetchGoogleAccountEmail(
       tokens.accessToken,
     );

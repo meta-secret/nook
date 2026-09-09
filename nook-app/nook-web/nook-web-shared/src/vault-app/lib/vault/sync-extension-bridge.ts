@@ -11,7 +11,7 @@ export class ExtensionSyncPublication {
   constructor(private readonly state: SyncActionsContext) {}
 
   async publishExtensionEventLogUpdateForVault(): Promise<void> {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     try {
       const vaultStoreId =

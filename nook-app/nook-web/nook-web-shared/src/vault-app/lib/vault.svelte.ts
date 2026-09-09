@@ -1,3 +1,4 @@
+import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import {
   VaultAccessStatus,
   type NookImportResult,
@@ -62,7 +63,9 @@ export {
 } from "$lib/vault/runtime-state.svelte";
 
 type ExternalDeviceIdentityAdoptionRequest = {
-  readonly adopt: (manager: NookVaultManager) => Promise<void>;
+  readonly adopt: (
+    manager: NookVaultManager,
+  ) => Promise<NookAdoptedExtensionIdentityHandoff>;
   readonly mode: ExternalDeviceIdentityAuthorizationMode;
 };
 

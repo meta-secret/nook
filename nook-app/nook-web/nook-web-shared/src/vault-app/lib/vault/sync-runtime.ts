@@ -29,7 +29,7 @@ export class VaultSyncRuntimeActions {
   }
 
   applyVaultSyncResult({ result }: ApplyVaultSyncResultRequest): void {
-    const state = state;
+    const state = this.state;
     if (state.isAuthenticated) {
       state.pendingJoins = result.pendingJoins;
       state.vaultMembers = result.vaultMembers;
@@ -73,7 +73,7 @@ export class VaultSyncRuntimeActions {
   }
 
   scheduleAutoConnectAfterApproval(): void {
-    const state = state;
+    const state = this.state;
     if (
       !state.clientPolicy.should_auto_connect_after_approval(
         state.isAuthenticated,

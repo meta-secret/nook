@@ -5,6 +5,7 @@ import initNookWasm, {
 } from '$app-wasm'
 import {
   VaultIdleSessionTracker,
+  VaultIdleSessionStartKind,
   VaultIdleWarningKind,
 } from '$lib/vault/idle-session-tracker'
 
@@ -68,9 +69,12 @@ describe('createVaultIdleSessionTracker', () => {
       },
     })
 
-    tracker.start()
+    const started = tracker.start()
+    if (started.kind !== VaultIdleSessionStartKind.Tracking)
+      throw new Error('DOM is required')
+    const active = started.session
     await new Promise((resolve) => setTimeout(resolve, 120))
-    tracker.stop()
+    active.stop()
     expect(expired).toBe(true)
   })
 
@@ -84,12 +88,15 @@ describe('createVaultIdleSessionTracker', () => {
       },
     })
 
-    tracker.start()
+    const started = tracker.start()
+    if (started.kind !== VaultIdleSessionStartKind.Tracking)
+      throw new Error('DOM is required')
+    const active = started.session
     await new Promise((resolve) => setTimeout(resolve, 40))
-    tracker.recordActivity()
+    active.recordActivity()
     await new Promise((resolve) => setTimeout(resolve, 60))
     expect(expired).toBe(false)
-    tracker.stop()
+    active.stop()
   })
 
   test('expiration detaches every activity listener before locking', async () => {
@@ -98,12 +105,15 @@ describe('createVaultIdleSessionTracker', () => {
       timeoutMs: 30,
       warning: { kind: VaultIdleWarningKind.Disabled },
       onExpire: () => {
-        tracker.stop()
+        // Expiration already detached the active capability.
       },
     })
 
+    const started = tracker.start()
+    if (started.kind !== VaultIdleSessionStartKind.Tracking)
+      throw new Error('DOM is required')
+    const active = started.session
     try {
-      tracker.start()
       await new Promise((resolve) => setTimeout(resolve, 80))
       for (const event of [
         'pointerdown',
@@ -115,7 +125,7 @@ describe('createVaultIdleSessionTracker', () => {
         expect(removeListener).toHaveBeenCalledWith(event, expect.any(Function))
       }
     } finally {
-      tracker.stop()
+      active.stop()
       removeListener.mockRestore()
     }
   })

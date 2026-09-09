@@ -17,7 +17,7 @@ export class VaultArchitectureActions {
   constructor(private readonly state: ArchitectureActionsContext) {}
 
   draftVaultArchitecture(): VaultArchitecture {
-    const state = state;
+    const state = this.state;
     return NookVaultArchitecture.draft(
       state.draftDeviceMode,
       state.draftVaultType,
@@ -28,14 +28,14 @@ export class VaultArchitectureActions {
   replaceVaultArchitecture({
     architecture,
   }: VaultArchitectureReplacement): void {
-    const state = state;
+    const state = this.state;
     const previous = state.vaultArchitecture;
     state.vaultArchitecture = architecture;
     if (previous !== architecture) previous.free();
   }
 
   applyDraftVaultArchitecture(): void {
-    const state = state;
+    const state = this.state;
     const replaceVaultArchitectureArgs: Parameters<
       VaultArchitectureActions["replaceVaultArchitecture"]
     >[0] = { architecture: this.draftVaultArchitecture() };
@@ -48,7 +48,7 @@ export class VaultArchitectureActions {
   }
 
   refreshVaultArchitectureFromManager(): void {
-    const state = state;
+    const state = this.state;
     if (!state.hasManager) return;
     let architecture: VaultArchitecture;
     try {
@@ -71,7 +71,7 @@ export class VaultArchitectureActions {
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<void> {
-    const state = state;
+    const state = this.state;
     const fallback = vault_architecture_can_create_secret(
       state.vaultArchitecture,
     );

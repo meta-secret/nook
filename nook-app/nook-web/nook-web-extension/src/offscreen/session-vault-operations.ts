@@ -9,6 +9,7 @@ import type {
   AuthProvidersSnapshot,
   CompanionIdentityStatus,
   NookCompanionExtensionEndpoint,
+  NookDiscoveredCompanionExtensionEndpoint,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
@@ -59,9 +60,23 @@ export type OpenPasskeyVaultRequest = {
   grant: ExtensionVaultGrant
 }
 
+export type CompanionDiscoveryEndpoint =
+  | {
+      kind: CompanionDiscoveryEndpointKind.Initial
+      endpoint: NookCompanionExtensionEndpoint
+    }
+  | {
+      kind: CompanionDiscoveryEndpointKind.Discovered
+      endpoint: NookDiscoveredCompanionExtensionEndpoint
+    }
+export enum CompanionDiscoveryEndpointKind {
+  Initial = 'initial',
+  Discovered = 'discovered',
+}
+
 export type CompanionVaultDiscoveryArgs = {
   activeManager: NookVaultManager
-  endpoint: Pick<NookCompanionExtensionEndpoint, 'discover'>
+  endpoint: CompanionDiscoveryEndpoint
   presence: CompanionExtensionPresence
 }
 
@@ -209,24 +224,40 @@ export async function openPasskeyVault({
   )
 }
 
+enum CompanionDiscoveryUse {
+  Pending = 'pending',
+  Consumed = 'consumed',
+}
+
 export class CompanionVaultDiscovery {
+  private use = CompanionDiscoveryUse.Pending
   constructor(private readonly args: CompanionVaultDiscoveryArgs) {}
 
   async discover(
     discovery: CompanionIdentityDiscoveryObservation,
-  ): Promise<CompanionIdentityStatus> {
+  ): Promise<NookDiscoveredCompanionExtensionEndpoint> {
+    if (this.use !== CompanionDiscoveryUse.Pending)
+      throw new Error('Companion discovery was consumed')
+    this.use = CompanionDiscoveryUse.Consumed
     const { activeManager, endpoint, presence } = this.args
-    if (presence.kind === 'unlocked') {
-      const grant: ExtensionVaultGrant = {
-        vaultStoreId: presence.vault_store_id,
-        deviceId: presence.app_key.appKey.appId,
-        devicePublicKey: presence.app_key.appKey.encryptionPublicKey,
-        deviceSigningPublicKey: presence.app_key.appKey.signingPublicKey,
+    try {
+      if (presence.kind === 'unlocked') {
+        const grant: ExtensionVaultGrant = {
+          vaultStoreId: presence.vault_store_id,
+          deviceId: presence.app_key.appKey.appId,
+          devicePublicKey: presence.app_key.appKey.encryptionPublicKey,
+          deviceSigningPublicKey: presence.app_key.appKey.signingPublicKey,
+        }
+        const openArgs: OpenPasskeyVaultRequest = { activeManager, grant }
+        await openPasskeyVault(openArgs)
       }
-      const openArgs: OpenPasskeyVaultRequest = { activeManager, grant }
-      await openPasskeyVault(openArgs)
+    } catch (error) {
+      endpoint.endpoint.free()
+      throw error
     }
-    return Reflect.apply(endpoint.discover, endpoint, [discovery])
+    return endpoint.kind === CompanionDiscoveryEndpointKind.Initial
+      ? endpoint.endpoint.discover(discovery)
+      : endpoint.endpoint.rediscover(discovery)
   }
 }
 

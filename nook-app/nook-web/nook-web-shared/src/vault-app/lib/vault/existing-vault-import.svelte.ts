@@ -202,10 +202,14 @@ export class ExistingVaultImportLifecycle {
   }
 
   private async activatePendingVault(): Promise<void> {
-    if (this.queue.kind !== ExistingVaultImportQueueKind.WaitingForDevice) {
+    if (
+      this.queue.kind !== ExistingVaultImportQueueKind.WaitingForDevice ||
+      !this.vault.isAuthenticated
+    ) {
       return;
     }
-    await this.vault.activateConnectedExistingVault(this.queue.request.storeId);
-    this.cancel();
+    const pending = this.queue;
+    await this.vault.activateConnectedExistingVault(pending.request.storeId);
+    if (this.queue === pending) this.cancel();
   }
 }

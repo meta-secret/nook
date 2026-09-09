@@ -1,3 +1,7 @@
+import {
+  BrowserIdentityHandoffKind,
+  type BrowserIdentityHandoff,
+} from "$lib/vault/identity-handoff";
 import type { JoinRequest, VaultMember } from "$lib/nook";
 import {
   DeviceProtectionStatus,
@@ -8,13 +12,13 @@ import {
   type PasswordEntryId,
 } from "$app-wasm";
 export enum ManagerSessionKind {
-  Locked = "locked",
-  Unlocked = "unlocked",
+  Unavailable = "unavailable",
+  Available = "available",
 }
 
 export type ManagerSession =
-  | { kind: ManagerSessionKind.Locked }
-  | { kind: ManagerSessionKind.Unlocked; manager: NookVaultManager };
+  | { kind: ManagerSessionKind.Unavailable }
+  | { kind: ManagerSessionKind.Available; manager: NookVaultManager };
 export enum PasswordEntrySelectionKind {
   NotSelected = "not-selected",
   Selected = "selected",
@@ -32,26 +36,29 @@ export type EnrollmentEntry =
   | { kind: EnrollmentEntryKind.Inactive }
   | { kind: EnrollmentEntryKind.Active; entryId: PasswordEntryId };
 export class VaultSessionState {
+  externalIdentityHandoff: BrowserIdentityHandoff = {
+    kind: BrowserIdentityHandoffKind.Inactive,
+  };
   private managerState = $state<ManagerSession>({
-    kind: ManagerSessionKind.Locked,
+    kind: ManagerSessionKind.Unavailable,
   });
   get managerSession(): ManagerSession {
     return this.managerState;
   }
   get hasManager(): boolean {
-    return this.managerState.kind === ManagerSessionKind.Unlocked;
+    return this.managerState.kind === ManagerSessionKind.Available;
   }
   requireManager(): NookVaultManager {
-    if (this.managerState.kind === ManagerSessionKind.Unlocked) {
+    if (this.managerState.kind === ManagerSessionKind.Available) {
       return this.managerState.manager;
     }
     throw new Error("Vault manager is required");
   }
   openManager(value: NookVaultManager): void {
-    this.managerState = { kind: ManagerSessionKind.Unlocked, manager: value };
+    this.managerState = { kind: ManagerSessionKind.Available, manager: value };
   }
   clearManager(): void {
-    this.managerState = { kind: ManagerSessionKind.Locked };
+    this.managerState = { kind: ManagerSessionKind.Unavailable };
   }
   deviceProtectionStatus = $state<DeviceProtectionStatus>(
     DeviceProtectionStatus.Loading,
