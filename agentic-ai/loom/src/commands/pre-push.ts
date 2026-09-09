@@ -1,26 +1,23 @@
+import { err, ok, type Result } from 'neverthrow';
 import type { PrePushRequest } from '../codec/args/pre-push.ts';
 
 import { ChangedCortexDensity } from '../lib/changed-cortex-density.ts';
 
-import { RepositoryRoot, BunExecutable } from '../lib/repo.ts';
-
 import { HostCommand } from '../lib/run.ts';
 
-import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
+import { LoomFailureCode } from '../loom-failure.ts';
 
 import type { RunCommandArgs } from '../lib/run.ts';
 
-import type { LoomFailureDetailArgs } from '../loom-failure.ts';
-
 export class PrePushCommand {
-  private constructor(private readonly request: PrePushRequest) {}
-  static run(request: PrePushRequest): Promise<PrePushReport> {
-    return new PrePushCommand(request).execute();
-  }
-  private async execute(): Promise<PrePushReport> {
-    const request = this.request;
-    BunExecutable.require();
-    const repoRoot = RepositoryRoot.find();
+  constructor(
+    private readonly input: {
+      readonly request: PrePushRequest;
+      readonly repoRoot: string;
+    },
+  ) {}
+  async execute(): Promise<Result<PrePushReport, PrePushFailure>> {
+    const { request, repoRoot } = this.input;
     const messages: string[] = [];
 
     const formatArgs: RunCommandArgs = {
@@ -30,11 +27,10 @@ export class PrePushCommand {
     };
     const format = HostCommand.run(formatArgs);
     if (format.exitCode !== 0) {
-      const loomFailureDetailArgs6: LoomFailureDetailArgs = {
+      return err({
         code: LoomFailureCode.CommandFailed,
-        text: `task format failed (exit ${format.exitCode}): ${format.stderr || format.stdout}`,
-      };
-      LoomFailure.detail(loomFailureDetailArgs6);
+        message: `task format failed (exit ${format.exitCode}): ${format.stderr || format.stdout}`,
+      });
     }
     messages.push('task format passed');
 
@@ -46,11 +42,10 @@ export class PrePushCommand {
       };
       const fetch = HostCommand.run(fetchArgs);
       if (fetch.exitCode !== 0) {
-        const loomFailureDetailArgs5: LoomFailureDetailArgs = {
+        return err({
           code: LoomFailureCode.CommandFailed,
-          text: `git fetch origin main failed: ${fetch.stderr || fetch.stdout}`,
-        };
-        LoomFailure.detail(loomFailureDetailArgs5);
+          message: `git fetch origin main failed: ${fetch.stderr || fetch.stdout}`,
+        });
       }
     }
 
@@ -61,19 +56,17 @@ export class PrePushCommand {
     };
     const base = HostCommand.run(baseArgs);
     if (base.exitCode !== 0) {
-      const loomFailureDetailArgs4: LoomFailureDetailArgs = {
+      return err({
         code: LoomFailureCode.CommandFailed,
-        text: `git rev-parse origin/main failed: ${base.stderr}`,
-      };
-      LoomFailure.detail(loomFailureDetailArgs4);
+        message: `git rev-parse origin/main failed: ${base.stderr}`,
+      });
     }
     const baseSha = base.stdout.trim();
     if (!/^[0-9a-f]{40}$/.test(baseSha)) {
-      const loomFailureDetailArgs3: LoomFailureDetailArgs = {
+      return err({
         code: LoomFailureCode.CommandFailed,
-        text: `origin/main did not resolve to a full SHA: ${baseSha}`,
-      };
-      LoomFailure.detail(loomFailureDetailArgs3);
+        message: `origin/main did not resolve to a full SHA: ${baseSha}`,
+      });
     }
 
     const densityArgs = { baseSha, repoRoot };
@@ -88,11 +81,10 @@ export class PrePushCommand {
           `${alert.file}:${alert.line}: ${alert.check}: ${alert.message}`,
       );
       const detail = [...typedDetail, ...valeDetail].join('\n');
-      const densityFailureArgs: LoomFailureDetailArgs = {
+      return err({
         code: LoomFailureCode.CortexAuditFailed,
-        text: `Cortex Writer density failed for changed Markdown:\n${detail}`,
-      };
-      LoomFailure.detail(densityFailureArgs);
+        message: `Cortex Writer density failed for changed Markdown:\n${detail}`,
+      });
     }
     messages.push(
       `Cortex Writer density passed for ${density.checkedPaths.length} changed Markdown file(s)`,
@@ -105,11 +97,10 @@ export class PrePushCommand {
     };
     const contract = HostCommand.run(contractArgs);
     if (contract.exitCode !== 0) {
-      const loomFailureDetailArgs2: LoomFailureDetailArgs = {
+      return err({
         code: LoomFailureCode.CommandFailed,
-        text: `UI demo contract failed: ${contract.stderr || contract.stdout}`,
-      };
-      LoomFailure.detail(loomFailureDetailArgs2);
+        message: `UI demo contract failed: ${contract.stderr || contract.stdout}`,
+      });
     }
     messages.push((contract.stdout || 'ui-demo-contract passed').trim());
 
@@ -122,23 +113,22 @@ export class PrePushCommand {
       };
       const stage = HostCommand.run(stageArgs);
       if (stage.exitCode !== 0) {
-        const loomFailureDetailArgs: LoomFailureDetailArgs = {
+        return err({
           code: LoomFailureCode.CommandFailed,
-          text: `git add -u failed: ${stage.stderr}`,
-        };
-        LoomFailure.detail(loomFailureDetailArgs);
+          message: `git add -u failed: ${stage.stderr}`,
+        });
       }
       staged = true;
       messages.push('staged host format updates with git add -u');
     }
 
-    return {
+    return ok({
       formatOk: true,
       uiDemoOk: true,
       baseSha,
       staged,
       messages,
-    };
+    });
   }
 }
 
@@ -148,4 +138,10 @@ export type PrePushReport = {
   readonly baseSha: string;
   readonly staged: boolean;
   readonly messages: string[];
+};
+
+export type PrePushFailure = {
+  readonly code:
+    LoomFailureCode.CommandFailed | LoomFailureCode.CortexAuditFailed;
+  readonly message: string;
 };

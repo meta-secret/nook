@@ -1,3 +1,4 @@
+import type { PrePushFailure } from '../commands/pre-push.ts';
 import {
   PullRequestValidationCommand,
   type PrLandFailure,
@@ -63,7 +64,7 @@ import {
   AGENT_TEMP_DIR_TOKEN,
   AgentTemporaryDirectory,
 } from '../lib/agent-temp-path.ts';
-import { RepositoryRoot } from '../lib/repo.ts';
+import { RepositoryRoot, BunExecutable } from '../lib/repo.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import type { ResolveAgentTempPathRequest } from '../lib/agent-temp-path.ts';
@@ -248,11 +249,17 @@ export class LoomRequestCatalog {
       | CortexSessionFailure
       | SkillScaffoldFailure
       | PrLandFailure
+      | PrePushFailure
     >
   > {
     switch (request.family) {
-      case RequestFamily.PrePush:
-        return ok(await PrePushCommand.run(request.prePush));
+      case RequestFamily.PrePush: {
+        BunExecutable.require();
+        return new PrePushCommand({
+          request: request.prePush,
+          repoRoot: RepositoryRoot.find(),
+        }).execute();
+      }
       case RequestFamily.CortexAudit:
         return CortexAuditCommand.runCortexAudit(request.cortexAudit);
       case RequestFamily.CortexSessionClean:
