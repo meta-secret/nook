@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { findBrokenRelativeLinks } from '../src/lib/links.ts';
+import { RepositoryMarkdownLinks } from '../src/lib/links.ts';
 
 import type { FindBrokenRelativeLinksArgs } from '../src/lib/links.ts';
 describe('findBrokenRelativeLinks', () => {
@@ -22,7 +22,7 @@ describe('findBrokenRelativeLinks', () => {
       content,
       repoRoot: root,
     };
-    const broken = findBrokenRelativeLinks(brokenArgs);
+    const broken = RepositoryMarkdownLinks.findBroken(brokenArgs);
     expect(broken).toEqual([
       {
         file: path.join('.cortex', 'demo.md'),

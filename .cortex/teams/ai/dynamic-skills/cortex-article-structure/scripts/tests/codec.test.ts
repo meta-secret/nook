@@ -1,11 +1,10 @@
 import { expect, test } from 'bun:test';
+
 import {
   CortexArticleRequestDecodeError,
-  decodeCortexArticleRequest,
-  decodeCortexArticleResult,
-  encodeCortexArticleRequest,
-  encodeCortexArticleResult,
+  CortexArticleTransport,
 } from '../src/codec.ts';
+
 import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
@@ -19,6 +18,25 @@ import {
   type CortexArticleSemanticBlock,
   type CortexArticleStructureResult,
 } from '../src/domain.ts';
+
+export class CortexArticleStructureCodecScenario {
+  private constructor(private readonly request: string) {}
+
+  static requestFailurePath(serializedRequest: string): string {
+    return new CortexArticleStructureCodecScenario(serializedRequest).execute();
+  }
+
+  private execute(): string {
+    const serializedRequest = this.request;
+    try {
+      CortexArticleTransport.decodeCortexArticleRequest(serializedRequest);
+    } catch (error) {
+      if (error instanceof CortexArticleRequestDecodeError) return error.path;
+      throw error;
+    }
+    throw new Error('Expected request decoding to fail.');
+  }
+}
 
 type RequestWithWrites = AuditCortexArticleStructureRequest & {
   readonly allowWrites: boolean;
@@ -63,22 +81,16 @@ const validResult: CortexArticleStructureResult = {
   ],
 };
 
-function requestFailurePath(serializedRequest: string): string {
-  try {
-    decodeCortexArticleRequest(serializedRequest);
-  } catch (error) {
-    if (error instanceof CortexArticleRequestDecodeError) return error.path;
-    throw error;
-  }
-  throw new Error('Expected request decoding to fail.');
-}
-
 test('round-trips exact semantic requests and findings', () => {
   expect(
-    decodeCortexArticleRequest(encodeCortexArticleRequest(validRequest)),
+    CortexArticleTransport.decodeCortexArticleRequest(
+      CortexArticleTransport.encodeCortexArticleRequest(validRequest),
+    ),
   ).toEqual(validRequest);
   expect(
-    decodeCortexArticleResult(encodeCortexArticleResult(validResult)),
+    CortexArticleTransport.decodeCortexArticleResult(
+      CortexArticleTransport.encodeCortexArticleResult(validResult),
+    ),
   ).toEqual(validResult);
 });
 
@@ -115,7 +127,9 @@ test('accepts active diagnostics for every finding code', () => {
       },
     ],
   };
-  expect(decodeCortexArticleResult(JSON.stringify(result))).toEqual(result);
+  expect(
+    CortexArticleTransport.decodeCortexArticleResult(JSON.stringify(result)),
+  ).toEqual(result);
 });
 
 test('rejects malformed envelopes and extra fields', () => {
@@ -123,10 +137,9 @@ test('rejects malformed envelopes and extra fields', () => {
     ...validRequest,
     allowWrites: true,
   };
-  const wrongKindRequest = encodeCortexArticleRequest(validRequest).replace(
-    CortexArticleContractKind.Request,
-    'wrong',
-  );
+  const wrongKindRequest = CortexArticleTransport.encodeCortexArticleRequest(
+    validRequest,
+  ).replace(CortexArticleContractKind.Request, 'wrong');
   const invalidRequests = [
     '{}',
     'null',
@@ -134,15 +147,21 @@ test('rejects malformed envelopes and extra fields', () => {
     wrongKindRequest,
   ];
   for (const serialized of invalidRequests) {
-    expect(() => decodeCortexArticleRequest(serialized)).toThrow();
+    expect(() =>
+      CortexArticleTransport.decodeCortexArticleRequest(serialized),
+    ).toThrow();
   }
-  expect(requestFailurePath(JSON.stringify(requestWithWrites))).toBe(
-    '["<unknown-key>"]',
-  );
+  expect(
+    CortexArticleStructureCodecScenario.requestFailurePath(
+      JSON.stringify(requestWithWrites),
+    ),
+  ).toBe('["<unknown-key>"]');
   const resultWithExtra: ResultWithExtra = { ...validResult, extra: true };
   const invalidResults = ['{}', 'null', JSON.stringify(resultWithExtra)];
   for (const serialized of invalidResults) {
-    expect(() => decodeCortexArticleResult(serialized)).toThrow();
+    expect(() =>
+      CortexArticleTransport.decodeCortexArticleResult(serialized),
+    ).toThrow();
   }
 });
 
@@ -163,7 +182,11 @@ test('accepts only canonical semantic block shapes', () => {
       blocks: [semanticBlock],
     };
     const request = { ...validRequest, documents: [document] };
-    expect(() => decodeCortexArticleRequest(JSON.stringify(request))).toThrow();
+    expect(() =>
+      CortexArticleTransport.decodeCortexArticleRequest(
+        JSON.stringify(request),
+      ),
+    ).toThrow();
   }
 });
 
@@ -173,11 +196,15 @@ test('rejects duplicate documents and nonmonotonic source lines', () => {
     documents: [validRequest.documents[0], validRequest.documents[0]],
   };
   expect(() =>
-    decodeCortexArticleRequest(JSON.stringify(duplicateRequest)),
+    CortexArticleTransport.decodeCortexArticleRequest(
+      JSON.stringify(duplicateRequest),
+    ),
   ).toThrow('Duplicate Cortex article document path');
-  expect(requestFailurePath(JSON.stringify(duplicateRequest))).toBe(
-    'documents[1].relativePath',
-  );
+  expect(
+    CortexArticleStructureCodecScenario.requestFailurePath(
+      JSON.stringify(duplicateRequest),
+    ),
+  ).toBe('documents[1].relativePath');
 
   const outOfOrderDocument = {
     ...validRequest.documents[0],
@@ -191,11 +218,15 @@ test('rejects duplicate documents and nonmonotonic source lines', () => {
     documents: [outOfOrderDocument],
   };
   expect(() =>
-    decodeCortexArticleRequest(JSON.stringify(outOfOrderRequest)),
+    CortexArticleTransport.decodeCortexArticleRequest(
+      JSON.stringify(outOfOrderRequest),
+    ),
   ).toThrow('Cortex article block lines must be strictly ordered');
-  expect(requestFailurePath(JSON.stringify(outOfOrderRequest))).toBe(
-    'documents[0].blocks[1].line',
-  );
+  expect(
+    CortexArticleStructureCodecScenario.requestFailurePath(
+      JSON.stringify(outOfOrderRequest),
+    ),
+  ).toBe('documents[0].blocks[1].line');
 });
 
 test('bounds heading diagnostic details', () => {
@@ -214,7 +245,9 @@ test('bounds heading diagnostic details', () => {
     documents: [boundaryDocument],
   };
   expect(() =>
-    decodeCortexArticleRequest(JSON.stringify(boundaryRequest)),
+    CortexArticleTransport.decodeCortexArticleRequest(
+      JSON.stringify(boundaryRequest),
+    ),
   ).not.toThrow();
 
   const overflowHeading = {
@@ -227,7 +260,9 @@ test('bounds heading diagnostic details', () => {
     documents: [overflowDocument],
   };
   expect(() =>
-    decodeCortexArticleRequest(JSON.stringify(overflowHeadingRequest)),
+    CortexArticleTransport.decodeCortexArticleRequest(
+      JSON.stringify(overflowHeadingRequest),
+    ),
   ).toThrow('Invalid Cortex article heading block');
 });
 
@@ -254,7 +289,9 @@ test('bounds paths, source lines, codes, and finding messages', () => {
       kind: CortexArticleContractKind.Result,
       findings: [finding],
     };
-    expect(() => decodeCortexArticleResult(JSON.stringify(result))).toThrow();
+    expect(() =>
+      CortexArticleTransport.decodeCortexArticleResult(JSON.stringify(result)),
+    ).toThrow();
   }
   const longPath = `.cortex/${'x'.repeat(CORTEX_ARTICLE_PATH_LIMIT)}.md`;
   const longPathDocument = {
@@ -266,7 +303,9 @@ test('bounds paths, source lines, codes, and finding messages', () => {
     documents: [longPathDocument],
   };
   expect(() =>
-    decodeCortexArticleRequest(JSON.stringify(longPathRequest)),
+    CortexArticleTransport.decodeCortexArticleRequest(
+      JSON.stringify(longPathRequest),
+    ),
   ).toThrow('Invalid Cortex article document');
 });
 
@@ -276,30 +315,32 @@ test('rejects control characters in request and result paths', () => {
     const relativePath = `.cortex/exam${control}ple.md`;
     const document = { ...validRequest.documents[0], relativePath };
     const request = { ...validRequest, documents: [document] };
-    expect(() => decodeCortexArticleRequest(JSON.stringify(request))).toThrow(
-      'Invalid Cortex article document',
-    );
+    expect(() =>
+      CortexArticleTransport.decodeCortexArticleRequest(
+        JSON.stringify(request),
+      ),
+    ).toThrow('Invalid Cortex article document');
 
     const finding = { ...validResult.findings[0], file: relativePath };
     const result = {
       kind: CortexArticleContractKind.Result,
       findings: [finding],
     };
-    expect(() => decodeCortexArticleResult(JSON.stringify(result))).toThrow(
-      'Invalid Cortex article finding',
-    );
+    expect(() =>
+      CortexArticleTransport.decodeCortexArticleResult(JSON.stringify(result)),
+    ).toThrow('Invalid Cortex article finding');
   }
 });
 
 test('enforces serialized request and result byte limits', () => {
   const oversizedRequest = 'x'.repeat(CORTEX_ARTICLE_REQUEST_BYTE_LIMIT + 1);
-  expect(() => decodeCortexArticleRequest(oversizedRequest)).toThrow(
-    'Cortex article request exceeds its byte bound',
-  );
+  expect(() =>
+    CortexArticleTransport.decodeCortexArticleRequest(oversizedRequest),
+  ).toThrow('Cortex article request exceeds its byte bound');
   const oversizedResult = 'x'.repeat(CORTEX_ARTICLE_RESULT_BYTE_LIMIT + 1);
-  expect(() => decodeCortexArticleResult(oversizedResult)).toThrow(
-    'Cortex article result exceeds its byte bound',
-  );
+  expect(() =>
+    CortexArticleTransport.decodeCortexArticleResult(oversizedResult),
+  ).toThrow('Cortex article result exceeds its byte bound');
 });
 
 test('rejects requests whose possible findings exceed result capacity', () => {
@@ -318,25 +359,29 @@ test('rejects requests whose possible findings exceed result capacity', () => {
     blocks,
   };
   const request = { ...validRequest, documents: [document] };
-  expect(() => decodeCortexArticleRequest(JSON.stringify(request))).toThrow(
-    'Cortex article request result budget exceeds its bound',
-  );
-  expect(requestFailurePath(JSON.stringify(request))).toBe(
-    'documents[0].blocks[9999]',
-  );
+  expect(() =>
+    CortexArticleTransport.decodeCortexArticleRequest(JSON.stringify(request)),
+  ).toThrow('Cortex article request result budget exceeds its bound');
+  expect(
+    CortexArticleStructureCodecScenario.requestFailurePath(
+      JSON.stringify(request),
+    ),
+  ).toBe('documents[0].blocks[9999]');
 });
 
 test('self-verifies an accepted request through decode, audit, and result decode', async () => {
   const { auditCortexArticleStructure } = await import('../src/audit.ts');
-  const decodedRequest = decodeCortexArticleRequest(
-    encodeCortexArticleRequest(validRequest),
+  const decodedRequest = CortexArticleTransport.decodeCortexArticleRequest(
+    CortexArticleTransport.encodeCortexArticleRequest(validRequest),
   );
   const findings = auditCortexArticleStructure(decodedRequest);
   const result: CortexArticleStructureResult = {
     kind: CortexArticleContractKind.Result,
     findings,
   };
-  expect(decodeCortexArticleResult(encodeCortexArticleResult(result))).toEqual(
-    result,
-  );
+  expect(
+    CortexArticleTransport.decodeCortexArticleResult(
+      CortexArticleTransport.encodeCortexArticleResult(result),
+    ),
+  ).toEqual(result);
 });

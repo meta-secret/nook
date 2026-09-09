@@ -1,3 +1,87 @@
+import { createHash } from 'node:crypto';
+
+import { readFileSync } from 'node:fs';
+
+import { posix, resolve } from 'node:path';
+
+import { SkillProviderShellEnvironmentScenario } from './skill-provider-shell-environment.ts';
+
+import type {
+  ShellParseState,
+  ShellWord,
+  WordEnvironmentRequest,
+} from './skill-provider-command-types.ts';
+
+export class SkillProviderSourcedSeamsScenario {
+  private constructor(private readonly request: AuditedSourceRequest) {}
+
+  static isAuditedSource(request: AuditedSourceRequest): boolean {
+    return new SkillProviderSourcedSeamsScenario(request).execute();
+  }
+
+  private execute(): boolean {
+    const request = this.request;
+    const specifier = request.source.replace(/^["']|["']$/gu, '');
+    return AUDITED_SOURCE_SEAMS.some(
+      (seam) =>
+        seam.sourcePath === request.sourcePath &&
+        (seam.specifier === specifier ||
+          seam.marker === specifier ||
+          seam.targetPath === specifier) &&
+        seam.targetPath === request.targetPath &&
+        SkillProviderSourcedSeamsScenario.seamDigestMatches(seam),
+    );
+  }
+
+  static assertAuditedSource([runtime, state, words]: readonly [
+    string,
+    ShellParseState,
+    readonly ShellWord[],
+  ]): void {
+    const executable = words[0];
+    if (runtime === '.' && !executable) return;
+    if (executable && words.length === 1) {
+      const wordRequest: WordEnvironmentRequest = {
+        environment: state.environment,
+        word: executable,
+      };
+      const target =
+        SkillProviderShellEnvironmentScenario.resolveWord(wordRequest);
+      const request: AuditedSourceRequest = {
+        source: executable.source,
+        sourcePath: state.sourcePath,
+        targetPath:
+          target.dynamic || state.cwdUnknown
+            ? false
+            : posix.normalize(posix.join(state.cwd, target.value)),
+      };
+      if (SkillProviderSourcedSeamsScenario.isAuditedSource(request)) return;
+    }
+    const [defaulted1 = 'missing'] = [executable?.source];
+    throw new Error(
+      `Unsupported sourced shell execution in ${state.sourcePath || 'inline'}: ${defaulted1}`,
+    );
+  }
+
+  static seamDigestMatches(seam: AuditedSourceSeam): boolean {
+    if (seam.digest === false || seam.targetPath === false) return true;
+    const source = readFileSync(
+      resolve(import.meta.dir, '../../..', seam.targetPath),
+    );
+    return createHash('sha256').update(source).digest('hex') === seam.digest;
+  }
+
+  static isAuditedRuntimeSource(request: AuditedRuntimeSourceRequest): boolean {
+    const expected = AUDITED_RUNTIME_SOURCES.get(request.path);
+    if (typeof expected !== 'string') return false;
+    const actual = new Bun.CryptoHasher('sha256')
+      .update(request.source)
+      .digest('hex');
+    if (actual !== expected)
+      throw new Error(`Audited runtime source has drifted: ${request.path}`);
+    return true;
+  }
+}
 export type AuditedSourceSeam = {
   readonly digest: string | false;
   readonly marker: string;
@@ -5,11 +89,13 @@ export type AuditedSourceSeam = {
   readonly specifier: string;
   readonly targetPath: string | false;
 };
+
 export type AuditedSourceRequest = {
   readonly source: string;
   readonly sourcePath: string | false;
   readonly targetPath: string | false;
 };
+
 export type AuditedRuntimeSourceRequest = {
   readonly path: string;
   readonly source: string;
@@ -92,13 +178,15 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
     'infra/tasks/kubernetes-tools.yml',
     'infra/tasks/k0s-worker-restore.yml',
     'infra/tasks/mesh.yml',
-  ].map((sourcePath): AuditedSourceSeam => ({
-    digest: false,
-    marker: '/etc/os-release',
-    sourcePath,
-    specifier: '/etc/os-release',
-    targetPath: '/etc/os-release',
-  })),
+  ].map(
+    (sourcePath): AuditedSourceSeam => ({
+      digest: false,
+      marker: '/etc/os-release',
+      sourcePath,
+      specifier: '/etc/os-release',
+      targetPath: '/etc/os-release',
+    }),
+  ),
   {
     digest: 'd0414467deac76fd3d5ba4b36a2de6ee4813f7a99bbb6db83b4ef58d3a0cb0bd',
     marker: '$HIVE_TASK_DIR/prepare-sccache-context.sh',
@@ -143,75 +231,3 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
       'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.sh',
   },
 ];
-
-export function isAuditedSource(request: AuditedSourceRequest): boolean {
-  const specifier = request.source.replace(/^["']|["']$/gu, '');
-  return AUDITED_SOURCE_SEAMS.some(
-    (seam) =>
-      seam.sourcePath === request.sourcePath &&
-      (seam.specifier === specifier ||
-        seam.marker === specifier ||
-        seam.targetPath === specifier) &&
-      seam.targetPath === request.targetPath &&
-      seamDigestMatches(seam),
-  );
-}
-
-export function assertAuditedSource([runtime, state, words]: readonly [
-  string,
-  ShellParseState,
-  readonly ShellWord[],
-]): void {
-  const executable = words[0];
-  if (runtime === '.' && !executable) return;
-  if (executable && words.length === 1) {
-    const wordRequest: WordEnvironmentRequest = {
-      environment: state.environment,
-      word: executable,
-    };
-    const target = resolveWord(wordRequest);
-    const request: AuditedSourceRequest = {
-      source: executable.source,
-      sourcePath: state.sourcePath,
-      targetPath:
-        target.dynamic || state.cwdUnknown
-          ? false
-          : posix.normalize(posix.join(state.cwd, target.value)),
-    };
-    if (isAuditedSource(request)) return;
-  }
-  const [defaulted1 = 'missing'] = [executable?.source];
-  throw new Error(
-    `Unsupported sourced shell execution in ${state.sourcePath || 'inline'}: ${defaulted1}`,
-  );
-}
-
-function seamDigestMatches(seam: AuditedSourceSeam): boolean {
-  if (seam.digest === false || seam.targetPath === false) return true;
-  const source = readFileSync(
-    resolve(import.meta.dir, '../../..', seam.targetPath),
-  );
-  return createHash('sha256').update(source).digest('hex') === seam.digest;
-}
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { posix, resolve } from 'node:path';
-import { resolveWord } from './skill-provider-shell-environment.ts';
-import type {
-  ShellParseState,
-  ShellWord,
-  WordEnvironmentRequest,
-} from './skill-provider-command-types.ts';
-
-export function isAuditedRuntimeSource(
-  request: AuditedRuntimeSourceRequest,
-): boolean {
-  const expected = AUDITED_RUNTIME_SOURCES.get(request.path);
-  if (typeof expected !== 'string') return false;
-  const actual = new Bun.CryptoHasher('sha256')
-    .update(request.source)
-    .digest('hex');
-  if (actual !== expected)
-    throw new Error(`Audited runtime source has drifted: ${request.path}`);
-  return true;
-}

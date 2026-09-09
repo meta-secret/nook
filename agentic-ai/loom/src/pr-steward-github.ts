@@ -1,10 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
-  asUntrustedYamlNode,
-  isRecord,
-  untrustedYamlProperty,
   UntrustedYamlPropertyPresence,
+  UntrustedYamlBoundary,
 } from './lib/guards.ts';
 import {
   PR_STEWARD_REPOSITORY,
@@ -136,24 +134,33 @@ export class PrStewardGithubPrReader implements PrStewardAssignedPrReader {
       });
     let parsed: UntrustedYamlNode;
     try {
-      parsed = asUntrustedYamlNode(
+      parsed = UntrustedYamlBoundary.fromHost(
         JSON.parse(result.stdout) as UntrustedYamlNode,
       );
     } catch {
       throw new PrStewardGithubUnavailableError({ cause: false });
     }
-    if (!isRecord(parsed))
+    if (!UntrustedYamlBoundary.isRecord(parsed))
       throw new PrStewardGithubUnavailableError({ cause: false });
-    const head = untrustedYamlProperty({ record: parsed, key: 'head' });
-    const html = untrustedYamlProperty({ record: parsed, key: 'html_url' });
+    const head = UntrustedYamlBoundary.property({
+      record: parsed,
+      key: 'head',
+    });
+    const html = UntrustedYamlBoundary.property({
+      record: parsed,
+      key: 'html_url',
+    });
     if (
       head.presence !== UntrustedYamlPropertyPresence.Present ||
-      !isRecord(head.value) ||
+      !UntrustedYamlBoundary.isRecord(head.value) ||
       html.presence !== UntrustedYamlPropertyPresence.Present ||
       typeof html.value !== 'string'
     )
       throw new PrStewardGithubUnavailableError({ cause: false });
-    const sha = untrustedYamlProperty({ record: head.value, key: 'sha' });
+    const sha = UntrustedYamlBoundary.property({
+      record: head.value,
+      key: 'sha',
+    });
     const expected = `https://github.com/${PR_STEWARD_REPOSITORY}/pull/${request.pullRequest}`;
     const url = PrStewardNdjsonCodec.githubUrl(html.value);
     if (

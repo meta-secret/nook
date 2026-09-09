@@ -1,5 +1,7 @@
 import { posix } from 'node:path';
-import { workflowCommandSources } from './skill-provider-workflow-commands.ts';
+
+import { SkillProviderWorkflowCommandsScenario } from './skill-provider-workflow-commands.ts';
+
 import type {
   CommandCollectionRequest,
   ConfigurationNode,
@@ -8,337 +10,415 @@ import type {
   TaskTemplateRequest,
 } from './skill-provider-command-types.ts';
 
+export class SkillProviderConfigCommandsScenario {
+  private constructor(private readonly request: RunnableCommandInspection) {}
+
+  static runnableCommandSources(
+    inspection: RunnableCommandInspection,
+  ): readonly string[] {
+    return new SkillProviderConfigCommandsScenario(inspection).execute();
+  }
+
+  private execute(): readonly string[] {
+    const inspection = this.request;
+    SkillProviderConfigCommandsScenario.assertRunnableConfigurationBytes(
+      inspection.source,
+    );
+    if (inspection.path.endsWith('bunfig.toml')) {
+      let document: Readonly<Record<string, ConfigurationNode>>;
+      try {
+        document = Bun.TOML.parse(inspection.source) as Readonly<
+          Record<string, ConfigurationNode>
+        >;
+      } catch {
+        throw new Error('Bun configuration is invalid.');
+      }
+      if (Object.hasOwn(document, 'preload'))
+        throw new Error('Bun preload configuration is forbidden.');
+      return [];
+    }
+    if (inspection.path.endsWith('package.json')) {
+      const document = JSON.parse(inspection.source) as {
+        readonly scripts?: Readonly<Record<string, string>>;
+      };
+      return SkillProviderConfigCommandsScenario.bounded(
+        document.scripts ? Object.values(document.scripts) : [],
+      );
+    }
+    if (/\.sh$/u.test(inspection.path) || posix.extname(inspection.path) === '')
+      return [inspection.source.replace(/^#![^\n]*(?:\n|$)/u, '')];
+    if (!/\.ya?ml$/u.test(inspection.path)) return [];
+    const document = Bun.YAML.parse(inspection.source) as ConfigurationNode;
+    if (/^\.github\/workflows\//u.test(inspection.path)) {
+      const request = { action: false, document };
+      return SkillProviderConfigCommandsScenario.bounded(
+        SkillProviderWorkflowCommandsScenario.workflowCommandSources(request),
+      );
+    }
+    if (/(^|\/)action\.ya?ml$/u.test(inspection.path)) {
+      const request = { action: true, document };
+      return SkillProviderConfigCommandsScenario.bounded(
+        SkillProviderWorkflowCommandsScenario.workflowCommandSources(request),
+      );
+    }
+    const request: TaskCommandRequest = {
+      document,
+      taskfilePath: inspection.path,
+    };
+    return SkillProviderConfigCommandsScenario.bounded(
+      SkillProviderConfigCommandsScenario.taskCommands(request),
+    );
+  }
+
+  static taskIncludeSpecifiers(source: string): readonly string[] {
+    SkillProviderConfigCommandsScenario.assertRunnableConfigurationBytes(
+      source,
+    );
+    const document = Bun.YAML.parse(source) as ConfigurationNode;
+    const [includeNode = false] = [
+      SkillProviderConfigCommandsScenario.mapping(document).includes,
+    ];
+    const includes = SkillProviderConfigCommandsScenario.mapping(includeNode);
+    return SkillProviderConfigCommandsScenario.bounded(
+      Object.values(includes).flatMap((value) => {
+        if (typeof value === 'string') return [value];
+        const taskfile =
+          SkillProviderConfigCommandsScenario.mapping(value).taskfile;
+        return typeof taskfile === 'string' ? [taskfile] : [];
+      }),
+    );
+  }
+
+  static assertRunnableConfigurationBytes(source: string): void {
+    if (new TextEncoder().encode(source).byteLength > MAX_CONFIG_BYTES)
+      throw new Error('Runnable configuration exceeds its UTF-8 byte bound.');
+  }
+
+  static bounded(commands: readonly string[]): readonly string[] {
+    if (commands.length > MAX_COMMANDS)
+      throw new Error(
+        'Runnable configuration command count exceeds its bound.',
+      );
+    let bytes = 0;
+    for (const command of commands) {
+      bytes += new TextEncoder().encode(command).byteLength;
+      if (bytes > MAX_COMMAND_BYTES)
+        throw new Error(
+          'Runnable configuration command bytes exceed their bound.',
+        );
+    }
+    return commands;
+  }
+
+  static taskCommands(request: TaskCommandRequest): readonly string[] {
+    const root = SkillProviderConfigCommandsScenario.mapping(request.document);
+    if ('dotenv' in root)
+      throw new Error('Task dotenv configuration is forbidden.');
+    const commands: string[] = [];
+    const rootShellRequest: ShellVariableCollectionRequest = {
+      node: root,
+      target: commands,
+    };
+    SkillProviderConfigCommandsScenario.collectShellVariables(rootShellRequest);
+    const rootVariableRequest: ResolvedTaskVariableRequest = {
+      root,
+      task: {},
+      taskfileDirectory: posix.dirname(request.taskfilePath),
+    };
+    const rootValues =
+      SkillProviderConfigCommandsScenario.taskStaticVariables(
+        rootVariableRequest,
+      );
+    for (const [index, source] of commands.entries()) {
+      const templateRequest: TaskTemplateRequest = {
+        source,
+        values: rootValues,
+      };
+      const shellRequest: TaskShellVariableRequest = {
+        source:
+          SkillProviderConfigCommandsScenario.resolveTaskTemplate(
+            templateRequest,
+          ),
+        values: rootValues,
+      };
+      commands[index] =
+        SkillProviderConfigCommandsScenario.resolveTaskShellVariables(
+          shellRequest,
+        );
+    }
+    const [tasks = false] = [root.tasks];
+    for (const task of Object.values(
+      SkillProviderConfigCommandsScenario.mapping(tasks),
+    )) {
+      const node = SkillProviderConfigCommandsScenario.mapping(task);
+      if ('dotenv' in node)
+        throw new Error('Task dotenv configuration is forbidden.');
+      const start = commands.length;
+      const shellVariableRequest: ShellVariableCollectionRequest = {
+        node,
+        target: commands,
+      };
+      SkillProviderConfigCommandsScenario.collectShellVariables(
+        shellVariableRequest,
+      );
+      for (const value of [node.cmds, node.status]) {
+        const [commandList = false] = [value];
+        const commandRequest: CommandCollectionRequest = {
+          value: commandList,
+          target: commands,
+        };
+        SkillProviderConfigCommandsScenario.collectCommandList(commandRequest);
+      }
+      const [dependencies = false] = [node.deps];
+      const dependencyRequest: CommandCollectionRequest = {
+        value: dependencies,
+        target: commands,
+      };
+      SkillProviderConfigCommandsScenario.collectTaskDependencies(
+        dependencyRequest,
+      );
+      const [preconditions = false] = [node.preconditions];
+      const shellRequest: CommandCollectionRequest = {
+        value: preconditions,
+        target: commands,
+      };
+      SkillProviderConfigCommandsScenario.collectTaskShellList(shellRequest);
+      const [taskVariables = false] = [node.vars];
+      for (const value of Object.values(
+        SkillProviderConfigCommandsScenario.mapping(taskVariables),
+      )) {
+        const shell = SkillProviderConfigCommandsScenario.mapping(value).sh;
+        if (typeof shell === 'string') commands.push(shell);
+      }
+      const variableRequest: ResolvedTaskVariableRequest = {
+        root,
+        task: node,
+        taskfileDirectory: posix.dirname(request.taskfilePath),
+      };
+      const values =
+        SkillProviderConfigCommandsScenario.taskStaticVariables(
+          variableRequest,
+        );
+      const directoryRequest: TaskTemplateRequest = {
+        source: typeof node.dir === 'string' ? node.dir : '',
+        values,
+      };
+      const directory =
+        SkillProviderConfigCommandsScenario.resolveTaskTemplate(
+          directoryRequest,
+        );
+      const environmentRequest: TaskEnvironmentRequest = { root, task: node };
+      const environment =
+        SkillProviderConfigCommandsScenario.taskEnvironment(environmentRequest);
+      for (const [index, source] of commands.entries()) {
+        if (index < start) continue;
+        const templateRequest: TaskTemplateRequest = {
+          source,
+          values,
+        };
+        const shellVariableRequest: TaskShellVariableRequest = {
+          source:
+            SkillProviderConfigCommandsScenario.resolveTaskTemplate(
+              templateRequest,
+            ),
+          values,
+        };
+        const command =
+          SkillProviderConfigCommandsScenario.resolveTaskShellVariables(
+            shellVariableRequest,
+          );
+        const located = directory ? `cd "${directory}" && ${command}` : command;
+        commands[index] = environment ? `${environment} ${located}` : located;
+      }
+    }
+    return commands;
+  }
+
+  static collectShellVariables(request: ShellVariableCollectionRequest): void {
+    for (const field of ['vars', 'env'] as const) {
+      const [entries = false] = [request.node[field]];
+      for (const value of Object.values(
+        SkillProviderConfigCommandsScenario.mapping(entries),
+      )) {
+        const shell = SkillProviderConfigCommandsScenario.mapping(value).sh;
+        if (typeof shell === 'string') request.target.push(shell);
+      }
+    }
+  }
+
+  static taskEnvironment(request: TaskEnvironmentRequest): string {
+    const values = new Map<string, string>();
+    const [rootEnvironment = false] = [request.root.env];
+    const [taskEnvironment = false] = [request.task.env];
+    for (const environment of [
+      SkillProviderConfigCommandsScenario.mapping(rootEnvironment),
+      SkillProviderConfigCommandsScenario.mapping(taskEnvironment),
+    ])
+      for (const [name, value] of Object.entries(environment))
+        if (/^[A-Za-z_]\w*$/u.test(name) && typeof value === 'string')
+          values.set(name, value);
+    return [...values]
+      .map(([name, value]) => `${name}='${value.replaceAll("'", "'\\''")}'`)
+      .join(' ');
+  }
+
+  static taskStaticVariables(
+    request: ResolvedTaskVariableRequest,
+  ): ReadonlyMap<string, string> {
+    const values = new Map<string, string>([
+      ['APP_ROOT', 'nook-app'],
+      ['DOCKER', 'docker'],
+      ['DOCKER_MKCERT_IMAGE', 'nook-mkcert:local'],
+      ['EXTENSION_ROOT', 'nook-app/nook-web/nook-web-extension'],
+      ['PLATFORM_ROOT', 'nook-app/nook-platform'],
+      ['REPO_ROOT', '.'],
+      ['RESEARCH_ROOT', 'nook-app/nook-web/nook-web-research'],
+      ['ROOT_DIR', '.'],
+      ['TASKFILE_DIR', request.taskfileDirectory],
+      ['WEB_GROUP_ROOT', 'nook-app/nook-web'],
+      ['WEB_ROOT', 'nook-app/nook-web/nook-web-app'],
+      ['WEB_SHARED_ROOT', 'nook-app/nook-web/nook-web-shared'],
+    ]);
+    const [rootVariables = false] = [request.root.vars];
+    const [taskVariables = false] = [request.task.vars];
+    for (const variables of [
+      SkillProviderConfigCommandsScenario.mapping(rootVariables),
+      SkillProviderConfigCommandsScenario.mapping(taskVariables),
+    ])
+      for (const [name, value] of Object.entries(variables)) {
+        if (typeof value === 'string') values.set(name, value);
+        const shell = SkillProviderConfigCommandsScenario.mapping(value).sh;
+        if (typeof shell !== 'string') continue;
+        const suffix = /^cd "\{\{\.TASKFILE_DIR\}\}([^"]*)" && pwd$/u.exec(
+          shell,
+        )?.[1];
+        if (typeof suffix === 'string')
+          values.set(
+            name,
+            posix.normalize(`${request.taskfileDirectory}${suffix}`),
+          );
+      }
+    for (let step = 0; step < 8; step += 1)
+      for (const [name, value] of values) {
+        const templateRequest: TaskTemplateRequest = { source: value, values };
+        values.set(
+          name,
+          SkillProviderConfigCommandsScenario.resolveTaskTemplate(
+            templateRequest,
+          ),
+        );
+      }
+    return values;
+  }
+
+  static resolveTaskTemplate(request: TaskTemplateRequest): string {
+    return request.source
+      .replace(/\{\{default "([^"]*)" \.([A-Za-z_]\w*)\}\}/gu, (template) => {
+        const match = /^\{\{default "([^"]*)" \.([A-Za-z_]\w*)\}\}$/u.exec(
+          template,
+        );
+        const [fallback = ''] = [match?.[1]];
+        const [name = ''] = [match?.[2]];
+        const value = request.values.get(name);
+        return value && !value.includes('{{') ? value : fallback;
+      })
+      .replace(/\{\{\.([A-Za-z_]\w*)\}\}/gu, (template) => {
+        const [name = ''] = [/^\{\{\.([A-Za-z_]\w*)\}\}$/u.exec(template)?.[1]];
+        const [defaulted13 = template] = [request.values.get(name)];
+        return defaulted13;
+      });
+  }
+
+  static resolveTaskShellVariables(request: TaskShellVariableRequest): string {
+    let resolved = request.source;
+    for (const [name, value] of request.values) {
+      if (value.includes('{{')) continue;
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+      resolved = resolved
+        .replace(new RegExp(`\\$${escaped}(?![A-Za-z0-9_])`, 'gu'), value)
+        .replaceAll(`\${${name}}`, value);
+    }
+    return resolved;
+  }
+
+  static collectCommandList(request: CommandCollectionRequest): void {
+    if (!Array.isArray(request.value)) return;
+    for (const entry of request.value) {
+      if (typeof entry === 'string') request.target.push(entry);
+      else {
+        const command = SkillProviderConfigCommandsScenario.mapping(entry);
+        for (const field of ['cmd', 'sh'] as const)
+          if (typeof command[field] === 'string')
+            request.target.push(command[field]);
+        if (typeof command.task === 'string')
+          request.target.push(`task ${command.task}`);
+        if (typeof command.defer === 'string')
+          request.target.push(command.defer);
+      }
+    }
+  }
+
+  static collectTaskDependencies(request: CommandCollectionRequest): void {
+    if (!Array.isArray(request.value)) return;
+    for (const entry of request.value) {
+      if (typeof entry === 'string') request.target.push(`task ${entry}`);
+      else if (
+        typeof SkillProviderConfigCommandsScenario.mapping(entry).task ===
+        'string'
+      )
+        request.target.push(
+          `task ${String(SkillProviderConfigCommandsScenario.mapping(entry).task)}`,
+        );
+    }
+  }
+
+  static collectTaskShellList(request: CommandCollectionRequest): void {
+    if (!Array.isArray(request.value)) return;
+    for (const entry of request.value) {
+      if (typeof entry === 'string') {
+        request.target.push(entry);
+        continue;
+      }
+      const shell = SkillProviderConfigCommandsScenario.mapping(entry).sh;
+      if (typeof shell === 'string') request.target.push(shell);
+    }
+  }
+
+  static mapping(
+    value: ConfigurationNode,
+  ): Readonly<Record<string, ConfigurationNode>> {
+    return value instanceof Object && !Array.isArray(value)
+      ? (value as Readonly<Record<string, ConfigurationNode>>)
+      : {};
+  }
+}
+
 const MAX_CONFIG_BYTES = 65_536;
+
 const MAX_COMMANDS = 4_096;
+
 const MAX_COMMAND_BYTES = 262_144;
 
 type ShellVariableCollectionRequest = {
   readonly node: Readonly<Record<string, ConfigurationNode>>;
   readonly target: string[];
 };
+
 type TaskEnvironmentRequest = {
   readonly root: Readonly<Record<string, ConfigurationNode>>;
   readonly task: Readonly<Record<string, ConfigurationNode>>;
 };
+
 type ResolvedTaskVariableRequest = TaskStaticVariableRequest & {
   readonly taskfileDirectory: string;
 };
+
 type TaskCommandRequest = {
   readonly document: ConfigurationNode;
   readonly taskfilePath: string;
 };
+
 type TaskShellVariableRequest = {
   readonly source: string;
   readonly values: ReadonlyMap<string, string>;
 };
-
-export function runnableCommandSources(
-  inspection: RunnableCommandInspection,
-): readonly string[] {
-  assertRunnableConfigurationBytes(inspection.source);
-  if (inspection.path.endsWith('bunfig.toml')) {
-    let document: Readonly<Record<string, ConfigurationNode>>;
-    try {
-      document = Bun.TOML.parse(inspection.source) as Readonly<
-        Record<string, ConfigurationNode>
-      >;
-    } catch {
-      throw new Error('Bun configuration is invalid.');
-    }
-    if (Object.hasOwn(document, 'preload'))
-      throw new Error('Bun preload configuration is forbidden.');
-    return [];
-  }
-  if (inspection.path.endsWith('package.json')) {
-    const document = JSON.parse(inspection.source) as {
-      readonly scripts?: Readonly<Record<string, string>>;
-    };
-    return bounded(document.scripts ? Object.values(document.scripts) : []);
-  }
-  if (/\.sh$/u.test(inspection.path) || posix.extname(inspection.path) === '')
-    return [inspection.source.replace(/^#![^\n]*(?:\n|$)/u, '')];
-  if (!/\.ya?ml$/u.test(inspection.path)) return [];
-  const document = Bun.YAML.parse(inspection.source) as ConfigurationNode;
-  if (/^\.github\/workflows\//u.test(inspection.path)) {
-    const request = { action: false, document };
-    return bounded(workflowCommandSources(request));
-  }
-  if (/(^|\/)action\.ya?ml$/u.test(inspection.path)) {
-    const request = { action: true, document };
-    return bounded(workflowCommandSources(request));
-  }
-  const request: TaskCommandRequest = {
-    document,
-    taskfilePath: inspection.path,
-  };
-  return bounded(taskCommands(request));
-}
-
-export function taskIncludeSpecifiers(source: string): readonly string[] {
-  assertRunnableConfigurationBytes(source);
-  const document = Bun.YAML.parse(source) as ConfigurationNode;
-  const [includeNode = false] = [mapping(document).includes];
-  const includes = mapping(includeNode);
-  return bounded(
-    Object.values(includes).flatMap((value) => {
-      if (typeof value === 'string') return [value];
-      const taskfile = mapping(value).taskfile;
-      return typeof taskfile === 'string' ? [taskfile] : [];
-    }),
-  );
-}
-
-export function assertRunnableConfigurationBytes(source: string): void {
-  if (new TextEncoder().encode(source).byteLength > MAX_CONFIG_BYTES)
-    throw new Error('Runnable configuration exceeds its UTF-8 byte bound.');
-}
-
-function bounded(commands: readonly string[]): readonly string[] {
-  if (commands.length > MAX_COMMANDS)
-    throw new Error('Runnable configuration command count exceeds its bound.');
-  let bytes = 0;
-  for (const command of commands) {
-    bytes += new TextEncoder().encode(command).byteLength;
-    if (bytes > MAX_COMMAND_BYTES)
-      throw new Error(
-        'Runnable configuration command bytes exceed their bound.',
-      );
-  }
-  return commands;
-}
-
-function taskCommands(request: TaskCommandRequest): readonly string[] {
-  const root = mapping(request.document);
-  if ('dotenv' in root)
-    throw new Error('Task dotenv configuration is forbidden.');
-  const commands: string[] = [];
-  const rootShellRequest: ShellVariableCollectionRequest = {
-    node: root,
-    target: commands,
-  };
-  collectShellVariables(rootShellRequest);
-  const rootVariableRequest: ResolvedTaskVariableRequest = {
-    root,
-    task: {},
-    taskfileDirectory: posix.dirname(request.taskfilePath),
-  };
-  const rootValues = taskStaticVariables(rootVariableRequest);
-  for (const [index, source] of commands.entries()) {
-    const templateRequest: TaskTemplateRequest = {
-      source,
-      values: rootValues,
-    };
-    const shellRequest: TaskShellVariableRequest = {
-      source: resolveTaskTemplate(templateRequest),
-      values: rootValues,
-    };
-    commands[index] = resolveTaskShellVariables(shellRequest);
-  }
-  const [tasks = false] = [root.tasks];
-  for (const task of Object.values(mapping(tasks))) {
-    const node = mapping(task);
-    if ('dotenv' in node)
-      throw new Error('Task dotenv configuration is forbidden.');
-    const start = commands.length;
-    const shellVariableRequest: ShellVariableCollectionRequest = {
-      node,
-      target: commands,
-    };
-    collectShellVariables(shellVariableRequest);
-    for (const value of [node.cmds, node.status]) {
-      const [commandList = false] = [value];
-      const commandRequest: CommandCollectionRequest = {
-        value: commandList,
-        target: commands,
-      };
-      collectCommandList(commandRequest);
-    }
-    const [dependencies = false] = [node.deps];
-    const dependencyRequest: CommandCollectionRequest = {
-      value: dependencies,
-      target: commands,
-    };
-    collectTaskDependencies(dependencyRequest);
-    const [preconditions = false] = [node.preconditions];
-    const shellRequest: CommandCollectionRequest = {
-      value: preconditions,
-      target: commands,
-    };
-    collectTaskShellList(shellRequest);
-    const [taskVariables = false] = [node.vars];
-    for (const value of Object.values(mapping(taskVariables))) {
-      const shell = mapping(value).sh;
-      if (typeof shell === 'string') commands.push(shell);
-    }
-    const variableRequest: ResolvedTaskVariableRequest = {
-      root,
-      task: node,
-      taskfileDirectory: posix.dirname(request.taskfilePath),
-    };
-    const values = taskStaticVariables(variableRequest);
-    const directoryRequest: TaskTemplateRequest = {
-      source: typeof node.dir === 'string' ? node.dir : '',
-      values,
-    };
-    const directory = resolveTaskTemplate(directoryRequest);
-    const environmentRequest: TaskEnvironmentRequest = { root, task: node };
-    const environment = taskEnvironment(environmentRequest);
-    for (const [index, source] of commands.entries()) {
-      if (index < start) continue;
-      const templateRequest: TaskTemplateRequest = {
-        source,
-        values,
-      };
-      const shellVariableRequest: TaskShellVariableRequest = {
-        source: resolveTaskTemplate(templateRequest),
-        values,
-      };
-      const command = resolveTaskShellVariables(shellVariableRequest);
-      const located = directory ? `cd "${directory}" && ${command}` : command;
-      commands[index] = environment ? `${environment} ${located}` : located;
-    }
-  }
-  return commands;
-}
-
-function collectShellVariables(request: ShellVariableCollectionRequest): void {
-  for (const field of ['vars', 'env'] as const) {
-    const [entries = false] = [request.node[field]];
-    for (const value of Object.values(mapping(entries))) {
-      const shell = mapping(value).sh;
-      if (typeof shell === 'string') request.target.push(shell);
-    }
-  }
-}
-
-function taskEnvironment(request: TaskEnvironmentRequest): string {
-  const values = new Map<string, string>();
-  const [rootEnvironment = false] = [request.root.env];
-  const [taskEnvironment = false] = [request.task.env];
-  for (const environment of [
-    mapping(rootEnvironment),
-    mapping(taskEnvironment),
-  ])
-    for (const [name, value] of Object.entries(environment))
-      if (/^[A-Za-z_]\w*$/u.test(name) && typeof value === 'string')
-        values.set(name, value);
-  return [...values]
-    .map(([name, value]) => `${name}='${value.replaceAll("'", "'\\''")}'`)
-    .join(' ');
-}
-
-function taskStaticVariables(
-  request: ResolvedTaskVariableRequest,
-): ReadonlyMap<string, string> {
-  const values = new Map<string, string>([
-    ['APP_ROOT', 'nook-app'],
-    ['DOCKER', 'docker'],
-    ['DOCKER_MKCERT_IMAGE', 'nook-mkcert:local'],
-    ['EXTENSION_ROOT', 'nook-app/nook-web/nook-web-extension'],
-    ['PLATFORM_ROOT', 'nook-app/nook-platform'],
-    ['REPO_ROOT', '.'],
-    ['RESEARCH_ROOT', 'nook-app/nook-web/nook-web-research'],
-    ['ROOT_DIR', '.'],
-    ['TASKFILE_DIR', request.taskfileDirectory],
-    ['WEB_GROUP_ROOT', 'nook-app/nook-web'],
-    ['WEB_ROOT', 'nook-app/nook-web/nook-web-app'],
-    ['WEB_SHARED_ROOT', 'nook-app/nook-web/nook-web-shared'],
-  ]);
-  const [rootVariables = false] = [request.root.vars];
-  const [taskVariables = false] = [request.task.vars];
-  for (const variables of [mapping(rootVariables), mapping(taskVariables)])
-    for (const [name, value] of Object.entries(variables)) {
-      if (typeof value === 'string') values.set(name, value);
-      const shell = mapping(value).sh;
-      if (typeof shell !== 'string') continue;
-      const suffix = /^cd "\{\{\.TASKFILE_DIR\}\}([^"]*)" && pwd$/u.exec(
-        shell,
-      )?.[1];
-      if (typeof suffix === 'string')
-        values.set(
-          name,
-          posix.normalize(`${request.taskfileDirectory}${suffix}`),
-        );
-    }
-  for (let step = 0; step < 8; step += 1)
-    for (const [name, value] of values) {
-      const templateRequest: TaskTemplateRequest = { source: value, values };
-      values.set(name, resolveTaskTemplate(templateRequest));
-    }
-  return values;
-}
-
-function resolveTaskTemplate(request: TaskTemplateRequest): string {
-  return request.source
-    .replace(/\{\{default "([^"]*)" \.([A-Za-z_]\w*)\}\}/gu, (template) => {
-      const match = /^\{\{default "([^"]*)" \.([A-Za-z_]\w*)\}\}$/u.exec(
-        template,
-      );
-      const [fallback = ''] = [match?.[1]];
-      const [name = ''] = [match?.[2]];
-      const value = request.values.get(name);
-      return value && !value.includes('{{') ? value : fallback;
-    })
-    .replace(/\{\{\.([A-Za-z_]\w*)\}\}/gu, (template) => {
-      const [name = ''] = [/^\{\{\.([A-Za-z_]\w*)\}\}$/u.exec(template)?.[1]];
-      const [defaulted13 = template] = [request.values.get(name)];
-      return defaulted13;
-    });
-}
-
-function resolveTaskShellVariables(request: TaskShellVariableRequest): string {
-  let resolved = request.source;
-  for (const [name, value] of request.values) {
-    if (value.includes('{{')) continue;
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-    resolved = resolved
-      .replace(new RegExp(`\\$${escaped}(?![A-Za-z0-9_])`, 'gu'), value)
-      .replaceAll(`\${${name}}`, value);
-  }
-  return resolved;
-}
-
-function collectCommandList(request: CommandCollectionRequest): void {
-  if (!Array.isArray(request.value)) return;
-  for (const entry of request.value) {
-    if (typeof entry === 'string') request.target.push(entry);
-    else {
-      const command = mapping(entry);
-      for (const field of ['cmd', 'sh'] as const)
-        if (typeof command[field] === 'string')
-          request.target.push(command[field]);
-      if (typeof command.task === 'string')
-        request.target.push(`task ${command.task}`);
-      if (typeof command.defer === 'string') request.target.push(command.defer);
-    }
-  }
-}
-
-function collectTaskDependencies(request: CommandCollectionRequest): void {
-  if (!Array.isArray(request.value)) return;
-  for (const entry of request.value) {
-    if (typeof entry === 'string') request.target.push(`task ${entry}`);
-    else if (typeof mapping(entry).task === 'string')
-      request.target.push(`task ${String(mapping(entry).task)}`);
-  }
-}
-
-function collectTaskShellList(request: CommandCollectionRequest): void {
-  if (!Array.isArray(request.value)) return;
-  for (const entry of request.value) {
-    if (typeof entry === 'string') {
-      request.target.push(entry);
-      continue;
-    }
-    const shell = mapping(entry).sh;
-    if (typeof shell === 'string') request.target.push(shell);
-  }
-}
-
-function mapping(
-  value: ConfigurationNode,
-): Readonly<Record<string, ConfigurationNode>> {
-  return value instanceof Object && !Array.isArray(value)
-    ? (value as Readonly<Record<string, ConfigurationNode>>)
-    : {};
-}

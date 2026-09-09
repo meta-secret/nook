@@ -1,41 +1,51 @@
 import { existsSync } from 'node:fs';
-import path from 'node:path';
-import { LoomFailureCode, loomFailure } from '../loom-failure.ts';
 
-export function findRepoRoot(startDir: string = process.cwd()): string {
-  let current = path.resolve(startDir);
-  for (;;) {
-    if (existsSync(path.join(current, '.cortex', 'AGENTS.md'))) {
-      return current;
+import path from 'node:path';
+
+import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
+
+export class RepositoryRoot {
+  private constructor(private readonly directory: string) {}
+  static find(startDir: string = process.cwd()): string {
+    return new RepositoryRoot(startDir).locate();
+  }
+  private locate(): string {
+    const startDir = this.directory;
+    let current = path.resolve(startDir);
+    for (;;) {
+      if (existsSync(path.join(current, '.cortex', 'AGENTS.md'))) {
+        return current;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) {
+        LoomFailure.raise(LoomFailureCode.RepoRootNotFound);
+      }
+      current = parent;
     }
-    const parent = path.dirname(current);
-    if (parent === current) {
-      loomFailure(LoomFailureCode.RepoRootNotFound);
+  }
+  static resolveRequestPath(args: ResolveRequestPathArgs): string {
+    const requestPath = args.requestPath;
+    const startDir = 'startDir' in args ? args.startDir : process.cwd();
+
+    if (path.isAbsolute(requestPath)) {
+      return requestPath;
     }
-    current = parent;
+    const root = RepositoryRoot.find(startDir);
+    return path.resolve(root, requestPath);
   }
 }
 
-/** Resolve request YAML paths against the repository root (Task CONFIG convention). */
+export class BunExecutable {
+  private constructor(readonly path: string) {}
+  static require(): string {
+    const bunPath = Bun.which('bun');
+    if (typeof bunPath !== 'string' || bunPath.length === 0) {
+      LoomFailure.raise(LoomFailureCode.BunNotFound);
+    }
+    return new BunExecutable(bunPath).path;
+  }
+}
+
 export type ResolveRequestPathArgs =
   | { readonly requestPath: string }
   | { readonly requestPath: string; readonly startDir: string };
-
-export function resolveRequestPath(args: ResolveRequestPathArgs): string {
-  const requestPath = args.requestPath;
-  const startDir = 'startDir' in args ? args.startDir : process.cwd();
-
-  if (path.isAbsolute(requestPath)) {
-    return requestPath;
-  }
-  const root = findRepoRoot(startDir);
-  return path.resolve(root, requestPath);
-}
-
-export function requireBun(): string {
-  const bunPath = Bun.which('bun');
-  if (typeof bunPath !== 'string' || bunPath.length === 0) {
-    loomFailure(LoomFailureCode.BunNotFound);
-  }
-  return bunPath;
-}

@@ -1,10 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import {
-  extractCortexIndex,
-  renderCortexIndexMarkdown,
-  stripDocumentNavigation,
-} from '../src/cortex-index.ts';
+import { CortexNavigationIndex } from '../src/cortex-index.ts';
 
 test('extracts index metadata and renders markdown', () => {
   const documents = [
@@ -39,11 +35,11 @@ Model text.
   ];
 
   const extractArgs = { documents, repoRoot: '/repo' };
-  const index = extractCortexIndex(extractArgs);
+  const index = CortexNavigationIndex.extractCortexIndex(extractArgs);
   expect(index.documents.length).toBe(2);
 
   const renderArgs = { index };
-  const markdown = renderCortexIndexMarkdown(renderArgs);
+  const markdown = CortexNavigationIndex.renderCortexIndexMarkdown(renderArgs);
   expect(markdown).toContain('# Cortex Context Router');
   expect(markdown).toContain('## Owning contexts');
   expect(markdown).toContain('[Gizmo Prime](gizmo/knowledge-graph.md)');
@@ -59,7 +55,7 @@ Model text.
 
 test('renders the complete canonical Cortex context router', () => {
   const renderArgs = { index: { documents: [] } };
-  const markdown = renderCortexIndexMarkdown(renderArgs);
+  const markdown = CortexNavigationIndex.renderCortexIndexMarkdown(renderArgs);
   const canonicalRouter = readFileSync(
     new URL('../../../../../../knowledge-graph.md', import.meta.url),
     'utf8',
@@ -115,7 +111,7 @@ This is the actual overview text.
 `;
 
   const stripArgs = { content };
-  const stripped = stripDocumentNavigation(stripArgs);
+  const stripped = CortexNavigationIndex.stripDocumentNavigation(stripArgs);
   expect(stripped).toContain('# Sample Doc');
   expect(stripped).toContain('Intro paragraph.');
   expect(stripped).toContain('## Overview');

@@ -1,22 +1,34 @@
 import { expect, test } from 'bun:test';
+
 import { join } from 'node:path';
-import { runSkillCli, type RunSkillCliRequest } from '../src/cli.ts';
+
+import { type RunSkillCliRequest, ExecutableSkillCli } from '../src/cli.ts';
+
 import { SkillCommandIssue } from '../src/skill-command-domain.ts';
+
+export class ExecutableSkillHostCliFileScenario {
+  private constructor(private readonly request: string) {}
+
+  static parseResponse(yaml: string): CliResponse {
+    return new ExecutableSkillHostCliFileScenario(yaml).execute();
+  }
+
+  private execute(): CliResponse {
+    const yaml = this.request;
+    return Bun.YAML.parse(yaml) as CliResponse;
+  }
+}
 
 type CliResponse = {
   readonly errors?: readonly { readonly issue: string }[];
 };
-
-function parseResponse(yaml: string): CliResponse {
-  return Bun.YAML.parse(yaml) as CliResponse;
-}
 
 test('preserves multiline YAML in exactly one command-line token', () => {
   const yaml = 'skillToolsList:\n  list: {}\n';
   const request: RunSkillCliRequest = {
     argv: [`--request-yaml=${yaml}`],
   };
-  expect(runSkillCli(request).exitCode).toBe(0);
+  expect(ExecutableSkillCli.runSkillCli(request).exitCode).toBe(0);
   const outcome = Bun.spawnSync(
     [
       'bun',
@@ -37,11 +49,13 @@ test('does not accept paths, file flags, stdin, or split YAML arguments', () => 
     ['--request-yaml=skillToolsList:', 'list: {}'],
   ] as const) {
     const request: RunSkillCliRequest = { argv };
-    const outcome = runSkillCli(request);
+    const outcome = ExecutableSkillCli.runSkillCli(request);
     expect(outcome.exitCode).toBe(2);
-    expect(parseResponse(outcome.yaml).errors?.at(0)?.issue).toBe(
-      SkillCommandIssue.UsageError,
-    );
+    expect(
+      ExecutableSkillHostCliFileScenario.parseResponse(outcome.yaml).errors?.at(
+        0,
+      )?.issue,
+    ).toBe(SkillCommandIssue.UsageError);
   }
 });
 
@@ -50,10 +64,11 @@ test('returns bounded redacted YAML for invalid inline input', () => {
   const request: RunSkillCliRequest = {
     argv: [`--request-yaml=skillToolsList: [${secret}`],
   };
-  const outcome = runSkillCli(request);
+  const outcome = ExecutableSkillCli.runSkillCli(request);
   expect(outcome.exitCode).toBe(2);
-  expect(parseResponse(outcome.yaml).errors?.at(0)?.issue).toBe(
-    SkillCommandIssue.InvalidYaml,
-  );
+  expect(
+    ExecutableSkillHostCliFileScenario.parseResponse(outcome.yaml).errors?.at(0)
+      ?.issue,
+  ).toBe(SkillCommandIssue.InvalidYaml);
   expect(outcome.yaml).not.toContain(secret);
 });

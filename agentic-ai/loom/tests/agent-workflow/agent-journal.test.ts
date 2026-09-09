@@ -1,8 +1,13 @@
 import { createHash } from 'node:crypto';
+
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+
 import { tmpdir } from 'node:os';
+
 import { join } from 'node:path';
+
 import { describe, expect, test } from 'bun:test';
+
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -12,28 +17,73 @@ import {
   TaskTerminalKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
+
 import { AgentAttemptEventKind } from '../../src/agent-workflow/agent-events.ts';
+
 import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts';
+
 import { AgentAttemptJournal } from '../../src/agent-workflow/agent-journal.ts';
-import { replayAgentAttemptJournal } from '../../src/agent-workflow/agent-replay.ts';
+
+import { AgentAttemptReplay } from '../../src/agent-workflow/agent-replay.ts';
+
 import type { RmOptions } from 'node:fs';
+
 import type {
   CompletedTaskTerminal,
   FailedTaskTerminal,
 } from '../../src/agent-workflow/domain.ts';
+
 import type { AgentAttemptJournalConfiguration } from '../../src/agent-workflow/agent-journal.ts';
+
 import type { AgentAttemptEventWithoutMetadata } from '../../src/agent-workflow/agent-events.ts';
+
 import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
+
 import type { ReplayAgentAttemptJournalRequest } from '../../src/agent-workflow/agent-replay.ts';
+
 import {
   CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
   LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
   PERSISTED_ACTIVITY_AGENT_ATTEMPT_WORKFLOW_VERSION,
   PROVENANCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
 } from '../../src/agent-workflow/agent-attempt-version.ts';
+
 import { CortexReferenceRelation } from '../../src/agent-workflow/cortex-references.ts';
 
+export class AgentWorkflowAgentJournalScenario {
+  private constructor(private readonly request: string) {}
+
+  static configuration(runDirectory: string): AgentAttemptJournalConfiguration {
+    return new AgentWorkflowAgentJournalScenario(runDirectory).execute();
+  }
+
+  private execute(): AgentAttemptJournalConfiguration {
+    const runDirectory = this.request;
+    return {
+      adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+      runDirectory,
+      runId: 'run-1',
+      workflow: DelegatedAgentWorkflowName.AgentWork,
+      workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+      sourceCommit: SOURCE_COMMIT,
+      task: 'inspect',
+      agent: 'auditor',
+      attempt: 1,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+      now: () => FIXED_TIME,
+      knownCortexIdentifiers: new Set(['CX-AI']),
+      compactOutput: () => {},
+    };
+  }
+
+  static sha256(serialized: string): string {
+    return createHash('sha256').update(serialized).digest('hex');
+  }
+}
+
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
 const FIXED_TIME = '2026-08-21T00:00:00.000Z';
 
 describe('agent attempt journal', () => {
@@ -43,7 +93,7 @@ describe('agent attempt journal', () => {
     try {
       const liveOutput: string[] = [];
       const journal = new AgentAttemptJournal<'inspect'>({
-        ...configuration(runDirectory),
+        ...AgentWorkflowAgentJournalScenario.configuration(runDirectory),
         compactOutput: (line) => {
           liveOutput.push(line);
         },
@@ -96,8 +146,10 @@ describe('agent attempt journal', () => {
       const replayRequest: ReplayAgentAttemptJournalRequest = {
         events: parsedEvents,
       };
-      const replay = replayAgentAttemptJournal(replayRequest);
-      expect(processing.events.sha256).toBe(sha256(events));
+      const replay = AgentAttemptReplay.replay(replayRequest);
+      expect(processing.events.sha256).toBe(
+        AgentWorkflowAgentJournalScenario.sha256(events),
+      );
       expect(replay.terminalKind).toBe(TaskTerminalKind.Completed);
       expect(parsedEvents.map((event) => event.actionId)).toEqual([
         'a0001',
@@ -133,7 +185,7 @@ describe('agent attempt journal', () => {
       const unknownKindRequest: ReplayAgentAttemptJournalRequest = {
         events: unknownKindEvents,
       };
-      expect(() => replayAgentAttemptJournal(unknownKindRequest)).toThrow(
+      expect(() => AgentAttemptReplay.replay(unknownKindRequest)).toThrow(
         'unknown event kind',
       );
       const invalidActionIdentity = parsedEvents.map((event) =>
@@ -142,7 +194,7 @@ describe('agent attempt journal', () => {
       const invalidActionRequest = {
         events: invalidActionIdentity,
       };
-      expect(() => replayAgentAttemptJournal(invalidActionRequest)).toThrow(
+      expect(() => AgentAttemptReplay.replay(invalidActionRequest)).toThrow(
         'action identity is invalid',
       );
       const mismatchedEvents = parsedEvents.map((event) =>
@@ -156,7 +208,7 @@ describe('agent attempt journal', () => {
       const mismatchedReplayRequest: ReplayAgentAttemptJournalRequest = {
         events: mismatchedEvents,
       };
-      expect(() => replayAgentAttemptJournal(mismatchedReplayRequest)).toThrow(
+      expect(() => AgentAttemptReplay.replay(mismatchedReplayRequest)).toThrow(
         'terminal result differs from its projection event',
       );
       const duplicateViewEvents: AgentAttemptEvent[] = [];
@@ -184,7 +236,7 @@ describe('agent attempt journal', () => {
         events: duplicateViewEvents,
       };
       expect(() =>
-        replayAgentAttemptJournal(duplicateViewReplayRequest),
+        AgentAttemptReplay.replay(duplicateViewReplayRequest),
       ).toThrow('duplicate views');
       const extraEventFieldRequest = {
         events: parsedEvents.map((event) => ({
@@ -192,7 +244,7 @@ describe('agent attempt journal', () => {
           prompt: 'secret-bearing prompt',
         })),
       };
-      expect(() => replayAgentAttemptJournal(extraEventFieldRequest)).toThrow(
+      expect(() => AgentAttemptReplay.replay(extraEventFieldRequest)).toThrow(
         'event fields are invalid',
       );
       const malformedParentEvents = parsedEvents.map((event) => ({
@@ -202,7 +254,7 @@ describe('agent attempt journal', () => {
       const malformedParentRequest = {
         events: malformedParentEvents,
       };
-      expect(() => replayAgentAttemptJournal(malformedParentRequest)).toThrow(
+      expect(() => AgentAttemptReplay.replay(malformedParentRequest)).toThrow(
         'identity is invalid',
       );
       const excessiveDepthEvents = parsedEvents.map((event) => ({
@@ -212,7 +264,7 @@ describe('agent attempt journal', () => {
       const excessiveDepthRequest = {
         events: excessiveDepthEvents,
       };
-      expect(() => replayAgentAttemptJournal(excessiveDepthRequest)).toThrow(
+      expect(() => AgentAttemptReplay.replay(excessiveDepthRequest)).toThrow(
         'identity is invalid',
       );
       const mismatchedAdapterEvents = parsedEvents.map((event) =>
@@ -226,7 +278,7 @@ describe('agent attempt journal', () => {
       const mismatchedAdapterRequest = {
         events: mismatchedAdapterEvents,
       };
-      expect(() => replayAgentAttemptJournal(mismatchedAdapterRequest)).toThrow(
+      expect(() => AgentAttemptReplay.replay(mismatchedAdapterRequest)).toThrow(
         'identity changed within the stream',
       );
       const unknownAdapterEvents = parsedEvents.map((event) => ({
@@ -236,7 +288,7 @@ describe('agent attempt journal', () => {
       const unknownAdapterRequest = {
         events: unknownAdapterEvents,
       };
-      expect(() => replayAgentAttemptJournal(unknownAdapterRequest)).toThrow(
+      expect(() => AgentAttemptReplay.replay(unknownAdapterRequest)).toThrow(
         'identity is invalid',
       );
       const wrongAuthorEvents = parsedEvents.map((event) => {
@@ -257,7 +309,7 @@ describe('agent attempt journal', () => {
       const wrongAuthorRequest = {
         events: wrongAuthorEvents,
       };
-      expect(() => replayAgentAttemptJournal(wrongAuthorRequest)).toThrow(
+      expect(() => AgentAttemptReplay.replay(wrongAuthorRequest)).toThrow(
         'view author',
       );
       expect(processing.view.presence).toBe(MaterializedViewPresence.Recorded);
@@ -287,7 +339,7 @@ describe('agent attempt journal', () => {
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
       const journal = new AgentAttemptJournal<'inspect'>(
-        configuration(runDirectory),
+        AgentWorkflowAgentJournalScenario.configuration(runDirectory),
       );
       await journal.initialize();
       const terminal: FailedTaskTerminal<'inspect'> = {
@@ -314,7 +366,7 @@ describe('agent attempt journal', () => {
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
       const failingOutputConfiguration: AgentAttemptJournalConfiguration = {
-        ...configuration(runDirectory),
+        ...AgentWorkflowAgentJournalScenario.configuration(runDirectory),
         compactOutput: async () =>
           Promise.reject(new Error('Output unavailable.')),
       };
@@ -339,7 +391,8 @@ describe('agent attempt journal', () => {
     const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-registry-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const configured = configuration(runDirectory);
+      const configured =
+        AgentWorkflowAgentJournalScenario.configuration(runDirectory);
       const missingRegistryConfiguration: AgentAttemptJournalConfiguration = {
         adapter: configured.adapter,
         runDirectory: configured.runDirectory,
@@ -381,7 +434,7 @@ describe('agent attempt journal', () => {
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
       const genericConfiguration: AgentAttemptJournalConfiguration = {
-        ...configuration(runDirectory),
+        ...AgentWorkflowAgentJournalScenario.configuration(runDirectory),
         adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
       };
       const journal = new AgentAttemptJournal<'inspect'>(genericConfiguration);
@@ -423,7 +476,8 @@ describe('agent attempt journal', () => {
   });
 
   test('rejects a structurally forged module expert journal adapter', () => {
-    const forgedConfiguration = configuration('/tmp');
+    const forgedConfiguration =
+      AgentWorkflowAgentJournalScenario.configuration('/tmp');
     Reflect.set(
       forgedConfiguration,
       'adapter',
@@ -436,14 +490,20 @@ describe('agent attempt journal', () => {
   });
 
   test('rejects path traversal in attempt identities', () => {
-    const unsafe = { ...configuration('/tmp'), task: '../escape' };
+    const unsafe = {
+      ...AgentWorkflowAgentJournalScenario.configuration('/tmp'),
+      task: '../escape',
+    };
     expect(() => new AgentAttemptJournal(unsafe)).toThrow(
       'Unsafe agent processing identifier',
     );
   });
 
   test('rejects hierarchy depth greater than three', () => {
-    const excessiveDepth = { ...configuration('/tmp'), depth: 4 };
+    const excessiveDepth = {
+      ...AgentWorkflowAgentJournalScenario.configuration('/tmp'),
+      depth: 4,
+    };
     expect(() => new AgentAttemptJournal(excessiveDepth)).toThrow(
       'hierarchy depth must be bounded',
     );
@@ -451,7 +511,7 @@ describe('agent attempt journal', () => {
 
   test('rejects legacy and unsupported attempt journal schemas', () => {
     const legacyConfiguration: AgentAttemptJournalConfiguration = {
-      ...configuration('/tmp'),
+      ...AgentWorkflowAgentJournalScenario.configuration('/tmp'),
       workflowVersion: LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
     };
     expect(() => new AgentAttemptJournal(legacyConfiguration)).toThrow(
@@ -474,7 +534,7 @@ describe('agent attempt journal', () => {
       occurredAt: FIXED_TIME,
     } as never as AgentAttemptEvent;
     const legacyReplayRequest = { events: [legacyWithoutAdapter] };
-    expect(() => replayAgentAttemptJournal(legacyReplayRequest)).toThrow(
+    expect(() => AgentAttemptReplay.replay(legacyReplayRequest)).toThrow(
       'Remove or explicitly migrate the persisted attempt',
     );
 
@@ -483,7 +543,7 @@ describe('agent attempt journal', () => {
       workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
     };
     const currentReplayRequest = { events: [currentWithoutAdapter] };
-    expect(() => replayAgentAttemptJournal(currentReplayRequest)).toThrow(
+    expect(() => AgentAttemptReplay.replay(currentReplayRequest)).toThrow(
       'event fields are invalid',
     );
 
@@ -492,7 +552,7 @@ describe('agent attempt journal', () => {
       workflowVersion: '5.0.0',
     };
     const unsupportedReplayRequest = { events: [unsupportedVersion] };
-    expect(() => replayAgentAttemptJournal(unsupportedReplayRequest)).toThrow(
+    expect(() => AgentAttemptReplay.replay(unsupportedReplayRequest)).toThrow(
       'version is unsupported',
     );
 
@@ -501,7 +561,7 @@ describe('agent attempt journal', () => {
       workflowVersion: PROVENANCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
     };
     const provenanceRequest = { events: [provenanceVersion] };
-    expect(() => replayAgentAttemptJournal(provenanceRequest)).toThrow(
+    expect(() => AgentAttemptReplay.replay(provenanceRequest)).toThrow(
       'predates compact action identities',
     );
 
@@ -510,30 +570,7 @@ describe('agent attempt journal', () => {
       workflowVersion: PERSISTED_ACTIVITY_AGENT_ATTEMPT_WORKFLOW_VERSION,
     };
     expect(() =>
-      replayAgentAttemptJournal({ events: [persistedActivityVersion] }),
+      AgentAttemptReplay.replay({ events: [persistedActivityVersion] }),
     ).toThrow('may contain persisted runtime activity');
   });
 });
-
-function configuration(runDirectory: string): AgentAttemptJournalConfiguration {
-  return {
-    adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
-    runDirectory,
-    runId: 'run-1',
-    workflow: DelegatedAgentWorkflowName.AgentWork,
-    workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
-    sourceCommit: SOURCE_COMMIT,
-    task: 'inspect',
-    agent: 'auditor',
-    attempt: 1,
-    depth: 1,
-    parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-    now: () => FIXED_TIME,
-    knownCortexIdentifiers: new Set(['CX-AI']),
-    compactOutput: () => {},
-  };
-}
-
-function sha256(serialized: string): string {
-  return createHash('sha256').update(serialized).digest('hex');
-}

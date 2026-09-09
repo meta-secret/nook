@@ -1,5 +1,5 @@
-import { executeCortexConsistencyApplication } from './application.ts';
-import { decodeCortexConsistencyRequest } from './codec.ts';
+import { CortexConsistencyApplication } from './application.ts';
+import { CortexConsistencyRequestDecoder } from './codec.ts';
 import {
   CortexConsistencyContractKind,
   CORTEX_CONSISTENCY_DOCUMENT_LIMIT,
@@ -19,13 +19,16 @@ export const CORTEX_CONSISTENCY_COMPILE_EXAMPLE = `cortexConsistency:
         commands: []
 `;
 
-function referenceSchema() {
-  return {
-    type: 'string',
-    maxUtf16CodeUnits: CORTEX_CONSISTENCY_PATH_LIMIT,
-    pattern:
-      '^(?!.*[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e-\\u200f\\u2028-\\u202e\\u2066-\\u206f])[\\s\\S]*$',
-  } as const;
+class CortexReferenceSchema {
+  private static readonly maximumCodeUnits = CORTEX_CONSISTENCY_PATH_LIMIT;
+  static create() {
+    return {
+      type: 'string',
+      maxUtf16CodeUnits: CortexReferenceSchema.maximumCodeUnits,
+      pattern:
+        '^(?!.*[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e-\\u200f\\u2028-\\u202e\\u2066-\\u206f])[\\s\\S]*$',
+    } as const;
+  }
 }
 
 export const CORTEX_CONSISTENCY_COMPILE_SCHEMA = {
@@ -47,16 +50,16 @@ export const CORTEX_CONSISTENCY_COMPILE_SCHEMA = {
         additionalProperties: false,
         required: ['relativePath', 'references', 'commands'],
         properties: {
-          relativePath: referenceSchema(),
+          relativePath: CortexReferenceSchema.create(),
           references: {
             type: 'array',
             maxItems: CORTEX_CONSISTENCY_REFERENCE_LIMIT,
-            items: referenceSchema(),
+            items: CortexReferenceSchema.create(),
           },
           commands: {
             type: 'array',
             maxItems: CORTEX_CONSISTENCY_REFERENCE_LIMIT,
-            items: referenceSchema(),
+            items: CortexReferenceSchema.create(),
           },
         },
       },
@@ -76,7 +79,7 @@ export const CORTEX_CONSISTENCY_ACTION_DEFINITION = Object.freeze({
 } as const);
 
 export const decodeCortexConsistencyActionPayload =
-  decodeCortexConsistencyRequest;
+  CortexConsistencyRequestDecoder.decodeCortexConsistencyRequest;
 export const executeCortexConsistencyAction =
-  executeCortexConsistencyApplication;
+  CortexConsistencyApplication.executeCortexConsistencyApplication;
 export { CortexConsistencyRequestDecodeError } from './codec.ts';

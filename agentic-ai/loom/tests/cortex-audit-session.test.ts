@@ -9,46 +9,60 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+
 import { tmpdir } from 'node:os';
+
 import path from 'node:path';
+
 import { expect, test } from 'bun:test';
-import {
-  publishedBaseCandidatesForEvent,
-  runCortexAuditFromDirectory,
-} from '../src/commands/cortex-audit.ts';
-import {
-  listCortexMarkdownFiles,
-  listPersistentCortexMarkdownFiles,
-} from '../src/lib/cortex-markdown-files.ts';
+
+import { CortexAuditCommand } from '../src/commands/cortex-audit.ts';
+
+import { CortexMarkdownInventory } from '../src/lib/cortex-markdown-files.ts';
+
 import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
+
 import { CortexStructureFindingCode } from '../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
+
 import { CortexContractFindingCode } from '../src/lib/cortex-contracts.ts';
+
 import { CortexArticleFindingCode } from '../src/lib/cortex-article-structure.ts';
 
-const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
+export class CortexAuditSessionScenario {
+  private constructor(private readonly request: string) {}
 
-function installValeConfiguration(repoRoot: string): void {
-  copyFileSync(
-    path.join(REPOSITORY_ROOT, '.vale.ini'),
-    path.join(repoRoot, '.vale.ini'),
-  );
-  cpSync(
-    path.join(REPOSITORY_ROOT, '.vale', 'styles'),
-    path.join(repoRoot, '.vale', 'styles'),
-    { recursive: true },
-  );
-  copyFileSync(
-    path.join(REPOSITORY_ROOT, '.vale', 'density.ini'),
-    path.join(repoRoot, '.vale', 'density.ini'),
-  );
+  static installValeConfiguration(repoRoot: string): void {
+    return new CortexAuditSessionScenario(repoRoot).execute();
+  }
+
+  private execute(): void {
+    const repoRoot = this.request;
+    copyFileSync(
+      path.join(REPOSITORY_ROOT, '.vale.ini'),
+      path.join(repoRoot, '.vale.ini'),
+    );
+    cpSync(
+      path.join(REPOSITORY_ROOT, '.vale', 'styles'),
+      path.join(repoRoot, '.vale', 'styles'),
+      { recursive: true },
+    );
+    copyFileSync(
+      path.join(REPOSITORY_ROOT, '.vale', 'density.ini'),
+      path.join(repoRoot, '.vale', 'density.ini'),
+    );
+  }
 }
+
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
 
 test('uses the pre-push commit for push stability audits', () => {
   const before = '1'.repeat(40);
   const base = '2'.repeat(40);
-  expect(publishedBaseCandidatesForEvent({ before })).toEqual([before]);
   expect(
-    publishedBaseCandidatesForEvent({
+    CortexAuditCommand.publishedBaseCandidatesForEvent({ before }),
+  ).toEqual([before]);
+  expect(
+    CortexAuditCommand.publishedBaseCandidatesForEvent({
       before,
       pull_request: { base: { sha: base } },
     }),
@@ -67,9 +81,10 @@ test('excludes temporary session memory from persistent Cortex documents', () =>
     writeFileSync(path.join(sessionRoot, 'current-task.md'), '# Session\n');
     writeFileSync(path.join(skillsRoot, 'durable.md'), '# Durable\n');
 
-    const relativeFiles = listPersistentCortexMarkdownFiles(cortexRoot).map(
-      (filePath) => path.relative(cortexRoot, filePath),
-    );
+    const relativeFiles =
+      CortexMarkdownInventory.listPersistentCortexMarkdownFiles(cortexRoot).map(
+        (filePath) => path.relative(cortexRoot, filePath),
+      );
 
     expect(relativeFiles).toEqual([
       'AGENTS.md',
@@ -146,9 +161,9 @@ test('excludes workspace dependencies and canonical executable package scripts',
       '# Must remain audited\n',
     );
 
-    const relativeFiles = listCortexMarkdownFiles(cortexRoot).map((filePath) =>
-      path.relative(cortexRoot, filePath),
-    );
+    const relativeFiles = CortexMarkdownInventory.listCortexMarkdownFiles(
+      cortexRoot,
+    ).map((filePath) => path.relative(cortexRoot, filePath));
     expect(relativeFiles).toContain(
       path.join('teams', 'ai', 'scripts', 'policy.md'),
     );
@@ -189,14 +204,14 @@ test('enforces Vale through the common Cortex audit execution path', async () =>
     mkdtempSync(path.join(tmpdir(), 'cortex-vale-audit-')),
   );
   try {
-    installValeConfiguration(repoRoot);
+    CortexAuditSessionScenario.installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     mkdirSync(cortexRoot, { recursive: true });
     writeFileSync(
       path.join(cortexRoot, 'AGENTS.md'),
       '# Agent Map\n\n## Relationships\n\nObsolete navigation.\n',
     );
-    const audit = runCortexAuditFromDirectory({
+    const audit = CortexAuditCommand.runCortexAuditFromDirectory({
       request: { includeDensityLint: false },
       startDirectory: repoRoot,
     });
@@ -211,7 +226,7 @@ test('fails the integrated Cortex audit for rendered Markdown tables', async () 
     mkdtempSync(path.join(tmpdir(), 'cortex-table-audit-')),
   );
   try {
-    installValeConfiguration(repoRoot);
+    CortexAuditSessionScenario.installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
     const directoryOptions = { recursive: true } as const;
@@ -244,7 +259,8 @@ test('fails the integrated Cortex audit for rendered Markdown tables', async () 
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
     const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
-    const report = await runCortexAuditFromDirectory(auditArgs);
+    const report =
+      await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
     expect(report.auditOk).toBe(false);
     expect(report.articleStructureFindings).toContainEqual({
       code: CortexArticleFindingCode.MarkdownTable,
@@ -264,7 +280,7 @@ test('fails the integrated Cortex audit for authored HTML', async () => {
     mkdtempSync(path.join(tmpdir(), 'cortex-html-audit-')),
   );
   try {
-    installValeConfiguration(repoRoot);
+    CortexAuditSessionScenario.installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
     const directoryOptions = { recursive: true } as const;
@@ -313,7 +329,8 @@ Fourth paragraph.
     );
     const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
-    const report = await runCortexAuditFromDirectory(auditArgs);
+    const report =
+      await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
     expect(report.auditOk).toBe(false);
     const agentFindings = report.structureFindings.filter(
       (finding) => finding.file === '.cortex/AGENTS.md',
@@ -368,7 +385,7 @@ test('admits session Markdown only through the global HTML syntax gate', async (
     mkdtempSync(path.join(tmpdir(), 'cortex-session-html-')),
   );
   try {
-    installValeConfiguration(repoRoot);
+    CortexAuditSessionScenario.installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     const sessionRoot = path.join(cortexRoot, '.session', 'nested');
     const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
@@ -388,7 +405,8 @@ test('admits session Markdown only through the global HTML syntax gate', async (
     );
     const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
-    const ordinaryReport = await runCortexAuditFromDirectory(auditArgs);
+    const ordinaryReport =
+      await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
     expect(
       ordinaryReport.structureFindings.some((finding) =>
         finding.file.includes('.session'),
@@ -406,7 +424,8 @@ test('admits session Markdown only through the global HTML syntax gate', async (
     ).toBe(false);
 
     writeFileSync(sessionPath, '<!-- forbidden session HTML -->\n');
-    const htmlReport = await runCortexAuditFromDirectory(auditArgs);
+    const htmlReport =
+      await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
     expect(htmlReport.auditOk).toBe(false);
     const sessionHtmlFindings = htmlReport.structureFindings.filter(
       (finding) =>
@@ -430,7 +449,7 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
     mkdtempSync(path.join(tmpdir(), 'cortex-html-cascade-')),
   );
   try {
-    installValeConfiguration(repoRoot);
+    CortexAuditSessionScenario.installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     const teamsRoot = path.join(cortexRoot, 'teams');
     const aiRoot = path.join(teamsRoot, 'ai');
@@ -518,7 +537,8 @@ ${gizmoIndexRows}
     unlinkSync(path.join(repoRoot, '.vale', 'density.ini'));
     const request = { includeDensityLint: false };
     const auditArgs = { request, startDirectory: repoRoot };
-    const report = await runCortexAuditFromDirectory(auditArgs);
+    const report =
+      await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
     const expectedReport: CortexAuditReport = {
       brokenLinks: [],
       invalidExecutableSkillPackages: [],

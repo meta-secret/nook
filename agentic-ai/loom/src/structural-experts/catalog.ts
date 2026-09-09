@@ -1,5 +1,25 @@
 import { WorkflowResultKind } from '../agent-workflow/domain.ts';
 
+export class StructuralExpertCatalog {
+  private constructor(private readonly request: string) {}
+
+  static structuralExpertProfile(
+    expertName: string,
+  ): StructuralExpertProfile | false {
+    return new StructuralExpertCatalog(expertName).execute();
+  }
+
+  private execute(): StructuralExpertProfile | false {
+    const expertName = this.request;
+    const [defaulted1 = false] = [
+      STRUCTURAL_EXPERT_CATALOG.find(
+        (candidate) => candidate.name === expertName,
+      ),
+    ];
+    return defaulted1;
+  }
+}
+
 export enum StructuralExpertKind {
   RepositoryEvidence = 'repository-evidence',
   VerifiedViewSynthesis = 'verified-view-synthesis',
@@ -132,14 +152,3 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
     validationSelectors: ['loom:verify'],
   },
 ] as const;
-
-export function structuralExpertProfile(
-  expertName: string,
-): StructuralExpertProfile | false {
-  const [defaulted1 = false] = [
-    STRUCTURAL_EXPERT_CATALOG.find(
-      (candidate) => candidate.name === expertName,
-    ),
-  ];
-  return defaulted1;
-}

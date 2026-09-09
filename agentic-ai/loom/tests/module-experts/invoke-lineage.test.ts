@@ -1,10 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
+
 import { existsSync } from 'node:fs';
+
 import { readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+
 import type { RmOptions } from 'node:fs';
+
 import { join, resolve } from 'node:path';
+
 import { expect, test } from 'bun:test';
+
 import { AgentAttemptEventKind } from '../../src/agent-workflow/agent-events.ts';
+
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -12,39 +19,491 @@ import {
   MaterializedViewPresence,
   TaskTerminalKind,
 } from '../../src/agent-workflow/domain.ts';
+
 import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
+
 import type {
   CompletedTaskTerminal,
   ModuleExpertAuthorization,
   ModuleDevelopmentPlanTaskOutput,
   ParentAgentAttempt,
 } from '../../src/agent-workflow/domain.ts';
+
 import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
   AgentTaskRuntime,
 } from '../../src/agent-workflow/runtime.ts';
-import { invokeModuleExpert } from '../../src/module-experts/invoke.ts';
+
+import { ModuleExpertInvocation } from '../../src/module-experts/invoke.ts';
+
 import type {
   InvokeModuleExpertArgs,
   ModuleExpertInvocationRequest,
 } from '../../src/module-experts/invoke.ts';
+
 import { MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH } from '../../src/agent-workflow/structured-result-codec.ts';
-import {
-  createCompletedAttempt,
-  createFailedAttempt,
-  moduleDevelopmentPlanOutput,
-  moduleExpertEvidenceOutput,
-} from './invoke-parent-fixture.ts';
-import { registerModuleExpertRuntimeMock } from './module-expert-runtime-mock.ts';
+
+import { ModuleExpertsInvokeParentFixtureScenario } from './invoke-parent-fixture.ts';
+
+import { ModuleExpertsModuleExpertRuntimeMockScenario } from './module-expert-runtime-mock.ts';
+
 import type {
   ModuleExpertRuntimeMockRegistration,
   RegisterModuleExpertRuntimeMockArgs,
 } from './module-expert-runtime-mock.ts';
 
+export class ModuleExpertsInvokeLineageScenario {
+  private constructor(private readonly request: InvalidDepthThreeParentCase) {}
+
+  static createDepthThreeFixtureLineage(
+    args: InvalidDepthThreeParentCase,
+  ): Promise<void> {
+    return new ModuleExpertsInvokeLineageScenario(args).execute();
+  }
+
+  private async execute(): Promise<void> {
+    const args = this.request;
+    const immediate = ModuleExpertsInvokeLineageScenario.directParent(
+      args.request,
+    );
+    const root: ParentAgentAttempt = {
+      kind: AgentAttemptParentKind.AgentAttempt,
+      task: 'feature-synthesis',
+      agent: 'delivery-owner',
+      attempt: 1,
+    };
+    const rootPlanArgs = {
+      repoRoot: REPO_ROOT,
+      runId: args.request.runId,
+      sourceCommit: args.request.sourceCommit,
+      task: root.task,
+      agent: root.agent,
+      attempt: root.attempt,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
+          ModuleExpertsInvokeLineageScenario.authorization(args.request),
+        ]),
+    } as const;
+    await ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
+      rootPlanArgs,
+    );
+    const immediateArgs = {
+      repoRoot: REPO_ROOT,
+      runId: args.request.runId,
+      sourceCommit: args.request.sourceCommit,
+      task: immediate.task,
+      agent: immediate.agent,
+      attempt: immediate.attempt,
+      depth: 2,
+      parent: root,
+      output: args.immediateOutput,
+    } as const;
+    await ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
+      immediateArgs,
+    );
+  }
+
+  static async setupAbsentParent(_args: ParentSetupArgs): Promise<void> {}
+
+  static async setupFailedParent(args: ParentSetupArgs): Promise<void> {
+    const parent = ModuleExpertsInvokeLineageScenario.directParent(
+      args.request,
+    );
+    const failedArgs = {
+      repoRoot: REPO_ROOT,
+      runId: args.request.runId,
+      sourceCommit: args.request.sourceCommit,
+      task: parent.task,
+      agent: parent.agent,
+      attempt: parent.attempt,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+    } as const;
+    await ModuleExpertsInvokeParentFixtureScenario.createFailedAttempt(
+      failedArgs,
+    );
+  }
+
+  static async setupDriftedParent(args: ParentSetupArgs): Promise<void> {
+    const planArgs: CreateDirectPlanArgs = {
+      request: args.request,
+      sourceCommit: DRIFTED_SOURCE_COMMIT,
+      authorization: ModuleExpertsInvokeLineageScenario.authorization(
+        args.request,
+      ),
+    };
+    await ModuleExpertsInvokeLineageScenario.createDirectPlan(planArgs);
+  }
+
+  static async setupUnauthorizedParent(args: ParentSetupArgs): Promise<void> {
+    const unauthorized = {
+      ...ModuleExpertsInvokeLineageScenario.authorization(args.request),
+      expert: 'different_expert',
+    };
+    const planArgs: CreateDirectPlanArgs = {
+      request: args.request,
+      sourceCommit: args.request.sourceCommit,
+      authorization: unauthorized,
+    };
+    await ModuleExpertsInvokeLineageScenario.createDirectPlan(planArgs);
+  }
+
+  static async setupCorruptedParent(args: ParentSetupArgs): Promise<void> {
+    const planArgs: CreateDirectPlanArgs = {
+      request: args.request,
+      sourceCommit: args.request.sourceCommit,
+      authorization: ModuleExpertsInvokeLineageScenario.authorization(
+        args.request,
+      ),
+    };
+    await ModuleExpertsInvokeLineageScenario.createDirectPlan(planArgs);
+    const parent = ModuleExpertsInvokeLineageScenario.directParent(
+      args.request,
+    );
+    const resultPath = join(
+      ModuleExpertsInvokeLineageScenario.processingRunDirectory(
+        args.request.runId,
+      ),
+      'agents',
+      parent.task,
+      `attempt-${parent.attempt}`,
+      'result.json',
+    );
+    const serialized = await readFile(resultPath, 'utf8');
+    await writeFile(resultPath, `${serialized}corrupted`, 'utf8');
+  }
+
+  static async setupSymlinkedProjection(args: ParentSetupArgs): Promise<void> {
+    const planArgs: CreateDirectPlanArgs = {
+      request: args.request,
+      sourceCommit: args.request.sourceCommit,
+      authorization: ModuleExpertsInvokeLineageScenario.authorization(
+        args.request,
+      ),
+    };
+    await ModuleExpertsInvokeLineageScenario.createDirectPlan(planArgs);
+    const parent = ModuleExpertsInvokeLineageScenario.directParent(
+      args.request,
+    );
+    const attemptDirectory = join(
+      ModuleExpertsInvokeLineageScenario.processingRunDirectory(
+        args.request.runId,
+      ),
+      'agents',
+      parent.task,
+      `attempt-${parent.attempt}`,
+    );
+    const projectionPath = join(attemptDirectory, 'result.json');
+    const projectionTarget = join(attemptDirectory, 'result-target.json');
+    await rename(projectionPath, projectionTarget);
+    await symlink('result-target.json', projectionPath, 'file');
+  }
+
+  static async setupSymlinkedAttemptDirectory(
+    args: ParentSetupArgs,
+  ): Promise<void> {
+    const planArgs: CreateDirectPlanArgs = {
+      request: args.request,
+      sourceCommit: args.request.sourceCommit,
+      authorization: ModuleExpertsInvokeLineageScenario.authorization(
+        args.request,
+      ),
+    };
+    await ModuleExpertsInvokeLineageScenario.createDirectPlan(planArgs);
+    const parent = ModuleExpertsInvokeLineageScenario.directParent(
+      args.request,
+    );
+    const parentDirectory = join(
+      ModuleExpertsInvokeLineageScenario.processingRunDirectory(
+        args.request.runId,
+      ),
+      'agents',
+      parent.task,
+    );
+    const attemptName = `attempt-${parent.attempt}`;
+    const attemptDirectory = join(parentDirectory, attemptName);
+    const attemptTargetName = `${attemptName}-target`;
+    await rename(attemptDirectory, join(parentDirectory, attemptTargetName));
+    await symlink(attemptTargetName, attemptDirectory, 'dir');
+  }
+
+  static async createDirectPlan(args: CreateDirectPlanArgs): Promise<void> {
+    const parent = ModuleExpertsInvokeLineageScenario.directParent(
+      args.request,
+    );
+    const completedArgs = {
+      repoRoot: REPO_ROOT,
+      runId: args.request.runId,
+      sourceCommit: args.sourceCommit,
+      task: parent.task,
+      agent: parent.agent,
+      attempt: parent.attempt,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
+          args.authorization,
+        ]),
+    } as const;
+    await ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
+      completedArgs,
+    );
+  }
+
+  static async createDirectPlanWithView(
+    args: CreateDirectPlanWithViewArgs,
+  ): Promise<void> {
+    const parent = ModuleExpertsInvokeLineageScenario.directParent(
+      args.request,
+    );
+    const output: ModuleDevelopmentPlanTaskOutput = {
+      ...ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
+        ModuleExpertsInvokeLineageScenario.authorization(args.request),
+      ]),
+      materializedViewMarkdown: args.view,
+    };
+    const completedArgs = {
+      repoRoot: REPO_ROOT,
+      runId: args.request.runId,
+      sourceCommit: args.request.sourceCommit,
+      task: parent.task,
+      agent: parent.agent,
+      attempt: parent.attempt,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+      output,
+    } as const;
+    await ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
+      completedArgs,
+    );
+  }
+
+  static async rewriteParentView(args: RewriteParentViewArgs): Promise<void> {
+    const parent = ModuleExpertsInvokeLineageScenario.directParent(
+      args.request,
+    );
+    const attemptDirectory = join(
+      ModuleExpertsInvokeLineageScenario.processingRunDirectory(
+        args.request.runId,
+      ),
+      'agents',
+      parent.task,
+      `attempt-${parent.attempt}`,
+    );
+    const eventsPath = join(attemptDirectory, 'events.jsonl');
+    const resultPath = join(attemptDirectory, 'result.json');
+    const viewPath = join(attemptDirectory, 'view.md');
+    const originalTerminal = JSON.parse(
+      await readFile(resultPath, 'utf8'),
+    ) as CompletedTaskTerminal<string>;
+    const output: ModuleDevelopmentPlanTaskOutput = {
+      ...ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
+        ModuleExpertsInvokeLineageScenario.authorization(args.request),
+      ]),
+      materializedViewMarkdown: args.view,
+    };
+    const terminal: CompletedTaskTerminal<string> = {
+      ...originalTerminal,
+      output,
+    };
+    const resultSerialized = `${JSON.stringify(terminal)}\n`;
+    const viewSerialized = `${args.view.trim()}\n`;
+    const resultHash =
+      ModuleExpertsInvokeLineageScenario.sha256(resultSerialized);
+    const viewHash = ModuleExpertsInvokeLineageScenario.sha256(viewSerialized);
+    const events = (await readFile(eventsPath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as AgentAttemptEvent);
+    const rewrittenEvents = events.map((event): AgentAttemptEvent => {
+      if (event.kind === AgentAttemptEventKind.ResultProjected) {
+        return { ...event, result: { ...event.result, sha256: resultHash } };
+      }
+      if (event.kind === AgentAttemptEventKind.ViewProjected) {
+        if (event.view.presence !== MaterializedViewPresence.Recorded) {
+          throw new Error('Expected a recorded parent view projection.');
+        }
+        return {
+          ...event,
+          view: {
+            ...event.view,
+            projection: { ...event.view.projection, sha256: viewHash },
+          },
+        };
+      }
+      if (event.kind === AgentAttemptEventKind.AttemptTerminalRecorded) {
+        if (event.view.presence !== MaterializedViewPresence.Recorded) {
+          throw new Error('Expected a recorded parent terminal view.');
+        }
+        return {
+          ...event,
+          result: { ...event.result, sha256: resultHash },
+          view: {
+            ...event.view,
+            projection: { ...event.view.projection, sha256: viewHash },
+          },
+        };
+      }
+      return event;
+    });
+    await Promise.all([
+      writeFile(
+        eventsPath,
+        `${rewrittenEvents.map((event) => JSON.stringify(event)).join('\n')}\n`,
+        'utf8',
+      ),
+      writeFile(resultPath, resultSerialized, 'utf8'),
+      writeFile(viewPath, viewSerialized, 'utf8'),
+    ]);
+  }
+
+  static async createDepthThreeLineage(
+    args: CreateDepthThreeLineageArgs,
+  ): Promise<void> {
+    const immediate = ModuleExpertsInvokeLineageScenario.directParent(
+      args.request,
+    );
+    const root: ParentAgentAttempt = {
+      kind: AgentAttemptParentKind.AgentAttempt,
+      task: 'feature-synthesis',
+      agent: 'delivery-owner',
+      attempt: 1,
+    };
+    const intermediateRequest: ModuleExpertInvocationRequest = {
+      runId: args.request.runId,
+      expert: immediate.agent,
+      selectedContextPaths: [],
+      sourceCommit: args.request.sourceCommit,
+      task: immediate.task,
+      attempt: immediate.attempt,
+      depth: 2,
+      parent: root,
+      instruction: 'Inspect the provider contract without writing files.',
+    };
+    const rootPlanArgs = {
+      repoRoot: REPO_ROOT,
+      runId: args.request.runId,
+      sourceCommit: args.request.sourceCommit,
+      task: root.task,
+      agent: root.agent,
+      attempt: root.attempt,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
+          ModuleExpertsInvokeLineageScenario.authorization(intermediateRequest),
+          args.authorization,
+        ]),
+    } as const;
+    await ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
+      rootPlanArgs,
+    );
+    const runtime = new CountingRuntime(intermediateRequest.runId);
+    const invocationInput: InvocationArgs = {
+      request: intermediateRequest,
+    };
+    try {
+      const intermediateResult =
+        await ModuleExpertInvocation.invokeModuleExpert(
+          ModuleExpertsInvokeLineageScenario.invocationArgs(invocationInput),
+        );
+      if (intermediateResult.terminal.kind !== TaskTerminalKind.Completed) {
+        throw new Error(
+          'Expected completed intermediate module expert fixture.',
+        );
+      }
+    } finally {
+      runtime.dispose();
+    }
+  }
+
+  static invocationArgs(args: InvocationArgs): InvokeModuleExpertArgs {
+    const controller = new AbortController();
+    return {
+      repoRoot: REPO_ROOT,
+      request: args.request,
+      signal: controller.signal,
+    };
+  }
+
+  static authorization(
+    request: ModuleExpertInvocationRequest,
+  ): ModuleExpertAuthorization {
+    return {
+      task: request.task,
+      expert: request.expert,
+      attempt: request.attempt,
+      depth: request.depth,
+      parent: ModuleExpertsInvokeLineageScenario.directParent(request),
+    };
+  }
+
+  static directParent(
+    request: ModuleExpertInvocationRequest,
+  ): ParentAgentAttempt {
+    if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
+      throw new Error('Expected parent agent attempt in the test fixture.');
+    }
+    return request.parent;
+  }
+
+  static directRequest(runId: string): ModuleExpertInvocationRequest {
+    return {
+      runId,
+      expert: 'core_expert',
+      selectedContextPaths: [],
+      sourceCommit: SOURCE_COMMIT,
+      task: 'inspect-core-contract',
+      attempt: 1,
+      depth: 2,
+      parent: {
+        kind: AgentAttemptParentKind.AgentAttempt,
+        task: 'feature-synthesis',
+        agent: 'delivery-owner',
+        attempt: 1,
+      },
+      instruction: 'Inspect the module contract without writing files.',
+    };
+  }
+
+  static depthThreeRequest(runId: string): ModuleExpertInvocationRequest {
+    const request = ModuleExpertsInvokeLineageScenario.directRequest(runId);
+    return {
+      ...request,
+      depth: 3,
+      parent: {
+        kind: AgentAttemptParentKind.AgentAttempt,
+        task: 'inspect-provider-contract',
+        agent: 'core_expert',
+        attempt: 1,
+      },
+    };
+  }
+
+  static processingRunDirectory(runId: string): string {
+    return join(
+      REPO_ROOT,
+      'workflow',
+      'processing',
+      DelegatedAgentWorkflowName.AgentWork,
+      runId,
+    );
+  }
+
+  static sha256(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
+  }
+}
+
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
+
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
 const DRIFTED_SOURCE_COMMIT = '1123456789abcdef0123456789abcdef01234567';
+
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
 class CountingRuntime implements AgentTaskRuntime<string, string> {
@@ -56,7 +515,10 @@ class CountingRuntime implements AgentTaskRuntime<string, string> {
       runId,
       runtime: this,
     };
-    this.registration = registerModuleExpertRuntimeMock(registrationArgs);
+    this.registration =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        registrationArgs,
+      );
   }
 
   async executeAgent(
@@ -65,7 +527,8 @@ class CountingRuntime implements AgentTaskRuntime<string, string> {
     this.executionCount += 1;
     return {
       threadId: `thread-${invocation.task}`,
-      output: moduleExpertEvidenceOutput(),
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput(),
     };
   }
 
@@ -76,27 +539,52 @@ class CountingRuntime implements AgentTaskRuntime<string, string> {
 
 test('rejects invalid, corrupted, or symlinked parents before runtime', async () => {
   const setupCases: readonly ParentSetupCase[] = [
-    { name: 'absent', setup: setupAbsentParent },
-    { name: 'failed', setup: setupFailedParent },
-    { name: 'source-drifted', setup: setupDriftedParent },
-    { name: 'unauthorized', setup: setupUnauthorizedParent },
-    { name: 'corrupted', setup: setupCorruptedParent },
-    { name: 'symlinked-projection', setup: setupSymlinkedProjection },
-    { name: 'symlinked-directory', setup: setupSymlinkedAttemptDirectory },
+    {
+      name: 'absent',
+      setup: ModuleExpertsInvokeLineageScenario.setupAbsentParent,
+    },
+    {
+      name: 'failed',
+      setup: ModuleExpertsInvokeLineageScenario.setupFailedParent,
+    },
+    {
+      name: 'source-drifted',
+      setup: ModuleExpertsInvokeLineageScenario.setupDriftedParent,
+    },
+    {
+      name: 'unauthorized',
+      setup: ModuleExpertsInvokeLineageScenario.setupUnauthorizedParent,
+    },
+    {
+      name: 'corrupted',
+      setup: ModuleExpertsInvokeLineageScenario.setupCorruptedParent,
+    },
+    {
+      name: 'symlinked-projection',
+      setup: ModuleExpertsInvokeLineageScenario.setupSymlinkedProjection,
+    },
+    {
+      name: 'symlinked-directory',
+      setup: ModuleExpertsInvokeLineageScenario.setupSymlinkedAttemptDirectory,
+    },
   ];
 
   for (const setupCase of setupCases) {
-    const request = directRequest(`parent-${setupCase.name}-${randomUUID()}`);
-    const runDirectory = processingRunDirectory(request.runId);
+    const request = ModuleExpertsInvokeLineageScenario.directRequest(
+      `parent-${setupCase.name}-${randomUUID()}`,
+    );
+    const runDirectory =
+      ModuleExpertsInvokeLineageScenario.processingRunDirectory(request.runId);
     const runtime = new CountingRuntime(request.runId);
     try {
       const setupArgs: ParentSetupArgs = { request };
       await setupCase.setup(setupArgs);
       const invocationInput: InvocationArgs = { request };
-      const invokeArgs = invocationArgs(invocationInput);
-      await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
-        'parent authorization failed',
-      );
+      const invokeArgs =
+        ModuleExpertsInvokeLineageScenario.invocationArgs(invocationInput);
+      await expect(
+        ModuleExpertInvocation.invokeModuleExpert(invokeArgs),
+      ).rejects.toThrow('parent authorization failed');
       expect(runtime.executionCount).toBe(0);
       const childAttemptDirectory = join(
         runDirectory,
@@ -113,8 +601,11 @@ test('rejects invalid, corrupted, or symlinked parents before runtime', async ()
 });
 
 test('authorizes a multibyte parent view within the character limit', async () => {
-  const request = directRequest(`multibyte-parent-view-${randomUUID()}`);
-  const runDirectory = processingRunDirectory(request.runId);
+  const request = ModuleExpertsInvokeLineageScenario.directRequest(
+    `multibyte-parent-view-${randomUUID()}`,
+  );
+  const runDirectory =
+    ModuleExpertsInvokeLineageScenario.processingRunDirectory(request.runId);
   const runtime = new CountingRuntime(request.runId);
   const multibyteView = '界'.repeat(40_000);
   try {
@@ -122,9 +613,11 @@ test('authorizes a multibyte parent view within the character limit', async () =
       request,
       view: multibyteView,
     };
-    await createDirectPlanWithView(planArgs);
+    await ModuleExpertsInvokeLineageScenario.createDirectPlanWithView(planArgs);
     const invocationInput: InvocationArgs = { request };
-    const result = await invokeModuleExpert(invocationArgs(invocationInput));
+    const result = await ModuleExpertInvocation.invokeModuleExpert(
+      ModuleExpertsInvokeLineageScenario.invocationArgs(invocationInput),
+    );
 
     expect(multibyteView.length).toBe(40_000);
     expect(Buffer.byteLength(multibyteView, 'utf8')).toBeGreaterThan(65_536);
@@ -137,24 +630,29 @@ test('authorizes a multibyte parent view within the character limit', async () =
 });
 
 test('rejects a parent view above the character limit with valid projection hashes', async () => {
-  const request = directRequest(`oversized-parent-view-${randomUUID()}`);
-  const runDirectory = processingRunDirectory(request.runId);
+  const request = ModuleExpertsInvokeLineageScenario.directRequest(
+    `oversized-parent-view-${randomUUID()}`,
+  );
+  const runDirectory =
+    ModuleExpertsInvokeLineageScenario.processingRunDirectory(request.runId);
   const runtime = new CountingRuntime(request.runId);
   try {
     const planArgs: CreateDirectPlanWithViewArgs = {
       request,
       view: 'v'.repeat(MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH),
     };
-    await createDirectPlanWithView(planArgs);
+    await ModuleExpertsInvokeLineageScenario.createDirectPlanWithView(planArgs);
     const rewriteArgs: RewriteParentViewArgs = {
       request,
       view: 'v'.repeat(MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH + 1),
     };
-    await rewriteParentView(rewriteArgs);
+    await ModuleExpertsInvokeLineageScenario.rewriteParentView(rewriteArgs);
 
     const invocationInput: InvocationArgs = { request };
     await expect(
-      invokeModuleExpert(invocationArgs(invocationInput)),
+      ModuleExpertInvocation.invokeModuleExpert(
+        ModuleExpertsInvokeLineageScenario.invocationArgs(invocationInput),
+      ),
     ).rejects.toThrow('parent authorization failed');
     expect(runtime.executionCount).toBe(0);
   } finally {
@@ -164,10 +662,11 @@ test('rejects a parent view above the character limit with valid projection hash
 });
 
 test('rejects authorization storage collisions before lineage materializes', async () => {
-  const siblingRequest = directRequest(
+  const siblingRequest = ModuleExpertsInvokeLineageScenario.directRequest(
     `authorization-key-collision-${randomUUID()}`,
   );
-  const siblingAuthorization = authorization(siblingRequest);
+  const siblingAuthorization =
+    ModuleExpertsInvokeLineageScenario.authorization(siblingRequest);
   const collidingSibling: ModuleExpertAuthorization = {
     ...siblingAuthorization,
     expert: 'web_expert',
@@ -178,8 +677,10 @@ test('rejects authorization storage collisions before lineage materializes', asy
       attempt: 2,
     },
   };
-  const direct = directRequest(`authorization-parent-key-${randomUUID()}`);
-  const parent = directParent(direct);
+  const direct = ModuleExpertsInvokeLineageScenario.directRequest(
+    `authorization-parent-key-${randomUUID()}`,
+  );
+  const parent = ModuleExpertsInvokeLineageScenario.directParent(direct);
   const parentKeyRequest: ModuleExpertInvocationRequest = {
     ...direct,
     task: parent.task,
@@ -193,14 +694,21 @@ test('rejects authorization storage collisions before lineage materializes', asy
     },
     {
       request: parentKeyRequest,
-      authorizations: [authorization(parentKeyRequest)],
+      authorizations: [
+        ModuleExpertsInvokeLineageScenario.authorization(parentKeyRequest),
+      ],
       expectedMessage: 'identity is invalid',
     },
   ];
 
   for (const testCase of cases) {
-    const runDirectory = processingRunDirectory(testCase.request.runId);
-    const immediateParent = directParent(testCase.request);
+    const runDirectory =
+      ModuleExpertsInvokeLineageScenario.processingRunDirectory(
+        testCase.request.runId,
+      );
+    const immediateParent = ModuleExpertsInvokeLineageScenario.directParent(
+      testCase.request,
+    );
     const completedArgs = {
       repoRoot: REPO_ROOT,
       runId: testCase.request.runId,
@@ -210,12 +718,17 @@ test('rejects authorization storage collisions before lineage materializes', asy
       attempt: immediateParent.attempt,
       depth: 1,
       parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-      output: moduleDevelopmentPlanOutput(testCase.authorizations),
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput(
+          testCase.authorizations,
+        ),
     } as const;
     try {
-      await expect(createCompletedAttempt(completedArgs)).rejects.toThrow(
-        testCase.expectedMessage,
-      );
+      await expect(
+        ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
+          completedArgs,
+        ),
+      ).rejects.toThrow(testCase.expectedMessage);
     } finally {
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
@@ -223,18 +736,24 @@ test('rejects authorization storage collisions before lineage materializes', asy
 });
 
 test('runs a depth-three expert only when the root plan predeclares the exact child', async () => {
-  const request = depthThreeRequest(`depth-three-${randomUUID()}`);
-  const runDirectory = processingRunDirectory(request.runId);
+  const request = ModuleExpertsInvokeLineageScenario.depthThreeRequest(
+    `depth-three-${randomUUID()}`,
+  );
+  const runDirectory =
+    ModuleExpertsInvokeLineageScenario.processingRunDirectory(request.runId);
   const runtime = new CountingRuntime(request.runId);
   try {
     const lineageArgs: CreateDepthThreeLineageArgs = {
       request,
-      authorization: authorization(request),
+      authorization: ModuleExpertsInvokeLineageScenario.authorization(request),
     };
-    await createDepthThreeLineage(lineageArgs);
+    await ModuleExpertsInvokeLineageScenario.createDepthThreeLineage(
+      lineageArgs,
+    );
     const invocationInput: InvocationArgs = { request };
-    const invokeArgs = invocationArgs(invocationInput);
-    const result = await invokeModuleExpert(invokeArgs);
+    const invokeArgs =
+      ModuleExpertsInvokeLineageScenario.invocationArgs(invocationInput);
+    const result = await ModuleExpertInvocation.invokeModuleExpert(invokeArgs);
 
     expect(result.terminal.kind).toBe(TaskTerminalKind.Completed);
     expect(runtime.executionCount).toBe(1);
@@ -245,11 +764,14 @@ test('runs a depth-three expert only when the root plan predeclares the exact ch
 });
 
 test('does not treat depth-two expert evidence as authority for a grandchild', async () => {
-  const request = depthThreeRequest(`depth-three-unplanned-${randomUUID()}`);
-  const runDirectory = processingRunDirectory(request.runId);
+  const request = ModuleExpertsInvokeLineageScenario.depthThreeRequest(
+    `depth-three-unplanned-${randomUUID()}`,
+  );
+  const runDirectory =
+    ModuleExpertsInvokeLineageScenario.processingRunDirectory(request.runId);
   const runtime = new CountingRuntime(request.runId);
   const unrelated = {
-    ...authorization(request),
+    ...ModuleExpertsInvokeLineageScenario.authorization(request),
     task: 'different-child',
   };
   try {
@@ -257,12 +779,15 @@ test('does not treat depth-two expert evidence as authority for a grandchild', a
       request,
       authorization: unrelated,
     };
-    await createDepthThreeLineage(lineageArgs);
-    const invocationInput: InvocationArgs = { request };
-    const invokeArgs = invocationArgs(invocationInput);
-    await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
-      'parent authorization failed',
+    await ModuleExpertsInvokeLineageScenario.createDepthThreeLineage(
+      lineageArgs,
     );
+    const invocationInput: InvocationArgs = { request };
+    const invokeArgs =
+      ModuleExpertsInvokeLineageScenario.invocationArgs(invocationInput);
+    await expect(
+      ModuleExpertInvocation.invokeModuleExpert(invokeArgs),
+    ).rejects.toThrow('parent authorization failed');
     expect(runtime.executionCount).toBe(0);
   } finally {
     runtime.dispose();
@@ -271,9 +796,12 @@ test('does not treat depth-two expert evidence as authority for a grandchild', a
 });
 
 test('generic journal construction cannot forge module expert parent provenance', async () => {
-  const request = depthThreeRequest(`generic-forgery-${randomUUID()}`);
-  const runDirectory = processingRunDirectory(request.runId);
-  const immediate = directParent(request);
+  const request = ModuleExpertsInvokeLineageScenario.depthThreeRequest(
+    `generic-forgery-${randomUUID()}`,
+  );
+  const runDirectory =
+    ModuleExpertsInvokeLineageScenario.processingRunDirectory(request.runId);
+  const immediate = ModuleExpertsInvokeLineageScenario.directParent(request);
   const forgedArgs = {
     repoRoot: REPO_ROOT,
     runId: request.runId,
@@ -288,23 +816,29 @@ test('generic journal construction cannot forge module expert parent provenance'
       agent: 'delivery-owner',
       attempt: 1,
     },
-    output: moduleExpertEvidenceOutput(),
+    output:
+      ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput(),
   } as const;
   try {
-    await expect(createCompletedAttempt(forgedArgs)).rejects.toThrow(
-      'isolated invocation adapter',
-    );
+    await expect(
+      ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
+        forgedArgs,
+      ),
+    ).rejects.toThrow('isolated invocation adapter');
   } finally {
     await rm(runDirectory, REMOVE_RECURSIVELY);
   }
 });
 
 test('rejects depth-three lineage without a registered expert evidence parent', async () => {
-  const registeredRequest = depthThreeRequest(
-    `depth-three-non-expert-result-${randomUUID()}`,
-  );
+  const registeredRequest =
+    ModuleExpertsInvokeLineageScenario.depthThreeRequest(
+      `depth-three-non-expert-result-${randomUUID()}`,
+    );
   const unregisteredRequest = {
-    ...depthThreeRequest(`depth-three-unregistered-${randomUUID()}`),
+    ...ModuleExpertsInvokeLineageScenario.depthThreeRequest(
+      `depth-three-unregistered-${randomUUID()}`,
+    ),
     parent: {
       kind: AgentAttemptParentKind.AgentAttempt,
       task: 'inspect-provider-contract',
@@ -315,28 +849,37 @@ test('rejects depth-three lineage without a registered expert evidence parent', 
   const cases: readonly InvalidDepthThreeParentCase[] = [
     {
       request: unregisteredRequest,
-      immediateOutput: moduleDevelopmentPlanOutput([
-        authorization(unregisteredRequest),
-      ]),
+      immediateOutput:
+        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
+          ModuleExpertsInvokeLineageScenario.authorization(unregisteredRequest),
+        ]),
     },
     {
       request: registeredRequest,
-      immediateOutput: moduleDevelopmentPlanOutput([
-        authorization(registeredRequest),
-      ]),
+      immediateOutput:
+        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
+          ModuleExpertsInvokeLineageScenario.authorization(registeredRequest),
+        ]),
     },
   ];
 
   for (const testCase of cases) {
-    const runDirectory = processingRunDirectory(testCase.request.runId);
+    const runDirectory =
+      ModuleExpertsInvokeLineageScenario.processingRunDirectory(
+        testCase.request.runId,
+      );
     const runtime = new CountingRuntime(testCase.request.runId);
     try {
-      await createDepthThreeFixtureLineage(testCase);
+      await ModuleExpertsInvokeLineageScenario.createDepthThreeFixtureLineage(
+        testCase,
+      );
       const invocationInput: InvocationArgs = {
         request: testCase.request,
       };
       await expect(
-        invokeModuleExpert(invocationArgs(invocationInput)),
+        ModuleExpertInvocation.invokeModuleExpert(
+          ModuleExpertsInvokeLineageScenario.invocationArgs(invocationInput),
+        ),
       ).rejects.toThrow('parent authorization failed');
       expect(runtime.executionCount).toBe(0);
     } finally {
@@ -347,16 +890,21 @@ test('rejects depth-three lineage without a registered expert evidence parent', 
 });
 
 test('rejects depth-three evidence whose event provenance was downgraded', async () => {
-  const request = depthThreeRequest(`downgraded-origin-${randomUUID()}`);
-  const runDirectory = processingRunDirectory(request.runId);
+  const request = ModuleExpertsInvokeLineageScenario.depthThreeRequest(
+    `downgraded-origin-${randomUUID()}`,
+  );
+  const runDirectory =
+    ModuleExpertsInvokeLineageScenario.processingRunDirectory(request.runId);
   const runtime = new CountingRuntime(request.runId);
   try {
     const lineageArgs: CreateDepthThreeLineageArgs = {
       request,
-      authorization: authorization(request),
+      authorization: ModuleExpertsInvokeLineageScenario.authorization(request),
     };
-    await createDepthThreeLineage(lineageArgs);
-    const immediate = directParent(request);
+    await ModuleExpertsInvokeLineageScenario.createDepthThreeLineage(
+      lineageArgs,
+    );
+    const immediate = ModuleExpertsInvokeLineageScenario.directParent(request);
     const eventsPath = join(
       runDirectory,
       'agents',
@@ -380,7 +928,9 @@ test('rejects depth-three evidence whose event provenance was downgraded', async
 
     const invocationInput: InvocationArgs = { request };
     await expect(
-      invokeModuleExpert(invocationArgs(invocationInput)),
+      ModuleExpertInvocation.invokeModuleExpert(
+        ModuleExpertsInvokeLineageScenario.invocationArgs(invocationInput),
+      ),
     ).rejects.toThrow('parent authorization failed');
     expect(runtime.executionCount).toBe(0);
   } finally {
@@ -392,7 +942,8 @@ test('rejects depth-three evidence whose event provenance was downgraded', async
 type InvalidDepthThreeParentCase = {
   readonly request: ModuleExpertInvocationRequest;
   readonly immediateOutput: ReturnType<
-    typeof moduleDevelopmentPlanOutput | typeof moduleExpertEvidenceOutput
+    | typeof ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput
+    | typeof ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput
   >;
 };
 
@@ -401,42 +952,6 @@ type AuthorizationStorageCollisionCase = {
   readonly authorizations: readonly ModuleExpertAuthorization[];
   readonly expectedMessage: string;
 };
-
-async function createDepthThreeFixtureLineage(
-  args: InvalidDepthThreeParentCase,
-): Promise<void> {
-  const immediate = directParent(args.request);
-  const root: ParentAgentAttempt = {
-    kind: AgentAttemptParentKind.AgentAttempt,
-    task: 'feature-synthesis',
-    agent: 'delivery-owner',
-    attempt: 1,
-  };
-  const rootPlanArgs = {
-    repoRoot: REPO_ROOT,
-    runId: args.request.runId,
-    sourceCommit: args.request.sourceCommit,
-    task: root.task,
-    agent: root.agent,
-    attempt: root.attempt,
-    depth: 1,
-    parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-    output: moduleDevelopmentPlanOutput([authorization(args.request)]),
-  } as const;
-  await createCompletedAttempt(rootPlanArgs);
-  const immediateArgs = {
-    repoRoot: REPO_ROOT,
-    runId: args.request.runId,
-    sourceCommit: args.request.sourceCommit,
-    task: immediate.task,
-    agent: immediate.agent,
-    attempt: immediate.attempt,
-    depth: 2,
-    parent: root,
-    output: args.immediateOutput,
-  } as const;
-  await createCompletedAttempt(immediateArgs);
-}
 
 type ParentSetupArgs = {
   readonly request: ModuleExpertInvocationRequest;
@@ -448,106 +963,6 @@ type ParentSetupCase = {
   readonly name: string;
   readonly setup: ParentSetup;
 };
-
-async function setupAbsentParent(_args: ParentSetupArgs): Promise<void> {}
-
-async function setupFailedParent(args: ParentSetupArgs): Promise<void> {
-  const parent = directParent(args.request);
-  const failedArgs = {
-    repoRoot: REPO_ROOT,
-    runId: args.request.runId,
-    sourceCommit: args.request.sourceCommit,
-    task: parent.task,
-    agent: parent.agent,
-    attempt: parent.attempt,
-    depth: 1,
-    parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-  } as const;
-  await createFailedAttempt(failedArgs);
-}
-
-async function setupDriftedParent(args: ParentSetupArgs): Promise<void> {
-  const planArgs: CreateDirectPlanArgs = {
-    request: args.request,
-    sourceCommit: DRIFTED_SOURCE_COMMIT,
-    authorization: authorization(args.request),
-  };
-  await createDirectPlan(planArgs);
-}
-
-async function setupUnauthorizedParent(args: ParentSetupArgs): Promise<void> {
-  const unauthorized = {
-    ...authorization(args.request),
-    expert: 'different_expert',
-  };
-  const planArgs: CreateDirectPlanArgs = {
-    request: args.request,
-    sourceCommit: args.request.sourceCommit,
-    authorization: unauthorized,
-  };
-  await createDirectPlan(planArgs);
-}
-
-async function setupCorruptedParent(args: ParentSetupArgs): Promise<void> {
-  const planArgs: CreateDirectPlanArgs = {
-    request: args.request,
-    sourceCommit: args.request.sourceCommit,
-    authorization: authorization(args.request),
-  };
-  await createDirectPlan(planArgs);
-  const parent = directParent(args.request);
-  const resultPath = join(
-    processingRunDirectory(args.request.runId),
-    'agents',
-    parent.task,
-    `attempt-${parent.attempt}`,
-    'result.json',
-  );
-  const serialized = await readFile(resultPath, 'utf8');
-  await writeFile(resultPath, `${serialized}corrupted`, 'utf8');
-}
-
-async function setupSymlinkedProjection(args: ParentSetupArgs): Promise<void> {
-  const planArgs: CreateDirectPlanArgs = {
-    request: args.request,
-    sourceCommit: args.request.sourceCommit,
-    authorization: authorization(args.request),
-  };
-  await createDirectPlan(planArgs);
-  const parent = directParent(args.request);
-  const attemptDirectory = join(
-    processingRunDirectory(args.request.runId),
-    'agents',
-    parent.task,
-    `attempt-${parent.attempt}`,
-  );
-  const projectionPath = join(attemptDirectory, 'result.json');
-  const projectionTarget = join(attemptDirectory, 'result-target.json');
-  await rename(projectionPath, projectionTarget);
-  await symlink('result-target.json', projectionPath, 'file');
-}
-
-async function setupSymlinkedAttemptDirectory(
-  args: ParentSetupArgs,
-): Promise<void> {
-  const planArgs: CreateDirectPlanArgs = {
-    request: args.request,
-    sourceCommit: args.request.sourceCommit,
-    authorization: authorization(args.request),
-  };
-  await createDirectPlan(planArgs);
-  const parent = directParent(args.request);
-  const parentDirectory = join(
-    processingRunDirectory(args.request.runId),
-    'agents',
-    parent.task,
-  );
-  const attemptName = `attempt-${parent.attempt}`;
-  const attemptDirectory = join(parentDirectory, attemptName);
-  const attemptTargetName = `${attemptName}-target`;
-  await rename(attemptDirectory, join(parentDirectory, attemptTargetName));
-  await symlink(attemptTargetName, attemptDirectory, 'dir');
-}
 
 type CreateDirectPlanArgs = {
   readonly request: ModuleExpertInvocationRequest;
@@ -562,250 +977,11 @@ type CreateDirectPlanWithViewArgs = {
 
 type RewriteParentViewArgs = CreateDirectPlanWithViewArgs;
 
-async function createDirectPlan(args: CreateDirectPlanArgs): Promise<void> {
-  const parent = directParent(args.request);
-  const completedArgs = {
-    repoRoot: REPO_ROOT,
-    runId: args.request.runId,
-    sourceCommit: args.sourceCommit,
-    task: parent.task,
-    agent: parent.agent,
-    attempt: parent.attempt,
-    depth: 1,
-    parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-    output: moduleDevelopmentPlanOutput([args.authorization]),
-  } as const;
-  await createCompletedAttempt(completedArgs);
-}
-
-async function createDirectPlanWithView(
-  args: CreateDirectPlanWithViewArgs,
-): Promise<void> {
-  const parent = directParent(args.request);
-  const output: ModuleDevelopmentPlanTaskOutput = {
-    ...moduleDevelopmentPlanOutput([authorization(args.request)]),
-    materializedViewMarkdown: args.view,
-  };
-  const completedArgs = {
-    repoRoot: REPO_ROOT,
-    runId: args.request.runId,
-    sourceCommit: args.request.sourceCommit,
-    task: parent.task,
-    agent: parent.agent,
-    attempt: parent.attempt,
-    depth: 1,
-    parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-    output,
-  } as const;
-  await createCompletedAttempt(completedArgs);
-}
-
-async function rewriteParentView(args: RewriteParentViewArgs): Promise<void> {
-  const parent = directParent(args.request);
-  const attemptDirectory = join(
-    processingRunDirectory(args.request.runId),
-    'agents',
-    parent.task,
-    `attempt-${parent.attempt}`,
-  );
-  const eventsPath = join(attemptDirectory, 'events.jsonl');
-  const resultPath = join(attemptDirectory, 'result.json');
-  const viewPath = join(attemptDirectory, 'view.md');
-  const originalTerminal = JSON.parse(
-    await readFile(resultPath, 'utf8'),
-  ) as CompletedTaskTerminal<string>;
-  const output: ModuleDevelopmentPlanTaskOutput = {
-    ...moduleDevelopmentPlanOutput([authorization(args.request)]),
-    materializedViewMarkdown: args.view,
-  };
-  const terminal: CompletedTaskTerminal<string> = {
-    ...originalTerminal,
-    output,
-  };
-  const resultSerialized = `${JSON.stringify(terminal)}\n`;
-  const viewSerialized = `${args.view.trim()}\n`;
-  const resultHash = sha256(resultSerialized);
-  const viewHash = sha256(viewSerialized);
-  const events = (await readFile(eventsPath, 'utf8'))
-    .trim()
-    .split('\n')
-    .map((line) => JSON.parse(line) as AgentAttemptEvent);
-  const rewrittenEvents = events.map((event): AgentAttemptEvent => {
-    if (event.kind === AgentAttemptEventKind.ResultProjected) {
-      return { ...event, result: { ...event.result, sha256: resultHash } };
-    }
-    if (event.kind === AgentAttemptEventKind.ViewProjected) {
-      if (event.view.presence !== MaterializedViewPresence.Recorded) {
-        throw new Error('Expected a recorded parent view projection.');
-      }
-      return {
-        ...event,
-        view: {
-          ...event.view,
-          projection: { ...event.view.projection, sha256: viewHash },
-        },
-      };
-    }
-    if (event.kind === AgentAttemptEventKind.AttemptTerminalRecorded) {
-      if (event.view.presence !== MaterializedViewPresence.Recorded) {
-        throw new Error('Expected a recorded parent terminal view.');
-      }
-      return {
-        ...event,
-        result: { ...event.result, sha256: resultHash },
-        view: {
-          ...event.view,
-          projection: { ...event.view.projection, sha256: viewHash },
-        },
-      };
-    }
-    return event;
-  });
-  await Promise.all([
-    writeFile(
-      eventsPath,
-      `${rewrittenEvents.map((event) => JSON.stringify(event)).join('\n')}\n`,
-      'utf8',
-    ),
-    writeFile(resultPath, resultSerialized, 'utf8'),
-    writeFile(viewPath, viewSerialized, 'utf8'),
-  ]);
-}
-
 type CreateDepthThreeLineageArgs = {
   readonly request: ModuleExpertInvocationRequest;
   readonly authorization: ModuleExpertAuthorization;
 };
 
-async function createDepthThreeLineage(
-  args: CreateDepthThreeLineageArgs,
-): Promise<void> {
-  const immediate = directParent(args.request);
-  const root: ParentAgentAttempt = {
-    kind: AgentAttemptParentKind.AgentAttempt,
-    task: 'feature-synthesis',
-    agent: 'delivery-owner',
-    attempt: 1,
-  };
-  const intermediateRequest: ModuleExpertInvocationRequest = {
-    runId: args.request.runId,
-    expert: immediate.agent,
-    selectedContextPaths: [],
-    sourceCommit: args.request.sourceCommit,
-    task: immediate.task,
-    attempt: immediate.attempt,
-    depth: 2,
-    parent: root,
-    instruction: 'Inspect the provider contract without writing files.',
-  };
-  const rootPlanArgs = {
-    repoRoot: REPO_ROOT,
-    runId: args.request.runId,
-    sourceCommit: args.request.sourceCommit,
-    task: root.task,
-    agent: root.agent,
-    attempt: root.attempt,
-    depth: 1,
-    parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-    output: moduleDevelopmentPlanOutput([
-      authorization(intermediateRequest),
-      args.authorization,
-    ]),
-  } as const;
-  await createCompletedAttempt(rootPlanArgs);
-  const runtime = new CountingRuntime(intermediateRequest.runId);
-  const invocationInput: InvocationArgs = {
-    request: intermediateRequest,
-  };
-  try {
-    const intermediateResult = await invokeModuleExpert(
-      invocationArgs(invocationInput),
-    );
-    if (intermediateResult.terminal.kind !== TaskTerminalKind.Completed) {
-      throw new Error('Expected completed intermediate module expert fixture.');
-    }
-  } finally {
-    runtime.dispose();
-  }
-}
-
 type InvocationArgs = {
   readonly request: ModuleExpertInvocationRequest;
 };
-
-function invocationArgs(args: InvocationArgs): InvokeModuleExpertArgs {
-  const controller = new AbortController();
-  return {
-    repoRoot: REPO_ROOT,
-    request: args.request,
-    signal: controller.signal,
-  };
-}
-
-function authorization(
-  request: ModuleExpertInvocationRequest,
-): ModuleExpertAuthorization {
-  return {
-    task: request.task,
-    expert: request.expert,
-    attempt: request.attempt,
-    depth: request.depth,
-    parent: directParent(request),
-  };
-}
-
-function directParent(
-  request: ModuleExpertInvocationRequest,
-): ParentAgentAttempt {
-  if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
-    throw new Error('Expected parent agent attempt in the test fixture.');
-  }
-  return request.parent;
-}
-
-function directRequest(runId: string): ModuleExpertInvocationRequest {
-  return {
-    runId,
-    expert: 'core_expert',
-    selectedContextPaths: [],
-    sourceCommit: SOURCE_COMMIT,
-    task: 'inspect-core-contract',
-    attempt: 1,
-    depth: 2,
-    parent: {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: 'feature-synthesis',
-      agent: 'delivery-owner',
-      attempt: 1,
-    },
-    instruction: 'Inspect the module contract without writing files.',
-  };
-}
-
-function depthThreeRequest(runId: string): ModuleExpertInvocationRequest {
-  const request = directRequest(runId);
-  return {
-    ...request,
-    depth: 3,
-    parent: {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: 'inspect-provider-contract',
-      agent: 'core_expert',
-      attempt: 1,
-    },
-  };
-}
-
-function processingRunDirectory(runId: string): string {
-  return join(
-    REPO_ROOT,
-    'workflow',
-    'processing',
-    DelegatedAgentWorkflowName.AgentWork,
-    runId,
-  );
-}
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
-}

@@ -1,8 +1,40 @@
 import { describe, expect, test } from 'bun:test';
+
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-import { decodeModuleExpertInvocationRequest } from '../../src/module-experts/invoke.ts';
+
+import { ModuleExpertRequestDecoder } from '../../src/module-experts/invoke.ts';
+
 import type { ModuleExpertInvocationRequest } from '../../src/module-experts/invoke.ts';
+
 import type { WebExpertAllowedContextPath } from '../../src/module-experts/catalog.ts';
+
+export class ModuleExpertsInvokeRequestCodecScenario {
+  private constructor(private readonly request: string) {}
+
+  static directRequest(runId: string): ModuleExpertInvocationRequest {
+    return new ModuleExpertsInvokeRequestCodecScenario(runId).execute();
+  }
+
+  private execute(): ModuleExpertInvocationRequest {
+    const runId = this.request;
+    return {
+      runId,
+      expert: 'core_expert',
+      selectedContextPaths: [],
+      sourceCommit: SOURCE_COMMIT,
+      task: 'inspect-core-contract',
+      attempt: 1,
+      depth: 2,
+      parent: {
+        kind: AgentAttemptParentKind.AgentAttempt,
+        task: 'feature-synthesis',
+        agent: 'delivery-owner',
+        attempt: 1,
+      },
+      instruction: 'Describe the external vault API used by nook-wasm.',
+    };
+  }
+}
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
@@ -12,7 +44,9 @@ type ExtendedModuleExpertInvocationRequest = ModuleExpertInvocationRequest & {
 
 describe('module expert invocation request codec', () => {
   test('decodes a bounded exact request with direct expert lineage', () => {
-    const request = directRequest('module-expert-decode');
+    const request = ModuleExpertsInvokeRequestCodecScenario.directRequest(
+      'module-expert-decode',
+    );
     const serialized = JSON.stringify(request);
     const [defaulted1 = []] = [request.selectedContextPaths];
     const expectedRequest = {
@@ -20,9 +54,11 @@ describe('module expert invocation request codec', () => {
       selectedContextPaths: defaulted1,
     };
 
-    expect(decodeModuleExpertInvocationRequest(serialized)).toEqual(
-      expectedRequest,
-    );
+    expect(
+      ModuleExpertRequestDecoder.decodeModuleExpertInvocationRequest(
+        serialized,
+      ),
+    ).toEqual(expectedRequest);
   });
 
   test('defaults omitted non-web selected context to an empty selection', () => {
@@ -44,12 +80,16 @@ describe('module expert invocation request codec', () => {
     const expectedRequest = { ...request, selectedContextPaths: [] };
 
     expect(
-      decodeModuleExpertInvocationRequest(JSON.stringify(request)),
+      ModuleExpertRequestDecoder.decodeModuleExpertInvocationRequest(
+        JSON.stringify(request),
+      ),
     ).toEqual(expectedRequest);
   });
 
   test('decodes bounded exceptional depth-three lineage', () => {
-    const direct = directRequest('module-expert-child');
+    const direct = ModuleExpertsInvokeRequestCodecScenario.directRequest(
+      'module-expert-child',
+    );
     const request: ModuleExpertInvocationRequest = {
       ...direct,
       depth: 3,
@@ -67,7 +107,9 @@ describe('module expert invocation request codec', () => {
     };
 
     expect(
-      decodeModuleExpertInvocationRequest(JSON.stringify(request)),
+      ModuleExpertRequestDecoder.decodeModuleExpertInvocationRequest(
+        JSON.stringify(request),
+      ),
     ).toEqual(expectedRequest);
   });
 
@@ -79,7 +121,9 @@ describe('module expert invocation request codec', () => {
       '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ];
     const request: ModuleExpertInvocationRequest = {
-      ...directRequest('web-expert-selected-context'),
+      ...ModuleExpertsInvokeRequestCodecScenario.directRequest(
+        'web-expert-selected-context',
+      ),
       expert: 'web_expert',
       selectedContextPaths,
     };
@@ -90,7 +134,9 @@ describe('module expert invocation request codec', () => {
     };
 
     expect(
-      decodeModuleExpertInvocationRequest(JSON.stringify(request)),
+      ModuleExpertRequestDecoder.decodeModuleExpertInvocationRequest(
+        JSON.stringify(request),
+      ),
     ).toEqual(expectedRequest);
   });
 
@@ -102,7 +148,9 @@ describe('module expert invocation request codec', () => {
       '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ];
     const webRequest: ModuleExpertInvocationRequest = {
-      ...directRequest('web-expert-invalid-context'),
+      ...ModuleExpertsInvokeRequestCodecScenario.directRequest(
+        'web-expert-invalid-context',
+      ),
       expert: 'web_expert',
       selectedContextPaths,
     };
@@ -121,20 +169,26 @@ describe('module expert invocation request codec', () => {
         selectedContextPaths: [...selectedContextPaths].reverse(),
       },
       {
-        ...directRequest('core-expert-foreign-context'),
+        ...ModuleExpertsInvokeRequestCodecScenario.directRequest(
+          'core-expert-foreign-context',
+        ),
         selectedContextPaths: [selectedContextPaths[0]],
       },
     ];
 
     for (const request of invalidRequests) {
       expect(() =>
-        decodeModuleExpertInvocationRequest(JSON.stringify(request)),
+        ModuleExpertRequestDecoder.decodeModuleExpertInvocationRequest(
+          JSON.stringify(request),
+        ),
       ).toThrow('request is invalid');
     }
   });
 
   test('rejects malformed, unbounded, extended, and excessive-depth requests', () => {
-    const valid = directRequest('module-expert-invalid');
+    const valid = ModuleExpertsInvokeRequestCodecScenario.directRequest(
+      'module-expert-invalid',
+    );
     const invalidSourceRequest: ModuleExpertInvocationRequest = {
       ...valid,
       sourceCommit: 'main',
@@ -211,27 +265,10 @@ describe('module expert invocation request codec', () => {
 
     for (const request of invalidRequests) {
       expect(() =>
-        decodeModuleExpertInvocationRequest(JSON.stringify(request)),
+        ModuleExpertRequestDecoder.decodeModuleExpertInvocationRequest(
+          JSON.stringify(request),
+        ),
       ).toThrow('request is invalid');
     }
   });
 });
-
-function directRequest(runId: string): ModuleExpertInvocationRequest {
-  return {
-    runId,
-    expert: 'core_expert',
-    selectedContextPaths: [],
-    sourceCommit: SOURCE_COMMIT,
-    task: 'inspect-core-contract',
-    attempt: 1,
-    depth: 2,
-    parent: {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: 'feature-synthesis',
-      agent: 'delivery-owner',
-      attempt: 1,
-    },
-    instruction: 'Describe the external vault API used by nook-wasm.',
-  };
-}

@@ -1,32 +1,111 @@
 import { expect, test } from 'bun:test';
+
 import {
   AgentAttemptParentKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
+
 import type {
   ModuleDevelopmentPlanTaskOutput,
   ModuleExpertContinuation,
   ModuleExpertTaskOutput,
   WorkflowTaskOutput,
 } from '../../src/agent-workflow/domain.ts';
-import {
-  decodeWorkflowTaskOutput,
-  workflowTaskOutputSchema,
-} from '../../src/agent-workflow/structured-result-codec.ts';
-import { isRecord } from '../../src/lib/guards.ts';
+
+import { WorkflowResultSchema } from '../../src/agent-workflow/structured-result-codec.ts';
+
+import { UntrustedYamlBoundary } from '../../src/lib/guards.ts';
+
 import type { UntrustedYamlNode } from '../../src/lib/guards.ts';
+
+export class AgentWorkflowStructuredResultCodecScenario {
+  private constructor(private readonly request: UntrustedYamlNode) {}
+
+  static moduleExpertContinuation(): ModuleExpertContinuation {
+    return {
+      externalApi: ['PublicFacade::inspect exposes the supported operation.'],
+      dependencies: ['CoreTypes supplies the stable input DTO.'],
+      consumers: ['WASM bindings consume PublicFacade.'],
+      behaviorInvariants: ['The operation preserves the domain transition.'],
+      securityInvariants: ['Sensitive values remain inside the Rust boundary.'],
+      compatibilityInvariants: ['The generated binding shape remains stable.'],
+      owningTests: ['The provider behavior suite owns the contract.'],
+      focusedValidation: ['Run the focused behavior and binding tests.'],
+      risks: ['No material implementation risks were found.'],
+      unresolvedDecisions: ['No unresolved decisions were found.'],
+      parentActions: ['Implement the consumer against PublicFacade only.'],
+    };
+  }
+
+  static moduleDevelopmentPlanOutput(): ModuleDevelopmentPlanTaskOutput {
+    return {
+      resultKind: WorkflowResultKind.ModuleDevelopmentPlan,
+      summary: 'Reviewed module plan.',
+      materializedViewMarkdown: '# Module plan\n\nReviewed.',
+      findings: [],
+      notesForParent: [],
+      artifacts: [],
+      moduleExpertAuthorizations: [
+        {
+          task: 'inspect-core-contract',
+          expert: 'core_expert',
+          attempt: 1,
+          depth: 2,
+          parent: {
+            kind: AgentAttemptParentKind.AgentAttempt,
+            task: 'feature-synthesis',
+            agent: 'delivery-owner',
+            attempt: 1,
+          },
+        },
+      ],
+    };
+  }
+
+  static moduleExpertOutput(): ModuleExpertTaskOutput {
+    return {
+      resultKind: WorkflowResultKind.ModuleExpertEvidence,
+      summary: 'Module boundary inspected.',
+      materializedViewMarkdown: '# Module boundary\n\nInspected.',
+      findings: [],
+      notesForParent: [],
+      artifacts: [],
+      continuation:
+        AgentWorkflowStructuredResultCodecScenario.moduleExpertContinuation(),
+    };
+  }
+
+  static jsonMap(value: UntrustedYamlNode): MutableYamlMap {
+    return new AgentWorkflowStructuredResultCodecScenario(value).execute();
+  }
+
+  private execute(): MutableYamlMap {
+    const value = this.request;
+    return JSON.parse(JSON.stringify(value)) as MutableYamlMap;
+  }
+
+  static continuationMap(output: MutableYamlMap): MutableYamlMap {
+    const continuation = output.continuation;
+    if (!continuation || !UntrustedYamlBoundary.isRecord(continuation)) {
+      throw new Error('Expected a continuation map in the test fixture.');
+    }
+    return continuation as MutableYamlMap;
+  }
+}
 
 type MutableYamlMap = Record<string, UntrustedYamlNode>;
 
 test('binds the structured result schema to one task result kind', () => {
-  const schema = workflowTaskOutputSchema(WorkflowResultKind.CortexEvidence);
+  const schema = WorkflowResultSchema.workflowTaskOutputSchema(
+    WorkflowResultKind.CortexEvidence,
+  );
   const properties = schema.properties;
   expect(JSON.stringify(properties)).toContain('cortex-evidence');
   expect(JSON.stringify(properties)).not.toContain('loom-leaf-evidence');
 });
 
 test('requires typed continuation fields for module expert evidence', () => {
-  const schema = workflowTaskOutputSchema(
+  const schema = WorkflowResultSchema.workflowTaskOutputSchema(
     WorkflowResultKind.ModuleExpertEvidence,
   );
   expect(schema.required).toContain('continuation');
@@ -38,19 +117,24 @@ test('requires typed continuation fields for module expert evidence', () => {
 });
 
 test('requires typed child authorizations for a module development plan', () => {
-  const schema = workflowTaskOutputSchema(
+  const schema = WorkflowResultSchema.workflowTaskOutputSchema(
     WorkflowResultKind.ModuleDevelopmentPlan,
   );
   expect(schema.required).toContain('moduleExpertAuthorizations');
   expect(JSON.stringify(schema.properties)).toContain('parent');
 
-  const output = moduleDevelopmentPlanOutput();
-  expect(decodeWorkflowTaskOutput(JSON.stringify(output))).toEqual(output);
+  const output =
+    AgentWorkflowStructuredResultCodecScenario.moduleDevelopmentPlanOutput();
+  expect(
+    WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(output)),
+  ).toEqual(output);
 });
 
 test('rejects missing, duplicate, or invalid module expert authorizations', () => {
-  const output = moduleDevelopmentPlanOutput();
-  const missingAuthorization = jsonMap(output);
+  const output =
+    AgentWorkflowStructuredResultCodecScenario.moduleDevelopmentPlanOutput();
+  const missingAuthorization =
+    AgentWorkflowStructuredResultCodecScenario.jsonMap(output);
   delete missingAuthorization.moduleExpertAuthorizations;
   const duplicateAuthorization: ModuleDevelopmentPlanTaskOutput = {
     ...output,
@@ -90,37 +174,49 @@ test('rejects missing, duplicate, or invalid module expert authorizations', () =
       },
     ],
   };
-  const invalidDepth = jsonMap(output);
+  const invalidDepth =
+    AgentWorkflowStructuredResultCodecScenario.jsonMap(output);
   const authorizationNode = invalidDepth.moduleExpertAuthorizations;
-  if (!Array.isArray(authorizationNode) || !isRecord(authorizationNode[0])) {
+  if (
+    !Array.isArray(authorizationNode) ||
+    !UntrustedYamlBoundary.isRecord(authorizationNode[0])
+  ) {
     throw new Error('Expected an authorization in the test fixture.');
   }
   const authorization = authorizationNode[0] as MutableYamlMap;
   authorization.depth = 4;
 
   expect(() =>
-    decodeWorkflowTaskOutput(JSON.stringify(missingAuthorization)),
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(missingAuthorization),
+    ),
   ).toThrow('missing or extra fields');
   expect(() =>
-    decodeWorkflowTaskOutput(JSON.stringify(duplicateAuthorization)),
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(duplicateAuthorization),
+    ),
   ).toThrow('journal storage keys must be unique');
   expect(() =>
-    decodeWorkflowTaskOutput(JSON.stringify(collidingStorageKey)),
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(collidingStorageKey),
+    ),
   ).toThrow('journal storage keys must be unique');
   expect(() =>
-    decodeWorkflowTaskOutput(JSON.stringify(childReusesParentStorageKey)),
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(childReusesParentStorageKey),
+    ),
   ).toThrow('identity is invalid');
-  expect(() => decodeWorkflowTaskOutput(JSON.stringify(invalidDepth))).toThrow(
-    'identity is invalid',
-  );
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(invalidDepth)),
+  ).toThrow('identity is invalid');
 });
 
 test('rejects extra fields at the structured output boundary', () => {
   const serialized =
     '{"resultKind":"cortex-evidence","summary":"Audited.","findings":[],"notesForParent":[],"artifacts":[],"extra":"not allowed"}';
-  expect(() => decodeWorkflowTaskOutput(serialized)).toThrow(
-    'missing or extra fields',
-  );
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(serialized),
+  ).toThrow('missing or extra fields');
 });
 
 test('decodes a valid typed task output', () => {
@@ -132,7 +228,9 @@ test('decodes a valid typed task output', () => {
     notesForParent: [],
     artifacts: [],
   };
-  const decoded = decodeWorkflowTaskOutput(JSON.stringify(output));
+  const decoded = WorkflowResultSchema.decodeWorkflowTaskOutput(
+    JSON.stringify(output),
+  );
   expect(decoded).toEqual(output);
 });
 
@@ -144,10 +242,13 @@ test('decodes complete module expert continuation data', () => {
     findings: [],
     notesForParent: [],
     artifacts: [],
-    continuation: moduleExpertContinuation(),
+    continuation:
+      AgentWorkflowStructuredResultCodecScenario.moduleExpertContinuation(),
   };
 
-  expect(decodeWorkflowTaskOutput(JSON.stringify(output))).toEqual(output);
+  expect(
+    WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(output)),
+  ).toEqual(output);
 });
 
 test('rejects module expert prose without complete continuation data', () => {
@@ -163,21 +264,26 @@ test('rejects module expert prose without complete continuation data', () => {
     ...missingContinuation,
     resultKind: WorkflowResultKind.ModuleExpertEvidence,
     continuation: {
-      ...moduleExpertContinuation(),
+      ...AgentWorkflowStructuredResultCodecScenario.moduleExpertContinuation(),
       parentActions: [],
     },
   };
 
   expect(() =>
-    decodeWorkflowTaskOutput(JSON.stringify(missingContinuation)),
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(missingContinuation),
+    ),
   ).toThrow('missing or extra fields');
   expect(() =>
-    decodeWorkflowTaskOutput(JSON.stringify(emptyParentActions)),
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(emptyParentActions),
+    ),
   ).toThrow('require bounded non-empty entries');
 });
 
 test('rejects every missing or extra module expert result field', () => {
-  const output = moduleExpertOutput();
+  const output =
+    AgentWorkflowStructuredResultCodecScenario.moduleExpertOutput();
   const outputFields = [
     'resultKind',
     'summary',
@@ -188,36 +294,46 @@ test('rejects every missing or extra module expert result field', () => {
     'continuation',
   ];
   for (const field of outputFields) {
-    const malformed = jsonMap(output);
+    const malformed =
+      AgentWorkflowStructuredResultCodecScenario.jsonMap(output);
     delete malformed[field];
-    expect(() => decodeWorkflowTaskOutput(JSON.stringify(malformed))).toThrow();
+    expect(() =>
+      WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(malformed)),
+    ).toThrow();
   }
 
-  const extraOutputField = jsonMap(output);
+  const extraOutputField =
+    AgentWorkflowStructuredResultCodecScenario.jsonMap(output);
   extraOutputField.implementationPlan = ['Not part of evidence.'];
   expect(() =>
-    decodeWorkflowTaskOutput(JSON.stringify(extraOutputField)),
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(extraOutputField),
+    ),
   ).toThrow('missing or extra fields');
 });
 
 test('rejects every missing or extra continuation field', () => {
-  const output = moduleExpertOutput();
+  const output =
+    AgentWorkflowStructuredResultCodecScenario.moduleExpertOutput();
   const continuationFields = Object.keys(output.continuation);
   for (const field of continuationFields) {
-    const malformed = jsonMap(output);
-    const continuation = continuationMap(malformed);
+    const malformed =
+      AgentWorkflowStructuredResultCodecScenario.jsonMap(output);
+    const continuation =
+      AgentWorkflowStructuredResultCodecScenario.continuationMap(malformed);
     delete continuation[field];
-    expect(() => decodeWorkflowTaskOutput(JSON.stringify(malformed))).toThrow(
-      'missing or extra fields',
-    );
+    expect(() =>
+      WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(malformed)),
+    ).toThrow('missing or extra fields');
   }
 
-  const malformed = jsonMap(output);
-  const continuation = continuationMap(malformed);
+  const malformed = AgentWorkflowStructuredResultCodecScenario.jsonMap(output);
+  const continuation =
+    AgentWorkflowStructuredResultCodecScenario.continuationMap(malformed);
   continuation.implementationPlan = ['Not a registered continuation field.'];
-  expect(() => decodeWorkflowTaskOutput(JSON.stringify(malformed))).toThrow(
-    'missing or extra fields',
-  );
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(malformed)),
+  ).toThrow('missing or extra fields');
 });
 
 test('rejects malformed, duplicate, controlled, and unbounded continuation entries', () => {
@@ -236,10 +352,15 @@ test('rejects malformed, duplicate, controlled, and unbounded continuation entri
   ];
 
   for (const invalidValue of invalidValues) {
-    const malformed = jsonMap(moduleExpertOutput());
-    const continuation = continuationMap(malformed);
+    const malformed = AgentWorkflowStructuredResultCodecScenario.jsonMap(
+      AgentWorkflowStructuredResultCodecScenario.moduleExpertOutput(),
+    );
+    const continuation =
+      AgentWorkflowStructuredResultCodecScenario.continuationMap(malformed);
     continuation.externalApi = invalidValue;
-    expect(() => decodeWorkflowTaskOutput(JSON.stringify(malformed))).toThrow();
+    expect(() =>
+      WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(malformed)),
+    ).toThrow();
   }
 });
 
@@ -252,17 +373,20 @@ test('rejects continuation data on standard workflow evidence', () => {
     notesForParent: [],
     artifacts: [],
   };
-  const output = jsonMap(standardOutput);
-  const moduleOutput = jsonMap(moduleExpertOutput());
+  const output =
+    AgentWorkflowStructuredResultCodecScenario.jsonMap(standardOutput);
+  const moduleOutput = AgentWorkflowStructuredResultCodecScenario.jsonMap(
+    AgentWorkflowStructuredResultCodecScenario.moduleExpertOutput(),
+  );
   const continuation = moduleOutput.continuation;
   if (!continuation) {
     throw new Error('Expected module expert continuation in the test fixture.');
   }
   output.continuation = continuation;
 
-  expect(() => decodeWorkflowTaskOutput(JSON.stringify(output))).toThrow(
-    'missing or extra fields',
-  );
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(output)),
+  ).toThrow('missing or extra fields');
 });
 
 test('requires non-empty evidence on every structured finding', () => {
@@ -270,12 +394,12 @@ test('requires non-empty evidence on every structured finding', () => {
     '{"resultKind":"cortex-evidence","summary":"Audited.","materializedViewMarkdown":"# Audit","findings":[{"severity":"error","title":"Missing evidence","summary":"No evidence was supplied.","evidence":[],"affectedPaths":[]}],"notesForParent":[],"artifacts":[]}';
   const blankEvidence =
     '{"resultKind":"cortex-evidence","summary":"Audited.","materializedViewMarkdown":"# Audit","findings":[{"severity":"error","title":"Blank evidence","summary":"Only blank evidence was supplied.","evidence":["   "],"affectedPaths":[]}],"notesForParent":[],"artifacts":[]}';
-  expect(() => decodeWorkflowTaskOutput(noEvidence)).toThrow(
-    'at least one non-empty evidence string',
-  );
-  expect(() => decodeWorkflowTaskOutput(blankEvidence)).toThrow(
-    'at least one non-empty evidence string',
-  );
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(noEvidence),
+  ).toThrow('at least one non-empty evidence string');
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(blankEvidence),
+  ).toThrow('at least one non-empty evidence string');
 });
 
 test('requires a bounded non-empty semantic materialized view', () => {
@@ -290,75 +414,12 @@ test('requires a bounded non-empty semantic materialized view', () => {
     artifacts: [],
   };
 
-  expect(() => decodeWorkflowTaskOutput(blankView)).toThrow(
-    'non-empty, bounded Markdown',
-  );
   expect(() =>
-    decodeWorkflowTaskOutput(JSON.stringify(oversizedOutput)),
+    WorkflowResultSchema.decodeWorkflowTaskOutput(blankView),
+  ).toThrow('non-empty, bounded Markdown');
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(oversizedOutput),
+    ),
   ).toThrow('non-empty, bounded Markdown');
 });
-
-function moduleExpertContinuation(): ModuleExpertContinuation {
-  return {
-    externalApi: ['PublicFacade::inspect exposes the supported operation.'],
-    dependencies: ['CoreTypes supplies the stable input DTO.'],
-    consumers: ['WASM bindings consume PublicFacade.'],
-    behaviorInvariants: ['The operation preserves the domain transition.'],
-    securityInvariants: ['Sensitive values remain inside the Rust boundary.'],
-    compatibilityInvariants: ['The generated binding shape remains stable.'],
-    owningTests: ['The provider behavior suite owns the contract.'],
-    focusedValidation: ['Run the focused behavior and binding tests.'],
-    risks: ['No material implementation risks were found.'],
-    unresolvedDecisions: ['No unresolved decisions were found.'],
-    parentActions: ['Implement the consumer against PublicFacade only.'],
-  };
-}
-
-function moduleDevelopmentPlanOutput(): ModuleDevelopmentPlanTaskOutput {
-  return {
-    resultKind: WorkflowResultKind.ModuleDevelopmentPlan,
-    summary: 'Reviewed module plan.',
-    materializedViewMarkdown: '# Module plan\n\nReviewed.',
-    findings: [],
-    notesForParent: [],
-    artifacts: [],
-    moduleExpertAuthorizations: [
-      {
-        task: 'inspect-core-contract',
-        expert: 'core_expert',
-        attempt: 1,
-        depth: 2,
-        parent: {
-          kind: AgentAttemptParentKind.AgentAttempt,
-          task: 'feature-synthesis',
-          agent: 'delivery-owner',
-          attempt: 1,
-        },
-      },
-    ],
-  };
-}
-
-function moduleExpertOutput(): ModuleExpertTaskOutput {
-  return {
-    resultKind: WorkflowResultKind.ModuleExpertEvidence,
-    summary: 'Module boundary inspected.',
-    materializedViewMarkdown: '# Module boundary\n\nInspected.',
-    findings: [],
-    notesForParent: [],
-    artifacts: [],
-    continuation: moduleExpertContinuation(),
-  };
-}
-
-function jsonMap(value: UntrustedYamlNode): MutableYamlMap {
-  return JSON.parse(JSON.stringify(value)) as MutableYamlMap;
-}
-
-function continuationMap(output: MutableYamlMap): MutableYamlMap {
-  const continuation = output.continuation;
-  if (!continuation || !isRecord(continuation)) {
-    throw new Error('Expected a continuation map in the test fixture.');
-  }
-  return continuation as MutableYamlMap;
-}

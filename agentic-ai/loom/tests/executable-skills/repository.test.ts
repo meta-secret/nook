@@ -6,21 +6,120 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises';
+
 import { tmpdir } from 'node:os';
+
 import { join } from 'node:path';
+
 import { expect, test } from 'bun:test';
+
 import {
-  auditExecutableSkillPackageFiles,
   EXECUTABLE_SKILL_DIAGNOSTIC_BYTE_LIMIT,
   EXECUTABLE_SKILL_FINDING_LIMIT,
-  executableSkillPackageFromPath,
-  readTrackedRepositoryFiles,
   type TrackedRepositoryFile,
+  ExecutableSkillRepository,
 } from '../../src/executable-skills/repository.ts';
+
 import type { UntrustedYamlMap } from '../../src/lib/guards.ts';
 
+export class ExecutableSkillsRepositoryScenario {
+  private constructor(private readonly request: FixtureOverrides) {}
+
+  static trackedFiles(): TrackedRepositoryFile[] {
+    return [
+      '.cortex/.gitignore',
+      '.cortex/bun.lock',
+      '.cortex/bunfig.toml',
+      '.cortex/package.json',
+      `${ROOT}/SKILL.md`,
+      `${SCRIPTS}/.gitignore`,
+      `${SCRIPTS}/.prettierrc`,
+      `${SCRIPTS}/eslint.config.js`,
+      `${SCRIPTS}/executable-skill.json`,
+      `${SCRIPTS}/package.json`,
+      `${SCRIPTS}/tsconfig.json`,
+      `${SCRIPTS}/src/index.ts`,
+      `${SCRIPTS}/tests/index.test.ts`,
+    ].map((path) => ({ mode: '100644', path }));
+  }
+
+  static packageFixture(overrides?: FixtureOverrides): Promise<string> {
+    return new ExecutableSkillsRepositoryScenario(overrides).execute();
+  }
+
+  private async execute(): Promise<string> {
+    const overrides = this.request;
+    const [defaulted1 = {}] = [overrides];
+    const selected: FixtureOverrides = defaulted1;
+    const repoRoot = await mkdtemp(join(tmpdir(), 'executable-skill-package-'));
+    await mkdir(join(repoRoot, SCRIPTS, 'src'), DIRECTORY_OPTIONS);
+    await mkdir(join(repoRoot, SCRIPTS, 'tests'), DIRECTORY_OPTIONS);
+    const [packageDocument = PACKAGE_DOCUMENT] = [selected.packageDocument];
+    const [
+      lock = {
+        lockfileVersion: 1,
+        configVersion: 1,
+        workspaces: {
+          '': { name: '@nook/executable-skills-workspace' },
+          'teams/ai/dynamic-skills/example/scripts': {
+            name: '@nook/example-skill',
+            version: '0.1.0',
+            devDependencies: packageDocument.devDependencies,
+          },
+        },
+        packages: {},
+      },
+    ] = [selected.lock];
+    const [prettier, tsconfig, eslint] = await Promise.all(
+      ['.prettierrc', 'tsconfig.json', 'eslint.config.js'].map((name) =>
+        readFile(join(CANONICAL_SCRIPTS, name), 'utf8'),
+      ),
+    );
+    const [defaulted2 = '---\nname: example\ndescription: Test skill.\n---\n'] =
+      [selected.skill];
+    const [defaulted3 = MANIFEST] = [selected.manifest];
+    const [defaulted4 = ''] = [prettier];
+    const [defaulted5 = ''] = [tsconfig];
+    const [defaulted6 = ''] = [eslint];
+    await Promise.all([
+      writeFile(join(repoRoot, '.cortex/.gitignore'), 'node_modules/\n'),
+      writeFile(
+        join(repoRoot, '.cortex/package.json'),
+        JSON.stringify(WORKSPACE_PACKAGE),
+      ),
+      writeFile(
+        join(repoRoot, '.cortex/bunfig.toml'),
+        '[install]\nlinker = "hoisted"\n',
+      ),
+      writeFile(join(repoRoot, '.cortex/bun.lock'), JSON.stringify(lock)),
+      writeFile(join(repoRoot, ROOT, 'SKILL.md'), defaulted2),
+      writeFile(
+        join(repoRoot, SCRIPTS, 'package.json'),
+        JSON.stringify(packageDocument),
+      ),
+      writeFile(
+        join(repoRoot, SCRIPTS, 'executable-skill.json'),
+        JSON.stringify(defaulted3),
+      ),
+      writeFile(join(repoRoot, SCRIPTS, '.prettierrc'), defaulted4),
+      writeFile(join(repoRoot, SCRIPTS, 'tsconfig.json'), defaulted5),
+      writeFile(join(repoRoot, SCRIPTS, 'eslint.config.js'), defaulted6),
+    ]);
+    return repoRoot;
+  }
+
+  static audit(repoRoot: string) {
+    return (tracked: readonly TrackedRepositoryFile[]) => {
+      const request = { repoRoot, tracked };
+      return ExecutableSkillRepository.auditFiles(request);
+    };
+  }
+}
+
 const ROOT = '.cortex/teams/ai/dynamic-skills/example';
+
 const SCRIPTS = `${ROOT}/scripts`;
+
 const WORKSPACE_PACKAGE = {
   name: '@nook/executable-skills-workspace',
   private: true,
@@ -31,8 +130,11 @@ const WORKSPACE_PACKAGE = {
     'teams/*/dynamic-skills/*/scripts',
   ],
 } as const;
+
 const REMOVE_OPTIONS = { recursive: true, force: true } as const;
+
 const DIRECTORY_OPTIONS = { recursive: true } as const;
+
 const CANONICAL_SCRIPTS = join(
   import.meta.dir,
   '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts',
@@ -68,24 +170,6 @@ const MANIFEST = {
   limits: { requestBytes: 1024, resultBytes: 1024 },
 } as const;
 
-function trackedFiles(): TrackedRepositoryFile[] {
-  return [
-    '.cortex/.gitignore',
-    '.cortex/bun.lock',
-    '.cortex/bunfig.toml',
-    '.cortex/package.json',
-    `${ROOT}/SKILL.md`,
-    `${SCRIPTS}/.gitignore`,
-    `${SCRIPTS}/.prettierrc`,
-    `${SCRIPTS}/eslint.config.js`,
-    `${SCRIPTS}/executable-skill.json`,
-    `${SCRIPTS}/package.json`,
-    `${SCRIPTS}/tsconfig.json`,
-    `${SCRIPTS}/src/index.ts`,
-    `${SCRIPTS}/tests/index.test.ts`,
-  ].map((path) => ({ mode: '100644', path }));
-}
-
 type FixtureOverrides = {
   readonly lock?: UntrustedYamlMap;
   readonly manifest?: UntrustedYamlMap;
@@ -93,78 +177,14 @@ type FixtureOverrides = {
   readonly skill?: string;
 };
 
-async function packageFixture(overrides?: FixtureOverrides): Promise<string> {
-  const [defaulted1 = {}] = [overrides];
-  const selected: FixtureOverrides = defaulted1;
-  const repoRoot = await mkdtemp(join(tmpdir(), 'executable-skill-package-'));
-  await mkdir(join(repoRoot, SCRIPTS, 'src'), DIRECTORY_OPTIONS);
-  await mkdir(join(repoRoot, SCRIPTS, 'tests'), DIRECTORY_OPTIONS);
-  const [packageDocument = PACKAGE_DOCUMENT] = [selected.packageDocument];
-  const [
-    lock = {
-      lockfileVersion: 1,
-      configVersion: 1,
-      workspaces: {
-        '': { name: '@nook/executable-skills-workspace' },
-        'teams/ai/dynamic-skills/example/scripts': {
-          name: '@nook/example-skill',
-          version: '0.1.0',
-          devDependencies: packageDocument.devDependencies,
-        },
-      },
-      packages: {},
-    },
-  ] = [selected.lock];
-  const [prettier, tsconfig, eslint] = await Promise.all(
-    ['.prettierrc', 'tsconfig.json', 'eslint.config.js'].map((name) =>
-      readFile(join(CANONICAL_SCRIPTS, name), 'utf8'),
-    ),
-  );
-  const [defaulted2 = '---\nname: example\ndescription: Test skill.\n---\n'] = [
-    selected.skill,
-  ];
-  const [defaulted3 = MANIFEST] = [selected.manifest];
-  const [defaulted4 = ''] = [prettier];
-  const [defaulted5 = ''] = [tsconfig];
-  const [defaulted6 = ''] = [eslint];
-  await Promise.all([
-    writeFile(join(repoRoot, '.cortex/.gitignore'), 'node_modules/\n'),
-    writeFile(
-      join(repoRoot, '.cortex/package.json'),
-      JSON.stringify(WORKSPACE_PACKAGE),
-    ),
-    writeFile(
-      join(repoRoot, '.cortex/bunfig.toml'),
-      '[install]\nlinker = "hoisted"\n',
-    ),
-    writeFile(join(repoRoot, '.cortex/bun.lock'), JSON.stringify(lock)),
-    writeFile(join(repoRoot, ROOT, 'SKILL.md'), defaulted2),
-    writeFile(
-      join(repoRoot, SCRIPTS, 'package.json'),
-      JSON.stringify(packageDocument),
-    ),
-    writeFile(
-      join(repoRoot, SCRIPTS, 'executable-skill.json'),
-      JSON.stringify(defaulted3),
-    ),
-    writeFile(join(repoRoot, SCRIPTS, '.prettierrc'), defaulted4),
-    writeFile(join(repoRoot, SCRIPTS, 'tsconfig.json'), defaulted5),
-    writeFile(join(repoRoot, SCRIPTS, 'eslint.config.js'), defaulted6),
-  ]);
-  return repoRoot;
-}
-
-function audit(repoRoot: string) {
-  return (tracked: readonly TrackedRepositoryFile[]) => {
-    const request = { repoRoot, tracked };
-    return auditExecutableSkillPackageFiles(request);
-  };
-}
-
 test('accepts the exact canonical executable-skill package schema', async () => {
-  const repoRoot = await packageFixture();
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
-    expect(audit(repoRoot)(trackedFiles())).toEqual([]);
+    expect(
+      ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+        ExecutableSkillsRepositoryScenario.trackedFiles(),
+      ),
+    ).toEqual([]);
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
   }
@@ -174,9 +194,14 @@ test('accepts a declared static YAML host execution kind', async () => {
   const overrides: FixtureOverrides = {
     manifest: { ...MANIFEST, executionKind: 'static-yaml-read-only' },
   };
-  const repoRoot = await packageFixture(overrides);
+  const repoRoot =
+    await ExecutableSkillsRepositoryScenario.packageFixture(overrides);
   try {
-    expect(audit(repoRoot)(trackedFiles())).toEqual([]);
+    expect(
+      ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+        ExecutableSkillsRepositoryScenario.trackedFiles(),
+      ),
+    ).toEqual([]);
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
   }
@@ -191,13 +216,13 @@ test('rejects executable-skill workspace policy drift', async () => {
       'hoisted linker',
     ],
   ] as const) {
-    const repoRoot = await packageFixture();
+    const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
     try {
       await writeFile(join(repoRoot, relativePath), source);
       expect(
-        audit(repoRoot)(trackedFiles()).some((finding) =>
-          finding.issue.includes(issue),
-        ),
+        ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+          ExecutableSkillsRepositoryScenario.trackedFiles(),
+        ).some((finding) => finding.issue.includes(issue)),
       ).toBe(true);
     } finally {
       await rm(repoRoot, REMOVE_OPTIONS);
@@ -206,13 +231,13 @@ test('rejects executable-skill workspace policy drift', async () => {
 });
 
 test('rejects a missing executable-skill workspace lock', async () => {
-  const repoRoot = await packageFixture();
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
     await rm(join(repoRoot, '.cortex/bun.lock'));
     expect(
-      audit(repoRoot)(trackedFiles()).some((finding) =>
-        finding.issue.includes('regular file'),
-      ),
+      ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+        ExecutableSkillsRepositoryScenario.trackedFiles(),
+      ).some((finding) => finding.issue.includes('regular file')),
     ).toBe(true);
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
@@ -220,9 +245,9 @@ test('rejects a missing executable-skill workspace lock', async () => {
 });
 
 test('rejects unsafe tracked modes and tracked node_modules', async () => {
-  const repoRoot = await packageFixture();
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
-    const files = trackedFiles();
+    const files = ExecutableSkillsRepositoryScenario.trackedFiles();
     const nodeModulesFile: TrackedRepositoryFile = {
       mode: '100644',
       path: `${SCRIPTS}/node_modules/hidden.js`,
@@ -240,7 +265,7 @@ test('rejects unsafe tracked modes and tracked node_modules', async () => {
       const candidate = files.at(index);
       if (candidate) files[index] = { ...candidate, mode };
     }
-    const findings = audit(repoRoot)(files);
+    const findings = ExecutableSkillsRepositoryScenario.audit(repoRoot)(files);
     expect(
       findings.filter((finding) => finding.issue.includes('mode 100644')),
     ).toHaveLength(3);
@@ -259,7 +284,7 @@ test('rejects unsafe tracked modes and tracked node_modules', async () => {
 });
 
 test('rejects every non-TypeScript executable source or test extension', async () => {
-  const repoRoot = await packageFixture();
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
     const unsupported = [
       `${SCRIPTS}/src/runtime.js`,
@@ -270,7 +295,7 @@ test('rejects every non-TypeScript executable source or test extension', async (
       `${SCRIPTS}/tests/launcher`,
     ];
     const files = [
-      ...trackedFiles(),
+      ...ExecutableSkillsRepositoryScenario.trackedFiles(),
       ...unsupported.map((filePath) => {
         const file: TrackedRepositoryFile = {
           mode: '100644',
@@ -279,9 +304,9 @@ test('rejects every non-TypeScript executable source or test extension', async (
         return file;
       }),
     ];
-    const findings = audit(repoRoot)(files).filter((finding) =>
-      finding.issue.includes('.ts extension'),
-    );
+    const findings = ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+      files,
+    ).filter((finding) => finding.issue.includes('.ts extension'));
     expect(findings.map((finding) => finding.path)).toEqual(unsupported);
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
@@ -299,7 +324,9 @@ test('derives the package root from the canonical outer skill boundary', () => {
     `${SCRIPTS}/tests/scripts/helper.test.ts`,
     `${SCRIPTS}/src/dynamic-skills/parser/scripts/helper.ts`,
   ]) {
-    expect(executableSkillPackageFromPath(trackedPath)).toMatchObject(expected);
+    expect(
+      ExecutableSkillRepository.packageFromPath(trackedPath),
+    ).toMatchObject(expected);
   }
 });
 
@@ -308,20 +335,22 @@ test('repository CLI audits one tracked snapshot', async () => {
     join(import.meta.dir, '../../src/executable-skills/repository-cli.ts'),
     'utf8',
   );
-  expect(cli.match(/readTrackedRepositoryFiles\(repoRoot\)/gu)).toHaveLength(1);
+  expect(
+    cli.match(/ExecutableSkillRepository\.readTrackedFiles\(repoRoot\)/gu),
+  ).toHaveLength(1);
   expect(cli).toContain('auditExecutableSkillPackageFiles(auditRequest)');
   expect(cli).not.toContain('auditTrackedExecutableSkillPackages');
 });
 
 test('rejects every nested skill-card mirror under scripts', async () => {
-  const repoRoot = await packageFixture();
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
     const mirrors = [
       `${SCRIPTS}/tests/fixtures/SKILL.md`,
       `${SCRIPTS}/node_modules/example/SKILL.md`,
     ];
-    const findings = audit(repoRoot)([
-      ...trackedFiles(),
+    const findings = ExecutableSkillsRepositoryScenario.audit(repoRoot)([
+      ...ExecutableSkillsRepositoryScenario.trackedFiles(),
       ...mirrors.map((filePath) => ({ mode: '100644', path: filePath })),
     ]);
     expect(
@@ -338,7 +367,7 @@ test('rejects project configs that weaken canonical source coverage', async () =
     ['eslint.config.js', "files: ['src/**/*.ts']"],
     ['.prettierrc', '"printWidth": 120'],
   ] as const) {
-    const repoRoot = await packageFixture();
+    const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
     try {
       const configPath = join(repoRoot, SCRIPTS, name);
       const source = await readFile(configPath, 'utf8');
@@ -350,7 +379,9 @@ test('rejects project configs that weaken canonical source coverage', async () =
           .replace('"printWidth": 80', replacement),
       );
       expect(
-        audit(repoRoot)(trackedFiles()).some(
+        ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+          ExecutableSkillsRepositoryScenario.trackedFiles(),
+        ).some(
           (finding) =>
             finding.path === `${SCRIPTS}/${name}` &&
             finding.issue.includes('canonical policy'),
@@ -370,9 +401,12 @@ test('returns central findings for invalid skill descriptions', async () => {
     '---\nname: example\ndescription: ""\n---\n',
   ]) {
     const overrides: FixtureOverrides = { skill };
-    const repoRoot = await packageFixture(overrides);
+    const repoRoot =
+      await ExecutableSkillsRepositoryScenario.packageFixture(overrides);
     try {
-      const findings = audit(repoRoot)(trackedFiles());
+      const findings = ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+        ExecutableSkillsRepositoryScenario.trackedFiles(),
+      );
       const expectedFinding = {
         path: `${ROOT}/SKILL.md`,
         issue: 'SKILL.md description must be a nonempty string',
@@ -385,17 +419,19 @@ test('returns central findings for invalid skill descriptions', async () => {
 });
 
 test('never follows noncanonical tracked document symlinks', async () => {
-  const repoRoot = await packageFixture();
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
     const packagePath = join(repoRoot, SCRIPTS, 'package.json');
     await rm(packagePath);
     await symlink('/dev/null', packagePath);
-    const noncanonicalFiles = trackedFiles().map((file) =>
-      file.path === `${SCRIPTS}/package.json`
-        ? { ...file, mode: '120000' }
-        : file,
-    );
-    const noncanonicalFindings = audit(repoRoot)(noncanonicalFiles);
+    const noncanonicalFiles =
+      ExecutableSkillsRepositoryScenario.trackedFiles().map((file) =>
+        file.path === `${SCRIPTS}/package.json`
+          ? { ...file, mode: '120000' }
+          : file,
+      );
+    const noncanonicalFindings =
+      ExecutableSkillsRepositoryScenario.audit(repoRoot)(noncanonicalFiles);
     expect(
       noncanonicalFindings.some((finding) =>
         finding.issue.includes('mode 100644'),
@@ -406,7 +442,9 @@ test('never follows noncanonical tracked document symlinks', async () => {
         finding.issue.includes('valid object'),
       ),
     ).toBe(false);
-    const unsafeWorkingTreeFindings = audit(repoRoot)(trackedFiles());
+    const unsafeWorkingTreeFindings = ExecutableSkillsRepositoryScenario.audit(
+      repoRoot,
+    )(ExecutableSkillsRepositoryScenario.trackedFiles());
     expect(
       unsafeWorkingTreeFindings.some((finding) =>
         finding.issue.includes('regular file'),
@@ -423,7 +461,7 @@ test('never follows noncanonical tracked document symlinks', async () => {
 });
 
 test('rejects executable packages under undeclared team owners', async () => {
-  const repoRoot = await packageFixture();
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
     const candidates = [
       '.cortex/gizm0/dynamic-skills/example/scripts/package.json',
@@ -437,10 +475,14 @@ test('rejects executable packages under undeclared team owners', async () => {
     }));
     expect(
       candidates.every(
-        (candidate) => executableSkillPackageFromPath(candidate) !== false,
+        (candidate) =>
+          ExecutableSkillRepository.packageFromPath(candidate) !== false,
       ),
     ).toBe(true);
-    const findings = audit(repoRoot)([...trackedFiles(), ...files]);
+    const findings = ExecutableSkillsRepositoryScenario.audit(repoRoot)([
+      ...ExecutableSkillsRepositoryScenario.trackedFiles(),
+      ...files,
+    ]);
     expect(
       findings.filter((finding) => finding.issue.includes('undeclared owner')),
     ).toHaveLength(candidates.length);
@@ -467,7 +509,9 @@ test('parses NUL-separated tracked paths without newline ambiguity', async () =>
       mode: '100644',
       path: trackedPath,
     };
-    expect(readTrackedRepositoryFiles(repoRoot)).toContainEqual(expectedFile);
+    expect(ExecutableSkillRepository.readTrackedFiles(repoRoot)).toContainEqual(
+      expectedFile,
+    );
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
   }
@@ -513,9 +557,14 @@ test('rejects identity, policy, runtime dependency, lifecycle, and lock drift', 
     },
   ];
   for (const overrides of cases) {
-    const repoRoot = await packageFixture(overrides);
+    const repoRoot =
+      await ExecutableSkillsRepositoryScenario.packageFixture(overrides);
     try {
-      expect(audit(repoRoot)(trackedFiles()).length).toBeGreaterThan(0);
+      expect(
+        ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+          ExecutableSkillsRepositoryScenario.trackedFiles(),
+        ).length,
+      ).toBeGreaterThan(0);
     } finally {
       await rm(repoRoot, REMOVE_OPTIONS);
     }
@@ -523,7 +572,7 @@ test('rejects identity, policy, runtime dependency, lifecycle, and lock drift', 
 });
 
 test('parsed JSON keys cannot hide runtime dependency fields', async () => {
-  const repoRoot = await packageFixture();
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
     await writeFile(
       join(repoRoot, SCRIPTS, 'package.json'),
@@ -532,13 +581,19 @@ test('parsed JSON keys cannot hide runtime dependency fields', async () => {
         '"de\\u0076Dependencies"',
       ),
     );
-    expect(audit(repoRoot)(trackedFiles())).toEqual([]);
+    expect(
+      ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+        ExecutableSkillsRepositoryScenario.trackedFiles(),
+      ),
+    ).toEqual([]);
     const escapedRuntime = JSON.stringify(PACKAGE_DOCUMENT).replace(
       '"devDependencies"',
       '"de\\u0070endencies"',
     );
     await writeFile(join(repoRoot, SCRIPTS, 'package.json'), escapedRuntime);
-    const findings = audit(repoRoot)(trackedFiles());
+    const findings = ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+      ExecutableSkillsRepositoryScenario.trackedFiles(),
+    );
     expect(
       findings.some((finding) =>
         finding.issue.includes('exact executable-skill schema'),
@@ -550,7 +605,7 @@ test('parsed JSON keys cannot hide runtime dependency fields', async () => {
 });
 
 test('bounds and sanitizes adversarial package diagnostics', async () => {
-  const repoRoot = await packageFixture();
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
     const dangerous = [
       ':colon',
@@ -563,7 +618,7 @@ test('bounds and sanitizes adversarial package diagnostics', async () => {
       '\u206aisolate',
       '\u206fcontrol',
     ];
-    const files = trackedFiles();
+    const files = ExecutableSkillsRepositoryScenario.trackedFiles();
     const oversizedPath: TrackedRepositoryFile = {
       mode: '100755',
       path: `${SCRIPTS}/${'a'.repeat(600)}.ts`,
@@ -577,7 +632,7 @@ test('bounds and sanitizes adversarial package diagnostics', async () => {
       };
       files.push(dangerousFile);
     }
-    const findings = audit(repoRoot)(files);
+    const findings = ExecutableSkillsRepositoryScenario.audit(repoRoot)(files);
     expect(findings.length).toBe(EXECUTABLE_SKILL_FINDING_LIMIT);
     let diagnosticBytes = 0;
     for (const finding of findings) {

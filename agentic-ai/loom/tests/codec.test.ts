@@ -3,13 +3,13 @@ import { RequestFamily, ResponsePhase } from '../src/codec/enums.ts';
 import { DecodeStatus } from '../src/codec/field-error.ts';
 import {
   EXAMPLE_CATALOG,
-  exampleDocumentNode,
+  LoomRequestExamples,
 } from '../src/codec/example-documents.ts';
-import { decodeLoomRequest } from '../src/codec/request.ts';
-import { parseYamlText } from '../src/codec/yaml.ts';
-import { dispatchValue } from '../src/tools/dispatch.ts';
-import { decodeAgentStatsAssemblePayload } from '../src/codec/args/agent-stats.ts';
-import { decodePrePushRequest } from '../src/codec/args/pre-push.ts';
+import { LoomRequestSchema } from '../src/codec/request.ts';
+import { YamlDocument } from '../src/codec/yaml.ts';
+import { LoomRequestDispatch } from '../src/tools/dispatch.ts';
+import { AgentStatsAssemblePayload } from '../src/codec/args/agent-stats.ts';
+import { PrePushRequestDecoder } from '../src/codec/args/pre-push.ts';
 
 import type { DecodeAgentStatsAssemblePayloadArgs } from '../src/codec/args/agent-stats.ts';
 describe('loom domain request codec', () => {
@@ -17,7 +17,7 @@ describe('loom domain request codec', () => {
     const decodedArgs6 = {
       prePush: { stageHostUpdates: true, fetchOriginMain: true },
     };
-    const decoded = decodeLoomRequest(decodedArgs6);
+    const decoded = LoomRequestSchema.decodeLoomRequest(decodedArgs6);
     expect(decoded.status).toBe(DecodeStatus.Ok);
     if (decoded.status === DecodeStatus.Ok) {
       expect(decoded.value.family).toBe(RequestFamily.PrePush);
@@ -35,7 +35,7 @@ describe('loom domain request codec', () => {
         },
       },
     };
-    const decoded = decodeLoomRequest(decodedArgs5);
+    const decoded = LoomRequestSchema.decodeLoomRequest(decodedArgs5);
     expect(decoded.status).toBe(DecodeStatus.Ok);
     if (decoded.status === DecodeStatus.Ok) {
       expect(decoded.value.family).toBe(RequestFamily.AgentStats);
@@ -47,7 +47,7 @@ describe('loom domain request codec', () => {
       name: 'agent-stats',
       arguments: { action: 'assemble', pr: 123 },
     };
-    const decoded = decodeLoomRequest(decodedArgs4);
+    const decoded = LoomRequestSchema.decodeLoomRequest(decodedArgs4);
     expect(decoded.status).toBe(DecodeStatus.Failed);
     if (decoded.status === DecodeStatus.Failed) {
       expect(decoded.errors.some((entry) => entry.path === 'name')).toBe(true);
@@ -62,7 +62,7 @@ describe('loom domain request codec', () => {
       stageHostUpdates: 'yes',
       fetchOriginMain: true,
     };
-    const decoded = decodePrePushRequest(decodedArgs3);
+    const decoded = PrePushRequestDecoder.decode(decodedArgs3);
     expect(decoded.status).toBe(DecodeStatus.Failed);
     if (decoded.status === DecodeStatus.Failed) {
       expect(
@@ -83,7 +83,7 @@ describe('loom domain request codec', () => {
       },
       path: 'agentStats.assemble',
     };
-    const decoded = decodeAgentStatsAssemblePayload(decodedArgs2);
+    const decoded = AgentStatsAssemblePayload.decode(decodedArgs2);
     expect(decoded.status).toBe(DecodeStatus.Ok);
   });
 
@@ -98,7 +98,7 @@ describe('loom domain request codec', () => {
       },
       path: 'agentStats.assemble',
     };
-    const decoded = decodeAgentStatsAssemblePayload(decodedArgs);
+    const decoded = AgentStatsAssemblePayload.decode(decodedArgs);
     expect(decoded.status).toBe(DecodeStatus.Failed);
     if (decoded.status === DecodeStatus.Failed) {
       expect(
@@ -115,7 +115,7 @@ describe('loom dispatch protocol', () => {
     const outcomeArgs3 = {
       toolsList: {},
     };
-    const outcome = await dispatchValue(outcomeArgs3);
+    const outcome = await LoomRequestDispatch.dispatchValue(outcomeArgs3);
     expect(outcome.exitCode).toBe(0);
     expect(outcome.body.ok).toBe(true);
     if (outcome.body.ok) {
@@ -137,12 +137,12 @@ describe('loom dispatch protocol', () => {
       ).toBe(false);
       for (const entry of result.requests) {
         expect(entry.exampleRequest.startsWith('task loom:')).toBe(true);
-        const parsed = parseYamlText(entry.exampleYaml);
+        const parsed = YamlDocument.parse(entry.exampleYaml);
         expect(parsed.status).toBe(DecodeStatus.Ok);
         if (parsed.status !== DecodeStatus.Ok) {
           continue;
         }
-        const decoded = decodeLoomRequest(parsed.value.value);
+        const decoded = LoomRequestSchema.decodeLoomRequest(parsed.value.value);
         expect(decoded.status).toBe(DecodeStatus.Ok);
         expect(entry.resolvedExampleYaml.length).toBeGreaterThan(0);
         if (entry.exampleYaml.includes('{agentTempDir}')) {
@@ -159,7 +159,7 @@ describe('loom dispatch protocol', () => {
     const outcomeArgs2 = {
       notARequest: {},
     };
-    const outcome = await dispatchValue(outcomeArgs2);
+    const outcome = await LoomRequestDispatch.dispatchValue(outcomeArgs2);
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
     if (!outcome.body.ok) {
@@ -176,7 +176,7 @@ describe('loom dispatch protocol', () => {
         prePush: { stageHostUpdates: true },
       },
     };
-    const outcome = await dispatchValue(outcomeArgs);
+    const outcome = await LoomRequestDispatch.dispatchValue(outcomeArgs);
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
     if (!outcome.body.ok) {
@@ -193,7 +193,9 @@ describe('loom dispatch protocol', () => {
 describe('typed example documents', () => {
   test('every catalog example decodes as a domain request', () => {
     for (const entry of EXAMPLE_CATALOG) {
-      const decoded = decodeLoomRequest(exampleDocumentNode(entry.document));
+      const decoded = LoomRequestSchema.decodeLoomRequest(
+        LoomRequestExamples.exampleDocumentNode(entry.document),
+      );
       expect(decoded.status).toBe(DecodeStatus.Ok);
     }
   });

@@ -1,54 +1,72 @@
 import { readFileSync } from 'node:fs';
+
 import path from 'node:path';
+
 import { expect, test } from 'bun:test';
-import { compileCortexContracts } from '../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/audit.ts';
+
+import { CortexConsistencyContract } from '../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/audit.ts';
+
 import type { CortexContractRegistry } from '../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/domain.ts';
+
 import { CORTEX_CONTRACT_REGISTRY } from '../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/registry.ts';
+
 import {
   CortexContextAuthorityDocument,
-  adaptCortexContractDocuments,
   CortexContractFindingCode,
   CortexPolicyArea,
   CortexPolicyContractKind,
   type CortexContractDocument,
+  CortexContractDocuments,
 } from '../src/lib/cortex-contracts.ts';
 
+export class CortexContractsScenario {
+  private constructor(private readonly request: readonly string[]) {}
+
+  static registry(imports: readonly string[]): CortexContractRegistry {
+    return new CortexContractsScenario(imports).execute();
+  }
+
+  private execute(): CortexContractRegistry {
+    const imports = this.request;
+    return {
+      contexts: [
+        {
+          authorityDocument: AUTHORITY,
+          ownsAreas: [CortexPolicyArea.GithubTypescript],
+          imports,
+        },
+      ],
+      policies: [
+        {
+          document: POLICY,
+          kind: CortexPolicyContractKind.General,
+          areas: [CortexPolicyArea.GithubTypescript],
+          capabilities: [],
+        },
+      ],
+      runtimes: [],
+    };
+  }
+
+  static compile(content: string) {
+    const documents: readonly CortexContractDocument[] = [
+      { relativePath: AUTHORITY, content },
+      { relativePath: POLICY, content: '# Policy\n' },
+    ];
+    return CortexConsistencyContract.compileCortexContracts({
+      registry: CortexContractsScenario.registry([POLICY]),
+      documents:
+        CortexContractDocuments.adaptCortexContractDocuments(documents),
+    });
+  }
+}
+
 const AUTHORITY = CortexContextAuthorityDocument.Sre;
+
 const POLICY =
   '.cortex/teams/web-dev/dynamic-skills/typescript-enums-over-booleans.md';
+
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '..', '..', '..');
-
-function registry(imports: readonly string[]): CortexContractRegistry {
-  return {
-    contexts: [
-      {
-        authorityDocument: AUTHORITY,
-        ownsAreas: [CortexPolicyArea.GithubTypescript],
-        imports,
-      },
-    ],
-    policies: [
-      {
-        document: POLICY,
-        kind: CortexPolicyContractKind.General,
-        areas: [CortexPolicyArea.GithubTypescript],
-        capabilities: [],
-      },
-    ],
-    runtimes: [],
-  };
-}
-
-function compile(content: string) {
-  const documents: readonly CortexContractDocument[] = [
-    { relativePath: AUTHORITY, content },
-    { relativePath: POLICY, content: '# Policy\n' },
-  ];
-  return compileCortexContracts({
-    registry: registry([POLICY]),
-    documents: adaptCortexContractDocuments(documents),
-  });
-}
 
 test('accepts the reviewed repository contract registry', () => {
   const paths = [
@@ -63,15 +81,18 @@ test('accepts the reviewed repository contract registry', () => {
     content: readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
   }));
   expect(
-    compileCortexContracts({
+    CortexConsistencyContract.compileCortexContracts({
       registry: CORTEX_CONTRACT_REGISTRY,
-      documents: adaptCortexContractDocuments(documents),
+      documents:
+        CortexContractDocuments.adaptCortexContractDocuments(documents),
     }),
   ).toEqual([]);
 });
 
 test('requires the importing authority to reference the policy document', () => {
-  expect(compile('# SRE\n\nNo policy link.\n')).toContainEqual(
+  expect(
+    CortexContractsScenario.compile('# SRE\n\nNo policy link.\n'),
+  ).toContainEqual(
     expect.objectContaining({
       code: CortexContractFindingCode.MissingPolicyReference,
       file: AUTHORITY,
@@ -90,14 +111,16 @@ const validReferences = [
 for (const reference of validReferences) {
   const [defaulted1 = ''] = [reference.split(']')[0]];
   test(`accepts Markdown policy reference: ${defaulted1}`, () => {
-    expect(compile(`# SRE\n\n${reference}\n`)).toEqual([]);
+    expect(CortexContractsScenario.compile(`# SRE\n\n${reference}\n`)).toEqual(
+      [],
+    );
   });
 }
 
 test('uses the first duplicate Markdown reference definition', () => {
   const content =
     '# SRE\n\n[policy][rule]\n\n[rule]: unrelated.md\n[rule]: ../web-dev/dynamic-skills/typescript-enums-over-booleans.md\n';
-  expect(compile(content)).toContainEqual(
+  expect(CortexContractsScenario.compile(content)).toContainEqual(
     expect.objectContaining({
       code: CortexContractFindingCode.MissingPolicyReference,
       file: AUTHORITY,
@@ -106,7 +129,7 @@ test('uses the first duplicate Markdown reference definition', () => {
 });
 
 test('adapts inline and fenced runtime commands without prose inference', () => {
-  const documents = adaptCortexContractDocuments([
+  const documents = CortexContractDocuments.adaptCortexContractDocuments([
     {
       relativePath: '.cortex/gizmo/workflows/subagent-delegation.md',
       content: `# Delegation

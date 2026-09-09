@@ -5,15 +5,18 @@ import {
   openSync,
   readFileSync,
 } from 'node:fs';
+
 import { homedir } from 'node:os';
+
 import { isAbsolute, join } from 'node:path';
+
 import { wsconnect } from '@nats-io/nats-core';
+
 import {
-  asUntrustedYamlNode,
-  isRecord,
-  untrustedYamlProperty,
   UntrustedYamlPropertyPresence,
+  UntrustedYamlBoundary,
 } from './lib/guards.ts';
+
 import {
   PR_STEWARD_REPOSITORY,
   PrStewardBlockerCode,
@@ -22,21 +25,180 @@ import {
   PrStewardRecordKind,
   PrStewardSource,
 } from './pr-steward-contract.ts';
+
 import {
   PrStewardGithubPrReader,
   PrStewardGithubUnavailableError,
 } from './pr-steward-github.ts';
 
 import type { UntrustedYamlMap, UntrustedYamlNode } from './lib/guards.ts';
+
 import type {
   PrStewardPullRequest,
   PrStewardRecord,
   PrStewardUrl,
 } from './pr-steward-contract.ts';
+
 import type { PrStewardAssignedPrReader } from './pr-steward-github.ts';
 
+export class WebhookProperty {
+  private constructor(
+    private readonly request: {
+      readonly record: UntrustedYamlMap;
+      readonly key: string;
+    },
+  ) {}
+  static read(args: {
+    readonly record: UntrustedYamlMap;
+    readonly key: string;
+  }): UntrustedYamlNode | false {
+    return new WebhookProperty(args).execute();
+  }
+  private execute(): UntrustedYamlNode | false {
+    const args = this.request;
+    const result = UntrustedYamlBoundary.property(args);
+    if (result.presence === UntrustedYamlPropertyPresence.Absent) return false;
+    return !result.value && typeof result.value === 'object'
+      ? false
+      : result.value;
+  }
+}
+
+export class WebhookObjectPath {
+  private constructor(
+    private readonly request: {
+      readonly record: UntrustedYamlMap;
+      readonly path: readonly string[];
+    },
+  ) {}
+  static read(args: {
+    readonly record: UntrustedYamlMap;
+    readonly path: readonly string[];
+  }): UntrustedYamlNode | false {
+    return new WebhookObjectPath(args).execute();
+  }
+  private execute(): UntrustedYamlNode | false {
+    const args = this.request;
+    let current: UntrustedYamlNode = args.record;
+    for (const key of args.path) {
+      if (!UntrustedYamlBoundary.isRecord(current)) return false;
+      const next = WebhookProperty.read({ record: current, key });
+      if (next === false) return false;
+      current = next;
+    }
+    return current;
+  }
+}
+
+export class WebhookOptionalText {
+  private constructor(private readonly request: UntrustedYamlNode | false) {}
+  static read(value: UntrustedYamlNode | false): string | false {
+    return new WebhookOptionalText(value).execute();
+  }
+  private execute(): string | false {
+    const value = this.request;
+    return typeof value === 'string' && value.length > 0 ? value : false;
+  }
+}
+
+export class WebhookOptionalInteger {
+  private constructor(private readonly request: UntrustedYamlNode | false) {}
+  static read(value: UntrustedYamlNode | false): number | false {
+    return new WebhookOptionalInteger(value).execute();
+  }
+  private execute(): number | false {
+    const value = this.request;
+    return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+      ? value
+      : false;
+  }
+}
+
+export class WebhookHeader {
+  private constructor(
+    private readonly request: {
+      readonly headers: UntrustedYamlMap;
+      readonly name: string;
+    },
+  ) {}
+  static read(args: {
+    readonly headers: UntrustedYamlMap;
+    readonly name: string;
+  }): string | false {
+    return new WebhookHeader(args).execute();
+  }
+  private execute(): string | false {
+    const args = this.request;
+    const value = WebhookProperty.read({
+      record: args.headers,
+      key: args.name,
+    });
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+    return false;
+  }
+}
+
+export class PrStewardCredentialFile {
+  private constructor(private readonly request: string) {}
+  static load(path: string): PrStewardCredential {
+    return new PrStewardCredentialFile(path).execute();
+  }
+  private execute(): PrStewardCredential {
+    const path = this.request;
+    let descriptor: number;
+    try {
+      descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    } catch {
+      throw new Error('credential file cannot be opened securely');
+    }
+    try {
+      const stat = fstatSync(descriptor);
+      if (!stat.isFile())
+        throw new Error('credential path must be a regular file');
+      if (!process.getuid || stat.uid !== process.getuid())
+        throw new Error('credential owner mismatch');
+      if ((stat.mode & 0o777) !== 0o600)
+        throw new Error('credential mode must be 0600');
+      const parsed = UntrustedYamlBoundary.fromHost(
+        Bun.YAML.parse(readFileSync(descriptor, 'utf8')) as UntrustedYamlNode,
+      );
+      if (
+        !UntrustedYamlBoundary.isRecord(parsed) ||
+        Object.keys(parsed).sort().join(',') !== 'password,username'
+      ) {
+        throw new Error('credential schema is invalid');
+      }
+      const username = WebhookProperty.read({
+        record: parsed,
+        key: 'username',
+      });
+      const password = WebhookProperty.read({
+        record: parsed,
+        key: 'password',
+      });
+      if (
+        username !== 'pr-steward' ||
+        typeof password !== 'string' ||
+        !/^[0-9a-f]{64}$/.test(password)
+      ) {
+        throw new Error('credential schema is invalid');
+      }
+      return { username, password };
+    } catch (cause) {
+      if (cause instanceof Error && cause.message.startsWith('credential '))
+        throw cause;
+      throw new Error('credential schema is invalid', { cause });
+    } finally {
+      closeSync(descriptor);
+    }
+  }
+}
+
 export const PR_STEWARD_ENDPOINT = 'wss://events.dev.nokey.sh';
+
 export const PR_STEWARD_SUBJECT = 'default.github-webhook.pr-lifecycle';
+
 export type PrStewardCredential = {
   readonly username: 'pr-steward';
   readonly password: string;
@@ -63,57 +225,13 @@ export type PrStewardEvent = {
   readonly author: string | false;
 };
 
-function property(args: {
-  readonly record: UntrustedYamlMap;
-  readonly key: string;
-}): UntrustedYamlNode | false {
-  const result = untrustedYamlProperty(args);
-  if (result.presence === UntrustedYamlPropertyPresence.Absent) return false;
-  return !result.value && typeof result.value === 'object'
-    ? false
-    : result.value;
-}
-
-function nested(args: {
-  readonly record: UntrustedYamlMap;
-  readonly path: readonly string[];
-}): UntrustedYamlNode | false {
-  let current: UntrustedYamlNode = args.record;
-  for (const key of args.path) {
-    if (!isRecord(current)) return false;
-    const next = property({ record: current, key });
-    if (next === false) return false;
-    current = next;
-  }
-  return current;
-}
-
-function optionalString(value: UntrustedYamlNode | false): string | false {
-  return typeof value === 'string' && value.length > 0 ? value : false;
-}
-
-function optionalNumber(value: UntrustedYamlNode | false): number | false {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? value
-    : false;
-}
-
-function headerValue(args: {
-  readonly headers: UntrustedYamlMap;
-  readonly name: string;
-}): string | false {
-  const value = property({ record: args.headers, key: args.name });
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
-  return false;
-}
-
 enum PrStewardWebhookDecodeCode {
   Data = 'data',
   Envelope = 'envelope',
   Identity = 'identity',
   Payload = 'payload',
 }
+
 type PrStewardMetadata = Pick<
   PrStewardEvent,
   | 'author'
@@ -126,6 +244,7 @@ type PrStewardMetadata = Pick<
   | 'state'
   | 'url'
 >;
+
 class EventDecodeError extends Error {
   readonly attribution:
     | {
@@ -165,8 +284,11 @@ export class PrStewardWebhookDecoder {
       [PrStewardSource.WorkflowJob]: 'workflow_job',
       [PrStewardSource.WorkflowRun]: 'workflow_run',
     };
-    const candidate = property({ record: args.body, key: keys[args.source] });
-    return isRecord(candidate) ? candidate : {};
+    const candidate = WebhookProperty.read({
+      record: args.body,
+      key: keys[args.source],
+    });
+    return UntrustedYamlBoundary.isRecord(candidate) ? candidate : {};
   }
 
   static #pullRequestNumber(args: {
@@ -174,13 +296,16 @@ export class PrStewardWebhookDecoder {
     readonly source: PrStewardSource | false;
   }): number | false {
     if (args.source === PrStewardSource.IssueComment) {
-      const marker = nested({
+      const marker = WebhookObjectPath.read({
         record: args.body,
         path: ['issue', 'pull_request'],
       });
-      return isRecord(marker)
-        ? optionalNumber(
-            nested({ record: args.body, path: ['issue', 'number'] }),
+      return UntrustedYamlBoundary.isRecord(marker)
+        ? WebhookOptionalInteger.read(
+            WebhookObjectPath.read({
+              record: args.body,
+              path: ['issue', 'number'],
+            }),
           )
         : false;
     }
@@ -189,27 +314,33 @@ export class PrStewardWebhookDecoder {
       args.source === PrStewardSource.PullRequestReview ||
       args.source === PrStewardSource.PullRequestReviewComment
     )
-      return optionalNumber(
-        nested({ record: args.body, path: ['pull_request', 'number'] }),
+      return WebhookOptionalInteger.read(
+        WebhookObjectPath.read({
+          record: args.body,
+          path: ['pull_request', 'number'],
+        }),
       );
     const source = args.source;
     if (source === false) return false;
     const object = this.#object({ body: args.body, source });
-    const candidates = property({ record: object, key: 'pull_requests' });
+    const candidates = WebhookProperty.read({
+      record: object,
+      key: 'pull_requests',
+    });
     if (
       !Array.isArray(candidates) ||
       candidates.length !== 1 ||
-      !isRecord(candidates[0])
+      !UntrustedYamlBoundary.isRecord(candidates[0])
     )
       return false;
-    const pullRequest = optionalNumber(
-      property({ record: candidates[0], key: 'number' }),
+    const pullRequest = WebhookOptionalInteger.read(
+      WebhookProperty.read({ record: candidates[0], key: 'number' }),
     );
-    const associatedHead = optionalString(
-      nested({ record: candidates[0], path: ['head', 'sha'] }),
+    const associatedHead = WebhookOptionalText.read(
+      WebhookObjectPath.read({ record: candidates[0], path: ['head', 'sha'] }),
     );
-    const eventHead = optionalString(
-      property({ record: object, key: 'head_sha' }),
+    const eventHead = WebhookOptionalText.read(
+      WebhookProperty.read({ record: object, key: 'head_sha' }),
     );
     return pullRequest !== false &&
       associatedHead !== false &&
@@ -228,13 +359,13 @@ export class PrStewardWebhookDecoder {
     if (source === false || source === PrStewardSource.IssueComment)
       return false;
     const object = this.#object({ body: args.body, source });
-    const value = optionalString(
+    const value = WebhookOptionalText.read(
       args.source === PrStewardSource.PullRequest
-        ? nested({ record: object, path: ['head', 'sha'] })
+        ? WebhookObjectPath.read({ record: object, path: ['head', 'sha'] })
         : args.source === PrStewardSource.PullRequestReview ||
             args.source === PrStewardSource.PullRequestReviewComment
-          ? property({ record: object, key: 'commit_id' })
-          : property({ record: object, key: 'head_sha' }),
+          ? WebhookProperty.read({ record: object, key: 'commit_id' })
+          : WebhookProperty.read({ record: object, key: 'head_sha' }),
     );
     return value !== false && /^[0-9a-f]{40}$/.test(value) ? value : false;
   }
@@ -243,7 +374,7 @@ export class PrStewardWebhookDecoder {
     readonly value: UntrustedYamlNode | false;
     readonly limit: number;
   }): string | false {
-    const candidate = optionalString(args.value);
+    const candidate = WebhookOptionalText.read(args.value);
     if (candidate === false) return false;
     const normalized = Array.from(candidate)
       .map((character) => {
@@ -263,20 +394,26 @@ export class PrStewardWebhookDecoder {
   }): PrStewardMetadata {
     const object = this.#object(args);
     const github = this.#boundedText({
-      value: property({ record: object, key: 'html_url' }),
+      value: WebhookProperty.read({ record: object, key: 'html_url' }),
       limit: 240,
     });
     const external = this.#boundedText({
-      value: property({ record: object, key: 'target_url' }),
+      value: WebhookProperty.read({ record: object, key: 'target_url' }),
       limit: 240,
     });
     const reviewComment =
       args.source === PrStewardSource.PullRequestReviewComment;
-    const line = optionalNumber(
-      property({ record: reviewComment ? object : {}, key: 'line' }),
+    const line = WebhookOptionalInteger.read(
+      WebhookProperty.read({
+        record: reviewComment ? object : {},
+        key: 'line',
+      }),
     );
-    const originalLine = optionalNumber(
-      property({ record: reviewComment ? object : {}, key: 'original_line' }),
+    const originalLine = WebhookOptionalInteger.read(
+      WebhookProperty.read({
+        record: reviewComment ? object : {},
+        key: 'original_line',
+      }),
     );
     const comment =
       args.source === PrStewardSource.IssueComment || reviewComment;
@@ -287,34 +424,40 @@ export class PrStewardWebhookDecoder {
       comment ||
       args.source === PrStewardSource.PullRequest ||
       args.source === PrStewardSource.PullRequestReview;
-    const objectId = optionalNumber(property({ record: object, key: 'id' }));
+    const objectId = WebhookOptionalInteger.read(
+      WebhookProperty.read({ record: object, key: 'id' }),
+    );
     return {
       objectId,
       runId: !run
         ? false
         : args.source === PrStewardSource.WorkflowRun
           ? objectId
-          : optionalNumber(property({ record: object, key: 'run_id' })),
-      reviewId: optionalNumber(
-        property({
+          : WebhookOptionalInteger.read(
+              WebhookProperty.read({ record: object, key: 'run_id' }),
+            ),
+      reviewId: WebhookOptionalInteger.read(
+        WebhookProperty.read({
           record: reviewComment ? object : {},
           key: 'pull_request_review_id',
         }),
       ),
       commentId: comment
-        ? optionalNumber(property({ record: object, key: 'id' }))
+        ? WebhookOptionalInteger.read(
+            WebhookProperty.read({ record: object, key: 'id' }),
+          )
         : false,
       state:
         this.#boundedText({
-          value: property({ record: object, key: 'state' }),
+          value: WebhookProperty.read({ record: object, key: 'state' }),
           limit: 64,
         }) ||
         this.#boundedText({
-          value: property({ record: object, key: 'conclusion' }),
+          value: WebhookProperty.read({ record: object, key: 'conclusion' }),
           limit: 64,
         }) ||
         this.#boundedText({
-          value: property({ record: object, key: 'status' }),
+          value: WebhookProperty.read({ record: object, key: 'status' }),
           limit: 64,
         }),
       url:
@@ -324,14 +467,20 @@ export class PrStewardWebhookDecoder {
             ? PrStewardNdjsonCodec.externalUrl(external)
             : false,
       path: this.#boundedText({
-        value: property({ record: reviewComment ? object : {}, key: 'path' }),
+        value: WebhookProperty.read({
+          record: reviewComment ? object : {},
+          key: 'path',
+        }),
         limit: 240,
       }),
       line: line !== false ? line : originalLine,
       author:
         human &&
         this.#boundedText({
-          value: nested({ record: object, path: ['user', 'login'] }),
+          value: WebhookObjectPath.read({
+            record: object,
+            path: ['user', 'login'],
+          }),
           limit: 64,
         }),
     };
@@ -346,11 +495,14 @@ export class PrStewardWebhookDecoder {
       args.source !== PrStewardSource.PullRequestReviewComment
     )
       return true;
-    const pullHead = optionalString(
-      nested({ record: args.body, path: ['pull_request', 'head', 'sha'] }),
+    const pullHead = WebhookOptionalText.read(
+      WebhookObjectPath.read({
+        record: args.body,
+        path: ['pull_request', 'head', 'sha'],
+      }),
     );
-    const objectHead = optionalString(
-      property({ record: this.#object(args), key: 'commit_id' }),
+    const objectHead = WebhookOptionalText.read(
+      WebhookProperty.read({ record: this.#object(args), key: 'commit_id' }),
     );
     return (
       pullHead !== false &&
@@ -364,7 +516,7 @@ export class PrStewardWebhookDecoder {
     const data = request.data;
     let parsed: UntrustedYamlNode;
     try {
-      parsed = asUntrustedYamlNode(
+      parsed = UntrustedYamlBoundary.fromHost(
         JSON.parse(
           new TextDecoder('utf-8', { fatal: true }).decode(data),
         ) as UntrustedYamlNode,
@@ -375,12 +527,15 @@ export class PrStewardWebhookDecoder {
         attribution: false,
       });
     }
-    if (!isRecord(parsed))
+    if (!UntrustedYamlBoundary.isRecord(parsed))
       throw new EventDecodeError({
         code: PrStewardWebhookDecodeCode.Payload,
         attribution: false,
       });
-    const encodedData = property({ record: parsed, key: 'data_base64' });
+    const encodedData = WebhookProperty.read({
+      record: parsed,
+      key: 'data_base64',
+    });
     if (
       typeof encodedData !== 'string' ||
       encodedData.length % 4 !== 0 ||
@@ -396,44 +551,52 @@ export class PrStewardWebhookDecoder {
       const decoded = new TextDecoder('utf-8', { fatal: true }).decode(
         Buffer.from(encodedData, 'base64'),
       );
-      eventData = asUntrustedYamlNode(JSON.parse(decoded) as UntrustedYamlNode);
+      eventData = UntrustedYamlBoundary.fromHost(
+        JSON.parse(decoded) as UntrustedYamlNode,
+      );
     } catch {
       throw new EventDecodeError({
         code: PrStewardWebhookDecodeCode.Data,
         attribution: false,
       });
     }
-    if (!isRecord(eventData))
+    if (!UntrustedYamlBoundary.isRecord(eventData))
       throw new EventDecodeError({
         code: PrStewardWebhookDecodeCode.Data,
         attribution: false,
       });
-    const headers = property({ record: eventData, key: 'headers' });
-    const body = property({ record: eventData, key: 'body' });
-    if (!isRecord(headers) || !isRecord(body))
+    const headers = WebhookProperty.read({ record: eventData, key: 'headers' });
+    const body = WebhookProperty.read({ record: eventData, key: 'body' });
+    if (
+      !UntrustedYamlBoundary.isRecord(headers) ||
+      !UntrustedYamlBoundary.isRecord(body)
+    )
       throw new EventDecodeError({
         code: PrStewardWebhookDecodeCode.Data,
         attribution: false,
       });
 
     const id = this.#boundedText({
-      value: property({ record: parsed, key: 'id' }),
+      value: WebhookProperty.read({ record: parsed, key: 'id' }),
       limit: 128,
     });
     const time = this.#boundedText({
-      value: property({ record: parsed, key: 'time' }),
+      value: WebhookProperty.read({ record: parsed, key: 'time' }),
       limit: 64,
     });
     const githubEvent = this.#boundedText({
-      value: headerValue({ headers, name: 'X-Github-Event' }),
+      value: WebhookHeader.read({ headers, name: 'X-Github-Event' }),
       limit: 64,
     });
     const deliveryId = this.#boundedText({
-      value: headerValue({ headers, name: 'X-Github-Delivery' }),
+      value: WebhookHeader.read({ headers, name: 'X-Github-Delivery' }),
       limit: 128,
     });
     const repository = this.#boundedText({
-      value: nested({ record: body, path: ['repository', 'full_name'] }),
+      value: WebhookObjectPath.read({
+        record: body,
+        path: ['repository', 'full_name'],
+      }),
       limit: 128,
     });
     const candidateSource =
@@ -462,7 +625,7 @@ export class PrStewardWebhookDecoder {
       });
 
     const action = this.#boundedText({
-      value: property({ record: body, key: 'action' }),
+      value: WebhookProperty.read({ record: body, key: 'action' }),
       limit: 64,
     });
     const sha = this.#headSha({ body, source });
@@ -532,6 +695,7 @@ type PrStewardObservationRequest = {
   readonly pullRequest: PrStewardPullRequest;
   readonly write: (line: string) => void;
 };
+
 type PrStewardMessage = { readonly data: Uint8Array };
 
 export class PrStewardEventObserver {
@@ -676,91 +840,57 @@ export class PrStewardEventObserver {
   }
 }
 
-export function loadCredential(path: string): PrStewardCredential {
-  let descriptor: number;
-  try {
-    descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  } catch {
-    throw new Error('credential file cannot be opened securely');
-  }
-  try {
-    const stat = fstatSync(descriptor);
-    if (!stat.isFile())
-      throw new Error('credential path must be a regular file');
-    if (!process.getuid || stat.uid !== process.getuid())
-      throw new Error('credential owner mismatch');
-    if ((stat.mode & 0o777) !== 0o600)
-      throw new Error('credential mode must be 0600');
-    const parsed = asUntrustedYamlNode(
-      Bun.YAML.parse(readFileSync(descriptor, 'utf8')) as UntrustedYamlNode,
-    );
-    if (
-      !isRecord(parsed) ||
-      Object.keys(parsed).sort().join(',') !== 'password,username'
-    ) {
-      throw new Error('credential schema is invalid');
-    }
-    const username = property({ record: parsed, key: 'username' });
-    const password = property({ record: parsed, key: 'password' });
-    if (
-      username !== 'pr-steward' ||
-      typeof password !== 'string' ||
-      !/^[0-9a-f]{64}$/.test(password)
-    ) {
-      throw new Error('credential schema is invalid');
-    }
-    return { username, password };
-  } catch (cause) {
-    if (cause instanceof Error && cause.message.startsWith('credential '))
-      throw cause;
-    throw new Error('credential schema is invalid', { cause });
-  } finally {
-    closeSync(descriptor);
-  }
-}
+export class PrStewardEventCli {
+  private constructor(private readonly request: readonly string[]) {}
 
-async function main(): Promise<void> {
-  const invocation = PrStewardInvocationCodec.parse(process.argv.slice(2));
-  const credential = loadCredential(invocation.credentialPath);
-  const connection = await wsconnect({
-    servers: PR_STEWARD_ENDPOINT,
-    user: credential.username,
-    pass: credential.password,
-    name: `pr-steward-${process.pid}`,
-    ignoreClusterUpdates: true,
-  });
-  const subscription = connection.subscribe(PR_STEWARD_SUBJECT);
-  let stopping = false;
-  const stop = (): void => {
-    if (stopping) return;
-    stopping = true;
-    void connection.drain().catch(() => {
-      process.exitCode = 1;
+  static main(arguments_: readonly string[] = process.argv): Promise<void> {
+    return new PrStewardEventCli(arguments_).execute();
+  }
+
+  private async execute(): Promise<void> {
+    const arguments_ = this.request;
+    const invocation = PrStewardInvocationCodec.parse(arguments_.slice(2));
+    const credential = PrStewardCredentialFile.load(invocation.credentialPath);
+    const connection = await wsconnect({
+      servers: PR_STEWARD_ENDPOINT,
+      user: credential.username,
+      pass: credential.password,
+      name: `pr-steward-${process.pid}`,
+      ignoreClusterUpdates: true,
     });
-  };
-  process.once('SIGINT', stop);
-  process.once('SIGTERM', stop);
-  try {
-    await new PrStewardEventObserver({
-      reader: PrStewardGithubPrReader.create(),
-    }).observe({
-      messages: subscription,
-      pullRequest: invocation.pullRequest,
-      write: (line) => {
-        process.stdout.write(line);
-      },
-    });
-    const closeError = await connection.closed();
-    if (closeError) throw new Error('NATS connection closed unexpectedly');
-  } finally {
-    if (!stopping) await connection.close();
-    process.removeListener('SIGINT', stop);
-    process.removeListener('SIGTERM', stop);
+    const subscription = connection.subscribe(PR_STEWARD_SUBJECT);
+    let stopping = false;
+    const stop = (): void => {
+      if (stopping) return;
+      stopping = true;
+      void connection.drain().catch(() => {
+        process.exitCode = 1;
+      });
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+    try {
+      await new PrStewardEventObserver({
+        reader: PrStewardGithubPrReader.create(),
+      }).observe({
+        messages: subscription,
+        pullRequest: invocation.pullRequest,
+        write: (line) => {
+          process.stdout.write(line);
+        },
+      });
+      const closeError = await connection.closed();
+      if (closeError) throw new Error('NATS connection closed unexpectedly');
+    } finally {
+      if (!stopping) await connection.close();
+      process.removeListener('SIGINT', stop);
+      process.removeListener('SIGTERM', stop);
+    }
   }
 }
 
 if (import.meta.main) {
-  main().catch((cause) => {
+  PrStewardEventCli.main().catch((cause) => {
     const message =
       cause instanceof Error ? cause.message : 'subscription failed';
     process.stderr.write(`PR Steward event subscription failed: ${message}\n`);

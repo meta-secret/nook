@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import {
   DecodeStatus,
   FieldIssue,
-  decodeErr,
-  decodeOk,
-  fieldError,
+  FailedFieldDecode,
+  SuccessfulFieldDecode,
+  FieldDiagnostic,
 } from '../src/codec/field-error.ts';
-import { findRepoRoot, resolveRequestPath } from '../src/lib/repo.ts';
+import { RepositoryRoot } from '../src/lib/repo.ts';
 import {
   LoomFailure,
   LoomFailureCode,
@@ -18,7 +18,7 @@ import type { ResolveRequestPathArgs } from '../src/lib/repo.ts';
 describe('decode outcome helpers', () => {
   test('decodeOk carries value', () => {
     const outcomeArgs = { ready: true };
-    const outcome = decodeOk(outcomeArgs);
+    const outcome = SuccessfulFieldDecode.create(outcomeArgs);
     expect(outcome.status).toBe(DecodeStatus.Ok);
     if (outcome.status === DecodeStatus.Ok) {
       expect(outcome.value.ready).toBe(true);
@@ -30,7 +30,9 @@ describe('decode outcome helpers', () => {
       path: 'prePush.stageHostUpdates',
       issue: FieldIssue.ExpectedBoolean,
     };
-    const outcome = decodeErr([fieldError(fieldErrorArgs)]);
+    const outcome = FailedFieldDecode.create([
+      FieldDiagnostic.create(fieldErrorArgs),
+    ]);
     expect(outcome.status).toBe(DecodeStatus.Failed);
     if (outcome.status === DecodeStatus.Failed) {
       expect(outcome.errors).toHaveLength(1);
@@ -65,17 +67,19 @@ describe('resolveRequestPath', () => {
     const resolveRequestPathArgs: ResolveRequestPathArgs = {
       requestPath: absolute,
     };
-    expect(resolveRequestPath(resolveRequestPathArgs)).toBe(absolute);
+    expect(RepositoryRoot.resolveRequestPath(resolveRequestPathArgs)).toBe(
+      absolute,
+    );
   });
 
   test('resolves relative paths from repository root', () => {
-    const root = findRepoRoot();
+    const root = RepositoryRoot.find();
     const relative = 'agentic-ai/loom/package.json';
     const resolvedArgs: ResolveRequestPathArgs = {
       requestPath: relative,
       startDir: `${root}/agentic-ai/loom`,
     };
-    const resolved = resolveRequestPath(resolvedArgs);
+    const resolved = RepositoryRoot.resolveRequestPath(resolvedArgs);
     expect(resolved.endsWith(relative)).toBe(true);
   });
 });

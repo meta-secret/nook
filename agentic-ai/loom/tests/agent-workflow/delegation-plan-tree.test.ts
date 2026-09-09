@@ -1,40 +1,88 @@
 import { describe, expect, test } from 'bun:test';
+
 import {
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
 } from '../../src/agent-workflow/domain.ts';
+
 import {
   DELEGATION_PLAN_SCHEMA_VERSION,
   DelegationBarrierPolicy,
 } from '../../src/agent-workflow/delegation-domain.ts';
+
 import type {
   DelegationAttemptDeclaration,
   DelegationAttemptIdentity,
   DelegationPlan,
 } from '../../src/agent-workflow/delegation-domain.ts';
-import { renderDelegationPlanTree } from '../../src/agent-workflow/delegation-plan-tree.ts';
+
+import { DelegationPlanTree } from '../../src/agent-workflow/delegation-plan-tree.ts';
+
+export class AgentWorkflowDelegationPlanTreeScenario {
+  private constructor(
+    private readonly request: readonly DelegationAttemptDeclaration[],
+  ) {}
+
+  static declaration(input: DeclarationInput): DelegationAttemptDeclaration {
+    const [children = []] = [input.children];
+    return {
+      identity: input.identity,
+      depth: input.depth,
+      parent: input.parent
+        ? { kind: AgentAttemptParentKind.AgentAttempt, ...input.parent }
+        : { kind: AgentAttemptParentKind.WorkflowRoot },
+      terminalBarrier: {
+        policy: DelegationBarrierPolicy.AllTerminal,
+        attempts: children,
+      },
+    };
+  }
+
+  static plan(
+    attempts: readonly DelegationAttemptDeclaration[],
+  ): DelegationPlan {
+    return new AgentWorkflowDelegationPlanTreeScenario(attempts).execute();
+  }
+
+  private execute(): DelegationPlan {
+    const attempts = this.request;
+    return {
+      schemaVersion: DELEGATION_PLAN_SCHEMA_VERSION,
+      workflow: DelegatedAgentWorkflowName.AgentWork,
+      runId: 'visual-plan',
+      sourceCommit: SOURCE_COMMIT,
+      rootMaterializer: ROOT,
+      attempts,
+    };
+  }
+}
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
 const ROOT: DelegationAttemptIdentity = {
   task: 'coordinate-delivery',
   agent: 'delivery-coordinator',
   attempt: 1,
 };
+
 const AI: DelegationAttemptIdentity = {
   task: 'update-cortex',
   agent: 'ai',
   attempt: 1,
 };
+
 const WEB: DelegationAttemptIdentity = {
   task: 'create_security-key_component',
   agent: 'web-dev',
   attempt: 1,
 };
+
 const CORE: DelegationAttemptIdentity = {
   task: 'auth-module-implementation',
   agent: 'core-dev',
   attempt: 1,
 };
+
 const REVIEW: DelegationAttemptIdentity = {
   task: 'review-auth-contract',
   agent: 'security',
@@ -44,8 +92,12 @@ const REVIEW: DelegationAttemptIdentity = {
 describe('delegation plan tree', () => {
   test('renders a root-only plan cleanly', () => {
     const rootInput: DeclarationInput = { identity: ROOT, depth: 1 };
-    const root = declaration(rootInput);
-    expect(renderDelegationPlanTree(plan([root]))).toBe(
+    const root = AgentWorkflowDelegationPlanTreeScenario.declaration(rootInput);
+    expect(
+      DelegationPlanTree.render(
+        AgentWorkflowDelegationPlanTreeScenario.plan([root]),
+      ),
+    ).toBe(
       ['gizmo', '└─ delivery-coordinator', '  └─ coordinate delivery', ''].join(
         '\n',
       ),
@@ -79,13 +131,24 @@ describe('delegation plan tree', () => {
       depth: 3,
       parent: WEB,
     };
-    const root = declaration(rootInput);
-    const ai = declaration(aiInput);
-    const web = declaration(webInput);
-    const core = declaration(coreInput);
-    const review = declaration(reviewInput);
+    const root = AgentWorkflowDelegationPlanTreeScenario.declaration(rootInput);
+    const ai = AgentWorkflowDelegationPlanTreeScenario.declaration(aiInput);
+    const web = AgentWorkflowDelegationPlanTreeScenario.declaration(webInput);
+    const core = AgentWorkflowDelegationPlanTreeScenario.declaration(coreInput);
+    const review =
+      AgentWorkflowDelegationPlanTreeScenario.declaration(reviewInput);
 
-    expect(renderDelegationPlanTree(plan([root, ai, web, core, review]))).toBe(
+    expect(
+      DelegationPlanTree.render(
+        AgentWorkflowDelegationPlanTreeScenario.plan([
+          root,
+          ai,
+          web,
+          core,
+          review,
+        ]),
+      ),
+    ).toBe(
       [
         'gizmo',
         '└─ delivery-coordinator',
@@ -110,31 +173,3 @@ type DeclarationInput = {
   readonly children?: readonly DelegationAttemptIdentity[];
   readonly parent?: DelegationAttemptIdentity;
 };
-
-function declaration(input: DeclarationInput): DelegationAttemptDeclaration {
-  const [children = []] = [input.children];
-  return {
-    identity: input.identity,
-    depth: input.depth,
-    parent: input.parent
-      ? { kind: AgentAttemptParentKind.AgentAttempt, ...input.parent }
-      : { kind: AgentAttemptParentKind.WorkflowRoot },
-    terminalBarrier: {
-      policy: DelegationBarrierPolicy.AllTerminal,
-      attempts: children,
-    },
-  };
-}
-
-function plan(
-  attempts: readonly DelegationAttemptDeclaration[],
-): DelegationPlan {
-  return {
-    schemaVersion: DELEGATION_PLAN_SCHEMA_VERSION,
-    workflow: DelegatedAgentWorkflowName.AgentWork,
-    runId: 'visual-plan',
-    sourceCommit: SOURCE_COMMIT,
-    rootMaterializer: ROOT,
-    attempts,
-  };
-}

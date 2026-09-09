@@ -36,32 +36,22 @@ import type {
   AgentAttemptEventMetadata,
   AgentAttemptEventWithoutMetadata,
 } from './agent-events.ts';
-import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
+import { WorkflowResultSchema } from './structured-result-codec.ts';
 import { MAX_AGENT_HIERARCHY_DEPTH } from './hierarchy.ts';
-import {
-  consumeModuleExpertCompletionAuthority,
-  consumeModuleExpertJournalAuthority,
-} from '../module-experts/trusted-runtime.ts';
-import {
-  consumeStructuralCompletionAuthority,
-  consumeStructuralJournalAuthority,
-} from '../structural-experts/trusted-runtime.ts';
+import { ModuleExpertRuntimeAuthority } from '../module-experts/trusted-runtime.ts';
+import { StructuralExpertRuntimeAuthority } from '../structural-experts/trusted-runtime.ts';
 import type {
   StructuralJournalAuthority,
   StructuralJournalBinding,
   StructuralRuntimeIdentity,
   TrustedStructuralExecution,
 } from '../structural-experts/trusted-runtime.ts';
-import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
+import { AgentAttemptSchema } from './agent-attempt-version.ts';
 import {
-  assertCortexReferences,
   type AssertCortexReferencesArgs,
+  CortexIdentifierSyntax,
 } from './cortex-references.ts';
-import {
-  cortexActionId,
-  renderAgentAttemptEvent,
-  renderRuntimeActivityObservation,
-} from './agent-event-renderer.ts';
+import { AgentEventPresentation } from './agent-event-renderer.ts';
 import {
   RuntimeActivityObservationField,
   WorkflowRuntimeActivityKind,
@@ -138,15 +128,6 @@ export type FinalizeStructuralExpertAttemptArgs<TTask extends string> = {
   readonly execution: TrustedStructuralExecution;
 };
 
-const PENDING_MODULE_EXPERT_CONFIGURATIONS = new WeakMap<
-  AgentAttemptJournalConfiguration,
-  ModuleExpertJournalBinding
->();
-const PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS = new WeakMap<
-  AgentAttemptJournalConfiguration,
-  StructuralJournalBinding
->();
-
 export class AgentAttemptJournal<TTask extends string> {
   readonly attemptDirectory: string;
   readonly eventsPath: string;
@@ -156,17 +137,23 @@ export class AgentAttemptJournal<TTask extends string> {
   private pendingAppend: Promise<void>;
   private finalized: boolean;
   private readonly moduleExpertJournalBinding:
-    ModuleExpertJournalBinding | false;
+    | ModuleExpertJournalBinding
+    | false;
   private trustedModuleExpertFinalization: boolean;
   private readonly structuralExpertJournalBinding:
-    StructuralJournalBinding | false;
+    | StructuralJournalBinding
+    | false;
   private trustedStructuralExpertFinalization: boolean;
 
   constructor(configuration: AgentAttemptJournalConfiguration) {
     const pendingBinding =
-      PENDING_MODULE_EXPERT_CONFIGURATIONS.get(configuration);
+      AgentAttemptJournal.PENDING_MODULE_EXPERT_CONFIGURATIONS.get(
+        configuration,
+      );
     const pendingStructuralBinding =
-      PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.get(configuration);
+      AgentAttemptJournal.PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.get(
+        configuration,
+      );
     const adapter = configuration.adapter as AgentAttemptAdapterKind;
     if (adapter === AgentAttemptAdapterKind.ModuleExpertInvocation) {
       if (!pendingBinding) {
@@ -174,14 +161,18 @@ export class AgentAttemptJournal<TTask extends string> {
           'Module expert journals require runtime completion authority.',
         );
       }
-      PENDING_MODULE_EXPERT_CONFIGURATIONS.delete(configuration);
+      AgentAttemptJournal.PENDING_MODULE_EXPERT_CONFIGURATIONS.delete(
+        configuration,
+      );
     } else if (adapter === AgentAttemptAdapterKind.StructuralExpertInvocation) {
       if (!pendingStructuralBinding) {
         throw new Error(
           'Structural expert journals require runtime completion authority.',
         );
       }
-      PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.delete(configuration);
+      AgentAttemptJournal.PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.delete(
+        configuration,
+      );
     } else if (!Object.values(AgentAttemptAdapterKind).includes(adapter)) {
       throw new Error('Agent attempt adapter provenance is invalid.');
     }
@@ -194,11 +185,11 @@ export class AgentAttemptJournal<TTask extends string> {
     ) {
       throw new Error('Agent attempt invocation context binding is invalid.');
     }
-    assertCurrentAgentAttemptWorkflowVersion(configuration.workflowVersion);
-    assertFilesystemIdentifier(configuration.task);
-    assertFilesystemIdentifier(configuration.agent);
-    assertFilesystemIdentifier(configuration.runId);
-    assertFilesystemIdentifier(configuration.workflow);
+    AgentAttemptSchema.assertCurrent(configuration.workflowVersion);
+    AgentAttemptJournal.assertFilesystemIdentifier(configuration.task);
+    AgentAttemptJournal.assertFilesystemIdentifier(configuration.agent);
+    AgentAttemptJournal.assertFilesystemIdentifier(configuration.runId);
+    AgentAttemptJournal.assertFilesystemIdentifier(configuration.workflow);
     if (
       !Number.isSafeInteger(configuration.attempt) ||
       configuration.attempt < 1 ||
@@ -215,7 +206,7 @@ export class AgentAttemptJournal<TTask extends string> {
     ) {
       throw new Error('Agent attempt source identity must be bounded.');
     }
-    assertParentLineage(configuration);
+    AgentAttemptJournal.assertParentLineage(configuration);
     this.configuration = configuration;
     this.attemptDirectory = join(
       configuration.runDirectory,
@@ -259,7 +250,7 @@ export class AgentAttemptJournal<TTask extends string> {
     if (this.finalized) {
       throw new Error('Cannot append to a finalized agent attempt journal.');
     }
-    if (!eventHasExactKeys(event)) {
+    if (!AgentAttemptJournal.eventHasExactKeys(event)) {
       throw new Error('Agent attempt event fields are invalid.');
     }
     this.sequence += 1;
@@ -279,7 +270,7 @@ export class AgentAttemptJournal<TTask extends string> {
       depth: this.configuration.depth,
       parent: this.configuration.parent,
       sequence: this.sequence,
-      actionId: cortexActionId(this.sequence),
+      actionId: AgentEventPresentation.cortexActionId(this.sequence),
       occurredAt,
     };
     const completeEvent = { ...metadata, ...event } as AgentAttemptEvent;
@@ -295,7 +286,9 @@ export class AgentAttemptJournal<TTask extends string> {
       },
     ] = [this.configuration.compactOutput];
     try {
-      await compactOutput(renderAgentAttemptEvent(completeEvent));
+      await compactOutput(
+        AgentEventPresentation.renderAgentAttemptEvent(completeEvent),
+      );
     } catch {
       // Compact human evidence is optional and cannot gate the journal.
     }
@@ -336,7 +329,7 @@ export class AgentAttemptJournal<TTask extends string> {
       references,
       knownIdentifiers: defaulted3,
     };
-    assertCortexReferences(referenceArgs);
+    CortexIdentifierSyntax.assertCortexReferences(referenceArgs);
     this.liveSequence += 1;
     const [
       compactOutput = (line: string): void => {
@@ -345,7 +338,7 @@ export class AgentAttemptJournal<TTask extends string> {
     ] = [this.configuration.compactOutput];
     try {
       await compactOutput(
-        renderRuntimeActivityObservation({
+        AgentEventPresentation.renderRuntimeActivityObservation({
           identity: {
             task: this.configuration.task,
             attempt: this.configuration.attempt,
@@ -393,7 +386,7 @@ export class AgentAttemptJournal<TTask extends string> {
     const eventsSerialized = await readFile(this.eventsPath, 'utf8');
     const events: ProjectionReference = {
       path: this.relativePath('events.jsonl'),
-      sha256: sha256(eventsSerialized),
+      sha256: AgentAttemptJournal.sha256(eventsSerialized),
     };
     return { kind: TaskProcessingKind.AgentAttempt, events, result, view };
   }
@@ -417,7 +410,9 @@ export class AgentAttemptJournal<TTask extends string> {
       execution: args.execution,
       terminalCompletion,
     };
-    consumeModuleExpertCompletionAuthority(consumeArgs);
+    ModuleExpertRuntimeAuthority.consumeModuleExpertCompletionAuthority(
+      consumeArgs,
+    );
     this.trustedModuleExpertFinalization = true;
     try {
       return await this.finalize(terminal);
@@ -445,7 +440,9 @@ export class AgentAttemptJournal<TTask extends string> {
       execution: args.execution,
       terminalCompletion,
     };
-    consumeStructuralCompletionAuthority(consumeRequest);
+    StructuralExpertRuntimeAuthority.consumeStructuralCompletionAuthority(
+      consumeRequest,
+    );
     this.trustedStructuralExpertFinalization = true;
     try {
       return await this.finalize(terminal);
@@ -462,7 +459,9 @@ export class AgentAttemptJournal<TTask extends string> {
       throw new Error('Agent terminal identity differs from its journal.');
     }
     if (terminal.kind === TaskTerminalKind.Completed) {
-      const output = decodeWorkflowTaskOutput(JSON.stringify(terminal.output));
+      const output = WorkflowResultSchema.decodeWorkflowTaskOutput(
+        JSON.stringify(terminal.output),
+      );
       const adapter = this.configuration.adapter as AgentAttemptAdapterKind;
       if (
         output.resultKind === WorkflowResultKind.ModuleExpertEvidence &&
@@ -502,7 +501,7 @@ export class AgentAttemptJournal<TTask extends string> {
       typeof terminal.summary !== 'string' ||
       terminal.summary.trim() === '' ||
       terminal.summary.length > 4096 ||
-      containsForbiddenControl(terminal.summary)
+      AgentAttemptJournal.containsForbiddenControl(terminal.summary)
     ) {
       throw new Error('Agent terminal failure summary must be bounded.');
     }
@@ -565,10 +564,10 @@ export class AgentAttemptJournal<TTask extends string> {
       path: absolutePath,
       serialized: input.serialized,
     };
-    await atomicWrite(operation);
+    await AgentAttemptJournal.atomicWrite(operation);
     return {
       path: this.relativePath(input.filename),
-      sha256: sha256(input.serialized),
+      sha256: AgentAttemptJournal.sha256(input.serialized),
     };
   }
 
@@ -580,111 +579,206 @@ export class AgentAttemptJournal<TTask extends string> {
       filename,
     );
   }
-}
 
-function eventHasExactKeys(event: AgentAttemptEventWithoutMetadata): boolean {
-  const startFields =
-    event.kind === AgentAttemptEventKind.AttemptStarted &&
-    event.invocationContextSha256
-      ? ['kind', 'invocationContextSha256']
-      : ['kind'];
-  const expectedByKind: Record<AgentAttemptEventKind, ReadonlySet<string>> = {
-    [AgentAttemptEventKind.AttemptStarted]: new Set(startFields),
-    [AgentAttemptEventKind.ResultProjected]: new Set(['kind', 'result']),
-    [AgentAttemptEventKind.ViewProjected]: new Set(['kind', 'view']),
-    [AgentAttemptEventKind.AttemptTerminalRecorded]: new Set([
-      'kind',
-      'terminalKind',
-      'result',
-      'view',
-    ]),
-  };
-  const expected = expectedByKind[event.kind];
-  if (!expected) return false;
-  const keys = Object.keys(event);
-  return (
-    keys.length === expected.size && keys.every((key) => expected.has(key))
-  );
-}
+  private static readonly PENDING_MODULE_EXPERT_CONFIGURATIONS = new WeakMap<
+    AgentAttemptJournalConfiguration,
+    ModuleExpertJournalBinding
+  >();
 
-export function createModuleExpertAttemptJournal<TTask extends string>(
-  args: CreateModuleExpertAttemptJournalArgs,
-): AgentAttemptJournal<TTask> {
-  const matchArgs: ConfigurationIdentityMatchArgs = {
-    configuration: args.configuration,
-    identity: args.identity,
-  };
-  if (!configurationMatchesIdentity(matchArgs)) {
-    throw new Error('Module expert journal identity is invalid.');
-  }
-  const consumeArgs = {
-    authority: args.authority,
-    identity: args.identity,
-  };
-  const binding = consumeModuleExpertJournalAuthority(consumeArgs);
-  const parentValue: AgentAttemptParent = { ...args.configuration.parent };
-  const parent = Object.freeze(parentValue);
-  const configuration: AgentAttemptJournalConfiguration = {
-    ...args.configuration,
-    parent,
-    adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
-  };
-  PENDING_MODULE_EXPERT_CONFIGURATIONS.set(configuration, binding);
-  const adapterSet = Reflect.set(
-    configuration,
-    'adapter',
-    AgentAttemptAdapterKind.ModuleExpertInvocation,
-  );
-  if (!adapterSet) {
-    PENDING_MODULE_EXPERT_CONFIGURATIONS.delete(configuration);
-    throw new Error('Module expert journal provenance could not be sealed.');
-  }
-  return new AgentAttemptJournal<TTask>(configuration);
-}
+  private static readonly PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS =
+    new WeakMap<AgentAttemptJournalConfiguration, StructuralJournalBinding>();
 
-export function createStructuralExpertAttemptJournal<TTask extends string>(
-  args: CreateStructuralExpertAttemptJournalArgs,
-): AgentAttemptJournal<TTask> {
-  const identityMatches =
-    args.configuration.runDirectory === args.identity.runDirectory &&
-    args.configuration.runId === args.identity.runId &&
-    args.configuration.workflow === args.identity.workflow &&
-    args.configuration.workflowVersion === args.identity.workflowVersion &&
-    args.configuration.sourceCommit === args.identity.sourceCommit &&
-    args.configuration.task === args.identity.task &&
-    args.configuration.agent === args.identity.agent &&
-    args.configuration.attempt === args.identity.attempt &&
-    args.configuration.depth === args.identity.depth &&
-    JSON.stringify(args.configuration.parent) ===
-      JSON.stringify(args.identity.parent);
-  if (!identityMatches) {
-    throw new Error('Structural expert journal identity is invalid.');
-  }
-  const consumeRequest = {
-    authority: args.authority,
-    identity: args.identity,
-  };
-  const binding = consumeStructuralJournalAuthority(consumeRequest);
-  const parentValue: AgentAttemptParent = { ...args.configuration.parent };
-  const parent = Object.freeze(parentValue);
-  const configuration: AgentAttemptJournalConfiguration = {
-    ...args.configuration,
-    parent,
-    adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
-  };
-  PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.set(configuration, binding);
-  const adapterSet = Reflect.set(
-    configuration,
-    'adapter',
-    AgentAttemptAdapterKind.StructuralExpertInvocation,
-  );
-  if (!adapterSet) {
-    PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.delete(configuration);
-    throw new Error(
-      'Structural expert journal provenance could not be sealed.',
+  private static eventHasExactKeys(
+    event: AgentAttemptEventWithoutMetadata,
+  ): boolean {
+    const startFields =
+      event.kind === AgentAttemptEventKind.AttemptStarted &&
+      event.invocationContextSha256
+        ? ['kind', 'invocationContextSha256']
+        : ['kind'];
+    const expectedByKind: Record<AgentAttemptEventKind, ReadonlySet<string>> = {
+      [AgentAttemptEventKind.AttemptStarted]: new Set(startFields),
+      [AgentAttemptEventKind.ResultProjected]: new Set(['kind', 'result']),
+      [AgentAttemptEventKind.ViewProjected]: new Set(['kind', 'view']),
+      [AgentAttemptEventKind.AttemptTerminalRecorded]: new Set([
+        'kind',
+        'terminalKind',
+        'result',
+        'view',
+      ]),
+    };
+    const expected = expectedByKind[event.kind];
+    if (!expected) return false;
+    const keys = Object.keys(event);
+    return (
+      keys.length === expected.size && keys.every((key) => expected.has(key))
     );
   }
-  return new AgentAttemptJournal<TTask>(configuration);
+
+  static createModuleExpert<TTask extends string>(
+    args: CreateModuleExpertAttemptJournalArgs,
+  ): AgentAttemptJournal<TTask> {
+    const matchArgs: ConfigurationIdentityMatchArgs = {
+      configuration: args.configuration,
+      identity: args.identity,
+    };
+    if (!AgentAttemptJournal.configurationMatchesIdentity(matchArgs)) {
+      throw new Error('Module expert journal identity is invalid.');
+    }
+    const consumeArgs = {
+      authority: args.authority,
+      identity: args.identity,
+    };
+    const binding =
+      ModuleExpertRuntimeAuthority.consumeModuleExpertJournalAuthority(
+        consumeArgs,
+      );
+    const parentValue: AgentAttemptParent = { ...args.configuration.parent };
+    const parent = Object.freeze(parentValue);
+    const configuration: AgentAttemptJournalConfiguration = {
+      ...args.configuration,
+      parent,
+      adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+    };
+    AgentAttemptJournal.PENDING_MODULE_EXPERT_CONFIGURATIONS.set(
+      configuration,
+      binding,
+    );
+    const adapterSet = Reflect.set(
+      configuration,
+      'adapter',
+      AgentAttemptAdapterKind.ModuleExpertInvocation,
+    );
+    if (!adapterSet) {
+      AgentAttemptJournal.PENDING_MODULE_EXPERT_CONFIGURATIONS.delete(
+        configuration,
+      );
+      throw new Error('Module expert journal provenance could not be sealed.');
+    }
+    return new AgentAttemptJournal<TTask>(configuration);
+  }
+
+  static createStructuralExpert<TTask extends string>(
+    args: CreateStructuralExpertAttemptJournalArgs,
+  ): AgentAttemptJournal<TTask> {
+    const identityMatches =
+      args.configuration.runDirectory === args.identity.runDirectory &&
+      args.configuration.runId === args.identity.runId &&
+      args.configuration.workflow === args.identity.workflow &&
+      args.configuration.workflowVersion === args.identity.workflowVersion &&
+      args.configuration.sourceCommit === args.identity.sourceCommit &&
+      args.configuration.task === args.identity.task &&
+      args.configuration.agent === args.identity.agent &&
+      args.configuration.attempt === args.identity.attempt &&
+      args.configuration.depth === args.identity.depth &&
+      JSON.stringify(args.configuration.parent) ===
+        JSON.stringify(args.identity.parent);
+    if (!identityMatches) {
+      throw new Error('Structural expert journal identity is invalid.');
+    }
+    const consumeRequest = {
+      authority: args.authority,
+      identity: args.identity,
+    };
+    const binding =
+      StructuralExpertRuntimeAuthority.consumeStructuralJournalAuthority(
+        consumeRequest,
+      );
+    const parentValue: AgentAttemptParent = { ...args.configuration.parent };
+    const parent = Object.freeze(parentValue);
+    const configuration: AgentAttemptJournalConfiguration = {
+      ...args.configuration,
+      parent,
+      adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+    };
+    AgentAttemptJournal.PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.set(
+      configuration,
+      binding,
+    );
+    const adapterSet = Reflect.set(
+      configuration,
+      'adapter',
+      AgentAttemptAdapterKind.StructuralExpertInvocation,
+    );
+    if (!adapterSet) {
+      AgentAttemptJournal.PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.delete(
+        configuration,
+      );
+      throw new Error(
+        'Structural expert journal provenance could not be sealed.',
+      );
+    }
+    return new AgentAttemptJournal<TTask>(configuration);
+  }
+
+  private static async atomicWrite(
+    operation: AtomicWriteOperation,
+  ): Promise<void> {
+    const temporaryPath = `${operation.path}.tmp`;
+    await writeFile(temporaryPath, operation.serialized, 'utf8');
+    await rename(temporaryPath, operation.path);
+  }
+
+  private static sha256(serialized: string): string {
+    return createHash('sha256').update(serialized).digest('hex');
+  }
+
+  private static configurationMatchesIdentity(
+    args: ConfigurationIdentityMatchArgs,
+  ): boolean {
+    const { configuration, identity } = args;
+    return (
+      configuration.runDirectory === identity.runDirectory &&
+      configuration.workflow === identity.workflow &&
+      configuration.workflowVersion === identity.workflowVersion &&
+      configuration.runId === identity.runId &&
+      configuration.sourceCommit === identity.sourceCommit &&
+      configuration.task === identity.task &&
+      configuration.agent === identity.agent &&
+      configuration.attempt === identity.attempt &&
+      configuration.depth === identity.depth &&
+      JSON.stringify(configuration.parent) === JSON.stringify(identity.parent)
+    );
+  }
+
+  private static assertFilesystemIdentifier(identifier: string): void {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(identifier)) {
+      throw new Error(`Unsafe agent processing identifier: ${identifier}`);
+    }
+  }
+
+  private static assertParentLineage(
+    configuration: AgentAttemptJournalConfiguration,
+  ): void {
+    const parent = configuration.parent;
+    if (parent.kind === AgentAttemptParentKind.WorkflowRoot) {
+      if (configuration.depth !== 1 || Object.keys(parent).length !== 1) {
+        throw new Error('Root agent attempt lineage is invalid.');
+      }
+      return;
+    }
+    AgentAttemptJournal.assertFilesystemIdentifier(parent.task);
+    AgentAttemptJournal.assertFilesystemIdentifier(parent.agent);
+    if (
+      configuration.depth < 2 ||
+      !Number.isSafeInteger(parent.attempt) ||
+      parent.attempt < 1 ||
+      (parent.task === configuration.task &&
+        parent.agent === configuration.agent &&
+        parent.attempt === configuration.attempt)
+    ) {
+      throw new Error('Parent agent attempt lineage is invalid.');
+    }
+  }
+
+  private static containsForbiddenControl(value: string): boolean {
+    return Array.from(value).some((character) => {
+      const code = character.charCodeAt(0);
+      return (
+        code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
+      );
+    });
+  }
 }
 
 type JsonProjectionInput<TTask extends string> = {
@@ -701,70 +795,3 @@ type AtomicWriteOperation = {
   readonly path: string;
   readonly serialized: string;
 };
-
-async function atomicWrite(operation: AtomicWriteOperation): Promise<void> {
-  const temporaryPath = `${operation.path}.tmp`;
-  await writeFile(temporaryPath, operation.serialized, 'utf8');
-  await rename(temporaryPath, operation.path);
-}
-
-function sha256(serialized: string): string {
-  return createHash('sha256').update(serialized).digest('hex');
-}
-
-function configurationMatchesIdentity(
-  args: ConfigurationIdentityMatchArgs,
-): boolean {
-  const { configuration, identity } = args;
-  return (
-    configuration.runDirectory === identity.runDirectory &&
-    configuration.workflow === identity.workflow &&
-    configuration.workflowVersion === identity.workflowVersion &&
-    configuration.runId === identity.runId &&
-    configuration.sourceCommit === identity.sourceCommit &&
-    configuration.task === identity.task &&
-    configuration.agent === identity.agent &&
-    configuration.attempt === identity.attempt &&
-    configuration.depth === identity.depth &&
-    JSON.stringify(configuration.parent) === JSON.stringify(identity.parent)
-  );
-}
-
-function assertFilesystemIdentifier(identifier: string): void {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(identifier)) {
-    throw new Error(`Unsafe agent processing identifier: ${identifier}`);
-  }
-}
-
-function assertParentLineage(
-  configuration: AgentAttemptJournalConfiguration,
-): void {
-  const parent = configuration.parent;
-  if (parent.kind === AgentAttemptParentKind.WorkflowRoot) {
-    if (configuration.depth !== 1 || Object.keys(parent).length !== 1) {
-      throw new Error('Root agent attempt lineage is invalid.');
-    }
-    return;
-  }
-  assertFilesystemIdentifier(parent.task);
-  assertFilesystemIdentifier(parent.agent);
-  if (
-    configuration.depth < 2 ||
-    !Number.isSafeInteger(parent.attempt) ||
-    parent.attempt < 1 ||
-    (parent.task === configuration.task &&
-      parent.agent === configuration.agent &&
-      parent.attempt === configuration.attempt)
-  ) {
-    throw new Error('Parent agent attempt lineage is invalid.');
-  }
-}
-
-function containsForbiddenControl(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0);
-    return (
-      code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
-    );
-  });
-}

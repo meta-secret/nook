@@ -2,8 +2,8 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { evaluatePopularity } from '../src/lib/dependency-popularity/evaluate.ts';
-import { scanRepositoryNpmPackages } from '../src/lib/dependency-popularity/scan.ts';
+import { DependencyPopularityPolicy } from '../src/lib/dependency-popularity/evaluate.ts';
+import { RepositoryDependencyInventory } from '../src/lib/dependency-popularity/scan.ts';
 import {
   DependencyEcosystem,
   GitHubStarsPresence,
@@ -33,7 +33,8 @@ describe('scanRepositoryNpmPackages', () => {
   test('reads Loom and validated executable-application dependencies', () => {
     const repositoryRoot = path.join(import.meta.dir, '../../..');
     const parse = spyOn(JSON, 'parse');
-    const names = scanRepositoryNpmPackages(repositoryRoot);
+    const names =
+      RepositoryDependencyInventory.scanRepositoryNpmPackages(repositoryRoot);
     expect(names).toContain('diff');
     expect(names).toContain('typescript');
     expect(names.some((name) => name.startsWith('@types/'))).toBe(false);
@@ -60,7 +61,7 @@ describe('scanRepositoryNpmPackages', () => {
     Bun.spawnSync(addOptions);
     let detail = '';
     try {
-      scanRepositoryNpmPackages(root);
+      RepositoryDependencyInventory.scanRepositoryNpmPackages(root);
     } catch (error) {
       detail = error instanceof Error ? error.message : '';
     }
@@ -84,7 +85,7 @@ describe('evaluatePopularity', () => {
       },
       thresholds,
     };
-    const finding = evaluatePopularity(findingArgs3);
+    const finding = DependencyPopularityPolicy.evaluate(findingArgs3);
     expect(finding.verdict).toBe(PopularityVerdict.Pass);
     expect(finding.reasons).toHaveLength(0);
   });
@@ -102,7 +103,7 @@ describe('evaluatePopularity', () => {
       },
       thresholds,
     };
-    const finding = evaluatePopularity(findingArgs2);
+    const finding = DependencyPopularityPolicy.evaluate(findingArgs2);
     expect(finding.verdict).toBe(PopularityVerdict.Fail);
     expect(finding.reasons.length).toBeGreaterThan(0);
   });
@@ -118,7 +119,7 @@ describe('evaluatePopularity', () => {
       },
       thresholds,
     };
-    const finding = evaluatePopularity(findingArgs);
+    const finding = DependencyPopularityPolicy.evaluate(findingArgs);
     expect(finding.verdict).toBe(PopularityVerdict.Fail);
   });
 });

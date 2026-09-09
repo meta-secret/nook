@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { runCortexVale } from '../lib/cortex-vale.ts';
+import { CortexValeInvocation } from '../lib/cortex-vale.ts';
 
 const [repoRootArgument = false, cortexRootArgument = false] =
   process.argv.slice(2);
@@ -8,5 +8,5 @@ if (repoRootArgument === false || cortexRootArgument === false) {
 }
 const repoRoot = path.resolve(repoRootArgument);
 const cortexRoot = path.resolve(repoRoot, cortexRootArgument);
-runCortexVale({ cortexRoot, repoRoot });
+CortexValeInvocation.runCortexVale({ cortexRoot, repoRoot });
 process.stdout.write('{}\n');

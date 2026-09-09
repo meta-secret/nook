@@ -1,20 +1,66 @@
 import { describe, expect, test } from 'bun:test';
+
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
+
 import {
-  asUntrustedYamlNode,
-  sealUntrustedYamlMap,
-} from '../src/lib/guards.ts';
-import {
-  buildActionsEvidence,
-  buildReviewEvidence,
   type BuildActionsEvidenceRequest,
   type BuildReviewEvidenceRequest,
+  GithubAgentEvidence,
 } from '../src/lib/agent-stats-github.ts';
-import { mergeReviewedDeliveryHeads } from '../src/lib/agent-stats-github-delivery.ts';
+
+import { ReviewedDeliveryHistory } from '../src/lib/agent-stats-github-delivery.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
+export class AgentStatsGithubScenario {
+  private constructor(private readonly request: ActionRunFixture) {}
+
+  static actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
+    return new AgentStatsGithubScenario(fixture).execute();
+  }
+
+  private execute(): UntrustedYamlNode {
+    const fixture = this.request;
+    const [defaulted1 = 'PR'] = [fixture.workflow];
+    const [defaulted2 = 'pull_request'] = [fixture.trigger];
+    const [defaulted3 = fixture.startedAt] = [fixture.createdAt];
+    const [defaulted4 = 'completed'] = [fixture.status];
+    const [defaulted5 = 42] = [fixture.sourcePr];
+    return {
+      id: fixture.id,
+      name: defaulted1,
+      run_attempt: fixture.runAttempt,
+      head_sha: fixture.headSha,
+      event: defaulted2,
+      created_at: defaulted3,
+      run_started_at: fixture.startedAt,
+      updated_at: fixture.finishedAt,
+      conclusion: fixture.conclusion,
+      status: defaulted4,
+      pull_requests: fixture.sourcePr === false ? [] : [{ number: defaulted5 }],
+      validation_requested:
+        fixture.validationRequested === false ? 'false' : 'true',
+    };
+  }
+
+  static actionPages(fixtures: readonly ActionRunFixture[]): UntrustedYamlNode {
+    return UntrustedYamlBoundary.fromHost([
+      {
+        total_count: fixtures.length,
+        workflow_runs: fixtures.map(AgentStatsGithubScenario.actionRun),
+      },
+    ]);
+  }
+
+  static yamlPages(items: readonly UntrustedYamlNode[]): UntrustedYamlNode {
+    return UntrustedYamlBoundary.fromHost([items]);
+  }
+}
+
 const firstHead = '1111111111111111111111111111111111111111';
+
 const finalHead = '2222222222222222222222222222222222222222';
+
 const thirdHead = '3333333333333333333333333333333333333333';
 
 describe('agent stats GitHub evidence', () => {
@@ -51,15 +97,15 @@ describe('agent stats GitHub evidence', () => {
       finishedAt: '2026-08-01T10:32:00Z',
       conclusion: 'failure',
     };
-    const pages = asUntrustedYamlNode([
+    const pages = UntrustedYamlBoundary.fromHost([
       {
         id: 10,
         total_count: 3,
         workflow_runs: [
-          actionRun(firstRun),
-          actionRun(obsoleteRun),
-          actionRun(finalRun),
-          actionRun(lateOldHeadRerun),
+          AgentStatsGithubScenario.actionRun(firstRun),
+          AgentStatsGithubScenario.actionRun(obsoleteRun),
+          AgentStatsGithubScenario.actionRun(finalRun),
+          AgentStatsGithubScenario.actionRun(lateOldHeadRerun),
         ],
       },
     ]);
@@ -71,7 +117,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs).toHaveLength(4);
     expect(evidence.heads).toHaveLength(2);
@@ -84,7 +130,7 @@ describe('agent stats GitHub evidence', () => {
 
   test('uses delivery order when head timestamps tie', () => {
     const sharedTimestamp = '2026-08-01T10:00:00Z';
-    const pages = actionPages([
+    const pages = AgentStatsGithubScenario.actionPages([
       {
         id: 102,
         runAttempt: 1,
@@ -110,7 +156,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.heads.map((head) => head.head_sha)).toEqual([
       firstHead,
@@ -120,7 +166,7 @@ describe('agent stats GitHub evidence', () => {
   });
 
   test('uses delivery order when an ancestor is observed after its successor', () => {
-    const pages = actionPages([
+    const pages = AgentStatsGithubScenario.actionPages([
       {
         id: 105,
         runAttempt: 1,
@@ -140,10 +186,10 @@ describe('agent stats GitHub evidence', () => {
       prNumber: 42,
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T11:00:00Z',
-      reviewEvents: [sealUntrustedYamlMap(successorReviewEvent)],
+      reviewEvents: [UntrustedYamlBoundary.seal(successorReviewEvent)],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.heads.map((head) => head.head_sha)).toEqual([
       firstHead,
@@ -153,7 +199,7 @@ describe('agent stats GitHub evidence', () => {
   });
 
   test('uses the earliest observed descendant as the supersession boundary', () => {
-    const pages = actionPages([
+    const pages = AgentStatsGithubScenario.actionPages([
       {
         id: 107,
         runAttempt: 1,
@@ -181,10 +227,10 @@ describe('agent stats GitHub evidence', () => {
       prNumber: 42,
       finalHeadSha: thirdHead,
       mergedAt: '2026-08-01T11:00:00Z',
-      reviewEvents: [sealUntrustedYamlMap(descendantReviewEvent)],
+      reviewEvents: [UntrustedYamlBoundary.seal(descendantReviewEvent)],
       deliveryHeadOrder: [firstHead, finalHead, thirdHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
     const firstCycle = evidence.validationCycles.find(
       (cycle) => cycle.head_sha === firstHead,
     );
@@ -193,7 +239,7 @@ describe('agent stats GitHub evidence', () => {
   });
 
   test('keeps unsupported-label runs out of validation cycles', () => {
-    const pages = actionPages([
+    const pages = AgentStatsGithubScenario.actionPages([
       {
         id: 104,
         runAttempt: 1,
@@ -212,7 +258,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(0);
@@ -236,10 +282,13 @@ describe('agent stats GitHub evidence', () => {
       conclusion: 'success',
       sourcePr: 99,
     };
-    const pages = asUntrustedYamlNode([
+    const pages = UntrustedYamlBoundary.fromHost([
       {
         total_count: 2,
-        workflow_runs: [actionRun(sourceRun), actionRun(foreignRun)],
+        workflow_runs: [
+          AgentStatsGithubScenario.actionRun(sourceRun),
+          AgentStatsGithubScenario.actionRun(foreignRun),
+        ],
       },
     ]);
     const request: BuildActionsEvidenceRequest = {
@@ -250,12 +299,12 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
     expect(evidence.runs).toHaveLength(1);
   });
 
   test('retains branch-scoped runs whose PR association was cleared', () => {
-    const pages = actionPages([
+    const pages = AgentStatsGithubScenario.actionPages([
       {
         id: 106,
         runAttempt: 1,
@@ -274,14 +323,16 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.runs[0]?.source_pr).toBe(42);
   });
 
   test('allows a final head with no applicable Actions workflow', () => {
-    const pages = asUntrustedYamlNode([{ total_count: 0, workflow_runs: [] }]);
+    const pages = UntrustedYamlBoundary.fromHost([
+      { total_count: 0, workflow_runs: [] },
+    ]);
     const request: BuildActionsEvidenceRequest = {
       pages,
       prNumber: 42,
@@ -290,7 +341,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs).toHaveLength(0);
     expect(evidence.heads).toHaveLength(1);
@@ -318,10 +369,13 @@ describe('agent stats GitHub evidence', () => {
       conclusion: 'success',
       workflow: 'Web research',
     };
-    const pages = asUntrustedYamlNode([
+    const pages = UntrustedYamlBoundary.fromHost([
       {
         total_count: 2,
-        workflow_runs: [actionRun(rustRun), actionRun(researchRun)],
+        workflow_runs: [
+          AgentStatsGithubScenario.actionRun(rustRun),
+          AgentStatsGithubScenario.actionRun(researchRun),
+        ],
       },
     ]);
     const request: BuildActionsEvidenceRequest = {
@@ -332,7 +386,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.validationCycles).toHaveLength(2);
     expect(evidence.validationCycles.map((cycle) => cycle.workflow)).toEqual([
@@ -342,7 +396,7 @@ describe('agent stats GitHub evidence', () => {
   });
 
   test('keeps manual runs out of validation cycles', () => {
-    const pages = actionPages([
+    const pages = AgentStatsGithubScenario.actionPages([
       {
         id: 203,
         runAttempt: 1,
@@ -362,7 +416,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(0);
@@ -387,10 +441,13 @@ describe('agent stats GitHub evidence', () => {
       conclusion: 'success',
       status: 'in_progress',
     };
-    const pages = asUntrustedYamlNode([
+    const pages = UntrustedYamlBoundary.fromHost([
       {
         total_count: 1,
-        workflow_runs: [actionRun(deliveredRun), actionRun(postMergeRerun)],
+        workflow_runs: [
+          AgentStatsGithubScenario.actionRun(deliveredRun),
+          AgentStatsGithubScenario.actionRun(postMergeRerun),
+        ],
       },
     ]);
     const request: BuildActionsEvidenceRequest = {
@@ -401,14 +458,14 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(1);
   });
 
   test('measures a rerun from its attempt-specific start', () => {
-    const pages = actionPages([
+    const pages = AgentStatsGithubScenario.actionPages([
       {
         id: 302,
         runAttempt: 2,
@@ -428,7 +485,7 @@ describe('agent stats GitHub evidence', () => {
       deliveryHeadOrder: [finalHead],
     };
 
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs[0]?.started_at).toBe('2026-08-01T10:00:00Z');
     expect(evidence.runs[0]?.duration_seconds).toBe(120);
@@ -444,8 +501,11 @@ describe('agent stats GitHub evidence', () => {
       finishedAt: '2026-08-01T10:07:00Z',
       conclusion: 'success',
     };
-    const pages = asUntrustedYamlNode([
-      { total_count: 1, workflow_runs: [actionRun(queuedRun)] },
+    const pages = UntrustedYamlBoundary.fromHost([
+      {
+        total_count: 1,
+        workflow_runs: [AgentStatsGithubScenario.actionRun(queuedRun)],
+      },
     ]);
     const request: BuildActionsEvidenceRequest = {
       pages,
@@ -455,7 +515,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs[0]?.duration_seconds).toBe(600);
   });
@@ -474,18 +534,21 @@ describe('agent stats GitHub evidence', () => {
       requested_at: '2026-08-01T10:20:00Z',
       completed_at: '',
     };
-    const pages = asUntrustedYamlNode([
-      { total_count: 1, workflow_runs: [actionRun(oldHeadRun)] },
+    const pages = UntrustedYamlBoundary.fromHost([
+      {
+        total_count: 1,
+        workflow_runs: [AgentStatsGithubScenario.actionRun(oldHeadRun)],
+      },
     ]);
     const request: BuildActionsEvidenceRequest = {
       pages,
       prNumber: 42,
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T11:00:00Z',
-      reviewEvents: [sealUntrustedYamlMap(reviewEventRecord)],
+      reviewEvents: [UntrustedYamlBoundary.seal(reviewEventRecord)],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.obsoleteValidationSeconds).toBe(600);
     expect(evidence.obsoleteValidationCount).toBe(1);
@@ -500,8 +563,11 @@ describe('agent stats GitHub evidence', () => {
       finishedAt: '2026-08-01T10:30:00Z',
       conclusion: 'success',
     };
-    const pages = asUntrustedYamlNode([
-      { total_count: 1, workflow_runs: [actionRun(oldHeadRun)] },
+    const pages = UntrustedYamlBoundary.fromHost([
+      {
+        total_count: 1,
+        workflow_runs: [AgentStatsGithubScenario.actionRun(oldHeadRun)],
+      },
     ]);
     const request: BuildActionsEvidenceRequest = {
       pages,
@@ -511,14 +577,14 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidence = buildActionsEvidence(request);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.obsoleteValidationSeconds).toBe(0);
     expect(evidence.heads[1]?.head_sha).toBe(finalHead);
   });
 
   test('pairs review requests and outcomes with exact delivery heads', () => {
-    const issueCommentPages = yamlPages([
+    const issueCommentPages = AgentStatsGithubScenario.yamlPages([
       {
         id: 10,
         body: `<!-- nook-codex-review:${firstHead.slice(0, 12)} -->`,
@@ -548,7 +614,7 @@ describe('agent stats GitHub evidence', () => {
         user: { login: 'github-actions[bot]' },
       },
     ]);
-    const reviewPages = yamlPages([
+    const reviewPages = AgentStatsGithubScenario.yamlPages([
       {
         id: 500,
         body: '',
@@ -564,7 +630,7 @@ describe('agent stats GitHub evidence', () => {
         user: { login: 'chatgpt-codex-connector[bot]' },
       },
     ]);
-    const reviewCommentPages = yamlPages([
+    const reviewCommentPages = AgentStatsGithubScenario.yamlPages([
       {
         pull_request_review_id: 501,
         user: { login: 'chatgpt-codex-connector[bot]' },
@@ -579,7 +645,7 @@ describe('agent stats GitHub evidence', () => {
         user: { login: 'chatgpt-codex-connector[bot]' },
       },
     ]);
-    const reviewReactionPages = yamlPages([
+    const reviewReactionPages = AgentStatsGithubScenario.yamlPages([
       {
         request_comment_id: 13,
         content: '+1',
@@ -595,7 +661,7 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [firstHead, finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = buildReviewEvidence(request);
+    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
 
     expect(evidence.events).toHaveLength(3);
     expect(evidence.requestCount).toBe(3);
@@ -609,7 +675,7 @@ describe('agent stats GitHub evidence', () => {
 
   test('counts a substantive review body as one finding', () => {
     const request: BuildReviewEvidenceRequest = {
-      issueCommentPages: yamlPages([
+      issueCommentPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 20,
           body: `<!-- nook-codex-review:${finalHead.slice(0, 12)} -->`,
@@ -618,7 +684,7 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'github-actions[bot]' },
         },
       ]),
-      reviewPages: yamlPages([
+      reviewPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 502,
           body: 'Please preserve review evidence for this head.',
@@ -627,12 +693,12 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'chatgpt-codex-connector[bot]' },
         },
       ]),
-      reviewCommentPages: yamlPages([]),
-      reviewReactionPages: yamlPages([]),
+      reviewCommentPages: AgentStatsGithubScenario.yamlPages([]),
+      reviewReactionPages: AgentStatsGithubScenario.yamlPages([]),
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = buildReviewEvidence(request);
+    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
 
     expect(evidence.findingBatchCount).toBe(1);
     expect(evidence.findingCount).toBe(1);
@@ -641,7 +707,7 @@ describe('agent stats GitHub evidence', () => {
 
   test('retains a clean reaction for a request after an earlier finding', () => {
     const request: BuildReviewEvidenceRequest = {
-      issueCommentPages: yamlPages([
+      issueCommentPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 21,
           body: `<!-- nook-codex-review:${finalHead.slice(0, 12)} -->`,
@@ -650,7 +716,7 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'github-actions[bot]' },
         },
       ]),
-      reviewPages: yamlPages([
+      reviewPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 503,
           body: 'Finding completed before the later request.',
@@ -659,8 +725,8 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'chatgpt-codex-connector[bot]' },
         },
       ]),
-      reviewCommentPages: yamlPages([]),
-      reviewReactionPages: yamlPages([
+      reviewCommentPages: AgentStatsGithubScenario.yamlPages([]),
+      reviewReactionPages: AgentStatsGithubScenario.yamlPages([
         {
           request_comment_id: 21,
           content: '+1',
@@ -671,7 +737,7 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = buildReviewEvidence(request);
+    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
 
     expect(evidence.events).toHaveLength(2);
     expect(evidence.events[0]?.outcome).toBe('clean');
@@ -681,7 +747,7 @@ describe('agent stats GitHub evidence', () => {
 
   test('pairs a later duplicate request with its own clean reaction', () => {
     const request: BuildReviewEvidenceRequest = {
-      issueCommentPages: yamlPages([
+      issueCommentPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 23,
           body: `<!-- nook-codex-review:${finalHead} -->`,
@@ -697,7 +763,7 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'github-actions[bot]' },
         },
       ]),
-      reviewPages: yamlPages([
+      reviewPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 505,
           body: 'Finding for the first request.',
@@ -706,8 +772,8 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'chatgpt-codex-connector[bot]' },
         },
       ]),
-      reviewCommentPages: yamlPages([]),
-      reviewReactionPages: yamlPages([
+      reviewCommentPages: AgentStatsGithubScenario.yamlPages([]),
+      reviewReactionPages: AgentStatsGithubScenario.yamlPages([
         {
           request_comment_id: 24,
           content: '+1',
@@ -718,7 +784,7 @@ describe('agent stats GitHub evidence', () => {
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = buildReviewEvidence(request);
+    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
 
     expect(evidence.events).toHaveLength(2);
     expect(evidence.events[0]?.outcome).toBe('findings');
@@ -730,7 +796,7 @@ describe('agent stats GitHub evidence', () => {
   test('retains trusted review evidence for a rebased-away full SHA', () => {
     const rebasedHead = '4444444444444444444444444444444444444444';
     const request: BuildReviewEvidenceRequest = {
-      issueCommentPages: yamlPages([
+      issueCommentPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 22,
           body: `<!-- nook-codex-review:${rebasedHead} -->`,
@@ -739,7 +805,7 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'github-actions[bot]' },
         },
       ]),
-      reviewPages: yamlPages([
+      reviewPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 504,
           body: 'Finding on a head removed by rebase.',
@@ -748,12 +814,12 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'chatgpt-codex-connector[bot]' },
         },
       ]),
-      reviewCommentPages: yamlPages([]),
-      reviewReactionPages: yamlPages([]),
+      reviewCommentPages: AgentStatsGithubScenario.yamlPages([]),
+      reviewReactionPages: AgentStatsGithubScenario.yamlPages([]),
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = buildReviewEvidence(request);
+    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
 
     expect(evidence.requestCount).toBe(1);
     expect(evidence.findingBatchCount).toBe(1);
@@ -762,7 +828,7 @@ describe('agent stats GitHub evidence', () => {
 
   test('excludes review results completed after merge', () => {
     const request: BuildReviewEvidenceRequest = {
-      issueCommentPages: yamlPages([
+      issueCommentPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 30,
           body: `<!-- nook-codex-review:${finalHead.slice(0, 12)} -->`,
@@ -771,7 +837,7 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'github-actions[bot]' },
         },
       ]),
-      reviewPages: yamlPages([
+      reviewPages: AgentStatsGithubScenario.yamlPages([
         {
           id: 503,
           body: 'A late finding must not alter delivery statistics.',
@@ -780,12 +846,12 @@ describe('agent stats GitHub evidence', () => {
           user: { login: 'chatgpt-codex-connector[bot]' },
         },
       ]),
-      reviewCommentPages: yamlPages([]),
-      reviewReactionPages: yamlPages([]),
+      reviewCommentPages: AgentStatsGithubScenario.yamlPages([]),
+      reviewReactionPages: AgentStatsGithubScenario.yamlPages([]),
       knownHeadShas: [finalHead],
       mergedAt: '2026-08-01T11:00:00Z',
     };
-    const evidence = buildReviewEvidence(request);
+    const evidence = GithubAgentEvidence.buildReviewEvidence(request);
 
     expect(evidence.findingBatchCount).toBe(0);
     expect(evidence.findingCount).toBe(0);
@@ -802,19 +868,19 @@ describe('agent stats GitHub evidence', () => {
       action_seconds: 300,
       obsolete_action_seconds: 0,
     };
-    const actionHead = sealUntrustedYamlMap(actionHeadRecord);
+    const actionHead = UntrustedYamlBoundary.seal(actionHeadRecord);
     const reviewEventRecord = {
       head_sha: firstHead,
       requested_at: '2026-08-01T10:00:00Z',
       completed_at: '2026-08-01T10:05:00Z',
     };
-    const reviewEvent = sealUntrustedYamlMap(reviewEventRecord);
+    const reviewEvent = UntrustedYamlBoundary.seal(reviewEventRecord);
     const mergeRequest = {
       actionHeads: [actionHead],
       reviewEvents: [reviewEvent],
       finalHeadSha: finalHead,
     };
-    const heads = mergeReviewedDeliveryHeads(mergeRequest);
+    const heads = ReviewedDeliveryHistory.merge(mergeRequest);
 
     expect(heads).toHaveLength(2);
     expect(heads[0]?.head_sha).toBe(finalHead);
@@ -840,11 +906,11 @@ describe('agent stats GitHub evidence', () => {
       completed_at: '2026-08-01T10:05:00Z',
     };
     const mergeRequest = {
-      actionHeads: [sealUntrustedYamlMap(emptyHeadRecord)],
-      reviewEvents: [sealUntrustedYamlMap(reviewEventRecord)],
+      actionHeads: [UntrustedYamlBoundary.seal(emptyHeadRecord)],
+      reviewEvents: [UntrustedYamlBoundary.seal(reviewEventRecord)],
       finalHeadSha: finalHead,
     };
-    const heads = mergeReviewedDeliveryHeads(mergeRequest);
+    const heads = ReviewedDeliveryHistory.merge(mergeRequest);
 
     expect(heads).toHaveLength(1);
     expect(heads[0]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
@@ -867,11 +933,11 @@ describe('agent stats GitHub evidence', () => {
       completed_at: '2026-08-01T10:05:00Z',
     };
     const mergeRequest = {
-      actionHeads: [sealUntrustedYamlMap(actionHeadRecord)],
-      reviewEvents: [sealUntrustedYamlMap(reviewEventRecord)],
+      actionHeads: [UntrustedYamlBoundary.seal(actionHeadRecord)],
+      reviewEvents: [UntrustedYamlBoundary.seal(reviewEventRecord)],
       finalHeadSha: finalHead,
     };
-    const heads = mergeReviewedDeliveryHeads(mergeRequest);
+    const heads = ReviewedDeliveryHistory.merge(mergeRequest);
 
     expect(heads[0]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
     expect(heads[0]?.last_observed_at).toBe('2026-08-01T10:25:00Z');
@@ -899,13 +965,13 @@ describe('agent stats GitHub evidence', () => {
     };
     const mergeRequest = {
       actionHeads: [
-        sealUntrustedYamlMap(firstActionHeadRecord),
-        sealUntrustedYamlMap(finalActionHeadRecord),
+        UntrustedYamlBoundary.seal(firstActionHeadRecord),
+        UntrustedYamlBoundary.seal(finalActionHeadRecord),
       ],
       reviewEvents: [],
       finalHeadSha: finalHead,
     };
-    const heads = mergeReviewedDeliveryHeads(mergeRequest);
+    const heads = ReviewedDeliveryHistory.merge(mergeRequest);
 
     expect(heads.map((head) => head.head_sha)).toEqual([firstHead, finalHead]);
   });
@@ -925,39 +991,3 @@ type ActionRunFixture = {
   readonly validationRequested?: boolean;
   readonly trigger?: string;
 };
-
-function actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
-  const [defaulted1 = 'PR'] = [fixture.workflow];
-  const [defaulted2 = 'pull_request'] = [fixture.trigger];
-  const [defaulted3 = fixture.startedAt] = [fixture.createdAt];
-  const [defaulted4 = 'completed'] = [fixture.status];
-  const [defaulted5 = 42] = [fixture.sourcePr];
-  return {
-    id: fixture.id,
-    name: defaulted1,
-    run_attempt: fixture.runAttempt,
-    head_sha: fixture.headSha,
-    event: defaulted2,
-    created_at: defaulted3,
-    run_started_at: fixture.startedAt,
-    updated_at: fixture.finishedAt,
-    conclusion: fixture.conclusion,
-    status: defaulted4,
-    pull_requests: fixture.sourcePr === false ? [] : [{ number: defaulted5 }],
-    validation_requested:
-      fixture.validationRequested === false ? 'false' : 'true',
-  };
-}
-
-function actionPages(fixtures: readonly ActionRunFixture[]): UntrustedYamlNode {
-  return asUntrustedYamlNode([
-    {
-      total_count: fixtures.length,
-      workflow_runs: fixtures.map(actionRun),
-    },
-  ]);
-}
-
-function yamlPages(items: readonly UntrustedYamlNode[]): UntrustedYamlNode {
-  return asUntrustedYamlNode([items]);
-}

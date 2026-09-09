@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { validateAgentStatsYaml } from '../src/lib/agent-stats-schema.ts';
+import { AgentStatisticsSchema } from '../src/lib/agent-stats-schema.ts';
 
 import type { ValidateAgentStatsYamlArgs } from '../src/lib/agent-stats-schema.ts';
 const validYaml = `
@@ -121,7 +121,7 @@ describe('validateAgentStatsYaml', () => {
       content: validYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs2);
+    const result = AgentStatisticsSchema.validate(resultArgs2);
     expect(result.ok).toBe(true);
     expect(result.errors).toEqual([]);
   });
@@ -131,7 +131,7 @@ describe('validateAgentStatsYaml', () => {
       content: validYaml.replace('schema_version: 4', 'schema_version: 3'),
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(request);
+    const result = AgentStatisticsSchema.validate(request);
     expect(result.ok).toBe(true);
   });
 
@@ -151,7 +151,7 @@ describe('validateAgentStatsYaml', () => {
       expectedPrNumber: 481,
     };
 
-    expect(validateAgentStatsYaml(request).ok).toBe(true);
+    expect(AgentStatisticsSchema.validate(request).ok).toBe(true);
   });
 
   test('accepts every repository validation workflow', () => {
@@ -164,7 +164,7 @@ describe('validateAgentStatsYaml', () => {
       expectedPrNumber: 481,
     };
 
-    expect(validateAgentStatsYaml(request).ok).toBe(true);
+    expect(AgentStatisticsSchema.validate(request).ok).toBe(true);
   });
 
   test('rejects contradictory review outcomes and finding counts', () => {
@@ -175,7 +175,7 @@ describe('validateAgentStatsYaml', () => {
       ),
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(request);
+    const result = AgentStatisticsSchema.validate(request);
     expect(
       result.errors.some((error) => error.includes('review outcome')),
     ).toBe(true);
@@ -189,7 +189,7 @@ describe('validateAgentStatsYaml', () => {
       ),
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(request);
+    const result = AgentStatisticsSchema.validate(request);
     expect(
       result.errors.some((error) => error.includes('first_observed_at')),
     ).toBe(true);
@@ -203,7 +203,7 @@ describe('validateAgentStatsYaml', () => {
       ),
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(request);
+    const result = AgentStatisticsSchema.validate(request);
     expect(
       result.errors.some((error) =>
         error.includes('must include requested github_actions_runs attempt'),
@@ -220,7 +220,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) =>
@@ -238,7 +238,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) => item.includes('action_run_count')),
@@ -254,7 +254,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(result.errors.some((item) => item.includes('action_seconds'))).toBe(
       true,
@@ -270,7 +270,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) => item.includes('obsolete_action_seconds')),
@@ -286,7 +286,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) =>
@@ -306,7 +306,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) => item.includes('latency_seconds must match')),
@@ -329,7 +329,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) =>
@@ -347,7 +347,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) => item.includes('pr_retrigger_count')),
@@ -359,7 +359,7 @@ describe('validateAgentStatsYaml', () => {
       content: validYaml,
       expectedPrNumber: 999,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) => item.includes('source_pr.number')),
@@ -375,7 +375,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) => item.includes('must be a full SHA')),
@@ -391,7 +391,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) =>
@@ -409,7 +409,7 @@ describe('validateAgentStatsYaml', () => {
       content: invalidYaml,
       expectedPrNumber: 481,
     };
-    const result = validateAgentStatsYaml(resultArgs);
+    const result = AgentStatisticsSchema.validate(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) => item.includes('head_sha must differ')),

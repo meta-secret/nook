@@ -1,7 +1,7 @@
 import {
   EXECUTABLE_SKILL_GATE_ACTIONS,
-  runExecutableSkillPackageGate,
   type ExecutableSkillGateAction,
+  ExecutableSkillPackageGate,
 } from './package-gate.ts';
 
 const action = process.argv.at(2);
@@ -23,4 +23,4 @@ const request = {
   action: action as ExecutableSkillGateAction,
   repoRoot,
 } as const;
-runExecutableSkillPackageGate(request);
+ExecutableSkillPackageGate.run(request);

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  actionJobsRequestedValidation,
   type ActionJobsRequestedValidationRequest,
+  GithubActionEvidenceApi,
 } from '../src/lib/agent-stats-github-api.ts';
-import { substantiveReviewBodyFindingCount } from '../src/lib/agent-stats-github-review.ts';
+import { ReviewFindingBody } from '../src/lib/agent-stats-github-review.ts';
 
 describe('agent stats GitHub classification', () => {
   test('requires supported request provenance or a non-skipped job', () => {
@@ -74,15 +74,25 @@ describe('agent stats GitHub classification', () => {
       ],
     };
 
-    expect(actionJobsRequestedValidation(skippedRequest)).toBe(false);
-    expect(actionJobsRequestedValidation(requestedRequest)).toBe(true);
-    expect(actionJobsRequestedValidation(cancelledRequest)).toBe(true);
-    expect(actionJobsRequestedValidation(unsupportedCancelledRequest)).toBe(
-      false,
-    );
-    expect(actionJobsRequestedValidation(supportedThenFailedRequest)).toBe(
-      true,
-    );
+    expect(
+      GithubActionEvidenceApi.actionJobsRequestedValidation(skippedRequest),
+    ).toBe(false);
+    expect(
+      GithubActionEvidenceApi.actionJobsRequestedValidation(requestedRequest),
+    ).toBe(true);
+    expect(
+      GithubActionEvidenceApi.actionJobsRequestedValidation(cancelledRequest),
+    ).toBe(true);
+    expect(
+      GithubActionEvidenceApi.actionJobsRequestedValidation(
+        unsupportedCancelledRequest,
+      ),
+    ).toBe(false);
+    expect(
+      GithubActionEvidenceApi.actionJobsRequestedValidation(
+        supportedThenFailedRequest,
+      ),
+    ).toBe(true);
   });
 
   test('counts findings in noncanonical details blocks', () => {
@@ -94,7 +104,7 @@ Here are some automated review suggestions for this pull request.
 
 <details><summary>Additional finding</summary>Do not discard this.</details>`;
 
-    expect(substantiveReviewBodyFindingCount(reviewBody)).toBe(1);
+    expect(ReviewFindingBody.countFindings(reviewBody)).toBe(1);
   });
 
   test('counts text inserted into an otherwise status-only review', () => {
@@ -106,6 +116,6 @@ Preserve this actionable text.
 
 **Reviewed commit:** \`1234567890\``;
 
-    expect(substantiveReviewBodyFindingCount(reviewBody)).toBe(1);
+    expect(ReviewFindingBody.countFindings(reviewBody)).toBe(1);
   });
 });

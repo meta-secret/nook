@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { decodeCompatibleModuleDeliveryPlan } from './codec.ts';
-import { decodeAndValidateModuleDeliveryPlan } from './validation.ts';
+import { ModuleDeliveryPlanSchema } from './codec.ts';
+import { ModuleDeliveryPlanDecoder } from './validation.ts';
 import {
   MODULE_DELIVERY_PLAN_VERSION,
   ModuleDeliveryCompatibilityStatus,
@@ -29,78 +29,92 @@ type RejectedModuleDeliveryCliOutput = {
 };
 
 type ModuleDeliveryCliOutput =
-  AcceptedModuleDeliveryCliOutput | RejectedModuleDeliveryCliOutput;
+  | AcceptedModuleDeliveryCliOutput
+  | RejectedModuleDeliveryCliOutput;
 
-async function runModuleDeliveryCli(
-  argv: ModuleDeliveryCliArguments,
-): Promise<number> {
-  const planPath = parsePlanPath(argv);
-  if (planPath === false) {
-    process.stderr.write('Usage: loom-module-delivery --plan <json-file>\n');
-    return 2;
-  }
-  let serialized: string;
-  try {
-    serialized = await readFile(planPath, 'utf8');
-  } catch {
-    process.stderr.write('Unable to read module delivery plan.\n');
-    return 2;
-  }
-  const result = moduleDeliveryCliValidation(serialized);
-  const output = moduleDeliveryCliOutput(result);
-  const rendered = `${JSON.stringify(output)}\n`;
-  process.stdout.write(rendered);
-  return output.status === ModuleDeliveryValidationStatus.Accepted ? 0 : 1;
-}
+export class ModuleDeliveryCli {
+  private constructor(private readonly request: ModuleDeliveryCliArguments) {}
 
-function moduleDeliveryCliValidation(
-  serialized: string,
-): ModuleDeliveryPlanValidation {
-  const decoded = decodeCompatibleModuleDeliveryPlan(serialized);
-  if (
-    decoded.status === ModuleDeliveryCompatibilityStatus.Decoded &&
-    decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION
-  ) {
-    const issue: ModuleDeliveryIssue = {
-      code: ModuleDeliveryIssueCode.InvalidField,
-      path: '$.version',
-      message: 'Canonical CLI admission requires plan version 2.',
+  static runModuleDeliveryCli(
+    argv: ModuleDeliveryCliArguments,
+  ): Promise<number> {
+    return new ModuleDeliveryCli(argv).execute();
+  }
+
+  private async execute(): Promise<number> {
+    const argv = this.request;
+    const planPath = ModuleDeliveryCli.parsePlanPath(argv);
+    if (planPath === false) {
+      process.stderr.write('Usage: loom-module-delivery --plan <json-file>\n');
+      return 2;
+    }
+    let serialized: string;
+    try {
+      serialized = await readFile(planPath, 'utf8');
+    } catch {
+      process.stderr.write('Unable to read module delivery plan.\n');
+      return 2;
+    }
+    const result = ModuleDeliveryCli.moduleDeliveryCliValidation(serialized);
+    const output = ModuleDeliveryCli.moduleDeliveryCliOutput(result);
+    const rendered = `${JSON.stringify(output)}\n`;
+    process.stdout.write(rendered);
+    return output.status === ModuleDeliveryValidationStatus.Accepted ? 0 : 1;
+  }
+
+  private static moduleDeliveryCliValidation(
+    serialized: string,
+  ): ModuleDeliveryPlanValidation {
+    const decoded =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(serialized);
+    if (
+      decoded.status === ModuleDeliveryCompatibilityStatus.Decoded &&
+      decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION
+    ) {
+      const issue: ModuleDeliveryIssue = {
+        code: ModuleDeliveryIssueCode.InvalidField,
+        path: '$.version',
+        message: 'Canonical CLI admission requires plan version 2.',
+      };
+      const rejection: RejectedModuleDeliveryPlan = {
+        status: ModuleDeliveryValidationStatus.Rejected,
+        issues: [issue],
+      };
+      return rejection;
+    }
+    return ModuleDeliveryPlanDecoder.decodeAndValidate(serialized);
+  }
+
+  private static moduleDeliveryCliOutput(
+    result: ModuleDeliveryPlanValidation,
+  ): ModuleDeliveryCliOutput {
+    if (result.status === ModuleDeliveryValidationStatus.Rejected)
+      return result;
+    return {
+      status: result.status,
+      inputVersion: result.inputVersion,
+      planDigest: result.planDigest,
+      topologicalOrder: result.topologicalOrder,
+      waves: result.waves,
     };
-    const rejection: RejectedModuleDeliveryPlan = {
-      status: ModuleDeliveryValidationStatus.Rejected,
-      issues: [issue],
-    };
-    return rejection;
   }
-  return decodeAndValidateModuleDeliveryPlan(serialized);
-}
 
-function moduleDeliveryCliOutput(
-  result: ModuleDeliveryPlanValidation,
-): ModuleDeliveryCliOutput {
-  if (result.status === ModuleDeliveryValidationStatus.Rejected) return result;
-  return {
-    status: result.status,
-    inputVersion: result.inputVersion,
-    planDigest: result.planDigest,
-    topologicalOrder: result.topologicalOrder,
-    waves: result.waves,
-  };
-}
-
-function parsePlanPath(argv: ModuleDeliveryCliArguments): string | false {
-  const tokens = argv.slice(2);
-  if (
-    tokens.length !== 2 ||
-    tokens[0] !== '--plan' ||
-    !tokens[1] ||
-    tokens[1].startsWith('--')
-  ) {
-    return false;
+  private static parsePlanPath(
+    argv: ModuleDeliveryCliArguments,
+  ): string | false {
+    const tokens = argv.slice(2);
+    if (
+      tokens.length !== 2 ||
+      tokens[0] !== '--plan' ||
+      !tokens[1] ||
+      tokens[1].startsWith('--')
+    ) {
+      return false;
+    }
+    return tokens[1];
   }
-  return tokens[1];
 }
 
 if (import.meta.main) {
-  process.exitCode = await runModuleDeliveryCli(Bun.argv);
+  process.exitCode = await ModuleDeliveryCli.runModuleDeliveryCli(Bun.argv);
 }

@@ -10,45 +10,81 @@ import type {
   AgentExecutionInvocation,
   AgentTaskRuntime,
 } from '../../src/agent-workflow/runtime.ts';
-import {
-  consumeIsolatedModuleExpertExecution,
-  executeIsolatedModuleExpertAgent,
-} from '../../src/module-experts/isolation-receipt.ts';
+import { ModuleExpertIsolationReceipts } from '../../src/module-experts/isolation-receipt.ts';
 import type {
   ConsumeIsolatedModuleExpertExecutionArgs,
   ExecuteIsolatedModuleExpertAgentArgs,
   IsolatedModuleExpertExecution,
   ModuleExpertIsolationReceipt,
 } from '../../src/module-experts/isolation-receipt.ts';
-import { moduleExpertEvidenceOutput } from './invoke-parent-fixture.ts';
-import { registerModuleExpertRuntimeMock } from './module-expert-runtime-mock.ts';
+import { ModuleExpertsInvokeParentFixtureScenario } from './invoke-parent-fixture.ts';
+import { ModuleExpertsModuleExpertRuntimeMockScenario } from './module-expert-runtime-mock.ts';
 import type { RegisterModuleExpertRuntimeMockArgs } from './module-expert-runtime-mock.ts';
 
-const RUN_ID = 'isolation-receipt';
-const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+/** Owns the module experts isolation receipt fixture registry and its capability transitions. */
+export class ModuleExpertsIsolationReceiptFixture {
+  private constructor() {}
+  static readonly RUN_ID = 'isolation-receipt';
+
+  static readonly SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
+  static moduleExpertInvocation(): AgentExecutionInvocation<string, string> {
+    const controller = new AbortController();
+    return {
+      task: 'inspect-core-contract',
+      attempt: 1,
+      sourceCommit: ModuleExpertsIsolationReceiptFixture.SOURCE_COMMIT,
+      runId: ModuleExpertsIsolationReceiptFixture.RUN_ID,
+      workingDirectory: '/tmp/module-expert-receipt',
+      upstreamOutputs: [],
+      signal: controller.signal,
+      observe: async () => {},
+      execution: {
+        kind: WorkflowExecutorKind.Agent,
+        agent: 'core_expert',
+        instruction: 'Inspect the public contract.',
+        resultKind: WorkflowResultKind.ModuleExpertEvidence,
+      },
+      agentProfile: {
+        name: 'core_expert',
+        instructionPrefix: 'Inspect only.',
+        workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+        reasoningEffort: AgentReasoningEffort.High,
+      },
+    };
+  }
+}
 
 class ReceiptRuntime implements AgentTaskRuntime<string, string> {
   async executeAgent(): Promise<AgentExecutionCompletion> {
     return {
       threadId: 'receipt-thread',
-      output: moduleExpertEvidenceOutput(),
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput(),
     };
   }
 }
 
 test('binds an isolation receipt to one exact completion and invocation', async () => {
-  const invocation = moduleExpertInvocation();
+  const invocation =
+    ModuleExpertsIsolationReceiptFixture.moduleExpertInvocation();
   const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
     runId: invocation.runId,
     runtime: new ReceiptRuntime(),
   };
-  const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+  const runtimeMock =
+    ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+      runtimeMockArgs,
+    );
   try {
     const executeArgs: ExecuteIsolatedModuleExpertAgentArgs<string, string> = {
       invocation,
       selectedContextPaths: [],
     };
-    const execution = await executeIsolatedModuleExpertAgent(executeArgs);
+    const execution =
+      await ModuleExpertIsolationReceipts.executeIsolatedModuleExpertAgent(
+        executeArgs,
+      );
     const mutatedCompletion: IsolatedModuleExpertExecution = {
       ...execution,
       completion: {
@@ -65,7 +101,9 @@ test('binds an isolation receipt to one exact completion and invocation', async 
       selectedContextPaths: [],
     };
     expect(() =>
-      consumeIsolatedModuleExpertExecution(mutatedCompletionArgs),
+      ModuleExpertIsolationReceipts.consumeIsolatedModuleExpertExecution(
+        mutatedCompletionArgs,
+      ),
     ).toThrow('isolation receipt is invalid');
 
     const mutatedInvocation: AgentExecutionInvocation<string, string> = {
@@ -81,7 +119,9 @@ test('binds an isolation receipt to one exact completion and invocation', async 
       selectedContextPaths: [],
     };
     expect(() =>
-      consumeIsolatedModuleExpertExecution(mutatedInvocationArgs),
+      ModuleExpertIsolationReceipts.consumeIsolatedModuleExpertExecution(
+        mutatedInvocationArgs,
+      ),
     ).toThrow('isolation receipt is invalid');
 
     const mutatedContextArgs: ConsumeIsolatedModuleExpertExecutionArgs<
@@ -95,7 +135,9 @@ test('binds an isolation receipt to one exact completion and invocation', async 
       ],
     };
     expect(() =>
-      consumeIsolatedModuleExpertExecution(mutatedContextArgs),
+      ModuleExpertIsolationReceipts.consumeIsolatedModuleExpertExecution(
+        mutatedContextArgs,
+      ),
     ).toThrow('isolation receipt is invalid');
 
     const consumeArgs: ConsumeIsolatedModuleExpertExecutionArgs<
@@ -106,24 +148,30 @@ test('binds an isolation receipt to one exact completion and invocation', async 
       invocation,
       selectedContextPaths: [],
     };
-    consumeIsolatedModuleExpertExecution(consumeArgs);
-    expect(() => consumeIsolatedModuleExpertExecution(consumeArgs)).toThrow(
-      'isolation receipt is invalid',
+    ModuleExpertIsolationReceipts.consumeIsolatedModuleExpertExecution(
+      consumeArgs,
     );
+    expect(() =>
+      ModuleExpertIsolationReceipts.consumeIsolatedModuleExpertExecution(
+        consumeArgs,
+      ),
+    ).toThrow('isolation receipt is invalid');
   } finally {
     runtimeMock.dispose();
   }
 });
 
 test('rejects a structurally forged isolation receipt', () => {
-  const invocation = moduleExpertInvocation();
+  const invocation =
+    ModuleExpertsIsolationReceiptFixture.moduleExpertInvocation();
   const forgedReceipt = {
     kind: 'module-expert-isolation-receipt',
   } as ModuleExpertIsolationReceipt;
   const execution: IsolatedModuleExpertExecution = {
     completion: {
       threadId: 'forged-thread',
-      output: moduleExpertEvidenceOutput(),
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput(),
     },
     receipt: forgedReceipt,
   };
@@ -134,33 +182,9 @@ test('rejects a structurally forged isolation receipt', () => {
       selectedContextPaths: [],
     };
 
-  expect(() => consumeIsolatedModuleExpertExecution(consumeArgs)).toThrow(
-    'isolation receipt is invalid',
-  );
+  expect(() =>
+    ModuleExpertIsolationReceipts.consumeIsolatedModuleExpertExecution(
+      consumeArgs,
+    ),
+  ).toThrow('isolation receipt is invalid');
 });
-
-function moduleExpertInvocation(): AgentExecutionInvocation<string, string> {
-  const controller = new AbortController();
-  return {
-    task: 'inspect-core-contract',
-    attempt: 1,
-    sourceCommit: SOURCE_COMMIT,
-    runId: RUN_ID,
-    workingDirectory: '/tmp/module-expert-receipt',
-    upstreamOutputs: [],
-    signal: controller.signal,
-    observe: async () => {},
-    execution: {
-      kind: WorkflowExecutorKind.Agent,
-      agent: 'core_expert',
-      instruction: 'Inspect the public contract.',
-      resultKind: WorkflowResultKind.ModuleExpertEvidence,
-    },
-    agentProfile: {
-      name: 'core_expert',
-      instructionPrefix: 'Inspect only.',
-      workspacePolicy: AgentWorkspacePolicy.ReadOnly,
-      reasoningEffort: AgentReasoningEffort.High,
-    },
-  };
-}

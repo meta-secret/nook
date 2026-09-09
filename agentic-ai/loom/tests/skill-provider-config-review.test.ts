@@ -1,10 +1,7 @@
 import { expect, test } from 'bun:test';
-import {
-  actionRuntimePaths,
-  configurationScriptPaths,
-} from './skill-provider-config-boundary.test.ts';
-import { normalizeConfigurationShellSource } from './skill-provider-config-runtime.ts';
-import { hydrateReachableSources } from './skill-provider-config-test-helpers.ts';
+import { SkillProviderConfigBoundaryScenario } from './skill-provider-config-boundary.test.ts';
+import { SkillProviderConfigRuntimeScenario } from './skill-provider-config-runtime.ts';
+import { SkillProviderConfigTestHelpersScenario } from './skill-provider-config-test-helpers.ts';
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
 import type { ActionRuntimeGraph } from './skill-provider-config-types.ts';
 
@@ -13,7 +10,7 @@ const PROVIDER =
 
 test('static Node eval cannot erase repository execution', () => {
   expect(() =>
-    normalizeConfigurationShellSource([
+    SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
       `node -e "import('./scripts/facade.mjs')"`,
       'package.json',
     ]),
@@ -24,7 +21,10 @@ test('static Node eval cannot erase repository execution', () => {
     "node -e 'const load = require; load(`./scripts/facade.cjs`)'",
   ]) {
     expect(() =>
-      normalizeConfigurationShellSource([source, 'package.json']),
+      SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
+        source,
+        'package.json',
+      ]),
     ).toThrow('Node eval execution is forbidden');
   }
 });
@@ -44,9 +44,9 @@ test('configuration roots receive the executable loader boundary', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() => configurationScriptPaths(graph)).toThrow(
-    'root violates runtime boundary',
-  );
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+  ).toThrow('root violates runtime boundary');
 });
 
 test('configuration roots cannot recover ambient loader aliases', () => {
@@ -62,9 +62,10 @@ test('configuration roots cannot recover ambient loader aliases', () => {
       sources,
       symlinkPaths: new Set(),
     };
-    expect(() => configurationScriptPaths(graph), source).toThrow(
-      'root violates runtime boundary',
-    );
+    expect(
+      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      source,
+    ).toThrow('root violates runtime boundary');
   }
 });
 
@@ -83,9 +84,9 @@ test('configuration roots reject computed dynamic imports', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() => configurationScriptPaths(graph)).toThrow(
-    'root violates runtime boundary',
-  );
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+  ).toThrow('root violates runtime boundary');
 });
 
 test('production hydration loads every statically reached shell target', async () => {
@@ -112,15 +113,17 @@ test('production hydration loads every statically reached shell target', async (
     symlinkPaths: new Set(),
   };
   const request = {
-    discover: configurationScriptPaths,
+    discover: SkillProviderConfigBoundaryScenario.configurationScriptPaths,
     graph,
     readSource,
     sources,
     unreadPaths,
   };
-  expect(await hydrateReachableSources(request)).toContain(
-    'scripts/provider.ts',
-  );
+  expect(
+    await SkillProviderConfigTestHelpersScenario.hydrateReachableSources(
+      request,
+    ),
+  ).toContain('scripts/provider.ts');
   expect(unreadPaths).toEqual(new Set());
 });
 
@@ -142,7 +145,9 @@ test('Node action subprocesses join the runnable configuration graph', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() => actionRuntimePaths(graph)).toThrow(
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.actionRuntimePaths(graph),
+  ).toThrow(
     /(?:Unauthorized application edge|reaches provider|runtime boundary)/u,
   );
 });
@@ -159,9 +164,9 @@ test('shell runtimes audit tracked scripts regardless of suffix', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() => configurationScriptPaths(graph)).toThrow(
-    /(?:reaches provider|runtime boundary)/u,
-  );
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+  ).toThrow(/(?:reaches provider|runtime boundary)/u);
 });
 
 test('find command-executing predicates fail closed', () => {
@@ -183,9 +188,10 @@ test('find command-executing predicates fail closed', () => {
       sources,
       symlinkPaths: new Set(),
     };
-    expect(() => configurationScriptPaths(graph), runtime).toThrow(
-      'Find command-executing predicate is forbidden',
-    );
+    expect(
+      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      runtime,
+    ).toThrow('Find command-executing predicate is forbidden');
   }
 });
 
@@ -204,9 +210,9 @@ test('scalar Task preconditions join the runnable graph', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() => configurationScriptPaths(graph)).toThrow(
-    /(?:reaches provider|runtime boundary)/u,
-  );
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+  ).toThrow(/(?:reaches provider|runtime boundary)/u);
 });
 
 test('nested Vite and Svelte roots preserve their runtime cwd', () => {
@@ -226,9 +232,10 @@ test('nested Vite and Svelte roots preserve their runtime cwd', () => {
       sources,
       symlinkPaths: new Set(),
     };
-    expect(() => configurationScriptPaths(graph), root).toThrow(
-      /(?:reaches provider|runtime boundary)/u,
-    );
+    expect(
+      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      root,
+    ).toThrow(/(?:reaches provider|runtime boundary)/u);
   }
 });
 
@@ -249,9 +256,10 @@ test('github-script module loads and subprocesses join the graph', () => {
       sources,
       symlinkPaths: new Set(),
     };
-    expect(() => configurationScriptPaths(graph), script).toThrow(
-      /(?:reaches provider|runtime boundary)/u,
-    );
+    expect(
+      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      script,
+    ).toThrow(/(?:reaches provider|runtime boundary)/u);
   }
 });
 
@@ -264,7 +272,7 @@ test('github-script rejects dynamic module loading', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() => configurationScriptPaths(graph)).toThrow(
-    'Dynamic github-script module load is forbidden',
-  );
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+  ).toThrow('Dynamic github-script module load is forbidden');
 });

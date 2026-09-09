@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { runIsolatedModuleExpertCodex } from '../agent-workflow/codex-runtime.ts';
+import { ModuleExpertCodexSdkAgentRuntime } from '../agent-workflow/codex-runtime.ts';
 import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
@@ -40,55 +40,94 @@ type ModuleExpertIsolationReceiptRecord = {
   readonly invocationDigest: string;
 };
 
-const MODULE_EXPERT_ISOLATION_RECEIPTS = new WeakMap<
-  ModuleExpertIsolationReceipt,
-  ModuleExpertIsolationReceiptRecord
->();
+/** Owns the module expert isolation receipts registry and its capability transitions. */
+export class ModuleExpertIsolationReceipts {
+  private constructor() {}
+  private static readonly MODULE_EXPERT_ISOLATION_RECEIPTS = new WeakMap<
+    ModuleExpertIsolationReceipt,
+    ModuleExpertIsolationReceiptRecord
+  >();
 
-export async function executeIsolatedModuleExpertAgent<
-  TTask extends string,
-  TAgent extends string,
->(
-  args: ExecuteIsolatedModuleExpertAgentArgs<TTask, TAgent>,
-): Promise<IsolatedModuleExpertExecution> {
-  const codexArgs = {
-    invocation: args.invocation,
-    selectedContextPaths: args.selectedContextPaths,
-  };
-  const completion = await runIsolatedModuleExpertCodex(codexArgs);
-  const receiptValue = {
-    kind: ModuleExpertIsolationReceiptKind.Isolated,
-  } as const;
-  const receipt: ModuleExpertIsolationReceipt = Object.freeze(receiptValue);
-  const record: ModuleExpertIsolationReceiptRecord = {
-    completionDigest: isolatedCompletionDigest(completion),
-    invocationDigest: isolatedInvocationDigest(args),
-  };
-  MODULE_EXPERT_ISOLATION_RECEIPTS.set(receipt, record);
-  const execution = { completion, receipt };
-  return Object.freeze(execution);
-}
-
-export function consumeIsolatedModuleExpertExecution<
-  TTask extends string,
-  TAgent extends string,
->(args: ConsumeIsolatedModuleExpertExecutionArgs<TTask, TAgent>): void {
-  const record = MODULE_EXPERT_ISOLATION_RECEIPTS.get(args.execution.receipt);
-  if (
-    !record ||
-    record.completionDigest !==
-      isolatedCompletionDigest(args.execution.completion) ||
-    record.invocationDigest !== isolatedInvocationDigest(args)
-  ) {
-    throw new Error('Module expert isolation receipt is invalid.');
+  static async executeIsolatedModuleExpertAgent<
+    TTask extends string,
+    TAgent extends string,
+  >(
+    args: ExecuteIsolatedModuleExpertAgentArgs<TTask, TAgent>,
+  ): Promise<IsolatedModuleExpertExecution> {
+    const codexArgs = {
+      invocation: args.invocation,
+      selectedContextPaths: args.selectedContextPaths,
+    };
+    const completion =
+      await ModuleExpertCodexSdkAgentRuntime.executeIsolated(codexArgs);
+    const receiptValue = {
+      kind: ModuleExpertIsolationReceiptKind.Isolated,
+    } as const;
+    const receipt: ModuleExpertIsolationReceipt = Object.freeze(receiptValue);
+    const record: ModuleExpertIsolationReceiptRecord = {
+      completionDigest:
+        ModuleExpertIsolationReceipts.isolatedCompletionDigest(completion),
+      invocationDigest:
+        ModuleExpertIsolationReceipts.isolatedInvocationDigest(args),
+    };
+    ModuleExpertIsolationReceipts.MODULE_EXPERT_ISOLATION_RECEIPTS.set(
+      receipt,
+      record,
+    );
+    const execution = { completion, receipt };
+    return Object.freeze(execution);
   }
-  MODULE_EXPERT_ISOLATION_RECEIPTS.delete(args.execution.receipt);
-}
 
-function isolatedCompletionDigest(
-  completion: AgentExecutionCompletion,
-): string {
-  return createHash('sha256').update(JSON.stringify(completion)).digest('hex');
+  static consumeIsolatedModuleExpertExecution<
+    TTask extends string,
+    TAgent extends string,
+  >(args: ConsumeIsolatedModuleExpertExecutionArgs<TTask, TAgent>): void {
+    const record =
+      ModuleExpertIsolationReceipts.MODULE_EXPERT_ISOLATION_RECEIPTS.get(
+        args.execution.receipt,
+      );
+    if (
+      !record ||
+      record.completionDigest !==
+        ModuleExpertIsolationReceipts.isolatedCompletionDigest(
+          args.execution.completion,
+        ) ||
+      record.invocationDigest !==
+        ModuleExpertIsolationReceipts.isolatedInvocationDigest(args)
+    ) {
+      throw new Error('Module expert isolation receipt is invalid.');
+    }
+    ModuleExpertIsolationReceipts.MODULE_EXPERT_ISOLATION_RECEIPTS.delete(
+      args.execution.receipt,
+    );
+  }
+
+  private static isolatedCompletionDigest(
+    completion: AgentExecutionCompletion,
+  ): string {
+    return createHash('sha256')
+      .update(JSON.stringify(completion))
+      .digest('hex');
+  }
+
+  private static isolatedInvocationDigest<
+    TTask extends string,
+    TAgent extends string,
+  >(evidence: ModuleExpertIsolationInvocationEvidence<TTask, TAgent>): string {
+    const invocation = evidence.invocation;
+    const identity = {
+      task: invocation.task,
+      attempt: invocation.attempt,
+      sourceCommit: invocation.sourceCommit,
+      runId: invocation.runId,
+      workingDirectory: invocation.workingDirectory,
+      upstreamOutputs: invocation.upstreamOutputs,
+      execution: invocation.execution,
+      agentProfile: invocation.agentProfile,
+      selectedContextPaths: evidence.selectedContextPaths,
+    };
+    return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+  }
 }
 
 type ModuleExpertIsolationInvocationEvidence<
@@ -98,21 +137,3 @@ type ModuleExpertIsolationInvocationEvidence<
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
   readonly selectedContextPaths: readonly string[];
 };
-
-function isolatedInvocationDigest<TTask extends string, TAgent extends string>(
-  evidence: ModuleExpertIsolationInvocationEvidence<TTask, TAgent>,
-): string {
-  const invocation = evidence.invocation;
-  const identity = {
-    task: invocation.task,
-    attempt: invocation.attempt,
-    sourceCommit: invocation.sourceCommit,
-    runId: invocation.runId,
-    workingDirectory: invocation.workingDirectory,
-    upstreamOutputs: invocation.upstreamOutputs,
-    execution: invocation.execution,
-    agentProfile: invocation.agentProfile,
-    selectedContextPaths: evidence.selectedContextPaths,
-  };
-  return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
-}

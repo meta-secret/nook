@@ -1,7 +1,45 @@
 import { spyOn } from 'bun:test';
+
 import * as codexRuntime from '../../src/agent-workflow/codex-runtime.ts';
+
 import type { RunIsolatedReadOnlyExpertCodexRequest } from '../../src/agent-workflow/codex-runtime.ts';
+
 import type { AgentTaskRuntime } from '../../src/agent-workflow/runtime.ts';
+
+export class StructuralExpertsStructuralRuntimeMockScenario {
+  private constructor(
+    private readonly request: RegisterStructuralRuntimeMockRequest,
+  ) {}
+
+  static registerStructuralRuntimeMock(
+    request: RegisterStructuralRuntimeMockRequest,
+  ): StructuralRuntimeMockRegistration {
+    return new StructuralExpertsStructuralRuntimeMockScenario(
+      request,
+    ).execute();
+  }
+
+  private execute(): StructuralRuntimeMockRegistration {
+    const request = this.request;
+    const [runtimes = new Array<AgentTaskRuntime<string, string>>()] = [
+      RUNTIMES.get(request.runId),
+    ];
+    runtimes.push(request.runtime);
+    RUNTIMES.set(request.runId, runtimes);
+    return {
+      dispose: () => {
+        const registered = RUNTIMES.get(request.runId);
+        if (registered?.at(-1) !== request.runtime) {
+          throw new Error(
+            'Structural runtime mocks were disposed out of order.',
+          );
+        }
+        registered.pop();
+        if (registered.length === 0) RUNTIMES.delete(request.runId);
+      },
+    };
+  }
+}
 
 export type RegisterStructuralRuntimeMockRequest = {
   readonly runId: string;
@@ -13,9 +51,13 @@ export type StructuralRuntimeMockRegistration = {
 };
 
 const RUNTIMES = new Map<string, AgentTaskRuntime<string, string>[]>();
-const original = codexRuntime.runIsolatedReadOnlyExpertCodex;
 
-spyOn(codexRuntime, 'runIsolatedReadOnlyExpertCodex').mockImplementation(
+const original = codexRuntime.ReadOnlyExpertCodexRuntime.executeIsolated;
+
+spyOn(
+  codexRuntime.ReadOnlyExpertCodexRuntime,
+  'executeIsolated',
+).mockImplementation(
   async <TTask extends string, TAgent extends string>(
     request: RunIsolatedReadOnlyExpertCodexRequest<TTask, TAgent>,
   ) => {
@@ -24,23 +66,3 @@ spyOn(codexRuntime, 'runIsolatedReadOnlyExpertCodex').mockImplementation(
     return original(request);
   },
 );
-
-export function registerStructuralRuntimeMock(
-  request: RegisterStructuralRuntimeMockRequest,
-): StructuralRuntimeMockRegistration {
-  const [runtimes = new Array<AgentTaskRuntime<string, string>>()] = [
-    RUNTIMES.get(request.runId),
-  ];
-  runtimes.push(request.runtime);
-  RUNTIMES.set(request.runId, runtimes);
-  return {
-    dispose: () => {
-      const registered = RUNTIMES.get(request.runId);
-      if (registered?.at(-1) !== request.runtime) {
-        throw new Error('Structural runtime mocks were disposed out of order.');
-      }
-      registered.pop();
-      if (registered.length === 0) RUNTIMES.delete(request.runId);
-    },
-  };
-}

@@ -7,11 +7,36 @@ import {
   CORTEX_DOCUMENT_MAP_REQUEST_BYTE_LIMIT,
   CORTEX_DOCUMENT_MAP_RESULT_BYTE_LIMIT,
 } from './domain.ts';
+
 import {
   CortexDocumentMapRequestDecodeError,
-  decodeCortexDocumentMapRequest,
+  CortexDocumentMapTransport,
 } from './codec.ts';
-import { executeCortexDocumentMapApplication } from './application.ts';
+
+import { CortexDocumentMapApplication } from './application.ts';
+
+export class CortexDocumentMapActionDecoder {
+  private constructor(private readonly request: string) {}
+
+  static cortexPathSchema() {
+    return {
+      type: 'string',
+      maxUtf16CodeUnits: CORTEX_DOCUMENT_MAP_PATH_LIMIT,
+      pattern: CORTEX_PATH_PATTERN,
+    } as const;
+  }
+
+  static decodeCortexDocumentMapActionPayload(serialized: string) {
+    return new CortexDocumentMapActionDecoder(serialized).execute();
+  }
+
+  private execute() {
+    const serialized = this.request;
+    return CortexDocumentMapTransport.decodeCortexDocumentMapRequest(
+      serialized,
+    );
+  }
+}
 
 export const CORTEX_DOCUMENT_MAP_AUDIT_EXAMPLE = `cortexDocumentMap:
   audit:
@@ -25,13 +50,7 @@ export const CORTEX_DOCUMENT_MAP_AUDIT_EXAMPLE = `cortexDocumentMap:
 
 const CORTEX_PATH_PATTERN =
   '^\\.cortex/(?!\\.\\.?/)(?!.*\\/\\.\\.?(?:\\/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e-\\u200f\\u2028-\\u202e\\u2066-\\u206f])[^/]+(?:/[^/]+)*\\.md$';
-function cortexPathSchema() {
-  return {
-    type: 'string',
-    maxUtf16CodeUnits: CORTEX_DOCUMENT_MAP_PATH_LIMIT,
-    pattern: CORTEX_PATH_PATTERN,
-  } as const;
-}
+
 export const CORTEX_DOCUMENT_MAP_AUDIT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -51,7 +70,7 @@ export const CORTEX_DOCUMENT_MAP_AUDIT_SCHEMA = {
         additionalProperties: false,
         required: ['relativePath', 'content'],
         properties: {
-          relativePath: cortexPathSchema(),
+          relativePath: CortexDocumentMapActionDecoder.cortexPathSchema(),
           content: {
             type: 'string',
             maxUtf16CodeUnits: CORTEX_DOCUMENT_MAP_CONTENT_LIMIT,
@@ -64,7 +83,7 @@ export const CORTEX_DOCUMENT_MAP_AUDIT_SCHEMA = {
     excludedDocumentPaths: {
       type: 'array',
       maxItems: CORTEX_DOCUMENT_MAP_EXCLUDED_PATH_LIMIT,
-      items: cortexPathSchema(),
+      items: CortexDocumentMapActionDecoder.cortexPathSchema(),
     },
   },
 } as const;
@@ -80,10 +99,7 @@ export const CORTEX_DOCUMENT_MAP_ACTION_DEFINITION = Object.freeze({
   inputSchema: CORTEX_DOCUMENT_MAP_AUDIT_SCHEMA,
 });
 
-export function decodeCortexDocumentMapActionPayload(serialized: string) {
-  return decodeCortexDocumentMapRequest(serialized);
-}
-
 export const executeCortexDocumentMapAction =
-  executeCortexDocumentMapApplication;
+  CortexDocumentMapApplication.executeCortexDocumentMapApplication;
+
 export { CortexDocumentMapRequestDecodeError };

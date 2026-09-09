@@ -1,15 +1,36 @@
 import { expect, test } from 'bun:test';
+
 import {
   CortexArticleFindingCode,
   CortexArticleSemanticKind,
   type CortexArticleSemanticBlock,
 } from '../src/domain.ts';
+
 import {
-  audit,
-  makeDocument,
   type MakeAuditRequest,
   type MakeDocumentRequest,
+  CortexArticleStructureSupportScenario,
 } from './support.ts';
+
+export class CortexArticleStructureAuditStructureScenario {
+  private constructor(private readonly request: SemanticBlocks) {}
+
+  static findingsFor(blocks: SemanticBlocks) {
+    return new CortexArticleStructureAuditStructureScenario(blocks).execute();
+  }
+
+  private execute() {
+    const blocks = this.request;
+    const documentRequest: MakeDocumentRequest = {
+      blocks,
+      relativePath: '.cortex/article.md',
+    };
+    const document =
+      CortexArticleStructureSupportScenario.makeDocument(documentRequest);
+    const auditRequest: MakeAuditRequest = { documents: [document] };
+    return CortexArticleStructureSupportScenario.audit(auditRequest);
+  }
+}
 
 type SemanticBlocks = readonly CortexArticleSemanticBlock[];
 
@@ -19,33 +40,32 @@ const headingAtDepth = (depth: number) => (line: number) => (text: string) => ({
   line,
   text,
 });
+
 const headingAt = headingAtDepth(2);
+
 const heading = headingAt(1);
+
 const simpleBlock =
   (
     kind: Exclude<CortexArticleSemanticKind, CortexArticleSemanticKind.Heading>,
   ) =>
   (line: number): CortexArticleSemanticBlock => ({ kind, line });
+
 const paragraph = simpleBlock(CortexArticleSemanticKind.Paragraph);
+
 const structure = simpleBlock(CortexArticleSemanticKind.Structure);
+
 const transparent = simpleBlock(CortexArticleSemanticKind.Transparent);
+
 const densitySeparator = simpleBlock(
   CortexArticleSemanticKind.DensitySeparator,
 );
+
 const visibleOrderedList = simpleBlock(
   CortexArticleSemanticKind.VisibleOrderedList,
 );
-const table = simpleBlock(CortexArticleSemanticKind.Table);
 
-function findingsFor(blocks: SemanticBlocks) {
-  const documentRequest: MakeDocumentRequest = {
-    blocks,
-    relativePath: '.cortex/article.md',
-  };
-  const document = makeDocument(documentRequest);
-  const auditRequest: MakeAuditRequest = { documents: [document] };
-  return audit(auditRequest);
-}
+const table = simpleBlock(CortexArticleSemanticKind.Table);
 
 test('accepts visible structure and visible ordered procedures', () => {
   const blocks = [
@@ -56,12 +76,16 @@ test('accepts visible structure and visible ordered procedures', () => {
     paragraph(9),
     visibleOrderedList(11),
   ];
-  expect(findingsFor(blocks)).toEqual([]);
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(blocks),
+  ).toEqual([]);
 });
 
 test('reports every rendered Markdown table', () => {
   const blocks = [heading('Reference'), paragraph(3), table(5), table(9)];
-  expect(findingsFor(blocks)).toEqual([
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(blocks),
+  ).toEqual([
     {
       code: CortexArticleFindingCode.MarkdownTable,
       file: '.cortex/article.md',
@@ -85,7 +109,9 @@ test('reports empty articles with active heading diagnostics', () => {
     transparent(9),
     densitySeparator(11),
   ];
-  expect(findingsFor(blocks)).toEqual([
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(blocks),
+  ).toEqual([
     {
       code: CortexArticleFindingCode.EmptyArticle,
       file: '.cortex/article.md',
@@ -104,7 +130,9 @@ test('reports the fourth consecutive paragraph at its source line', () => {
     paragraph(10),
     paragraph(12),
   ];
-  expect(findingsFor(blocks)).toEqual([
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(blocks),
+  ).toEqual([
     {
       code: CortexArticleFindingCode.DenseArticle,
       file: '.cortex/article.md',
@@ -124,9 +152,13 @@ test('density separators reset prose without becoming visible content', () => {
     densitySeparator(9),
     paragraph(11),
   ];
-  expect(findingsFor(structuredBlocks)).toEqual([]);
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(structuredBlocks),
+  ).toEqual([]);
   const emptyBlocks = [heading('Empty'), densitySeparator(3)];
-  expect(findingsFor(emptyBlocks)).toHaveLength(1);
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(emptyBlocks),
+  ).toHaveLength(1);
 });
 
 test('visible structure resets prose density', () => {
@@ -140,7 +172,9 @@ test('visible structure resets prose density', () => {
       semanticStructure(9),
       paragraph(11),
     ];
-    expect(findingsFor(blocks)).toEqual([]);
+    expect(
+      CortexArticleStructureAuditStructureScenario.findingsFor(blocks),
+    ).toEqual([]);
   }
 });
 
@@ -158,7 +192,9 @@ test('nested H4 headings reset density without ending the owning H3 scan', () =>
     paragraph(15),
     paragraph(17),
   ];
-  expect(findingsFor(blocks)).toEqual([
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(blocks),
+  ).toEqual([
     {
       code: CortexArticleFindingCode.DenseArticle,
       file: '.cortex/article.md',
@@ -175,7 +211,9 @@ test('requires an explicit visible ordered-list semantic state', () => {
     paragraph(6),
     structure(8),
   ];
-  expect(findingsFor(blocks)).toEqual([
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(blocks),
+  ).toEqual([
     {
       code: CortexArticleFindingCode.UnorderedProcedure,
       file: '.cortex/article.md',
@@ -200,9 +238,11 @@ test('recognizes the active procedure-heading vocabulary', () => {
   ];
   for (const text of headings) {
     const blocks = [heading(text), paragraph(3)];
-    expect(findingsFor(blocks).map((finding) => finding.code)).toEqual([
-      CortexArticleFindingCode.UnorderedProcedure,
-    ]);
+    expect(
+      CortexArticleStructureAuditStructureScenario.findingsFor(blocks).map(
+        (finding) => finding.code,
+      ),
+    ).toEqual([CortexArticleFindingCode.UnorderedProcedure]);
   }
 });
 
@@ -218,7 +258,11 @@ test('honors H2 and H3 ownership boundaries and ignores H1 titles', () => {
     headingAt(11)('Next explanation'),
     paragraph(13),
   ];
-  expect(findingsFor(blocks)).toEqual([]);
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(blocks),
+  ).toEqual([]);
   const titleOnly = [h1(1)('Title')];
-  expect(findingsFor(titleOnly)).toEqual([]);
+  expect(
+    CortexArticleStructureAuditStructureScenario.findingsFor(titleOnly),
+  ).toEqual([]);
 });

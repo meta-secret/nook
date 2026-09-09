@@ -1,38 +1,54 @@
 import { expect, test } from 'bun:test';
+
 import { join } from 'node:path';
-import {
-  actionRuntimePaths,
-  configurationScriptPaths,
-} from './skill-provider-config-boundary.test.ts';
+
+import { SkillProviderConfigBoundaryScenario } from './skill-provider-config-boundary.test.ts';
+
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
+
 import type { ActionRuntimeGraph } from './skill-provider-config-types.ts';
+
+export class SkillProviderCommandSecurityScenario {
+  private constructor(private readonly request: string) {}
+
+  static directGraph(command: string): ConfigurationScriptGraph {
+    return new SkillProviderCommandSecurityScenario(command).execute();
+  }
+
+  private execute(): ConfigurationScriptGraph {
+    const command = this.request;
+    const root =
+      command === '. /etc/os-release'
+        ? 'infra/tasks/providers.yml'
+        : 'Taskfile.yml';
+    return {
+      executablePaths: new Set(),
+      roots: [root],
+      sources: new Map([[root, `tasks: {audit: {cmds: [${command}]}}`]]),
+      symlinkPaths: new Set(),
+    };
+  }
+}
 
 const PROTECTED = '.agents/skills/example-skill/scripts/src/application.ts';
 
-function directGraph(command: string): ConfigurationScriptGraph {
-  const root =
-    command === '. /etc/os-release'
-      ? 'infra/tasks/providers.yml'
-      : 'Taskfile.yml';
-  return {
-    executablePaths: new Set(),
-    roots: [root],
-    sources: new Map([[root, `tasks: {audit: {cmds: [${command}]}}`]]),
-    symlinkPaths: new Set(),
-  };
-}
-
 test('allows only the exact audited source catalog', () => {
-  expect(configurationScriptPaths(directGraph('. /etc/os-release'))).toEqual(
-    [],
-  );
+  expect(
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+      SkillProviderCommandSecurityScenario.directGraph('. /etc/os-release'),
+    ),
+  ).toEqual([]);
   for (const command of [
     'source scripts/other.sh',
     '. scripts/other.sh',
     '. "$DYNAMIC"',
     'source /etc/lsb-release',
   ])
-    expect(() => configurationScriptPaths(directGraph(command))).toThrow();
+    expect(() =>
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        SkillProviderCommandSecurityScenario.directGraph(command),
+      ),
+    ).toThrow();
 });
 
 test('repository PATH cannot shadow the trusted Docker CLI', async () => {
@@ -53,9 +69,9 @@ test('repository PATH cannot shadow the trusted Docker CLI', async () => {
     ]),
     symlinkPaths: new Set(),
   };
-  expect(() => configurationScriptPaths(graph)).toThrow(
-    'Command-scoped PATH mutation',
-  );
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+  ).toThrow('Command-scoped PATH mutation');
 });
 
 test('pins the sole repository source helper', () => {
@@ -71,7 +87,9 @@ test('pins the sole repository source helper', () => {
     ]),
     symlinkPaths: new Set(),
   };
-  expect(() => configurationScriptPaths(graph)).toThrow('helper has drifted');
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+  ).toThrow('helper has drifted');
 });
 
 test('bounds action manifests and package metadata before parsing', () => {
@@ -80,7 +98,9 @@ test('bounds action manifests and package metadata before parsing', () => {
     sources: new Map([['action.yml', `#${'a'.repeat(65_537)}`]]),
     symlinkPaths: new Set(),
   };
-  expect(() => actionRuntimePaths(manifest)).toThrow('UTF-8 byte bound');
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.actionRuntimePaths(manifest),
+  ).toThrow('UTF-8 byte bound');
   const inert = { inert: 'é'.repeat(32_768) };
   const action: ActionRuntimeGraph = {
     roots: ['action.yml'],
@@ -91,7 +111,9 @@ test('bounds action manifests and package metadata before parsing', () => {
     ]),
     symlinkPaths: new Set(),
   };
-  expect(() => actionRuntimePaths(action)).toThrow('UTF-8 byte bound');
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.actionRuntimePaths(action),
+  ).toThrow('UTF-8 byte bound');
 });
 
 test('bounds growing configuration cycles', () => {
@@ -105,7 +127,7 @@ test('bounds growing configuration cycles', () => {
     ]),
     symlinkPaths: new Set(),
   };
-  expect(() => configurationScriptPaths(graph)).toThrow(
-    'graph exceeds its bound',
-  );
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+  ).toThrow('graph exceeds its bound');
 });

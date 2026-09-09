@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+
 import {
   CortexArticleRequestDecodeError,
-  decodeCortexArticleRequest,
+  CortexArticleTransport,
 } from '../../../cortex-article-structure/scripts/src/codec.ts';
+
 import {
   CortexArticleContractKind,
   CortexArticleSemanticKind,
@@ -10,37 +12,89 @@ import {
   CORTEX_ARTICLE_PATH_LIMIT,
   type AuditCortexArticleStructureRequest,
 } from '../../../cortex-article-structure/scripts/src/domain.ts';
+
 import {
   DelegationVisualizationContractKind,
   DelegationVisualizationTeam,
 } from '../../../delegation-visualization/scripts/src/domain.ts';
+
 import {
-  dispatchSkillYamlText,
-  finalizeSkillCliResponse,
-  runSkillCli,
   type FinalSkillCliResponseRequest,
   type RunSkillCliRequest,
+  ExecutableSkillCli,
 } from '../src/cli.ts';
+
 import {
-  listDiscoverableSkillActions,
   SKILL_TOOLS_LIST_INVOKE,
+  ExecutableSkillActions,
 } from '../src/skill-action-registry.ts';
+
 import {
   SkillCommandIssue,
   SkillCommandPhase,
   SKILL_HOST_RESPONSE_BYTE_LIMIT,
   SkillRequestFamily,
 } from '../src/skill-command-domain.ts';
+
 import {
   SKILL_YAML_DEPTH_LIMIT,
-  parseSkillYamlText,
-  stringifySkillYaml,
   type UntrustedSkillYamlNode,
+  ExecutableSkillYaml,
 } from '../src/skill-yaml-codec.ts';
+
 import {
-  validateSkillInput,
   type SkillSchemaValidationRequest,
+  ExecutableSkillInputSchema,
 } from '../src/skill-schema-validator.ts';
+
+export class ExecutableSkillHostCliScenario {
+  private constructor(private readonly request: ArticleRequestInput) {}
+
+  static parseResponse(yaml: string): CliResponse {
+    return Bun.YAML.parse(yaml) as CliResponse;
+  }
+
+  static articleRequest(
+    input: ArticleRequestInput,
+  ): AuditCortexArticleStructureRequest {
+    return new ExecutableSkillHostCliScenario(input).execute();
+  }
+
+  private execute(): AuditCortexArticleStructureRequest {
+    const input = this.request;
+    return {
+      kind: CortexArticleContractKind.Request,
+      documents: [
+        {
+          relativePath: input.relativePath,
+          blocks: [
+            {
+              depth: 2,
+              kind: CortexArticleSemanticKind.Heading,
+              line: 1,
+              text: input.heading,
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  static providerFailurePath(
+    request: AuditCortexArticleStructureRequest,
+  ): string {
+    try {
+      CortexArticleTransport.decodeCortexArticleRequest(
+        JSON.stringify(request),
+      );
+    } catch (error) {
+      if (error instanceof CortexArticleRequestDecodeError) return error.path;
+      throw error;
+    }
+    throw new Error('Expected provider rejection.');
+  }
+}
+
 type CliResponse = {
   readonly ok: boolean;
   readonly family?: string;
@@ -81,51 +135,19 @@ type CliResponse = {
   };
   readonly recover?: { readonly toolsListRequest: string };
 };
-function parseResponse(yaml: string): CliResponse {
-  return Bun.YAML.parse(yaml) as CliResponse;
-}
+
 type ArticleRequestInput = {
   readonly heading: string;
   readonly relativePath: string;
 };
-function articleRequest(
-  input: ArticleRequestInput,
-): AuditCortexArticleStructureRequest {
-  return {
-    kind: CortexArticleContractKind.Request,
-    documents: [
-      {
-        relativePath: input.relativePath,
-        blocks: [
-          {
-            depth: 2,
-            kind: CortexArticleSemanticKind.Heading,
-            line: 1,
-            text: input.heading,
-          },
-        ],
-      },
-    ],
-  };
-}
-function providerFailurePath(
-  request: AuditCortexArticleStructureRequest,
-): string {
-  try {
-    decodeCortexArticleRequest(JSON.stringify(request));
-  } catch (error) {
-    if (error instanceof CortexArticleRequestDecodeError) return error.path;
-    throw error;
-  }
-  throw new Error('Expected provider rejection.');
-}
+
 describe('provider-neutral executable skill YAML host', () => {
   test('discovers the closed executable action catalog', async () => {
     const request: RunSkillCliRequest = { argv: [] };
-    const outcome = await runSkillCli(request);
-    const response = parseResponse(outcome.yaml);
+    const outcome = await ExecutableSkillCli.runSkillCli(request);
+    const response = ExecutableSkillHostCliScenario.parseResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(0);
-    expect(parseSkillYamlText(outcome.yaml).ok).toBe(true);
+    expect(ExecutableSkillYaml.parseSkillYamlText(outcome.yaml).ok).toBe(true);
     expect(response.ok).toBe(true);
     const actions = response.result?.actions;
     if (!actions) throw new Error('Missing discovered actions.');
@@ -143,23 +165,31 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(action.inputSchema).toMatchObject(expectedSchema);
     for (const discovered of actions) {
       expect(discovered.exampleRequest).toMatch(/^task skills:/u);
-      expect(dispatchSkillYamlText(discovered.exampleYaml).exitCode).toBe(0);
+      expect(
+        ExecutableSkillCli.dispatchSkillYamlText(discovered.exampleYaml)
+          .exitCode,
+      ).toBe(0);
     }
     for (const argv of [[], ['--tools-list']]) {
       const invocationRequest: RunSkillCliRequest = { argv };
-      expect((await runSkillCli(invocationRequest)).exitCode).toBe(0);
+      expect(
+        (await ExecutableSkillCli.runSkillCli(invocationRequest)).exitCode,
+      ).toBe(0);
     }
   });
   test('executes the article action through its validated provider contract', () => {
-    const action = listDiscoverableSkillActions().actions.at(1);
+    const action =
+      ExecutableSkillActions.listDiscoverableSkillActions().actions.at(1);
     if (!action) throw new Error('Missing article action.');
-    const outcome = dispatchSkillYamlText(action.exampleYaml);
-    const response = parseResponse(outcome.yaml);
+    const outcome = ExecutableSkillCli.dispatchSkillYamlText(
+      action.exampleYaml,
+    );
+    const response = ExecutableSkillHostCliScenario.parseResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(0);
     expect(response.family).toBe(SkillRequestFamily.CortexArticleStructure);
     expect(response.operation).toBe('audit');
     expect(response.result).toMatchObject({ findings: [] });
-    const invalid = dispatchSkillYamlText(
+    const invalid = ExecutableSkillCli.dispatchSkillYamlText(
       action.exampleYaml.replace(
         'documents:',
         'secret: MARKER\n    documents:',
@@ -169,16 +199,19 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(invalid.yaml).not.toContain('MARKER');
   });
   test('executes the document-map action through its static provider', () => {
-    const action = listDiscoverableSkillActions().actions.at(2);
+    const action =
+      ExecutableSkillActions.listDiscoverableSkillActions().actions.at(2);
     if (!action) throw new Error('Missing document-map action.');
-    const outcome = dispatchSkillYamlText(action.exampleYaml);
-    const response = parseResponse(outcome.yaml);
+    const outcome = ExecutableSkillCli.dispatchSkillYamlText(
+      action.exampleYaml,
+    );
+    const response = ExecutableSkillHostCliScenario.parseResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(0);
     expect(response.family).toBe(SkillRequestFamily.CortexDocumentMap);
     expect(response.operation).toBe('audit');
     expect(response.result).toMatchObject({ findings: [] });
 
-    const invalid = dispatchSkillYamlText(
+    const invalid = ExecutableSkillCli.dispatchSkillYamlText(
       action.exampleYaml.replace(
         'documents:',
         'secret: MARKER\n    documents:',
@@ -187,7 +220,8 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(invalid.exitCode).toBe(2);
     expect(invalid.yaml).not.toContain('MARKER');
 
-    const transientLink = dispatchSkillYamlText(`cortexDocumentMap:
+    const transientLink =
+      ExecutableSkillCli.dispatchSkillYamlText(`cortexDocumentMap:
   audit:
     kind: cortex-document-map-audit-v1
     documents:
@@ -198,7 +232,10 @@ describe('provider-neutral executable skill YAML host', () => {
     excludedDocumentPaths:
       - .cortex/.session/note.md
 `);
-    expect(parseResponse(transientLink.yaml).result?.findings).toEqual([
+    expect(
+      ExecutableSkillHostCliScenario.parseResponse(transientLink.yaml).result
+        ?.findings,
+    ).toEqual([
       {
         code: 'invalid-index-entry',
         file: '.cortex/knowledge-graph.md',
@@ -208,7 +245,7 @@ describe('provider-neutral executable skill YAML host', () => {
       },
     ]);
 
-    const missingExcludedDocument = dispatchSkillYamlText(
+    const missingExcludedDocument = ExecutableSkillCli.dispatchSkillYamlText(
       action.exampleYaml.replace(
         'excludedDocumentPaths: []',
         'excludedDocumentPaths:\n      - .cortex/.session/MARKER.md',
@@ -217,24 +254,32 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(missingExcludedDocument.exitCode).toBe(2);
     expect(missingExcludedDocument.yaml).not.toContain('MARKER');
     expect(
-      parseResponse(missingExcludedDocument.yaml).errors?.at(0)?.path,
+      ExecutableSkillHostCliScenario.parseResponse(
+        missingExcludedDocument.yaml,
+      ).errors?.at(0)?.path,
     ).toBe('cortexDocumentMap.audit.excludedDocumentPaths[0]');
   });
   test('executes consistency through its validated provider contract', () => {
-    const action = listDiscoverableSkillActions().actions.at(3);
+    const action =
+      ExecutableSkillActions.listDiscoverableSkillActions().actions.at(3);
     if (!action) throw new Error('Missing consistency action.');
-    const outcome = dispatchSkillYamlText(action.exampleYaml);
-    const response = parseResponse(outcome.yaml);
+    const outcome = ExecutableSkillCli.dispatchSkillYamlText(
+      action.exampleYaml,
+    );
+    const response = ExecutableSkillHostCliScenario.parseResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(0);
     expect(response.family).toBe(SkillRequestFamily.CortexConsistency);
     expect(response.operation).toBe('compile');
     expect(response.result?.findings?.length).toBeGreaterThan(0);
   });
   test('renders delegation through its validated static provider', () => {
-    const action = listDiscoverableSkillActions().actions.at(4);
+    const action =
+      ExecutableSkillActions.listDiscoverableSkillActions().actions.at(4);
     if (!action) throw new Error('Missing delegation visualization action.');
-    const outcome = dispatchSkillYamlText(action.exampleYaml);
-    const response = parseResponse(outcome.yaml);
+    const outcome = ExecutableSkillCli.dispatchSkillYamlText(
+      action.exampleYaml,
+    );
+    const response = ExecutableSkillHostCliScenario.parseResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(0);
     expect(response.family).toBe(SkillRequestFamily.DelegationVisualization);
     expect(response.operation).toBe('render');
@@ -279,13 +324,15 @@ describe('provider-neutral executable skill YAML host', () => {
         },
       },
     };
-    const specialOutcome = dispatchSkillYamlText(
-      stringifySkillYaml(specialRequest as UntrustedSkillYamlNode),
+    const specialOutcome = ExecutableSkillCli.dispatchSkillYamlText(
+      ExecutableSkillYaml.stringifySkillYaml(
+        specialRequest as UntrustedSkillYamlNode,
+      ),
     );
     expect(specialOutcome.exitCode).toBe(0);
     expect(
-      parseResponse(specialOutcome.yaml).result?.document?.gizmo.tasks[0]
-        ?.description,
+      ExecutableSkillHostCliScenario.parseResponse(specialOutcome.yaml).result
+        ?.document?.gizmo.tasks[0]?.description,
     ).toBe(specialDescription);
   });
   test('keeps structured delegation within the trusted host response bound', () => {
@@ -310,10 +357,10 @@ describe('provider-neutral executable skill YAML host', () => {
         },
       },
     };
-    const outcome = dispatchSkillYamlText(
-      stringifySkillYaml(request as UntrustedSkillYamlNode),
+    const outcome = ExecutableSkillCli.dispatchSkillYamlText(
+      ExecutableSkillYaml.stringifySkillYaml(request as UntrustedSkillYamlNode),
     );
-    const response = parseResponse(outcome.yaml);
+    const response = ExecutableSkillHostCliScenario.parseResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(0);
     expect(response.result?.document?.gizmo.tasks).toHaveLength(64);
     expect(
@@ -321,7 +368,8 @@ describe('provider-neutral executable skill YAML host', () => {
     ).toBeLessThanOrEqual(SKILL_HOST_RESPONSE_BYTE_LIMIT);
   });
   test('aligns discovered and provider UTF-16 string limits', () => {
-    const action = listDiscoverableSkillActions().actions.at(1);
+    const action =
+      ExecutableSkillActions.listDiscoverableSkillActions().actions.at(1);
     if (!action) throw new Error('Missing article action.');
     const boundaryPath = `.cortex/${'😀'.repeat(2_042)}a.md`;
     const boundaryHeading = '😀'.repeat(1_900);
@@ -331,7 +379,7 @@ describe('provider-neutral executable skill YAML host', () => {
     const overflowHeading = `${boundaryHeading}a`;
     expect(overflowPath.length).toBe(CORTEX_ARTICLE_PATH_LIMIT + 1);
     expect(overflowHeading.length).toBe(CORTEX_ARTICLE_DETAIL_TEXT_LIMIT + 1);
-    const accepted = articleRequest({
+    const accepted = ExecutableSkillHostCliScenario.articleRequest({
       heading: boundaryHeading,
       relativePath: boundaryPath,
     });
@@ -340,20 +388,27 @@ describe('provider-neutral executable skill YAML host', () => {
       schema: action.inputSchema,
       value: accepted,
     };
-    expect(validateSkillInput(validationRequest).ok).toBe(true);
+    expect(
+      ExecutableSkillInputSchema.validateSkillInput(validationRequest).ok,
+    ).toBe(true);
     expect(() =>
-      decodeCortexArticleRequest(JSON.stringify(accepted)),
+      CortexArticleTransport.decodeCortexArticleRequest(
+        JSON.stringify(accepted),
+      ),
     ).not.toThrow();
     const wrapped = {
       [SkillRequestFamily.CortexArticleStructure]: {
         audit: accepted,
       },
     };
-    expect(dispatchSkillYamlText(JSON.stringify(wrapped)).exitCode).toBe(0);
+    expect(
+      ExecutableSkillCli.dispatchSkillYamlText(JSON.stringify(wrapped))
+        .exitCode,
+    ).toBe(0);
 
     for (const [request, schemaPath, providerPath] of [
       [
-        articleRequest({
+        ExecutableSkillHostCliScenario.articleRequest({
           heading: 'Heading',
           relativePath: overflowPath,
         }),
@@ -361,7 +416,7 @@ describe('provider-neutral executable skill YAML host', () => {
         'documents[0].relativePath',
       ],
       [
-        articleRequest({
+        ExecutableSkillHostCliScenario.articleRequest({
           heading: overflowHeading,
           relativePath: '.cortex/example.md',
         }),
@@ -374,29 +429,37 @@ describe('provider-neutral executable skill YAML host', () => {
         schema: action.inputSchema,
         value: request,
       };
-      const validation = validateSkillInput(rejectedValidationRequest);
+      const validation = ExecutableSkillInputSchema.validateSkillInput(
+        rejectedValidationRequest,
+      );
       expect(validation.ok).toBe(false);
       if (validation.ok) throw new Error('Expected schema rejection.');
       expect(validation.path).toBe(schemaPath);
-      expect(providerFailurePath(request)).toBe(providerPath);
+      expect(ExecutableSkillHostCliScenario.providerFailurePath(request)).toBe(
+        providerPath,
+      );
       const rejectedWrapped = {
         [SkillRequestFamily.CortexArticleStructure]: { audit: request },
       };
       expect(
-        dispatchSkillYamlText(JSON.stringify(rejectedWrapped)).exitCode,
+        ExecutableSkillCli.dispatchSkillYamlText(
+          JSON.stringify(rejectedWrapped),
+        ).exitCode,
       ).toBe(2);
     }
   });
   test('executes tools-list and rejects CLI flags', async () => {
-    const outcome = dispatchSkillYamlText('skillToolsList:\n  list: {}\n');
-    const response = parseResponse(outcome.yaml);
+    const outcome = ExecutableSkillCli.dispatchSkillYamlText(
+      'skillToolsList:\n  list: {}\n',
+    );
+    const response = ExecutableSkillHostCliScenario.parseResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(0);
     expect(response.family).toBe(SkillRequestFamily.ToolsList);
     expect(response.operation).toBe('list');
     const request: RunSkillCliRequest = {
       argv: ['audit', '--path', '.cortex'],
     };
-    expect((await runSkillCli(request)).exitCode).toBe(2);
+    expect((await ExecutableSkillCli.runSkillCli(request)).exitCode).toBe(2);
   });
   test('reports canonical paths without echoing unknown keys or values', () => {
     const cases = [
@@ -414,8 +477,10 @@ describe('provider-neutral executable skill YAML host', () => {
       ['hyphen-marker: value\n', '["<unknown-key>"]'],
     ] as const;
     for (const [yaml, path] of cases) {
-      const outcome = dispatchSkillYamlText(yaml);
-      const response = parseResponse(outcome.yaml);
+      const outcome = ExecutableSkillCli.dispatchSkillYamlText(yaml);
+      const response = ExecutableSkillHostCliScenario.parseResponse(
+        outcome.yaml,
+      );
       expect(outcome.exitCode).toBe(2);
       expect(response.errors?.at(0)?.path).toBe(path);
       expect(outcome.yaml).not.toMatch(/SECRET|MARKER/u);
@@ -439,8 +504,10 @@ describe('provider-neutral executable skill YAML host', () => {
       aliasLines.join('\r'),
       `${'['.repeat(SKILL_YAML_DEPTH_LIMIT + 1)}${secret}`,
     ]) {
-      const outcome = dispatchSkillYamlText(yaml);
-      const response = parseResponse(outcome.yaml);
+      const outcome = ExecutableSkillCli.dispatchSkillYamlText(yaml);
+      const response = ExecutableSkillHostCliScenario.parseResponse(
+        outcome.yaml,
+      );
       const expectedError = {
         issue: SkillCommandIssue.InvalidYaml,
         message: 'Invalid YAML syntax.',
@@ -453,10 +520,10 @@ describe('provider-neutral executable skill YAML host', () => {
     }
   });
   test('rejects generic name and arguments envelopes', () => {
-    const outcome = dispatchSkillYamlText(
+    const outcome = ExecutableSkillCli.dispatchSkillYamlText(
       'name: skill-tools-list\narguments:\n  action: list\n',
     );
-    const response = parseResponse(outcome.yaml);
+    const response = ExecutableSkillHostCliScenario.parseResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(2);
     expect(response.errors?.at(0)?.path).toBe('');
     expect(outcome.yaml).toContain(
@@ -464,12 +531,14 @@ describe('provider-neutral executable skill YAML host', () => {
     );
   });
   test('bounds requests and final success or failure envelopes', () => {
-    const oversizedInput = dispatchSkillYamlText(
+    const oversizedInput = ExecutableSkillCli.dispatchSkillYamlText(
       `# ${'x'.repeat(4 * 1_024 * 1_024)}\n`,
     );
-    expect(parseResponse(oversizedInput.yaml).errors?.at(0)?.issue).toBe(
-      SkillCommandIssue.RequestTooLarge,
-    );
+    expect(
+      ExecutableSkillHostCliScenario.parseResponse(
+        oversizedInput.yaml,
+      ).errors?.at(0)?.issue,
+    ).toBe(SkillCommandIssue.RequestTooLarge);
     const oversizedScalar = new Array<string>(9).fill('x'.repeat(1_048_576));
     for (const [exitCode, response] of [
       [0, { ok: true, result: oversizedScalar }],
@@ -479,14 +548,16 @@ describe('provider-neutral executable skill YAML host', () => {
         exitCode,
         response: response as UntrustedSkillYamlNode,
       };
-      const outcome = finalizeSkillCliResponse(request);
+      const outcome = ExecutableSkillCli.finalizeSkillCliResponse(request);
       expect(outcome.exitCode).toBe(1);
       const expectedError = {
         issue: SkillCommandIssue.ResponseTooLarge,
       };
-      expect(parseResponse(outcome.yaml).errors?.at(0)).toMatchObject(
-        expectedError,
-      );
+      expect(
+        ExecutableSkillHostCliScenario.parseResponse(outcome.yaml).errors?.at(
+          0,
+        ),
+      ).toMatchObject(expectedError);
       expect(
         new TextEncoder().encode(outcome.yaml).byteLength,
       ).toBeLessThanOrEqual(SKILL_HOST_RESPONSE_BYTE_LIMIT);
@@ -498,18 +569,23 @@ describe('provider-neutral executable skill YAML host', () => {
         exitCode: 0,
         response: { ok: true, result: value },
       };
-      const outcome = finalizeSkillCliResponse(request);
+      const outcome = ExecutableSkillCli.finalizeSkillCliResponse(request);
       expect(outcome.exitCode).toBe(1);
-      expect(parseResponse(outcome.yaml).errors?.at(0)?.issue).toBe(
-        SkillCommandIssue.InvalidResponse,
+      expect(
+        ExecutableSkillHostCliScenario.parseResponse(outcome.yaml).errors?.at(0)
+          ?.issue,
+      ).toBe(SkillCommandIssue.InvalidResponse);
+      expect(ExecutableSkillYaml.parseSkillYamlText(outcome.yaml).ok).toBe(
+        true,
       );
-      expect(parseSkillYamlText(outcome.yaml).ok).toBe(true);
       expect(outcome.yaml).not.toMatch(/\.nan|\.inf/iu);
       expect(outcome.yaml.length).toBeLessThan(1_024 * 1_024);
     }
   });
   test('uses decode phase for malformed input', () => {
-    const response = parseResponse(dispatchSkillYamlText('[').yaml);
+    const response = ExecutableSkillHostCliScenario.parseResponse(
+      ExecutableSkillCli.dispatchSkillYamlText('[').yaml,
+    );
     expect(response.phase).toBe(SkillCommandPhase.Decode);
   });
 });

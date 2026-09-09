@@ -10,9 +10,9 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  loadCredential,
   PrStewardEventObserver,
   PrStewardInvocationCodec,
+  PrStewardCredentialFile,
 } from '../src/pr-steward-events.ts';
 import {
   PR_STEWARD_REPOSITORY,
@@ -159,7 +159,7 @@ describe('PR Steward credentials and invocation codec', () => {
     const path = join(directory, 'client.yaml');
     writeFileSync(path, `username: pr-steward\npassword: ${'a'.repeat(64)}\n`);
     chmodSync(path, 0o600);
-    expect(loadCredential(path)).toEqual({
+    expect(PrStewardCredentialFile.load(path)).toEqual({
       username: 'pr-steward',
       password: 'a'.repeat(64),
     });
@@ -167,7 +167,9 @@ describe('PR Steward credentials and invocation codec', () => {
       path,
       `username: pr-steward\npassword: ${'a'.repeat(64)}\nextra: true\n`,
     );
-    expect(() => loadCredential(path)).toThrow('credential schema is invalid');
+    expect(() => PrStewardCredentialFile.load(path)).toThrow(
+      'credential schema is invalid',
+    );
   });
 
   test('rejects broad modes and symbolic links', () => {
@@ -180,10 +182,14 @@ describe('PR Steward credentials and invocation codec', () => {
       `username: pr-steward\npassword: ${'a'.repeat(64)}\n`,
     );
     chmodSync(target, 0o644);
-    expect(() => loadCredential(target)).toThrow('mode must be 0600');
+    expect(() => PrStewardCredentialFile.load(target)).toThrow(
+      'mode must be 0600',
+    );
     chmodSync(target, 0o600);
     symlinkSync(target, link);
-    expect(() => loadCredential(link)).toThrow('cannot be opened securely');
+    expect(() => PrStewardCredentialFile.load(link)).toThrow(
+      'cannot be opened securely',
+    );
   });
 
   test('requires one positive PR and an absolute optional config', () => {

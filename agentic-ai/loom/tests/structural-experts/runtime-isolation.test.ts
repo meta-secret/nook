@@ -3,11 +3,11 @@ import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
-import { createReadOnlyExpertRuntimeIsolation } from '../../src/module-experts/runtime-contract.ts';
+import { ModuleExpertIsolation } from '../../src/module-experts/runtime-contract.ts';
 import type { ReadOnlyExpertRuntimeIsolationRequest } from '../../src/module-experts/runtime-contract.ts';
-import { runCommand } from '../../src/lib/run.ts';
+import { HostCommand } from '../../src/lib/run.ts';
 import type { RunCommandArgs } from '../../src/lib/run.ts';
-import { structuralExpertProfile } from '../../src/structural-experts/catalog.ts';
+import { StructuralExpertCatalog } from '../../src/structural-experts/catalog.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
@@ -40,7 +40,9 @@ test('materializes synthesis context without repository paths or credentials', a
       workingDirectory: REPO_ROOT,
     };
     const isolation =
-      await createReadOnlyExpertRuntimeIsolation(isolationRequest);
+      await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
+        isolationRequest,
+      );
     try {
       const verifiedView = join(
         isolation.repositorySnapshot,
@@ -89,7 +91,7 @@ test('rejects traversal and oversized synthetic context before agent execution',
       workingDirectory: REPO_ROOT,
     };
     await expect(
-      createReadOnlyExpertRuntimeIsolation(unsafeRequest),
+      ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(unsafeRequest),
     ).rejects.toThrow('context file is unsafe');
     expect(await readdir(temporaryRoot)).toEqual([]);
   } finally {
@@ -98,7 +100,9 @@ test('rejects traversal and oversized synthetic context before agent execution',
 });
 
 test('materializes only exact shared formatter and lint tooling', async () => {
-  const profile = structuralExpertProfile('code_refactoring_expert');
+  const profile = StructuralExpertCatalog.structuralExpertProfile(
+    'code_refactoring_expert',
+  );
   if (profile === false)
     throw new Error('Code refactoring profile is missing.');
   const exactRefactoringFiles = [
@@ -115,7 +119,7 @@ test('materializes only exact shared formatter and lint tooling', async () => {
     command: 'git',
     cwd: REPO_ROOT,
   };
-  const sourceCommit = runCommand(revisionRequest).stdout.trim();
+  const sourceCommit = HostCommand.run(revisionRequest).stdout.trim();
   try {
     const [defaulted3 = ''] = [process.env.PATH];
     const isolationRequest: ReadOnlyExpertRuntimeIsolationRequest = {
@@ -135,7 +139,9 @@ test('materializes only exact shared formatter and lint tooling', async () => {
       workingDirectory: REPO_ROOT,
     };
     const isolation =
-      await createReadOnlyExpertRuntimeIsolation(isolationRequest);
+      await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
+        isolationRequest,
+      );
     try {
       for (const relativePath of exactRefactoringFiles) {
         await access(join(isolation.repositorySnapshot, relativePath));

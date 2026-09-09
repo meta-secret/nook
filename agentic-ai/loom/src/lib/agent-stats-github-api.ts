@@ -1,18 +1,513 @@
 import {
   UntrustedYamlPropertyPresence,
-  asUntrustedYamlNode,
-  isRecord,
-  sealUntrustedYamlMap,
-  untrustedYamlProperty,
   type UntrustedYamlMap,
   type UntrustedYamlNode,
+  UntrustedYamlBoundary,
 } from './guards.ts';
-import { CommandOutputPolicy, runCommand } from './run.ts';
-import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
+
+import { CommandOutputPolicy, HostCommand } from './run.ts';
+
+import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
+
 import type { RunCommandArgs } from './run.ts';
+
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
+
+export class GithubActionEvidenceApi {
+  private constructor(
+    private readonly request: CollectDispatchedActionAttemptPagesRequest,
+  ) {}
+
+  static collectDispatchedActionAttemptPages(
+    request: CollectDispatchedActionAttemptPagesRequest,
+  ): UntrustedYamlNode {
+    return new GithubActionEvidenceApi(request).execute();
+  }
+
+  private execute(): UntrustedYamlNode {
+    const request = this.request;
+    const selectedRuns: UntrustedYamlMap[] = [];
+    const sourceHeadByRun = new Map<number, string>();
+    const titlePrefix = `E2E PR #${request.prNumber} @ `;
+    for (const page of GithubActionEvidenceApi.flattenApiPages(request.pages)) {
+      if (!UntrustedYamlBoundary.isRecord(page)) continue;
+      const runsRequest: GitHubPropertyRequest = {
+        record: page,
+        key: 'workflow_runs',
+      };
+      for (const run of GithubActionEvidenceApi.requiredArrayProperty(
+        runsRequest,
+      )) {
+        if (!UntrustedYamlBoundary.isRecord(run)) continue;
+        const titleRequest: GitHubPropertyRequest = {
+          record: run,
+          key: 'display_title',
+        };
+        const displayTitle =
+          GithubActionEvidenceApi.requiredStringProperty(titleRequest);
+        if (!displayTitle.startsWith(titlePrefix)) {
+          continue;
+        }
+        const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
+        const runId = GithubActionEvidenceApi.requiredNumberProperty(idRequest);
+        const sourceRequest: DispatchedSourceHeadRequest = {
+          displayTitle,
+          prNumber: request.prNumber,
+          runId,
+        };
+        sourceHeadByRun.set(
+          runId,
+          GithubActionEvidenceApi.dispatchedSourceHead(sourceRequest),
+        );
+        selectedRuns.push(run);
+      }
+    }
+    const selectedPageRecord = {
+      total_count: selectedRuns.length,
+      workflow_runs: selectedRuns,
+    };
+    const selectedPage = UntrustedYamlBoundary.seal(selectedPageRecord);
+    const expandRequest: ExpandActionAttemptPagesRequest = {
+      repoRoot: request.repoRoot,
+      pages: UntrustedYamlBoundary.fromHost([selectedPage]),
+    };
+    const expanded =
+      GithubActionEvidenceApi.expandActionAttemptPages(expandRequest);
+    const associatedRuns: UntrustedYamlMap[] = [];
+    for (const page of GithubActionEvidenceApi.flattenApiPages(expanded)) {
+      if (!UntrustedYamlBoundary.isRecord(page)) continue;
+      const runsRequest: GitHubPropertyRequest = {
+        record: page,
+        key: 'workflow_runs',
+      };
+      for (const run of GithubActionEvidenceApi.requiredArrayProperty(
+        runsRequest,
+      )) {
+        if (!UntrustedYamlBoundary.isRecord(run)) continue;
+        const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
+        const runId = GithubActionEvidenceApi.requiredNumberProperty(idRequest);
+        const verifiedRequest: GitHubPropertyRequest = {
+          record: run,
+          key: 'source_verified',
+        };
+        const sourceVerified =
+          GithubActionEvidenceApi.stringProperty(verifiedRequest) === 'true';
+        const [headSha = ''] = [sourceHeadByRun.get(runId)];
+        const associatedRecord = {
+          ...run,
+          head_sha: sourceVerified ? headSha : '',
+          pull_requests: [{ number: request.prNumber }],
+        };
+        associatedRuns.push(UntrustedYamlBoundary.seal(associatedRecord));
+      }
+    }
+    const associatedPageRecord = {
+      total_count: selectedRuns.length,
+      workflow_runs: associatedRuns,
+    };
+    const associatedPage = UntrustedYamlBoundary.seal(associatedPageRecord);
+    return UntrustedYamlBoundary.fromHost([associatedPage]);
+  }
+
+  static dispatchedSourceHead(request: DispatchedSourceHeadRequest): string {
+    const prefix = `E2E PR #${request.prNumber} @ `;
+    const suffixStart = request.displayTitle.indexOf(' · ', prefix.length);
+    const headSha =
+      suffixStart < 0
+        ? ''
+        : request.displayTitle.slice(prefix.length, suffixStart);
+    return /^[0-9a-f]{40}$/.test(headSha) ? headSha : '';
+  }
+
+  static expandActionAttemptPages(
+    request: ExpandActionAttemptPagesRequest,
+  ): UntrustedYamlNode {
+    const pages = GithubActionEvidenceApi.flattenApiPages(request.pages);
+    const expandedRuns: UntrustedYamlMap[] = [];
+    let expectedRunCount = 0;
+    for (const page of pages) {
+      if (!UntrustedYamlBoundary.isRecord(page)) {
+        GithubActionEvidenceApi.failGitHubCollection(
+          'GitHub Actions page must be a mapping',
+        );
+      }
+      const totalRequest: GitHubPropertyRequest = {
+        record: page,
+        key: 'total_count',
+      };
+      expectedRunCount = Math.max(
+        expectedRunCount,
+        GithubActionEvidenceApi.requiredNumberProperty(totalRequest),
+      );
+      const runsRequest: GitHubPropertyRequest = {
+        record: page,
+        key: 'workflow_runs',
+      };
+      const runs = GithubActionEvidenceApi.requiredArrayProperty(runsRequest);
+      for (const run of runs) {
+        if (!UntrustedYamlBoundary.isRecord(run)) {
+          GithubActionEvidenceApi.failGitHubCollection(
+            'GitHub Actions run must be a mapping',
+          );
+        }
+        const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
+        const runId = GithubActionEvidenceApi.requiredNumberProperty(idRequest);
+        const attemptRequest: GitHubPropertyRequest = {
+          record: run,
+          key: 'run_attempt',
+        };
+        const latestAttempt =
+          GithubActionEvidenceApi.requiredNumberProperty(attemptRequest);
+        for (let attempt = 1; attempt <= latestAttempt; attempt += 1) {
+          const attemptApiRequest: GitHubApiRequest = {
+            repoRoot: request.repoRoot,
+            endpoint: `repos/{owner}/{repo}/actions/runs/${runId}/attempts/${attempt}`,
+          };
+          const attemptRecords = GithubActionEvidenceApi.flattenApiPages(
+            GithubActionEvidenceApi.runGitHubApi(attemptApiRequest),
+          );
+          const attemptRecord = attemptRecords.find(
+            UntrustedYamlBoundary.isRecord,
+          );
+          if (!attemptRecord) {
+            GithubActionEvidenceApi.failGitHubCollection(
+              `GitHub Actions attempt ${runId}:${attempt} was not returned`,
+            );
+          }
+          const validationRequest: ActionAttemptRequestedValidationRequest = {
+            repoRoot: request.repoRoot,
+            runId,
+            attempt,
+            attemptRecord,
+          };
+          const validationRequested =
+            GithubActionEvidenceApi.actionAttemptRequestedValidation(
+              validationRequest,
+            );
+          const sourceVerificationRequest: ActionAttemptSourceVerificationRequest =
+            {
+              repoRoot: request.repoRoot,
+              runId,
+              attempt,
+              attemptRecord,
+            };
+          const sourceVerified =
+            GithubActionEvidenceApi.actionAttemptSourceVerified(
+              sourceVerificationRequest,
+            );
+          const expandedRecord = {
+            ...attemptRecord,
+            validation_requested: validationRequested ? 'true' : 'false',
+            source_verified: sourceVerified ? 'true' : 'false',
+          };
+          expandedRuns.push(UntrustedYamlBoundary.seal(expandedRecord));
+        }
+      }
+    }
+    const expandedPageRecord = {
+      total_count: expectedRunCount,
+      workflow_runs: expandedRuns,
+    };
+    const expandedPage = UntrustedYamlBoundary.seal(expandedPageRecord);
+    return UntrustedYamlBoundary.fromHost([expandedPage]);
+  }
+
+  private static actionAttemptSourceVerified(
+    request: ActionAttemptSourceVerificationRequest,
+  ): boolean {
+    const workflowRequest: GitHubPropertyRequest = {
+      record: request.attemptRecord,
+      key: 'name',
+    };
+    if (
+      GithubActionEvidenceApi.requiredStringProperty(workflowRequest) !==
+      'E2E (PR)'
+    )
+      return true;
+    const jobsRequest: GitHubApiRequest = {
+      repoRoot: request.repoRoot,
+      endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
+      fields: ['per_page=100'],
+    };
+    for (const page of GithubActionEvidenceApi.flattenApiPages(
+      GithubActionEvidenceApi.runGitHubApi(jobsRequest),
+    )) {
+      if (!UntrustedYamlBoundary.isRecord(page)) {
+        GithubActionEvidenceApi.failGitHubCollection(
+          'GitHub Actions jobs page must be a mapping',
+        );
+      }
+      const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
+      const verificationRequest: ActionJobsVerifiedSourceRequest = {
+        jobs: GithubActionEvidenceApi.requiredArrayProperty(jobsProperty),
+      };
+      if (GithubActionEvidenceApi.actionJobsVerifiedSource(verificationRequest))
+        return true;
+    }
+    return false;
+  }
+
+  static actionJobsVerifiedSource(
+    request: ActionJobsVerifiedSourceRequest,
+  ): boolean {
+    return request.jobs.some((job) => {
+      if (!UntrustedYamlBoundary.isRecord(job)) return false;
+      const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
+      if (
+        GithubActionEvidenceApi.requiredStringProperty(nameRequest) !==
+        'Build PR browser image'
+      ) {
+        return false;
+      }
+      const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
+      const stepsArgs: UntrustedYamlPropertyArgs = stepsRequest;
+      const stepsProperty = UntrustedYamlBoundary.property(stepsArgs);
+      if (stepsProperty.presence === UntrustedYamlPropertyPresence.Absent) {
+        return false;
+      }
+      if (!Array.isArray(stepsProperty.value)) {
+        GithubActionEvidenceApi.failGitHubCollection(
+          'GitHub field steps must be a list',
+        );
+      }
+      return stepsProperty.value.some((step) => {
+        if (!UntrustedYamlBoundary.isRecord(step)) return false;
+        const stepNameRequest: GitHubPropertyRequest = {
+          record: step,
+          key: 'name',
+        };
+        const conclusionRequest: GitHubPropertyRequest = {
+          record: step,
+          key: 'conclusion',
+        };
+        return (
+          GithubActionEvidenceApi.requiredStringProperty(stepNameRequest) ===
+            'Resolve PR head SHA' &&
+          GithubActionEvidenceApi.stringProperty(conclusionRequest) ===
+            'success'
+        );
+      });
+    });
+  }
+
+  private static actionAttemptRequestedValidation(
+    request: ActionAttemptRequestedValidationRequest,
+  ): boolean {
+    const workflowRequest: GitHubPropertyRequest = {
+      record: request.attemptRecord,
+      key: 'name',
+    };
+    const workflow =
+      GithubActionEvidenceApi.requiredStringProperty(workflowRequest);
+    const gateJobName =
+      workflow === 'PR'
+        ? 'Validate explicit CI request'
+        : workflow === 'Rust ecosystem checks'
+          ? 'Validate explicit ecosystem request'
+          : '';
+    if (gateJobName.length === 0) return true;
+    const jobsRequest: GitHubApiRequest = {
+      repoRoot: request.repoRoot,
+      endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
+      fields: ['per_page=100'],
+    };
+    for (const page of GithubActionEvidenceApi.flattenApiPages(
+      GithubActionEvidenceApi.runGitHubApi(jobsRequest),
+    )) {
+      if (!UntrustedYamlBoundary.isRecord(page)) {
+        GithubActionEvidenceApi.failGitHubCollection(
+          'GitHub Actions jobs page must be a mapping',
+        );
+      }
+      const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
+      const validationRequest: ActionJobsRequestedValidationRequest = {
+        jobs: GithubActionEvidenceApi.requiredArrayProperty(jobsProperty),
+        gateJobName,
+      };
+      if (
+        GithubActionEvidenceApi.actionJobsRequestedValidation(validationRequest)
+      )
+        return true;
+    }
+    return false;
+  }
+
+  static actionJobsRequestedValidation(
+    request: ActionJobsRequestedValidationRequest,
+  ): boolean {
+    const supportedGateRequest = request.jobs.some((job) => {
+      if (!UntrustedYamlBoundary.isRecord(job)) return false;
+      const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
+      if (
+        GithubActionEvidenceApi.requiredStringProperty(nameRequest) !==
+        request.gateJobName
+      ) {
+        return false;
+      }
+      const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
+      const stepsArgs: UntrustedYamlPropertyArgs = stepsRequest;
+      const stepsProperty = UntrustedYamlBoundary.property(stepsArgs);
+      if (stepsProperty.presence === UntrustedYamlPropertyPresence.Absent) {
+        return false;
+      }
+      if (!Array.isArray(stepsProperty.value)) {
+        GithubActionEvidenceApi.failGitHubCollection(
+          'GitHub field steps must be a list',
+        );
+      }
+      return stepsProperty.value.some((step) => {
+        if (!UntrustedYamlBoundary.isRecord(step)) return false;
+        const stepNameRequest: GitHubPropertyRequest = {
+          record: step,
+          key: 'name',
+        };
+        const stepConclusionRequest: GitHubPropertyRequest = {
+          record: step,
+          key: 'conclusion',
+        };
+        return (
+          GithubActionEvidenceApi.requiredStringProperty(stepNameRequest) ===
+            'Reject unsupported label events' &&
+          GithubActionEvidenceApi.stringProperty(stepConclusionRequest) ===
+            'success'
+        );
+      });
+    });
+    if (supportedGateRequest) return true;
+    return request.jobs.some((job) => {
+      if (!UntrustedYamlBoundary.isRecord(job)) return false;
+      const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
+      const conclusionRequest: GitHubPropertyRequest = {
+        record: job,
+        key: 'conclusion',
+      };
+      return (
+        GithubActionEvidenceApi.requiredStringProperty(nameRequest) !==
+          request.gateJobName &&
+        GithubActionEvidenceApi.stringProperty(conclusionRequest) !== 'skipped'
+      );
+    });
+  }
+
+  static runGitHubApi(request: GitHubApiRequest): UntrustedYamlNode {
+    const args = [
+      'api',
+      '--paginate',
+      '--slurp',
+      '-X',
+      'GET',
+      request.endpoint,
+    ];
+    const [defaulted1 = []] = [request.fields];
+    for (const field of defaulted1) args.push('-f', field);
+    const commandRequest: RunCommandArgs = {
+      command: 'gh',
+      args,
+      cwd: request.repoRoot,
+      outputPolicy: CommandOutputPolicy.GitHubApi,
+    };
+    const output = HostCommand.run(commandRequest);
+    if (output.exitCode !== 0) {
+      GithubActionEvidenceApi.failGitHubCollection(
+        output.stderr || output.stdout || 'GitHub API request failed',
+      );
+    }
+    try {
+      return UntrustedYamlBoundary.fromHost(
+        JSON.parse(output.stdout) as UntrustedYamlNode,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      GithubActionEvidenceApi.failGitHubCollection(
+        `GitHub API response is invalid JSON: ${message}`,
+      );
+    }
+  }
+
+  static flattenApiPages(value: UntrustedYamlNode): UntrustedYamlNode[] {
+    if (!Array.isArray(value)) {
+      GithubActionEvidenceApi.failGitHubCollection(
+        'GitHub API pagination did not return a list',
+      );
+    }
+    const flattened: UntrustedYamlNode[] = [];
+    for (const page of value) {
+      if (Array.isArray(page)) flattened.push(...page);
+      else flattened.push(page);
+    }
+    return flattened;
+  }
+
+  static stringProperty(request: GitHubPropertyRequest): string {
+    const args: UntrustedYamlPropertyArgs = request;
+    const property = UntrustedYamlBoundary.property(args);
+    return property.presence === UntrustedYamlPropertyPresence.Present &&
+      typeof property.value === 'string'
+      ? property.value
+      : '';
+  }
+
+  static numberProperty(request: GitHubPropertyRequest): number {
+    const args: UntrustedYamlPropertyArgs = request;
+    const property = UntrustedYamlBoundary.property(args);
+    return property.presence === UntrustedYamlPropertyPresence.Present &&
+      typeof property.value === 'number'
+      ? property.value
+      : 0;
+  }
+
+  static requiredStringProperty(request: GitHubPropertyRequest): string {
+    const value = GithubActionEvidenceApi.stringProperty(request);
+    if (value.length === 0) {
+      GithubActionEvidenceApi.failGitHubCollection(
+        `GitHub field ${request.key} must be a non-empty string`,
+      );
+    }
+    return value;
+  }
+
+  static requiredNumberProperty(request: GitHubPropertyRequest): number {
+    const args: UntrustedYamlPropertyArgs = request;
+    const property = UntrustedYamlBoundary.property(args);
+    if (
+      property.presence === UntrustedYamlPropertyPresence.Absent ||
+      typeof property.value !== 'number' ||
+      !Number.isInteger(property.value) ||
+      property.value < 0
+    ) {
+      GithubActionEvidenceApi.failGitHubCollection(
+        `GitHub field ${request.key} must be a non-negative integer`,
+      );
+    }
+    return property.value;
+  }
+
+  static requiredArrayProperty(
+    request: GitHubPropertyRequest,
+  ): readonly UntrustedYamlNode[] {
+    const args: UntrustedYamlPropertyArgs = request;
+    const property = UntrustedYamlBoundary.property(args);
+    if (
+      property.presence === UntrustedYamlPropertyPresence.Absent ||
+      !Array.isArray(property.value)
+    ) {
+      GithubActionEvidenceApi.failGitHubCollection(
+        `GitHub field ${request.key} must be a list`,
+      );
+    }
+    return property.value;
+  }
+
+  static failGitHubCollection(message: string): never {
+    const detail: LoomFailureDetailArgs = {
+      code: LoomFailureCode.CommandFailed,
+      text: message,
+    };
+    LoomFailure.detail(detail);
+  }
+}
 
 export type GitHubApiRequest = {
   readonly repoRoot: string;
@@ -36,180 +531,11 @@ export type CollectDispatchedActionAttemptPagesRequest = {
   readonly prNumber: number;
 };
 
-export function collectDispatchedActionAttemptPages(
-  request: CollectDispatchedActionAttemptPagesRequest,
-): UntrustedYamlNode {
-  const selectedRuns: UntrustedYamlMap[] = [];
-  const sourceHeadByRun = new Map<number, string>();
-  const titlePrefix = `E2E PR #${request.prNumber} @ `;
-  for (const page of flattenApiPages(request.pages)) {
-    if (!isRecord(page)) continue;
-    const runsRequest: GitHubPropertyRequest = {
-      record: page,
-      key: 'workflow_runs',
-    };
-    for (const run of requiredArrayProperty(runsRequest)) {
-      if (!isRecord(run)) continue;
-      const titleRequest: GitHubPropertyRequest = {
-        record: run,
-        key: 'display_title',
-      };
-      const displayTitle = requiredStringProperty(titleRequest);
-      if (!displayTitle.startsWith(titlePrefix)) {
-        continue;
-      }
-      const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
-      const runId = requiredNumberProperty(idRequest);
-      const sourceRequest: DispatchedSourceHeadRequest = {
-        displayTitle,
-        prNumber: request.prNumber,
-        runId,
-      };
-      sourceHeadByRun.set(runId, dispatchedSourceHead(sourceRequest));
-      selectedRuns.push(run);
-    }
-  }
-  const selectedPageRecord = {
-    total_count: selectedRuns.length,
-    workflow_runs: selectedRuns,
-  };
-  const selectedPage = sealUntrustedYamlMap(selectedPageRecord);
-  const expandRequest: ExpandActionAttemptPagesRequest = {
-    repoRoot: request.repoRoot,
-    pages: asUntrustedYamlNode([selectedPage]),
-  };
-  const expanded = expandActionAttemptPages(expandRequest);
-  const associatedRuns: UntrustedYamlMap[] = [];
-  for (const page of flattenApiPages(expanded)) {
-    if (!isRecord(page)) continue;
-    const runsRequest: GitHubPropertyRequest = {
-      record: page,
-      key: 'workflow_runs',
-    };
-    for (const run of requiredArrayProperty(runsRequest)) {
-      if (!isRecord(run)) continue;
-      const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
-      const runId = requiredNumberProperty(idRequest);
-      const verifiedRequest: GitHubPropertyRequest = {
-        record: run,
-        key: 'source_verified',
-      };
-      const sourceVerified = stringProperty(verifiedRequest) === 'true';
-      const [headSha = ''] = [sourceHeadByRun.get(runId)];
-      const associatedRecord = {
-        ...run,
-        head_sha: sourceVerified ? headSha : '',
-        pull_requests: [{ number: request.prNumber }],
-      };
-      associatedRuns.push(sealUntrustedYamlMap(associatedRecord));
-    }
-  }
-  const associatedPageRecord = {
-    total_count: selectedRuns.length,
-    workflow_runs: associatedRuns,
-  };
-  const associatedPage = sealUntrustedYamlMap(associatedPageRecord);
-  return asUntrustedYamlNode([associatedPage]);
-}
-
 type DispatchedSourceHeadRequest = {
   readonly displayTitle: string;
   readonly prNumber: number;
   readonly runId: number;
 };
-
-export function dispatchedSourceHead(
-  request: DispatchedSourceHeadRequest,
-): string {
-  const prefix = `E2E PR #${request.prNumber} @ `;
-  const suffixStart = request.displayTitle.indexOf(' · ', prefix.length);
-  const headSha =
-    suffixStart < 0
-      ? ''
-      : request.displayTitle.slice(prefix.length, suffixStart);
-  return /^[0-9a-f]{40}$/.test(headSha) ? headSha : '';
-}
-
-export function expandActionAttemptPages(
-  request: ExpandActionAttemptPagesRequest,
-): UntrustedYamlNode {
-  const pages = flattenApiPages(request.pages);
-  const expandedRuns: UntrustedYamlMap[] = [];
-  let expectedRunCount = 0;
-  for (const page of pages) {
-    if (!isRecord(page)) {
-      failGitHubCollection('GitHub Actions page must be a mapping');
-    }
-    const totalRequest: GitHubPropertyRequest = {
-      record: page,
-      key: 'total_count',
-    };
-    expectedRunCount = Math.max(
-      expectedRunCount,
-      requiredNumberProperty(totalRequest),
-    );
-    const runsRequest: GitHubPropertyRequest = {
-      record: page,
-      key: 'workflow_runs',
-    };
-    const runs = requiredArrayProperty(runsRequest);
-    for (const run of runs) {
-      if (!isRecord(run)) {
-        failGitHubCollection('GitHub Actions run must be a mapping');
-      }
-      const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
-      const runId = requiredNumberProperty(idRequest);
-      const attemptRequest: GitHubPropertyRequest = {
-        record: run,
-        key: 'run_attempt',
-      };
-      const latestAttempt = requiredNumberProperty(attemptRequest);
-      for (let attempt = 1; attempt <= latestAttempt; attempt += 1) {
-        const attemptApiRequest: GitHubApiRequest = {
-          repoRoot: request.repoRoot,
-          endpoint: `repos/{owner}/{repo}/actions/runs/${runId}/attempts/${attempt}`,
-        };
-        const attemptRecords = flattenApiPages(runGitHubApi(attemptApiRequest));
-        const attemptRecord = attemptRecords.find(isRecord);
-        if (!attemptRecord) {
-          failGitHubCollection(
-            `GitHub Actions attempt ${runId}:${attempt} was not returned`,
-          );
-        }
-        const validationRequest: ActionAttemptRequestedValidationRequest = {
-          repoRoot: request.repoRoot,
-          runId,
-          attempt,
-          attemptRecord,
-        };
-        const validationRequested =
-          actionAttemptRequestedValidation(validationRequest);
-        const sourceVerificationRequest: ActionAttemptSourceVerificationRequest =
-          {
-            repoRoot: request.repoRoot,
-            runId,
-            attempt,
-            attemptRecord,
-          };
-        const sourceVerified = actionAttemptSourceVerified(
-          sourceVerificationRequest,
-        );
-        const expandedRecord = {
-          ...attemptRecord,
-          validation_requested: validationRequested ? 'true' : 'false',
-          source_verified: sourceVerified ? 'true' : 'false',
-        };
-        expandedRuns.push(sealUntrustedYamlMap(expandedRecord));
-      }
-    }
-  }
-  const expandedPageRecord = {
-    total_count: expectedRunCount,
-    workflow_runs: expandedRuns,
-  };
-  const expandedPage = sealUntrustedYamlMap(expandedPageRecord);
-  return asUntrustedYamlNode([expandedPage]);
-}
 
 type ActionAttemptSourceVerificationRequest = {
   readonly repoRoot: string;
@@ -218,71 +544,9 @@ type ActionAttemptSourceVerificationRequest = {
   readonly attemptRecord: UntrustedYamlMap;
 };
 
-function actionAttemptSourceVerified(
-  request: ActionAttemptSourceVerificationRequest,
-): boolean {
-  const workflowRequest: GitHubPropertyRequest = {
-    record: request.attemptRecord,
-    key: 'name',
-  };
-  if (requiredStringProperty(workflowRequest) !== 'E2E (PR)') return true;
-  const jobsRequest: GitHubApiRequest = {
-    repoRoot: request.repoRoot,
-    endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
-    fields: ['per_page=100'],
-  };
-  for (const page of flattenApiPages(runGitHubApi(jobsRequest))) {
-    if (!isRecord(page)) {
-      failGitHubCollection('GitHub Actions jobs page must be a mapping');
-    }
-    const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
-    const verificationRequest: ActionJobsVerifiedSourceRequest = {
-      jobs: requiredArrayProperty(jobsProperty),
-    };
-    if (actionJobsVerifiedSource(verificationRequest)) return true;
-  }
-  return false;
-}
-
 export type ActionJobsVerifiedSourceRequest = {
   readonly jobs: readonly UntrustedYamlNode[];
 };
-
-export function actionJobsVerifiedSource(
-  request: ActionJobsVerifiedSourceRequest,
-): boolean {
-  return request.jobs.some((job) => {
-    if (!isRecord(job)) return false;
-    const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
-    if (requiredStringProperty(nameRequest) !== 'Build PR browser image') {
-      return false;
-    }
-    const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
-    const stepsArgs: UntrustedYamlPropertyArgs = stepsRequest;
-    const stepsProperty = untrustedYamlProperty(stepsArgs);
-    if (stepsProperty.presence === UntrustedYamlPropertyPresence.Absent) {
-      return false;
-    }
-    if (!Array.isArray(stepsProperty.value)) {
-      failGitHubCollection('GitHub field steps must be a list');
-    }
-    return stepsProperty.value.some((step) => {
-      if (!isRecord(step)) return false;
-      const stepNameRequest: GitHubPropertyRequest = {
-        record: step,
-        key: 'name',
-      };
-      const conclusionRequest: GitHubPropertyRequest = {
-        record: step,
-        key: 'conclusion',
-      };
-      return (
-        requiredStringProperty(stepNameRequest) === 'Resolve PR head SHA' &&
-        stringProperty(conclusionRequest) === 'success'
-      );
-    });
-  });
-}
 
 type ActionAttemptRequestedValidationRequest = {
   readonly repoRoot: string;
@@ -291,193 +555,7 @@ type ActionAttemptRequestedValidationRequest = {
   readonly attemptRecord: UntrustedYamlMap;
 };
 
-function actionAttemptRequestedValidation(
-  request: ActionAttemptRequestedValidationRequest,
-): boolean {
-  const workflowRequest: GitHubPropertyRequest = {
-    record: request.attemptRecord,
-    key: 'name',
-  };
-  const workflow = requiredStringProperty(workflowRequest);
-  const gateJobName =
-    workflow === 'PR'
-      ? 'Validate explicit CI request'
-      : workflow === 'Rust ecosystem checks'
-        ? 'Validate explicit ecosystem request'
-        : '';
-  if (gateJobName.length === 0) return true;
-  const jobsRequest: GitHubApiRequest = {
-    repoRoot: request.repoRoot,
-    endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
-    fields: ['per_page=100'],
-  };
-  for (const page of flattenApiPages(runGitHubApi(jobsRequest))) {
-    if (!isRecord(page)) {
-      failGitHubCollection('GitHub Actions jobs page must be a mapping');
-    }
-    const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
-    const validationRequest: ActionJobsRequestedValidationRequest = {
-      jobs: requiredArrayProperty(jobsProperty),
-      gateJobName,
-    };
-    if (actionJobsRequestedValidation(validationRequest)) return true;
-  }
-  return false;
-}
-
 export type ActionJobsRequestedValidationRequest = {
   readonly jobs: readonly UntrustedYamlNode[];
   readonly gateJobName: string;
 };
-
-export function actionJobsRequestedValidation(
-  request: ActionJobsRequestedValidationRequest,
-): boolean {
-  const supportedGateRequest = request.jobs.some((job) => {
-    if (!isRecord(job)) return false;
-    const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
-    if (requiredStringProperty(nameRequest) !== request.gateJobName) {
-      return false;
-    }
-    const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
-    const stepsArgs: UntrustedYamlPropertyArgs = stepsRequest;
-    const stepsProperty = untrustedYamlProperty(stepsArgs);
-    if (stepsProperty.presence === UntrustedYamlPropertyPresence.Absent) {
-      return false;
-    }
-    if (!Array.isArray(stepsProperty.value)) {
-      failGitHubCollection('GitHub field steps must be a list');
-    }
-    return stepsProperty.value.some((step) => {
-      if (!isRecord(step)) return false;
-      const stepNameRequest: GitHubPropertyRequest = {
-        record: step,
-        key: 'name',
-      };
-      const stepConclusionRequest: GitHubPropertyRequest = {
-        record: step,
-        key: 'conclusion',
-      };
-      return (
-        requiredStringProperty(stepNameRequest) ===
-          'Reject unsupported label events' &&
-        stringProperty(stepConclusionRequest) === 'success'
-      );
-    });
-  });
-  if (supportedGateRequest) return true;
-  return request.jobs.some((job) => {
-    if (!isRecord(job)) return false;
-    const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
-    const conclusionRequest: GitHubPropertyRequest = {
-      record: job,
-      key: 'conclusion',
-    };
-    return (
-      requiredStringProperty(nameRequest) !== request.gateJobName &&
-      stringProperty(conclusionRequest) !== 'skipped'
-    );
-  });
-}
-
-export function runGitHubApi(request: GitHubApiRequest): UntrustedYamlNode {
-  const args = ['api', '--paginate', '--slurp', '-X', 'GET', request.endpoint];
-  const [defaulted1 = []] = [request.fields];
-  for (const field of defaulted1) args.push('-f', field);
-  const commandRequest: RunCommandArgs = {
-    command: 'gh',
-    args,
-    cwd: request.repoRoot,
-    outputPolicy: CommandOutputPolicy.GitHubApi,
-  };
-  const output = runCommand(commandRequest);
-  if (output.exitCode !== 0) {
-    failGitHubCollection(
-      output.stderr || output.stdout || 'GitHub API request failed',
-    );
-  }
-  try {
-    return asUntrustedYamlNode(JSON.parse(output.stdout) as UntrustedYamlNode);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    failGitHubCollection(`GitHub API response is invalid JSON: ${message}`);
-  }
-}
-
-export function flattenApiPages(value: UntrustedYamlNode): UntrustedYamlNode[] {
-  if (!Array.isArray(value)) {
-    failGitHubCollection('GitHub API pagination did not return a list');
-  }
-  const flattened: UntrustedYamlNode[] = [];
-  for (const page of value) {
-    if (Array.isArray(page)) flattened.push(...page);
-    else flattened.push(page);
-  }
-  return flattened;
-}
-
-export function stringProperty(request: GitHubPropertyRequest): string {
-  const args: UntrustedYamlPropertyArgs = request;
-  const property = untrustedYamlProperty(args);
-  return property.presence === UntrustedYamlPropertyPresence.Present &&
-    typeof property.value === 'string'
-    ? property.value
-    : '';
-}
-
-export function numberProperty(request: GitHubPropertyRequest): number {
-  const args: UntrustedYamlPropertyArgs = request;
-  const property = untrustedYamlProperty(args);
-  return property.presence === UntrustedYamlPropertyPresence.Present &&
-    typeof property.value === 'number'
-    ? property.value
-    : 0;
-}
-
-export function requiredStringProperty(request: GitHubPropertyRequest): string {
-  const value = stringProperty(request);
-  if (value.length === 0) {
-    failGitHubCollection(
-      `GitHub field ${request.key} must be a non-empty string`,
-    );
-  }
-  return value;
-}
-
-export function requiredNumberProperty(request: GitHubPropertyRequest): number {
-  const args: UntrustedYamlPropertyArgs = request;
-  const property = untrustedYamlProperty(args);
-  if (
-    property.presence === UntrustedYamlPropertyPresence.Absent ||
-    typeof property.value !== 'number' ||
-    !Number.isInteger(property.value) ||
-    property.value < 0
-  ) {
-    failGitHubCollection(
-      `GitHub field ${request.key} must be a non-negative integer`,
-    );
-  }
-  return property.value;
-}
-
-export function requiredArrayProperty(
-  request: GitHubPropertyRequest,
-): readonly UntrustedYamlNode[] {
-  const args: UntrustedYamlPropertyArgs = request;
-  const property = untrustedYamlProperty(args);
-  if (
-    property.presence === UntrustedYamlPropertyPresence.Absent ||
-    !Array.isArray(property.value)
-  ) {
-    failGitHubCollection(`GitHub field ${request.key} must be a list`);
-  }
-  return property.value;
-}
-
-export function failGitHubCollection(message: string): never {
-  const detail: LoomFailureDetailArgs = {
-    code: LoomFailureCode.CommandFailed,
-    text: message,
-  };
-  loomFailureDetail(detail);
-}

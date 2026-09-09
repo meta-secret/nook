@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   CORTEX_AUTHORING_SKILL_PATHS,
-  resolveTeamTaskContext,
+  TeamTaskContextResolver,
 } from '../../src/team-agents/context.ts';
 import type { TeamTaskContextRequest } from '../../src/team-agents/context.ts';
 import { GizmoOwnedAgentKey, TeamKey } from '../../src/team-agents/catalog.ts';
@@ -36,7 +36,7 @@ describe('team task context', () => {
       writeClaims: ['infra/arc/**'],
       selectedSkillPaths: [SRE_DELTA_SKILL],
     };
-    const context = resolveTeamTaskContext(request);
+    const context = TeamTaskContextResolver.resolveTeamTaskContext(request);
 
     expect(context.team).toBe(TeamKey.Sre);
     expect(context.contextPaths).toEqual([
@@ -59,7 +59,7 @@ describe('team task context', () => {
       writeClaims: [writeClaim],
       selectedSkillPaths: [SRE_DELTA_SKILL],
     };
-    const context = resolveTeamTaskContext(request);
+    const context = TeamTaskContextResolver.resolveTeamTaskContext(request);
 
     expect(context.team).toBe(TeamKey.Sre);
     expect(context.skillPaths).toEqual([
@@ -81,7 +81,7 @@ describe('team task context', () => {
       writeClaims: [],
       selectedSkillPaths: [],
     };
-    const context = resolveTeamTaskContext(request);
+    const context = TeamTaskContextResolver.resolveTeamTaskContext(request);
 
     expect(context.contextPaths).toEqual(SRE_CONTEXT_PATHS);
     expect(context.skillPaths).toEqual([]);
@@ -95,7 +95,7 @@ describe('team task context', () => {
       writeClaims: [],
       selectedSkillPaths: [],
     };
-    const context = resolveTeamTaskContext(request);
+    const context = TeamTaskContextResolver.resolveTeamTaskContext(request);
 
     expect(context.team).toBe(GizmoOwnedAgentKey.PrSteward);
     expect(context.contextPaths).toEqual(PR_STEWARD_CONTEXT_PATHS);
@@ -110,7 +110,7 @@ describe('team task context', () => {
       writeClaims: ['.cortex/teams/sre/**'],
       selectedSkillPaths: [CORTEX_AUTHORING_SKILL_PATHS[0]],
     };
-    const context = resolveTeamTaskContext(request);
+    const context = TeamTaskContextResolver.resolveTeamTaskContext(request);
 
     expect(context.skillPaths).toHaveLength(
       CORTEX_AUTHORING_SKILL_PATHS.length,
@@ -139,15 +139,15 @@ describe('team task context', () => {
       writeClaims: [],
       selectedSkillPaths: ['.cortex/teams/sre/workflows/quality.md'],
     };
-    expect(() => resolveTeamTaskContext(unsafeClaim)).toThrow(
-      'canonical resource paths',
-    );
-    expect(() => resolveTeamTaskContext(invalidSkill)).toThrow(
-      'exact existing task-authorized Cortex Markdown files',
-    );
-    expect(() => resolveTeamTaskContext(nonSkillCortexPath)).toThrow(
-      'exact existing task-authorized Cortex Markdown files',
-    );
+    expect(() =>
+      TeamTaskContextResolver.resolveTeamTaskContext(unsafeClaim),
+    ).toThrow('canonical resource paths');
+    expect(() =>
+      TeamTaskContextResolver.resolveTeamTaskContext(invalidSkill),
+    ).toThrow('exact existing task-authorized Cortex Markdown files');
+    expect(() =>
+      TeamTaskContextResolver.resolveTeamTaskContext(nonSkillCortexPath),
+    ).toThrow('exact existing task-authorized Cortex Markdown files');
   });
 
   test('rejects wildcard, missing, and unreadable selected skills', () => {
@@ -167,9 +167,9 @@ describe('team task context', () => {
         ...request,
         selectedSkillPaths: [selectedSkillPath],
       };
-      expect(() => resolveTeamTaskContext(selectedRequest)).toThrow(
-        'exact existing task-authorized Cortex Markdown files',
-      );
+      expect(() =>
+        TeamTaskContextResolver.resolveTeamTaskContext(selectedRequest),
+      ).toThrow('exact existing task-authorized Cortex Markdown files');
     }
   });
 
@@ -193,9 +193,9 @@ describe('team task context', () => {
         writeClaims: ['.cortex/teams/sre/workflows/quality.md'],
         selectedSkillPaths: [],
       };
-      expect(() => resolveTeamTaskContext(request)).toThrow(
-        'existing regular files',
-      );
+      expect(() =>
+        TeamTaskContextResolver.resolveTeamTaskContext(request),
+      ).toThrow('existing regular files');
     } finally {
       rmSync(repositoryRoot, removalOptions);
     }

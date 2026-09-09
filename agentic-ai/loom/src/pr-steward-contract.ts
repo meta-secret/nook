@@ -1,8 +1,6 @@
 import {
-  asUntrustedYamlNode,
-  isRecord,
-  untrustedYamlProperty,
   UntrustedYamlPropertyPresence,
+  UntrustedYamlBoundary,
 } from './lib/guards.ts';
 import type { UntrustedYamlMap, UntrustedYamlNode } from './lib/guards.ts';
 
@@ -275,7 +273,7 @@ export class PrStewardNdjsonCodec {
   }
 
   static routing(record: UntrustedYamlNode): PrStewardRoutingRecord {
-    return isRecord(record)
+    return UntrustedYamlBoundary.isRecord(record)
       ? this.#routing(record)
       : this.#reject(PrStewardDecodeCode.InvalidRecord);
   }
@@ -283,7 +281,7 @@ export class PrStewardNdjsonCodec {
   static blocker(
     record: UntrustedYamlNode,
   ): PrStewardMalformedBlocker | PrStewardUnavailableBlocker {
-    return isRecord(record)
+    return UntrustedYamlBoundary.isRecord(record)
       ? this.#blocker(record)
       : this.#reject(PrStewardDecodeCode.InvalidRecord);
   }
@@ -306,14 +304,17 @@ export class PrStewardNdjsonCodec {
       this.#reject(PrStewardDecodeCode.InvalidRecord);
     let parsed: UntrustedYamlNode;
     try {
-      parsed = asUntrustedYamlNode(JSON.parse(line) as UntrustedYamlNode);
+      parsed = UntrustedYamlBoundary.fromHost(
+        JSON.parse(line) as UntrustedYamlNode,
+      );
     } catch {
       this.#fail({
         code: PrStewardDecodeCode.InvalidJson,
         cause: new Error('JSON parser rejected the record'),
       });
     }
-    if (!isRecord(parsed)) this.#reject(PrStewardDecodeCode.InvalidRecord);
+    if (!UntrustedYamlBoundary.isRecord(parsed))
+      this.#reject(PrStewardDecodeCode.InvalidRecord);
     this.#exact({
       record: parsed,
       fields: [Field.Record, Field.SchemaVersion],
@@ -324,7 +325,8 @@ export class PrStewardNdjsonCodec {
     )
       this.#reject(PrStewardDecodeCode.UnsupportedVersion);
     const value = this.#required({ record: parsed, field: Field.Record });
-    if (!isRecord(value)) this.#reject(PrStewardDecodeCode.InvalidRecord);
+    if (!UntrustedYamlBoundary.isRecord(value))
+      this.#reject(PrStewardDecodeCode.InvalidRecord);
     const kind = this.#required({ record: value, field: Field.Kind });
     const record =
       kind === PrStewardRecordKind.Routing
@@ -496,7 +498,7 @@ export class PrStewardNdjsonCodec {
   }
 
   static #required(request: RecordField): UntrustedYamlNode {
-    const result = untrustedYamlProperty({
+    const result = UntrustedYamlBoundary.property({
       record: request.record,
       key: request.field,
     });
@@ -583,7 +585,8 @@ export class PrStewardNdjsonCodec {
   static #url(record: UntrustedYamlMap): PrStewardUrl | false {
     const value = this.#required({ record, field: Field.Url });
     if (value === false) return false;
-    if (!isRecord(value)) this.#reject(PrStewardDecodeCode.InvalidField);
+    if (!UntrustedYamlBoundary.isRecord(value))
+      this.#reject(PrStewardDecodeCode.InvalidField);
     this.#exact({ record: value, fields: [Field.Trust, Field.Value] });
     const trust = this.#required({ record: value, field: Field.Trust });
     const text = this.#text({ record: value, field: Field.Value, limit: 240 });

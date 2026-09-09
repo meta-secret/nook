@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
@@ -10,11 +12,14 @@ import {
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
-  decodeAndValidateModuleDeliveryPlan,
-  decodeCompatibleModuleDeliveryPlan,
+  ModuleDeliveryPlanDecoder,
+  ModuleDeliveryPlanSchema,
 } from '../../src/module-delivery/index.ts';
-import { uncoveredEvidenceClaims } from '../../src/module-delivery/resource-claim-containment.ts';
+
+import { ModuleResourceContainment } from '../../src/module-delivery/resource-claim-containment.ts';
+
 import { TeamKey } from '../../src/team-agents/catalog.ts';
+
 import type {
   LegacyModuleDeliveryPlan,
   ModuleDeliveryEdgeContract,
@@ -26,7 +31,186 @@ import type {
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
 
+export class ModuleDeliveryIntegrationAdmissionGuardScenario {
+  private constructor(private readonly request: PlanFixture) {}
+
+  static baseline(dependencies: readonly string[]) {
+    return dependencies.length === 0
+      ? {
+          kind: ModuleDeliveryBaselineKind.SourceCommit as const,
+          sourceCommit: SOURCE_COMMIT,
+        }
+      : {
+          kind: ModuleDeliveryBaselineKind.IntegratedDependencies as const,
+          providerTaskIds: dependencies,
+        };
+  }
+
+  static readNode(fixture: ReadNodeFixture): ModuleDeliveryReadOnlyNodeV2 {
+    return {
+      kind: ModuleDeliveryTaskKind.ReadOnly,
+      taskId: fixture.taskId,
+      team: TeamKey.DevelopmentCore,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+      expert: 'core_expert',
+      moduleRoot: CORE_ROOT,
+      consumerOutcome: `${fixture.taskId} reports evidence.`,
+      baseline: ModuleDeliveryIntegrationAdmissionGuardScenario.baseline(
+        fixture.dependencies,
+      ),
+      agentDepthLimit: 2,
+      dependencies: fixture.dependencies,
+      resources: {
+        read: [`${CORE_ROOT}/**`],
+        write: [],
+        evidenceSurface: fixture.evidenceSurface,
+      },
+      parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      acceptance: {
+        commands: [`task ${fixture.taskId}:audit`],
+        evidence: [`${fixture.taskId} is reviewed.`],
+      },
+    };
+  }
+
+  static writeNode(fixture: WriteNodeFixture): ModuleDeliveryWriteNodeV2 {
+    return {
+      kind: ModuleDeliveryTaskKind.Write,
+      taskId: fixture.taskId,
+      team: TeamKey.DevelopmentCore,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+      expert: 'core_expert',
+      moduleRoot: CORE_ROOT,
+      consumerOutcome: `${fixture.taskId} publishes implementation.`,
+      baseline: ModuleDeliveryIntegrationAdmissionGuardScenario.baseline(
+        fixture.dependencies,
+      ),
+      agentDepthLimit: 2,
+      dependencies: fixture.dependencies,
+      resources: {
+        read: [`${CORE_ROOT}/**`],
+        write: [`${CORE_ROOT}/src/**`],
+        evidenceSurface: [],
+      },
+      parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      acceptance: {
+        commands: [`task ${fixture.taskId}:test`],
+        evidence: [`${fixture.taskId} passes.`],
+      },
+      workspace: {
+        kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
+        expectedCommitHandoff: true,
+      },
+    };
+  }
+
+  static edge(fixture: EdgeFixture) {
+    const value: ModuleDeliveryEdgeContract = {
+      providerTaskId: fixture.providerTaskId,
+      consumerTaskId: fixture.consumerTaskId,
+      capability: `${fixture.providerTaskId} capability`,
+      publicTypes: [`${fixture.providerTaskId}Result`],
+      errors: [`${fixture.providerTaskId}Error`],
+      behaviorInvariants: ['The capability is deterministic.'],
+      securityInvariants: ['Provider state remains protected.'],
+      compatibilityExpectations: ['The consumer accepts the capability.'],
+      owningTests: [`${fixture.providerTaskId} contract test`],
+    };
+    return value;
+  }
+
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
+    return new ModuleDeliveryIntegrationAdmissionGuardScenario(
+      fixture,
+    ).execute();
+  }
+
+  private execute(): ModuleDeliveryPlanV2 {
+    const fixture = this.request;
+    return {
+      version: 2,
+      generation: 1,
+      sourceCommit: fixture.sourceCommit,
+      maxConcurrency: 3,
+      maxAgentDepth: 3,
+      maxAttempts: 2,
+      parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+      parentJoin: {
+        kind: ModuleDeliveryJoinKind.DirectCommits,
+        owner: 'delivery-owner',
+        validationCommands: ['task loom:verify'],
+      },
+      nodes: fixture.nodes,
+      edgeContracts: fixture.edgeContracts,
+    };
+  }
+
+  static validate(value: ModuleDeliveryPlanV2): ModuleDeliveryPlanValidation {
+    return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
+  }
+
+  static validated(value: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
+    const result =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.validate(value);
+    if (result.status !== ModuleDeliveryValidationStatus.Accepted) {
+      throw new Error(JSON.stringify(result.issues));
+    }
+    return result;
+  }
+
+  static issueCodes(
+    value: ModuleDeliveryPlanValidation,
+  ): readonly ModuleDeliveryIssueCode[] {
+    return value.status === ModuleDeliveryValidationStatus.Rejected
+      ? value.issues.map(({ code }) => code)
+      : [];
+  }
+
+  static legacyPlan(): LegacyModuleDeliveryPlan {
+    return {
+      version: 1,
+      sourceCommit: SOURCE_COMMIT,
+      maxConcurrency: 1,
+      maxAgentDepth: 2,
+      maxAttempts: 2,
+      parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+      parentJoin: {
+        kind: ModuleDeliveryJoinKind.DirectCommits,
+        owner: 'delivery-owner',
+        validationCommands: ['task loom:verify'],
+      },
+      nodes: [
+        {
+          kind: ModuleDeliveryTaskKind.ReadOnly,
+          taskId: 'legacy-audit',
+          expert: 'core_expert',
+          moduleRoot: CORE_ROOT,
+          consumerOutcome: 'Compatibility evidence is decoded only.',
+          baseline: {
+            kind: ModuleDeliveryBaselineKind.SourceCommit,
+            sourceCommit: SOURCE_COMMIT,
+          },
+          agentDepthLimit: 2,
+          dependencies: [],
+          resources: { read: [`${CORE_ROOT}/**`], write: [] },
+          parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+          acceptance: {
+            commands: ['task legacy:audit'],
+            evidence: ['Legacy evidence is present.'],
+          },
+        },
+      ],
+      edgeContracts: [],
+    };
+  }
+}
+
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 
 type ReadNodeFixture = {
@@ -51,168 +235,6 @@ type EdgeFixture = {
   readonly consumerTaskId: string;
 };
 
-function baseline(dependencies: readonly string[]) {
-  return dependencies.length === 0
-    ? {
-        kind: ModuleDeliveryBaselineKind.SourceCommit as const,
-        sourceCommit: SOURCE_COMMIT,
-      }
-    : {
-        kind: ModuleDeliveryBaselineKind.IntegratedDependencies as const,
-        providerTaskIds: dependencies,
-      };
-}
-
-function readNode(fixture: ReadNodeFixture): ModuleDeliveryReadOnlyNodeV2 {
-  return {
-    kind: ModuleDeliveryTaskKind.ReadOnly,
-    taskId: fixture.taskId,
-    team: TeamKey.DevelopmentCore,
-    functionalOwner: TeamKey.Ai,
-    acceptanceOwner: TeamKey.Ai,
-    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-    expert: 'core_expert',
-    moduleRoot: CORE_ROOT,
-    consumerOutcome: `${fixture.taskId} reports evidence.`,
-    baseline: baseline(fixture.dependencies),
-    agentDepthLimit: 2,
-    dependencies: fixture.dependencies,
-    resources: {
-      read: [`${CORE_ROOT}/**`],
-      write: [],
-      evidenceSurface: fixture.evidenceSurface,
-    },
-    parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-    acceptance: {
-      commands: [`task ${fixture.taskId}:audit`],
-      evidence: [`${fixture.taskId} is reviewed.`],
-    },
-  };
-}
-
-function writeNode(fixture: WriteNodeFixture): ModuleDeliveryWriteNodeV2 {
-  return {
-    kind: ModuleDeliveryTaskKind.Write,
-    taskId: fixture.taskId,
-    team: TeamKey.DevelopmentCore,
-    functionalOwner: TeamKey.Ai,
-    acceptanceOwner: TeamKey.Ai,
-    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-    expert: 'core_expert',
-    moduleRoot: CORE_ROOT,
-    consumerOutcome: `${fixture.taskId} publishes implementation.`,
-    baseline: baseline(fixture.dependencies),
-    agentDepthLimit: 2,
-    dependencies: fixture.dependencies,
-    resources: {
-      read: [`${CORE_ROOT}/**`],
-      write: [`${CORE_ROOT}/src/**`],
-      evidenceSurface: [],
-    },
-    parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-    acceptance: {
-      commands: [`task ${fixture.taskId}:test`],
-      evidence: [`${fixture.taskId} passes.`],
-    },
-    workspace: {
-      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-      expectedCommitHandoff: true,
-    },
-  };
-}
-
-function edge(fixture: EdgeFixture) {
-  const value: ModuleDeliveryEdgeContract = {
-    providerTaskId: fixture.providerTaskId,
-    consumerTaskId: fixture.consumerTaskId,
-    capability: `${fixture.providerTaskId} capability`,
-    publicTypes: [`${fixture.providerTaskId}Result`],
-    errors: [`${fixture.providerTaskId}Error`],
-    behaviorInvariants: ['The capability is deterministic.'],
-    securityInvariants: ['Provider state remains protected.'],
-    compatibilityExpectations: ['The consumer accepts the capability.'],
-    owningTests: [`${fixture.providerTaskId} contract test`],
-  };
-  return value;
-}
-
-function plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
-  return {
-    version: 2,
-    generation: 1,
-    sourceCommit: fixture.sourceCommit,
-    maxConcurrency: 3,
-    maxAgentDepth: 3,
-    maxAttempts: 2,
-    parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
-    parentJoin: {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
-      owner: 'delivery-owner',
-      validationCommands: ['task loom:verify'],
-    },
-    nodes: fixture.nodes,
-    edgeContracts: fixture.edgeContracts,
-  };
-}
-
-function validate(value: ModuleDeliveryPlanV2): ModuleDeliveryPlanValidation {
-  return decodeAndValidateModuleDeliveryPlan(JSON.stringify(value));
-}
-
-function validated(value: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
-  const result = validate(value);
-  if (result.status !== ModuleDeliveryValidationStatus.Accepted) {
-    throw new Error(JSON.stringify(result.issues));
-  }
-  return result;
-}
-
-function issueCodes(
-  value: ModuleDeliveryPlanValidation,
-): readonly ModuleDeliveryIssueCode[] {
-  return value.status === ModuleDeliveryValidationStatus.Rejected
-    ? value.issues.map(({ code }) => code)
-    : [];
-}
-
-function legacyPlan(): LegacyModuleDeliveryPlan {
-  return {
-    version: 1,
-    sourceCommit: SOURCE_COMMIT,
-    maxConcurrency: 1,
-    maxAgentDepth: 2,
-    maxAttempts: 2,
-    parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
-    parentJoin: {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
-      owner: 'delivery-owner',
-      validationCommands: ['task loom:verify'],
-    },
-    nodes: [
-      {
-        kind: ModuleDeliveryTaskKind.ReadOnly,
-        taskId: 'legacy-audit',
-        expert: 'core_expert',
-        moduleRoot: CORE_ROOT,
-        consumerOutcome: 'Compatibility evidence is decoded only.',
-        baseline: {
-          kind: ModuleDeliveryBaselineKind.SourceCommit,
-          sourceCommit: SOURCE_COMMIT,
-        },
-        agentDepthLimit: 2,
-        dependencies: [],
-        resources: { read: [`${CORE_ROOT}/**`], write: [] },
-        parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-        acceptance: {
-          commands: ['task legacy:audit'],
-          evidence: ['Legacy evidence is present.'],
-        },
-      },
-    ],
-    edgeContracts: [],
-  };
-}
-
 describe('validation-only runtime boundary', () => {
   test('keeps direct glob evidence containment single-segment', () => {
     const recursiveRoot = {
@@ -227,15 +249,17 @@ describe('validation-only runtime boundary', () => {
       read: [`${CORE_ROOT}/*.rs`],
       evidenceSurface: [`${CORE_ROOT}/**`],
     };
-    expect(uncoveredEvidenceClaims(recursiveRoot)).toEqual(
-      recursiveRoot.evidenceSurface,
-    );
-    expect(uncoveredEvidenceClaims(recursiveSubdirectory)).toEqual(
-      recursiveSubdirectory.evidenceSurface,
-    );
-    expect(uncoveredEvidenceClaims(extensionAgainstSubtree)).toEqual(
-      extensionAgainstSubtree.evidenceSurface,
-    );
+    expect(
+      ModuleResourceContainment.uncoveredEvidenceClaims(recursiveRoot),
+    ).toEqual(recursiveRoot.evidenceSurface);
+    expect(
+      ModuleResourceContainment.uncoveredEvidenceClaims(recursiveSubdirectory),
+    ).toEqual(recursiveSubdirectory.evidenceSurface);
+    expect(
+      ModuleResourceContainment.uncoveredEvidenceClaims(
+        extensionAgainstSubtree,
+      ),
+    ).toEqual(extensionAgainstSubtree.evidenceSurface);
 
     const narrowerDirectGlob = {
       read: [`${CORE_ROOT}/src/*`],
@@ -245,21 +269,28 @@ describe('validation-only runtime boundary', () => {
       read: [`${CORE_ROOT}/src/*.rs`],
       evidenceSurface: [`${CORE_ROOT}/src/lib.rs`],
     };
-    expect(uncoveredEvidenceClaims(narrowerDirectGlob)).toEqual([]);
-    expect(uncoveredEvidenceClaims(narrowerExactPath)).toEqual([]);
+    expect(
+      ModuleResourceContainment.uncoveredEvidenceClaims(narrowerDirectGlob),
+    ).toEqual([]);
+    expect(
+      ModuleResourceContainment.uncoveredEvidenceClaims(narrowerExactPath),
+    ).toEqual([]);
   });
 
   test('keeps compatibility decode separate from canonical validation', () => {
-    const serialized = JSON.stringify(legacyPlan());
-    const compatibility = decodeCompatibleModuleDeliveryPlan(serialized);
+    const serialized = JSON.stringify(
+      ModuleDeliveryIntegrationAdmissionGuardScenario.legacyPlan(),
+    );
+    const compatibility =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(serialized);
     expect(compatibility.status).toBe(
       ModuleDeliveryCompatibilityStatus.Decoded,
     );
-    const canonical = decodeAndValidateModuleDeliveryPlan(serialized);
+    const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(serialized);
     expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
-    expect(issueCodes(canonical)).toContain(
-      ModuleDeliveryIssueCode.InvalidField,
-    );
+    expect(
+      ModuleDeliveryIntegrationAdmissionGuardScenario.issueCodes(canonical),
+    ).toContain(ModuleDeliveryIssueCode.InvalidField);
   });
 
   test('derives evidence hazards without semantic edges or plan mutation', () => {
@@ -267,20 +298,24 @@ describe('validation-only runtime boundary', () => {
       taskId: 'writer',
       dependencies: [],
     };
-    const writer = writeNode(writerFixture);
+    const writer =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.writeNode(writerFixture);
     const auditFixture: ReadNodeFixture = {
       taskId: 'audit',
       dependencies: [],
       evidenceSurface: [`${CORE_ROOT}/src/**`],
     };
-    const audit = readNode(auditFixture);
+    const audit =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.readNode(auditFixture);
     const planFixture: PlanFixture = {
       sourceCommit: SOURCE_COMMIT,
       nodes: [audit, writer],
       edgeContracts: [],
     };
-    const value = plan(planFixture);
-    const result = validated(value);
+    const value =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.plan(planFixture);
+    const result =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.validated(value);
     expect(result.topologicalOrder).toEqual(['writer', 'audit']);
     expect(result.plan).toEqual(value);
     expect(result.plan.edgeContracts).toEqual([]);
@@ -303,8 +338,10 @@ describe('validation-only runtime boundary', () => {
       taskId: 'writer',
       dependencies: ['audit'],
     };
-    const audit = readNode(auditFixture);
-    const writer = writeNode(writerFixture);
+    const audit =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.readNode(auditFixture);
+    const writer =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.writeNode(writerFixture);
     const edgeFixture: EdgeFixture = {
       providerTaskId: 'audit',
       consumerTaskId: 'writer',
@@ -312,12 +349,17 @@ describe('validation-only runtime boundary', () => {
     const planFixture: PlanFixture = {
       sourceCommit: SOURCE_COMMIT,
       nodes: [audit, writer],
-      edgeContracts: [edge(edgeFixture)],
+      edgeContracts: [
+        ModuleDeliveryIntegrationAdmissionGuardScenario.edge(edgeFixture),
+      ],
     };
-    const value = plan(planFixture);
-    expect(issueCodes(validate(value))).toContain(
-      ModuleDeliveryIssueCode.DependencyCycle,
-    );
+    const value =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.plan(planFixture);
+    expect(
+      ModuleDeliveryIntegrationAdmissionGuardScenario.issueCodes(
+        ModuleDeliveryIntegrationAdmissionGuardScenario.validate(value),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.DependencyCycle);
   });
 
   test('records deterministic conflict and non-writer frontier semantics', () => {
@@ -329,15 +371,19 @@ describe('validation-only runtime boundary', () => {
       taskId: 'writer-b',
       dependencies: [],
     };
-    const firstWriter = writeNode(firstFixture);
-    const secondWriter = writeNode(secondFixture);
+    const firstWriter =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.writeNode(firstFixture);
+    const secondWriter =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.writeNode(secondFixture);
     const conflictFixture: PlanFixture = {
       sourceCommit: SOURCE_COMMIT,
       nodes: [secondWriter, firstWriter],
       edgeContracts: [],
     };
-    const conflictValue = plan(conflictFixture);
-    const conflict = validated(conflictValue);
+    const conflictValue =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.plan(conflictFixture);
+    const conflict =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.validated(conflictValue);
     const expectedConflict = {
       predecessorTaskId: 'writer-a',
       successorTaskId: 'writer-b',
@@ -356,8 +402,10 @@ describe('validation-only runtime boundary', () => {
       dependencies: ['audit-a'],
       evidenceSurface: [`${CORE_ROOT}/src/b/**`],
     };
-    const provider = readNode(providerFixture);
-    const consumer = readNode(consumerFixture);
+    const provider =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.readNode(providerFixture);
+    const consumer =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.readNode(consumerFixture);
     const edgeFixture: EdgeFixture = {
       providerTaskId: 'audit-a',
       consumerTaskId: 'audit-b',
@@ -365,10 +413,14 @@ describe('validation-only runtime boundary', () => {
     const declaredFixture: PlanFixture = {
       sourceCommit: SOURCE_COMMIT,
       nodes: [consumer, provider],
-      edgeContracts: [edge(edgeFixture)],
+      edgeContracts: [
+        ModuleDeliveryIntegrationAdmissionGuardScenario.edge(edgeFixture),
+      ],
     };
-    const declaredValue = plan(declaredFixture);
-    const declared = validated(declaredValue);
+    const declaredValue =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.plan(declaredFixture);
+    const declared =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.validated(declaredValue);
     const expectedDeclared = {
       predecessorTaskId: 'audit-a',
       successorTaskId: 'audit-b',
@@ -384,7 +436,8 @@ describe('validation-only runtime boundary', () => {
       dependencies: [],
       evidenceSurface: [`${CORE_ROOT}/src/**`],
     };
-    const root = readNode(rootFixture);
+    const root =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.readNode(rootFixture);
     const nested: ModuleDeliveryReadOnlyNodeV2 = {
       ...root,
       parentLineage: {
@@ -399,9 +452,12 @@ describe('validation-only runtime boundary', () => {
       nodes: [nested],
       edgeContracts: [],
     };
-    const value = plan(planFixture);
-    expect(issueCodes(validate(value))).toContain(
-      ModuleDeliveryIssueCode.ParentLineageMismatch,
-    );
+    const value =
+      ModuleDeliveryIntegrationAdmissionGuardScenario.plan(planFixture);
+    expect(
+      ModuleDeliveryIntegrationAdmissionGuardScenario.issueCodes(
+        ModuleDeliveryIntegrationAdmissionGuardScenario.validate(value),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.ParentLineageMismatch);
   });
 });

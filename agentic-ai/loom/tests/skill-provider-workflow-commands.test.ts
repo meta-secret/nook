@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { analyzeShellCommands } from './skill-provider-command-boundary.ts';
+import { SkillProviderCommandBoundaryScenario } from './skill-provider-command-boundary.ts';
 import type { ConfigurationNode } from './skill-provider-command-types.ts';
-import { workflowCommandSources } from './skill-provider-workflow-commands.ts';
+import { SkillProviderWorkflowCommandsScenario } from './skill-provider-workflow-commands.ts';
 
 test('preserves dynamic execution environment for fail-closed auditing', () => {
   const document: ConfigurationNode = {
@@ -17,7 +17,8 @@ test('preserves dynamic execution environment for fail-closed auditing', () => {
     },
   };
   const request = { action: false, document };
-  const commands = workflowCommandSources(request);
+  const commands =
+    SkillProviderWorkflowCommandsScenario.workflowCommandSources(request);
   expect(commands).toHaveLength(1);
   expect(commands[0]).toContain('NODE_OPTIONS=');
   expect(commands[0]).not.toContain('SAFE_LABEL=');
@@ -26,9 +27,9 @@ test('preserves dynamic execution environment for fail-closed auditing', () => {
     source: commands[0] as string,
     sourcePath: '.github/workflows/audit.yml',
   };
-  expect(() => analyzeShellCommands(inspection)).toThrow(
-    'NODE_OPTIONS execution is forbidden.',
-  );
+  expect(() =>
+    SkillProviderCommandBoundaryScenario.analyzeShellCommands(inspection),
+  ).toThrow('NODE_OPTIONS execution is forbidden.');
 });
 
 test('rejects implicit shell startup hooks before flattening run steps', () => {
@@ -42,9 +43,9 @@ test('rejects implicit shell startup hooks before flattening run steps', () => {
     },
   };
   const request = { action: false, document };
-  expect(() => workflowCommandSources(request)).toThrow(
-    'BASH_ENV workflow shell startup is forbidden.',
-  );
+  expect(() =>
+    SkillProviderWorkflowCommandsScenario.workflowCommandSources(request),
+  ).toThrow('BASH_ENV workflow shell startup is forbidden.');
 });
 
 test('rejects execution environment mutations through GITHUB_ENV', () => {
@@ -62,9 +63,11 @@ test('rejects execution environment mutations through GITHUB_ENV', () => {
       },
     };
     const request = { action: false, document };
-    expect(() => workflowCommandSources(request), mutation).toThrow(
-      /workflow command-file mutation is forbidden/u,
-    );
+    expect(
+      () =>
+        SkillProviderWorkflowCommandsScenario.workflowCommandSources(request),
+      mutation,
+    ).toThrow(/workflow command-file mutation is forbidden/u);
   }
 });
 
@@ -74,16 +77,21 @@ test('rejects workflow shells without a matching command parser', () => {
       jobs: { audit: { steps: [{ run: 'echo safe', shell }] } },
     };
     const request = { action: false, document };
-    expect(() => workflowCommandSources(request), shell).toThrow(
-      `Custom workflow shell is forbidden: ${shell}`,
-    );
+    expect(
+      () =>
+        SkillProviderWorkflowCommandsScenario.workflowCommandSources(request),
+      shell,
+    ).toThrow(`Custom workflow shell is forbidden: ${shell}`);
   }
   for (const shell of ['bash', 'sh']) {
     const document: ConfigurationNode = {
       jobs: { audit: { steps: [{ run: 'echo safe', shell }] } },
     };
     const request = { action: false, document };
-    expect(workflowCommandSources(request), shell).toEqual(['echo safe']);
+    expect(
+      SkillProviderWorkflowCommandsScenario.workflowCommandSources(request),
+      shell,
+    ).toEqual(['echo safe']);
   }
 });
 
@@ -93,9 +101,11 @@ test('rejects implicit shells unless the runner proves Bourne semantics', () => 
       jobs: { audit: { 'runs-on': runner, steps: [{ run: 'echo safe' }] } },
     };
     const request = { action: false, document };
-    expect(() => workflowCommandSources(request), runner).toThrow(
-      'Implicit workflow shell is not proven to be Bash or sh.',
-    );
+    expect(
+      () =>
+        SkillProviderWorkflowCommandsScenario.workflowCommandSources(request),
+      runner,
+    ).toThrow('Implicit workflow shell is not proven to be Bash or sh.');
   }
   const document: ConfigurationNode = {
     jobs: {
@@ -106,5 +116,7 @@ test('rejects implicit shells unless the runner proves Bourne semantics', () => 
     },
   };
   const request = { action: false, document };
-  expect(workflowCommandSources(request)).toEqual(['echo safe']);
+  expect(
+    SkillProviderWorkflowCommandsScenario.workflowCommandSources(request),
+  ).toEqual(['echo safe']);
 });

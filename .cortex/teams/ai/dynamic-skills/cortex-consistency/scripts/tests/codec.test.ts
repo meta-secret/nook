@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
-import { decodeCortexConsistencyRequest } from '../src/codec.ts';
+import { CortexConsistencyRequestDecoder } from '../src/codec.ts';
 import { CortexConsistencyContractKind } from '../src/domain.ts';
 
 test('decodes the strict consistency request', () => {
   expect(
-    decodeCortexConsistencyRequest(
+    CortexConsistencyRequestDecoder.decodeCortexConsistencyRequest(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [
@@ -26,7 +26,7 @@ test('rejects duplicate documents and extra fields', () => {
     commands: [],
   };
   expect(() =>
-    decodeCortexConsistencyRequest(
+    CortexConsistencyRequestDecoder.decodeCortexConsistencyRequest(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [document, document],
@@ -34,7 +34,7 @@ test('rejects duplicate documents and extra fields', () => {
     ),
   ).toThrow();
   expect(() =>
-    decodeCortexConsistencyRequest(
+    CortexConsistencyRequestDecoder.decodeCortexConsistencyRequest(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [],

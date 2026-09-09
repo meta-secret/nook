@@ -1,47 +1,61 @@
-import { auditCortexDocumentMap } from './audit.ts';
-import {
-  decodeCortexDocumentMapRequest,
-  decodeCortexDocumentMapResult,
-  encodeCortexDocumentMapRequest,
-  encodeCortexDocumentMapResult,
-} from './codec.ts';
+import { CortexDocumentMapAudit } from './audit.ts';
+
+import { CortexDocumentMapTransport } from './codec.ts';
+
 import {
   CortexDocumentMapContractKind,
   type AuditCortexDocumentMapRequest,
   type CortexDocumentMapResult,
 } from './domain.ts';
+
 import {
-  verifyCortexDocumentMapResult,
   type VerifyCortexDocumentMapResultRequest,
+  CortexDocumentMapVerifier,
 } from './verification.ts';
+
+export class CortexDocumentMapApplication {
+  private constructor(
+    private readonly request: AuditCortexDocumentMapRequest,
+  ) {}
+
+  static executeCortexDocumentMapApplication(
+    request: AuditCortexDocumentMapRequest,
+  ): CortexDocumentMapResult {
+    return new CortexDocumentMapApplication(request).execute();
+  }
+
+  private execute(): CortexDocumentMapResult {
+    const request = this.request;
+    const admitted = CortexDocumentMapTransport.decodeCortexDocumentMapRequest(
+      CortexDocumentMapTransport.encodeCortexDocumentMapRequest(request),
+    );
+    const result: CortexDocumentMapResult = {
+      kind: CortexDocumentMapContractKind.Result,
+      findings: CortexDocumentMapAudit.auditCortexDocumentMap(admitted),
+    };
+    return CortexDocumentMapApplication.acceptCortexDocumentMapResult({
+      auditRequest: admitted,
+      result,
+    });
+  }
+
+  static acceptCortexDocumentMapResult(
+    request: AcceptCortexDocumentMapResultRequest,
+  ): CortexDocumentMapResult {
+    const verificationRequest: VerifyCortexDocumentMapResultRequest = {
+      auditRequest: request.auditRequest,
+      result: request.result,
+    };
+    CortexDocumentMapVerifier.verifyCortexDocumentMapResult(
+      verificationRequest,
+    );
+    return CortexDocumentMapTransport.decodeCortexDocumentMapResult(
+      CortexDocumentMapTransport.encodeCortexDocumentMapResult(request.result),
+    );
+  }
+}
 
 export type AcceptCortexDocumentMapResultRequest = {
   readonly auditRequest: AuditCortexDocumentMapRequest;
   readonly result: CortexDocumentMapResult;
 };
-
-export function executeCortexDocumentMapApplication(
-  request: AuditCortexDocumentMapRequest,
-): CortexDocumentMapResult {
-  const admitted = decodeCortexDocumentMapRequest(
-    encodeCortexDocumentMapRequest(request),
-  );
-  const result: CortexDocumentMapResult = {
-    kind: CortexDocumentMapContractKind.Result,
-    findings: auditCortexDocumentMap(admitted),
-  };
-  return acceptCortexDocumentMapResult({ auditRequest: admitted, result });
-}
-
-export function acceptCortexDocumentMapResult(
-  request: AcceptCortexDocumentMapResultRequest,
-): CortexDocumentMapResult {
-  const verificationRequest: VerifyCortexDocumentMapResultRequest = {
-    auditRequest: request.auditRequest,
-    result: request.result,
-  };
-  verifyCortexDocumentMapResult(verificationRequest);
-  return decodeCortexDocumentMapResult(
-    encodeCortexDocumentMapResult(request.result),
-  );
-}

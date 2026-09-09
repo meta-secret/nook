@@ -11,7 +11,7 @@ import type {
   AgentProfile,
   AgentTaskExecution,
 } from '../agent-workflow/domain.ts';
-import { decodeWorkflowTaskOutput } from '../agent-workflow/structured-result-codec.ts';
+import { WorkflowResultSchema } from '../agent-workflow/structured-result-codec.ts';
 import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
@@ -21,23 +21,20 @@ import type {
   ReadOnlyExpertContextFile,
   ReadOnlyExpertRuntimeIsolationRequest,
 } from '../module-experts/runtime-contract.ts';
-import { auditStructuralExperts } from './audit.ts';
-import { StructuralExpertKind, structuralExpertProfile } from './catalog.ts';
+import { StructuralExpertContract } from './audit.ts';
+import { StructuralExpertKind, StructuralExpertCatalog } from './catalog.ts';
 import type { StructuralExpertProfile } from './catalog.ts';
 import {
   STRUCTURAL_EXPERT_WORKFLOW_VERSION,
-  consumeStructuralParentAuthorization,
+  StructuralExpertParentAuthorization,
 } from './parent-authorization.ts';
 import type {
   VerifiedStructuralChildContext,
   VerifiedStructuralParentAuthorization,
 } from './parent-authorization.ts';
-import { validatedStructuralExpertInvocationRequest } from './request-codec.ts';
+import { StructuralExpertRequestDecoder } from './request-codec.ts';
 import type { StructuralExpertInvocationRequest } from './request-codec.ts';
-import {
-  consumeIsolatedStructuralExpertExecution,
-  executeIsolatedStructuralExpert,
-} from './isolation-receipt.ts';
+import { StructuralExpertIsolationReceipts } from './isolation-receipt.ts';
 
 const STRUCTURAL_EXPERT_INSTRUCTIONS = `Act only as the assigned read-only Nook structural expert.
 Use only the bounded context exposed by Loom at the exact source commit.
@@ -133,199 +130,316 @@ type StructuralCompletionRecord = StructuralAuthorityRecord & {
   readonly completionDigest: string;
 };
 
-const SESSIONS = new WeakMap<
-  StructuralRuntimeSession,
-  StructuralSessionRecord
->();
-const JOURNAL_AUTHORITIES = new WeakMap<
-  StructuralJournalAuthority,
-  StructuralAuthorityRecord
->();
-const JOURNAL_BINDINGS = new WeakMap<
-  StructuralJournalBinding,
-  StructuralAuthorityRecord
->();
-const COMPLETION_AUTHORITIES = new WeakMap<
-  StructuralCompletionAuthority,
-  StructuralCompletionRecord
->();
+/** Owns the structural expert runtime authority registry and its capability transitions. */
+export class StructuralExpertRuntimeAuthority {
+  private constructor() {}
+  private static readonly SESSIONS = new WeakMap<
+    StructuralRuntimeSession,
+    StructuralSessionRecord
+  >();
 
-export function createStructuralRuntimeSession(
-  input: CreateStructuralRuntimeSessionRequest,
-): CreatedStructuralRuntimeSession {
-  const request = validatedStructuralExpertInvocationRequest(input.request);
-  const repoRoot = resolve(input.repoRoot);
-  const auditRequest = { repoRoot };
-  const audit = auditStructuralExperts(auditRequest);
-  const profile = structuralExpertProfile(request.expert);
-  if (!audit.auditOk || !profile) {
-    throw new Error('Structural expert runtime contract is invalid.');
+  private static readonly JOURNAL_AUTHORITIES = new WeakMap<
+    StructuralJournalAuthority,
+    StructuralAuthorityRecord
+  >();
+
+  private static readonly JOURNAL_BINDINGS = new WeakMap<
+    StructuralJournalBinding,
+    StructuralAuthorityRecord
+  >();
+
+  private static readonly COMPLETION_AUTHORITIES = new WeakMap<
+    StructuralCompletionAuthority,
+    StructuralCompletionRecord
+  >();
+
+  static createStructuralRuntimeSession(
+    input: CreateStructuralRuntimeSessionRequest,
+  ): CreatedStructuralRuntimeSession {
+    const request =
+      StructuralExpertRequestDecoder.validatedStructuralExpertInvocationRequest(
+        input.request,
+      );
+    const repoRoot = resolve(input.repoRoot);
+    const auditRequest = { repoRoot };
+    const audit = StructuralExpertContract.auditStructuralExperts(auditRequest);
+    const profile = StructuralExpertCatalog.structuralExpertProfile(
+      request.expert,
+    );
+    if (!audit.auditOk || !profile) {
+      throw new Error('Structural expert runtime contract is invalid.');
+    }
+    const runDirectory = join(
+      repoRoot,
+      'workflow',
+      'processing',
+      DelegatedAgentWorkflowName.AgentWork,
+      request.runId,
+    );
+    const authorizationRequest = {
+      authorization: input.parentAuthorization,
+      request,
+      runDirectory,
+    };
+    const childContexts =
+      StructuralExpertParentAuthorization.consumeStructuralParentAuthorization(
+        authorizationRequest,
+      );
+    const instructionInput: StructuralInstructionInput = {
+      instruction: request.instruction,
+      profile,
+    };
+    const instruction =
+      StructuralExpertRuntimeAuthority.structuralInstruction(instructionInput);
+    const parentValue: AgentAttemptParent = { ...request.parent };
+    const parent = Object.freeze(parentValue);
+    const identityValue: StructuralRuntimeIdentity = {
+      runDirectory,
+      workingDirectory: repoRoot,
+      runId: request.runId,
+      workflow: DelegatedAgentWorkflowName.AgentWork,
+      workflowVersion: STRUCTURAL_EXPERT_WORKFLOW_VERSION,
+      sourceCommit: request.sourceCommit,
+      task: request.task,
+      agent: request.expert,
+      attempt: request.attempt,
+      depth: 2 as const,
+      parent,
+      instruction,
+    };
+    const identity = Object.freeze(identityValue);
+    const agentProfile: AgentProfile<string> = {
+      name: profile.name,
+      instructionPrefix: STRUCTURAL_EXPERT_INSTRUCTIONS,
+      workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+      reasoningEffort: AgentReasoningEffort.High,
+    };
+    const execution: AgentTaskExecution<string> = {
+      kind: WorkflowExecutorKind.Agent,
+      agent: profile.name,
+      instruction,
+      resultKind: profile.resultKind,
+    };
+    const invocation: AgentExecutionInvocation<string, string> = {
+      task: request.task,
+      attempt: request.attempt,
+      sourceCommit: request.sourceCommit,
+      runId: request.runId,
+      workingDirectory: repoRoot,
+      upstreamOutputs: [],
+      signal: AbortSignal.abort(),
+      observe: async () => {},
+      execution,
+      agentProfile,
+    };
+    const isolationInput: StructuralIsolationRequestInput = {
+      childContexts,
+      profile,
+      repoRoot,
+      request,
+    };
+    const isolationRequest =
+      StructuralExpertRuntimeAuthority.structuralIsolationRequest(
+        isolationInput,
+      );
+    const sessionValue: StructuralRuntimeSession = {
+      kind: StructuralRuntimeCapabilityKind.Session,
+    };
+    const session = Object.freeze(sessionValue);
+    const journalAuthorityValue: StructuralJournalAuthority = {
+      kind: StructuralRuntimeCapabilityKind.JournalAuthority,
+    };
+    const journalAuthority = Object.freeze(journalAuthorityValue);
+    const identityDigest = StructuralExpertRuntimeAuthority.digest(identity);
+    const sessionRecord: StructuralSessionRecord = {
+      identity,
+      identityDigest,
+      invocation,
+      isolationRequest,
+    };
+    StructuralExpertRuntimeAuthority.SESSIONS.set(session, sessionRecord);
+    const authorityRecord: StructuralAuthorityRecord = {
+      session,
+      identityDigest,
+    };
+    StructuralExpertRuntimeAuthority.JOURNAL_AUTHORITIES.set(
+      journalAuthority,
+      authorityRecord,
+    );
+    return { session, journalAuthority, identity };
   }
-  const runDirectory = join(
-    repoRoot,
-    'workflow',
-    'processing',
-    DelegatedAgentWorkflowName.AgentWork,
-    request.runId,
-  );
-  const authorizationRequest = {
-    authorization: input.parentAuthorization,
-    request,
-    runDirectory,
-  };
-  const childContexts =
-    consumeStructuralParentAuthorization(authorizationRequest);
-  const instructionInput: StructuralInstructionInput = {
-    instruction: request.instruction,
-    profile,
-  };
-  const instruction = structuralInstruction(instructionInput);
-  const parentValue: AgentAttemptParent = { ...request.parent };
-  const parent = Object.freeze(parentValue);
-  const identityValue: StructuralRuntimeIdentity = {
-    runDirectory,
-    workingDirectory: repoRoot,
-    runId: request.runId,
-    workflow: DelegatedAgentWorkflowName.AgentWork,
-    workflowVersion: STRUCTURAL_EXPERT_WORKFLOW_VERSION,
-    sourceCommit: request.sourceCommit,
-    task: request.task,
-    agent: request.expert,
-    attempt: request.attempt,
-    depth: 2 as const,
-    parent,
-    instruction,
-  };
-  const identity = Object.freeze(identityValue);
-  const agentProfile: AgentProfile<string> = {
-    name: profile.name,
-    instructionPrefix: STRUCTURAL_EXPERT_INSTRUCTIONS,
-    workspacePolicy: AgentWorkspacePolicy.ReadOnly,
-    reasoningEffort: AgentReasoningEffort.High,
-  };
-  const execution: AgentTaskExecution<string> = {
-    kind: WorkflowExecutorKind.Agent,
-    agent: profile.name,
-    instruction,
-    resultKind: profile.resultKind,
-  };
-  const invocation: AgentExecutionInvocation<string, string> = {
-    task: request.task,
-    attempt: request.attempt,
-    sourceCommit: request.sourceCommit,
-    runId: request.runId,
-    workingDirectory: repoRoot,
-    upstreamOutputs: [],
-    signal: AbortSignal.abort(),
-    observe: async () => {},
-    execution,
-    agentProfile,
-  };
-  const isolationInput: StructuralIsolationRequestInput = {
-    childContexts,
-    profile,
-    repoRoot,
-    request,
-  };
-  const isolationRequest = structuralIsolationRequest(isolationInput);
-  const sessionValue: StructuralRuntimeSession = {
-    kind: StructuralRuntimeCapabilityKind.Session,
-  };
-  const session = Object.freeze(sessionValue);
-  const journalAuthorityValue: StructuralJournalAuthority = {
-    kind: StructuralRuntimeCapabilityKind.JournalAuthority,
-  };
-  const journalAuthority = Object.freeze(journalAuthorityValue);
-  const identityDigest = digest(identity);
-  const sessionRecord: StructuralSessionRecord = {
-    identity,
-    identityDigest,
-    invocation,
-    isolationRequest,
-  };
-  SESSIONS.set(session, sessionRecord);
-  const authorityRecord: StructuralAuthorityRecord = {
-    session,
-    identityDigest,
-  };
-  JOURNAL_AUTHORITIES.set(journalAuthority, authorityRecord);
-  return { session, journalAuthority, identity };
-}
 
-export async function executeStructuralExpert(
-  input: ExecuteStructuralExpertRequest,
-): Promise<TrustedStructuralExecution> {
-  const record = SESSIONS.get(input.session);
-  if (!record) throw new Error('Structural expert runtime session is invalid.');
-  SESSIONS.delete(input.session);
-  const invocation: AgentExecutionInvocation<string, string> = {
-    ...record.invocation,
-    signal: input.signal,
-    observe: input.observe,
-  };
-  const executionRequest = {
-    invocation,
-    isolationRequest: record.isolationRequest,
-  };
-  const isolatedExecution =
-    await executeIsolatedStructuralExpert(executionRequest);
-  const consumeRequest = {
-    execution: isolatedExecution,
-    invocation,
-    isolationRequest: record.isolationRequest,
-  };
-  consumeIsolatedStructuralExpertExecution(consumeRequest);
-  const completion = isolatedExecution.completion;
-  const authorityValue: StructuralCompletionAuthority = {
-    kind: StructuralRuntimeCapabilityKind.CompletionAuthority,
-  };
-  const authority = Object.freeze(authorityValue);
-  const completionRecord: StructuralCompletionRecord = {
-    session: input.session,
-    identityDigest: record.identityDigest,
-    completionDigest: digest(completion),
-  };
-  COMPLETION_AUTHORITIES.set(authority, completionRecord);
-  const trustedExecution: TrustedStructuralExecution = {
-    completion,
-    authority,
-  };
-  return Object.freeze(trustedExecution);
-}
-
-export function consumeStructuralJournalAuthority(
-  input: ConsumeStructuralJournalAuthorityRequest,
-): StructuralJournalBinding {
-  const record = JOURNAL_AUTHORITIES.get(input.authority);
-  if (!record || record.identityDigest !== digest(input.identity)) {
-    throw new Error('Structural expert journal authority is invalid.');
+  static async executeStructuralExpert(
+    input: ExecuteStructuralExpertRequest,
+  ): Promise<TrustedStructuralExecution> {
+    const record = StructuralExpertRuntimeAuthority.SESSIONS.get(input.session);
+    if (!record)
+      throw new Error('Structural expert runtime session is invalid.');
+    StructuralExpertRuntimeAuthority.SESSIONS.delete(input.session);
+    const invocation: AgentExecutionInvocation<string, string> = {
+      ...record.invocation,
+      signal: input.signal,
+      observe: input.observe,
+    };
+    const executionRequest = {
+      invocation,
+      isolationRequest: record.isolationRequest,
+    };
+    const isolatedExecution =
+      await StructuralExpertIsolationReceipts.executeIsolatedStructuralExpert(
+        executionRequest,
+      );
+    const consumeRequest = {
+      execution: isolatedExecution,
+      invocation,
+      isolationRequest: record.isolationRequest,
+    };
+    StructuralExpertIsolationReceipts.consumeIsolatedStructuralExpertExecution(
+      consumeRequest,
+    );
+    const completion = isolatedExecution.completion;
+    const authorityValue: StructuralCompletionAuthority = {
+      kind: StructuralRuntimeCapabilityKind.CompletionAuthority,
+    };
+    const authority = Object.freeze(authorityValue);
+    const completionRecord: StructuralCompletionRecord = {
+      session: input.session,
+      identityDigest: record.identityDigest,
+      completionDigest: StructuralExpertRuntimeAuthority.digest(completion),
+    };
+    StructuralExpertRuntimeAuthority.COMPLETION_AUTHORITIES.set(
+      authority,
+      completionRecord,
+    );
+    const trustedExecution: TrustedStructuralExecution = {
+      completion,
+      authority,
+    };
+    return Object.freeze(trustedExecution);
   }
-  JOURNAL_AUTHORITIES.delete(input.authority);
-  const bindingValue: StructuralJournalBinding = {
-    kind: StructuralRuntimeCapabilityKind.JournalBinding,
-  };
-  const binding = Object.freeze(bindingValue);
-  JOURNAL_BINDINGS.set(binding, record);
-  return binding;
-}
 
-export function consumeStructuralCompletionAuthority(
-  input: ConsumeStructuralCompletionAuthorityRequest,
-): void {
-  const journal = JOURNAL_BINDINGS.get(input.binding);
-  const completion = COMPLETION_AUTHORITIES.get(input.execution.authority);
-  if (
-    !journal ||
-    !completion ||
-    journal.session !== completion.session ||
-    journal.identityDigest !== completion.identityDigest ||
-    completion.completionDigest !== digest(input.execution.completion) ||
-    completion.completionDigest !== digest(input.terminalCompletion)
-  ) {
-    throw new Error('Structural expert completion authority is invalid.');
+  static consumeStructuralJournalAuthority(
+    input: ConsumeStructuralJournalAuthorityRequest,
+  ): StructuralJournalBinding {
+    const record = StructuralExpertRuntimeAuthority.JOURNAL_AUTHORITIES.get(
+      input.authority,
+    );
+    if (
+      !record ||
+      record.identityDigest !==
+        StructuralExpertRuntimeAuthority.digest(input.identity)
+    ) {
+      throw new Error('Structural expert journal authority is invalid.');
+    }
+    StructuralExpertRuntimeAuthority.JOURNAL_AUTHORITIES.delete(
+      input.authority,
+    );
+    const bindingValue: StructuralJournalBinding = {
+      kind: StructuralRuntimeCapabilityKind.JournalBinding,
+    };
+    const binding = Object.freeze(bindingValue);
+    StructuralExpertRuntimeAuthority.JOURNAL_BINDINGS.set(binding, record);
+    return binding;
   }
-  JOURNAL_BINDINGS.delete(input.binding);
-  COMPLETION_AUTHORITIES.delete(input.execution.authority);
+
+  static consumeStructuralCompletionAuthority(
+    input: ConsumeStructuralCompletionAuthorityRequest,
+  ): void {
+    const journal = StructuralExpertRuntimeAuthority.JOURNAL_BINDINGS.get(
+      input.binding,
+    );
+    const completion =
+      StructuralExpertRuntimeAuthority.COMPLETION_AUTHORITIES.get(
+        input.execution.authority,
+      );
+    if (
+      !journal ||
+      !completion ||
+      journal.session !== completion.session ||
+      journal.identityDigest !== completion.identityDigest ||
+      completion.completionDigest !==
+        StructuralExpertRuntimeAuthority.digest(input.execution.completion) ||
+      completion.completionDigest !==
+        StructuralExpertRuntimeAuthority.digest(input.terminalCompletion)
+    ) {
+      throw new Error('Structural expert completion authority is invalid.');
+    }
+    StructuralExpertRuntimeAuthority.JOURNAL_BINDINGS.delete(input.binding);
+    StructuralExpertRuntimeAuthority.COMPLETION_AUTHORITIES.delete(
+      input.execution.authority,
+    );
+  }
+
+  private static structuralIsolationRequest(
+    input: StructuralIsolationRequestInput,
+  ): ReadOnlyExpertRuntimeIsolationRequest {
+    const repositoryEvidence =
+      input.request.kind === StructuralExpertKind.RepositoryEvidence;
+    const contextFiles: ReadOnlyExpertContextFile[] =
+      input.childContexts.flatMap((child) => [
+        {
+          path: `children/${child.task}/attempt-${child.attempt}/result.json`,
+          content: `${child.resultJson}\n`,
+        },
+        {
+          path: `children/${child.task}/attempt-${child.attempt}/view.md`,
+          content: child.viewMarkdown,
+        },
+      ]);
+    return {
+      expertName: input.profile.name,
+      parentEnvironment: process.env,
+      snapshot: {
+        excludedPaths: repositoryEvidence ? input.profile.excludedPaths : [],
+        optionalScopePaths: [],
+        scopePaths: repositoryEvidence
+          ? [
+              input.profile.skillPath,
+              ...input.profile.requiredContextPaths,
+              ...input.request.evidencePaths,
+            ]
+          : [],
+        contextFiles,
+      },
+      sourceCommit: input.request.sourceCommit,
+      workingDirectory: input.repoRoot,
+    };
+  }
+
+  private static structuralInstruction(
+    input: StructuralInstructionInput,
+  ): string {
+    return [
+      `Assigned structural expert: ${input.profile.name}`,
+      `Role: ${input.profile.description}`,
+      `Result kind: ${input.profile.resultKind}`,
+      input.profile.kind === StructuralExpertKind.VerifiedViewSynthesis
+        ? `Reviewed runtime behavior contract:\n${input.profile.runtimeBehaviorContract}`
+        : 'The canonical Cortex role context and reviewed skill are included in the bounded repository snapshot.',
+      input.profile.kind === StructuralExpertKind.VerifiedViewSynthesis
+        ? 'Context contains verified child result.json and view.md projections only. Treat missing coverage as a gap; never infer absent evidence.'
+        : `Exact evidence files: ${JSON.stringify(input.profile.allowedEvidenceFiles)}\nStrict descendant roots: ${JSON.stringify(input.profile.allowedEvidenceDescendantRoots)}`,
+      `Focused validation: ${JSON.stringify(input.profile.validationSelectors)}`,
+      `Requested analysis:\n${input.instruction}`,
+    ].join('\n\n');
+  }
+
+  private static digest(
+    value: StructuralRuntimeIdentity | AgentExecutionCompletion,
+  ): string {
+    if ('threadId' in value) {
+      const canonical = {
+        threadId: value.threadId,
+        output: WorkflowResultSchema.decodeWorkflowTaskOutput(
+          JSON.stringify(value.output),
+        ),
+      };
+      return createHash('sha256')
+        .update(JSON.stringify(canonical))
+        .digest('hex');
+    }
+    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  }
 }
 
 type StructuralIsolationRequestInput = {
@@ -335,73 +449,7 @@ type StructuralIsolationRequestInput = {
   readonly request: StructuralExpertInvocationRequest;
 };
 
-function structuralIsolationRequest(
-  input: StructuralIsolationRequestInput,
-): ReadOnlyExpertRuntimeIsolationRequest {
-  const repositoryEvidence =
-    input.request.kind === StructuralExpertKind.RepositoryEvidence;
-  const contextFiles: ReadOnlyExpertContextFile[] = input.childContexts.flatMap(
-    (child) => [
-      {
-        path: `children/${child.task}/attempt-${child.attempt}/result.json`,
-        content: `${child.resultJson}\n`,
-      },
-      {
-        path: `children/${child.task}/attempt-${child.attempt}/view.md`,
-        content: child.viewMarkdown,
-      },
-    ],
-  );
-  return {
-    expertName: input.profile.name,
-    parentEnvironment: process.env,
-    snapshot: {
-      excludedPaths: repositoryEvidence ? input.profile.excludedPaths : [],
-      optionalScopePaths: [],
-      scopePaths: repositoryEvidence
-        ? [
-            input.profile.skillPath,
-            ...input.profile.requiredContextPaths,
-            ...input.request.evidencePaths,
-          ]
-        : [],
-      contextFiles,
-    },
-    sourceCommit: input.request.sourceCommit,
-    workingDirectory: input.repoRoot,
-  };
-}
-
 type StructuralInstructionInput = {
   readonly instruction: string;
   readonly profile: StructuralExpertProfile;
 };
-
-function structuralInstruction(input: StructuralInstructionInput): string {
-  return [
-    `Assigned structural expert: ${input.profile.name}`,
-    `Role: ${input.profile.description}`,
-    `Result kind: ${input.profile.resultKind}`,
-    input.profile.kind === StructuralExpertKind.VerifiedViewSynthesis
-      ? `Reviewed runtime behavior contract:\n${input.profile.runtimeBehaviorContract}`
-      : 'The canonical Cortex role context and reviewed skill are included in the bounded repository snapshot.',
-    input.profile.kind === StructuralExpertKind.VerifiedViewSynthesis
-      ? 'Context contains verified child result.json and view.md projections only. Treat missing coverage as a gap; never infer absent evidence.'
-      : `Exact evidence files: ${JSON.stringify(input.profile.allowedEvidenceFiles)}\nStrict descendant roots: ${JSON.stringify(input.profile.allowedEvidenceDescendantRoots)}`,
-    `Focused validation: ${JSON.stringify(input.profile.validationSelectors)}`,
-    `Requested analysis:\n${input.instruction}`,
-  ].join('\n\n');
-}
-
-function digest(
-  value: StructuralRuntimeIdentity | AgentExecutionCompletion,
-): string {
-  if ('threadId' in value) {
-    const canonical = {
-      threadId: value.threadId,
-      output: decodeWorkflowTaskOutput(JSON.stringify(value.output)),
-    };
-    return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
-  }
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
-}

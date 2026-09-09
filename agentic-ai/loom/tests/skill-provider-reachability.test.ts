@@ -1,17 +1,331 @@
 import { join, posix } from 'node:path';
+
 import { expect, test } from 'bun:test';
+
+import { SkillProviderBoundaryScenario } from './skill-provider-boundary.test.ts';
+
 import {
-  referencesSkillProvider as specifierReferencesSkillProvider,
-  violatesSkillProviderBoundary,
-} from './skill-provider-boundary.test.ts';
-import {
-  executableScriptViolatesBoundary,
   ShellExecutablePolicy,
-  shellExecutableLaunchesUnprovenScript,
+  SkillProviderExecutableScriptScenario,
 } from './skill-provider-executable-script.ts';
-import { repositorySubprocessEntrypoints } from './skill-provider-subprocess.ts';
+
+import { SkillProviderSubprocessScenario } from './skill-provider-subprocess.ts';
+
 import { PRODUCTION_SOURCE_EXTENSIONS } from './skill-provider-type-context.ts';
-import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-boundary.ts';
+
+import { CortexArticleAdapterBoundaryScenario } from './cortex-article-adapter-boundary.ts';
+
+export class SkillProviderReachabilityScenario {
+  private constructor(private readonly request: string) {}
+
+  static trackedRepositoryInventory(): TrackedRepositoryInventory {
+    const spawnOptions: TrackedSourcesSpawnOptions = {
+      cmd: ['git', 'ls-files', '--stage', '-z'],
+      cwd: REPOSITORY_ROOT,
+      stderr: 'pipe',
+      stdout: 'pipe',
+    };
+    const result = Bun.spawnSync(spawnOptions);
+    if (result.exitCode !== 0) {
+      throw new Error(`Unable to enumerate tracked sources: ${result.stderr}`);
+    }
+    return SkillProviderReachabilityScenario.parseTrackedRepositoryInventory(
+      result.stdout.toString(),
+    );
+  }
+
+  static parseTrackedRepositoryInventory(
+    source: string,
+  ): TrackedRepositoryInventory {
+    return new SkillProviderReachabilityScenario(source).execute();
+  }
+
+  private execute(): TrackedRepositoryInventory {
+    const source = this.request;
+    const paths: string[] = [];
+    const executablePaths = new Set<string>();
+    const symlinkPaths = new Set<string>();
+    for (const entry of source.split('\0').filter(Boolean)) {
+      const separator = entry.indexOf('\t');
+      if (separator < 0) throw new Error('Tracked source record has no path');
+      const metadata = entry.slice(0, separator);
+      const path = entry.slice(separator + 1);
+      paths.push(path);
+      if (metadata.startsWith('120000 ')) symlinkPaths.add(path);
+      if (metadata.startsWith('100755 ')) executablePaths.add(path);
+    }
+    return { executablePaths, paths, symlinkPaths };
+  }
+
+  static runtimeDependencyViolations(
+    inspection: RuntimeDependencyGraphInspection,
+  ): readonly string[] {
+    const pending = [...inspection.roots];
+    const visited = new Set<string>();
+    const violations: string[] = [];
+    while (pending.length > 0) {
+      const path = pending.pop();
+      if (!path || visited.has(path)) continue;
+      visited.add(path);
+      if (inspection.symlinkPaths.has(path)) {
+        violations.push(path);
+        continue;
+      }
+      const extensionless = posix.extname(path).length === 0;
+      if (!SUBPROCESS_SOURCE_EXTENSION.test(path) && !extensionless) {
+        violations.push(path);
+        continue;
+      }
+      const source = inspection.sources.get(path);
+      if (typeof source !== 'string') {
+        violations.push(path);
+        continue;
+      }
+      const sourceBody = source.replace(/^#![^\n]*(?:\n|$)/u, '');
+      const boundaryInspection = {
+        path,
+        roots: new Set(inspection.roots),
+        shellPolicy: ShellExecutablePolicy.TrackedConfiguration,
+        source: sourceBody,
+        sources: inspection.sources,
+      };
+      const adapterInspection = { path, source: sourceBody };
+      if (
+        (path === LOOM_ARTICLE_ADAPTER || path === LOOM_CONSISTENCY_ADAPTER
+          ? CortexArticleAdapterBoundaryScenario.cortexArticleAdapterViolatesBoundary(
+              adapterInspection,
+            )
+          : path !== EXECUTABLE_SKILL_PACKAGE_GATE &&
+            SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
+              boundaryInspection,
+            )) ||
+        (path.endsWith('.sh') &&
+          SkillProviderExecutableScriptScenario.shellExecutableLaunchesUnprovenScript(
+            sourceBody,
+          ))
+      ) {
+        violations.push(path);
+        continue;
+      }
+      const importedModules =
+        EXECUTABLE_SOURCE_EXTENSION.test(path) || extensionless
+          ? RUNTIME_IMPORT_SCANNER.scanImports(sourceBody)
+          : [];
+      for (const imported of importedModules) {
+        const resolution: RuntimeDependencyResolution = {
+          importer: path,
+          sources: inspection.sources,
+          specifier: imported.path,
+        };
+        const dependency =
+          SkillProviderReachabilityScenario.resolveRuntimeDependency(
+            resolution,
+          );
+        const providerReference =
+          SkillProviderBoundaryScenario.referencesSkillProvider(
+            imported.path,
+          ) ||
+          SkillProviderReachabilityScenario.referencesSkillProvider(resolution);
+        const edge: RuntimeDependencyEdge | false =
+          dependency === false ? false : { dependency, importer: path };
+        if (
+          (providerReference && dependency === false) ||
+          (edge !== false &&
+            SkillProviderReachabilityScenario.isSkillApplicationDependency(
+              edge.dependency,
+            ) &&
+            !SkillProviderReachabilityScenario.isAuthorizedSkillApplicationEdge(
+              edge,
+            ))
+        ) {
+          violations.push(path);
+        } else if (
+          dependency !== false &&
+          (EXECUTABLE_SOURCE_EXTENSION.test(dependency) ||
+            posix.extname(dependency) === '')
+        ) {
+          pending.push(dependency);
+        } else if (
+          dependency === false &&
+          (imported.path.startsWith('.') ||
+            SkillProviderReachabilityScenario.isRepositoryBackedSpecifier(
+              resolution,
+            ))
+        ) {
+          violations.push(path);
+        }
+      }
+      const entrypointInspection = {
+        executablePaths: inspection.executablePaths,
+        importer: path,
+        source: sourceBody,
+        sources: inspection.sources,
+      };
+      const entrypoints =
+        SkillProviderSubprocessScenario.repositorySubprocessEntrypoints(
+          entrypointInspection,
+        );
+      for (const dependency of entrypoints.paths) {
+        const edge: RuntimeDependencyEdge = { dependency, importer: path };
+        if (
+          SkillProviderReachabilityScenario.isSkillApplicationDependency(
+            dependency,
+          ) &&
+          !SkillProviderReachabilityScenario.isAuthorizedSkillApplicationEdge(
+            edge,
+          )
+        ) {
+          violations.push(path);
+        } else {
+          pending.push(dependency);
+        }
+      }
+      if (entrypoints.unresolved && path !== EXECUTABLE_SKILL_PACKAGE_GATE)
+        violations.push(path);
+    }
+    return [...new Set(violations)].sort();
+  }
+
+  static isSkillApplicationDependency(path: string): boolean {
+    return (
+      path === LOOM_ARTICLE_ADAPTER ||
+      path === LOOM_CONSISTENCY_ADAPTER ||
+      path.startsWith(ARTICLE_PROVIDER_PREFIX) ||
+      path.startsWith(CONSISTENCY_PROVIDER_PREFIX)
+    );
+  }
+
+  static isAuthorizedSkillApplicationEdge(
+    edge: RuntimeDependencyEdge,
+  ): boolean {
+    if (edge.dependency === LOOM_ARTICLE_ADAPTER) {
+      return edge.importer === CORTEX_AUDIT;
+    }
+    if (edge.dependency === LOOM_CONSISTENCY_ADAPTER) {
+      return edge.importer === CORTEX_AUDIT;
+    }
+    if (edge.importer === LOOM_ARTICLE_ADAPTER) {
+      return (
+        edge.dependency === ARTICLE_APPLICATION ||
+        edge.dependency === ARTICLE_DOMAIN
+      );
+    }
+    if (edge.importer === LOOM_CONSISTENCY_ADAPTER) {
+      return (
+        edge.dependency === CONSISTENCY_APPLICATION ||
+        edge.dependency === CONSISTENCY_DOMAIN
+      );
+    }
+    return (
+      (edge.importer.startsWith(ARTICLE_PROVIDER_PREFIX) &&
+        edge.dependency.startsWith(ARTICLE_PROVIDER_PREFIX)) ||
+      (edge.importer.startsWith(CONSISTENCY_PROVIDER_PREFIX) &&
+        edge.dependency.startsWith(CONSISTENCY_PROVIDER_PREFIX))
+    );
+  }
+
+  static skillApplicationDependencies(
+    request: RuntimeDependencyListRequest,
+  ): readonly string[] {
+    const [source = ''] = [request.sources.get(request.importer)];
+    const dependencies = new Set<string>();
+    for (const imported of RUNTIME_IMPORT_SCANNER.scanImports(source)) {
+      const resolution: RuntimeDependencyResolution = {
+        importer: request.importer,
+        sources: request.sources,
+        specifier: imported.path,
+      };
+      const dependency =
+        SkillProviderReachabilityScenario.resolveRuntimeDependency(resolution);
+      if (
+        dependency !== false &&
+        SkillProviderReachabilityScenario.isSkillApplicationDependency(
+          dependency,
+        )
+      ) {
+        dependencies.add(dependency);
+      }
+    }
+    return [...dependencies].sort();
+  }
+
+  static resolveRuntimeDependency(
+    resolution: RuntimeDependencyResolution,
+  ): string | false {
+    if (!resolution.specifier.startsWith('.')) return false;
+    const base =
+      SkillProviderReachabilityScenario.normalizedDependencyPath(resolution);
+    for (const suffix of RUNTIME_SOURCE_SUFFIXES) {
+      const direct = `${base}${suffix}`;
+      if (resolution.sources.has(direct)) return direct;
+      const indexed = `${base}/index${suffix}`;
+      if (resolution.sources.has(indexed)) return indexed;
+    }
+    return false;
+  }
+
+  static isRepositoryBackedSpecifier(
+    resolution: RuntimeDependencyResolution,
+  ): boolean {
+    const specifier = resolution.specifier;
+    if (specifier.startsWith('#') || specifier.startsWith('file:')) return true;
+    if (specifier.startsWith('.') || specifier.startsWith('node:'))
+      return false;
+    const segments = specifier.split('/');
+    const [defaulted1 = ''] = [segments[0]];
+    const packageName = specifier.startsWith('@')
+      ? segments.slice(0, 2).join('/')
+      : defaulted1;
+    for (const [path, source] of resolution.sources) {
+      if (!path.endsWith('package.json') || source.length === 0) continue;
+      let document: RepositoryPackageDocument;
+      try {
+        document = JSON.parse(source) as RepositoryPackageDocument;
+      } catch {
+        continue;
+      }
+      if (document.name === packageName) return true;
+      for (const dependencies of [
+        document.dependencies,
+        document.devDependencies,
+        document.optionalDependencies,
+      ]) {
+        const [dependency = false] = [dependencies?.[packageName]];
+        if (
+          dependency !== false &&
+          (dependency.startsWith('file:') ||
+            dependency.startsWith('workspace:'))
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  static referencesSkillProvider(
+    resolution: RuntimeDependencyResolution,
+  ): boolean {
+    const path =
+      SkillProviderReachabilityScenario.normalizedDependencyPath(resolution);
+    return (
+      path === '.agents/skills' ||
+      path.startsWith('.agents/skills/') ||
+      path === ARTICLE_PROVIDER_PREFIX.slice(0, -1) ||
+      path.startsWith(ARTICLE_PROVIDER_PREFIX) ||
+      path === CONSISTENCY_PROVIDER_PREFIX.slice(0, -1) ||
+      path.startsWith(CONSISTENCY_PROVIDER_PREFIX)
+    );
+  }
+
+  static normalizedDependencyPath(
+    resolution: RuntimeDependencyResolution,
+  ): string {
+    return posix.normalize(
+      posix.join(posix.dirname(resolution.importer), resolution.specifier),
+    );
+  }
+}
 
 type RuntimeDependencyGraphInspection = {
   readonly executablePaths: ReadonlySet<string>;
@@ -61,294 +375,43 @@ type RepositoryPackageDocument = {
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
+
 const LOOM_PRODUCTION_PREFIX = 'agentic-ai/loom/src/';
+
 const CORTEX_AUDIT = `${LOOM_PRODUCTION_PREFIX}commands/cortex-audit.ts`;
+
 const LOOM_ARTICLE_ADAPTER = `${LOOM_PRODUCTION_PREFIX}lib/cortex-article-structure.ts`;
+
 const LOOM_CONSISTENCY_ADAPTER = `${LOOM_PRODUCTION_PREFIX}lib/cortex-contracts.ts`;
+
 const EXECUTABLE_SKILL_PACKAGE_GATE = `${LOOM_PRODUCTION_PREFIX}executable-skills/package-gate.ts`;
+
 const ARTICLE_PROVIDER_PREFIX =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/';
+
 const ARTICLE_APPLICATION = `${ARTICLE_PROVIDER_PREFIX}src/application.ts`;
+
 const ARTICLE_DOMAIN = `${ARTICLE_PROVIDER_PREFIX}src/domain.ts`;
+
 const CONSISTENCY_PROVIDER_PREFIX =
   '.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/';
+
 const CONSISTENCY_APPLICATION = `${CONSISTENCY_PROVIDER_PREFIX}src/application.ts`;
+
 const CONSISTENCY_DOMAIN = `${CONSISTENCY_PROVIDER_PREFIX}src/domain.ts`;
+
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/u;
+
 const SUBPROCESS_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|sh)$/u;
+
 const RUNTIME_SOURCE_SUFFIXES = [
   '',
   ...'ts tsx mts cts js jsx mjs cjs'.split(' ').map((value) => `.${value}`),
 ] as const;
+
 const transpilerOptions: RuntimeTranspilerOptions = { loader: 'tsx' };
+
 const RUNTIME_IMPORT_SCANNER = new Bun.Transpiler(transpilerOptions);
-
-function trackedRepositoryInventory(): TrackedRepositoryInventory {
-  const spawnOptions: TrackedSourcesSpawnOptions = {
-    cmd: ['git', 'ls-files', '--stage', '-z'],
-    cwd: REPOSITORY_ROOT,
-    stderr: 'pipe',
-    stdout: 'pipe',
-  };
-  const result = Bun.spawnSync(spawnOptions);
-  if (result.exitCode !== 0) {
-    throw new Error(`Unable to enumerate tracked sources: ${result.stderr}`);
-  }
-  return parseTrackedRepositoryInventory(result.stdout.toString());
-}
-
-function parseTrackedRepositoryInventory(
-  source: string,
-): TrackedRepositoryInventory {
-  const paths: string[] = [];
-  const executablePaths = new Set<string>();
-  const symlinkPaths = new Set<string>();
-  for (const entry of source.split('\0').filter(Boolean)) {
-    const separator = entry.indexOf('\t');
-    if (separator < 0) throw new Error('Tracked source record has no path');
-    const metadata = entry.slice(0, separator);
-    const path = entry.slice(separator + 1);
-    paths.push(path);
-    if (metadata.startsWith('120000 ')) symlinkPaths.add(path);
-    if (metadata.startsWith('100755 ')) executablePaths.add(path);
-  }
-  return { executablePaths, paths, symlinkPaths };
-}
-
-function runtimeDependencyViolations(
-  inspection: RuntimeDependencyGraphInspection,
-): readonly string[] {
-  const pending = [...inspection.roots];
-  const visited = new Set<string>();
-  const violations: string[] = [];
-  while (pending.length > 0) {
-    const path = pending.pop();
-    if (!path || visited.has(path)) continue;
-    visited.add(path);
-    if (inspection.symlinkPaths.has(path)) {
-      violations.push(path);
-      continue;
-    }
-    const extensionless = posix.extname(path).length === 0;
-    if (!SUBPROCESS_SOURCE_EXTENSION.test(path) && !extensionless) {
-      violations.push(path);
-      continue;
-    }
-    const source = inspection.sources.get(path);
-    if (typeof source !== 'string') {
-      violations.push(path);
-      continue;
-    }
-    const sourceBody = source.replace(/^#![^\n]*(?:\n|$)/u, '');
-    const boundaryInspection = {
-      path,
-      roots: new Set(inspection.roots),
-      shellPolicy: ShellExecutablePolicy.TrackedConfiguration,
-      source: sourceBody,
-      sources: inspection.sources,
-    };
-    const adapterInspection = { path, source: sourceBody };
-    if (
-      (path === LOOM_ARTICLE_ADAPTER || path === LOOM_CONSISTENCY_ADAPTER
-        ? cortexArticleAdapterViolatesBoundary(adapterInspection)
-        : path !== EXECUTABLE_SKILL_PACKAGE_GATE &&
-          executableScriptViolatesBoundary(boundaryInspection)) ||
-      (path.endsWith('.sh') &&
-        shellExecutableLaunchesUnprovenScript(sourceBody))
-    ) {
-      violations.push(path);
-      continue;
-    }
-    const importedModules =
-      EXECUTABLE_SOURCE_EXTENSION.test(path) || extensionless
-        ? RUNTIME_IMPORT_SCANNER.scanImports(sourceBody)
-        : [];
-    for (const imported of importedModules) {
-      const resolution: RuntimeDependencyResolution = {
-        importer: path,
-        sources: inspection.sources,
-        specifier: imported.path,
-      };
-      const dependency = resolveRuntimeDependency(resolution);
-      const providerReference =
-        specifierReferencesSkillProvider(imported.path) ||
-        referencesSkillProvider(resolution);
-      const edge: RuntimeDependencyEdge | false =
-        dependency === false ? false : { dependency, importer: path };
-      if (
-        (providerReference && dependency === false) ||
-        (edge !== false &&
-          isSkillApplicationDependency(edge.dependency) &&
-          !isAuthorizedSkillApplicationEdge(edge))
-      ) {
-        violations.push(path);
-      } else if (
-        dependency !== false &&
-        (EXECUTABLE_SOURCE_EXTENSION.test(dependency) ||
-          posix.extname(dependency) === '')
-      ) {
-        pending.push(dependency);
-      } else if (
-        dependency === false &&
-        (imported.path.startsWith('.') ||
-          isRepositoryBackedSpecifier(resolution))
-      ) {
-        violations.push(path);
-      }
-    }
-    const entrypointInspection = {
-      executablePaths: inspection.executablePaths,
-      importer: path,
-      source: sourceBody,
-      sources: inspection.sources,
-    };
-    const entrypoints = repositorySubprocessEntrypoints(entrypointInspection);
-    for (const dependency of entrypoints.paths) {
-      const edge: RuntimeDependencyEdge = { dependency, importer: path };
-      if (
-        isSkillApplicationDependency(dependency) &&
-        !isAuthorizedSkillApplicationEdge(edge)
-      ) {
-        violations.push(path);
-      } else {
-        pending.push(dependency);
-      }
-    }
-    if (entrypoints.unresolved && path !== EXECUTABLE_SKILL_PACKAGE_GATE)
-      violations.push(path);
-  }
-  return [...new Set(violations)].sort();
-}
-
-function isSkillApplicationDependency(path: string): boolean {
-  return (
-    path === LOOM_ARTICLE_ADAPTER ||
-    path === LOOM_CONSISTENCY_ADAPTER ||
-    path.startsWith(ARTICLE_PROVIDER_PREFIX) ||
-    path.startsWith(CONSISTENCY_PROVIDER_PREFIX)
-  );
-}
-
-function isAuthorizedSkillApplicationEdge(
-  edge: RuntimeDependencyEdge,
-): boolean {
-  if (edge.dependency === LOOM_ARTICLE_ADAPTER) {
-    return edge.importer === CORTEX_AUDIT;
-  }
-  if (edge.dependency === LOOM_CONSISTENCY_ADAPTER) {
-    return edge.importer === CORTEX_AUDIT;
-  }
-  if (edge.importer === LOOM_ARTICLE_ADAPTER) {
-    return (
-      edge.dependency === ARTICLE_APPLICATION ||
-      edge.dependency === ARTICLE_DOMAIN
-    );
-  }
-  if (edge.importer === LOOM_CONSISTENCY_ADAPTER) {
-    return (
-      edge.dependency === CONSISTENCY_APPLICATION ||
-      edge.dependency === CONSISTENCY_DOMAIN
-    );
-  }
-  return (
-    (edge.importer.startsWith(ARTICLE_PROVIDER_PREFIX) &&
-      edge.dependency.startsWith(ARTICLE_PROVIDER_PREFIX)) ||
-    (edge.importer.startsWith(CONSISTENCY_PROVIDER_PREFIX) &&
-      edge.dependency.startsWith(CONSISTENCY_PROVIDER_PREFIX))
-  );
-}
-
-function skillApplicationDependencies(
-  request: RuntimeDependencyListRequest,
-): readonly string[] {
-  const [source = ''] = [request.sources.get(request.importer)];
-  const dependencies = new Set<string>();
-  for (const imported of RUNTIME_IMPORT_SCANNER.scanImports(source)) {
-    const resolution: RuntimeDependencyResolution = {
-      importer: request.importer,
-      sources: request.sources,
-      specifier: imported.path,
-    };
-    const dependency = resolveRuntimeDependency(resolution);
-    if (dependency !== false && isSkillApplicationDependency(dependency)) {
-      dependencies.add(dependency);
-    }
-  }
-  return [...dependencies].sort();
-}
-
-function resolveRuntimeDependency(
-  resolution: RuntimeDependencyResolution,
-): string | false {
-  if (!resolution.specifier.startsWith('.')) return false;
-  const base = normalizedDependencyPath(resolution);
-  for (const suffix of RUNTIME_SOURCE_SUFFIXES) {
-    const direct = `${base}${suffix}`;
-    if (resolution.sources.has(direct)) return direct;
-    const indexed = `${base}/index${suffix}`;
-    if (resolution.sources.has(indexed)) return indexed;
-  }
-  return false;
-}
-
-function isRepositoryBackedSpecifier(
-  resolution: RuntimeDependencyResolution,
-): boolean {
-  const specifier = resolution.specifier;
-  if (specifier.startsWith('#') || specifier.startsWith('file:')) return true;
-  if (specifier.startsWith('.') || specifier.startsWith('node:')) return false;
-  const segments = specifier.split('/');
-  const [defaulted1 = ''] = [segments[0]];
-  const packageName = specifier.startsWith('@')
-    ? segments.slice(0, 2).join('/')
-    : defaulted1;
-  for (const [path, source] of resolution.sources) {
-    if (!path.endsWith('package.json') || source.length === 0) continue;
-    let document: RepositoryPackageDocument;
-    try {
-      document = JSON.parse(source) as RepositoryPackageDocument;
-    } catch {
-      continue;
-    }
-    if (document.name === packageName) return true;
-    for (const dependencies of [
-      document.dependencies,
-      document.devDependencies,
-      document.optionalDependencies,
-    ]) {
-      const [dependency = false] = [dependencies?.[packageName]];
-      if (
-        dependency !== false &&
-        (dependency.startsWith('file:') || dependency.startsWith('workspace:'))
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function referencesSkillProvider(
-  resolution: RuntimeDependencyResolution,
-): boolean {
-  const path = normalizedDependencyPath(resolution);
-  return (
-    path === '.agents/skills' ||
-    path.startsWith('.agents/skills/') ||
-    path === ARTICLE_PROVIDER_PREFIX.slice(0, -1) ||
-    path.startsWith(ARTICLE_PROVIDER_PREFIX) ||
-    path === CONSISTENCY_PROVIDER_PREFIX.slice(0, -1) ||
-    path.startsWith(CONSISTENCY_PROVIDER_PREFIX)
-  );
-}
-
-function normalizedDependencyPath(
-  resolution: RuntimeDependencyResolution,
-): string {
-  return posix.normalize(
-    posix.join(posix.dirname(resolution.importer), resolution.specifier),
-  );
-}
 
 test('follows runtime facades without scanning unrelated provider references', () => {
   const sources = new Map<string, string>([
@@ -374,10 +437,9 @@ test('follows runtime facades without scanning unrelated provider references', (
     sources,
     symlinkPaths: new Set<string>(),
   };
-  expect(runtimeDependencyViolations(inspection)).toEqual([
-    'agentic-ai/loom/src/unsafe.ts',
-    'agentic-ai/nested/index.ts',
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+  ).toEqual(['agentic-ai/loom/src/unsafe.ts', 'agentic-ai/nested/index.ts']);
 });
 
 test('fails closed for repository-backed module aliases', () => {
@@ -406,14 +468,16 @@ test('fails closed for repository-backed module aliases', () => {
       sources,
       symlinkPaths: new Set<string>(),
     };
-    expect(runtimeDependencyViolations(inspection), specifier).toEqual([
-      'agentic-ai/loom/src/cli.js',
-    ]);
+    expect(
+      SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+      specifier,
+    ).toEqual(['agentic-ai/loom/src/cli.js']);
   }
 });
 
 test('production Loom reaches providers only through its semantic adapter', async () => {
-  const inventory = trackedRepositoryInventory();
+  const inventory =
+    SkillProviderReachabilityScenario.trackedRepositoryInventory();
   const trackedPaths = inventory.paths;
   const roots = trackedPaths
     .filter(
@@ -443,27 +507,32 @@ test('production Loom reaches providers only through its semantic adapter', asyn
     importer: CORTEX_AUDIT,
     sources,
   };
-  expect(skillApplicationDependencies(auditDependenciesRequest)).toEqual([
-    LOOM_ARTICLE_ADAPTER,
-    LOOM_CONSISTENCY_ADAPTER,
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.skillApplicationDependencies(
+      auditDependenciesRequest,
+    ),
+  ).toEqual([LOOM_ARTICLE_ADAPTER, LOOM_CONSISTENCY_ADAPTER]);
   const adapterDependenciesRequest: RuntimeDependencyListRequest = {
     importer: LOOM_ARTICLE_ADAPTER,
     sources,
   };
-  expect(skillApplicationDependencies(adapterDependenciesRequest)).toEqual([
-    ARTICLE_APPLICATION,
-    ARTICLE_DOMAIN,
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.skillApplicationDependencies(
+      adapterDependenciesRequest,
+    ),
+  ).toEqual([ARTICLE_APPLICATION, ARTICLE_DOMAIN]);
   const consistencyDependenciesRequest: RuntimeDependencyListRequest = {
     importer: LOOM_CONSISTENCY_ADAPTER,
     sources,
   };
-  expect(skillApplicationDependencies(consistencyDependenciesRequest)).toEqual([
-    CONSISTENCY_APPLICATION,
-    CONSISTENCY_DOMAIN,
-  ]);
-  expect(runtimeDependencyViolations(inspection)).toEqual([]);
+  expect(
+    SkillProviderReachabilityScenario.skillApplicationDependencies(
+      consistencyDependenciesRequest,
+    ),
+  ).toEqual([CONSISTENCY_APPLICATION, CONSISTENCY_DOMAIN]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+  ).toEqual([]);
 });
 
 test('rejects every alternate application consumer edge', () => {
@@ -497,7 +566,10 @@ test('rejects every alternate application consumer edge', () => {
       sources,
       symlinkPaths: new Set<string>(),
     };
-    expect(runtimeDependencyViolations(inspection), root).toContain(root);
+    expect(
+      SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+      root,
+    ).toContain(root);
   }
 });
 
@@ -516,20 +588,21 @@ test('rejects a dangerous adapter on the canonical runtime chain', () => {
     sources,
     symlinkPaths: new Set<string>(),
   };
-  expect(runtimeDependencyViolations(inspection)).toContain(
-    LOOM_ARTICLE_ADAPTER,
-  );
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+  ).toContain(LOOM_ARTICLE_ADAPTER);
 });
 
 test('rejects every reachable tracked symlink facade', () => {
-  const inventory = parseTrackedRepositoryInventory(
-    [
-      '100644 aaaa 0\tagentic-ai/loom/src/cli.ts',
-      '120000 bbbb 0\tagentic-ai/loom/src/provider-facade.ts',
-      '120000 dddd 0\tagentic-ai/loom/src/provider-facade',
-      '120000 cccc 0\tdocs/provider-facade.md',
-    ].join('\0'),
-  );
+  const inventory =
+    SkillProviderReachabilityScenario.parseTrackedRepositoryInventory(
+      [
+        '100644 aaaa 0\tagentic-ai/loom/src/cli.ts',
+        '120000 bbbb 0\tagentic-ai/loom/src/provider-facade.ts',
+        '120000 dddd 0\tagentic-ai/loom/src/provider-facade',
+        '120000 cccc 0\tdocs/provider-facade.md',
+      ].join('\0'),
+    );
   expect(inventory.paths).toContain('agentic-ai/loom/src/provider-facade.ts');
   const sources = new Map<string, string>([
     [
@@ -545,7 +618,9 @@ test('rejects every reachable tracked symlink facade', () => {
     sources,
     symlinkPaths: inventory.symlinkPaths,
   };
-  expect(runtimeDependencyViolations(inspection)).toEqual([
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+  ).toEqual([
     'agentic-ai/loom/src/provider-facade',
     'agentic-ai/loom/src/provider-facade.ts',
   ]);
@@ -575,9 +650,10 @@ test('follows repository subprocess entrypoints and fails closed', () => {
       sources,
       symlinkPaths: new Set<string>(),
     };
-    expect(runtimeDependencyViolations(inspection), launch).toContain(
-      'agentic-ai/loom/src/facade.ts',
-    );
+    expect(
+      SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+      launch,
+    ).toContain('agentic-ai/loom/src/facade.ts');
   }
   const packageScriptSources = new Map<string, string>([
     [
@@ -599,7 +675,11 @@ test('follows repository subprocess entrypoints and fails closed', () => {
     sources: packageScriptSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(runtimeDependencyViolations(packageScriptInspection)).toEqual([]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      packageScriptInspection,
+    ),
+  ).toEqual([]);
 
   for (const launch of [
     `function launch(scriptPath: string) {
@@ -654,7 +734,9 @@ runCommand(request);`,
       symlinkPaths: new Set<string>(),
     };
     expect(
-      runtimeDependencyViolations(failClosedInspection),
+      SkillProviderReachabilityScenario.runtimeDependencyViolations(
+        failClosedInspection,
+      ),
       launch,
     ).not.toEqual([]);
   }
@@ -669,9 +751,11 @@ runCommand(request);`,
     sources: extensionlessRuntimeSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(runtimeDependencyViolations(extensionlessRuntimeInspection)).toEqual([
-    'runner',
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      extensionlessRuntimeInspection,
+    ),
+  ).toEqual(['runner']);
 
   const sources = new Map<string, string>([
     ['agentic-ai/loom/src/cli.ts', "Bun.spawn(['bun', './missing.ts']);"],
@@ -682,9 +766,9 @@ runCommand(request);`,
     sources,
     symlinkPaths: new Set<string>(),
   };
-  expect(runtimeDependencyViolations(inspection)).toEqual([
-    'agentic-ai/loom/src/cli.ts',
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+  ).toEqual(['agentic-ai/loom/src/cli.ts']);
 });
 
 test('checks external and extensionless subprocess scripts as executable sources', () => {
@@ -706,9 +790,10 @@ test('checks external and extensionless subprocess scripts as executable sources
       sources,
       symlinkPaths: new Set<string>(),
     };
-    expect(runtimeDependencyViolations(inspection), facadeSource).toContain(
-      'tools/facade.ts',
-    );
+    expect(
+      SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+      facadeSource,
+    ).toContain('tools/facade.ts');
   }
 
   const extensionlessSources = new Map<string, string>([
@@ -724,9 +809,11 @@ test('checks external and extensionless subprocess scripts as executable sources
     sources: extensionlessSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(runtimeDependencyViolations(extensionlessInspection)).toEqual([
-    'tools/runner',
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      extensionlessInspection,
+    ),
+  ).toEqual(['tools/runner']);
 
   const nonExecutableInspection: RuntimeDependencyGraphInspection = {
     executablePaths: new Set<string>(),
@@ -734,9 +821,11 @@ test('checks external and extensionless subprocess scripts as executable sources
     sources: extensionlessSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(runtimeDependencyViolations(nonExecutableInspection)).toEqual([
-    'agentic-ai/loom/src/cli.ts',
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      nonExecutableInspection,
+    ),
+  ).toEqual(['agentic-ai/loom/src/cli.ts']);
 
   const shellSources = new Map<string, string>([
     [
@@ -751,39 +840,52 @@ test('checks external and extensionless subprocess scripts as executable sources
     sources: shellSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(runtimeDependencyViolations(shellInspection)).toEqual([]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      shellInspection,
+    ),
+  ).toEqual([]);
 
   shellSources.set(
     'tools/facade.sh',
     '#!/bin/sh\nbun .agents/skills/provider/src/audit.ts',
   );
-  expect(runtimeDependencyViolations(shellInspection)).toEqual([
-    'tools/facade.sh',
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      shellInspection,
+    ),
+  ).toEqual(['tools/facade.sh']);
 
   shellSources.set('tools/facade.sh', '#!/bin/sh\nbun ../nested.ts');
   shellSources.set(
     'nested.ts',
     "import './.agents/skills/provider/src/audit.ts';",
   );
-  expect(runtimeDependencyViolations(shellInspection)).toEqual([
-    'tools/facade.sh',
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      shellInspection,
+    ),
+  ).toEqual(['tools/facade.sh']);
 
   shellSources.set('tools/facade.sh', '#!/bin/sh\nbun ../runner');
   shellSources.set(
     'runner',
     "import './.agents/skills/provider/src/audit.ts';",
   );
-  expect(runtimeDependencyViolations(shellInspection)).toEqual([
-    'tools/facade.sh',
-  ]);
+  expect(
+    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      shellInspection,
+    ),
+  ).toEqual(['tools/facade.sh']);
 
   for (const launch of ['MODE=x bun ../runner', 'exec bun ../runner']) {
     shellSources.set('tools/facade.sh', `#!/bin/sh\n${launch}`);
-    expect(runtimeDependencyViolations(shellInspection), launch).toEqual([
-      'tools/facade.sh',
-    ]);
+    expect(
+      SkillProviderReachabilityScenario.runtimeDependencyViolations(
+        shellInspection,
+      ),
+      launch,
+    ).toEqual(['tools/facade.sh']);
   }
 });
 
@@ -830,7 +932,9 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
       filePath: 'dynamic-evaluator.mts',
       source,
     };
-    expect(violatesSkillProviderBoundary(inspection)).toBe(true);
+    expect(
+      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+    ).toBe(true);
   }
   for (const source of [
     'export {}; const eval = (value: string) => value;',
@@ -850,6 +954,11 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     "const record = { label: 'safe' }; const { masked = record as Record<string, string> } = {}; const key = computeKey(); masked[key];",
   ]) {
     const localInspection = { filePath: 'local-evaluator.ts', source };
-    expect(violatesSkillProviderBoundary(localInspection), source).toBe(false);
+    expect(
+      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        localInspection,
+      ),
+      source,
+    ).toBe(false);
   }
 });

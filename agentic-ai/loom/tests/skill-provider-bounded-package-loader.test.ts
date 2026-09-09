@@ -1,11 +1,7 @@
 import { join } from 'node:path';
 import { expect, test } from 'bun:test';
-import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
-import {
-  specializeBoundedLocalDataLoaders,
-  specializeBoundedPackageLoaders,
-  specializeProvenGeneratedArtifactLoader,
-} from './skill-provider-bounded-package-loader.ts';
+import { SkillProviderBoundaryScenario } from './skill-provider-boundary.test.ts';
+import { SkillProviderBoundedPackageLoaderScenario } from './skill-provider-bounded-package-loader.ts';
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 
@@ -23,7 +19,10 @@ test('specializes only closed finite external package loaders', async () => {
     source: defaulted1,
     sources,
   };
-  const specialized = specializeBoundedPackageLoaders(inspection);
+  const specialized =
+    SkillProviderBoundedPackageLoaderScenario.specializeBoundedPackageLoaders(
+      inspection,
+    );
   expect(specialized).toContain("from 'bounded-package-loader'");
   expect(specialized).toContain('return Promise.resolve(false)');
   const sourceInspection = {
@@ -31,7 +30,11 @@ test('specializes only closed finite external package loaders', async () => {
     filePath: path,
     source: specialized,
   };
-  expect(violatesSkillProviderBoundary(sourceInspection)).toBe(false);
+  expect(
+    SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+      sourceInspection,
+    ),
+  ).toBe(false);
 });
 
 test('specializes only closed tracked local data modules', async () => {
@@ -48,14 +51,21 @@ test('specializes only closed tracked local data modules', async () => {
     source: defaulted2,
     sources,
   };
-  const specialized = specializeBoundedLocalDataLoaders(inspection);
+  const specialized =
+    SkillProviderBoundedPackageLoaderScenario.specializeBoundedLocalDataLoaders(
+      inspection,
+    );
   expect(specialized).toContain("await import('../src/landing/messages.js')");
   const sourceInspection = {
     allowUnprovenComputedDataAccess: true as const,
     filePath: path,
     source: specialized,
   };
-  expect(violatesSkillProviderBoundary(sourceInspection)).toBe(false);
+  expect(
+    SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+      sourceInspection,
+    ),
+  ).toBe(false);
 });
 
 test('does not specialize escaped, computed, or repository-backed loaders', () => {
@@ -84,7 +94,12 @@ test('does not specialize escaped, computed, or repository-backed loaders', () =
       source,
       sources,
     };
-    expect(specializeBoundedPackageLoaders(inspection), tail).toBe(source);
+    expect(
+      SkillProviderBoundedPackageLoaderScenario.specializeBoundedPackageLoaders(
+        inspection,
+      ),
+      tail,
+    ).toBe(source);
   }
 });
 
@@ -104,7 +119,10 @@ test('specializes only exact source-closed generated artifacts', async () => {
   const roots = new Set([producerPath, envPath]);
   const [source = ''] = [sources.get(path)];
   const inspection = { path, roots, source, sources };
-  const specialized = specializeProvenGeneratedArtifactLoader(inspection);
+  const specialized =
+    SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
+      inspection,
+    );
   expect(specialized).toContain(
     "await import('../cloudflare-pages/legacy-route-worker.js')",
   );
@@ -114,9 +132,11 @@ test('specializes only exact source-closed generated artifacts', async () => {
     source.replace('Date.now()', 'callerNonce()'),
   ]) {
     const unsafeInspection = { path, roots, source: unsafeSource, sources };
-    expect(specializeProvenGeneratedArtifactLoader(unsafeInspection)).toBe(
-      unsafeSource,
-    );
+    expect(
+      SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
+        unsafeInspection,
+      ),
+    ).toBe(unsafeSource);
   }
   const unprovenInspection = {
     path,
@@ -124,7 +144,9 @@ test('specializes only exact source-closed generated artifacts', async () => {
     source,
     sources,
   };
-  expect(specializeProvenGeneratedArtifactLoader(unprovenInspection)).toBe(
-    source,
-  );
+  expect(
+    SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
+      unprovenInspection,
+    ),
+  ).toBe(source);
 });

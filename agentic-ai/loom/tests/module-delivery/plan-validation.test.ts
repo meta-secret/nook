@@ -1,62 +1,45 @@
-import { describe, expect, test } from 'bun:test';
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
-  REQUIRED_PARENT_OWNED_RESOURCES,
+  ModuleDeliveryPlanValidationScenario,
+  SOURCE_COMMIT,
+  PARENT_OWNED_RESOURCES,
+  CORE_ROOT,
+} from './plan-validation.fixture.ts';
+import type {
+  PlanFixture,
+  WriteNodeFixture,
+  ReadOnlyNodeFixture,
+  EdgeFixture,
+} from './plan-validation.fixture.ts';
+export { ModuleDeliveryPlanValidationScenario } from './plan-validation.fixture.ts';
+import { describe, expect, test } from 'bun:test';
+
+import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+
+import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryIssueCode,
-  ModuleDeliveryJoinKind,
   ModuleDeliveryEvidenceInputSchema,
   ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryTaskKind,
   ModuleDeliveryTaskProfile,
   ModuleDeliveryValidationStatus,
-  ModuleDeliveryWorkspaceKind,
-  decodeAndValidateModuleDeliveryPlan,
+  ModuleDeliveryPlanDecoder,
 } from '../../src/module-delivery/index.ts';
+
 import type {
   LegacyModuleDeliveryPlan,
   LegacyModuleDeliveryNode,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryExecutionPrecedence,
-  ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
   ModuleDeliveryPlanV2,
-  ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
+
 import { TeamKey } from '../../src/team-agents/catalog.ts';
-
-const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
-const PARENT_OWNED_RESOURCES: readonly string[] = [
-  ...REQUIRED_PARENT_OWNED_RESOURCES,
-];
-type WriteNodeFixture = {
-  readonly taskId: string;
-  readonly expert: string;
-  readonly moduleRoot: string;
-  readonly dependencies: readonly string[];
-  readonly read: readonly string[];
-  readonly write: readonly string[];
-};
-
-type ReadOnlyNodeFixture = {
-  readonly taskId: string;
-  readonly expert: string;
-  readonly moduleRoot: string;
-  readonly dependencies: readonly string[];
-};
-
-type EdgeFixture = {
-  readonly providerTaskId: string;
-  readonly consumerTaskId: string;
-};
-type PlanFixture = {
-  readonly nodes: readonly ModuleDeliveryNodeV2[];
-  readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
-};
 
 type LegacySynthesisNode = Omit<LegacyModuleDeliveryNode, 'kind'> & {
   readonly kind: ModuleDeliveryTaskKind.EvidenceSynthesis;
@@ -73,7 +56,9 @@ type LegacyLineageHybridNode = LegacyModuleDeliveryNode & {
 };
 
 type LegacyAdversarialNode =
-  LegacySynthesisNode | LegacyOwnerHybridNode | LegacyLineageHybridNode;
+  | LegacySynthesisNode
+  | LegacyOwnerHybridNode
+  | LegacyLineageHybridNode;
 
 type LegacyAdversarialPlan = Omit<LegacyModuleDeliveryPlan, 'nodes'> & {
   readonly nodes: readonly LegacyAdversarialNode[];
@@ -93,173 +78,8 @@ type NodeFailureFixture = {
   readonly code: ModuleDeliveryIssueCode;
 };
 
-function writeNode(fixture: WriteNodeFixture): ModuleDeliveryWriteNodeV2 {
-  const baseline: ModuleDeliveryBaseline =
-    fixture.dependencies.length === 0
-      ? {
-          kind: ModuleDeliveryBaselineKind.SourceCommit,
-          sourceCommit: SOURCE_COMMIT,
-        }
-      : {
-          kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
-          providerTaskIds: fixture.dependencies,
-        };
-  return {
-    kind: ModuleDeliveryTaskKind.Write,
-    taskId: fixture.taskId,
-    team:
-      fixture.expert === 'web_expert'
-        ? TeamKey.WebDevelopment
-        : TeamKey.DevelopmentCore,
-    functionalOwner: TeamKey.Ai,
-    acceptanceOwner: TeamKey.Ai,
-    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-    expert: fixture.expert,
-    moduleRoot: fixture.moduleRoot,
-    consumerOutcome: `${fixture.taskId} publishes its accepted capability.`,
-    baseline,
-    agentDepthLimit: 2,
-    dependencies: fixture.dependencies,
-    resources: {
-      read: fixture.read,
-      write: fixture.write,
-      evidenceSurface: [],
-    },
-    parentOwnedExclusions: PARENT_OWNED_RESOURCES,
-    acceptance: {
-      commands: [`task ${fixture.taskId}:test`],
-      evidence: [`${fixture.taskId} behavior passes`],
-    },
-    workspace: {
-      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-      expectedCommitHandoff: true,
-    },
-  };
-}
-
-function readOnlyNode(
-  fixture: ReadOnlyNodeFixture,
-): ModuleDeliveryReadOnlyNodeV2 {
-  const baseline: ModuleDeliveryBaseline =
-    fixture.dependencies.length === 0
-      ? {
-          kind: ModuleDeliveryBaselineKind.SourceCommit,
-          sourceCommit: SOURCE_COMMIT,
-        }
-      : {
-          kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
-          providerTaskIds: fixture.dependencies,
-        };
-  return {
-    kind: ModuleDeliveryTaskKind.ReadOnly,
-    taskId: fixture.taskId,
-    team: TeamKey.DevelopmentCore,
-    functionalOwner: TeamKey.Ai,
-    acceptanceOwner: TeamKey.Ai,
-    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-    expert: fixture.expert,
-    moduleRoot: fixture.moduleRoot,
-    consumerOutcome: `${fixture.taskId} reports reviewed evidence.`,
-    baseline,
-    agentDepthLimit: 2,
-    dependencies: fixture.dependencies,
-    resources: {
-      read: [`${fixture.moduleRoot}/**`],
-      write: [],
-      evidenceSurface: [`${fixture.moduleRoot}/**`],
-    },
-    parentOwnedExclusions: PARENT_OWNED_RESOURCES,
-    acceptance: {
-      commands: [`task ${fixture.taskId}:audit`],
-      evidence: [`${fixture.taskId} review is complete`],
-    },
-  };
-}
-
-function edgeContract(fixture: EdgeFixture): ModuleDeliveryEdgeContract {
-  return {
-    providerTaskId: fixture.providerTaskId,
-    consumerTaskId: fixture.consumerTaskId,
-    capability: `${fixture.providerTaskId} capability`,
-    publicTypes: [`${fixture.providerTaskId}Request`],
-    errors: [`${fixture.providerTaskId}Error`],
-    behaviorInvariants: ['Behavior is deterministic.'],
-    securityInvariants: ['Protected material remains provider-owned.'],
-    compatibilityExpectations: ['Existing consumers remain compatible.'],
-    owningTests: [`${fixture.providerTaskId} contract test`],
-  };
-}
-
-function plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
-  return {
-    version: 2,
-    generation: 1,
-    sourceCommit: SOURCE_COMMIT,
-    maxConcurrency: 3,
-    maxAgentDepth: 3,
-    maxAttempts: 2,
-    parentOwnedResources: PARENT_OWNED_RESOURCES,
-    parentJoin: {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
-      owner: 'delivery-owner',
-      validationCommands: ['task loom:verify'],
-    },
-    nodes: fixture.nodes,
-    edgeContracts: fixture.edgeContracts,
-  };
-}
-
-function validate(value: ModuleDeliveryPlanV2): ModuleDeliveryPlanValidation {
-  return decodeAndValidateModuleDeliveryPlan(JSON.stringify(value));
-}
-
-function legacyPlan(): LegacyModuleDeliveryPlan {
-  return {
-    version: 1,
-    sourceCommit: SOURCE_COMMIT,
-    maxConcurrency: 1,
-    maxAgentDepth: 2,
-    maxAttempts: 2,
-    parentOwnedResources: PARENT_OWNED_RESOURCES,
-    parentJoin: {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
-      owner: 'delivery-owner',
-      validationCommands: ['task loom:verify'],
-    },
-    nodes: [
-      {
-        kind: ModuleDeliveryTaskKind.ReadOnly,
-        taskId: 'legacy-core-audit',
-        expert: 'core_expert',
-        moduleRoot: CORE_ROOT,
-        consumerOutcome: 'The parent receives reviewed legacy evidence.',
-        baseline: {
-          kind: ModuleDeliveryBaselineKind.SourceCommit,
-          sourceCommit: SOURCE_COMMIT,
-        },
-        agentDepthLimit: 2,
-        dependencies: [],
-        resources: { read: [`${CORE_ROOT}/**`], write: [] },
-        parentOwnedExclusions: PARENT_OWNED_RESOURCES,
-        acceptance: {
-          commands: ['task core:audit'],
-          evidence: ['Legacy evidence is reviewed.'],
-        },
-      },
-    ],
-    edgeContracts: [],
-  };
-}
-
-function codes(
-  result: ModuleDeliveryPlanValidation,
-): readonly ModuleDeliveryIssueCode[] {
-  if (result.status === ModuleDeliveryValidationStatus.Accepted) return [];
-  return result.issues.map((entry) => entry.code);
-}
-
-const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 const WASM_ROOT = 'nook-app/nook-platform/nook-wasm';
+
 const WEB_ROOT = 'nook-app/nook-web/nook-web-app';
 
 const CORE_FIXTURE: WriteNodeFixture = {
@@ -270,7 +90,9 @@ const CORE_FIXTURE: WriteNodeFixture = {
   read: [`${CORE_ROOT}/**`],
   write: [`${CORE_ROOT}/**`],
 };
-const CORE_NODE = writeNode(CORE_FIXTURE);
+
+const CORE_NODE = ModuleDeliveryPlanValidationScenario.writeNode(CORE_FIXTURE);
+
 const WASM_FIXTURE: WriteNodeFixture = {
   taskId: 'wasm-adapter',
   expert: 'internal_api_expert',
@@ -279,7 +101,9 @@ const WASM_FIXTURE: WriteNodeFixture = {
   read: [`${CORE_ROOT}/**`],
   write: [`${WASM_ROOT}/**`],
 };
-const WASM_NODE = writeNode(WASM_FIXTURE);
+
+const WASM_NODE = ModuleDeliveryPlanValidationScenario.writeNode(WASM_FIXTURE);
+
 const WEB_FIXTURE: WriteNodeFixture = {
   taskId: 'web-consumer',
   expert: 'web_expert',
@@ -288,22 +112,33 @@ const WEB_FIXTURE: WriteNodeFixture = {
   read: [`${WASM_ROOT}/**`],
   write: [`${WEB_ROOT}/**`],
 };
-const WEB_NODE = writeNode(WEB_FIXTURE);
+
+const WEB_NODE = ModuleDeliveryPlanValidationScenario.writeNode(WEB_FIXTURE);
+
 const CORE_WASM_EDGE_FIXTURE: EdgeFixture = {
   providerTaskId: 'core-provider',
   consumerTaskId: 'wasm-adapter',
 };
+
 const WASM_WEB_EDGE_FIXTURE: EdgeFixture = {
   providerTaskId: 'wasm-adapter',
   consumerTaskId: 'web-consumer',
 };
-const CORE_WASM_EDGE = edgeContract(CORE_WASM_EDGE_FIXTURE);
-const WASM_WEB_EDGE = edgeContract(WASM_WEB_EDGE_FIXTURE);
+
+const CORE_WASM_EDGE = ModuleDeliveryPlanValidationScenario.edgeContract(
+  CORE_WASM_EDGE_FIXTURE,
+);
+
+const WASM_WEB_EDGE = ModuleDeliveryPlanValidationScenario.edgeContract(
+  WASM_WEB_EDGE_FIXTURE,
+);
+
 const DEFAULT_NODES: readonly ModuleDeliveryNodeV2[] = [
   WEB_NODE,
   CORE_NODE,
   WASM_NODE,
 ];
+
 const DEFAULT_EDGES: readonly ModuleDeliveryEdgeContract[] = [
   WASM_WEB_EDGE,
   CORE_WASM_EDGE,
@@ -312,10 +147,14 @@ const DEFAULT_EDGES: readonly ModuleDeliveryEdgeContract[] = [
 describe('reviewed module delivery plan', () => {
   test('admits ordinary team tasks and rejects forged identity, profile, and scope', () => {
     const accepted = (node: ModuleDeliveryNodeV2) =>
-      validate(plan({ nodes: [node], edgeContracts: [] })).status ===
-      ModuleDeliveryValidationStatus.Accepted;
+      ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan({
+          nodes: [node],
+          edgeContracts: [],
+        }),
+      ).status === ModuleDeliveryValidationStatus.Accepted;
     const security: ModuleDeliveryReadOnlyNodeV2 = {
-      ...readOnlyNode({
+      ...ModuleDeliveryPlanValidationScenario.readOnlyNode({
         taskId: 'security-review',
         expert: ModuleDeliveryTaskProfile.Ordinary,
         moduleRoot: '.cortex/teams/security',
@@ -328,7 +167,7 @@ describe('reviewed module delivery plan', () => {
     for (const team of [TeamKey.Security, TeamKey.Sre])
       expect(accepted({ ...security, team })).toBe(true);
     const sreWrite = {
-      ...writeNode({
+      ...ModuleDeliveryPlanValidationScenario.writeNode({
         ...CORE_FIXTURE,
         expert: ModuleDeliveryTaskProfile.Ordinary,
         moduleRoot: 'infra',
@@ -359,7 +198,7 @@ describe('reviewed module delivery plan', () => {
 
   test('rejects v2-only task forms and authority fields in v1 input', () => {
     expect(LEGACY_INPUT_REJECTS_SYNTHESIS).toBe(true);
-    const legacy = legacyPlan();
+    const legacy = ModuleDeliveryPlanValidationScenario.legacyPlan();
     const node = legacy.nodes[0];
     if (!node) throw new Error('Legacy fixture must contain one node.');
     const candidates: readonly LegacyAdversarialPlan[] = [
@@ -382,11 +221,13 @@ describe('reviewed module delivery plan', () => {
     ];
 
     for (const candidate of candidates) {
-      const result = decodeAndValidateModuleDeliveryPlan(
+      const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
         JSON.stringify(candidate),
       );
       expect(result.status).toBe(ModuleDeliveryValidationStatus.Rejected);
-      expect(codes(result)).toContain(ModuleDeliveryIssueCode.InvalidField);
+      expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+        ModuleDeliveryIssueCode.InvalidField,
+      );
     }
   });
 
@@ -397,7 +238,8 @@ describe('reviewed module delivery plan', () => {
       moduleRoot: CORE_ROOT,
       dependencies: [],
     };
-    const provider = readOnlyNode(providerFixture);
+    const provider =
+      ModuleDeliveryPlanValidationScenario.readOnlyNode(providerFixture);
     const synthesis: ModuleDeliveryEvidenceSynthesisNodeV2 = {
       kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
       taskId: 'evidence-synthesis',
@@ -438,11 +280,15 @@ describe('reviewed module delivery plan', () => {
     };
     const fixture: PlanFixture = {
       nodes: [synthesis, provider],
-      edgeContracts: [edgeContract(edgeFixture)],
+      edgeContracts: [
+        ModuleDeliveryPlanValidationScenario.edgeContract(edgeFixture),
+      ],
     };
-    expect(validate(plan(fixture)).status).toBe(
-      ModuleDeliveryValidationStatus.Accepted,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan(fixture),
+      ).status,
+    ).toBe(ModuleDeliveryValidationStatus.Accepted);
 
     const selfAccepted: ModuleDeliveryEvidenceSynthesisNodeV2 = {
       ...synthesis,
@@ -450,11 +296,17 @@ describe('reviewed module delivery plan', () => {
     };
     const selfFixture: PlanFixture = {
       nodes: [selfAccepted, provider],
-      edgeContracts: [edgeContract(edgeFixture)],
+      edgeContracts: [
+        ModuleDeliveryPlanValidationScenario.edgeContract(edgeFixture),
+      ],
     };
-    expect(codes(validate(plan(selfFixture)))).toContain(
-      ModuleDeliveryIssueCode.AcceptanceOwnershipMismatch,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(selfFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.AcceptanceOwnershipMismatch);
 
     const forgedProducer: ModuleDeliveryEvidenceSynthesisNodeV2 = {
       ...synthesis,
@@ -472,11 +324,17 @@ describe('reviewed module delivery plan', () => {
     };
     const forgedFixture: PlanFixture = {
       nodes: [forgedProducer, provider],
-      edgeContracts: [edgeContract(edgeFixture)],
+      edgeContracts: [
+        ModuleDeliveryPlanValidationScenario.edgeContract(edgeFixture),
+      ],
     };
-    expect(codes(validate(plan(forgedFixture)))).toContain(
-      ModuleDeliveryIssueCode.EvidenceInputMismatch,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(forgedFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.EvidenceInputMismatch);
   });
 
   test('accepts the bottom-up graph and returns deterministic order and digest', () => {
@@ -484,7 +342,9 @@ describe('reviewed module delivery plan', () => {
       nodes: DEFAULT_NODES,
       edgeContracts: DEFAULT_EDGES,
     };
-    const result = validate(plan(fixture));
+    const result = ModuleDeliveryPlanValidationScenario.validate(
+      ModuleDeliveryPlanValidationScenario.plan(fixture),
+    );
     expect(result.status).toBe(ModuleDeliveryValidationStatus.Accepted);
     if (result.status !== ModuleDeliveryValidationStatus.Accepted) return;
     const expectedOrder = ['core-provider', 'wasm-adapter', 'web-consumer'];
@@ -495,7 +355,9 @@ describe('reviewed module delivery plan', () => {
       nodes: [WASM_NODE, WEB_NODE, CORE_NODE],
       edgeContracts: [CORE_WASM_EDGE, WASM_WEB_EDGE],
     };
-    const reordered = validate(plan(reorderedFixture));
+    const reordered = ModuleDeliveryPlanValidationScenario.validate(
+      ModuleDeliveryPlanValidationScenario.plan(reorderedFixture),
+    );
     expect(reordered.status).toBe(ModuleDeliveryValidationStatus.Accepted);
     if (reordered.status !== ModuleDeliveryValidationStatus.Accepted) return;
     expect(reordered.planDigest).toBe(result.planDigest);
@@ -511,7 +373,7 @@ describe('reviewed module delivery plan', () => {
       },
     };
     const fixture: PlanFixture = { nodes: [orderedNode], edgeContracts: [] };
-    const orderedPlan = plan(fixture);
+    const orderedPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
     const reversedNode: ModuleDeliveryWriteNodeV2 = {
       ...orderedNode,
       acceptance: {
@@ -523,8 +385,9 @@ describe('reviewed module delivery plan', () => {
       ...orderedPlan,
       nodes: [reversedNode],
     };
-    const ordered = validate(orderedPlan);
-    const reversedNodeResult = validate(reversedNodePlan);
+    const ordered = ModuleDeliveryPlanValidationScenario.validate(orderedPlan);
+    const reversedNodeResult =
+      ModuleDeliveryPlanValidationScenario.validate(reversedNodePlan);
     expect(ordered.status).toBe(ModuleDeliveryValidationStatus.Accepted);
     expect(reversedNodeResult.status).toBe(
       ModuleDeliveryValidationStatus.Accepted,
@@ -552,28 +415,34 @@ describe('reviewed module delivery plan', () => {
         read: [`${CORE_ROOT}/**`],
         write: [`${CORE_ROOT}/**`],
       };
-      nodes.push(writeNode(fixture));
+      nodes.push(ModuleDeliveryPlanValidationScenario.writeNode(fixture));
       if (previous !== '') {
         const edgeFixture: EdgeFixture = {
           providerTaskId: previous,
           consumerTaskId: taskId,
         };
-        edges.push(edgeContract(edgeFixture));
+        edges.push(
+          ModuleDeliveryPlanValidationScenario.edgeContract(edgeFixture),
+        );
       }
     }
     const fixture: PlanFixture = {
       nodes,
       edgeContracts: edges,
     };
-    const result = validate(plan(fixture));
+    const result = ModuleDeliveryPlanValidationScenario.validate(
+      ModuleDeliveryPlanValidationScenario.plan(fixture),
+    );
     expect(result.status).toBe(ModuleDeliveryValidationStatus.Accepted);
     if (result.status !== ModuleDeliveryValidationStatus.Accepted) return;
     expect(result.waves).toHaveLength(5);
   });
 
   test('rejects malformed transport before semantic validation', () => {
-    const result = decodeAndValidateModuleDeliveryPlan('{');
-    expect(codes(result)).toContain(ModuleDeliveryIssueCode.MalformedTransport);
+    const result = ModuleDeliveryPlanDecoder.decodeAndValidate('{');
+    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+      ModuleDeliveryIssueCode.MalformedTransport,
+    );
   });
 
   test('rejects non-exact commits and execution limits above policy', () => {
@@ -581,7 +450,7 @@ describe('reviewed module delivery plan', () => {
       nodes: DEFAULT_NODES,
       edgeContracts: DEFAULT_EDGES,
     };
-    const validPlan = plan(fixture);
+    const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
     const invalidPlan: ModuleDeliveryPlanV2 = {
       ...validPlan,
       sourceCommit: 'main',
@@ -589,9 +458,13 @@ describe('reviewed module delivery plan', () => {
       maxAgentDepth: 4,
       maxAttempts: 6,
     };
-    const result = validate(invalidPlan);
-    expect(codes(result)).toContain(ModuleDeliveryIssueCode.InvalidField);
-    expect(codes(result)).toContain(ModuleDeliveryIssueCode.LimitExceeded);
+    const result = ModuleDeliveryPlanValidationScenario.validate(invalidPlan);
+    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+      ModuleDeliveryIssueCode.LimitExceeded,
+    );
   });
 });
 
@@ -603,9 +476,11 @@ describe('task execution and canonical ownership', () => {
       nodes: [CORE_NODE, WASM_NODE],
       edgeContracts: [CORE_WASM_EDGE],
     };
-    expect(validate(plan(acceptedFixture)).status).toBe(
-      ModuleDeliveryValidationStatus.Accepted,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan(acceptedFixture),
+      ).status,
+    ).toBe(ModuleDeliveryValidationStatus.Accepted);
 
     const expertOwnedWasm: ModuleDeliveryWriteNodeV2 = {
       ...WASM_NODE,
@@ -615,9 +490,13 @@ describe('task execution and canonical ownership', () => {
       nodes: [CORE_NODE, expertOwnedWasm],
       edgeContracts: [CORE_WASM_EDGE],
     };
-    expect(codes(validate(plan(rejectedFixture)))).toContain(
-      ModuleDeliveryIssueCode.TeamOwnershipMismatch,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(rejectedFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.TeamOwnershipMismatch);
   });
 
   test('permits empty writes only for an explicitly read-only task', () => {
@@ -627,11 +506,14 @@ describe('task execution and canonical ownership', () => {
       moduleRoot: CORE_ROOT,
       dependencies: [],
     };
-    const audit = readOnlyNode(auditFixture);
+    const audit =
+      ModuleDeliveryPlanValidationScenario.readOnlyNode(auditFixture);
     const acceptedFixture: PlanFixture = { nodes: [audit], edgeContracts: [] };
-    expect(validate(plan(acceptedFixture)).status).toBe(
-      ModuleDeliveryValidationStatus.Accepted,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan(acceptedFixture),
+      ).status,
+    ).toBe(ModuleDeliveryValidationStatus.Accepted);
 
     const emptyWrite: ModuleDeliveryWriteNodeV2 = {
       ...CORE_NODE,
@@ -641,9 +523,13 @@ describe('task execution and canonical ownership', () => {
       nodes: [emptyWrite],
       edgeContracts: [],
     };
-    expect(codes(validate(plan(emptyFixture)))).toContain(
-      ModuleDeliveryIssueCode.InvalidField,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(emptyFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.InvalidField);
 
     const readOnlyWriter: ModuleDeliveryReadOnlyNodeV2 = {
       ...audit,
@@ -653,9 +539,13 @@ describe('task execution and canonical ownership', () => {
       nodes: [readOnlyWriter],
       edgeContracts: [],
     };
-    expect(codes(validate(plan(writerFixture)))).toContain(
-      ModuleDeliveryIssueCode.InvalidField,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(writerFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.InvalidField);
   });
 
   test('accepts evidence claims contained by broader repository reads', () => {
@@ -665,7 +555,8 @@ describe('task execution and canonical ownership', () => {
       moduleRoot: CORE_ROOT,
       dependencies: [],
     };
-    const audit = readOnlyNode(auditFixture);
+    const audit =
+      ModuleDeliveryPlanValidationScenario.readOnlyNode(auditFixture);
     const containedCases: readonly ModuleDeliveryReadOnlyNodeV2[] = [
       {
         ...audit,
@@ -695,9 +586,11 @@ describe('task execution and canonical ownership', () => {
 
     for (const node of containedCases) {
       const fixture: PlanFixture = { nodes: [node], edgeContracts: [] };
-      expect(validate(plan(fixture)).status).toBe(
-        ModuleDeliveryValidationStatus.Accepted,
-      );
+      expect(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(fixture),
+        ).status,
+      ).toBe(ModuleDeliveryValidationStatus.Accepted);
     }
   });
 
@@ -708,7 +601,8 @@ describe('task execution and canonical ownership', () => {
       moduleRoot: CORE_ROOT,
       dependencies: [],
     };
-    const audit = readOnlyNode(auditFixture);
+    const audit =
+      ModuleDeliveryPlanValidationScenario.readOnlyNode(auditFixture);
     const uncoveredCases: readonly ModuleDeliveryReadOnlyNodeV2[] = [
       {
         ...audit,
@@ -730,9 +624,13 @@ describe('task execution and canonical ownership', () => {
 
     for (const node of uncoveredCases) {
       const fixture: PlanFixture = { nodes: [node], edgeContracts: [] };
-      expect(codes(validate(plan(fixture)))).toContain(
-        ModuleDeliveryIssueCode.EvidenceSurfaceMismatch,
-      );
+      expect(
+        ModuleDeliveryPlanValidationScenario.codes(
+          ModuleDeliveryPlanValidationScenario.validate(
+            ModuleDeliveryPlanValidationScenario.plan(fixture),
+          ),
+        ),
+      ).toContain(ModuleDeliveryIssueCode.EvidenceSurfaceMismatch);
     }
   });
 
@@ -772,7 +670,13 @@ describe('task execution and canonical ownership', () => {
         nodes: [failure.node],
         edgeContracts: [],
       };
-      expect(codes(validate(plan(fixture)))).toContain(failure.code);
+      expect(
+        ModuleDeliveryPlanValidationScenario.codes(
+          ModuleDeliveryPlanValidationScenario.validate(
+            ModuleDeliveryPlanValidationScenario.plan(fixture),
+          ),
+        ),
+      ).toContain(failure.code);
     }
   });
 
@@ -804,12 +708,16 @@ describe('task execution and canonical ownership', () => {
       const nodes = node.taskId === 'wasm-adapter' ? [CORE_NODE, node] : [node];
       const edges = node.taskId === 'wasm-adapter' ? [CORE_WASM_EDGE] : [];
       const fixture: PlanFixture = { nodes, edgeContracts: edges };
-      const result = validate(plan(fixture));
+      const result = ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan(fixture),
+      );
       const expected =
         node === excessiveDepth
           ? ModuleDeliveryIssueCode.LimitExceeded
           : ModuleDeliveryIssueCode.BaselineMismatch;
-      expect(codes(result)).toContain(expected);
+      expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+        expected,
+      );
     }
   });
 
@@ -824,14 +732,19 @@ describe('task execution and canonical ownership', () => {
       read: [`${sharedRoot}/**`],
       write: [`${generatedRoot}/**`],
     };
-    const generatedWriter = writeNode(fixture);
+    const generatedWriter =
+      ModuleDeliveryPlanValidationScenario.writeNode(fixture);
     const planFixture: PlanFixture = {
       nodes: [generatedWriter],
       edgeContracts: [],
     };
-    expect(codes(validate(plan(planFixture)))).toContain(
-      ModuleDeliveryIssueCode.WriteScopeMismatch,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(planFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.WriteScopeMismatch);
   });
 });
 
@@ -845,7 +758,9 @@ describe('dependency edges and resource safety', () => {
       read: [`${CORE_ROOT}/**`],
       write: [`${WEB_ROOT}/src/second/**`],
     };
-    const secondConsumer = writeNode(secondConsumerFixture);
+    const secondConsumer = ModuleDeliveryPlanValidationScenario.writeNode(
+      secondConsumerFixture,
+    );
     const fanInConsumer: ModuleDeliveryWriteNodeV2 = {
       ...WEB_NODE,
       dependencies: ['core-provider', 'wasm-adapter'],
@@ -869,8 +784,8 @@ describe('dependency edges and resource safety', () => {
     const completeEdges: readonly ModuleDeliveryEdgeContract[] = [
       CORE_WASM_EDGE,
       WASM_WEB_EDGE,
-      edgeContract(coreWebFixture),
-      edgeContract(coreSecondFixture),
+      ModuleDeliveryPlanValidationScenario.edgeContract(coreWebFixture),
+      ModuleDeliveryPlanValidationScenario.edgeContract(coreSecondFixture),
     ];
     const nodes: readonly ModuleDeliveryNodeV2[] = [
       CORE_NODE,
@@ -882,17 +797,23 @@ describe('dependency edges and resource safety', () => {
       nodes,
       edgeContracts: completeEdges,
     };
-    expect(validate(plan(completeFixture)).status).toBe(
-      ModuleDeliveryValidationStatus.Accepted,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan(completeFixture),
+      ).status,
+    ).toBe(ModuleDeliveryValidationStatus.Accepted);
 
     const missingFixture: PlanFixture = {
       nodes,
       edgeContracts: completeEdges.slice(1),
     };
-    expect(codes(validate(plan(missingFixture)))).toContain(
-      ModuleDeliveryIssueCode.MissingEdgeContract,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(missingFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.MissingEdgeContract);
 
     const unexpectedFixtureValue: EdgeFixture = {
       providerTaskId: 'web-consumer',
@@ -900,15 +821,19 @@ describe('dependency edges and resource safety', () => {
     };
     const unexpectedEdges = [
       ...completeEdges,
-      edgeContract(unexpectedFixtureValue),
+      ModuleDeliveryPlanValidationScenario.edgeContract(unexpectedFixtureValue),
     ];
     const unexpectedFixture: PlanFixture = {
       nodes,
       edgeContracts: unexpectedEdges,
     };
-    expect(codes(validate(plan(unexpectedFixture)))).toContain(
-      ModuleDeliveryIssueCode.UnexpectedEdgeContract,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(unexpectedFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.UnexpectedEdgeContract);
   });
 
   test('serializes concurrent overlap and permits ordered overlap', () => {
@@ -916,12 +841,15 @@ describe('dependency edges and resource safety', () => {
       ...CORE_FIXTURE,
       taskId: 'core-sibling',
     };
-    const sibling = writeNode(siblingFixture);
+    const sibling =
+      ModuleDeliveryPlanValidationScenario.writeNode(siblingFixture);
     const concurrentFixture: PlanFixture = {
       nodes: [CORE_NODE, sibling],
       edgeContracts: [],
     };
-    const concurrent = validate(plan(concurrentFixture));
+    const concurrent = ModuleDeliveryPlanValidationScenario.validate(
+      ModuleDeliveryPlanValidationScenario.plan(concurrentFixture),
+    );
     if (concurrent.status !== ModuleDeliveryValidationStatus.Accepted)
       throw new Error(JSON.stringify(concurrent.issues));
     const precedence: ModuleDeliveryExecutionPrecedence = {
@@ -946,11 +874,15 @@ describe('dependency edges and resource safety', () => {
     };
     const orderedFixture: PlanFixture = {
       nodes: [orderedSibling, CORE_NODE],
-      edgeContracts: [edgeContract(orderedEdgeFixture)],
+      edgeContracts: [
+        ModuleDeliveryPlanValidationScenario.edgeContract(orderedEdgeFixture),
+      ],
     };
-    expect(validate(plan(orderedFixture)).status).toBe(
-      ModuleDeliveryValidationStatus.Accepted,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan(orderedFixture),
+      ).status,
+    ).toBe(ModuleDeliveryValidationStatus.Accepted);
   });
 
   test('rejects missing, self, cyclic dependencies and protected writes', () => {
@@ -959,18 +891,26 @@ describe('dependency edges and resource safety', () => {
       dependencies: ['missing-provider'],
     };
     const missingFixture: PlanFixture = { nodes: [missing], edgeContracts: [] };
-    expect(codes(validate(plan(missingFixture)))).toContain(
-      ModuleDeliveryIssueCode.MissingDependency,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(missingFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.MissingDependency);
 
     const self: ModuleDeliveryWriteNodeV2 = {
       ...CORE_NODE,
       dependencies: ['core-provider'],
     };
     const selfFixture: PlanFixture = { nodes: [self], edgeContracts: [] };
-    expect(codes(validate(plan(selfFixture)))).toContain(
-      ModuleDeliveryIssueCode.SelfDependency,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(selfFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.SelfDependency);
 
     const cyclicCore: ModuleDeliveryWriteNodeV2 = {
       ...CORE_NODE,
@@ -980,9 +920,13 @@ describe('dependency edges and resource safety', () => {
       nodes: [cyclicCore, WASM_NODE],
       edgeContracts: [CORE_WASM_EDGE, WASM_WEB_EDGE],
     };
-    expect(codes(validate(plan(cycleFixture)))).toContain(
-      ModuleDeliveryIssueCode.DependencyCycle,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(cycleFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.DependencyCycle);
 
     const protectedWrite: ModuleDeliveryWriteNodeV2 = {
       ...CORE_NODE,
@@ -992,8 +936,12 @@ describe('dependency edges and resource safety', () => {
       nodes: [protectedWrite],
       edgeContracts: [],
     };
-    expect(codes(validate(plan(protectedFixture)))).toContain(
-      ModuleDeliveryIssueCode.ParentOwnedWrite,
-    );
+    expect(
+      ModuleDeliveryPlanValidationScenario.codes(
+        ModuleDeliveryPlanValidationScenario.validate(
+          ModuleDeliveryPlanValidationScenario.plan(protectedFixture),
+        ),
+      ),
+    ).toContain(ModuleDeliveryIssueCode.ParentOwnedWrite);
   });
 });

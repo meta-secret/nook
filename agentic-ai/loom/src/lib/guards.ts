@@ -1,3 +1,26 @@
+/** The host syntax edge; values leave it only through a concrete decoder. */
+export class UntrustedYamlBoundary {
+  private constructor(private readonly value: UntrustedYamlNode) {}
+  static isRecord(value: UntrustedYamlNode): value is UntrustedYamlMap {
+    return (
+      typeof value === 'object' &&
+      value instanceof Object &&
+      !Array.isArray(value)
+    );
+  }
+  static isNonEmptyString(value: UntrustedYamlNode): value is string {
+    return typeof value === 'string' && value.length > 0;
+  }
+  static fromHost(value: UntrustedYamlNode): UntrustedYamlNode {
+    return new UntrustedYamlBoundary(value).value;
+  }
+  static seal(builder: UntrustedYamlMapBuilder): UntrustedYamlMap {
+    return builder;
+  }
+  static property(args: UntrustedYamlPropertyArgs): UntrustedYamlProperty {
+    return new UntrustedYamlObject(args.record).property(args.key);
+  }
+}
 /**
  * Boundary-only YAML/JSON syntax node.
  *
@@ -6,7 +29,11 @@
  * results.
  */
 export type UntrustedYamlNode =
-  string | number | boolean | readonly UntrustedYamlNode[] | UntrustedYamlMap;
+  | string
+  | number
+  | boolean
+  | readonly UntrustedYamlNode[]
+  | UntrustedYamlMap;
 
 /** Untrusted object map from YAML/JSON. */
 export type UntrustedYamlMap = {
@@ -30,47 +57,19 @@ export type UntrustedYamlProperty =
     }
   | { readonly presence: UntrustedYamlPropertyPresence.Absent };
 
-export function isRecord(value: UntrustedYamlNode): value is UntrustedYamlMap {
-  return (
-    typeof value === 'object' &&
-    value instanceof Object &&
-    !Array.isArray(value)
-  );
-}
-
-export function isNonEmptyString(value: UntrustedYamlNode): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
-/** Boundary-only bridge for a host parse result before immediate decoding. */
-export function asUntrustedYamlNode(
-  value: UntrustedYamlNode,
-): UntrustedYamlNode {
-  return value;
-}
-
 export type UntrustedYamlPropertyArgs = {
   readonly record: UntrustedYamlMap;
   readonly key: string;
 };
 
-/** Read one property without authoring `undefined` from index access. */
-export function untrustedYamlProperty(
-  args: UntrustedYamlPropertyArgs,
-): UntrustedYamlProperty {
-  for (const [entryKey, value] of Object.entries(args.record)) {
-    if (entryKey === args.key) {
-      return {
-        presence: UntrustedYamlPropertyPresence.Present,
-        value,
-      };
+/** Owns property-presence interpretation for one decoded host map. */
+class UntrustedYamlObject {
+  constructor(private readonly record: UntrustedYamlMap) {}
+  property(key: string): UntrustedYamlProperty {
+    for (const [entryKey, value] of Object.entries(this.record)) {
+      if (entryKey === key)
+        return { presence: UntrustedYamlPropertyPresence.Present, value };
     }
+    return { presence: UntrustedYamlPropertyPresence.Absent };
   }
-  return { presence: UntrustedYamlPropertyPresence.Absent };
-}
-
-export function sealUntrustedYamlMap(
-  builder: UntrustedYamlMapBuilder,
-): UntrustedYamlMap {
-  return builder;
 }

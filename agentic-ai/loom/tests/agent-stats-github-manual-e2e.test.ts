@@ -1,18 +1,68 @@
 import { readFileSync } from 'node:fs';
+
 import { describe, expect, test } from 'bun:test';
-import { asUntrustedYamlNode } from '../src/lib/guards.ts';
+
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
+
 import {
-  buildActionsEvidence,
   type BuildActionsEvidenceRequest,
+  GithubAgentEvidence,
 } from '../src/lib/agent-stats-github.ts';
-import {
-  actionJobsVerifiedSource,
-  dispatchedSourceHead,
-} from '../src/lib/agent-stats-github-api.ts';
+
+import { GithubActionEvidenceApi } from '../src/lib/agent-stats-github-api.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
+export class AgentStatsGithubManualE2eScenario {
+  private constructor(private readonly request: UntrustedYamlNode) {}
+
+  static actionPages(
+    fixtures: readonly ManualActionFixture[],
+  ): UntrustedYamlNode {
+    return UntrustedYamlBoundary.fromHost([
+      {
+        total_count: fixtures.length,
+        workflow_runs: fixtures.map((fixture) => {
+          const [status = 'completed'] = [fixture.status];
+          return {
+            id: fixture.id,
+            name: 'E2E (PR)',
+            run_attempt: 1,
+            head_sha: fixture.headSha,
+            event: 'workflow_dispatch',
+            created_at: '2026-08-01T10:00:00Z',
+            updated_at: fixture.finishedAt,
+            conclusion: fixture.conclusion,
+            status,
+            pull_requests: [{ number: 42 }],
+            validation_requested: 'true',
+          };
+        }),
+      },
+    ]);
+  }
+
+  static evidenceRequest(
+    pages: UntrustedYamlNode,
+  ): BuildActionsEvidenceRequest {
+    return new AgentStatsGithubManualE2eScenario(pages).execute();
+  }
+
+  private execute(): BuildActionsEvidenceRequest {
+    const pages = this.request;
+    return {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+      deliveryHeadOrder: [finalHead],
+    };
+  }
+}
+
 const firstHead = '1111111111111111111111111111111111111111';
+
 const finalHead = '2222222222222222222222222222222222222222';
 
 describe('agent stats manual E2E evidence', () => {
@@ -49,7 +99,9 @@ describe('agent stats manual E2E evidence', () => {
       runId: 500,
     };
 
-    expect(dispatchedSourceHead(request)).toBe(finalHead);
+    expect(GithubActionEvidenceApi.dispatchedSourceHead(request)).toBe(
+      finalHead,
+    );
   });
 
   test('keeps rerun provenance immutable in workflow metadata', () => {
@@ -59,7 +111,9 @@ describe('agent stats manual E2E evidence', () => {
       runId: 500,
     };
 
-    expect(dispatchedSourceHead(request)).toBe(firstHead);
+    expect(GithubActionEvidenceApi.dispatchedSourceHead(request)).toBe(
+      firstHead,
+    );
   });
 
   test('leaves malformed manual E2E metadata unattributed', () => {
@@ -69,7 +123,7 @@ describe('agent stats manual E2E evidence', () => {
       runId: 500,
     };
 
-    expect(dispatchedSourceHead(request)).toBe('');
+    expect(GithubActionEvidenceApi.dispatchedSourceHead(request)).toBe('');
   });
 
   test('attributes manual provenance only after server-side verification', () => {
@@ -98,13 +152,21 @@ describe('agent stats manual E2E evidence', () => {
       ],
     };
 
-    expect(actionJobsVerifiedSource(successful)).toBe(true);
-    expect(actionJobsVerifiedSource(rejected)).toBe(false);
-    expect(actionJobsVerifiedSource(cancelledBeforeResolution)).toBe(false);
+    expect(GithubActionEvidenceApi.actionJobsVerifiedSource(successful)).toBe(
+      true,
+    );
+    expect(GithubActionEvidenceApi.actionJobsVerifiedSource(rejected)).toBe(
+      false,
+    );
+    expect(
+      GithubActionEvidenceApi.actionJobsVerifiedSource(
+        cancelledBeforeResolution,
+      ),
+    ).toBe(false);
   });
 
   test('snapshots nonterminal action attempts at merge', () => {
-    const pages = actionPages([
+    const pages = AgentStatsGithubManualE2eScenario.actionPages([
       {
         id: 101,
         headSha: finalHead,
@@ -113,8 +175,8 @@ describe('agent stats manual E2E evidence', () => {
         status: 'in_progress',
       },
     ]);
-    const request = evidenceRequest(pages);
-    const evidence = buildActionsEvidence(request);
+    const request = AgentStatsGithubManualE2eScenario.evidenceRequest(pages);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.runs[0]?.finished_at).toBe(request.mergedAt);
@@ -122,7 +184,7 @@ describe('agent stats manual E2E evidence', () => {
   });
 
   test('clips an action that completes after merge to the merge boundary', () => {
-    const pages = actionPages([
+    const pages = AgentStatsGithubManualE2eScenario.actionPages([
       {
         id: 104,
         headSha: finalHead,
@@ -130,8 +192,8 @@ describe('agent stats manual E2E evidence', () => {
         conclusion: 'success',
       },
     ]);
-    const request = evidenceRequest(pages);
-    const evidence = buildActionsEvidence(request);
+    const request = AgentStatsGithubManualE2eScenario.evidenceRequest(pages);
+    const evidence = GithubAgentEvidence.buildActionsEvidence(request);
 
     expect(evidence.runs[0]?.finished_at).toBe(request.mergedAt);
     expect(evidence.runs[0]?.duration_seconds).toBe(3600);
@@ -139,7 +201,7 @@ describe('agent stats manual E2E evidence', () => {
   });
 
   test('counts malformed dispatches without inventing a delivery head', () => {
-    const pages = actionPages([
+    const pages = AgentStatsGithubManualE2eScenario.actionPages([
       {
         id: 105,
         headSha: '',
@@ -147,7 +209,9 @@ describe('agent stats manual E2E evidence', () => {
         conclusion: 'failure',
       },
     ]);
-    const evidence = buildActionsEvidence(evidenceRequest(pages));
+    const evidence = GithubAgentEvidence.buildActionsEvidence(
+      AgentStatsGithubManualE2eScenario.evidenceRequest(pages),
+    );
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.runs[0]?.source_attributed).toBe(false);
@@ -162,42 +226,3 @@ type ManualActionFixture = {
   readonly conclusion: string;
   readonly status?: string;
 };
-
-function actionPages(
-  fixtures: readonly ManualActionFixture[],
-): UntrustedYamlNode {
-  return asUntrustedYamlNode([
-    {
-      total_count: fixtures.length,
-      workflow_runs: fixtures.map((fixture) => {
-        const [status = 'completed'] = [fixture.status];
-        return {
-          id: fixture.id,
-          name: 'E2E (PR)',
-          run_attempt: 1,
-          head_sha: fixture.headSha,
-          event: 'workflow_dispatch',
-          created_at: '2026-08-01T10:00:00Z',
-          updated_at: fixture.finishedAt,
-          conclusion: fixture.conclusion,
-          status,
-          pull_requests: [{ number: 42 }],
-          validation_requested: 'true',
-        };
-      }),
-    },
-  ]);
-}
-
-function evidenceRequest(
-  pages: UntrustedYamlNode,
-): BuildActionsEvidenceRequest {
-  return {
-    pages,
-    prNumber: 42,
-    finalHeadSha: finalHead,
-    mergedAt: '2026-08-01T11:00:00Z',
-    reviewEvents: [],
-    deliveryHeadOrder: [finalHead],
-  };
-}

@@ -1,31 +1,42 @@
 import { expect, test } from 'bun:test';
+
 import {
   type ExecutableProviderReferenceInspection,
   type ExecutableScriptInspection,
-  executableSourceReferencesProvider,
-  executableScriptViolatesBoundary,
   ShellExecutablePolicy,
+  SkillProviderExecutableScriptScenario,
 } from './skill-provider-executable-script.ts';
 
-function violatesBoundary(source: string): boolean {
-  const inspection: ExecutableScriptInspection = {
-    path: 'scripts/audit.ts',
-    roots: new Set<string>(),
-    shellPolicy: ShellExecutablePolicy.TrackedConfiguration,
-    source,
-    sources: new Map<string, string>(),
-  };
-  return executableScriptViolatesBoundary(inspection);
+export class SkillProviderExecutableScriptFixture {
+  private constructor(private readonly request: string) {}
+
+  static violatesBoundary(source: string): boolean {
+    return new SkillProviderExecutableScriptFixture(source).execute();
+  }
+
+  private execute(): boolean {
+    const source = this.request;
+    const inspection: ExecutableScriptInspection = {
+      path: 'scripts/audit.ts',
+      roots: new Set<string>(),
+      shellPolicy: ShellExecutablePolicy.TrackedConfiguration,
+      source,
+      sources: new Map<string, string>(),
+    };
+    return SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
+      inspection,
+    );
+  }
 }
 
 test('distinguishes inert provider path text from runtime imports', () => {
   expect(
-    violatesBoundary(
+    SkillProviderExecutableScriptFixture.violatesBoundary(
       "const documentationPath = '.agents/skills/example/SKILL.md';",
     ),
   ).toBe(false);
   expect(
-    violatesBoundary(
+    SkillProviderExecutableScriptFixture.violatesBoundary(
       "await import('../../../.agents/skills/example/src/runner.ts');",
     ),
   ).toBe(true);
@@ -33,16 +44,28 @@ test('distinguishes inert provider path text from runtime imports', () => {
 
 test('normalizes only inert document capability checks', () => {
   expect(
-    violatesBoundary(`if ('document' in globalThis) renderDocument();`),
+    SkillProviderExecutableScriptFixture.violatesBoundary(
+      `if ('document' in globalThis) renderDocument();`,
+    ),
   ).toBe(false);
   expect(
-    violatesBoundary(`const runtime = globalThis; consume(runtime);`),
+    SkillProviderExecutableScriptFixture.violatesBoundary(
+      `const runtime = globalThis; consume(runtime);`,
+    ),
   ).toBe(true);
 });
 
 test('normalizes the exact async-dispose protocol member', () => {
-  expect(violatesBoundary(`await agent[Symbol.asyncDispose]();`)).toBe(false);
-  expect(violatesBoundary(`await agent[member]();`)).toBe(true);
+  expect(
+    SkillProviderExecutableScriptFixture.violatesBoundary(
+      `await agent[Symbol.asyncDispose]();`,
+    ),
+  ).toBe(false);
+  expect(
+    SkillProviderExecutableScriptFixture.violatesBoundary(
+      `await agent[member]();`,
+    ),
+  ).toBe(true);
 });
 
 test('distinguishes shell fixture paths from provider execution', () => {
@@ -55,8 +78,16 @@ printf '.agents/skills/*/src/**/*.ts' > expected.txt`,
     path: 'scripts/run.sh',
     source: `bun .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/run.ts`,
   };
-  expect(executableSourceReferencesProvider(inertInspection)).toBe(false);
-  expect(executableSourceReferencesProvider(executedInspection)).toBe(true);
+  expect(
+    SkillProviderExecutableScriptScenario.executableSourceReferencesProvider(
+      inertInspection,
+    ),
+  ).toBe(false);
+  expect(
+    SkillProviderExecutableScriptScenario.executableSourceReferencesProvider(
+      executedInspection,
+    ),
+  ).toBe(true);
 });
 
 test('normalizes exact CommonJS entrypoint and export contracts', () => {
@@ -71,5 +102,9 @@ module.exports = { fs };
 `,
     sources: new Map<string, string>(),
   };
-  expect(executableScriptViolatesBoundary(inspection)).toBe(false);
+  expect(
+    SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
+      inspection,
+    ),
+  ).toBe(false);
 });

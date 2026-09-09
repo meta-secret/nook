@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+
 import {
   chmodSync,
   existsSync,
@@ -6,68 +7,74 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+
 import { join } from 'node:path';
 
-import {
-  cleanupModuleWorktree,
-  prepareModuleWorktree,
-} from '../../src/module-delivery/index.ts';
-import {
-  gitText,
-  runModuleDeliveryGit,
-} from '../../src/module-delivery/git-command.ts';
-import {
-  createGitFixture,
-  disposeGitFixture,
-  fixtureGit,
-  installCheckoutHook,
-  prepareRequest,
-  worktreeGit,
-} from './worktree-test-support.ts';
+import { ModuleWorktree } from '../../src/module-delivery/index.ts';
+
+import { ModuleRepositoryGit } from '../../src/module-delivery/git-command.ts';
+
+import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 
 import type {
   CleanupModuleWorktreeRequest,
   ModuleWorktreeHandle,
   PrepareModuleWorktreeRequest,
 } from '../../src/module-delivery/index.ts';
+
 import type { GitFixture } from './worktree-test-support.ts';
 
+export class ModuleDeliveryWorktreePrepareScenario {
+  private constructor(private readonly request: PrepareModuleWorktreeRequest) {}
+
+  static createTrackedFixture(): GitFixture {
+    const fixture =
+      ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
+    fixtures.push(fixture);
+    return fixture;
+  }
+
+  static prepared(request: PrepareModuleWorktreeRequest): ModuleWorktreeHandle {
+    return new ModuleDeliveryWorktreePrepareScenario(request).execute();
+  }
+
+  private execute(): ModuleWorktreeHandle {
+    const request = this.request;
+    const workspace = ModuleWorktree.prepareModuleWorktree(request);
+    workspaces.push(workspace);
+    return workspace;
+  }
+}
+
 const fixtures: GitFixture[] = [];
+
 const workspaces: ModuleWorktreeHandle[] = [];
 
 afterEach(() => {
   for (const workspace of workspaces.splice(0)) {
     const cleanupRequest: CleanupModuleWorktreeRequest = { workspace };
     try {
-      cleanupModuleWorktree(cleanupRequest);
+      ModuleWorktree.cleanupModuleWorktree(cleanupRequest);
     } catch {
       // Rejection tests can intentionally invalidate the workspace.
     }
   }
   for (const fixture of fixtures.splice(0)) {
-    disposeGitFixture(fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(fixture);
   }
 });
 
-function createTrackedFixture(): GitFixture {
-  const fixture = createGitFixture();
-  fixtures.push(fixture);
-  return fixture;
-}
-
-function prepared(request: PrepareModuleWorktreeRequest): ModuleWorktreeHandle {
-  const workspace = prepareModuleWorktree(request);
-  workspaces.push(workspace);
-  return workspace;
-}
-
 describe('prepareModuleWorktree', () => {
   test('identifies the current shared checkout at the exact baseline', () => {
-    const fixture = createTrackedFixture();
-    const marker = installCheckoutHook(fixture);
-    const request = prepareRequest(fixture);
-    const workspace = prepared(request);
-    const git = worktreeGit(workspace);
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    const marker =
+      ModuleDeliveryWorktreeTestSupportScenario.installCheckoutHook(fixture);
+    const request =
+      ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture);
+    const workspace = ModuleDeliveryWorktreePrepareScenario.prepared(request);
+    const git =
+      ModuleDeliveryWorktreeTestSupportScenario.worktreeGit(workspace);
 
     expect(workspace.baselineCommit).toBe(fixture.baselineCommit);
     expect(workspace.worktreePath).toBe(fixture.sourceRoot);
@@ -81,56 +88,83 @@ describe('prepareModuleWorktree', () => {
   });
 
   test('reuses the shared checkout for retry attempts', () => {
-    const fixture = createTrackedFixture();
-    const firstRequest = prepareRequest(fixture);
-    const first = prepared(firstRequest);
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    const firstRequest =
+      ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture);
+    const first = ModuleDeliveryWorktreePrepareScenario.prepared(firstRequest);
     const secondRequest: PrepareModuleWorktreeRequest = {
       ...firstRequest,
       attempt: 2,
     };
-    const second = prepared(secondRequest);
+    const second =
+      ModuleDeliveryWorktreePrepareScenario.prepared(secondRequest);
     expect(second.worktreePath).toBe(first.worktreePath);
     expect(second.worktreeId).toBe(first.worktreeId);
     expect(second.attempt).toBe(2);
   });
 
   test('rejects a dirty or stale shared checkout before dispatch', () => {
-    const fixture = createTrackedFixture();
-    const request = prepareRequest(fixture);
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    const request =
+      ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture);
     writeFileSync(join(fixture.sourceRoot, 'dirty.ts'), 'dirty\n');
-    expect(() => prepareModuleWorktree(request)).toThrow(
+    expect(() => ModuleWorktree.prepareModuleWorktree(request)).toThrow(
       'must be clean before dispatch',
     );
-    fixtureGit(fixture)(['clean', '-fd']);
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+      'clean',
+      '-fd',
+    ]);
     writeFileSync(join(fixture.sourceRoot, 'later.ts'), 'later\n');
-    fixtureGit(fixture)(['add', 'later.ts']);
-    fixtureGit(fixture)(['commit', '--quiet', '-m', 'later']);
-    expect(() => prepareModuleWorktree(request)).toThrow(
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+      'add',
+      'later.ts',
+    ]);
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+      'commit',
+      '--quiet',
+      '-m',
+      'later',
+    ]);
+    expect(() => ModuleWorktree.prepareModuleWorktree(request)).toThrow(
       'HEAD must match its baseline',
     );
   });
 
   test('rejects a detached shared checkout before dispatch', () => {
-    const fixture = createTrackedFixture();
-    fixtureGit(fixture)(['checkout', '--quiet', '--detach']);
-    expect(() => prepareModuleWorktree(prepareRequest(fixture))).toThrow();
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+      'checkout',
+      '--quiet',
+      '--detach',
+    ]);
+    expect(() =>
+      ModuleWorktree.prepareModuleWorktree(
+        ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture),
+      ),
+    ).toThrow();
   });
 
   test('rejects nonexact commits and ignores obsolete workspace roots', () => {
-    const fixture = createTrackedFixture();
-    const base = prepareRequest(fixture);
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    const base =
+      ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture);
     const shortCommitRequest: PrepareModuleWorktreeRequest = {
       ...base,
       baselineCommit: fixture.baselineCommit.slice(0, 12),
     };
-    expect(() => prepareModuleWorktree(shortCommitRequest)).toThrow(
-      'exact lowercase 40-hex',
-    );
+    expect(() =>
+      ModuleWorktree.prepareModuleWorktree(shortCommitRequest),
+    ).toThrow('exact lowercase 40-hex');
 
     const hadGitDirectory = 'GIT_DIR' in process.env;
     const [previousGitDirectory = ''] = [process.env.GIT_DIR];
     process.env.GIT_DIR = join(fixture.root, 'does-not-exist');
-    const scrubbed = prepared(base);
+    const scrubbed = ModuleDeliveryWorktreePrepareScenario.prepared(base);
     expect(scrubbed.baselineCommit).toBe(fixture.baselineCommit);
     if (hadGitDirectory) process.env.GIT_DIR = previousGitDirectory;
     else delete process.env.GIT_DIR;
@@ -141,29 +175,35 @@ describe('prepareModuleWorktree', () => {
       ...base,
       workspaceRoot: nestedRoot,
     };
-    expect(prepareModuleWorktree(nestedRequest).worktreePath).toBe(
-      fixture.sourceRoot,
-    );
+    expect(
+      ModuleWorktree.prepareModuleWorktree(nestedRequest).worktreePath,
+    ).toBe(fixture.sourceRoot);
   });
 
   test('does not create a worktree registration', () => {
-    const fixture = createTrackedFixture();
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
     const linkedRoot = join(fixture.root, 'linked-workspaces');
     symlinkSync(fixture.workspaceRoot, linkedRoot);
     const request: PrepareModuleWorktreeRequest = {
-      ...prepareRequest(fixture),
+      ...ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture),
       workspaceRoot: linkedRoot,
     };
-    expect(prepareModuleWorktree(request).worktreePath).toBe(
+    expect(ModuleWorktree.prepareModuleWorktree(request).worktreePath).toBe(
       fixture.sourceRoot,
     );
     expect(
-      fixtureGit(fixture)(['worktree', 'list', '--porcelain']),
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+        'worktree',
+        'list',
+        '--porcelain',
+      ]),
     ).not.toContain(linkedRoot);
   });
 
   test('ignores inherited global Git configuration during preparation', () => {
-    const fixture = createTrackedFixture();
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
     const marker = join(fixture.root, 'fsmonitor-ran');
     const monitor = join(fixture.root, 'fsmonitor.sh');
     const globalConfig = join(fixture.root, 'poisoned.gitconfig');
@@ -174,7 +214,9 @@ describe('prepareModuleWorktree', () => {
     const [previousConfig = ''] = [process.env.GIT_CONFIG_GLOBAL];
     process.env.GIT_CONFIG_GLOBAL = globalConfig;
     try {
-      prepared(prepareRequest(fixture));
+      ModuleDeliveryWorktreePrepareScenario.prepared(
+        ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture),
+      );
     } finally {
       if (hadGlobalConfig) process.env.GIT_CONFIG_GLOBAL = previousConfig;
       else delete process.env.GIT_CONFIG_GLOBAL;
@@ -183,16 +225,19 @@ describe('prepareModuleWorktree', () => {
   });
 
   test('does not inherit ambient process environment in Git commands', () => {
-    const fixture = createTrackedFixture();
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
     const hadEmail = 'EMAIL' in process.env;
     const [previousEmail = ''] = [process.env.EMAIL];
     process.env.EMAIL = 'ambient-authority@nook.invalid';
     try {
-      const result = runModuleDeliveryGit({
+      const result = ModuleRepositoryGit.runModuleDeliveryGit({
         cwd: fixture.sourceRoot,
         args: ['var', 'GIT_AUTHOR_IDENT'],
       });
-      expect(gitText(result)).not.toContain('ambient-authority@nook.invalid');
+      expect(ModuleRepositoryGit.gitText(result)).not.toContain(
+        'ambient-authority@nook.invalid',
+      );
     } finally {
       if (hadEmail) process.env.EMAIL = previousEmail;
       else delete process.env.EMAIL;
@@ -200,13 +245,14 @@ describe('prepareModuleWorktree', () => {
   });
 
   test('validates executable search paths for the host platform', () => {
-    const fixture = createTrackedFixture();
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
     const hadPath = 'PATH' in process.env;
     const [previousPath = ''] = [process.env.PATH];
     try {
       process.env.PATH = `relative-bin:${previousPath || '/usr/bin'}`;
       expect(() =>
-        runModuleDeliveryGit({
+        ModuleRepositoryGit.runModuleDeliveryGit({
           cwd: fixture.sourceRoot,
           args: ['status', '--short'],
         }),
@@ -214,7 +260,7 @@ describe('prepareModuleWorktree', () => {
       process.env.PATH = '\\\\server\\git';
       let message = '';
       try {
-        runModuleDeliveryGit({
+        ModuleRepositoryGit.runModuleDeliveryGit({
           cwd: fixture.sourceRoot,
           args: ['status', '--short'],
         });
@@ -233,20 +279,21 @@ describe('prepareModuleWorktree', () => {
   });
 
   test('preserves trusted Git arguments within explicit input bounds', () => {
-    const fixture = createTrackedFixture();
-    const exact = runModuleDeliveryGit({
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    const exact = ModuleRepositoryGit.runModuleDeliveryGit({
       cwd: fixture.sourceRoot,
       args: ['rev-parse', '--verify', 'HEAD'],
     });
-    expect(gitText(exact)).toBe(fixture.baselineCommit);
+    expect(ModuleRepositoryGit.gitText(exact)).toBe(fixture.baselineCommit);
     expect(() =>
-      runModuleDeliveryGit({
+      ModuleRepositoryGit.runModuleDeliveryGit({
         cwd: fixture.sourceRoot,
         args: Array.from({ length: 1025 }, () => 'status'),
       }),
     ).toThrow('arguments exceed bounded input');
     expect(() =>
-      runModuleDeliveryGit({
+      ModuleRepositoryGit.runModuleDeliveryGit({
         cwd: fixture.sourceRoot,
         args: ['x'.repeat(1024 * 1024 + 1)],
       }),

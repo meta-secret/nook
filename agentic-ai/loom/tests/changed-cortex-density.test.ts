@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
+
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
+
 import {
   copyFileSync,
   cpSync,
@@ -11,27 +13,101 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+
 import { tmpdir } from 'node:os';
+
 import path from 'node:path';
+
 import { expect, test } from 'bun:test';
-import { lintChangedCortexDensity } from '../src/lib/changed-cortex-density.ts';
+
+import { ChangedCortexDensity } from '../src/lib/changed-cortex-density.ts';
+
+export class ChangedCortexDensityScenario {
+  private constructor(private readonly request: CreateFixtureArgs) {}
+
+  static installDensityValeConfiguration(repoRoot: string): void {
+    const styleRoot = path.join(repoRoot, '.vale', 'styles', 'NookDensity');
+    mkdirSync(styleRoot, { recursive: true });
+    copyFileSync(
+      path.join(REPOSITORY_ROOT, '.vale', 'density.ini'),
+      path.join(repoRoot, '.vale', 'density.ini'),
+    );
+    cpSync(
+      path.join(REPOSITORY_ROOT, '.vale', 'styles', 'NookDensity'),
+      styleRoot,
+      { recursive: true },
+    );
+  }
+
+  static createFixture(args: CreateFixtureArgs): Fixture {
+    return new ChangedCortexDensityScenario(args).execute();
+  }
+
+  private execute(): Fixture {
+    const args = this.request;
+    const repoRoot = realpathSync(
+      mkdtempSync(path.join(tmpdir(), args.prefix)),
+    );
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(path.join(repoRoot, '.cortex'), directoryOptions);
+    ChangedCortexDensityScenario.installDensityValeConfiguration(repoRoot);
+    for (const file of args.files) {
+      const filePath = path.join(repoRoot, file.relativePath);
+      mkdirSync(path.dirname(filePath), directoryOptions);
+      writeFileSync(filePath, file.content);
+    }
+    const initArgs: GitArgs = { arguments: ['init', '-q'], repoRoot };
+    ChangedCortexDensityScenario.git(initArgs);
+    const commitArgs: CommitAllArgs = {
+      message: 'fixture baseline',
+      repoRoot,
+    };
+    const baseSha = ChangedCortexDensityScenario.commitAll(commitArgs);
+    return { baseSha, repoRoot };
+  }
+
+  static commitAll(args: CommitAllArgs): string {
+    const addArgs: GitArgs = {
+      arguments: ['add', '--', '.'],
+      repoRoot: args.repoRoot,
+    };
+    ChangedCortexDensityScenario.git(addArgs);
+    const commitArgs: GitArgs = {
+      repoRoot: args.repoRoot,
+      arguments: [
+        '-c',
+        'user.name=Nook',
+        '-c',
+        'user.email=nook@example.invalid',
+        'commit',
+        '-qm',
+        args.message,
+      ],
+    };
+    ChangedCortexDensityScenario.git(commitArgs);
+    const revisionArgs: GitArgs = {
+      arguments: ['rev-parse', 'HEAD'],
+      repoRoot: args.repoRoot,
+    };
+    return ChangedCortexDensityScenario.git(revisionArgs).trim();
+  }
+
+  static lintFixture(args: LintFixtureArgs) {
+    return ChangedCortexDensity.lint(args);
+  }
+
+  static git(args: GitArgs): string {
+    const options: ExecFileSyncOptionsWithStringEncoding = {
+      cwd: args.repoRoot,
+      encoding: 'utf8',
+    };
+    return execFileSync('git', [...args.arguments], options);
+  }
+}
 
 const REMOVE_OPTIONS = { force: true, recursive: true } as const;
-const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
 
-function installDensityValeConfiguration(repoRoot: string): void {
-  const styleRoot = path.join(repoRoot, '.vale', 'styles', 'NookDensity');
-  mkdirSync(styleRoot, { recursive: true });
-  copyFileSync(
-    path.join(REPOSITORY_ROOT, '.vale', 'density.ini'),
-    path.join(repoRoot, '.vale', 'density.ini'),
-  );
-  cpSync(
-    path.join(REPOSITORY_ROOT, '.vale', 'styles', 'NookDensity'),
-    styleRoot,
-    { recursive: true },
-  );
-}
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
 
 test('limits enforcement to affected prose in changed Cortex Markdown', () => {
   const fixtureArgs: CreateFixtureArgs = {
@@ -44,7 +120,7 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
       },
     ],
   };
-  const fixture = createFixture(fixtureArgs);
+  const fixture = ChangedCortexDensityScenario.createFixture(fixtureArgs);
   try {
     writeFileSync(
       path.join(fixture.repoRoot, '.cortex/legacy.md'),
@@ -73,7 +149,7 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
       baseSha: fixture.baseSha,
       repoRoot: fixture.repoRoot,
     };
-    const report = lintFixture(reportArgs);
+    const report = ChangedCortexDensityScenario.lintFixture(reportArgs);
     expect(report.checkedPaths).toEqual([
       '.cortex/changed.md',
       '.cortex/knowledge-graph.md',
@@ -111,7 +187,7 @@ test('checks a paragraph merged by a deletion-only hunk', () => {
       },
     ],
   };
-  const fixture = createFixture(fixtureArgs);
+  const fixture = ChangedCortexDensityScenario.createFixture(fixtureArgs);
   try {
     writeFileSync(
       path.join(fixture.repoRoot, '.cortex/merged.md'),
@@ -124,7 +200,7 @@ test('checks a paragraph merged by a deletion-only hunk', () => {
       baseSha: fixture.baseSha,
       repoRoot: fixture.repoRoot,
     };
-    const report = lintFixture(reportArgs);
+    const report = ChangedCortexDensityScenario.lintFixture(reportArgs);
     expect(report.findings.length).toBeGreaterThan(0);
     expect(report.findings[0]?.file).toBe('.cortex/merged.md');
   } finally {
@@ -143,18 +219,18 @@ test('preserves rename ancestry and checks edits made during a rename', () => {
       },
     ],
   };
-  const fixture = createFixture(fixtureArgs);
+  const fixture = ChangedCortexDensityScenario.createFixture(fixtureArgs);
   try {
     const moveArgs: GitArgs = {
       arguments: ['mv', '.cortex/legacy.md', '.cortex/renamed.md'],
       repoRoot: fixture.repoRoot,
     };
-    git(moveArgs);
+    ChangedCortexDensityScenario.git(moveArgs);
     const reportArgs: LintFixtureArgs = {
       baseSha: fixture.baseSha,
       repoRoot: fixture.repoRoot,
     };
-    const pureRename = lintFixture(reportArgs);
+    const pureRename = ChangedCortexDensityScenario.lintFixture(reportArgs);
     expect(pureRename.checkedPaths).toEqual(['.cortex/renamed.md']);
     expect(pureRename.findings).toEqual([]);
 
@@ -166,7 +242,7 @@ test('preserves rename ancestry and checks edits made during a rename', () => {
         '- Require the successor branch and the open pull request and the predecessor metadata and the frozen base SHA and the containment proof before claim.',
       ].join('\n'),
     );
-    const editedRename = lintFixture(reportArgs);
+    const editedRename = ChangedCortexDensityScenario.lintFixture(reportArgs);
     expect(editedRename.findings.length).toBeGreaterThan(0);
     expect(editedRename.findings.every((finding) => finding.line === 3)).toBe(
       true,
@@ -192,13 +268,13 @@ test('checks full destinations promoted from nonpersistent sources', () => {
       },
     ],
   };
-  const fixture = createFixture(fixtureArgs);
+  const fixture = ChangedCortexDensityScenario.createFixture(fixtureArgs);
   try {
     const externalMoveArgs: GitArgs = {
       arguments: ['mv', 'external.md', '.cortex/external.md'],
       repoRoot: fixture.repoRoot,
     };
-    git(externalMoveArgs);
+    ChangedCortexDensityScenario.git(externalMoveArgs);
     const sessionMoveArgs: GitArgs = {
       arguments: [
         'mv',
@@ -207,12 +283,12 @@ test('checks full destinations promoted from nonpersistent sources', () => {
       ],
       repoRoot: fixture.repoRoot,
     };
-    git(sessionMoveArgs);
+    ChangedCortexDensityScenario.git(sessionMoveArgs);
     const reportArgs: LintFixtureArgs = {
       baseSha: fixture.baseSha,
       repoRoot: fixture.repoRoot,
     };
-    const report = lintFixture(reportArgs);
+    const report = ChangedCortexDensityScenario.lintFixture(reportArgs);
     expect(report.checkedPaths).toEqual([
       '.cortex/external.md',
       '.cortex/session-promoted.md',
@@ -234,7 +310,7 @@ test('checks a full regular file promoted from a symlink type change', () => {
     const cortexRoot = path.join(repoRoot, '.cortex');
     const directoryOptions = { recursive: true } as const;
     mkdirSync(cortexRoot, directoryOptions);
-    installDensityValeConfiguration(repoRoot);
+    ChangedCortexDensityScenario.installDensityValeConfiguration(repoRoot);
     writeFileSync(
       path.join(repoRoot, 'source.md'),
       '- The external source remains outside persistent Cortex.\n',
@@ -242,12 +318,12 @@ test('checks a full regular file promoted from a symlink type change', () => {
     const destinationPath = path.join(cortexRoot, 'promoted.md');
     symlinkSync('../source.md', destinationPath);
     const initArgs: GitArgs = { arguments: ['init', '-q'], repoRoot };
-    git(initArgs);
+    ChangedCortexDensityScenario.git(initArgs);
     const baselineArgs: CommitAllArgs = {
       message: 'symlink baseline',
       repoRoot,
     };
-    const baseSha = commitAll(baselineArgs);
+    const baseSha = ChangedCortexDensityScenario.commitAll(baselineArgs);
 
     unlinkSync(destinationPath);
     writeFileSync(
@@ -255,7 +331,7 @@ test('checks a full regular file promoted from a symlink type change', () => {
       'The promoted policy has one rule and another rule and another rule and another rule and another rule and another rule and now requires full density review.\n',
     );
     const reportArgs: LintFixtureArgs = { baseSha, repoRoot };
-    const report = lintFixture(reportArgs);
+    const report = ChangedCortexDensityScenario.lintFixture(reportArgs);
     expect(report.checkedPaths).toEqual(['.cortex/promoted.md']);
     expect(report.findings.length).toBeGreaterThan(0);
     expect(
@@ -279,13 +355,13 @@ test('compares a stale feature branch from its merge base with main', () => {
       },
     ],
   };
-  const fixture = createFixture(fixtureArgs);
+  const fixture = ChangedCortexDensityScenario.createFixture(fixtureArgs);
   try {
     const featureBranchArgs: GitArgs = {
       arguments: ['checkout', '-qb', 'feature', fixture.baseSha],
       repoRoot: fixture.repoRoot,
     };
-    git(featureBranchArgs);
+    ChangedCortexDensityScenario.git(featureBranchArgs);
     writeFileSync(
       path.join(fixture.repoRoot, '.cortex/feature.md'),
       '- Require the successor branch and the open pull request and the predecessor metadata and the frozen base SHA and the containment proof before claim.\n',
@@ -294,13 +370,13 @@ test('compares a stale feature branch from its merge base with main', () => {
       message: 'feature change',
       repoRoot: fixture.repoRoot,
     };
-    commitAll(featureCommitArgs);
+    ChangedCortexDensityScenario.commitAll(featureCommitArgs);
 
     const upstreamBranchArgs: GitArgs = {
       arguments: ['checkout', '-qb', 'upstream', fixture.baseSha],
       repoRoot: fixture.repoRoot,
     };
-    git(upstreamBranchArgs);
+    ChangedCortexDensityScenario.git(upstreamBranchArgs);
     writeFileSync(
       path.join(fixture.repoRoot, '.cortex/shared.md'),
       '- Keep the upstream policy concise.\n',
@@ -309,18 +385,19 @@ test('compares a stale feature branch from its merge base with main', () => {
       message: 'upstream change',
       repoRoot: fixture.repoRoot,
     };
-    const upstreamSha = commitAll(upstreamCommitArgs);
+    const upstreamSha =
+      ChangedCortexDensityScenario.commitAll(upstreamCommitArgs);
     const checkoutFeatureArgs: GitArgs = {
       arguments: ['checkout', '-q', 'feature'],
       repoRoot: fixture.repoRoot,
     };
-    git(checkoutFeatureArgs);
+    ChangedCortexDensityScenario.git(checkoutFeatureArgs);
 
     const reportArgs: LintFixtureArgs = {
       baseSha: upstreamSha,
       repoRoot: fixture.repoRoot,
     };
-    const report = lintFixture(reportArgs);
+    const report = ChangedCortexDensityScenario.lintFixture(reportArgs);
     expect(report.checkedPaths).toEqual(['.cortex/feature.md']);
     expect(report.findings.length).toBeGreaterThan(0);
     expect(
@@ -346,75 +423,17 @@ type Fixture = {
   readonly repoRoot: string;
 };
 
-function createFixture(args: CreateFixtureArgs): Fixture {
-  const repoRoot = realpathSync(mkdtempSync(path.join(tmpdir(), args.prefix)));
-  const directoryOptions = { recursive: true } as const;
-  mkdirSync(path.join(repoRoot, '.cortex'), directoryOptions);
-  installDensityValeConfiguration(repoRoot);
-  for (const file of args.files) {
-    const filePath = path.join(repoRoot, file.relativePath);
-    mkdirSync(path.dirname(filePath), directoryOptions);
-    writeFileSync(filePath, file.content);
-  }
-  const initArgs: GitArgs = { arguments: ['init', '-q'], repoRoot };
-  git(initArgs);
-  const commitArgs: CommitAllArgs = {
-    message: 'fixture baseline',
-    repoRoot,
-  };
-  const baseSha = commitAll(commitArgs);
-  return { baseSha, repoRoot };
-}
-
 type CommitAllArgs = {
   readonly message: string;
   readonly repoRoot: string;
 };
-
-function commitAll(args: CommitAllArgs): string {
-  const addArgs: GitArgs = {
-    arguments: ['add', '--', '.'],
-    repoRoot: args.repoRoot,
-  };
-  git(addArgs);
-  const commitArgs: GitArgs = {
-    repoRoot: args.repoRoot,
-    arguments: [
-      '-c',
-      'user.name=Nook',
-      '-c',
-      'user.email=nook@example.invalid',
-      'commit',
-      '-qm',
-      args.message,
-    ],
-  };
-  git(commitArgs);
-  const revisionArgs: GitArgs = {
-    arguments: ['rev-parse', 'HEAD'],
-    repoRoot: args.repoRoot,
-  };
-  return git(revisionArgs).trim();
-}
 
 type LintFixtureArgs = {
   readonly baseSha: string;
   readonly repoRoot: string;
 };
 
-function lintFixture(args: LintFixtureArgs) {
-  return lintChangedCortexDensity(args);
-}
-
 type GitArgs = {
   readonly arguments: readonly string[];
   readonly repoRoot: string;
 };
-
-function git(args: GitArgs): string {
-  const options: ExecFileSyncOptionsWithStringEncoding = {
-    cwd: args.repoRoot,
-    encoding: 'utf8',
-  };
-  return execFileSync('git', [...args.arguments], options);
-}

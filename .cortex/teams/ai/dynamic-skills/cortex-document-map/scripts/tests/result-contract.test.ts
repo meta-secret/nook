@@ -1,14 +1,14 @@
 import { expect, test } from 'bun:test';
-import {
-  acceptCortexDocumentMapResult,
-  executeCortexDocumentMapApplication,
-} from '../src/application.ts';
+
+import { CortexDocumentMapApplication } from '../src/application.ts';
+
 import {
   CortexDocumentMapResultDecodeError,
-  decodeCortexDocumentMapResult,
-  encodeCortexDocumentMapResult,
+  CortexDocumentMapTransport,
 } from '../src/codec.ts';
+
 import { CortexStructureFindingCode } from '../src/cortex-document-structure.ts';
+
 import {
   CortexDocumentMapContractKind,
   CORTEX_DOCUMENT_MAP_FINDING_LINE_LIMIT,
@@ -16,6 +16,28 @@ import {
   CORTEX_DOCUMENT_MAP_RESULT_BYTE_LIMIT,
   type AuditCortexDocumentMapRequest,
 } from '../src/domain.ts';
+
+export class CortexDocumentMapResultContractScenario {
+  private constructor(
+    private readonly request: readonly Readonly<
+      Record<string, string | number>
+    >[],
+  ) {}
+
+  static serializedResult(
+    findings: readonly Readonly<Record<string, string | number>>[],
+  ): string {
+    return new CortexDocumentMapResultContractScenario(findings).execute();
+  }
+
+  private execute(): string {
+    const findings = this.request;
+    return JSON.stringify({
+      kind: CortexDocumentMapContractKind.Result,
+      findings,
+    });
+  }
+}
 
 const invalidRootRequest: AuditCortexDocumentMapRequest = {
   kind: CortexDocumentMapContractKind.Request,
@@ -47,19 +69,15 @@ const validFinding = {
   message: 'Centralized Cortex knowledge graph is missing.',
 };
 
-function serializedResult(
-  findings: readonly Readonly<Record<string, string | number>>[],
-): string {
-  return JSON.stringify({
-    kind: CortexDocumentMapContractKind.Result,
-    findings,
-  });
-}
-
 test('round-trips the exact bounded result contract', () => {
-  const result = executeCortexDocumentMapApplication(invalidRootRequest);
+  const result =
+    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
+      invalidRootRequest,
+    );
   expect(
-    decodeCortexDocumentMapResult(encodeCortexDocumentMapResult(result)),
+    CortexDocumentMapTransport.decodeCortexDocumentMapResult(
+      CortexDocumentMapTransport.encodeCortexDocumentMapResult(result),
+    ),
   ).toEqual(result);
 });
 
@@ -73,8 +91,10 @@ test('rejects malformed envelopes and unknown or missing fields', () => {
       findings: [],
       secret: 'redact-me',
     }),
-    serializedResult([{ ...validFinding, secret: 'redact-me' }]),
-    serializedResult([
+    CortexDocumentMapResultContractScenario.serializedResult([
+      { ...validFinding, secret: 'redact-me' },
+    ]),
+    CortexDocumentMapResultContractScenario.serializedResult([
       {
         code: validFinding.code,
         file: validFinding.file,
@@ -83,9 +103,9 @@ test('rejects malformed envelopes and unknown or missing fields', () => {
     ]),
   ];
   for (const serialized of malformed) {
-    expect(() => decodeCortexDocumentMapResult(serialized)).toThrow(
-      CortexDocumentMapResultDecodeError,
-    );
+    expect(() =>
+      CortexDocumentMapTransport.decodeCortexDocumentMapResult(serialized),
+    ).toThrow(CortexDocumentMapResultDecodeError);
   }
 });
 
@@ -104,21 +124,26 @@ test('rejects invalid finding codes, paths, lines, and messages', () => {
   ];
   for (const finding of invalidFindings) {
     expect(() =>
-      decodeCortexDocumentMapResult(serializedResult([finding])),
+      CortexDocumentMapTransport.decodeCortexDocumentMapResult(
+        CortexDocumentMapResultContractScenario.serializedResult([finding]),
+      ),
     ).toThrow(CortexDocumentMapResultDecodeError);
   }
 });
 
 test('rejects oversized serialized results', () => {
   expect(() =>
-    decodeCortexDocumentMapResult(
+    CortexDocumentMapTransport.decodeCortexDocumentMapResult(
       'x'.repeat(CORTEX_DOCUMENT_MAP_RESULT_BYTE_LIMIT + 1),
     ),
   ).toThrow(CortexDocumentMapResultDecodeError);
 });
 
 test('acceptance rejects removal, reordering, duplication, and mutation', () => {
-  const result = executeCortexDocumentMapApplication(invalidRootRequest);
+  const result =
+    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
+      invalidRootRequest,
+    );
   const [first = false, second = false] = result.findings;
   expect(first).not.toBe(false);
   expect(second).not.toBe(false);
@@ -149,7 +174,7 @@ test('acceptance rejects removal, reordering, duplication, and mutation', () => 
   ];
   for (const candidate of candidates) {
     expect(() =>
-      acceptCortexDocumentMapResult({
+      CortexDocumentMapApplication.acceptCortexDocumentMapResult({
         auditRequest: invalidRootRequest,
         result: candidate,
       }),
@@ -158,7 +183,10 @@ test('acceptance rejects removal, reordering, duplication, and mutation', () => 
 });
 
 test('acceptance binds findings to the exact admitted request', () => {
-  const result = executeCortexDocumentMapApplication(invalidRootRequest);
+  const result =
+    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
+      invalidRootRequest,
+    );
   const cleanRequest: AuditCortexDocumentMapRequest = {
     ...invalidRootRequest,
     documents: [
@@ -169,17 +197,23 @@ test('acceptance binds findings to the exact admitted request', () => {
     ],
   };
   expect(() =>
-    acceptCortexDocumentMapResult({ auditRequest: cleanRequest, result }),
+    CortexDocumentMapApplication.acceptCortexDocumentMapResult({
+      auditRequest: cleanRequest,
+      result,
+    }),
   ).toThrow('Cortex document-map verification failed.');
 });
 
 test('acceptance rejects an omitted transient-link diagnostic', () => {
-  const result = executeCortexDocumentMapApplication(transientLinkRequest);
+  const result =
+    CortexDocumentMapApplication.executeCortexDocumentMapApplication(
+      transientLinkRequest,
+    );
   expect(result.findings.map((finding) => finding.code)).toEqual([
     CortexStructureFindingCode.InvalidIndexEntry,
   ]);
   expect(() =>
-    acceptCortexDocumentMapResult({
+    CortexDocumentMapApplication.acceptCortexDocumentMapResult({
       auditRequest: transientLinkRequest,
       result: { ...result, findings: [] },
     }),

@@ -1,52 +1,797 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+
 import { dirname, isAbsolute, join, normalize, relative } from 'node:path';
+
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
+
 import {
   MODULE_EXPERT_CATALOG,
   MODULE_EXPERT_RESEARCH_ROOT,
 } from './catalog.ts';
+
 import type {
   ModuleExpertGeneratedScope,
   ModuleExpertProfile,
 } from './catalog.ts';
-import {
-  auditInternalApiExpertConsumerScope,
-  discoverInternalApiConsumerPaths,
-} from './consumer-scope-audit.ts';
+
+import { InternalApiConsumerScope } from './consumer-scope-audit.ts';
+
 import type { AuditInternalApiExpertConsumerScopeArgs } from './consumer-scope-audit.ts';
-import { auditModuleExpertSnapshotScopes } from './snapshot-scope-audit.ts';
+
+import { ModuleExpertSnapshotScope } from './snapshot-scope-audit.ts';
+
 import type { AuditModuleExpertSnapshotScopesArgs } from './snapshot-scope-audit.ts';
+
 import {
   MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
   MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
   MODULE_EXPERT_AUTH_PROVIDER,
   MODULE_EXPERT_CONTEXT_MCP,
   MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-  buildModuleExpertCodexOptions,
-  moduleExpertIsolatedThreadOptions,
+  ModuleExpertIsolation,
 } from './runtime-contract.ts';
+
 import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from './read-context-mcp.ts';
+
 import {
   CargoWorkspaceInventoryKind,
-  discoverCargoWorkspace,
+  CargoWorkspaceDiscovery,
 } from './cargo-workspace.ts';
+
 import type { DiscoverCargoWorkspaceArgs } from './cargo-workspace.ts';
+
 import {
   MODULE_EXPERT_CLI,
   MODULE_EXPERT_TRUSTED_RUNTIME,
-  auditModuleExpertRuntimeRouting,
+  ModuleExpertRuntimeRouting,
 } from './runtime-routing-audit.ts';
+
 import type { AuditModuleExpertRuntimeRoutingArgs } from './runtime-routing-audit.ts';
-import { validModuleExpertRuntimeEnvironment } from './runtime-environment-audit.ts';
+
+import { ModuleExpertEnvironment } from './runtime-environment-audit.ts';
+
 import type { ValidateModuleExpertRuntimeEnvironmentArgs } from './runtime-environment-audit.ts';
-import { auditTeamAgents } from '../team-agents/audit.ts';
+
+import { TeamAgentContract } from '../team-agents/audit.ts';
+
 import type { AuditTeamAgentsRequest } from '../team-agents/audit.ts';
-import { auditMarkdownContractSections } from '../lib/markdown-contract.ts';
+
+import { MarkdownContractSections } from '../lib/markdown-contract.ts';
+
 import type {
   MarkdownContractAuditRequest,
   MarkdownContractSection,
 } from '../lib/markdown-contract.ts';
-export { auditModuleExpertRuntimeRouting };
+
+export class ModuleExpertContract {
+  private constructor(private readonly request: AuditModuleExpertsArgs) {}
+
+  static auditModuleExperts(
+    args: AuditModuleExpertsArgs,
+  ): ModuleExpertAuditReport {
+    return new ModuleExpertContract(args).execute();
+  }
+
+  private execute(): ModuleExpertAuditReport {
+    const args = this.request;
+    const findings: ModuleExpertAuditFinding[] = [];
+    const context: ModuleExpertValidationContext = {
+      findings,
+      repoRoot: args.repoRoot,
+    };
+    ModuleExpertContract.validateProfiles(context);
+    ModuleExpertContract.validateCortexRoleAuthority(context);
+    const liveRoots = ModuleExpertContract.liveProductionModuleRoots(context);
+    const coverageArgs: ValidateProductionCoverageArgs = {
+      context,
+      liveRoots,
+    };
+    ModuleExpertContract.validateProductionCoverage(coverageArgs);
+    ModuleExpertContract.mergeTeamAgentAudit(context);
+    ModuleExpertContract.validateRuntimePolicy(context);
+    ModuleExpertContract.validateRuntimeRouting(context);
+    return {
+      findings,
+      profileCount: MODULE_EXPERT_CATALOG.length,
+      productionModuleCount: liveRoots.length,
+      auditOk: findings.length === 0,
+    };
+  }
+
+  private static mergeTeamAgentAudit(
+    context: ModuleExpertValidationContext,
+  ): void {
+    const teamAuditRequest: AuditTeamAgentsRequest = {
+      repoRoot: context.repoRoot,
+    };
+    const teamAudit = TeamAgentContract.auditTeamAgents(teamAuditRequest);
+    for (const teamFinding of teamAudit.findings) {
+      const finding: ModuleExpertAuditFinding = {
+        code: teamFinding.code,
+        path: teamFinding.path,
+        message: teamFinding.message,
+      };
+      context.findings.push(finding);
+    }
+  }
+
+  static auditGeneratedScopeProducerContract(
+    args: AuditGeneratedScopeProducerContractArgs,
+  ): readonly ModuleExpertAuditFinding[] {
+    const findings: ModuleExpertAuditFinding[] = [];
+    const context: ModuleExpertValidationContext = {
+      findings,
+      repoRoot: args.repoRoot,
+    };
+    const validationArgs: ValidateGeneratedScopeProducerArgs = {
+      context,
+      generatedScope: args.generatedScope,
+    };
+    ModuleExpertContract.validateGeneratedScopeProducer(validationArgs);
+    return findings;
+  }
+
+  static auditModuleExpertRuntimePolicy(
+    args: AuditModuleExpertRuntimePolicyArgs,
+  ): readonly ModuleExpertAuditFinding[] {
+    if (!args.codexOptions.config)
+      return [ModuleExpertContract.unsafeRuntimeFinding()];
+    const config = args.codexOptions.config;
+    const agents = ModuleExpertContract.configRecord(config.agents);
+    const features = ModuleExpertContract.configRecord(config.features);
+    const shellEnvironmentPolicy = ModuleExpertContract.configRecord(
+      config.shell_environment_policy,
+    );
+    const tools = ModuleExpertContract.configRecord(config.tools);
+    const modelProviders = ModuleExpertContract.configRecord(
+      config.model_providers,
+    );
+    const provider = ModuleExpertContract.configRecord(
+      modelProviders && modelProviders[MODULE_EXPERT_AUTH_PROVIDER],
+    );
+    const contextServers = ModuleExpertContract.configRecord(
+      config.mcp_servers,
+    );
+    const contextServer = ModuleExpertContract.configRecord(
+      contextServers && contextServers[MODULE_EXPERT_CONTEXT_MCP],
+    );
+    const contextServerValidation: ContextServerRegistryValidation = {
+      registry: contextServers,
+      server: contextServer,
+    };
+    const authEnvironmentComparison: OrderedValuesComparison = {
+      actual: args.authEnvironmentKeys,
+      expected: EXPECTED_AUTH_ENVIRONMENT_KEYS,
+    };
+    const processEnvironmentComparison: OrderedValuesComparison = {
+      actual: args.processEnvironmentKeys,
+      expected: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
+    };
+    const actualShellEnvironment = ModuleExpertContract.configRecord(
+      shellEnvironmentPolicy === false ? false : shellEnvironmentPolicy.set,
+    );
+    const runtimeEnvironmentValidation: ValidateModuleExpertRuntimeEnvironmentArgs =
+      {
+        actualProcessEnvironment: args.codexOptions.env,
+        actualShellEnvironment,
+        allowedShellKeys: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
+        safeCodexEnvironment: args.safeCodexEnvironment,
+        safeShellEnvironment: args.safeShellEnvironment,
+      };
+    const valid =
+      args.threadOptions.sandboxMode === 'read-only' &&
+      args.threadOptions.approvalPolicy === 'never' &&
+      args.threadOptions.networkAccessEnabled === false &&
+      args.threadOptions.webSearchMode === 'disabled' &&
+      args.threadOptions.skipGitRepoCheck === true &&
+      config.allow_login_shell === false &&
+      config.cli_auth_credentials_store === 'file' &&
+      config.model_provider === MODULE_EXPERT_AUTH_PROVIDER &&
+      ModuleExpertContract.validAuthenticationProvider(provider) &&
+      Boolean(agents) &&
+      agents !== false &&
+      agents.enabled === false &&
+      agents.max_depth === 0 &&
+      JSON.stringify(features) === JSON.stringify(EXPECTED_DISABLED_FEATURES) &&
+      Boolean(tools) &&
+      tools !== false &&
+      tools.view_image === false &&
+      tools.web_search === false &&
+      config.web_search === 'disabled' &&
+      ModuleExpertContract.validContextServerRegistry(
+        contextServerValidation,
+      ) &&
+      Boolean(shellEnvironmentPolicy) &&
+      shellEnvironmentPolicy !== false &&
+      typeof shellEnvironmentPolicy === 'object' &&
+      !Array.isArray(shellEnvironmentPolicy) &&
+      shellEnvironmentPolicy.inherit === 'none' &&
+      shellEnvironmentPolicy.ignore_default_excludes === false &&
+      ModuleExpertEnvironment.validate(runtimeEnvironmentValidation) &&
+      ModuleExpertContract.sameOrderedValues(authEnvironmentComparison) &&
+      ModuleExpertContract.sameOrderedValues(processEnvironmentComparison);
+    if (valid) return [];
+    return [ModuleExpertContract.unsafeRuntimeFinding()];
+  }
+
+  private static unsafeRuntimeFinding(): ModuleExpertAuditFinding {
+    return {
+      code: 'unsafe-module-expert-runtime',
+      path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
+      message:
+        'Module experts require an isolated read-only, bounded-context, non-delegating Codex runtime.',
+    };
+  }
+
+  private static configRecord(
+    value?: CodexConfigEntry,
+  ): CodexConfigRecord | false {
+    if (typeof value !== 'object' || !value || Array.isArray(value))
+      return false;
+    return value;
+  }
+
+  private static validAuthenticationProvider(
+    provider: CodexConfigRecord | false,
+  ): boolean {
+    if (!provider) return false;
+    const auth = ModuleExpertContract.configRecord(provider.auth);
+    if (!auth) return false;
+    return (
+      provider.name === 'Nook module expert OpenAI provider' &&
+      provider.base_url === 'https://api.openai.com/v1' &&
+      provider.wire_api === 'responses' &&
+      auth.command === process.execPath &&
+      Array.isArray(auth.args) &&
+      auth.args.length === 5 &&
+      auth.args[0] === '-e' &&
+      auth.args[1] === MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE &&
+      auth.args[2] === '--' &&
+      typeof auth.args[3] === 'string' &&
+      typeof auth.args[4] === 'string' &&
+      auth.refresh_interval_ms === 0 &&
+      auth.timeout_ms === 5_000
+    );
+  }
+
+  private static validContextServerRegistry(
+    validation: ContextServerRegistryValidation,
+  ): boolean {
+    const { registry, server } = validation;
+    if (
+      !registry ||
+      !server ||
+      Object.keys(registry).length !== 1 ||
+      server.enabled !== true ||
+      server.required !== true ||
+      server.default_tools_approval_mode !== 'approve' ||
+      server.startup_timeout_sec !== 5 ||
+      server.tool_timeout_sec !== 10 ||
+      JSON.stringify(server.enabled_tools) !==
+        JSON.stringify(MODULE_EXPERT_READ_CONTEXT_TOOLS)
+    ) {
+      return false;
+    }
+    if (typeof server.url !== 'string') return false;
+    try {
+      const url = new URL(server.url);
+      return (
+        url.protocol === 'http:' &&
+        url.hostname === '127.0.0.1' &&
+        url.pathname.length > 1
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private static sameOrderedValues(
+    comparison: OrderedValuesComparison,
+  ): boolean {
+    return (
+      JSON.stringify(comparison.actual) === JSON.stringify(comparison.expected)
+    );
+  }
+
+  private static validateProfiles(
+    context: ModuleExpertValidationContext,
+  ): void {
+    const names = new Set<string>();
+    const moduleOwners = new Map<string, string>();
+    for (const profile of MODULE_EXPERT_CATALOG) {
+      if (
+        !ModuleExpertContract.safeIdentifier(profile.name) ||
+        names.has(profile.name)
+      ) {
+        context.findings[context.findings.length] = {
+          code: 'invalid-profile-name',
+          path: MODULE_EXPERT_CATALOG_PATH,
+          message: `Module expert name is unsafe or duplicated: ${profile.name}`,
+        };
+      }
+      names.add(profile.name);
+      if (profile.validationSelectors.length === 0) {
+        context.findings[context.findings.length] = {
+          code: 'missing-validation-selector',
+          path: MODULE_EXPERT_CATALOG_PATH,
+          message:
+            'Every module expert needs at least one focused validation selector.',
+        };
+      }
+      const validateProfilePathsArgs: ValidateProfilePathsArgs = {
+        context,
+        moduleOwners,
+        profile,
+      };
+      ModuleExpertContract.validateProfilePaths(validateProfilePathsArgs);
+    }
+    const snapshotScopeArgs: AuditModuleExpertSnapshotScopesArgs = {
+      profiles: MODULE_EXPERT_CATALOG,
+    };
+    context.findings.push(
+      ...ModuleExpertSnapshotScope.audit(snapshotScopeArgs),
+    );
+    ModuleExpertContract.validateInternalApiProfile(context);
+  }
+
+  private static validateCortexRoleAuthority(
+    context: ModuleExpertValidationContext,
+  ): void {
+    const authorityPath = join(
+      context.repoRoot,
+      MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
+    );
+    const source = existsSync(authorityPath)
+      ? readFileSync(authorityPath, 'utf8')
+      : '';
+    const authorityAuditArgs: AuditModuleExpertCortexAuthorityArgs = { source };
+    context.findings.push(
+      ...ModuleExpertContract.auditModuleExpertCortexAuthority(
+        authorityAuditArgs,
+      ),
+    );
+  }
+
+  static auditModuleExpertCortexAuthority(
+    args: AuditModuleExpertCortexAuthorityArgs,
+  ): readonly ModuleExpertAuditFinding[] {
+    const findings: ModuleExpertAuditFinding[] = [];
+    const contractAuditRequest: MarkdownContractAuditRequest = {
+      sections: MODULE_EXPERT_CONTRACT_SECTIONS,
+      source: args.source,
+    };
+    for (const drift of MarkdownContractSections.audit(contractAuditRequest)) {
+      const finding: ModuleExpertAuditFinding = {
+        code: 'cortex-module-expert-contract-semantic-drift',
+        path: MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
+        message: `Canonical Cortex module expert contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
+      };
+      findings.push(finding);
+    }
+    for (const profile of MODULE_EXPERT_CATALOG) {
+      const marker = ModuleExpertContract.moduleExpertCortexMarker(profile);
+      if (args.source.includes(marker)) continue;
+      const finding: ModuleExpertAuditFinding = {
+        code: 'missing-cortex-module-expert-role',
+        path: MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
+        message: `Canonical Cortex module expert role is missing: ${profile.name}`,
+      };
+      findings.push(finding);
+    }
+    return findings;
+  }
+
+  private static moduleExpertCortexMarker(
+    profile: ModuleExpertProfile,
+  ): string {
+    if (profile.name === 'internal_api_expert') {
+      return '`internal_api_expert` owns inter-module contract analysis.';
+    }
+    if (profile.name === 'web_expert') {
+      return '`web_expert` covers the initial production presentation group.';
+    }
+    return `### \`${profile.name}\``;
+  }
+
+  private static validateProfilePaths(args: ValidateProfilePathsArgs): void {
+    const paths = [
+      ...args.profile.boundaryScopePaths,
+      ...args.profile.canonicalContextPaths,
+      ...args.profile.allowedContextPaths,
+      ...args.profile.moduleRoots,
+      ...args.profile.scopePaths,
+      ...args.profile.generatedScopePaths.flatMap((scope) => [
+        scope.path,
+        scope.producerPath,
+      ]),
+      ...args.profile.excludedPaths,
+      ...args.profile.publicEntryPoints,
+      ...args.profile.authorityPaths,
+      ...args.profile.skillPaths,
+    ];
+    for (const candidate of paths) {
+      if (!ModuleExpertContract.safeRepoPath(candidate)) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'unsafe-catalog-path',
+          path: candidate,
+          message: `Module expert path must be normalized and repository-relative: ${candidate}`,
+        };
+      }
+    }
+    for (const moduleRoot of args.profile.moduleRoots) {
+      const owner = args.moduleOwners.get(moduleRoot);
+      if (owner) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'duplicate-module-owner',
+          path: moduleRoot,
+          message: `Module is owned by both ${owner} and ${args.profile.name}.`,
+        };
+      }
+      args.moduleOwners.set(moduleRoot, args.profile.name);
+    }
+    const requiredPaths = [
+      ...args.profile.boundaryScopePaths,
+      ...args.profile.canonicalContextPaths,
+      ...args.profile.allowedContextPaths,
+      ...args.profile.moduleRoots,
+      ...args.profile.scopePaths,
+      ...args.profile.publicEntryPoints,
+      ...args.profile.authorityPaths,
+      ...args.profile.skillPaths,
+    ];
+    for (const requiredPath of requiredPaths) {
+      if (!existsSync(join(args.context.repoRoot, requiredPath))) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'missing-catalog-path',
+          path: requiredPath,
+          message: `Module expert catalog path does not exist: ${requiredPath}`,
+        };
+      }
+    }
+    for (const generatedScope of args.profile.generatedScopePaths) {
+      const selectors = [
+        generatedScope.sealedSelector,
+        generatedScope.workspaceMaterializerSelector,
+        generatedScope.productionSelector,
+      ];
+      const validMarkers =
+        generatedScope.requiredMarkers.length > 0 &&
+        generatedScope.requiredMarkers.every(
+          (marker) =>
+            ModuleExpertContract.safeRepoPath(marker.path) &&
+            !marker.path.includes('/') &&
+            marker.producerEvidence.length > 0 &&
+            marker.producerEvidence.every(
+              ModuleExpertContract.validProducerEvidence,
+            ),
+        );
+      if (!validMarkers) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'invalid-generated-scope-markers',
+          path: generatedScope.path,
+          message:
+            'Generated scopes require safe, non-empty relative output markers.',
+        };
+      }
+      if (
+        generatedScope.sealedSelector !== 'wasm:build' ||
+        generatedScope.workspaceMaterializerSelector !== 'wasm:build:fast' ||
+        generatedScope.productionSelector !== 'wasm:build:prod'
+      ) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'invalid-generated-scope-selectors',
+          path: generatedScope.path,
+          message:
+            'WASM generated scopes require sealed, workspace-materializer, and production selectors.',
+        };
+      }
+      const producerValidationArgs: ValidateGeneratedScopeProducerArgs = {
+        context: args.context,
+        generatedScope,
+      };
+      ModuleExpertContract.validateGeneratedScopeProducer(
+        producerValidationArgs,
+      );
+    }
+  }
+
+  private static validateGeneratedScopeProducer(
+    args: ValidateGeneratedScopeProducerArgs,
+  ): void {
+    const producerPath = join(
+      args.context.repoRoot,
+      args.generatedScope.producerPath,
+    );
+    if (!existsSync(producerPath)) {
+      args.context.findings[args.context.findings.length] = {
+        code: 'missing-generated-scope-producer',
+        path: args.generatedScope.producerPath,
+        message: `Generated scope producer does not exist: ${args.generatedScope.producerPath}`,
+      };
+      return;
+    }
+    const producer = readFileSync(producerPath, 'utf8');
+    if (!producer.includes(args.generatedScope.producerContains)) {
+      args.context.findings[args.context.findings.length] = {
+        code: 'generated-scope-producer-drift',
+        path: args.generatedScope.producerPath,
+        message: `Generated scope producer no longer declares ${args.generatedScope.path}.`,
+      };
+    }
+    const selectors = [
+      args.generatedScope.sealedSelector,
+      args.generatedScope.workspaceMaterializerSelector,
+      args.generatedScope.productionSelector,
+    ];
+    for (const selector of selectors) {
+      if (!producer.includes(`\n  ${selector}:`)) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'generated-scope-selector-drift',
+          path: args.generatedScope.producerPath,
+          message: `Generated scope producer no longer declares ${selector}.`,
+        };
+      }
+    }
+    for (const marker of args.generatedScope.requiredMarkers) {
+      if (
+        marker.producerEvidence.some((evidence) => !producer.includes(evidence))
+      ) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'generated-scope-marker-producer-drift',
+          path: args.generatedScope.producerPath,
+          message: `Generated scope producer no longer proves output marker ${marker.path} for ${args.generatedScope.path}.`,
+        };
+      }
+    }
+  }
+
+  private static validateInternalApiProfile(
+    context: ModuleExpertValidationContext,
+  ): void {
+    const profile = MODULE_EXPERT_CATALOG.find(
+      (candidate) => candidate.name === 'internal_api_expert',
+    );
+    if (!profile) {
+      context.findings[context.findings.length] = {
+        code: 'missing-internal-api-expert',
+        path: MODULE_EXPERT_CATALOG_PATH,
+        message: 'The internal_api_expert profile is required.',
+      };
+      return;
+    }
+    const consumerScopeArgs: AuditInternalApiExpertConsumerScopeArgs = {
+      discoveredConsumerPaths:
+        InternalApiConsumerScope.discoverInternalApiConsumerPaths(
+          context.repoRoot,
+        ),
+      profile,
+    };
+    context.findings.push(
+      ...InternalApiConsumerScope.auditInternalApiExpertConsumerScope(
+        consumerScopeArgs,
+      ),
+    );
+    const requiredScopes = [
+      'nook-app/nook-platform/nook-companion-wasm',
+      'nook-app/nook-platform/nook-wasm',
+      'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',
+      'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
+    ];
+    const ownedScopes = new Set([
+      ...profile.moduleRoots,
+      ...profile.scopePaths,
+      ...profile.generatedScopePaths.map((scope) => scope.path),
+    ]);
+    for (const requiredScope of requiredScopes) {
+      if (!ownedScopes.has(requiredScope)) {
+        context.findings[context.findings.length] = {
+          code: 'incomplete-internal-api-scope',
+          path: MODULE_EXPERT_CATALOG_PATH,
+          message: `internal_api_expert must cover ${requiredScope}.`,
+        };
+      }
+    }
+    const requiredGeneratedMarkers = new Map<string, readonly string[]>([
+      [
+        'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',
+        [
+          '.wasm-source-sha256',
+          'nook_companion_wasm.js',
+          'nook_companion_wasm_bg.wasm',
+        ],
+      ],
+      [
+        'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
+        [
+          '.wasm-source-sha256',
+          'nook-wasm-build-mode',
+          'nook_wasm.js',
+          'nook_wasm_bg.wasm',
+        ],
+      ],
+    ]);
+    for (const [path, markers] of requiredGeneratedMarkers) {
+      const generatedScope = profile.generatedScopePaths.find(
+        (candidate) => candidate.path === path,
+      );
+      if (
+        !generatedScope ||
+        markers.some(
+          (marker) =>
+            !generatedScope.requiredMarkers.some(
+              (requiredMarker) => requiredMarker.path === marker,
+            ),
+        )
+      ) {
+        context.findings[context.findings.length] = {
+          code: 'incomplete-generated-scope-contract',
+          path,
+          message: `internal_api_expert must declare all required generated outputs for ${path}.`,
+        };
+      }
+    }
+  }
+
+  private static validateProductionCoverage(
+    args: ValidateProductionCoverageArgs,
+  ): void {
+    const catalogRoots = MODULE_EXPERT_CATALOG.flatMap(
+      (profile) => profile.moduleRoots,
+    );
+    const catalogSet = new Set(catalogRoots);
+    const liveSet = new Set(args.liveRoots);
+    for (const liveRoot of args.liveRoots) {
+      if (!catalogSet.has(liveRoot)) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'unrouted-production-module',
+          path: liveRoot,
+          message: `Production module has no module expert: ${liveRoot}`,
+        };
+      }
+    }
+    for (const catalogRoot of catalogRoots) {
+      if (!liveSet.has(catalogRoot)) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'stale-module-route',
+          path: catalogRoot,
+          message: `Catalog route is not a live production module: ${catalogRoot}`,
+        };
+      }
+    }
+    if (catalogSet.has(MODULE_EXPERT_RESEARCH_ROOT)) {
+      args.context.findings[args.context.findings.length] = {
+        code: 'research-module-routed',
+        path: MODULE_EXPERT_RESEARCH_ROOT,
+        message:
+          'nook-web-research must remain outside production expert routing.',
+      };
+    }
+  }
+
+  private static liveProductionModuleRoots(
+    context: ModuleExpertValidationContext,
+  ): readonly string[] {
+    const discoveryArgs: DiscoverCargoWorkspaceArgs = {
+      repoRoot: context.repoRoot,
+      manifestPath: PLATFORM_MANIFEST,
+    };
+    const cargoInventory = CargoWorkspaceDiscovery.discover(discoveryArgs);
+    const rustRoots =
+      cargoInventory.kind === CargoWorkspaceInventoryKind.Complete
+        ? cargoInventory.roots
+        : [];
+    if (cargoInventory.kind === CargoWorkspaceInventoryKind.Failed) {
+      context.findings[context.findings.length] = {
+        code: cargoInventory.code,
+        path: PLATFORM_MANIFEST,
+        message: cargoInventory.message,
+      };
+    }
+    const webDirectory = join(context.repoRoot, WEB_ROOT);
+    const directoryOptions = { withFileTypes: true } as const;
+    const webRoots = readdirSync(webDirectory, directoryOptions)
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `${WEB_ROOT}/${entry.name}`)
+      .filter((root) =>
+        existsSync(join(context.repoRoot, root, 'package.json')),
+      )
+      .filter((root) => root !== MODULE_EXPERT_RESEARCH_ROOT);
+    return [...rustRoots, ...webRoots].sort();
+  }
+
+  private static validateRuntimePolicy(
+    context: ModuleExpertValidationContext,
+  ): void {
+    const threadOptionsArgs = { workingDirectory: context.repoRoot };
+    const threadOptions =
+      ModuleExpertIsolation.moduleExpertIsolatedThreadOptions(
+        threadOptionsArgs,
+      );
+    const codexOptionsRequest = {
+      authenticationCommandArgs: [
+        '-e',
+        MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
+        '--',
+        '/isolated/authentication.sock',
+        'audit-nonce',
+      ],
+      contextServerUrl: 'http://127.0.0.1:1/audit-context',
+      processEnvironment: {
+        CODEX_HOME: '/isolated/codex-home',
+        PATH: '/usr/bin',
+      },
+    };
+    const auditArgs: AuditModuleExpertRuntimePolicyArgs = {
+      authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
+      codexOptions:
+        ModuleExpertIsolation.buildModuleExpertCodexOptions(
+          codexOptionsRequest,
+        ),
+      processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+      safeCodexEnvironment: AUDIT_CODEX_ENVIRONMENT,
+      safeShellEnvironment: AUDIT_SHELL_ENVIRONMENT,
+      threadOptions,
+    };
+    for (const finding of ModuleExpertContract.auditModuleExpertRuntimePolicy(
+      auditArgs,
+    )) {
+      context.findings[context.findings.length] = finding;
+    }
+  }
+
+  private static validateRuntimeRouting(
+    context: ModuleExpertValidationContext,
+  ): void {
+    const moduleExpertCliPath = join(context.repoRoot, MODULE_EXPERT_CLI);
+    const trustedRuntimePath = join(
+      context.repoRoot,
+      MODULE_EXPERT_TRUSTED_RUNTIME,
+    );
+    const auditArgs: AuditModuleExpertRuntimeRoutingArgs = {
+      moduleExpertCliSource: existsSync(moduleExpertCliPath)
+        ? readFileSync(moduleExpertCliPath, 'utf8')
+        : '',
+      trustedRuntimeSource: existsSync(trustedRuntimePath)
+        ? readFileSync(trustedRuntimePath, 'utf8')
+        : '',
+    };
+    for (const finding of ModuleExpertRuntimeRouting.audit(auditArgs)) {
+      context.findings[context.findings.length] = finding;
+    }
+  }
+
+  private static safeIdentifier(value: string): boolean {
+    return value.length <= 64 && /^[a-z][a-z0-9_]*$/u.test(value);
+  }
+
+  private static validProducerEvidence(value: string): boolean {
+    return (
+      value.length > 0 &&
+      value.length <= 512 &&
+      value.trim() === value &&
+      !Array.from(value).some((character) => {
+        const code = character.charCodeAt(0);
+        return code < 32 || code === 127;
+      })
+    );
+  }
+
+  private static safeRepoPath(value: string): boolean {
+    return (
+      value.length > 0 &&
+      value.length <= 512 &&
+      !isAbsolute(value) &&
+      normalize(value) === value &&
+      relative('.', value) === value &&
+      !value.split('/').includes('.git') &&
+      !value.split('/').includes('..') &&
+      dirname(value) !== '..'
+    );
+  }
+}
+
+export { ModuleExpertRuntimeRouting };
+
 export type { AuditModuleExpertRuntimeRoutingArgs };
 
 export type ModuleExpertAuditFinding = {
@@ -81,11 +826,16 @@ export type AuditModuleExpertCortexAuthorityArgs = {
 
 const MODULE_EXPERT_CATALOG_PATH =
   'agentic-ai/loom/src/module-experts/catalog.ts';
+
 const MODULE_EXPERT_CORTEX_AUTHORITY_PATH =
   '.cortex/teams/ai/architecture/module-experts.md';
+
 const PLATFORM_MANIFEST = 'nook-app/nook-platform/Cargo.toml';
+
 const WEB_ROOT = 'nook-app/nook-web';
+
 const EXPECTED_AUTH_ENVIRONMENT_KEYS = ['CODEX_API_KEY'] as const;
+
 const EXPECTED_PROCESS_ENVIRONMENT_KEYS = [
   'COMSPEC',
   'PATH',
@@ -95,11 +845,14 @@ const EXPECTED_PROCESS_ENVIRONMENT_KEYS = [
   'SystemRoot',
   'WINDIR',
 ] as const;
+
 const AUDIT_CODEX_ENVIRONMENT = {
   CODEX_HOME: '/isolated/codex-home',
   PATH: '/usr/bin',
 } as const;
+
 const AUDIT_SHELL_ENVIRONMENT = { PATH: '/usr/bin' } as const;
+
 const EXPECTED_DISABLED_FEATURES = {
   apps: false,
   code_mode: { enabled: false },
@@ -116,6 +869,7 @@ const EXPECTED_DISABLED_FEATURES = {
   unified_exec: false,
   view_image: false,
 } as const;
+
 const MODULE_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
   {
     heading: '## Engineering team routing',
@@ -147,48 +901,6 @@ const MODULE_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
   },
 ];
 
-export function auditModuleExperts(
-  args: AuditModuleExpertsArgs,
-): ModuleExpertAuditReport {
-  const findings: ModuleExpertAuditFinding[] = [];
-  const context: ModuleExpertValidationContext = {
-    findings,
-    repoRoot: args.repoRoot,
-  };
-  validateProfiles(context);
-  validateCortexRoleAuthority(context);
-  const liveRoots = liveProductionModuleRoots(context);
-  const coverageArgs: ValidateProductionCoverageArgs = {
-    context,
-    liveRoots,
-  };
-  validateProductionCoverage(coverageArgs);
-  mergeTeamAgentAudit(context);
-  validateRuntimePolicy(context);
-  validateRuntimeRouting(context);
-  return {
-    findings,
-    profileCount: MODULE_EXPERT_CATALOG.length,
-    productionModuleCount: liveRoots.length,
-    auditOk: findings.length === 0,
-  };
-}
-
-function mergeTeamAgentAudit(context: ModuleExpertValidationContext): void {
-  const teamAuditRequest: AuditTeamAgentsRequest = {
-    repoRoot: context.repoRoot,
-  };
-  const teamAudit = auditTeamAgents(teamAuditRequest);
-  for (const teamFinding of teamAudit.findings) {
-    const finding: ModuleExpertAuditFinding = {
-      code: teamFinding.code,
-      path: teamFinding.path,
-      message: teamFinding.message,
-    };
-    context.findings.push(finding);
-  }
-}
-
 type ModuleExpertValidationContext = {
   readonly findings: ModuleExpertAuditFinding[];
   readonly repoRoot: string;
@@ -199,271 +911,19 @@ export type AuditGeneratedScopeProducerContractArgs = {
   readonly generatedScope: ModuleExpertGeneratedScope;
 };
 
-export function auditGeneratedScopeProducerContract(
-  args: AuditGeneratedScopeProducerContractArgs,
-): readonly ModuleExpertAuditFinding[] {
-  const findings: ModuleExpertAuditFinding[] = [];
-  const context: ModuleExpertValidationContext = {
-    findings,
-    repoRoot: args.repoRoot,
-  };
-  const validationArgs: ValidateGeneratedScopeProducerArgs = {
-    context,
-    generatedScope: args.generatedScope,
-  };
-  validateGeneratedScopeProducer(validationArgs);
-  return findings;
-}
-
-export function auditModuleExpertRuntimePolicy(
-  args: AuditModuleExpertRuntimePolicyArgs,
-): readonly ModuleExpertAuditFinding[] {
-  if (!args.codexOptions.config) return [unsafeRuntimeFinding()];
-  const config = args.codexOptions.config;
-  const agents = configRecord(config.agents);
-  const features = configRecord(config.features);
-  const shellEnvironmentPolicy = configRecord(config.shell_environment_policy);
-  const tools = configRecord(config.tools);
-  const modelProviders = configRecord(config.model_providers);
-  const provider = configRecord(
-    modelProviders && modelProviders[MODULE_EXPERT_AUTH_PROVIDER],
-  );
-  const contextServers = configRecord(config.mcp_servers);
-  const contextServer = configRecord(
-    contextServers && contextServers[MODULE_EXPERT_CONTEXT_MCP],
-  );
-  const contextServerValidation: ContextServerRegistryValidation = {
-    registry: contextServers,
-    server: contextServer,
-  };
-  const authEnvironmentComparison: OrderedValuesComparison = {
-    actual: args.authEnvironmentKeys,
-    expected: EXPECTED_AUTH_ENVIRONMENT_KEYS,
-  };
-  const processEnvironmentComparison: OrderedValuesComparison = {
-    actual: args.processEnvironmentKeys,
-    expected: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
-  };
-  const actualShellEnvironment = configRecord(
-    shellEnvironmentPolicy === false ? false : shellEnvironmentPolicy.set,
-  );
-  const runtimeEnvironmentValidation: ValidateModuleExpertRuntimeEnvironmentArgs =
-    {
-      actualProcessEnvironment: args.codexOptions.env,
-      actualShellEnvironment,
-      allowedShellKeys: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
-      safeCodexEnvironment: args.safeCodexEnvironment,
-      safeShellEnvironment: args.safeShellEnvironment,
-    };
-  const valid =
-    args.threadOptions.sandboxMode === 'read-only' &&
-    args.threadOptions.approvalPolicy === 'never' &&
-    args.threadOptions.networkAccessEnabled === false &&
-    args.threadOptions.webSearchMode === 'disabled' &&
-    args.threadOptions.skipGitRepoCheck === true &&
-    config.allow_login_shell === false &&
-    config.cli_auth_credentials_store === 'file' &&
-    config.model_provider === MODULE_EXPERT_AUTH_PROVIDER &&
-    validAuthenticationProvider(provider) &&
-    Boolean(agents) &&
-    agents !== false &&
-    agents.enabled === false &&
-    agents.max_depth === 0 &&
-    JSON.stringify(features) === JSON.stringify(EXPECTED_DISABLED_FEATURES) &&
-    Boolean(tools) &&
-    tools !== false &&
-    tools.view_image === false &&
-    tools.web_search === false &&
-    config.web_search === 'disabled' &&
-    validContextServerRegistry(contextServerValidation) &&
-    Boolean(shellEnvironmentPolicy) &&
-    shellEnvironmentPolicy !== false &&
-    typeof shellEnvironmentPolicy === 'object' &&
-    !Array.isArray(shellEnvironmentPolicy) &&
-    shellEnvironmentPolicy.inherit === 'none' &&
-    shellEnvironmentPolicy.ignore_default_excludes === false &&
-    validModuleExpertRuntimeEnvironment(runtimeEnvironmentValidation) &&
-    sameOrderedValues(authEnvironmentComparison) &&
-    sameOrderedValues(processEnvironmentComparison);
-  if (valid) return [];
-  return [unsafeRuntimeFinding()];
-}
-
-function unsafeRuntimeFinding(): ModuleExpertAuditFinding {
-  return {
-    code: 'unsafe-module-expert-runtime',
-    path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
-    message:
-      'Module experts require an isolated read-only, bounded-context, non-delegating Codex runtime.',
-  };
-}
-
 type CodexConfigEntry = NonNullable<CodexOptions['config']>[string];
+
 type CodexConfigRecord = Readonly<Record<string, CodexConfigEntry>>;
-
-function configRecord(value?: CodexConfigEntry): CodexConfigRecord | false {
-  if (typeof value !== 'object' || !value || Array.isArray(value)) return false;
-  return value;
-}
-
-function validAuthenticationProvider(
-  provider: CodexConfigRecord | false,
-): boolean {
-  if (!provider) return false;
-  const auth = configRecord(provider.auth);
-  if (!auth) return false;
-  return (
-    provider.name === 'Nook module expert OpenAI provider' &&
-    provider.base_url === 'https://api.openai.com/v1' &&
-    provider.wire_api === 'responses' &&
-    auth.command === process.execPath &&
-    Array.isArray(auth.args) &&
-    auth.args.length === 5 &&
-    auth.args[0] === '-e' &&
-    auth.args[1] === MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE &&
-    auth.args[2] === '--' &&
-    typeof auth.args[3] === 'string' &&
-    typeof auth.args[4] === 'string' &&
-    auth.refresh_interval_ms === 0 &&
-    auth.timeout_ms === 5_000
-  );
-}
 
 type ContextServerRegistryValidation = {
   readonly registry: CodexConfigRecord | false;
   readonly server: CodexConfigRecord | false;
 };
 
-function validContextServerRegistry(
-  validation: ContextServerRegistryValidation,
-): boolean {
-  const { registry, server } = validation;
-  if (
-    !registry ||
-    !server ||
-    Object.keys(registry).length !== 1 ||
-    server.enabled !== true ||
-    server.required !== true ||
-    server.default_tools_approval_mode !== 'approve' ||
-    server.startup_timeout_sec !== 5 ||
-    server.tool_timeout_sec !== 10 ||
-    JSON.stringify(server.enabled_tools) !==
-      JSON.stringify(MODULE_EXPERT_READ_CONTEXT_TOOLS)
-  ) {
-    return false;
-  }
-  if (typeof server.url !== 'string') return false;
-  try {
-    const url = new URL(server.url);
-    return (
-      url.protocol === 'http:' &&
-      url.hostname === '127.0.0.1' &&
-      url.pathname.length > 1
-    );
-  } catch {
-    return false;
-  }
-}
-
 type OrderedValuesComparison = {
   readonly actual: readonly string[];
   readonly expected: readonly string[];
 };
-
-function sameOrderedValues(comparison: OrderedValuesComparison): boolean {
-  return (
-    JSON.stringify(comparison.actual) === JSON.stringify(comparison.expected)
-  );
-}
-
-function validateProfiles(context: ModuleExpertValidationContext): void {
-  const names = new Set<string>();
-  const moduleOwners = new Map<string, string>();
-  for (const profile of MODULE_EXPERT_CATALOG) {
-    if (!safeIdentifier(profile.name) || names.has(profile.name)) {
-      context.findings[context.findings.length] = {
-        code: 'invalid-profile-name',
-        path: MODULE_EXPERT_CATALOG_PATH,
-        message: `Module expert name is unsafe or duplicated: ${profile.name}`,
-      };
-    }
-    names.add(profile.name);
-    if (profile.validationSelectors.length === 0) {
-      context.findings[context.findings.length] = {
-        code: 'missing-validation-selector',
-        path: MODULE_EXPERT_CATALOG_PATH,
-        message:
-          'Every module expert needs at least one focused validation selector.',
-      };
-    }
-    const validateProfilePathsArgs: ValidateProfilePathsArgs = {
-      context,
-      moduleOwners,
-      profile,
-    };
-    validateProfilePaths(validateProfilePathsArgs);
-  }
-  const snapshotScopeArgs: AuditModuleExpertSnapshotScopesArgs = {
-    profiles: MODULE_EXPERT_CATALOG,
-  };
-  context.findings.push(...auditModuleExpertSnapshotScopes(snapshotScopeArgs));
-  validateInternalApiProfile(context);
-}
-
-function validateCortexRoleAuthority(
-  context: ModuleExpertValidationContext,
-): void {
-  const authorityPath = join(
-    context.repoRoot,
-    MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
-  );
-  const source = existsSync(authorityPath)
-    ? readFileSync(authorityPath, 'utf8')
-    : '';
-  const authorityAuditArgs: AuditModuleExpertCortexAuthorityArgs = { source };
-  context.findings.push(
-    ...auditModuleExpertCortexAuthority(authorityAuditArgs),
-  );
-}
-
-export function auditModuleExpertCortexAuthority(
-  args: AuditModuleExpertCortexAuthorityArgs,
-): readonly ModuleExpertAuditFinding[] {
-  const findings: ModuleExpertAuditFinding[] = [];
-  const contractAuditRequest: MarkdownContractAuditRequest = {
-    sections: MODULE_EXPERT_CONTRACT_SECTIONS,
-    source: args.source,
-  };
-  for (const drift of auditMarkdownContractSections(contractAuditRequest)) {
-    const finding: ModuleExpertAuditFinding = {
-      code: 'cortex-module-expert-contract-semantic-drift',
-      path: MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
-      message: `Canonical Cortex module expert contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
-    };
-    findings.push(finding);
-  }
-  for (const profile of MODULE_EXPERT_CATALOG) {
-    const marker = moduleExpertCortexMarker(profile);
-    if (args.source.includes(marker)) continue;
-    const finding: ModuleExpertAuditFinding = {
-      code: 'missing-cortex-module-expert-role',
-      path: MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
-      message: `Canonical Cortex module expert role is missing: ${profile.name}`,
-    };
-    findings.push(finding);
-  }
-  return findings;
-}
-
-function moduleExpertCortexMarker(profile: ModuleExpertProfile): string {
-  if (profile.name === 'internal_api_expert') {
-    return '`internal_api_expert` owns inter-module contract analysis.';
-  }
-  if (profile.name === 'web_expert') {
-    return '`web_expert` covers the initial production presentation group.';
-  }
-  return `### \`${profile.name}\``;
-}
 
 type ValidateProfilePathsArgs = {
   readonly context: ModuleExpertValidationContext;
@@ -471,385 +931,12 @@ type ValidateProfilePathsArgs = {
   readonly profile: ModuleExpertProfile;
 };
 
-function validateProfilePaths(args: ValidateProfilePathsArgs): void {
-  const paths = [
-    ...args.profile.boundaryScopePaths,
-    ...args.profile.canonicalContextPaths,
-    ...args.profile.allowedContextPaths,
-    ...args.profile.moduleRoots,
-    ...args.profile.scopePaths,
-    ...args.profile.generatedScopePaths.flatMap((scope) => [
-      scope.path,
-      scope.producerPath,
-    ]),
-    ...args.profile.excludedPaths,
-    ...args.profile.publicEntryPoints,
-    ...args.profile.authorityPaths,
-    ...args.profile.skillPaths,
-  ];
-  for (const candidate of paths) {
-    if (!safeRepoPath(candidate)) {
-      args.context.findings[args.context.findings.length] = {
-        code: 'unsafe-catalog-path',
-        path: candidate,
-        message: `Module expert path must be normalized and repository-relative: ${candidate}`,
-      };
-    }
-  }
-  for (const moduleRoot of args.profile.moduleRoots) {
-    const owner = args.moduleOwners.get(moduleRoot);
-    if (owner) {
-      args.context.findings[args.context.findings.length] = {
-        code: 'duplicate-module-owner',
-        path: moduleRoot,
-        message: `Module is owned by both ${owner} and ${args.profile.name}.`,
-      };
-    }
-    args.moduleOwners.set(moduleRoot, args.profile.name);
-  }
-  const requiredPaths = [
-    ...args.profile.boundaryScopePaths,
-    ...args.profile.canonicalContextPaths,
-    ...args.profile.allowedContextPaths,
-    ...args.profile.moduleRoots,
-    ...args.profile.scopePaths,
-    ...args.profile.publicEntryPoints,
-    ...args.profile.authorityPaths,
-    ...args.profile.skillPaths,
-  ];
-  for (const requiredPath of requiredPaths) {
-    if (!existsSync(join(args.context.repoRoot, requiredPath))) {
-      args.context.findings[args.context.findings.length] = {
-        code: 'missing-catalog-path',
-        path: requiredPath,
-        message: `Module expert catalog path does not exist: ${requiredPath}`,
-      };
-    }
-  }
-  for (const generatedScope of args.profile.generatedScopePaths) {
-    const selectors = [
-      generatedScope.sealedSelector,
-      generatedScope.workspaceMaterializerSelector,
-      generatedScope.productionSelector,
-    ];
-    const validMarkers =
-      generatedScope.requiredMarkers.length > 0 &&
-      generatedScope.requiredMarkers.every(
-        (marker) =>
-          safeRepoPath(marker.path) &&
-          !marker.path.includes('/') &&
-          marker.producerEvidence.length > 0 &&
-          marker.producerEvidence.every(validProducerEvidence),
-      );
-    if (!validMarkers) {
-      args.context.findings[args.context.findings.length] = {
-        code: 'invalid-generated-scope-markers',
-        path: generatedScope.path,
-        message:
-          'Generated scopes require safe, non-empty relative output markers.',
-      };
-    }
-    if (
-      generatedScope.sealedSelector !== 'wasm:build' ||
-      generatedScope.workspaceMaterializerSelector !== 'wasm:build:fast' ||
-      generatedScope.productionSelector !== 'wasm:build:prod'
-    ) {
-      args.context.findings[args.context.findings.length] = {
-        code: 'invalid-generated-scope-selectors',
-        path: generatedScope.path,
-        message:
-          'WASM generated scopes require sealed, workspace-materializer, and production selectors.',
-      };
-    }
-    const producerValidationArgs: ValidateGeneratedScopeProducerArgs = {
-      context: args.context,
-      generatedScope,
-    };
-    validateGeneratedScopeProducer(producerValidationArgs);
-  }
-}
-
 type ValidateGeneratedScopeProducerArgs = {
   readonly context: ModuleExpertValidationContext;
   readonly generatedScope: ModuleExpertGeneratedScope;
 };
 
-function validateGeneratedScopeProducer(
-  args: ValidateGeneratedScopeProducerArgs,
-): void {
-  const producerPath = join(
-    args.context.repoRoot,
-    args.generatedScope.producerPath,
-  );
-  if (!existsSync(producerPath)) {
-    args.context.findings[args.context.findings.length] = {
-      code: 'missing-generated-scope-producer',
-      path: args.generatedScope.producerPath,
-      message: `Generated scope producer does not exist: ${args.generatedScope.producerPath}`,
-    };
-    return;
-  }
-  const producer = readFileSync(producerPath, 'utf8');
-  if (!producer.includes(args.generatedScope.producerContains)) {
-    args.context.findings[args.context.findings.length] = {
-      code: 'generated-scope-producer-drift',
-      path: args.generatedScope.producerPath,
-      message: `Generated scope producer no longer declares ${args.generatedScope.path}.`,
-    };
-  }
-  const selectors = [
-    args.generatedScope.sealedSelector,
-    args.generatedScope.workspaceMaterializerSelector,
-    args.generatedScope.productionSelector,
-  ];
-  for (const selector of selectors) {
-    if (!producer.includes(`\n  ${selector}:`)) {
-      args.context.findings[args.context.findings.length] = {
-        code: 'generated-scope-selector-drift',
-        path: args.generatedScope.producerPath,
-        message: `Generated scope producer no longer declares ${selector}.`,
-      };
-    }
-  }
-  for (const marker of args.generatedScope.requiredMarkers) {
-    if (
-      marker.producerEvidence.some((evidence) => !producer.includes(evidence))
-    ) {
-      args.context.findings[args.context.findings.length] = {
-        code: 'generated-scope-marker-producer-drift',
-        path: args.generatedScope.producerPath,
-        message: `Generated scope producer no longer proves output marker ${marker.path} for ${args.generatedScope.path}.`,
-      };
-    }
-  }
-}
-
-function validateInternalApiProfile(
-  context: ModuleExpertValidationContext,
-): void {
-  const profile = MODULE_EXPERT_CATALOG.find(
-    (candidate) => candidate.name === 'internal_api_expert',
-  );
-  if (!profile) {
-    context.findings[context.findings.length] = {
-      code: 'missing-internal-api-expert',
-      path: MODULE_EXPERT_CATALOG_PATH,
-      message: 'The internal_api_expert profile is required.',
-    };
-    return;
-  }
-  const consumerScopeArgs: AuditInternalApiExpertConsumerScopeArgs = {
-    discoveredConsumerPaths: discoverInternalApiConsumerPaths(context.repoRoot),
-    profile,
-  };
-  context.findings.push(
-    ...auditInternalApiExpertConsumerScope(consumerScopeArgs),
-  );
-  const requiredScopes = [
-    'nook-app/nook-platform/nook-companion-wasm',
-    'nook-app/nook-platform/nook-wasm',
-    'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',
-    'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
-  ];
-  const ownedScopes = new Set([
-    ...profile.moduleRoots,
-    ...profile.scopePaths,
-    ...profile.generatedScopePaths.map((scope) => scope.path),
-  ]);
-  for (const requiredScope of requiredScopes) {
-    if (!ownedScopes.has(requiredScope)) {
-      context.findings[context.findings.length] = {
-        code: 'incomplete-internal-api-scope',
-        path: MODULE_EXPERT_CATALOG_PATH,
-        message: `internal_api_expert must cover ${requiredScope}.`,
-      };
-    }
-  }
-  const requiredGeneratedMarkers = new Map<string, readonly string[]>([
-    [
-      'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',
-      [
-        '.wasm-source-sha256',
-        'nook_companion_wasm.js',
-        'nook_companion_wasm_bg.wasm',
-      ],
-    ],
-    [
-      'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
-      [
-        '.wasm-source-sha256',
-        'nook-wasm-build-mode',
-        'nook_wasm.js',
-        'nook_wasm_bg.wasm',
-      ],
-    ],
-  ]);
-  for (const [path, markers] of requiredGeneratedMarkers) {
-    const generatedScope = profile.generatedScopePaths.find(
-      (candidate) => candidate.path === path,
-    );
-    if (
-      !generatedScope ||
-      markers.some(
-        (marker) =>
-          !generatedScope.requiredMarkers.some(
-            (requiredMarker) => requiredMarker.path === marker,
-          ),
-      )
-    ) {
-      context.findings[context.findings.length] = {
-        code: 'incomplete-generated-scope-contract',
-        path,
-        message: `internal_api_expert must declare all required generated outputs for ${path}.`,
-      };
-    }
-  }
-}
-
 type ValidateProductionCoverageArgs = {
   readonly context: ModuleExpertValidationContext;
   readonly liveRoots: readonly string[];
 };
-
-function validateProductionCoverage(
-  args: ValidateProductionCoverageArgs,
-): void {
-  const catalogRoots = MODULE_EXPERT_CATALOG.flatMap(
-    (profile) => profile.moduleRoots,
-  );
-  const catalogSet = new Set(catalogRoots);
-  const liveSet = new Set(args.liveRoots);
-  for (const liveRoot of args.liveRoots) {
-    if (!catalogSet.has(liveRoot)) {
-      args.context.findings[args.context.findings.length] = {
-        code: 'unrouted-production-module',
-        path: liveRoot,
-        message: `Production module has no module expert: ${liveRoot}`,
-      };
-    }
-  }
-  for (const catalogRoot of catalogRoots) {
-    if (!liveSet.has(catalogRoot)) {
-      args.context.findings[args.context.findings.length] = {
-        code: 'stale-module-route',
-        path: catalogRoot,
-        message: `Catalog route is not a live production module: ${catalogRoot}`,
-      };
-    }
-  }
-  if (catalogSet.has(MODULE_EXPERT_RESEARCH_ROOT)) {
-    args.context.findings[args.context.findings.length] = {
-      code: 'research-module-routed',
-      path: MODULE_EXPERT_RESEARCH_ROOT,
-      message:
-        'nook-web-research must remain outside production expert routing.',
-    };
-  }
-}
-
-function liveProductionModuleRoots(
-  context: ModuleExpertValidationContext,
-): readonly string[] {
-  const discoveryArgs: DiscoverCargoWorkspaceArgs = {
-    repoRoot: context.repoRoot,
-    manifestPath: PLATFORM_MANIFEST,
-  };
-  const cargoInventory = discoverCargoWorkspace(discoveryArgs);
-  const rustRoots =
-    cargoInventory.kind === CargoWorkspaceInventoryKind.Complete
-      ? cargoInventory.roots
-      : [];
-  if (cargoInventory.kind === CargoWorkspaceInventoryKind.Failed) {
-    context.findings[context.findings.length] = {
-      code: cargoInventory.code,
-      path: PLATFORM_MANIFEST,
-      message: cargoInventory.message,
-    };
-  }
-  const webDirectory = join(context.repoRoot, WEB_ROOT);
-  const directoryOptions = { withFileTypes: true } as const;
-  const webRoots = readdirSync(webDirectory, directoryOptions)
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => `${WEB_ROOT}/${entry.name}`)
-    .filter((root) => existsSync(join(context.repoRoot, root, 'package.json')))
-    .filter((root) => root !== MODULE_EXPERT_RESEARCH_ROOT);
-  return [...rustRoots, ...webRoots].sort();
-}
-
-function validateRuntimePolicy(context: ModuleExpertValidationContext): void {
-  const threadOptionsArgs = { workingDirectory: context.repoRoot };
-  const threadOptions = moduleExpertIsolatedThreadOptions(threadOptionsArgs);
-  const codexOptionsRequest = {
-    authenticationCommandArgs: [
-      '-e',
-      MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
-      '--',
-      '/isolated/authentication.sock',
-      'audit-nonce',
-    ],
-    contextServerUrl: 'http://127.0.0.1:1/audit-context',
-    processEnvironment: {
-      CODEX_HOME: '/isolated/codex-home',
-      PATH: '/usr/bin',
-    },
-  };
-  const auditArgs: AuditModuleExpertRuntimePolicyArgs = {
-    authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
-    codexOptions: buildModuleExpertCodexOptions(codexOptionsRequest),
-    processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-    safeCodexEnvironment: AUDIT_CODEX_ENVIRONMENT,
-    safeShellEnvironment: AUDIT_SHELL_ENVIRONMENT,
-    threadOptions,
-  };
-  for (const finding of auditModuleExpertRuntimePolicy(auditArgs)) {
-    context.findings[context.findings.length] = finding;
-  }
-}
-
-function validateRuntimeRouting(context: ModuleExpertValidationContext): void {
-  const moduleExpertCliPath = join(context.repoRoot, MODULE_EXPERT_CLI);
-  const trustedRuntimePath = join(
-    context.repoRoot,
-    MODULE_EXPERT_TRUSTED_RUNTIME,
-  );
-  const auditArgs: AuditModuleExpertRuntimeRoutingArgs = {
-    moduleExpertCliSource: existsSync(moduleExpertCliPath)
-      ? readFileSync(moduleExpertCliPath, 'utf8')
-      : '',
-    trustedRuntimeSource: existsSync(trustedRuntimePath)
-      ? readFileSync(trustedRuntimePath, 'utf8')
-      : '',
-  };
-  for (const finding of auditModuleExpertRuntimeRouting(auditArgs)) {
-    context.findings[context.findings.length] = finding;
-  }
-}
-
-function safeIdentifier(value: string): boolean {
-  return value.length <= 64 && /^[a-z][a-z0-9_]*$/u.test(value);
-}
-
-function validProducerEvidence(value: string): boolean {
-  return (
-    value.length > 0 &&
-    value.length <= 512 &&
-    value.trim() === value &&
-    !Array.from(value).some((character) => {
-      const code = character.charCodeAt(0);
-      return code < 32 || code === 127;
-    })
-  );
-}
-
-function safeRepoPath(value: string): boolean {
-  return (
-    value.length > 0 &&
-    value.length <= 512 &&
-    !isAbsolute(value) &&
-    normalize(value) === value &&
-    relative('.', value) === value &&
-    !value.split('/').includes('.git') &&
-    !value.split('/').includes('..') &&
-    dirname(value) !== '..'
-  );
-}

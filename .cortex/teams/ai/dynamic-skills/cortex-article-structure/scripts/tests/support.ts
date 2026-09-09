@@ -1,4 +1,5 @@
-import { auditCortexArticleStructure } from '../src/audit.ts';
+import { CortexArticleAudit } from '../src/audit.ts';
+
 import {
   CortexArticleContractKind,
   type AuditCortexArticleStructureRequest,
@@ -6,6 +7,37 @@ import {
   type CortexArticleFinding,
   type CortexArticleSemanticBlock,
 } from '../src/domain.ts';
+
+export class CortexArticleStructureSupportScenario {
+  private constructor(private readonly request: MakeDocumentRequest) {}
+
+  static makeDocument(request: MakeDocumentRequest): CortexArticleDocument {
+    return new CortexArticleStructureSupportScenario(request).execute();
+  }
+
+  private execute(): CortexArticleDocument {
+    const request = this.request;
+    return {
+      relativePath: request.relativePath,
+      blocks: request.blocks,
+    };
+  }
+
+  static makeAuditRequest(
+    request: MakeAuditRequest,
+  ): AuditCortexArticleStructureRequest {
+    return {
+      kind: CortexArticleContractKind.Request,
+      documents: request.documents,
+    };
+  }
+
+  static audit(request: MakeAuditRequest): CortexArticleFinding[] {
+    return CortexArticleAudit.auditCortexArticleStructure(
+      CortexArticleStructureSupportScenario.makeAuditRequest(request),
+    );
+  }
+}
 
 export type MakeAuditRequest = {
   readonly documents: readonly CortexArticleDocument[];
@@ -15,25 +47,3 @@ export type MakeDocumentRequest = {
   readonly blocks: readonly CortexArticleSemanticBlock[];
   readonly relativePath: string;
 };
-
-export function makeDocument(
-  request: MakeDocumentRequest,
-): CortexArticleDocument {
-  return {
-    relativePath: request.relativePath,
-    blocks: request.blocks,
-  };
-}
-
-export function makeAuditRequest(
-  request: MakeAuditRequest,
-): AuditCortexArticleStructureRequest {
-  return {
-    kind: CortexArticleContractKind.Request,
-    documents: request.documents,
-  };
-}
-
-export function audit(request: MakeAuditRequest): CortexArticleFinding[] {
-  return auditCortexArticleStructure(makeAuditRequest(request));
-}

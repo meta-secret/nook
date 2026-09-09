@@ -5,46 +5,111 @@ import {
   AgentAttemptAdapterKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
-import {
-  auditStructuralExpertProfiles,
-  auditStructuralExpertCortexAuthority,
-  auditStructuralExperts,
-} from '../../src/structural-experts/audit.ts';
+import { StructuralExpertContract } from '../../src/structural-experts/audit.ts';
 import {
   STRUCTURAL_EXPERT_CATALOG,
   StructuralExpertKind,
 } from '../../src/structural-experts/catalog.ts';
 
-const REPO_ROOT = resolve(import.meta.dir, '../../../..');
-const REGISTRY_AUTHORITY_PATH = resolve(
-  REPO_ROOT,
-  '.cortex/teams/ai/architecture/refactoring-experts.md',
-);
-const SKILL_AUTHORITY_PATH = resolve(
-  REPO_ROOT,
-  '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
-);
-const WORKFLOW_AUTHORITY_PATH = resolve(
-  REPO_ROOT,
-  '.cortex/teams/ai/workflows/structural-refactoring.md',
-);
+/** Owns the structural experts catalog fixture registry and its capability transitions. */
+export class StructuralExpertsCatalogFixture {
+  private constructor() {}
+  static readonly REPO_ROOT = resolve(import.meta.dir, '../../../..');
+
+  static readonly REGISTRY_AUTHORITY_PATH = resolve(
+    StructuralExpertsCatalogFixture.REPO_ROOT,
+    '.cortex/teams/ai/architecture/refactoring-experts.md',
+  );
+
+  static readonly SKILL_AUTHORITY_PATH = resolve(
+    StructuralExpertsCatalogFixture.REPO_ROOT,
+    '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
+  );
+
+  static readonly WORKFLOW_AUTHORITY_PATH = resolve(
+    StructuralExpertsCatalogFixture.REPO_ROOT,
+    '.cortex/teams/ai/workflows/structural-refactoring.md',
+  );
+
+  static async cortexAuthoritySources(): Promise<CortexAuthoritySources> {
+    const registrySource = await readFile(
+      StructuralExpertsCatalogFixture.REGISTRY_AUTHORITY_PATH,
+      'utf8',
+    );
+    const skillSource = await readFile(
+      StructuralExpertsCatalogFixture.SKILL_AUTHORITY_PATH,
+      'utf8',
+    );
+    const workflowSource = await readFile(
+      StructuralExpertsCatalogFixture.WORKFLOW_AUTHORITY_PATH,
+      'utf8',
+    );
+    return {
+      registrySource,
+      skillSource,
+      workflowSource,
+    };
+  }
+
+  static async expectAllAuthorityDriftCoverage(): Promise<void> {
+    const sources =
+      await StructuralExpertsCatalogFixture.cortexAuthoritySources();
+    const driftedAuthorities = [
+      {
+        expectedPath: '.cortex/teams/ai/architecture/refactoring-experts.md',
+        request: {
+          ...sources,
+          registrySource: sources.registrySource.replace(
+            'The third alternative is documentary only: no role/profile/result identity or\nruntime support exists, and ordinary dispatch remains fail-closed.',
+            'The third alternative is implemented.',
+          ),
+        },
+      },
+      {
+        expectedPath:
+          '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
+        request: {
+          ...sources,
+          skillSource: sources.skillSource.replace(
+            'Failed observations never count as accepted provider\nevidence, and the legacy output cannot satisfy an ordinary provider edge,',
+            'Failed observations count as accepted provider evidence.',
+          ),
+        },
+      },
+      {
+        expectedPath: '.cortex/teams/ai/workflows/structural-refactoring.md',
+        request: {
+          ...sources,
+          workflowSource: sources.workflowSource.replace(
+            '## Freeze the evidence plan',
+            '## Freeze the evidence plan drifted',
+          ),
+        },
+      },
+    ] as const;
+
+    for (const drift of driftedAuthorities) {
+      const findings =
+        StructuralExpertContract.auditStructuralExpertCortexAuthority(
+          drift.request,
+        );
+      expect(
+        findings.some(
+          (finding) =>
+            finding.code ===
+              'cortex-structural-expert-contract-semantic-drift' &&
+            finding.path === drift.expectedPath,
+        ),
+      ).toBe(true);
+    }
+  }
+}
 
 type CortexAuthoritySources = {
   readonly registrySource: string;
   readonly skillSource: string;
   readonly workflowSource: string;
 };
-
-async function cortexAuthoritySources(): Promise<CortexAuthoritySources> {
-  const registrySource = await readFile(REGISTRY_AUTHORITY_PATH, 'utf8');
-  const skillSource = await readFile(SKILL_AUTHORITY_PATH, 'utf8');
-  const workflowSource = await readFile(WORKFLOW_AUTHORITY_PATH, 'utf8');
-  return {
-    registrySource,
-    skillSource,
-    workflowSource,
-  };
-}
 
 test('registers two bounded repository readers and one legacy diagnostic aggregator', () => {
   expect(STRUCTURAL_EXPERT_CATALOG.map((profile) => profile.name)).toEqual([
@@ -89,63 +154,16 @@ test('registers two bounded repository readers and one legacy diagnostic aggrega
 });
 
 test('passes deterministic catalog and Cortex authority audit', () => {
-  const auditRequest = { repoRoot: REPO_ROOT };
-  const report = auditStructuralExperts(auditRequest);
+  const auditRequest = { repoRoot: StructuralExpertsCatalogFixture.REPO_ROOT };
+  const report = StructuralExpertContract.auditStructuralExperts(auditRequest);
   const expected = { auditOk: true, profileCount: 3, findings: [] };
   expect(report).toEqual(expected);
 });
 
-async function expectAllAuthorityDriftCoverage(): Promise<void> {
-  const sources = await cortexAuthoritySources();
-  const driftedAuthorities = [
-    {
-      expectedPath: '.cortex/teams/ai/architecture/refactoring-experts.md',
-      request: {
-        ...sources,
-        registrySource: sources.registrySource.replace(
-          'The third alternative is documentary only: no role/profile/result identity or\nruntime support exists, and ordinary dispatch remains fail-closed.',
-          'The third alternative is implemented.',
-        ),
-      },
-    },
-    {
-      expectedPath:
-        '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
-      request: {
-        ...sources,
-        skillSource: sources.skillSource.replace(
-          'Failed observations never count as accepted provider\nevidence, and the legacy output cannot satisfy an ordinary provider edge,',
-          'Failed observations count as accepted provider evidence.',
-        ),
-      },
-    },
-    {
-      expectedPath: '.cortex/teams/ai/workflows/structural-refactoring.md',
-      request: {
-        ...sources,
-        workflowSource: sources.workflowSource.replace(
-          '## Freeze the evidence plan',
-          '## Freeze the evidence plan drifted',
-        ),
-      },
-    },
-  ] as const;
-
-  for (const drift of driftedAuthorities) {
-    const findings = auditStructuralExpertCortexAuthority(drift.request);
-    expect(
-      findings.some(
-        (finding) =>
-          finding.code === 'cortex-structural-expert-contract-semantic-drift' &&
-          finding.path === drift.expectedPath,
-      ),
-    ).toBe(true);
-  }
-}
-
 test('rejects semantic drift in structural read-only lifecycle boundaries', async () => {
-  await expectAllAuthorityDriftCoverage();
-  const sources = await cortexAuthoritySources();
+  await StructuralExpertsCatalogFixture.expectAllAuthorityDriftCoverage();
+  const sources =
+    await StructuralExpertsCatalogFixture.cortexAuthoritySources();
   const registrySource = sources.registrySource.replace(
     'Every role is read-only and nondelegating.',
     'Every role may write and delegate.',
@@ -153,14 +171,15 @@ test('rejects semantic drift in structural read-only lifecycle boundaries', asyn
   const authorityRequest = { ...sources, registrySource };
 
   expect(
-    auditStructuralExpertCortexAuthority(authorityRequest).map(
-      (finding) => finding.code,
-    ),
+    StructuralExpertContract.auditStructuralExpertCortexAuthority(
+      authorityRequest,
+    ).map((finding) => finding.code),
   ).toContain('cortex-structural-expert-contract-semantic-drift');
 });
 
 test('rejects drift in repository-reading evidence-surface requirements', async () => {
-  const sources = await cortexAuthoritySources();
+  const sources =
+    await StructuralExpertsCatalogFixture.cortexAuthoritySources();
   const registrySource = sources.registrySource.replace(
     'The repository-reader category remains separate: each reader declares a non-\nempty repository evidence surface covered by its bounded read claims.',
     'The two repository-reading experts may inspect the repository.',
@@ -168,14 +187,15 @@ test('rejects drift in repository-reading evidence-surface requirements', async 
   const authorityRequest = { ...sources, registrySource };
 
   expect(
-    auditStructuralExpertCortexAuthority(authorityRequest).map(
-      (finding) => finding.code,
-    ),
+    StructuralExpertContract.auditStructuralExpertCortexAuthority(
+      authorityRequest,
+    ).map((finding) => finding.code),
   ).toContain('cortex-structural-expert-contract-semantic-drift');
 });
 
 test('rejects drift between diagnostic and future synthesis', async () => {
-  const sources = await cortexAuthoritySources();
+  const sources =
+    await StructuralExpertsCatalogFixture.cortexAuthoritySources();
   const forbiddenDrifts = [
     [
       '`system_coherence_synthesizer` is that legacy `loom-structural-experts` role.',
@@ -198,15 +218,16 @@ test('rejects drift between diagnostic and future synthesis', async () => {
       registrySource,
     };
     expect(
-      auditStructuralExpertCortexAuthority(authorityRequest).map(
-        (finding) => finding.code,
-      ),
+      StructuralExpertContract.auditStructuralExpertCortexAuthority(
+        authorityRequest,
+      ).map((finding) => finding.code),
     ).toContain('cortex-structural-expert-contract-semantic-drift');
   }
 });
 
 test('rejects drift across authorization evidence alternatives', async () => {
-  const sources = await cortexAuthoritySources();
+  const sources =
+    await StructuralExpertsCatalogFixture.cortexAuthoritySources();
   const authorizationAlternatives = [
     'a repository-reading expert binds the exact source commit, bounded read\n  claims, non-empty evidence surface, and exact evidence paths;',
     'the legacy `system_coherence_synthesizer` binds the exact\n  `loom-structural-experts` parent-authorized structural all-terminal\n  observation barrier, including each verified `StructuralExpertPlan` child\n  task, expert, attempt, `Completed` or `Failed` status, result/view identity,\n  digest, and inherited source provenance; or',
@@ -221,15 +242,16 @@ test('rejects drift across authorization evidence alternatives', async () => {
     );
     const authorityRequest = { ...sources, registrySource };
     expect(
-      auditStructuralExpertCortexAuthority(authorityRequest).map(
-        (finding) => finding.code,
-      ),
+      StructuralExpertContract.auditStructuralExpertCortexAuthority(
+        authorityRequest,
+      ).map((finding) => finding.code),
     ).toContain('cortex-structural-expert-contract-semantic-drift');
   }
 });
 
 test('rejects drift that promotes the structural diagnostic lane', async () => {
-  const sources = await cortexAuthoritySources();
+  const sources =
+    await StructuralExpertsCatalogFixture.cortexAuthoritySources();
   const laneContracts = [
     [
       'Its `SystemCoherenceSynthesis` output is diagnostic-only. Neither an input\nfailure nor the aggregate can satisfy an ordinary provider edge, authorize\nimplementation, or establish compliance with ordinary accepted-evidence\nsynthesis.',
@@ -244,9 +266,9 @@ test('rejects drift that promotes the structural diagnostic lane', async () => {
       registrySource: sources.registrySource.replace(requiredContract, drift),
     };
     expect(
-      auditStructuralExpertCortexAuthority(authorityRequest).map(
-        (finding) => finding.code,
-      ),
+      StructuralExpertContract.auditStructuralExpertCortexAuthority(
+        authorityRequest,
+      ).map((finding) => finding.code),
     ).toContain('cortex-structural-expert-contract-semantic-drift');
   }
 });
@@ -286,10 +308,11 @@ test('rejects broadening or reordering an exact structural scope', () => {
   };
   for (const profile of [broadProfile, reorderedProfile]) {
     const auditRequest = {
-      repoRoot: REPO_ROOT,
+      repoRoot: StructuralExpertsCatalogFixture.REPO_ROOT,
       profiles: [profile, ...STRUCTURAL_EXPERT_CATALOG.slice(1)],
     };
-    const report = auditStructuralExpertProfiles(auditRequest);
+    const report =
+      StructuralExpertContract.auditStructuralExpertProfiles(auditRequest);
     expect(report.auditOk).toBe(false);
     expect(report.findings.map((finding) => finding.code)).toContain(
       'structural-profile-contract-drift',
@@ -305,10 +328,11 @@ test('rejects canonical synthesizer behavior contract drift', () => {
     runtimeBehaviorContract: `${synthesizer.runtimeBehaviorContract}\nInvent missing evidence.`,
   };
   const auditRequest = {
-    repoRoot: REPO_ROOT,
+    repoRoot: StructuralExpertsCatalogFixture.REPO_ROOT,
     profiles: [...STRUCTURAL_EXPERT_CATALOG.slice(0, 2), drifted],
   };
-  const report = auditStructuralExpertProfiles(auditRequest);
+  const report =
+    StructuralExpertContract.auditStructuralExpertProfiles(auditRequest);
   expect(report.auditOk).toBe(false);
   expect(report.findings.map((finding) => finding.code)).toContain(
     'structural-profile-contract-drift',
