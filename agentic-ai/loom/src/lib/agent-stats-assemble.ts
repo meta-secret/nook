@@ -204,8 +204,7 @@ export class AgentStatisticsAssembly {
       mergedAt,
       finalHeadSha: headSha,
     };
-    const githubResult1 =
-      GithubAgentEvidence.collectAgentStatsGitHubEvidence(evidenceRequest);
+    const githubResult1 = new GithubAgentEvidence(evidenceRequest).collect();
     if (githubResult1.isErr()) return err(githubResult1.error);
     const evidence = githubResult1.value;
     const runs = evidence.githubActionsRuns;

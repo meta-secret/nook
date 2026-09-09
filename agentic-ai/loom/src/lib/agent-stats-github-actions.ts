@@ -3,10 +3,7 @@ import { GitHubEvidenceField } from './agent-stats-github-field.ts';
 import type { GitHubEvidenceFailure } from './agent-stats-github-api.ts';
 import { type UntrustedYamlMap, UntrustedYamlBoundary } from './guards.ts';
 
-import {
-  type GitHubPropertyRequest as PropertyRequest,
-  GithubActionEvidenceApi,
-} from './agent-stats-github-api.ts';
+import { type GitHubPropertyRequest as PropertyRequest } from './agent-stats-github-api.ts';
 
 export class ActionRunObservation {
   constructor(private readonly request: ActionObservationRequest) {}
@@ -59,7 +56,7 @@ export class ActionRunObservation {
     const fieldAdmission4 = new ActionAttemptStart(request.record).execute();
     if (fieldAdmission4.isErr()) return err(fieldAdmission4.error);
     const startedAt = fieldAdmission4.value;
-    const headSha = GithubActionEvidenceApi.stringProperty(headRequest);
+    const headSha = new GitHubEvidenceField(headRequest).optionalString();
     const finishedAt =
       status !== 'completed' || crossesObservationBoundary
         ? request.observedThrough
@@ -141,7 +138,7 @@ export class PullRequestActionRun {
           key: 'number',
         };
         return (
-          GithubActionEvidenceApi.numberProperty(numberRequest) ===
+          new GitHubEvidenceField(numberRequest).optionalNumber() ===
           request.prNumber
         );
       }),

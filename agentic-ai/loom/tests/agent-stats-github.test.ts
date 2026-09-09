@@ -1,3 +1,4 @@
+import { GitHubActionEvidence } from '../src/lib/agent-stats-github.ts';
 import { GitHubReviewEvidence } from '../src/lib/agent-stats-github-review-evidence.ts';
 import assert from 'node:assert/strict';
 import { describe, expect, test } from 'bun:test';
@@ -7,7 +8,6 @@ import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 import {
   type BuildActionsEvidenceRequest,
   type BuildReviewEvidenceRequest,
-  GithubAgentEvidence,
 } from '../src/lib/agent-stats-github.ts';
 
 import { ReviewedDeliveryHistory } from '../src/lib/agent-stats-github-delivery.ts';
@@ -119,7 +119,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -160,7 +160,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -195,7 +195,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [UntrustedYamlBoundary.seal(successorReviewEvent)],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -238,7 +238,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [UntrustedYamlBoundary.seal(descendantReviewEvent)],
       deliveryHeadOrder: [firstHead, finalHead, thirdHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
     const firstCycle = evidence.validationCycles.find(
@@ -268,7 +268,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -311,7 +311,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
     expect(evidence.runs).toHaveLength(1);
@@ -337,7 +337,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -357,7 +357,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -404,7 +404,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -436,7 +436,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -480,7 +480,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -509,7 +509,7 @@ describe('agent stats GitHub evidence', () => {
       deliveryHeadOrder: [finalHead],
     };
 
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -541,7 +541,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -576,7 +576,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [UntrustedYamlBoundary.seal(reviewEventRecord)],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -607,7 +607,7 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [firstHead, finalHead],
     };
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 

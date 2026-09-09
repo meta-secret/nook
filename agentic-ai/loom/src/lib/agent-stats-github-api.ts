@@ -6,7 +6,6 @@ import {
 } from './agent-stats-github-jobs.ts';
 import { err, ok, type Result } from 'neverthrow';
 import {
-  UntrustedYamlPropertyPresence,
   type UntrustedYamlMap,
   type UntrustedYamlNode,
   UntrustedYamlBoundary,
@@ -16,29 +15,60 @@ import { CommandOutputPolicy, HostCommand } from './run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
-import type { UntrustedYamlPropertyArgs } from './guards.ts';
-
 import type { RunCommandArgs } from './run.ts';
 
 export class GithubActionEvidenceApi {
-  private constructor(
+  constructor(private readonly request: GitHubApiRequest) {}
+  execute(): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
+    const request = this.request;
+    const args = [
+      'api',
+      '--paginate',
+      '--slurp',
+      '-X',
+      'GET',
+      request.endpoint,
+    ];
+    const [defaulted1 = []] = [request.fields];
+    for (const field of defaulted1) args.push('-f', field);
+    const commandRequest: RunCommandArgs = {
+      command: 'gh',
+      args,
+      cwd: request.repoRoot,
+      outputPolicy: CommandOutputPolicy.GitHubApi,
+    };
+    const output = HostCommand.run(commandRequest);
+    if (output.exitCode !== 0) {
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: output.stderr || output.stdout || 'GitHub API request failed',
+      });
+    }
+    try {
+      return ok(
+        UntrustedYamlBoundary.fromHost(
+          JSON.parse(output.stdout) as UntrustedYamlNode,
+        ),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: `GitHub API response is invalid JSON: ${message}`,
+      });
+    }
+  }
+}
+export class GitHubDispatchedActionPages {
+  constructor(
     private readonly request: CollectDispatchedActionAttemptPagesRequest,
   ) {}
-
-  static collectDispatchedActionAttemptPages(
-    request: CollectDispatchedActionAttemptPagesRequest,
-  ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
-    return new GithubActionEvidenceApi(request).execute();
-  }
-
-  private execute(): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
+  collect(): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
     const request = this.request;
     const selectedRuns: UntrustedYamlMap[] = [];
     const sourceHeadByRun = new Map<number, string>();
     const titlePrefix = `E2E PR #${request.prNumber} @ `;
-    const pageAdmission1 = GithubActionEvidenceApi.flattenApiPages(
-      request.pages,
-    );
+    const pageAdmission1 = new GitHubApiPages(request.pages).flatten();
     if (pageAdmission1.isErr()) return err(pageAdmission1.error);
     for (const page of pageAdmission1.value) {
       if (!UntrustedYamlBoundary.isRecord(page)) continue;
@@ -71,7 +101,7 @@ export class GithubActionEvidenceApi {
         };
         sourceHeadByRun.set(
           runId,
-          GithubActionEvidenceApi.dispatchedSourceHead(sourceRequest),
+          new GitHubDispatchTitle(sourceRequest).sourceHead(),
         );
         selectedRuns.push(run);
       }
@@ -85,12 +115,11 @@ export class GithubActionEvidenceApi {
       repoRoot: request.repoRoot,
       pages: UntrustedYamlBoundary.fromHost([selectedPage]),
     };
-    const githubResult1 =
-      GithubActionEvidenceApi.expandActionAttemptPages(expandRequest);
+    const githubResult1 = new GitHubActionAttemptPages(expandRequest).expand();
     if (githubResult1.isErr()) return err(githubResult1.error);
     const expanded = githubResult1.value;
     const associatedRuns: UntrustedYamlMap[] = [];
-    const pageAdmission2 = GithubActionEvidenceApi.flattenApiPages(expanded);
+    const pageAdmission2 = new GitHubApiPages(expanded).flatten();
     if (pageAdmission2.isErr()) return err(pageAdmission2.error);
     for (const page of pageAdmission2.value) {
       if (!UntrustedYamlBoundary.isRecord(page)) continue;
@@ -111,7 +140,7 @@ export class GithubActionEvidenceApi {
           key: 'source_verified',
         };
         const sourceVerified =
-          GithubActionEvidenceApi.stringProperty(verifiedRequest) === 'true';
+          new GitHubEvidenceField(verifiedRequest).optionalString() === 'true';
         const [headSha = ''] = [sourceHeadByRun.get(runId)];
         const associatedRecord = {
           ...run,
@@ -128,23 +157,12 @@ export class GithubActionEvidenceApi {
     const associatedPage = UntrustedYamlBoundary.seal(associatedPageRecord);
     return ok(UntrustedYamlBoundary.fromHost([associatedPage]));
   }
-
-  static dispatchedSourceHead(request: DispatchedSourceHeadRequest): string {
-    const prefix = `E2E PR #${request.prNumber} @ `;
-    const suffixStart = request.displayTitle.indexOf(' · ', prefix.length);
-    const headSha =
-      suffixStart < 0
-        ? ''
-        : request.displayTitle.slice(prefix.length, suffixStart);
-    return /^[0-9a-f]{40}$/.test(headSha) ? headSha : '';
-  }
-
-  static expandActionAttemptPages(
-    request: ExpandActionAttemptPagesRequest,
-  ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
-    const pageAdmission3 = GithubActionEvidenceApi.flattenApiPages(
-      request.pages,
-    );
+}
+export class GitHubActionAttemptPages {
+  constructor(private readonly request: ExpandActionAttemptPagesRequest) {}
+  expand(): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
+    const request = this.request;
+    const pageAdmission3 = new GitHubApiPages(request.pages).flatten();
     if (pageAdmission3.isErr()) return err(pageAdmission3.error);
     const pages = pageAdmission3.value;
     const expandedRuns: UntrustedYamlMap[] = [];
@@ -193,12 +211,13 @@ export class GithubActionEvidenceApi {
             repoRoot: request.repoRoot,
             endpoint: `repos/{owner}/{repo}/actions/runs/${runId}/attempts/${attempt}`,
           };
-          const githubResult2 =
-            GithubActionEvidenceApi.runGitHubApi(attemptApiRequest);
+          const githubResult2 = new GithubActionEvidenceApi(
+            attemptApiRequest,
+          ).execute();
           if (githubResult2.isErr()) return err(githubResult2.error);
-          const pageAdmission4 = GithubActionEvidenceApi.flattenApiPages(
+          const pageAdmission4 = new GitHubApiPages(
             githubResult2.value,
-          );
+          ).flatten();
           if (pageAdmission4.isErr()) return err(pageAdmission4.error);
           const attemptRecords = pageAdmission4.value;
           const attemptRecord = attemptRecords.find(
@@ -216,10 +235,9 @@ export class GithubActionEvidenceApi {
             attempt,
             attemptRecord,
           };
-          const githubResult3 =
-            GithubActionEvidenceApi.actionAttemptRequestedValidation(
-              validationRequest,
-            );
+          const githubResult3 = new GitHubActionAttempt(
+            validationRequest,
+          ).validationRequest();
           if (githubResult3.isErr()) return err(githubResult3.error);
           const validationRequested = githubResult3.value;
           const sourceVerificationRequest: ActionAttemptSourceVerificationRequest =
@@ -229,10 +247,9 @@ export class GithubActionEvidenceApi {
               attempt,
               attemptRecord,
             };
-          const githubResult4 =
-            GithubActionEvidenceApi.actionAttemptSourceVerified(
-              sourceVerificationRequest,
-            );
+          const githubResult4 = new GitHubActionAttempt(
+            sourceVerificationRequest,
+          ).sourceVerification();
           if (githubResult4.isErr()) return err(githubResult4.error);
           const sourceVerified = githubResult4.value;
           const expandedRecord = {
@@ -257,10 +274,16 @@ export class GithubActionEvidenceApi {
     const expandedPage = UntrustedYamlBoundary.seal(expandedPageRecord);
     return ok(UntrustedYamlBoundary.fromHost([expandedPage]));
   }
-
-  private static actionAttemptSourceVerified(
-    request: ActionAttemptSourceVerificationRequest,
-  ): Result<GitHubSourceVerification, GitHubEvidenceFailure> {
+}
+export class GitHubActionAttempt {
+  constructor(
+    private readonly request: ActionAttemptSourceVerificationRequest,
+  ) {}
+  sourceVerification(): Result<
+    GitHubSourceVerification,
+    GitHubEvidenceFailure
+  > {
+    const request = this.request;
     const workflowRequest: GitHubPropertyRequest = {
       record: request.attemptRecord,
       key: 'name',
@@ -274,11 +297,9 @@ export class GithubActionEvidenceApi {
       endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
       fields: ['per_page=100'],
     };
-    const githubResult5 = GithubActionEvidenceApi.runGitHubApi(jobsRequest);
+    const githubResult5 = new GithubActionEvidenceApi(jobsRequest).execute();
     if (githubResult5.isErr()) return err(githubResult5.error);
-    const pageAdmission5 = GithubActionEvidenceApi.flattenApiPages(
-      githubResult5.value,
-    );
+    const pageAdmission5 = new GitHubApiPages(githubResult5.value).flatten();
     if (pageAdmission5.isErr()) return err(pageAdmission5.error);
     for (const page of pageAdmission5.value) {
       if (!UntrustedYamlBoundary.isRecord(page)) {
@@ -302,10 +323,8 @@ export class GithubActionEvidenceApi {
     }
     return ok(GitHubSourceVerification.Unverified);
   }
-
-  private static actionAttemptRequestedValidation(
-    request: ActionAttemptRequestedValidationRequest,
-  ): Result<GitHubValidationRequest, GitHubEvidenceFailure> {
+  validationRequest(): Result<GitHubValidationRequest, GitHubEvidenceFailure> {
+    const request = this.request;
     const workflowRequest: GitHubPropertyRequest = {
       record: request.attemptRecord,
       key: 'name',
@@ -325,11 +344,9 @@ export class GithubActionEvidenceApi {
       endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
       fields: ['per_page=100'],
     };
-    const githubResult6 = GithubActionEvidenceApi.runGitHubApi(jobsRequest);
+    const githubResult6 = new GithubActionEvidenceApi(jobsRequest).execute();
     if (githubResult6.isErr()) return err(githubResult6.error);
-    const pageAdmission6 = GithubActionEvidenceApi.flattenApiPages(
-      githubResult6.value,
-    );
+    const pageAdmission6 = new GitHubApiPages(githubResult6.value).flatten();
     if (pageAdmission6.isErr()) return err(pageAdmission6.error);
     for (const page of pageAdmission6.value) {
       if (!UntrustedYamlBoundary.isRecord(page)) {
@@ -354,51 +371,24 @@ export class GithubActionEvidenceApi {
     }
     return ok(GitHubValidationRequest.NotRequested);
   }
-
-  static runGitHubApi(
-    request: GitHubApiRequest,
-  ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
-    const args = [
-      'api',
-      '--paginate',
-      '--slurp',
-      '-X',
-      'GET',
-      request.endpoint,
-    ];
-    const [defaulted1 = []] = [request.fields];
-    for (const field of defaulted1) args.push('-f', field);
-    const commandRequest: RunCommandArgs = {
-      command: 'gh',
-      args,
-      cwd: request.repoRoot,
-      outputPolicy: CommandOutputPolicy.GitHubApi,
-    };
-    const output = HostCommand.run(commandRequest);
-    if (output.exitCode !== 0) {
-      return err({
-        code: LoomFailureCode.CommandFailed,
-        message: output.stderr || output.stdout || 'GitHub API request failed',
-      });
-    }
-    try {
-      return ok(
-        UntrustedYamlBoundary.fromHost(
-          JSON.parse(output.stdout) as UntrustedYamlNode,
-        ),
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return err({
-        code: LoomFailureCode.CommandFailed,
-        message: `GitHub API response is invalid JSON: ${message}`,
-      });
-    }
+}
+export class GitHubDispatchTitle {
+  constructor(private readonly request: DispatchedSourceHeadRequest) {}
+  sourceHead(): string {
+    const request = this.request;
+    const prefix = `E2E PR #${request.prNumber} @ `;
+    const suffixStart = request.displayTitle.indexOf(' · ', prefix.length);
+    const headSha =
+      suffixStart < 0
+        ? ''
+        : request.displayTitle.slice(prefix.length, suffixStart);
+    return /^[0-9a-f]{40}$/.test(headSha) ? headSha : '';
   }
-
-  static flattenApiPages(
-    value: UntrustedYamlNode,
-  ): Result<UntrustedYamlNode[], GitHubEvidenceFailure> {
+}
+export class GitHubApiPages {
+  constructor(private readonly request: UntrustedYamlNode) {}
+  flatten(): Result<UntrustedYamlNode[], GitHubEvidenceFailure> {
+    const value = this.request;
     if (!Array.isArray(value)) {
       return err({
         code: LoomFailureCode.CommandFailed,
@@ -411,24 +401,6 @@ export class GithubActionEvidenceApi {
       else flattened.push(page);
     }
     return ok(flattened);
-  }
-
-  static stringProperty(request: GitHubPropertyRequest): string {
-    const args: UntrustedYamlPropertyArgs = request;
-    const property = UntrustedYamlBoundary.property(args);
-    return property.presence === UntrustedYamlPropertyPresence.Present &&
-      typeof property.value === 'string'
-      ? property.value
-      : '';
-  }
-
-  static numberProperty(request: GitHubPropertyRequest): number {
-    const args: UntrustedYamlPropertyArgs = request;
-    const property = UntrustedYamlBoundary.property(args);
-    return property.presence === UntrustedYamlPropertyPresence.Present &&
-      typeof property.value === 'number'
-      ? property.value
-      : 0;
   }
 }
 
@@ -469,13 +441,6 @@ type ActionAttemptSourceVerificationRequest = {
 
 export type ActionJobsVerifiedSourceRequest = {
   readonly jobs: readonly UntrustedYamlNode[];
-};
-
-type ActionAttemptRequestedValidationRequest = {
-  readonly repoRoot: string;
-  readonly runId: number;
-  readonly attempt: number;
-  readonly attemptRecord: UntrustedYamlMap;
 };
 
 export type ActionJobsRequestedValidationRequest = {

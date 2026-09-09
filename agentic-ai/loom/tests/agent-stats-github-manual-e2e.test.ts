@@ -1,3 +1,5 @@
+import { GitHubActionEvidence } from '../src/lib/agent-stats-github.ts';
+import { GitHubDispatchTitle } from '../src/lib/agent-stats-github-api.ts';
 import { ok } from 'neverthrow';
 import {
   GitHubActionJobs,
@@ -10,12 +12,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 
-import {
-  type BuildActionsEvidenceRequest,
-  GithubAgentEvidence,
-} from '../src/lib/agent-stats-github.ts';
-
-import { GithubActionEvidenceApi } from '../src/lib/agent-stats-github-api.ts';
+import { type BuildActionsEvidenceRequest } from '../src/lib/agent-stats-github.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
@@ -79,7 +76,7 @@ describe('agent stats manual E2E evidence', () => {
     );
 
     expect(source).toContain(
-      'collectAgentStatsGitHubEvidence(evidenceRequest)',
+      'new GithubAgentEvidence(evidenceRequest).collect()',
     );
     expect(source).not.toContain('collectGithubActionsRuns');
     expect(source).not.toContain("'run',\n      'list'");
@@ -105,9 +102,7 @@ describe('agent stats manual E2E evidence', () => {
       runId: 500,
     };
 
-    expect(GithubActionEvidenceApi.dispatchedSourceHead(request)).toBe(
-      finalHead,
-    );
+    expect(new GitHubDispatchTitle(request).sourceHead()).toBe(finalHead);
   });
 
   test('keeps rerun provenance immutable in workflow metadata', () => {
@@ -117,9 +112,7 @@ describe('agent stats manual E2E evidence', () => {
       runId: 500,
     };
 
-    expect(GithubActionEvidenceApi.dispatchedSourceHead(request)).toBe(
-      firstHead,
-    );
+    expect(new GitHubDispatchTitle(request).sourceHead()).toBe(firstHead);
   });
 
   test('leaves malformed manual E2E metadata unattributed', () => {
@@ -129,7 +122,7 @@ describe('agent stats manual E2E evidence', () => {
       runId: 500,
     };
 
-    expect(GithubActionEvidenceApi.dispatchedSourceHead(request)).toBe('');
+    expect(new GitHubDispatchTitle(request).sourceHead()).toBe('');
   });
 
   test('attributes manual provenance only after server-side verification', () => {
@@ -180,7 +173,7 @@ describe('agent stats manual E2E evidence', () => {
       },
     ]);
     const request = AgentStatsGithubManualE2eScenario.evidenceRequest(pages);
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -199,7 +192,7 @@ describe('agent stats manual E2E evidence', () => {
       },
     ]);
     const request = AgentStatsGithubManualE2eScenario.evidenceRequest(pages);
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(request);
+    const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 
@@ -217,9 +210,9 @@ describe('agent stats manual E2E evidence', () => {
         conclusion: 'failure',
       },
     ]);
-    const evidenceResult = GithubAgentEvidence.buildActionsEvidence(
+    const evidenceResult = new GitHubActionEvidence(
       AgentStatsGithubManualE2eScenario.evidenceRequest(pages),
-    );
+    ).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
 

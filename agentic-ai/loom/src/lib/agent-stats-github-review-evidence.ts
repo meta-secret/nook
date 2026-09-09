@@ -1,3 +1,4 @@
+import { GitHubApiPages } from './agent-stats-github-api.ts';
 import { err, ok, type Result } from 'neverthrow';
 import { LoomFailureCode } from '../loom-failure.ts';
 import {
@@ -42,28 +43,26 @@ export class GitHubReviewEvidence {
   constructor(private readonly request: BuildReviewEvidenceRequest) {}
   build(): Result<ReviewEvidence, GitHubEvidenceFailure> {
     const request = this.request;
-    const pageAdmission7 = GithubActionEvidenceApi.flattenApiPages(
+    const pageAdmission7 = new GitHubApiPages(
       request.issueCommentPages,
-    );
+    ).flatten();
     if (pageAdmission7.isErr()) return err(pageAdmission7.error);
     const issueComments = pageAdmission7.value.filter(
       UntrustedYamlBoundary.isRecord,
     );
-    const pageAdmission8 = GithubActionEvidenceApi.flattenApiPages(
-      request.reviewPages,
-    );
+    const pageAdmission8 = new GitHubApiPages(request.reviewPages).flatten();
     if (pageAdmission8.isErr()) return err(pageAdmission8.error);
     const reviews = pageAdmission8.value.filter(UntrustedYamlBoundary.isRecord);
-    const pageAdmission9 = GithubActionEvidenceApi.flattenApiPages(
+    const pageAdmission9 = new GitHubApiPages(
       request.reviewCommentPages,
-    );
+    ).flatten();
     if (pageAdmission9.isErr()) return err(pageAdmission9.error);
     const reviewComments = pageAdmission9.value.filter(
       UntrustedYamlBoundary.isRecord,
     );
-    const pageAdmission10 = GithubActionEvidenceApi.flattenApiPages(
+    const pageAdmission10 = new GitHubApiPages(
       request.reviewReactionPages,
-    );
+    ).flatten();
     if (pageAdmission10.isErr()) return err(pageAdmission10.error);
     const reviewReactions = pageAdmission10.value.filter(
       UntrustedYamlBoundary.isRecord,
@@ -209,7 +208,7 @@ export class GitHubReviewEvidence {
       )
         continue;
       const stateRequest: PropertyRequest = { record: review, key: 'state' };
-      if (GithubActionEvidenceApi.stringProperty(stateRequest) === 'PENDING')
+      if (new GitHubEvidenceField(stateRequest).optionalString() === 'PENDING')
         continue;
       const cutoffRequest: PropertyRequest = {
         record: review,
@@ -246,13 +245,13 @@ export class GitHubReviewEvidence {
         if (requiredField14.isErr()) return err(requiredField14.error);
         if (
           requiredField14.value === reviewId &&
-          GithubActionEvidenceApi.numberProperty(replyRequest) === 0
+          new GitHubEvidenceField(replyRequest).optionalNumber() === 0
         )
           inlineFindingCount += 1;
       }
       const bodyRequest: PropertyRequest = { record: review, key: 'body' };
       const bodyFindingCount = ReviewFindingBody.countFindings(
-        GithubActionEvidenceApi.stringProperty(bodyRequest),
+        new GitHubEvidenceField(bodyRequest).optionalString(),
       );
       const findingCount = inlineFindingCount + bodyFindingCount;
       if (findingCount === 0) continue;
@@ -453,9 +452,9 @@ export class GitHubReviewReactions {
   collect(): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
     const request = this.request;
     const reactions: UntrustedYamlMap[] = [];
-    const pageAdmission11 = GithubActionEvidenceApi.flattenApiPages(
+    const pageAdmission11 = new GitHubApiPages(
       request.issueCommentPages,
-    );
+    ).flatten();
     if (pageAdmission11.isErr()) return err(pageAdmission11.error);
     const comments = pageAdmission11.value.filter(
       UntrustedYamlBoundary.isRecord,
@@ -476,11 +475,11 @@ export class GitHubReviewReactions {
         endpoint: `repos/{owner}/{repo}/issues/comments/${commentId}/reactions`,
         fields: ['per_page=100'],
       };
-      const githubResult10 = GithubActionEvidenceApi.runGitHubApi(apiRequest);
+      const githubResult10 = new GithubActionEvidenceApi(apiRequest).execute();
       if (githubResult10.isErr()) return err(githubResult10.error);
-      const pageAdmission12 = GithubActionEvidenceApi.flattenApiPages(
+      const pageAdmission12 = new GitHubApiPages(
         githubResult10.value,
-      );
+      ).flatten();
       if (pageAdmission12.isErr()) return err(pageAdmission12.error);
       for (const reaction of pageAdmission12.value) {
         if (!UntrustedYamlBoundary.isRecord(reaction)) {
@@ -546,7 +545,8 @@ class GitHubReviewAuthor {
     }
     const loginRequest: PropertyRequest = { record: user.value, key: 'login' };
     return (
-      GithubActionEvidenceApi.stringProperty(loginRequest) === request.expected
+      new GitHubEvidenceField(loginRequest).optionalString() ===
+      request.expected
     );
   }
   trustedRequester(): boolean {
@@ -557,7 +557,7 @@ class GitHubReviewAuthor {
     };
     if (
       TRUSTED_REVIEW_ASSOCIATIONS.has(
-        GithubActionEvidenceApi.stringProperty(associationRequest),
+        new GitHubEvidenceField(associationRequest).optionalString(),
       )
     ) {
       return true;

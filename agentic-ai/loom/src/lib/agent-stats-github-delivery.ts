@@ -1,6 +1,5 @@
+import { GitHubEvidenceField } from './agent-stats-github-field.ts';
 import { type UntrustedYamlMap, UntrustedYamlBoundary } from './guards.ts';
-
-import { GithubActionEvidenceApi } from './agent-stats-github-api.ts';
 
 export class ReviewedDeliveryHistory {
   private constructor(
@@ -194,7 +193,7 @@ export class DeliveryMetadataProperty {
   }
   private execute(): string {
     const request = this.request;
-    return GithubActionEvidenceApi.stringProperty(request);
+    return new GitHubEvidenceField(request).optionalString();
   }
 }
 

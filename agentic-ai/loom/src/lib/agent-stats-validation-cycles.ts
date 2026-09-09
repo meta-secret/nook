@@ -1,4 +1,4 @@
-import { GithubActionEvidenceApi } from './agent-stats-github-api.ts';
+import { GitHubEvidenceField } from './agent-stats-github-field.ts';
 
 import type { UntrustedYamlMap } from './guards.ts';
 
@@ -12,7 +12,9 @@ export class ValidationCycleHistory {
     const attemptsByWorkflow = new Map<string, number>();
     for (const cycle of cycles) {
       const workflowRequest = { record: cycle, key: 'workflow' };
-      const workflow = GithubActionEvidenceApi.stringProperty(workflowRequest);
+      const workflow = new GitHubEvidenceField(
+        workflowRequest,
+      ).optionalString();
       const [defaulted1 = 0] = [attemptsByWorkflow.get(workflow)];
       attemptsByWorkflow.set(workflow, defaulted1 + 1);
     }
