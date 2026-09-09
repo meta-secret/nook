@@ -136,7 +136,7 @@ impl KeePassXcTotp<'_> {
                 {
                     self.website_url.clone_into(&mut authenticator.website_url);
                 }
-                authenticator.apply_inferred_website_url_if_empty()?;
+                let authenticator = authenticator.apply_inferred_website_url_if_empty()?;
                 Ok((Some(SecretValue::Authenticator(authenticator)), 0))
             }
             Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {

@@ -90,8 +90,8 @@ impl CreditCardSecret {
     }
 
     /// Re-validate a deserialized payload (import / decrypt path).
-    pub fn normalize(&mut self) -> Result<(), ValidationError> {
-        *self = Self::from_fields(CreditCardFields {
+    pub fn normalize(self) -> Result<Self, ValidationError> {
+        Self::from_fields(CreditCardFields {
             title: &self.title,
             cardholder_name: &self.cardholder_name,
             number: &self.number,
@@ -99,8 +99,7 @@ impl CreditCardSecret {
             expiration_year: &self.expiration_year,
             cvv: &self.cvv,
             notes: &self.notes,
-        })?;
-        Ok(())
+        })
     }
 
     /// Last four digits for safe list display.

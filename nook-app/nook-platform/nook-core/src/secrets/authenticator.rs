@@ -91,7 +91,7 @@ impl AuthenticatorSecret {
         Ok(())
     }
 
-    pub fn normalize(&mut self) -> Result<(), ValidationError> {
+    pub fn normalize(mut self) -> Result<Self, ValidationError> {
         self.issuer = self.issuer.trim().to_owned();
         self.account = self.account.trim().to_owned();
         self.website_url = self.website_url.trim().to_owned();
@@ -100,15 +100,16 @@ impl AuthenticatorSecret {
             backup_codes::BackupCodeInput::new(&self.backup_codes).soft_normalized();
         self.backup_codes.zeroize();
         self.backup_codes = normalized_backup_codes;
-        self.validate()
+        self.validate()?;
+        Ok(self)
     }
 
     /// Fill [`Self::website_url`] from issuer host text or the popular-issuer map.
     pub fn apply_inferred_website_url_if_empty(
-        &mut self,
-    ) -> Result<(), AuthenticatorIssuerHostsError> {
+        mut self,
+    ) -> Result<Self, AuthenticatorIssuerHostsError> {
         if !self.website_url.trim().is_empty() {
-            return Ok(());
+            return Ok(self);
         }
         let request = AuthenticatorWebsiteHostRequest {
             website_url: "",
@@ -122,7 +123,7 @@ impl AuthenticatorSecret {
         if let Some(host) = host {
             self.website_url = format!("https://{host}");
         }
-        Ok(())
+        Ok(self)
     }
 
     pub fn current_code(&self, unix_seconds: TotpUnixSeconds) -> Result<TotpCode, ValidationError> {
@@ -212,9 +213,8 @@ impl AuthenticatorSecret {
         }
         item.backup_codes = backup_codes.lines().map(str::to_owned).collect();
         item.apply_inferred_website_url_if_empty()
-            .map_err(|_| ValidationError::AuthenticatorIssuerCatalogInvalid)?;
-        item.normalize()?;
-        Ok(item)
+            .map_err(|_| ValidationError::AuthenticatorIssuerCatalogInvalid)?
+            .normalize()
     }
 
     pub fn from_otpauth_uri(uri: &str) -> Result<Self, ValidationError> {

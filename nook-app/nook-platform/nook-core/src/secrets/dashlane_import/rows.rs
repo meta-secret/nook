@@ -283,12 +283,15 @@ impl CredentialColumns {
                     {
                         authenticator.website_url = website_url;
                     }
-                    if let Err(error) = authenticator.apply_inferred_website_url_if_empty() {
-                        for item in &mut items {
-                            item.zeroize_plaintext();
+                    let authenticator = match authenticator.apply_inferred_website_url_if_empty() {
+                        Ok(authenticator) => authenticator,
+                        Err(error) => {
+                            for item in &mut items {
+                                item.zeroize_plaintext();
+                            }
+                            return Err(error.into());
                         }
-                        return Err(error.into());
-                    }
+                    };
                     items.push(SecretValue::Authenticator(authenticator));
                 }
                 Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {

@@ -97,7 +97,7 @@ impl OtpParameters {
             }
             .base32(),
         );
-        let mut authenticator = AuthenticatorSecret {
+        let authenticator = AuthenticatorSecret {
             issuer,
             account,
             website_url: String::new(),
@@ -108,10 +108,9 @@ impl OtpParameters {
             period: TotpPeriod::try_from(30).map_err(|_| OtpParameterError::Unsupported)?,
             backup_codes: Vec::new(),
         };
-        authenticator
+        let authenticator = authenticator
             .apply_inferred_website_url_if_empty()
-            .map_err(OtpParameterError::IssuerCatalog)?;
-        authenticator
+            .map_err(OtpParameterError::IssuerCatalog)?
             .normalize()
             .map_err(|_| OtpParameterError::Unsupported)?;
         Ok(SecretValue::Authenticator(authenticator))

@@ -206,7 +206,7 @@ impl CheckedOtpauthInput {
                 (issuer, account)
             });
         let issuer = self.decoded.parameter("issuer").unwrap_or(label_issuer);
-        let mut item = AuthenticatorSecret {
+        let item = AuthenticatorSecret {
             issuer: issuer.to_owned(),
             account: account.to_owned(),
             website_url: String::new(),
@@ -217,9 +217,8 @@ impl CheckedOtpauthInput {
             backup_codes: Vec::new(),
         };
         item.apply_inferred_website_url_if_empty()
-            .map_err(|_| ValidationError::AuthenticatorIssuerCatalogInvalid)?;
-        item.normalize()?;
-        Ok(item)
+            .map_err(|_| ValidationError::AuthenticatorIssuerCatalogInvalid)?
+            .normalize()
     }
 }
 

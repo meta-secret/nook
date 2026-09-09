@@ -508,16 +508,14 @@ impl SecretValue {
                 Ok(Self::Passkey(passkey))
             }
             SecretType::Authenticator => {
-                let mut secret: AuthenticatorSecret =
+                let secret: AuthenticatorSecret =
                     serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidAuthenticator)?;
-                secret.normalize()?;
-                Ok(Self::Authenticator(secret))
+                Ok(Self::Authenticator(secret.normalize()?))
             }
             SecretType::CreditCard => {
-                let mut secret: CreditCardSecret =
+                let secret: CreditCardSecret =
                     serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidCreditCard)?;
-                secret.normalize()?;
-                Ok(Self::CreditCard(secret))
+                Ok(Self::CreditCard(secret.normalize()?))
             }
             SecretType::FileAttachment => {
                 let secret: FileAttachmentSecret = serde_yaml::from_str(yaml)
