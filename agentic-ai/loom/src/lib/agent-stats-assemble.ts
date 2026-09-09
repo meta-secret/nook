@@ -204,8 +204,10 @@ export class AgentStatisticsAssembly {
       mergedAt,
       finalHeadSha: headSha,
     };
-    const evidence =
+    const githubResult1 =
       GithubAgentEvidence.collectAgentStatsGitHubEvidence(evidenceRequest);
+    if (githubResult1.isErr()) return err(githubResult1.error);
+    const evidence = githubResult1.value;
     const runs = evidence.githubActionsRuns;
     const localExecutions = scratch.local_executions;
     const localSeconds = this.sumDurationSeconds(localExecutions);

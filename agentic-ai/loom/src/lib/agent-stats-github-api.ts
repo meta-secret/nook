@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import {
   UntrustedYamlPropertyPresence,
   type UntrustedYamlMap,
@@ -22,11 +23,11 @@ export class GithubActionEvidenceApi {
 
   static collectDispatchedActionAttemptPages(
     request: CollectDispatchedActionAttemptPagesRequest,
-  ): UntrustedYamlNode {
+  ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
     return new GithubActionEvidenceApi(request).execute();
   }
 
-  private execute(): UntrustedYamlNode {
+  private execute(): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
     const request = this.request;
     const selectedRuns: UntrustedYamlMap[] = [];
     const sourceHeadByRun = new Map<number, string>();
@@ -73,8 +74,10 @@ export class GithubActionEvidenceApi {
       repoRoot: request.repoRoot,
       pages: UntrustedYamlBoundary.fromHost([selectedPage]),
     };
-    const expanded =
+    const githubResult1 =
       GithubActionEvidenceApi.expandActionAttemptPages(expandRequest);
+    if (githubResult1.isErr()) return err(githubResult1.error);
+    const expanded = githubResult1.value;
     const associatedRuns: UntrustedYamlMap[] = [];
     for (const page of GithubActionEvidenceApi.flattenApiPages(expanded)) {
       if (!UntrustedYamlBoundary.isRecord(page)) continue;
@@ -108,7 +111,7 @@ export class GithubActionEvidenceApi {
       workflow_runs: associatedRuns,
     };
     const associatedPage = UntrustedYamlBoundary.seal(associatedPageRecord);
-    return UntrustedYamlBoundary.fromHost([associatedPage]);
+    return ok(UntrustedYamlBoundary.fromHost([associatedPage]));
   }
 
   static dispatchedSourceHead(request: DispatchedSourceHeadRequest): string {
@@ -123,15 +126,16 @@ export class GithubActionEvidenceApi {
 
   static expandActionAttemptPages(
     request: ExpandActionAttemptPagesRequest,
-  ): UntrustedYamlNode {
+  ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
     const pages = GithubActionEvidenceApi.flattenApiPages(request.pages);
     const expandedRuns: UntrustedYamlMap[] = [];
     let expectedRunCount = 0;
     for (const page of pages) {
       if (!UntrustedYamlBoundary.isRecord(page)) {
-        GithubActionEvidenceApi.failGitHubCollection(
-          'GitHub Actions page must be a mapping',
-        );
+        return err({
+          code: LoomFailureCode.CommandFailed,
+          message: 'GitHub Actions page must be a mapping',
+        });
       }
       const totalRequest: GitHubPropertyRequest = {
         record: page,
@@ -148,9 +152,10 @@ export class GithubActionEvidenceApi {
       const runs = GithubActionEvidenceApi.requiredArrayProperty(runsRequest);
       for (const run of runs) {
         if (!UntrustedYamlBoundary.isRecord(run)) {
-          GithubActionEvidenceApi.failGitHubCollection(
-            'GitHub Actions run must be a mapping',
-          );
+          return err({
+            code: LoomFailureCode.CommandFailed,
+            message: 'GitHub Actions run must be a mapping',
+          });
         }
         const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
         const runId = GithubActionEvidenceApi.requiredNumberProperty(idRequest);
@@ -165,16 +170,20 @@ export class GithubActionEvidenceApi {
             repoRoot: request.repoRoot,
             endpoint: `repos/{owner}/{repo}/actions/runs/${runId}/attempts/${attempt}`,
           };
+          const githubResult2 =
+            GithubActionEvidenceApi.runGitHubApi(attemptApiRequest);
+          if (githubResult2.isErr()) return err(githubResult2.error);
           const attemptRecords = GithubActionEvidenceApi.flattenApiPages(
-            GithubActionEvidenceApi.runGitHubApi(attemptApiRequest),
+            githubResult2.value,
           );
           const attemptRecord = attemptRecords.find(
             UntrustedYamlBoundary.isRecord,
           );
           if (!attemptRecord) {
-            GithubActionEvidenceApi.failGitHubCollection(
-              `GitHub Actions attempt ${runId}:${attempt} was not returned`,
-            );
+            return err({
+              code: LoomFailureCode.CommandFailed,
+              message: `GitHub Actions attempt ${runId}:${attempt} was not returned`,
+            });
           }
           const validationRequest: ActionAttemptRequestedValidationRequest = {
             repoRoot: request.repoRoot,
@@ -182,10 +191,12 @@ export class GithubActionEvidenceApi {
             attempt,
             attemptRecord,
           };
-          const validationRequested =
+          const githubResult3 =
             GithubActionEvidenceApi.actionAttemptRequestedValidation(
               validationRequest,
             );
+          if (githubResult3.isErr()) return err(githubResult3.error);
+          const validationRequested = githubResult3.value;
           const sourceVerificationRequest: ActionAttemptSourceVerificationRequest =
             {
               repoRoot: request.repoRoot,
@@ -193,10 +204,12 @@ export class GithubActionEvidenceApi {
               attempt,
               attemptRecord,
             };
-          const sourceVerified =
+          const githubResult4 =
             GithubActionEvidenceApi.actionAttemptSourceVerified(
               sourceVerificationRequest,
             );
+          if (githubResult4.isErr()) return err(githubResult4.error);
+          const sourceVerified = githubResult4.value;
           const expandedRecord = {
             ...attemptRecord,
             validation_requested: validationRequested ? 'true' : 'false',
@@ -211,12 +224,12 @@ export class GithubActionEvidenceApi {
       workflow_runs: expandedRuns,
     };
     const expandedPage = UntrustedYamlBoundary.seal(expandedPageRecord);
-    return UntrustedYamlBoundary.fromHost([expandedPage]);
+    return ok(UntrustedYamlBoundary.fromHost([expandedPage]));
   }
 
   private static actionAttemptSourceVerified(
     request: ActionAttemptSourceVerificationRequest,
-  ): boolean {
+  ): Result<boolean, GitHubEvidenceFailure> {
     const workflowRequest: GitHubPropertyRequest = {
       record: request.attemptRecord,
       key: 'name',
@@ -225,28 +238,31 @@ export class GithubActionEvidenceApi {
       GithubActionEvidenceApi.requiredStringProperty(workflowRequest) !==
       'E2E (PR)'
     )
-      return true;
+      return ok(true);
     const jobsRequest: GitHubApiRequest = {
       repoRoot: request.repoRoot,
       endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
       fields: ['per_page=100'],
     };
+    const githubResult5 = GithubActionEvidenceApi.runGitHubApi(jobsRequest);
+    if (githubResult5.isErr()) return err(githubResult5.error);
     for (const page of GithubActionEvidenceApi.flattenApiPages(
-      GithubActionEvidenceApi.runGitHubApi(jobsRequest),
+      githubResult5.value,
     )) {
       if (!UntrustedYamlBoundary.isRecord(page)) {
-        GithubActionEvidenceApi.failGitHubCollection(
-          'GitHub Actions jobs page must be a mapping',
-        );
+        return err({
+          code: LoomFailureCode.CommandFailed,
+          message: 'GitHub Actions jobs page must be a mapping',
+        });
       }
       const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
       const verificationRequest: ActionJobsVerifiedSourceRequest = {
         jobs: GithubActionEvidenceApi.requiredArrayProperty(jobsProperty),
       };
       if (GithubActionEvidenceApi.actionJobsVerifiedSource(verificationRequest))
-        return true;
+        return ok(true);
     }
-    return false;
+    return ok(false);
   }
 
   static actionJobsVerifiedSource(
@@ -294,7 +310,7 @@ export class GithubActionEvidenceApi {
 
   private static actionAttemptRequestedValidation(
     request: ActionAttemptRequestedValidationRequest,
-  ): boolean {
+  ): Result<boolean, GitHubEvidenceFailure> {
     const workflowRequest: GitHubPropertyRequest = {
       record: request.attemptRecord,
       key: 'name',
@@ -307,19 +323,22 @@ export class GithubActionEvidenceApi {
         : workflow === 'Rust ecosystem checks'
           ? 'Validate explicit ecosystem request'
           : '';
-    if (gateJobName.length === 0) return true;
+    if (gateJobName.length === 0) return ok(true);
     const jobsRequest: GitHubApiRequest = {
       repoRoot: request.repoRoot,
       endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
       fields: ['per_page=100'],
     };
+    const githubResult6 = GithubActionEvidenceApi.runGitHubApi(jobsRequest);
+    if (githubResult6.isErr()) return err(githubResult6.error);
     for (const page of GithubActionEvidenceApi.flattenApiPages(
-      GithubActionEvidenceApi.runGitHubApi(jobsRequest),
+      githubResult6.value,
     )) {
       if (!UntrustedYamlBoundary.isRecord(page)) {
-        GithubActionEvidenceApi.failGitHubCollection(
-          'GitHub Actions jobs page must be a mapping',
-        );
+        return err({
+          code: LoomFailureCode.CommandFailed,
+          message: 'GitHub Actions jobs page must be a mapping',
+        });
       }
       const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
       const validationRequest: ActionJobsRequestedValidationRequest = {
@@ -329,9 +348,9 @@ export class GithubActionEvidenceApi {
       if (
         GithubActionEvidenceApi.actionJobsRequestedValidation(validationRequest)
       )
-        return true;
+        return ok(true);
     }
-    return false;
+    return ok(false);
   }
 
   static actionJobsRequestedValidation(
@@ -391,7 +410,9 @@ export class GithubActionEvidenceApi {
     });
   }
 
-  static runGitHubApi(request: GitHubApiRequest): UntrustedYamlNode {
+  static runGitHubApi(
+    request: GitHubApiRequest,
+  ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
     const args = [
       'api',
       '--paginate',
@@ -410,19 +431,23 @@ export class GithubActionEvidenceApi {
     };
     const output = HostCommand.run(commandRequest);
     if (output.exitCode !== 0) {
-      GithubActionEvidenceApi.failGitHubCollection(
-        output.stderr || output.stdout || 'GitHub API request failed',
-      );
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: output.stderr || output.stdout || 'GitHub API request failed',
+      });
     }
     try {
-      return UntrustedYamlBoundary.fromHost(
-        JSON.parse(output.stdout) as UntrustedYamlNode,
+      return ok(
+        UntrustedYamlBoundary.fromHost(
+          JSON.parse(output.stdout) as UntrustedYamlNode,
+        ),
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      GithubActionEvidenceApi.failGitHubCollection(
-        `GitHub API response is invalid JSON: ${message}`,
-      );
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: `GitHub API response is invalid JSON: ${message}`,
+      });
     }
   }
 
@@ -558,4 +583,9 @@ type ActionAttemptRequestedValidationRequest = {
 export type ActionJobsRequestedValidationRequest = {
   readonly jobs: readonly UntrustedYamlNode[];
   readonly gateJobName: string;
+};
+
+export type GitHubEvidenceFailure = {
+  readonly code: LoomFailureCode;
+  readonly message: string;
 };

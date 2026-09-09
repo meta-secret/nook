@@ -1,3 +1,5 @@
+import { err, ok, type Result } from 'neverthrow';
+import type { GitHubEvidenceFailure } from './agent-stats-github-api.ts';
 import {
   UntrustedYamlPropertyPresence,
   type UntrustedYamlMap,
@@ -57,7 +59,7 @@ export class GithubAgentEvidence {
 
   static collectAgentStatsGitHubEvidence(
     request: AgentStatsGitHubEvidenceRequest,
-  ): AgentStatsGitHubEvidence {
+  ): Result<AgentStatsGitHubEvidence, GitHubEvidenceFailure> {
     const actionsEndpoint = 'repos/{owner}/{repo}/actions/runs';
     const createdRange = `created=${request.startedAt}..${request.mergedAt}`;
     const branchField = `branch=${request.branch}`;
@@ -66,27 +68,37 @@ export class GithubAgentEvidence {
       endpoint: actionsEndpoint,
       fields: [branchField, createdRange, 'per_page=100'],
     };
-    const actionPages = GithubActionEvidenceApi.runGitHubApi(actionsApiRequest);
+    const githubResult1 =
+      GithubActionEvidenceApi.runGitHubApi(actionsApiRequest);
+    if (githubResult1.isErr()) return err(githubResult1.error);
+    const actionPages = githubResult1.value;
     const attemptPagesRequest: ExpandActionAttemptPagesRequest = {
       repoRoot: request.repoRoot,
       pages: actionPages,
     };
-    const expandedActionPages =
+    const githubResult2 =
       GithubActionEvidenceApi.expandActionAttemptPages(attemptPagesRequest);
+    if (githubResult2.isErr()) return err(githubResult2.error);
+    const expandedActionPages = githubResult2.value;
     const dispatchedApiRequest: GitHubApiRequest = {
       repoRoot: request.repoRoot,
       endpoint: 'repos/{owner}/{repo}/actions/workflows/e2e-pr.yml/runs',
       fields: [createdRange, 'event=workflow_dispatch', 'per_page=100'],
     };
+    const githubResult3 =
+      GithubActionEvidenceApi.runGitHubApi(dispatchedApiRequest);
+    if (githubResult3.isErr()) return err(githubResult3.error);
     const dispatchedRequest: CollectDispatchedActionAttemptPagesRequest = {
       repoRoot: request.repoRoot,
-      pages: GithubActionEvidenceApi.runGitHubApi(dispatchedApiRequest),
+      pages: githubResult3.value,
       prNumber: request.prNumber,
     };
-    const dispatchedActionPages =
+    const githubResult4 =
       GithubActionEvidenceApi.collectDispatchedActionAttemptPages(
         dispatchedRequest,
       );
+    if (githubResult4.isErr()) return err(githubResult4.error);
+    const dispatchedActionPages = githubResult4.value;
     const allActionPages: UntrustedYamlNode = [
       ...GithubActionEvidenceApi.flattenApiPages(expandedActionPages),
       ...GithubActionEvidenceApi.flattenApiPages(dispatchedActionPages),
@@ -111,7 +123,9 @@ export class GithubAgentEvidence {
       endpoint: `repos/{owner}/{repo}/pulls/${request.prNumber}/commits`,
       fields: ['per_page=100'],
     };
-    const commitPages = GithubActionEvidenceApi.runGitHubApi(commitsRequest);
+    const githubResult5 = GithubActionEvidenceApi.runGitHubApi(commitsRequest);
+    if (githubResult5.isErr()) return err(githubResult5.error);
+    const commitPages = githubResult5.value;
     const knownHeadShas: string[] = [];
     for (const commit of GithubActionEvidenceApi.flattenApiPages(commitPages)) {
       if (!UntrustedYamlBoundary.isRecord(commit)) continue;
@@ -123,20 +137,28 @@ export class GithubAgentEvidence {
     if (!knownHeadShas.includes(request.finalHeadSha)) {
       knownHeadShas.push(request.finalHeadSha);
     }
-    const issueCommentPages =
+    const githubResult6 =
       GithubActionEvidenceApi.runGitHubApi(issueCommentsRequest);
+    if (githubResult6.isErr()) return err(githubResult6.error);
+    const issueCommentPages = githubResult6.value;
     const reactionsRequest: CollectReviewReactionPagesRequest = {
       repoRoot: request.repoRoot,
       issueCommentPages,
     };
+    const githubResult7 = GithubActionEvidenceApi.runGitHubApi(reviewsRequest);
+    if (githubResult7.isErr()) return err(githubResult7.error);
+    const githubResult8 = GithubActionEvidenceApi.runGitHubApi(
+      reviewCommentsRequest,
+    );
+    if (githubResult8.isErr()) return err(githubResult8.error);
+    const githubResult9 =
+      GithubAgentEvidence.collectReviewReactionPages(reactionsRequest);
+    if (githubResult9.isErr()) return err(githubResult9.error);
     const reviewRequest: BuildReviewEvidenceRequest = {
       issueCommentPages,
-      reviewPages: GithubActionEvidenceApi.runGitHubApi(reviewsRequest),
-      reviewCommentPages: GithubActionEvidenceApi.runGitHubApi(
-        reviewCommentsRequest,
-      ),
-      reviewReactionPages:
-        GithubAgentEvidence.collectReviewReactionPages(reactionsRequest),
+      reviewPages: githubResult7.value,
+      reviewCommentPages: githubResult8.value,
+      reviewReactionPages: githubResult9.value,
       knownHeadShas,
       mergedAt: request.mergedAt,
     };
@@ -157,7 +179,7 @@ export class GithubAgentEvidence {
     };
     const deliveryHeads = ReviewedDeliveryHistory.merge(deliveryHeadsRequest);
 
-    return {
+    return ok({
       githubActionsRuns: actions.runs,
       deliveryHeads,
       reviewEvents: reviews.events,
@@ -169,7 +191,7 @@ export class GithubAgentEvidence {
       reviewRequestCount: reviews.requestCount,
       reviewFindingBatchCount: reviews.findingBatchCount,
       reviewFindingCount: reviews.findingCount,
-    };
+    });
   }
 
   static buildActionsEvidence(
@@ -403,7 +425,7 @@ export class GithubAgentEvidence {
 
   private static collectReviewReactionPages(
     request: CollectReviewReactionPagesRequest,
-  ): UntrustedYamlNode {
+  ): Result<UntrustedYamlNode, GitHubEvidenceFailure> {
     const reactions: UntrustedYamlMap[] = [];
     const comments = GithubActionEvidenceApi.flattenApiPages(
       request.issueCommentPages,
@@ -421,8 +443,10 @@ export class GithubAgentEvidence {
         endpoint: `repos/{owner}/{repo}/issues/comments/${commentId}/reactions`,
         fields: ['per_page=100'],
       };
+      const githubResult10 = GithubActionEvidenceApi.runGitHubApi(apiRequest);
+      if (githubResult10.isErr()) return err(githubResult10.error);
       for (const reaction of GithubActionEvidenceApi.flattenApiPages(
-        GithubActionEvidenceApi.runGitHubApi(apiRequest),
+        githubResult10.value,
       )) {
         if (!UntrustedYamlBoundary.isRecord(reaction)) {
           GithubActionEvidenceApi.failGitHubCollection(
@@ -461,7 +485,7 @@ export class GithubAgentEvidence {
         reactions.push(UntrustedYamlBoundary.seal(reactionRecord));
       }
     }
-    return [reactions];
+    return ok([reactions]);
   }
 
   private static buildHeadObservation(
