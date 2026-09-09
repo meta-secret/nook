@@ -150,26 +150,12 @@ impl VaultMetaState {
     ) -> MultiDeviceResult<()> {
         let mut joins = HashMap::new();
         for record in fresh_records {
-            if let VaultMetaRecord::Join(device_id, join) = VaultMetaRecord::classify(record)? {
+            if let VaultMetaRecord::Join(device_id, join) = (record).classify()? {
                 joins.insert(device_id, join);
             }
         }
         self.joins = joins;
         Ok(())
-    }
-}
-
-impl VaultMetaRecord {
-    pub fn is_join(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
-        Ok(matches!(Self::classify(record)?, Self::Join(..)))
-    }
-
-    pub fn is_auth(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
-        Ok(matches!(Self::classify(record)?, Self::Auth(..)))
-    }
-
-    pub fn is_member(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
-        Ok(matches!(Self::classify(record)?, Self::Member(..)))
     }
 }
 
@@ -187,7 +173,7 @@ impl<'a> VaultRecordView<'a> {
     pub fn list_join_requests(&self) -> MultiDeviceResult<Vec<JoinRequest>> {
         self.records
             .iter()
-            .filter_map(|record| match VaultMetaRecord::classify(record) {
+            .filter_map(|record| match (record).classify() {
                 Ok(VaultMetaRecord::Join(_, join)) => Some(Ok(join)),
                 Ok(_) => None,
                 Err(error) => Some(Err(error)),
@@ -197,10 +183,7 @@ impl<'a> VaultRecordView<'a> {
 
     pub fn has_multi_device_records(&self) -> MultiDeviceResult<bool> {
         for record in self.records {
-            if !matches!(
-                VaultMetaRecord::classify(record)?,
-                VaultMetaRecord::Secret(..)
-            ) {
+            if !matches!((record).classify()?, VaultMetaRecord::Secret(..)) {
                 return Ok(true);
             }
         }
@@ -210,10 +193,7 @@ impl<'a> VaultRecordView<'a> {
     pub fn user_records(&self) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
         let mut user_records = Vec::new();
         for record in self.records {
-            if matches!(
-                VaultMetaRecord::classify(record)?,
-                VaultMetaRecord::Secret(..)
-            ) {
+            if matches!((record).classify()?, VaultMetaRecord::Secret(..)) {
                 user_records.push(record.clone());
             }
         }

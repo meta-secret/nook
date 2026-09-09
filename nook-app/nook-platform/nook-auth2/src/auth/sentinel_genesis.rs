@@ -894,10 +894,7 @@ mod tests {
             .prepare(&owner_signing)?
             .issue(&StoreId::parse("store_AAAAAAAAAAA")?)?;
         for record in &issued.records {
-            assert!(!matches!(
-                VaultMetaRecord::classify(record)?,
-                VaultMetaRecord::Auth(..)
-            ));
+            assert!(!matches!((record).classify()?, VaultMetaRecord::Auth(..)));
         }
         let share_count = SentinelShareEnvelope::count_sentinel_share_records(&issued.records)?;
         assert_eq!(usize::from(share_count), 3);

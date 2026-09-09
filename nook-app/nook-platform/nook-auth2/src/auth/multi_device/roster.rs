@@ -182,7 +182,7 @@ impl VaultMember {
         } = request;
         let mut roster = Vec::new();
         for record in records {
-            if !VaultMetaRecord::is_member(record)? {
+            if !matches!((record).classify()?, VaultMetaRecord::Member(..)) {
                 continue;
             }
             let entry = MemberEntry::decrypt_member_entry(DecryptMemberEntryRequest {
@@ -249,7 +249,7 @@ impl VaultMember {
         } = request;
         let mut replacement = Vec::with_capacity(records.len() + member_records.len());
         for record in records.iter() {
-            if !VaultMetaRecord::is_member(record)? {
+            if !matches!((record).classify()?, VaultMetaRecord::Member(..)) {
                 replacement.push(record.clone());
             }
         }

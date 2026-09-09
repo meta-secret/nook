@@ -235,6 +235,11 @@ impl Default for VaultArchitecture {
 }
 
 impl VaultArchitecture {
+    /// Serde omission callback for the default architecture.
+    pub(crate) fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+
     pub fn draft(
         device_mode: DeviceMode,
         vault_type: VaultType,
@@ -305,7 +310,8 @@ impl VaultArchitecture {
         let mut has_auth = false;
 
         for record in records {
-            let classified = VaultMetaRecord::classify(record)
+            let classified = (record)
+                .classify()
                 .map_err(|_| ValidationError::InvalidSentinelShareSet)?;
             match classified {
                 VaultMetaRecord::Auth(..) => has_auth = true,

@@ -109,17 +109,21 @@ impl DriveStorageClient<'_> {
     }
 }
 
-/// Validate a shared-grant request, then (for Google Drive) grant the persisted
-/// folder or create one when no target exists. Falls back to
-/// `ManualGrantRequired` when the Drive API fails or no owner token is supplied.
-impl DriveStorageClient<'_> {
-    pub(crate) fn is_google_drive_shared_grant_request(request: SharedDriveGrantPolicy) -> bool {
-        let SharedDriveGrantPolicy {
-            provider_type,
-            oauth_preset,
-        } = request;
-        provider_type == StorageProviderType::OauthFile
-            && oauth_preset == ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AutomaticSharedGrantRoute {
+    GoogleDrive,
+    Manual,
+}
+
+impl SharedDriveGrantPolicy {
+    pub(crate) fn automatic_grant_route(self) -> AutomaticSharedGrantRoute {
+        match (self.provider_type, self.oauth_preset) {
+            (
+                StorageProviderType::OauthFile,
+                ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
+            ) => AutomaticSharedGrantRoute::GoogleDrive,
+            _ => AutomaticSharedGrantRoute::Manual,
+        }
     }
 }
 
@@ -138,13 +142,13 @@ pub async fn prepare_shared_storage_grant(
                 SharedStorageGrantCredential::Unavailable => "",
                 SharedStorageGrantCredential::AccessToken(token) => token.trim(),
             };
-            let is_gdrive =
-                DriveStorageClient::is_google_drive_shared_grant_request(SharedDriveGrantPolicy {
-                    provider_type: request.provider_type,
-                    oauth_preset: request.oauth_preset,
-                });
-            match (!token.is_empty(), is_gdrive) {
-                (true, true) => {
+            let route = (SharedDriveGrantPolicy {
+                provider_type: request.provider_type,
+                oauth_preset: request.oauth_preset,
+            })
+            .automatic_grant_route();
+            match (!token.is_empty(), route) {
+                (true, AutomaticSharedGrantRoute::GoogleDrive) => {
                     if target.id().is_some_and(|id| !id.trim().is_empty()) {
                         DriveStorageClient::grant_existing_drive_folder(ExistingDriveFolderGrant {
                             access_token: token,
@@ -235,11 +239,13 @@ mod browser_tests {
             SharedStorageGrantCredential::Unavailable,
             nook_core::SharedStorageTargetSelection::Create,
         );
-        assert!(DriveStorageClient::is_google_drive_shared_grant_request(
-            SharedDriveGrantPolicy {
+        assert!(matches!(
+            (SharedDriveGrantPolicy {
                 provider_type: manual_request.provider_type,
                 oauth_preset: manual_request.oauth_preset
-            }
+            })
+            .automatic_grant_route(),
+            AutomaticSharedGrantRoute::GoogleDrive
         ));
         let manual = prepare_shared_storage_grant(manual_request).await?;
         assert!(matches!(
@@ -279,11 +285,13 @@ mod browser_tests {
                 nook_core::SharedStorageTargetSelection::Create,
             )
         };
-        assert!(!DriveStorageClient::is_google_drive_shared_grant_request(
-            SharedDriveGrantPolicy {
+        assert!(!matches!(
+            (SharedDriveGrantPolicy {
                 provider_type: unsupported_request.provider_type,
                 oauth_preset: unsupported_request.oauth_preset
-            }
+            })
+            .automatic_grant_route(),
+            AutomaticSharedGrantRoute::GoogleDrive
         ));
         let unsupported = prepare_shared_storage_grant(unsupported_request).await?;
         assert!(matches!(
@@ -321,7 +329,7 @@ pub(crate) struct NewDriveFolderGrant<'a> {
     pub(crate) instructions_key: String,
     pub(crate) joiner_identity: String,
 }
-/// Named values required by DriveStorageClient::is_google_drive_shared_grant_request.
+/// Provider evidence used to select the available automatic grant route.
 pub(crate) struct SharedDriveGrantPolicy {
     pub(crate) provider_type: nook_core::StorageProviderType,
     pub(crate) oauth_preset: nook_core::ProviderOauthPreset,

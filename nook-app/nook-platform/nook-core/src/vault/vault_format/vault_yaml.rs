@@ -34,13 +34,10 @@ pub(super) struct StoredVaultYaml {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) name: Option<String>,
     /// Active unlock mechanism. Omitted on write when `Keys` (the default).
-    #[serde(default, skip_serializing_if = "StoredVaultYaml::unlock_is_keys")]
+    #[serde(default, skip_serializing_if = "VaultUnlock::is_keys")]
     pub(super) unlock: VaultUnlock,
     /// Grouped vault architecture modes.
-    #[serde(
-        default,
-        skip_serializing_if = "StoredVaultYaml::architecture_is_default"
-    )]
+    #[serde(default, skip_serializing_if = "VaultArchitecture::is_default")]
     pub(super) architecture: VaultArchitecture,
     #[serde(default)]
     pub(super) secrets: Vec<StoredSecretRecord>,
@@ -118,7 +115,8 @@ impl StoredVaultYaml {
                 }
                 continue;
             }
-            match VaultMetaRecord::classify(record)
+            match (record)
+                .classify()
                 .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?
             {
                 VaultMetaRecord::Join(..) => vault.joins.push(record.clone()),
@@ -158,14 +156,6 @@ impl StoredVaultYaml {
         );
         records.extend(self.sentinel_shares);
         Ok(records)
-    }
-
-    pub(super) fn unlock_is_keys(unlock: &VaultUnlock) -> bool {
-        matches!(unlock, VaultUnlock::Keys)
-    }
-
-    pub(super) fn architecture_is_default(architecture: &VaultArchitecture) -> bool {
-        architecture == &VaultArchitecture::default()
     }
 
     #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -452,7 +442,10 @@ mod tests {
         let parsed = VaultYamlTestData::deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed, shares);
         for record in &parsed {
-            assert!(VaultMetaRecord::is_sentinel_share_stored_record(record)?);
+            assert!(matches!(
+                (record).classify()?,
+                VaultMetaRecord::SentinelShare(..)
+            ));
         }
         Ok(())
     }

@@ -7,7 +7,8 @@ use crate::{NookDatabase, SaveVaultBlobRequest};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
 use nook_core::{
-    AppId, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment, PasskeyBackupState, StoreId,
+    AppId, DeviceAccessCredentialKind, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment,
+    PasskeyBackupState, StoreId,
 };
 pub use passkey_metadata::{NookPasskeyAttachmentState, NookPasskeyBackupState};
 use wasm_bindgen::JsError;
@@ -446,13 +447,12 @@ impl NookDeviceAccessSnapshot {
             protected,
         } = request;
         let session_device_id = session_device_id.trim();
-        let identity_state = nook_core::DeviceAccessIdentityState::classify(
-            &nook_core::DeviceAccessIdentityObservation {
-                session_unlocked,
-                session_device_id,
-                persisted_device_id: protected.as_ref().map(|(device_id, _)| device_id.as_str()),
-            },
-        );
+        let identity_state = (&nook_core::DeviceAccessIdentityObservation {
+            session_unlocked,
+            session_device_id,
+            persisted_device_id: protected.as_ref().map(|(device_id, _)| device_id.as_str()),
+        })
+            .identity_state();
         let session_uses_companion = !session_device_id.is_empty()
             && protected
                 .as_ref()
@@ -951,4 +951,12 @@ mod browser_tests {
         assert_eq!(rows[0].label(), "Alpha");
         assert_eq!(rows[1].access_state(), NookDeviceVaultAccessState::Unknown);
     }
+}
+
+/// Numeric WASM enums use a thin exported adapter for receiver behavior.
+#[wasm_bindgen]
+pub fn device_access_credential_kind(
+    protection: DeviceAccessProtectionKind,
+) -> DeviceAccessCredentialKind {
+    protection.credential_kind()
 }

@@ -75,6 +75,27 @@ pub enum DeviceAccessProtectionKind {
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeviceAccessCredentialKind {
+    Unavailable,
+    CompanionSession,
+    Passkey,
+    PinOrPassphrase,
+}
+
+impl DeviceAccessProtectionKind {
+    #[must_use]
+    pub const fn credential_kind(self) -> DeviceAccessCredentialKind {
+        match self {
+            Self::Missing => DeviceAccessCredentialKind::Unavailable,
+            Self::CompanionSession => DeviceAccessCredentialKind::CompanionSession,
+            Self::PasskeyStandard | Self::PasskeyAntiHacker => DeviceAccessCredentialKind::Passkey,
+            Self::PinOrPassphrase => DeviceAccessCredentialKind::PinOrPassphrase,
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeviceAccessIdentityState {
     Missing,
     Locked,
@@ -624,51 +645,57 @@ mod tests {
     #[test]
     fn distinguishes_missing_locked_and_unlocked_identity_sessions() {
         assert_eq!(
-            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+            (&DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "",
                 persisted_device_id: None,
-            }),
+            })
+                .identity_state(),
             DeviceAccessIdentityState::Missing
         );
         assert_eq!(
-            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+            (&DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "",
                 persisted_device_id: Some("device-persisted"),
-            }),
+            })
+                .identity_state(),
             DeviceAccessIdentityState::Locked
         );
         assert_eq!(
-            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+            (&DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "device-persisted",
                 persisted_device_id: Some("device-persisted"),
-            }),
+            })
+                .identity_state(),
             DeviceAccessIdentityState::Locked
         );
         assert_eq!(
-            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+            (&DeviceAccessIdentityObservation {
                 session_unlocked: true.into(),
                 session_device_id: "device-session",
                 persisted_device_id: Some("device-persisted"),
-            }),
+            })
+                .identity_state(),
             DeviceAccessIdentityState::Unlocked
         );
         assert_eq!(
-            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+            (&DeviceAccessIdentityObservation {
                 session_unlocked: true.into(),
                 session_device_id: "device-companion",
                 persisted_device_id: None,
-            }),
+            })
+                .identity_state(),
             DeviceAccessIdentityState::Unlocked
         );
         assert_eq!(
-            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+            (&DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "device-companion",
                 persisted_device_id: None,
-            }),
+            })
+                .identity_state(),
             DeviceAccessIdentityState::Locked
         );
     }

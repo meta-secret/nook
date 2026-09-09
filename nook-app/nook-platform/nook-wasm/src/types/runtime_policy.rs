@@ -34,7 +34,7 @@ impl NookVaultClientPolicy {
         &self,
         state: nook_core::RemoteVaultRecoveryState,
     ) -> bool {
-        VaultClientPolicy::remote_recovery_prompt_visible(state)
+        (state).prompt_visible()
     }
 
     #[wasm_bindgen]
@@ -43,7 +43,7 @@ impl NookVaultClientPolicy {
         &self,
         state: nook_core::RemoteVaultRecoveryState,
     ) -> bool {
-        VaultClientPolicy::remote_recovery_prompt_has_cache(state)
+        (state).prompt_has_cache()
     }
 
     #[wasm_bindgen]
@@ -52,7 +52,7 @@ impl NookVaultClientPolicy {
         &self,
         state: nook_core::RemoteVaultRecoveryState,
     ) -> bool {
-        VaultClientPolicy::remote_recovery_connect_confirmed(state)
+        (state).connect_confirmed()
     }
 
     #[wasm_bindgen(constructor)]

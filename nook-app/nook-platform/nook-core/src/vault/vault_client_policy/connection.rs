@@ -79,21 +79,6 @@ pub enum VaultConnectGateDecision {
 
 impl VaultClientPolicy {
     #[must_use]
-    pub const fn remote_recovery_prompt_visible(state: RemoteVaultRecoveryState) -> bool {
-        state.prompt_visible()
-    }
-
-    #[must_use]
-    pub const fn remote_recovery_prompt_has_cache(state: RemoteVaultRecoveryState) -> bool {
-        state.prompt_has_cache()
-    }
-
-    #[must_use]
-    pub const fn remote_recovery_connect_confirmed(state: RemoteVaultRecoveryState) -> bool {
-        state.connect_confirmed()
-    }
-
-    #[must_use]
     pub const fn existing_vault_identity_recovery_required(
         request: crate::ExistingVaultIdentityRecoveryRequiredRequest,
     ) -> bool {
@@ -382,21 +367,11 @@ mod tests {
 
     #[test]
     fn remote_recovery_state_exposes_only_prompt_variants_to_the_ui() {
-        assert!(VaultClientPolicy::remote_recovery_prompt_visible(
-            RemoteVaultRecoveryState::PromptWithCache
-        ));
-        assert!(VaultClientPolicy::remote_recovery_prompt_visible(
-            RemoteVaultRecoveryState::PromptMissingOnly
-        ));
-        assert!(!VaultClientPolicy::remote_recovery_prompt_visible(
-            RemoteVaultRecoveryState::ConnectFromCache
-        ));
-        assert!(VaultClientPolicy::remote_recovery_prompt_has_cache(
-            RemoteVaultRecoveryState::PromptWithCache
-        ));
-        assert!(!VaultClientPolicy::remote_recovery_prompt_has_cache(
-            RemoteVaultRecoveryState::PromptMissingOnly
-        ));
+        assert!((RemoteVaultRecoveryState::PromptWithCache).prompt_visible());
+        assert!((RemoteVaultRecoveryState::PromptMissingOnly).prompt_visible());
+        assert!(!(RemoteVaultRecoveryState::ConnectFromCache).prompt_visible());
+        assert!((RemoteVaultRecoveryState::PromptWithCache).prompt_has_cache());
+        assert!(!(RemoteVaultRecoveryState::PromptMissingOnly).prompt_has_cache());
     }
 
     #[test]
@@ -406,13 +381,13 @@ mod tests {
             RemoteVaultRecoveryState::PromptWithCache,
             RemoteVaultRecoveryState::PromptMissingOnly,
         ] {
-            assert!(!VaultClientPolicy::remote_recovery_connect_confirmed(state));
+            assert!(!(state).connect_confirmed());
         }
         for state in [
             RemoteVaultRecoveryState::ConnectFromCache,
             RemoteVaultRecoveryState::ConnectFresh,
         ] {
-            assert!(VaultClientPolicy::remote_recovery_connect_confirmed(state));
+            assert!((state).connect_confirmed());
         }
     }
 

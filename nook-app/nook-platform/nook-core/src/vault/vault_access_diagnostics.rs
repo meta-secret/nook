@@ -229,8 +229,7 @@ impl EvaluatedVaultAccess<'_> {
         };
         let mut secrets = Vec::new();
         for record in records {
-            let VaultMetaRecord::Secret(secret_id, secret_type, payload) =
-                VaultMetaRecord::classify(record)?
+            let VaultMetaRecord::Secret(secret_id, secret_type, payload) = (record).classify()?
             else {
                 continue;
             };

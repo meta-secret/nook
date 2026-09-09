@@ -275,10 +275,7 @@ mod tests {
         assert_eq!(materialized.sentinel_participants.len(), 2);
         assert_eq!(materialized.sentinel_shares.len(), 2);
         for record in &output.stored_records {
-            assert!(!matches!(
-                VaultMetaRecord::classify(record)?,
-                VaultMetaRecord::Auth(..)
-            ));
+            assert!(!matches!((record).classify()?, VaultMetaRecord::Auth(..)));
         }
         output
             .architecture

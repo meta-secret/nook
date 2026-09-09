@@ -71,16 +71,6 @@ impl<'a> VaultFormatDocument<'a> {
         VaultSchemaVersion::CURRENT
     }
 
-    fn ensure_supported_schema(version: VaultSchemaVersion) -> VaultFormatResult<()> {
-        if version != Self::current_schema_version() {
-            return Err(VaultFormatError::UnsupportedSchemaVersion {
-                found: version,
-                max_supported: Self::current_schema_version(),
-            });
-        }
-        Ok(())
-    }
-
     /// Cheap parse of top-level `schema_version` (missing → `1`).
     pub fn schema_version(&self) -> VaultFormatResult<VaultSchemaVersion> {
         let trimmed = self.stored.trim();
@@ -102,7 +92,7 @@ impl<'a> VaultFormatDocument<'a> {
         self.detect()?;
         let vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
-        Self::ensure_supported_schema(vault.schema_version.into())?;
+        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         Ok(match vault.name {
             Some(name) => VaultName::from_named(&name),
             None => VaultName::Unnamed,
@@ -118,7 +108,7 @@ impl<'a> VaultFormatDocument<'a> {
         self.detect()?;
         let mut vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
-        Self::ensure_supported_schema(vault.schema_version.into())?;
+        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         vault.name = match VaultName::from_named(name) {
             VaultName::Named(name) => Some(name),
             VaultName::Unnamed => None,
@@ -137,7 +127,7 @@ impl<'a> VaultFormatDocument<'a> {
         self.detect()?;
         let vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseVersion)?;
-        Self::ensure_supported_schema(vault.schema_version.into())?;
+        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         Ok(vault.vault_version.into())
     }
 
@@ -150,7 +140,7 @@ impl<'a> VaultFormatDocument<'a> {
         self.detect()?;
         let vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParsePasswordEntries)?;
-        Self::ensure_supported_schema(vault.schema_version.into())?;
+        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         Ok(vault.password_entries)
     }
 
@@ -163,7 +153,7 @@ impl<'a> VaultFormatDocument<'a> {
         self.detect()?;
         let vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseStoreId)?;
-        Self::ensure_supported_schema(vault.schema_version.into())?;
+        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         match vault.store_id {
             Some(id) => Ok(VaultStoreIdentity::Assigned(
                 crate::StoreId::parse(&id)?.to_string(),
@@ -181,7 +171,7 @@ impl<'a> VaultFormatDocument<'a> {
         self.detect()?;
         let vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseArchitecture)?;
-        Self::ensure_supported_schema(vault.schema_version.into())?;
+        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         vault.architecture.validate()?;
         Ok(vault.architecture)
     }
@@ -195,7 +185,7 @@ impl<'a> VaultFormatDocument<'a> {
         self.detect()?;
         let vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseUnlock)?;
-        Self::ensure_supported_schema(vault.schema_version.into())?;
+        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         Ok(vault.unlock)
     }
 
@@ -217,7 +207,7 @@ impl<'a> VaultFormatDocument<'a> {
 
         let vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(|_| VaultFormatError::YamlMissingSections)?;
-        Self::ensure_supported_schema(vault.schema_version.into())?;
+        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         let unlock = vault.unlock.clone();
         let records = vault.into_stored_records()?;
         Ok((records, unlock))
@@ -316,7 +306,7 @@ impl VaultRecordSet {
             VaultName::Named(name) => Some(name),
             VaultName::Unnamed => None,
         };
-        vault.unlock = Self::normalized_unlock(unlock);
+        vault.unlock = unlock.projection_unlock();
         vault.architecture = architecture.clone();
         vault.password_entries = password_entries.to_vec();
         serde_yaml::to_string(&vault)
@@ -334,12 +324,6 @@ impl VaultRecordSet {
             VaultStoreIdentityRef::Unassigned | VaultStoreIdentityRef::Assigned(_) => {
                 Ok(VaultStoreIdentity::Unassigned)
             }
-        }
-    }
-
-    fn normalized_unlock(unlock: &VaultUnlock) -> VaultUnlock {
-        match unlock {
-            VaultUnlock::Passwords { .. } | VaultUnlock::Keys => VaultUnlock::Keys,
         }
     }
 
@@ -939,6 +923,18 @@ mod tests {
                 max_supported
             } if u32::from(found) == 99 && u32::from(max_supported) == 1
         ));
+        Ok(())
+    }
+}
+
+impl VaultSchemaVersion {
+    fn ensure_supported(self) -> VaultFormatResult<()> {
+        if self != Self::CURRENT {
+            return Err(VaultFormatError::UnsupportedSchemaVersion {
+                found: self,
+                max_supported: Self::CURRENT,
+            });
+        }
         Ok(())
     }
 }

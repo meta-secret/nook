@@ -124,15 +124,6 @@ impl SentinelShareEnvelope {
     }
 }
 
-impl VaultMetaRecord {
-    pub fn is_sentinel_share_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
-        Ok(matches!(
-            VaultMetaRecord::classify(record)?,
-            VaultMetaRecord::SentinelShare(..)
-        ))
-    }
-}
-
 impl SentinelShareEnvelope {
     pub fn create_sentinel_share_records(
         request: CreateSentinelShareRecordsRequest<'_>,
@@ -283,7 +274,7 @@ impl SentinelShareEnvelope {
     ) -> MultiDeviceResult<SentinelRecordCount> {
         let mut count = 0;
         for record in records {
-            if VaultMetaRecord::is_sentinel_share_stored_record(record)? {
+            if matches!((record).classify()?, VaultMetaRecord::SentinelShare(..)) {
                 count += 1;
             }
         }
@@ -344,8 +335,11 @@ mod tests {
 
         assert_eq!(records.len(), 3);
         for record in &records {
-            assert!(VaultMetaRecord::is_sentinel_share_stored_record(record)?);
-            assert!(!VaultMetaRecord::is_auth(record)?);
+            assert!(matches!(
+                (record).classify()?,
+                VaultMetaRecord::SentinelShare(..)
+            ));
+            assert!(!matches!((record).classify()?, VaultMetaRecord::Auth(..)));
         }
         assert!(VaultRecordView::new(&records).secrets_key(&first).is_err());
         assert!(

@@ -61,11 +61,8 @@ impl AuthKeyId {
 /// Single classification site for the four record kinds that share the
 /// `StoredSecretRecord { key, secret_type, value }` wire shape.
 ///
-/// Replaces scattered `is_join_stored_record` / `is_auth_stored_record` /
-/// `is_members_stored_record` probing at call sites that need to branch on
-/// record kind. Those helpers remain as thin wrappers over this for
-/// call sites that only need a boolean (e.g. wire-boundary partitioning in
-/// `vault_format.rs`).
+/// `StoredSecretRecord::classify` decodes this outcome once. Consumers select
+/// the typed variant rather than probing the raw record with boolean helpers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VaultMetaRecord {
     /// A user-visible secret: id, its declared type, and the age-armored ciphertext.
@@ -80,40 +77,37 @@ pub enum VaultMetaRecord {
     SentinelShare(DeviceId, SentinelShareEnvelope),
 }
 
-impl VaultMetaRecord {
-    pub fn classify(record: &StoredSecretRecord) -> MultiDeviceResult<Self> {
-        if let Some(device_id_str) = record
-            .key
-            .as_str()
-            .strip_prefix(SENTINEL_SHARE_RECORD_PREFIX)
-        {
+impl StoredSecretRecord {
+    pub fn classify(&self) -> MultiDeviceResult<VaultMetaRecord> {
+        if let Some(device_id_str) = self.key.as_str().strip_prefix(SENTINEL_SHARE_RECORD_PREFIX) {
             let device_id = DeviceId::parse(device_id_str)?;
-            let share =
-                SentinelShareEnvelope::parse_sentinel_share_envelope(record.value.as_str())?;
-            return Ok(Self::SentinelShare(device_id, share));
+            let share = SentinelShareEnvelope::parse_sentinel_share_envelope(self.value.as_str())?;
+            return Ok(VaultMetaRecord::SentinelShare(device_id, share));
         }
-        if let Ok(join) = JoinRequest::parse_json(record.value.as_str()) {
-            return Ok(Self::Join(join.device_id.clone(), join));
+        if let Ok(join) = JoinRequest::parse_json(self.value.as_str()) {
+            return Ok(VaultMetaRecord::Join(join.device_id.clone(), join));
         }
-        if let Some(pk_id_str) = record.key.as_str().strip_prefix(MEMBER_RECORD_PREFIX)
-            && record.value.as_str().contains("BEGIN AGE ENCRYPTED FILE")
+        if let Some(pk_id_str) = self.key.as_str().strip_prefix(MEMBER_RECORD_PREFIX)
+            && self.value.as_str().contains("BEGIN AGE ENCRYPTED FILE")
             && let Ok(auth_id) = AuthKeyId::parse(pk_id_str)
         {
-            return Ok(Self::Member(auth_id, record.value.clone()));
+            return Ok(VaultMetaRecord::Member(auth_id, self.value.clone()));
         }
-        if crate::AuthKeyId::is_valid(record.key.as_str())
-            && let Ok(envelopes) = AuthEnvelopes::parse(record.value.as_str())
-            && let Ok(auth_id) = AuthKeyId::parse(record.key.as_str())
+        if crate::AuthKeyId::is_valid(self.key.as_str())
+            && let Ok(envelopes) = AuthEnvelopes::parse(self.value.as_str())
+            && let Ok(auth_id) = AuthKeyId::parse(self.key.as_str())
         {
-            return Ok(Self::Auth(auth_id, envelopes));
+            return Ok(VaultMetaRecord::Auth(auth_id, envelopes));
         }
-        Ok(Self::Secret(
-            record.key.clone(),
-            record.secret_type.unwrap_or(SecretType::SecureNote),
-            record.value.clone(),
+        Ok(VaultMetaRecord::Secret(
+            self.key.clone(),
+            self.secret_type.unwrap_or(SecretType::SecureNote),
+            self.value.clone(),
         ))
     }
+}
 
+impl VaultMetaRecord {
     /// Wire-boundary encoding back to the shared `StoredSecretRecord` shape.
     pub fn to_stored(&self) -> MultiDeviceResult<StoredSecretRecord> {
         Ok(match self {
@@ -197,7 +191,7 @@ impl VaultMetaState {
 
     /// Insert or overwrite whichever bucket `record` classifies into.
     pub fn apply_record(&mut self, record: &StoredSecretRecord) -> MultiDeviceResult<()> {
-        match VaultMetaRecord::classify(record)? {
+        match (record).classify()? {
             VaultMetaRecord::Secret(id, secret_type, payload) => {
                 self.secrets.insert(id, (secret_type, payload));
             }
@@ -225,7 +219,7 @@ impl VaultMetaState {
         let mut members = self.members.clone();
         members.clear();
         for record in member_records {
-            if let VaultMetaRecord::Member(auth_id, payload) = VaultMetaRecord::classify(record)? {
+            if let VaultMetaRecord::Member(auth_id, payload) = (record).classify()? {
                 members.insert(auth_id, payload);
             }
         }

@@ -124,20 +124,15 @@ pub struct DeviceAccessIdentityObservation<'a> {
     pub persisted_device_id: Option<&'a str>,
 }
 
-impl DeviceAccessIdentityState {
+impl DeviceAccessIdentityObservation<'_> {
     #[must_use]
-    pub fn classify(observation: &DeviceAccessIdentityObservation<'_>) -> Self {
-        if matches!(
-            observation.session_unlocked,
-            DeviceSessionLockState::Unlocked
-        ) {
-            Self::Unlocked
-        } else if !observation.session_device_id.trim().is_empty()
-            || observation.persisted_device_id.is_some()
-        {
-            Self::Locked
+    pub fn identity_state(&self) -> DeviceAccessIdentityState {
+        if matches!(self.session_unlocked, DeviceSessionLockState::Unlocked) {
+            DeviceAccessIdentityState::Unlocked
+        } else if !self.session_device_id.trim().is_empty() || self.persisted_device_id.is_some() {
+            DeviceAccessIdentityState::Locked
         } else {
-            Self::Missing
+            DeviceAccessIdentityState::Missing
         }
     }
 }

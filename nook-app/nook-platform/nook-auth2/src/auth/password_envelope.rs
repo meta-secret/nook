@@ -193,6 +193,19 @@ impl From<VaultUnlockTagged> for VaultUnlock {
 }
 
 impl VaultUnlock {
+    /// Serde omission callback for the default key-only projection.
+    #[must_use]
+    pub fn is_keys(&self) -> bool {
+        matches!(self, Self::Keys)
+    }
+
+    #[must_use]
+    pub fn projection_unlock(&self) -> Self {
+        match self {
+            Self::Passwords { .. } | Self::Keys => Self::Keys,
+        }
+    }
+
     #[must_use]
     pub fn is_password(&self) -> bool {
         matches!(self, Self::Passwords { .. })

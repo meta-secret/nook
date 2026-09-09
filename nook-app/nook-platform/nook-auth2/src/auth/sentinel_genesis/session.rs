@@ -341,9 +341,7 @@ impl ReadySentinelGenesis<'_> {
         // record has parsed and every delivery has been signed.
         let mut deliveries = Vec::with_capacity(share_records.len());
         for (participant, record) in session.participants.iter().zip(&share_records) {
-            let VaultMetaRecord::SentinelShare(device_id, share) =
-                VaultMetaRecord::classify(record)?
-            else {
+            let VaultMetaRecord::SentinelShare(device_id, share) = (record).classify()? else {
                 return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
             };
             if device_id != participant.device_id {

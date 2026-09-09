@@ -135,7 +135,12 @@ impl NookVaultManager {
         let auth_id = SecretId::from_vault_record(identity.auth_id().as_str());
         let mut retained = Vec::with_capacity(records.len());
         for record in records {
-            if record.key != auth_id && !nook_core::VaultMetaRecord::is_member(&record)? {
+            if record.key != auth_id
+                && !matches!(
+                    (&record).classify()?,
+                    nook_core::VaultMetaRecord::Member(..)
+                )
+            {
                 retained.push(record);
             }
         }

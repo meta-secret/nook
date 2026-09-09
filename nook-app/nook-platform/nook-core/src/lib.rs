@@ -28,8 +28,8 @@ pub(crate) use auth::{
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
     DEVICE_ACCESS_PROFILE_VERSION, DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS,
-    DeviceAccessIdentityObservation, DeviceAccessIdentityState, DeviceAccessProfile,
-    DeviceAccessProfileDecodeResult, DeviceAccessProfileTransitionError,
+    DeviceAccessCredentialKind, DeviceAccessIdentityObservation, DeviceAccessIdentityState,
+    DeviceAccessProfile, DeviceAccessProfileDecodeResult, DeviceAccessProfileTransitionError,
     DeviceAccessProfileVersion, DeviceAccessProtectionKind, DeviceAccessProviderLabelError,
     IdentityVaultAppGrant, IdentityVaultAppGrantKind, IdentityVaultLinks,
     IdentityVaultLinksRequest, PasskeyAccessProfile, PasskeyAuthenticatorAttachment,

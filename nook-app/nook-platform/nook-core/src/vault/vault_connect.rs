@@ -241,10 +241,7 @@ impl<'a> VaultContent<'a> {
     fn validate_user_secret_types(records: &[StoredSecretRecord]) -> VaultResult<()> {
         for record in records {
             if record.secret_type.is_none()
-                && matches!(
-                    VaultMetaRecord::classify(record)?,
-                    VaultMetaRecord::Secret(..)
-                )
+                && matches!((record).classify()?, VaultMetaRecord::Secret(..))
             {
                 return Err(DatabaseError::MissingSecretType {
                     key: record.key.clone(),

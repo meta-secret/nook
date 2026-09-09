@@ -348,7 +348,10 @@ mod browser_tests {
             .await?;
         assert!(!event_log_remote);
         assert_eq!(retained.len(), 1);
-        assert!(!nook_core::VaultMetaRecord::is_join(&retained[0])?);
+        assert!(!matches!(
+            (&retained[0]).classify()?,
+            nook_core::VaultMetaRecord::Join(..)
+        ));
         Ok(())
     }
 
@@ -440,7 +443,7 @@ impl NookVaultManager {
         let records = nook_core::VaultFormatDocument::new(content).deserialize(format)?;
         let mut retained = Vec::with_capacity(records.len());
         for record in records {
-            if !nook_core::VaultMetaRecord::is_join(&record)? {
+            if !matches!((&record).classify()?, nook_core::VaultMetaRecord::Join(..)) {
                 retained.push(record);
             }
         }

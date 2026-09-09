@@ -118,13 +118,18 @@ pub enum AuthenticationApprovalRequirement {
     TakeoverRequired,
 }
 
-impl AuthenticationApprovalRequirement {
+impl AuthenticationWorkflowAction {
     #[must_use]
-    pub const fn for_action(action: AuthenticationWorkflowAction) -> Self {
-        if matches!(action, AuthenticationWorkflowAction::TakeOver) {
-            Self::TakeoverRequired
-        } else {
-            Self::ExplicitUserApproval
+    pub const fn approval_requirement(self) -> AuthenticationApprovalRequirement {
+        match self {
+            Self::TakeOver => AuthenticationApprovalRequirement::TakeoverRequired,
+            Self::ContinueWithNook
+            | Self::GeneratePassword
+            | Self::FillTotp
+            | Self::EnrollAuthenticator
+            | Self::UsePasskey
+            | Self::CreatePasskey
+            | Self::SaveBackupCodes => AuthenticationApprovalRequirement::ExplicitUserApproval,
         }
     }
 }
@@ -229,7 +234,7 @@ impl AuthenticationWorkflowSnapshot {
             action: draft.action,
             current_step: draft.progress.current_step(),
             total_steps: draft.progress.total_steps(),
-            approval_requirement: AuthenticationApprovalRequirement::for_action(draft.action),
+            approval_requirement: draft.action.approval_requirement(),
             saved_login_capability: AuthenticationSavedLoginCapability::Unavailable,
             observation_index: AuthenticationWorkflowObservationIndex(0),
         }
@@ -265,7 +270,7 @@ impl AuthenticationWorkflowSnapshot {
             WebsitePasskeyProposal::CreatePasskey => AuthenticationWorkflowAction::CreatePasskey,
         };
         self.action = action;
-        self.approval_requirement = AuthenticationApprovalRequirement::for_action(action);
+        self.approval_requirement = action.approval_requirement();
         self
     }
 
@@ -274,7 +279,7 @@ impl AuthenticationWorkflowSnapshot {
         matches!(
             (
                 self.approval_requirement,
-                AuthenticationApprovalRequirement::for_action(self.action)
+                self.action.approval_requirement()
             ),
             (
                 AuthenticationApprovalRequirement::ExplicitUserApproval,

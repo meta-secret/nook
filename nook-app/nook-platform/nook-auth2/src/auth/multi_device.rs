@@ -199,15 +199,15 @@ mod tests {
         assert!(state.is_empty());
 
         assert!(matches!(
-            VaultMetaRecord::classify(&user_secret)?,
+            (&user_secret).classify()?,
             VaultMetaRecord::Secret(_, SecretType::Login, _)
         ));
         assert!(matches!(
-            VaultMetaRecord::classify(&join_record)?,
+            (&join_record).classify()?,
             VaultMetaRecord::Join(_, _)
         ));
         assert!(matches!(
-            VaultMetaRecord::classify(&sentinel_record)?,
+            (&sentinel_record).classify()?,
             VaultMetaRecord::SentinelShare(_, _)
         ));
 
@@ -219,7 +219,7 @@ mod tests {
                 .replacen("\"version\":1", "\"version\":3", 1),
         );
         let before = state.clone();
-        assert!(VaultMetaRecord::classify(&invalid_sentinel).is_err());
+        assert!((&invalid_sentinel).classify().is_err());
         match state.apply_record(&invalid_sentinel) {
             Err(_) => {}
             Ok(()) => return Err(anyhow::anyhow!("invalid share must be rejected")),
