@@ -5,7 +5,6 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::ProviderSyncCheckpoint;
-use serde_json::{Map, Value};
 
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPat, GithubPatMask,
@@ -15,8 +14,8 @@ use crate::{
 };
 
 use super::{
-    AuthProvidersSnapshotData, NormalizedAuthSnapshot, ProviderLabelLabels,
-    ProviderStorageDetailLabels, StorageProviderData,
+    AuthProvidersSnapshotData, ProviderLabelLabels, ProviderStorageDetailLabels,
+    StorageProviderData,
 };
 
 pub struct DuplicateProviderSelection<'a> {
@@ -31,13 +30,6 @@ pub struct LocalProviderRowRequest<'a> {
     pub created_at: &'a str,
 }
 struct CatalogProviderText<'a>(Option<&'a str>);
-struct ProviderSnapshotWire<'a>(&'a mut Value);
-struct ProviderRowWire<'a>(&'a mut Map<String, Value>);
-struct OAuthConfigurationWire<'a>(&'a mut Map<String, Value>);
-struct SemanticProviderField<'a> {
-    missing_state: &'a str,
-    present_state: &'a str,
-}
 
 impl StorageProviderData {
     pub fn storage_detail(&self, labels: &ProviderStorageDetailLabels) -> String {
@@ -208,180 +200,22 @@ impl DuplicateProviderSelection<'_> {
     }
 }
 
-impl NormalizedAuthSnapshot {
-    #[must_use]
-    pub fn from_wire(raw: &Value) -> Self {
-        let mut normalized = raw.clone();
-        ProviderSnapshotWire(&mut normalized).normalize();
-        let object = normalized.as_object();
-        let providers = object
-            .and_then(|object| object.get("providers"))
-            .and_then(Value::as_array)
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|item| {
-                        serde_json::from_value::<StorageProviderData>(item.clone()).ok()
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        let active_vault_store_id = object
-            .and_then(|object| object.get("activeVaultStoreId"))
-            .cloned()
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or_default();
-        NormalizedAuthSnapshot {
-            snapshot: AuthProvidersSnapshotData {
-                providers,
-                active_vault_store_id,
-            },
-            changed: normalized != *raw,
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalProviderRowChange {
+    Present,
+    Inserted,
 }
-
-impl SemanticProviderField<'_> {
-    fn normalize(self, value: Option<Value>) -> Value {
-        let Self {
-            missing_state,
-            present_state,
-        } = self;
-        match value {
-            Some(Value::Object(object)) if object.contains_key("state") => Value::Object(object),
-            Some(Value::String(value)) if !value.trim().is_empty() => {
-                serde_json::json!({ "state": present_state, "value": value })
-            }
-            _ => serde_json::json!({ "state": missing_state }),
-        }
-    }
-}
-
-impl OAuthConfigurationWire<'_> {
-    fn normalize(self) {
-        let config = self.0;
-        for (field, missing, present) in [
-            ("accessToken", "signedOut", "accessToken"),
-            ("refreshToken", "notIssued", "token"),
-            ("expiresAt", "unknown", "expiresAt"),
-            ("fileId", "unresolved", "fileId"),
-            ("fileName", "unresolved", "fileName"),
-            ("accountEmail", "unknown", "email"),
-            ("folderId", "root", "folderId"),
-            ("iCloudShareTarget", "personal", "sharedTarget"),
-        ] {
-            let value = SemanticProviderField {
-                missing_state: missing,
-                present_state: present,
-            }
-            .normalize(config.remove(field));
-            config.insert(field.to_owned(), value);
-        }
-    }
-}
-
-impl ProviderRowWire<'_> {
-    fn normalize(self) {
-        let provider = self.0;
-        for (field, missing, present) in [
-            ("githubPat", "missing", "token"),
-            ("githubRepo", "defaultRepository", "repository"),
-            ("storeId", "unscoped", "storeId"),
-        ] {
-            let value = SemanticProviderField {
-                missing_state: missing,
-                present_state: present,
-            }
-            .normalize(provider.remove(field));
-            provider.insert(field.to_owned(), value);
-        }
-
-        let oauth_file = match provider.remove("oauthFile") {
-            Some(Value::Object(mut object)) if object.contains_key("state") => {
-                if let Some(Value::Object(config)) = object.get_mut("config") {
-                    OAuthConfigurationWire(config).normalize();
-                }
-                Value::Object(object)
-            }
-            Some(Value::Object(mut config)) => {
-                OAuthConfigurationWire(&mut config).normalize();
-                serde_json::json!({ "state": "configured", "config": config })
-            }
-            _ => serde_json::json!({ "state": "notApplicable" }),
-        };
-        provider.insert("oauthFile".to_owned(), oauth_file);
-
-        let local_folder = match provider.remove("localFolder") {
-            Some(Value::Object(mut object)) if object.contains_key("state") => {
-                if let Some(Value::Object(config)) = object.get_mut("config") {
-                    let directory = SemanticProviderField {
-                        missing_state: "unnamed",
-                        present_state: "directoryName",
-                    }
-                    .normalize(config.remove("directoryName"));
-                    let handle = SemanticProviderField {
-                        missing_state: "unbound",
-                        present_state: "handleId",
-                    }
-                    .normalize(config.remove("handleId"));
-                    config.insert("directoryName".to_owned(), directory);
-                    config.insert("handleId".to_owned(), handle);
-                }
-                Value::Object(object)
-            }
-            Some(Value::Object(mut config)) => {
-                let directory = SemanticProviderField {
-                    missing_state: "unnamed",
-                    present_state: "directoryName",
-                }
-                .normalize(config.remove("directoryName"));
-                let handle = SemanticProviderField {
-                    missing_state: "unbound",
-                    present_state: "handleId",
-                }
-                .normalize(config.remove("handleId"));
-                config.insert("directoryName".to_owned(), directory);
-                config.insert("handleId".to_owned(), handle);
-                serde_json::json!({ "state": "configured", "config": config })
-            }
-            _ => serde_json::json!({ "state": "notApplicable" }),
-        };
-        provider.insert("localFolder".to_owned(), local_folder);
-    }
-}
-
-impl ProviderSnapshotWire<'_> {
-    fn normalize(self) {
-        let raw = self.0;
-        let Some(object) = raw.as_object_mut() else {
-            *raw = serde_json::json!({
-                "providers": [],
-                "activeVaultStoreId": { "state": "unselected" }
-            });
-            return;
-        };
-        if let Some(Value::Array(providers)) = object.get_mut("providers") {
-            for provider in providers {
-                if let Some(provider) = provider.as_object_mut() {
-                    ProviderRowWire(provider).normalize();
-                }
-            }
-        } else {
-            object.insert("providers".to_owned(), Value::Array(Vec::new()));
-        }
-        let active = SemanticProviderField {
-            missing_state: "unselected",
-            present_state: "storeId",
-        }
-        .normalize(object.remove("activeVaultStoreId"));
-        object.insert("activeVaultStoreId".to_owned(), active);
-    }
+pub struct LocalProviderRowOutcome {
+    pub snapshot: AuthProvidersSnapshotData,
+    pub change: LocalProviderRowChange,
 }
 
 impl AuthProvidersSnapshotData {
     #[must_use]
-    pub fn ensure_local_row(&self, request: LocalProviderRowRequest<'_>) -> (Self, bool) {
-        let snapshot = self;
+    pub fn ensure_local_row(
+        mut self,
+        request: LocalProviderRowRequest<'_>,
+    ) -> LocalProviderRowOutcome {
         let LocalProviderRowRequest {
             active_store_id,
             new_id,
@@ -389,8 +223,8 @@ impl AuthProvidersSnapshotData {
         } = request;
         let store_id = CatalogProviderText(active_store_id)
             .non_empty()
-            .or_else(|| CatalogProviderText(snapshot.active_vault_store_id.as_deref()).non_empty());
-        let has_local_for_vault = snapshot.providers.iter().any(|provider| {
+            .or_else(|| CatalogProviderText(self.active_vault_store_id.as_deref()).non_empty());
+        let has_local_for_vault = self.providers.iter().any(|provider| {
             provider.provider_type == StorageProviderType::Local
                 && match (
                     &store_id,
@@ -401,7 +235,10 @@ impl AuthProvidersSnapshotData {
                 }
         });
         if has_local_for_vault {
-            return (snapshot.clone(), false);
+            return LocalProviderRowOutcome {
+                snapshot: self,
+                change: LocalProviderRowChange::Present,
+            };
         }
         let local = StorageProviderData {
             id: new_id.to_owned(),
@@ -415,16 +252,11 @@ impl AuthProvidersSnapshotData {
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: created_at.to_owned(),
         };
-        let mut providers = Vec::with_capacity(snapshot.providers.len() + 1);
-        providers.push(local);
-        providers.extend(snapshot.providers.iter().cloned());
-        (
-            AuthProvidersSnapshotData {
-                providers,
-                active_vault_store_id: snapshot.active_vault_store_id.clone(),
-            },
-            true,
-        )
+        self.providers.insert(0, local);
+        LocalProviderRowOutcome {
+            snapshot: self,
+            change: LocalProviderRowChange::Inserted,
+        }
     }
 }
 
@@ -462,9 +294,7 @@ mod tests {
         StoredLocalFolderHandle, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
         StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
     };
-    use serde_json::Value;
 
-    use serde_json::json;
     use std::io::Error as IoError;
     use std::slice;
 
@@ -475,7 +305,10 @@ mod tests {
         StorageProviderType,
     };
 
-    use super::{DuplicateProviderSelection, LocalProviderRowRequest, NormalizedAuthSnapshot};
+    use super::{
+        DuplicateProviderSelection, LocalProviderRowChange, LocalProviderRowOutcome,
+        LocalProviderRowRequest,
+    };
 
     impl GithubCatalogFixture<'_> {
         fn build(self) -> StorageProviderData {
@@ -574,59 +407,6 @@ mod tests {
                 icloud: "iCloud localized".to_owned(),
             }
         }
-    }
-
-    #[test]
-    fn normalization_migrates_missing_values_and_preserves_active_vault() {
-        let missing = NormalizedAuthSnapshot::from_wire(&Value::Null);
-        assert_eq!(missing.snapshot, AuthProvidersSnapshotData::default());
-        assert!(missing.changed);
-
-        let raw = json!({ "providers": [], "activeVaultStoreId": "vault-1" });
-        let normalized = NormalizedAuthSnapshot::from_wire(&raw);
-        assert_eq!(
-            normalized.snapshot.active_vault_store_id.as_deref(),
-            Some("vault-1")
-        );
-        assert!(normalized.changed);
-    }
-
-    #[test]
-    fn normalization_preserves_tagged_bytes_and_reports_wire_changes_only() -> anyhow::Result<()> {
-        let provider = GithubCatalogFixture {
-            id: "first",
-            repo: " repo ",
-            pat: " pat ",
-        }
-        .build();
-        let snapshot = AuthProvidersSnapshotData {
-            providers: vec![provider],
-            active_vault_store_id: ActiveVaultScope::StoreId(" vault ".to_owned()),
-        };
-        let raw = serde_json::to_value(&snapshot)?;
-        let original = raw.clone();
-        let normalized = NormalizedAuthSnapshot::from_wire(&raw);
-        assert_eq!(normalized.snapshot, snapshot);
-        assert!(!normalized.changed);
-        assert_eq!(raw, original);
-        // Filtering an invalid array item does not itself change normalized wire JSON.
-        let malformed =
-            json!({"providers": [false], "activeVaultStoreId": {"state": "unselected"}});
-        let normalized = NormalizedAuthSnapshot::from_wire(&malformed);
-        assert_eq!(normalized.snapshot, AuthProvidersSnapshotData::default());
-        assert!(!normalized.changed);
-        for raw in [
-            json!({"providers": false}),
-            json!(17),
-            json!({"providers": [{}]}),
-        ] {
-            let original = raw.clone();
-            let normalized = NormalizedAuthSnapshot::from_wire(&raw);
-            assert_eq!(normalized.snapshot, AuthProvidersSnapshotData::default());
-            assert!(normalized.changed);
-            assert_eq!(raw, original);
-        }
-        Ok(())
     }
 
     #[test]
@@ -904,12 +684,15 @@ mod tests {
             ],
             active_vault_store_id: ActiveVaultScope::Unselected,
         };
-        let (next, changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
+        let LocalProviderRowOutcome {
+            snapshot: next,
+            change,
+        } = snapshot.ensure_local_row(LocalProviderRowRequest {
             active_store_id: None,
             new_id: "local-1",
             created_at: "2026-06-24T00:00:00.000Z",
         });
-        assert!(changed);
+        assert_eq!(change, LocalProviderRowChange::Inserted);
         assert_eq!(next.providers.len(), 2);
         assert_eq!(next.providers[0].provider_type, StorageProviderType::Local);
         assert_eq!(next.providers[0].label, "This device");
@@ -921,25 +704,36 @@ mod tests {
             }],
             active_vault_store_id: ActiveVaultScope::StoreId("vault-1".to_owned()),
         };
-        let (unchanged, changed) = existing.ensure_local_row(LocalProviderRowRequest {
+        let LocalProviderRowOutcome {
+            snapshot: existing,
+            change,
+        } = existing.ensure_local_row(LocalProviderRowRequest {
             active_store_id: Some("vault-1"),
             new_id: "local-2",
             created_at: "x",
         });
-        assert!(!changed);
-        assert_eq!(unchanged.providers.len(), 1);
+        assert_eq!(change, LocalProviderRowChange::Present);
+        assert_eq!(existing.providers.len(), 1);
 
         for active_store_id in [None, Some(" "), Some(" vault-1 "), Some("vault-2")] {
-            let original = existing.clone();
-            let (next, changed) = existing.ensure_local_row(LocalProviderRowRequest {
+            let LocalProviderRowOutcome {
+                snapshot: next,
+                change,
+            } = existing.clone().ensure_local_row(LocalProviderRowRequest {
                 active_store_id,
                 new_id: "new",
                 created_at: "time",
             });
-            assert_eq!(existing, original);
             assert_eq!(next.active_vault_store_id, existing.active_vault_store_id);
-            assert_eq!(changed, active_store_id == Some("vault-2"));
-            if changed {
+            assert_eq!(
+                change,
+                if active_store_id == Some("vault-2") {
+                    LocalProviderRowChange::Inserted
+                } else {
+                    LocalProviderRowChange::Present
+                }
+            );
+            if change == LocalProviderRowChange::Inserted {
                 assert_eq!(next.providers[0].store_id.as_deref(), Some("vault-2"));
                 assert_eq!(next.providers[1], existing.providers[0]);
             } else {

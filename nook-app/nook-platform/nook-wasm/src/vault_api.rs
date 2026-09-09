@@ -145,12 +145,13 @@ impl NookVaultManager {
         }
         let new_id = nook_core::CompactToken::generate()?.to_string();
         let created_at: String = Date::new_0().to_iso_string().into();
-        let (snapshot, changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
-            active_store_id: None,
-            new_id: &new_id,
-            created_at: &created_at,
-        });
-        if changed {
+        let nook_core::LocalProviderRowOutcome { snapshot, change } =
+            snapshot.ensure_local_row(LocalProviderRowRequest {
+                active_store_id: None,
+                new_id: &new_id,
+                created_at: &created_at,
+            });
+        if change == nook_core::LocalProviderRowChange::Inserted {
             ProviderSnapshotPublication {
                 identity: &identity,
                 snapshot: &snapshot,
@@ -174,12 +175,13 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let new_id = nook_core::CompactToken::generate()?.to_string();
         let created_at: String = Date::new_0().to_iso_string().into();
-        let (snapshot, changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
-            active_store_id: None,
-            new_id: &new_id,
-            created_at: &created_at,
-        });
-        if changed {
+        let nook_core::LocalProviderRowOutcome { snapshot, change } =
+            snapshot.ensure_local_row(LocalProviderRowRequest {
+                active_store_id: None,
+                new_id: &new_id,
+                created_at: &created_at,
+            });
+        if change == nook_core::LocalProviderRowChange::Inserted {
             ProviderSnapshotPublication {
                 identity: &identity,
                 snapshot: &snapshot,
@@ -365,11 +367,12 @@ pub fn ensure_local_provider_row(
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let new_id = nook_core::CompactToken::generate()?.to_string();
     let created_at: String = Date::new_0().to_iso_string().into();
-    let (next, _changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
-        active_store_id: Some(active_store_id),
-        new_id: &new_id,
-        created_at: &created_at,
-    });
+    let nook_core::LocalProviderRowOutcome { snapshot: next, .. } =
+        snapshot.ensure_local_row(LocalProviderRowRequest {
+            active_store_id: Some(active_store_id),
+            new_id: &new_id,
+            created_at: &created_at,
+        });
     Ok(next)
 }
 

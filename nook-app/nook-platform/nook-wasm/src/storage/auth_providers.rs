@@ -187,14 +187,14 @@ impl AuthProviderDatabase {
         } else {
             scoped
         };
-        let normalized = NormalizedAuthSnapshot::from_wire(&raw);
+        let normalized = NormalizedAuthSnapshot::from(raw);
         let mut snapshot = normalized.snapshot;
         snapshot = snapshot
             .open_credentials(identity)
             .map_err(|rejection| rejection.into_cause())?;
         Ok(NormalizedAuthSnapshot {
             snapshot,
-            changed: normalized.changed,
+            migration: normalized.migration,
         })
     }
 }
@@ -233,10 +233,13 @@ impl AuthProviderDatabase {
             },
         )
         .await?;
+        let scoped = rollback_projection::ProviderSnapshotObservation::from(scoped);
+        let legacy = rollback_projection::ProviderSnapshotObservation::from(legacy);
         if AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch {
             scoped: &scoped,
             legacy: &legacy,
-        }) {
+        }) == rollback_projection::ProviderProjectionRelation::Equal
+        {
             for key in [STATE_KEY, SCHEMA_KEY] {
                 store
                     .delete(serde_wasm_bindgen::to_value(key).map_err(|e| {
@@ -380,7 +383,7 @@ mod wasm_idb_tests {
             &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
         )
         .await?;
-        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from(raw).snapshot;
         let stored_pat = stored.providers[0]
             .github_pat
             .as_deref()
@@ -568,8 +571,7 @@ mod wasm_idb_tests {
 
         AuthProviderDatabase::migrate_legacy_auth_providers_for_identity(&first).await?;
         let mut rollback =
-            NormalizedAuthSnapshot::from_wire(&AuthProviderDatabase::read_raw_snapshot().await?)
-                .snapshot;
+            NormalizedAuthSnapshot::from(AuthProviderDatabase::read_raw_snapshot().await?).snapshot;
         rollback = rollback
             .open_credentials(&first)
             .map_err(|rejection| rejection.into_cause())?;
@@ -641,8 +643,7 @@ mod wasm_idb_tests {
             Some("github_pat_newer")
         );
         let mut rollback =
-            NormalizedAuthSnapshot::from_wire(&AuthProviderDatabase::read_raw_snapshot().await?)
-                .snapshot;
+            NormalizedAuthSnapshot::from(AuthProviderDatabase::read_raw_snapshot().await?).snapshot;
         rollback = rollback
             .open_credentials(&identity)
             .map_err(|rejection| rejection.into_cause())?;
@@ -749,8 +750,7 @@ mod wasm_idb_tests {
         AuthProviderDatabase::migrate_legacy_auth_providers_for_selected_identity().await?;
 
         let mut rollback =
-            NormalizedAuthSnapshot::from_wire(&AuthProviderDatabase::read_raw_snapshot().await?)
-                .snapshot;
+            NormalizedAuthSnapshot::from(AuthProviderDatabase::read_raw_snapshot().await?).snapshot;
         rollback = rollback
             .open_credentials(&first)
             .map_err(|rejection| rejection.into_cause())?;
@@ -861,7 +861,7 @@ mod wasm_idb_tests {
             &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
         )
         .await?;
-        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from(raw).snapshot;
         let mut provider_ids = stored
             .providers
             .iter()
@@ -874,8 +874,7 @@ mod wasm_idb_tests {
             ProviderCredentialStorageAdmission::MarkerCompatible
         );
         let rollback =
-            NormalizedAuthSnapshot::from_wire(&AuthProviderDatabase::read_raw_snapshot().await?)
-                .snapshot;
+            NormalizedAuthSnapshot::from(AuthProviderDatabase::read_raw_snapshot().await?).snapshot;
         let mut rollback_provider_ids = rollback
             .providers
             .iter()
@@ -946,7 +945,7 @@ mod wasm_idb_tests {
             &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
         )
         .await?;
-        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from(raw).snapshot;
         let oauth = stored.providers[0]
             .oauth_file
             .as_ref()

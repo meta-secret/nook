@@ -44,6 +44,53 @@ impl ProviderCredentialRejection {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProviderCredentialOpening {
+    Unchanged,
+    Opened,
+}
+impl PreparedProviderCredentials {
+    fn opening_evidence(&self, provider: &StorageProviderData) -> ProviderCredentialOpening {
+        let oauth = provider.oauth_file.as_ref();
+        let pairs = [
+            (provider.github_pat.as_deref(), self.github.as_ref()),
+            (
+                oauth.and_then(|oauth| oauth.access_token.as_deref()),
+                self.access.as_ref(),
+            ),
+            (
+                oauth.and_then(|oauth| oauth.refresh_token.as_deref()),
+                self.refresh.as_ref(),
+            ),
+        ];
+        if pairs.into_iter().any(|(original, replacement)| {
+            replacement.is_some_and(|replacement| original != Some(replacement.as_str()))
+        }) {
+            ProviderCredentialOpening::Opened
+        } else {
+            ProviderCredentialOpening::Unchanged
+        }
+    }
+}
+impl AuthProvidersSnapshotData {
+    /// Authenticate all credential fields and observe whether opening changes any
+    /// bytes. Prepared plaintext buffers zeroize without becoming a snapshot.
+    pub fn credential_opening_evidence(
+        &self,
+        identity: &DeviceIdentity,
+    ) -> MultiDeviceResult<ProviderCredentialOpening> {
+        let transition = CredentialTransition::Open(identity);
+        let mut outcome = ProviderCredentialOpening::Unchanged;
+        for provider in &self.providers {
+            let prepared = transition.prepare(provider)?;
+            if prepared.opening_evidence(provider) == ProviderCredentialOpening::Opened {
+                outcome = ProviderCredentialOpening::Opened;
+            }
+        }
+        Ok(outcome)
+    }
+}
+
 enum CredentialTransition<'a> {
     Seal(&'a DevicePublicKey),
     Open(&'a DeviceIdentity),
@@ -356,8 +403,8 @@ mod tests {
 
     use super::{
         AGE_ARMOR_MARKER, AuthProvidersSnapshotData, MultiDeviceError, MultiDeviceResult,
-        ProviderCredentialEncoding, ProviderCredentialField, ProviderCredentialRejection,
-        ProviderCredentialStorageAdmission,
+        ProviderCredentialEncoding, ProviderCredentialField, ProviderCredentialOpening,
+        ProviderCredentialRejection, ProviderCredentialStorageAdmission,
     };
     use crate::{
         DeviceIdentity, ICloudMode, OAuthFileConfigData, OauthFilePreset, StorageProviderData,
@@ -724,6 +771,46 @@ mod tests {
         snapshot = ExpectedCredentialFailure::AnyError
             .verify_open(snapshot.open_credentials(&identity))?;
         assert_eq!(snapshot, sealed);
+        Ok(())
+    }
+    #[test]
+    fn opening_evidence_requires_every_credential_and_never_publishes_plaintext()
+    -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let foreign = DeviceIdentity::generate()?;
+        let original = AuthProvidersSnapshotData {
+            providers: vec![StorageProviderData::github(
+                "one",
+                "GitHub",
+                "credential",
+                "repo",
+                "now",
+            )],
+            active_vault_store_id: crate::ActiveVaultScope::Unselected,
+        };
+        assert_eq!(
+            original.credential_opening_evidence(&identity)?,
+            ProviderCredentialOpening::Unchanged
+        );
+        let sealed = original.sealed_credentials_projection(&identity)?;
+        assert_eq!(
+            sealed.credential_opening_evidence(&identity)?,
+            ProviderCredentialOpening::Opened
+        );
+        assert!(sealed.credential_opening_evidence(&foreign).is_err());
+        assert_eq!(
+            sealed.credential_storage_admission(),
+            ProviderCredentialStorageAdmission::MarkerCompatible
+        );
+        let mut mixed = sealed;
+        mixed.providers.push(StorageProviderData::github(
+            "two",
+            "GitHub",
+            AGE_ARMOR_MARKER,
+            "repo",
+            "now",
+        ));
+        assert!(mixed.credential_opening_evidence(&identity).is_err());
         Ok(())
     }
 }

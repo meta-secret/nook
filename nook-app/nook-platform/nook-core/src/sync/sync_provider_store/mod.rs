@@ -18,6 +18,8 @@ use crate::{
 
 mod active_credentials;
 mod catalog;
+mod wire;
+pub use wire::ProviderWireMigration;
 mod enrollment;
 mod legacy_storage;
 pub use legacy_storage::LegacyAuthProvidersSnapshot;
@@ -32,7 +34,10 @@ pub use active_credentials::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup,
 };
-pub use catalog::{DuplicateProviderSelection, LocalProviderRowRequest};
+pub use catalog::{
+    DuplicateProviderSelection, LocalProviderRowChange, LocalProviderRowOutcome,
+    LocalProviderRowRequest,
+};
 pub use enrollment::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
 pub use oauth::{GoogleOAuthTokenInput, ICloudOAuthTokenInput};
 pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
@@ -282,12 +287,12 @@ pub struct AuthProvidersSnapshot {
 
 pub type AuthProvidersSnapshotData = AuthProvidersSnapshot;
 
-/// Result of [`NormalizedAuthSnapshot::from_wire`].
+/// Owned wire admission with an explicit migration observation.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedAuthSnapshot {
     pub snapshot: AuthProvidersSnapshot,
-    pub changed: bool,
+    pub migration: ProviderWireMigration,
 }
 
 #[cfg(test)]

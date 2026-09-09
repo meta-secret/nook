@@ -64,7 +64,7 @@ impl CheckedOnboardingRecipient<'_> {
         let provider_json = Zeroizing::new(identity.open_utf8(&package.provider_snapshot)?);
         let provider_storage: serde_json::Value = serde_json::from_str(&provider_json)
             .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        let mut provider_snapshot = NormalizedAuthSnapshot::from_wire(&provider_storage).snapshot;
+        let mut provider_snapshot = NormalizedAuthSnapshot::from(provider_storage).snapshot;
         provider_snapshot.validate_onboarding(package.delivery.store_id.as_str())?;
         provider_snapshot.active_vault_store_id =
             ActiveVaultScope::StoreId(package.delivery.store_id.to_string());

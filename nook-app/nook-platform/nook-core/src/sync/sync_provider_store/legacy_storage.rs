@@ -151,7 +151,7 @@ mod tests {
         };
 
         let value = serde_json::to_value(snapshot.legacy_storage_snapshot())?;
-        let round_trip = NormalizedAuthSnapshot::from_wire(&value).snapshot;
+        let round_trip = NormalizedAuthSnapshot::from(value).snapshot;
         assert_eq!(round_trip, snapshot);
         Ok(())
     }

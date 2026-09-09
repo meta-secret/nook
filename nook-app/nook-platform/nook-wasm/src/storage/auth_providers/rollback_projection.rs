@@ -9,23 +9,47 @@ use rexie::TransactionMode;
 
 use super::{NookError, ProviderSnapshotStore, SCHEMA_KEY, STATE_KEY, STORE};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ProviderProjectionRelation {
+    MissingRecord,
+    Equal,
+    Different,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum LegacyProjectionOwnership {
+    Owned,
+    Foreign,
+}
+
+pub(crate) enum ProviderSnapshotObservation {
+    Missing,
+    Present(NormalizedAuthSnapshot),
+}
+impl From<serde_json::Value> for ProviderSnapshotObservation {
+    fn from(raw: serde_json::Value) -> Self {
+        match raw {
+            serde_json::Value::Null => Self::Missing,
+            raw => Self::Present(NormalizedAuthSnapshot::from(raw)),
+        }
+    }
+}
 /// Named values required by AuthProviderDatabase::projections_match.
 pub(crate) struct ProviderDbProjectionsMatch<'a> {
-    pub(crate) scoped: &'a serde_json::Value,
-    pub(crate) legacy: &'a serde_json::Value,
+    pub(crate) scoped: &'a ProviderSnapshotObservation,
+    pub(crate) legacy: &'a ProviderSnapshotObservation,
 }
 
 /// Named values required by AuthProviderDatabase::require_compatible_legacy_snapshot.
 pub(crate) struct ProviderDbRequireCompatibleLegacySnapshot<'a> {
-    pub(crate) scoped: &'a serde_json::Value,
-    pub(crate) legacy: &'a serde_json::Value,
+    pub(crate) scoped: &'a ProviderSnapshotObservation,
+    pub(crate) legacy: &'a ProviderSnapshotObservation,
 }
 
 /// Named values required by AuthProviderDatabase::legacy_snapshot_belongs_to_identity.
 pub(crate) struct ProviderDbLegacySnapshotBelongsToIdentity<'a> {
     pub(crate) identity: &'a DeviceIdentity,
-    pub(crate) scoped: &'a serde_json::Value,
-    pub(crate) legacy: &'a serde_json::Value,
+    pub(crate) scoped: &'a ProviderSnapshotObservation,
+    pub(crate) legacy: &'a ProviderSnapshotObservation,
 }
 
 impl AuthProviderDatabase {
@@ -56,13 +80,23 @@ impl AuthProviderDatabase {
 }
 
 impl AuthProviderDatabase {
-    pub(super) fn projections_match(request: ProviderDbProjectionsMatch<'_>) -> bool {
+    pub(super) fn projections_match(
+        request: ProviderDbProjectionsMatch<'_>,
+    ) -> ProviderProjectionRelation {
         let ProviderDbProjectionsMatch { scoped, legacy } = request;
-        if scoped.is_null() || legacy.is_null() {
-            return false;
+        match (scoped, legacy) {
+            (
+                ProviderSnapshotObservation::Present(scoped),
+                ProviderSnapshotObservation::Present(legacy),
+            ) => {
+                if scoped.snapshot == legacy.snapshot {
+                    ProviderProjectionRelation::Equal
+                } else {
+                    ProviderProjectionRelation::Different
+                }
+            }
+            _ => ProviderProjectionRelation::MissingRecord,
         }
-        NormalizedAuthSnapshot::from_wire(scoped).snapshot
-            == NormalizedAuthSnapshot::from_wire(legacy).snapshot
     }
 }
 
@@ -71,12 +105,8 @@ impl AuthProviderDatabase {
         request: ProviderDbRequireCompatibleLegacySnapshot<'_>,
     ) -> Result<(), NookError> {
         let ProviderDbRequireCompatibleLegacySnapshot { scoped, legacy } = request;
-        if scoped.is_null()
-            || legacy.is_null()
-            || AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch {
-                scoped: scoped,
-                legacy: legacy,
-            })
+        if AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch { scoped, legacy })
+            != ProviderProjectionRelation::Different
         {
             return Ok(());
         }
@@ -90,7 +120,7 @@ impl AuthProviderDatabase {
 impl AuthProviderDatabase {
     pub(super) fn legacy_snapshot_belongs_to_identity(
         request: ProviderDbLegacySnapshotBelongsToIdentity<'_>,
-    ) -> bool {
+    ) -> LegacyProjectionOwnership {
         let ProviderDbLegacySnapshotBelongsToIdentity {
             identity,
             scoped,
@@ -99,17 +129,19 @@ impl AuthProviderDatabase {
         if AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch {
             scoped: scoped,
             legacy: legacy,
-        }) {
-            return true;
+        }) == ProviderProjectionRelation::Equal
+        {
+            return LegacyProjectionOwnership::Owned;
         }
-        if legacy.is_null() {
-            return false;
+        let ProviderSnapshotObservation::Present(legacy) = legacy else {
+            return LegacyProjectionOwnership::Foreign;
+        };
+        match legacy.snapshot.credential_opening_evidence(identity) {
+            Ok(nook_core::ProviderCredentialOpening::Opened) => LegacyProjectionOwnership::Owned,
+            Ok(nook_core::ProviderCredentialOpening::Unchanged) | Err(_) => {
+                LegacyProjectionOwnership::Foreign
+            }
         }
-        let mut snapshot = NormalizedAuthSnapshot::from_wire(legacy).snapshot;
-        let sealed = snapshot.clone();
-        snapshot
-            .open_credentials(identity)
-            .is_ok_and(|opened| opened != sealed)
     }
 }
 
@@ -145,14 +177,20 @@ impl AuthProviderDatabase {
             },
         )
         .await?;
+        let scoped = ProviderSnapshotObservation::from(scoped);
+        let legacy = ProviderSnapshotObservation::from(legacy);
         AuthProviderDatabase::require_compatible_legacy_snapshot(
             ProviderDbRequireCompatibleLegacySnapshot {
                 scoped: &scoped,
                 legacy: &legacy,
             },
         )?;
-        if scoped.is_null() && !legacy.is_null() {
-            let mut snapshot = NormalizedAuthSnapshot::from_wire(&legacy).snapshot;
+        if let (
+            ProviderSnapshotObservation::Missing,
+            ProviderSnapshotObservation::Present(legacy),
+        ) = (scoped, legacy)
+        {
+            let mut snapshot = legacy.snapshot;
             snapshot = snapshot
                 .open_credentials(identity)
                 .map_err(|rejection| rejection.into_cause())?;
@@ -227,23 +265,28 @@ impl AuthProviderDatabase {
             },
         )
         .await?;
+        let scoped = ProviderSnapshotObservation::from(scoped);
+        let legacy = ProviderSnapshotObservation::from(legacy);
         AuthProviderDatabase::require_compatible_legacy_snapshot(
             ProviderDbRequireCompatibleLegacySnapshot {
                 scoped: &scoped,
                 legacy: &legacy,
             },
         )?;
-        if scoped.is_null() {
-            let snapshot = NormalizedAuthSnapshot::from_wire(&legacy).snapshot;
-            if !legacy.is_null()
-                && snapshot.credential_storage_admission()
-                    != ProviderCredentialStorageAdmission::MarkerCompatible
+        if let (
+            ProviderSnapshotObservation::Missing,
+            ProviderSnapshotObservation::Present(legacy),
+        ) = (scoped, legacy)
+        {
+            let snapshot = legacy.snapshot;
+            if snapshot.credential_storage_admission()
+                != ProviderCredentialStorageAdmission::MarkerCompatible
             {
                 return Err(NookError::Decryption(
                     "Legacy auth providers require current identity authorization".to_owned(),
                 ));
             }
-            if !legacy.is_null() {
+            {
                 ProviderSnapshotStore {
                     store: &store,
                     state_key: &state_key,
@@ -270,5 +313,41 @@ impl AuthProviderDatabase {
                 ))
             })
             .map(|_| ())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn missing_records_do_not_prove_rollback_projection_ownership() {
+        let missing = ProviderSnapshotObservation::Missing;
+        let empty = ProviderSnapshotObservation::from(serde_json::json!({ "providers": [] }));
+        assert_eq!(
+            AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch {
+                scoped: &missing,
+                legacy: &empty
+            }),
+            ProviderProjectionRelation::MissingRecord
+        );
+        let tagged_empty = ProviderSnapshotObservation::from(
+            serde_json::json!({ "providers": [], "activeVaultStoreId": { "state": "unselected" } }),
+        );
+        assert_eq!(
+            AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch {
+                scoped: &empty,
+                legacy: &tagged_empty
+            }),
+            ProviderProjectionRelation::Equal
+        );
+        assert!(
+            AuthProviderDatabase::require_compatible_legacy_snapshot(
+                ProviderDbRequireCompatibleLegacySnapshot {
+                    scoped: &missing,
+                    legacy: &empty
+                }
+            )
+            .is_ok()
+        );
     }
 }

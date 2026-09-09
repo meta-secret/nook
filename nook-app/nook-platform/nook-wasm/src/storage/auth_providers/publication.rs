@@ -63,6 +63,8 @@ impl ProviderSnapshotPublication<'_> {
             },
         )
         .await?;
+        let scoped = rollback_projection::ProviderSnapshotObservation::from(scoped);
+        let legacy = rollback_projection::ProviderSnapshotObservation::from(legacy);
         let legacy_belongs_to_identity = AuthProviderDatabase::legacy_snapshot_belongs_to_identity(
             ProviderDbLegacySnapshotBelongsToIdentity {
                 identity: identity,
@@ -70,13 +72,20 @@ impl ProviderSnapshotPublication<'_> {
                 legacy: &legacy,
             },
         );
-        if refresh_legacy && !legacy.is_null() && !legacy_belongs_to_identity {
+        if refresh_legacy
+            && matches!(
+                legacy,
+                rollback_projection::ProviderSnapshotObservation::Present(_)
+            )
+            && legacy_belongs_to_identity == rollback_projection::LegacyProjectionOwnership::Foreign
+        {
             return Err(NookError::Database(
                 "Legacy auth providers belong to another identity; both records were preserved"
                     .to_owned(),
             ));
         }
-        let refresh_legacy = refresh_legacy || legacy_belongs_to_identity;
+        let refresh_legacy = refresh_legacy
+            || legacy_belongs_to_identity == rollback_projection::LegacyProjectionOwnership::Owned;
         Ok(PreparedProviderSnapshotWrite {
             database: rexie,
             transaction,
@@ -143,12 +152,11 @@ impl PresealedProviderSnapshotPublication<'_> {
         } else {
             Value::Null
         };
-        let raw = if legacy.is_null() {
-            scoped
-        } else {
-            legacy.clone()
+        let (raw, legacy_write) = match legacy {
+            Value::Null => (scoped, LegacyProjectionWrite::Preserve),
+            legacy => (legacy, LegacyProjectionWrite::Refresh),
         };
-        let existing = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
+        let existing = NormalizedAuthSnapshot::from(raw).snapshot;
         if existing.credential_storage_admission()
             != ProviderCredentialStorageAdmission::MarkerCompatible
         {
@@ -164,11 +172,7 @@ impl PresealedProviderSnapshotPublication<'_> {
             state_key,
             schema_key,
             snapshot: merged,
-            legacy: if legacy.is_null() {
-                LegacyProjectionWrite::Preserve
-            } else {
-                LegacyProjectionWrite::Refresh
-            },
+            legacy: legacy_write,
             completion: PublicationCompletion::Presealed,
         })
     }
@@ -469,7 +473,7 @@ mod tests {
         let admitted = prepared.snapshot.clone();
         prepared.persist().await?;
         let raw = fixture.scoped().await?;
-        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from(raw).snapshot;
         assert_eq!(stored, admitted);
         let loaded = AuthProviderDatabase::load_auth_providers(&fixture.identity).await?;
         assert_eq!(loaded.snapshot, fixture.snapshot);
@@ -490,7 +494,7 @@ mod tests {
         fixture.import().save().await?;
         let before = fixture.scoped().await?;
         assert_eq!(
-            NormalizedAuthSnapshot::from_wire(&before).snapshot,
+            NormalizedAuthSnapshot::from(before.clone()).snapshot,
             fixture.snapshot
         );
         assert!(
@@ -684,7 +688,7 @@ mod tests {
             &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
         )
         .await?;
-        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from(raw).snapshot;
         let mut provider_ids = stored
             .providers
             .iter()
@@ -749,7 +753,7 @@ mod tests {
         )
         .await?;
         assert_eq!(
-            NormalizedAuthSnapshot::from_wire(&raw).snapshot.providers[0]
+            NormalizedAuthSnapshot::from(raw).snapshot.providers[0]
                 .github_pat
                 .as_deref(),
             Some("github_pat_plaintext")
@@ -808,7 +812,7 @@ mod tests {
             &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
         )
         .await?;
-        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from(raw).snapshot;
         assert_eq!(stored.providers.len(), 1);
         assert_eq!(stored.providers[0].id, "gh-retained");
         assert_eq!(

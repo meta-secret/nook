@@ -268,8 +268,8 @@ pub use session::{
     ReplaceSecretInput, VerifiedAuthenticatorReplacementInput,
 };
 pub use sync_provider_credentials::{
-    AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialRejection,
-    ProviderCredentialStorageAdmission,
+    AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialOpening,
+    ProviderCredentialRejection, ProviderCredentialStorageAdmission,
 };
 pub use sync_provider_store::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
@@ -277,11 +277,12 @@ pub use sync_provider_store::{
     ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection,
     DuplicateProviderSelection, DuplicateSyncProvider, GoogleOAuthTokenInput,
     ICloudOAuthTokenInput, LegacyAuthProvidersSnapshot, LocalFolderConfigData,
-    LocalProviderRowRequest, ManagerStoreScopeRef, NormalizedAuthSnapshot, OAuthAccessToken,
-    OAuthAccessTokenRef, OAuthFileConfigData, ProviderEnrollmentRequest, ProviderEventFlushTarget,
-    ProviderLabelLabels, ProviderRows, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup,
-    ProviderSelectionRequest, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
-    ProviderSyncRevision, ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope,
+    LocalProviderRowChange, LocalProviderRowOutcome, LocalProviderRowRequest, ManagerStoreScopeRef,
+    NormalizedAuthSnapshot, OAuthAccessToken, OAuthAccessTokenRef, OAuthFileConfigData,
+    ProviderEnrollmentRequest, ProviderEventFlushTarget, ProviderLabelLabels, ProviderRows,
+    ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup, ProviderSelectionRequest,
+    ProviderStorageDetailLabels, ProviderSyncCheckpoint, ProviderSyncRevision,
+    ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope, ProviderWireMigration,
     RemoteEventFlushProviderRequest, SharedGrantProviderSelection, StagedRemoteConnection,
     StorageConnectArgs, StorageProviderData, StoredGithubPat, StoredGithubRepository,
     StoredGoogleDriveFolder, StoredICloudShareTarget, StoredLocalFolderConfiguration,
