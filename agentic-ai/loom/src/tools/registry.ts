@@ -1,3 +1,7 @@
+import {
+  PullRequestValidationCommand,
+  type PrLandFailure,
+} from '../commands/pr-land.ts';
 import type { SkillScaffoldFailure } from '../commands/skill-scaffold.ts';
 import type { CortexSessionFailure } from '../commands/cortex-session-clean.ts';
 import { ok, type Result } from 'neverthrow';
@@ -240,7 +244,10 @@ export class LoomRequestCatalog {
   ): Promise<
     Result<
       LoomCommandResult,
-      CortexAuditFailure | CortexSessionFailure | SkillScaffoldFailure
+      | CortexAuditFailure
+      | CortexSessionFailure
+      | SkillScaffoldFailure
+      | PrLandFailure
     >
   > {
     switch (request.family) {
@@ -283,25 +290,25 @@ export class LoomRequestCatalog {
       case RequestFamily.PrLand: {
         switch (request.operation) {
           case PrLandOperation.Status:
-            return ok(
-              await PullRequestDeliveryCommand.runPrLandStatus(request.status),
-            );
+            return new PullRequestDeliveryCommand({
+              repoRoot: RepositoryRoot.find(),
+              prNumber: request.status.prNumber,
+            }).status();
           case PrLandOperation.Validate:
-            return ok(
-              await PullRequestDeliveryCommand.runPrLandValidate(
-                request.validate,
-              ),
-            );
+            return new PullRequestValidationCommand({
+              repoRoot: RepositoryRoot.find(),
+              request: request.validate,
+            }).execute();
           case PrLandOperation.Ready:
-            return ok(
-              await PullRequestDeliveryCommand.runPrLandReady(request.ready),
-            );
+            return new PullRequestDeliveryCommand({
+              repoRoot: RepositoryRoot.find(),
+              prNumber: request.ready.prNumber,
+            }).readiness();
           case PrLandOperation.MergeCheck:
-            return ok(
-              await PullRequestDeliveryCommand.runPrLandMergeCheck(
-                request.mergeCheck,
-              ),
-            );
+            return new PullRequestDeliveryCommand({
+              repoRoot: RepositoryRoot.find(),
+              prNumber: request.mergeCheck.prNumber,
+            }).mergeReadiness();
         }
         break;
       }
