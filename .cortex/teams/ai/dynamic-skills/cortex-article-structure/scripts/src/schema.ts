@@ -40,7 +40,8 @@ export const CORTEX_ARTICLE_HEADING_SCHEMA = z.strictObject({
 
 export const CORTEX_ARTICLE_SIMPLE_KIND_SCHEMA = z
   .enum(CortexArticleSemanticKind)
-  .exclude([CortexArticleSemanticKind.Heading]);
+  // Zod enum exclusions use declaration keys, not their serialized values.
+  .exclude(['Heading']);
 
 export const CORTEX_ARTICLE_SIMPLE_BLOCK_SCHEMA = z.strictObject({
   kind: CORTEX_ARTICLE_SIMPLE_KIND_SCHEMA,
