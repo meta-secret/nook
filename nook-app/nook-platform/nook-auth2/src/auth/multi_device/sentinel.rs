@@ -59,7 +59,7 @@ pub struct OpenedSentinelShare {
     pub device_id: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
 #[serde(try_from = "u32")]
 pub struct SentinelShareVersion(u32);
 

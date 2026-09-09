@@ -1,14 +1,9 @@
 use super::{wasm_bindgen, window};
-use nook_core::AppLocale;
 use nook_core::{ClientRunMode, RuntimeConfigValue, VaultRuntimePolicy};
 use wasm_bindgen::JsError;
 
-#[wasm_bindgen(typescript_custom_section)]
-const WEB_TYPES: &'static str = r#"
-export type NookAppLocale = 'en' | 'ru';
-export type StoreId = string;
-export type PasswordEntryId = string;
-"#;
+#[tsify::declare]
+pub type NookAppLocale = nook_core::SupportedAppLocale;
 
 impl NookBrowserLocale {
     fn browser_language_tags() -> Vec<String> {
@@ -64,9 +59,8 @@ impl NookBrowserLocale {
 
     #[wasm_bindgen]
     #[must_use]
-    pub fn app_locale(&self) -> String {
-        AppLocale::resolve_app_locale_from_tags(self.language_tags.iter().map(String::as_str))
-            .to_owned()
+    pub fn app_locale(&self) -> NookAppLocale {
+        nook_core::SupportedAppLocale::resolve(self.language_tags.iter().map(String::as_str))
     }
 }
 
@@ -110,44 +104,8 @@ impl NookClientRunModeUtil {
     }
 }
 
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct NookStorageConnectArgs {
-    mode: String,
-    pat: String,
-    repo: String,
-}
-
-impl From<nook_core::StorageConnectArgs> for NookStorageConnectArgs {
-    fn from(args: nook_core::StorageConnectArgs) -> Self {
-        Self {
-            mode: args.mode,
-            pat: args.pat,
-            repo: args.repo,
-        }
-    }
-}
-
-#[wasm_bindgen]
-impl NookStorageConnectArgs {
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn mode(&self) -> String {
-        self.mode.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn pat(&self) -> String {
-        self.pat.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn repo(&self) -> String {
-        self.repo.clone()
-    }
-}
+#[tsify::declare]
+pub type NookStorageConnectArgs = nook_core::StorageConnectArgs;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -342,7 +300,7 @@ mod tests {
     fn locale_run_modes_and_storage_wrappers_project_successful_values() {
         let locale = NookBrowserLocale::from_tags(vec!["ru-RU".to_owned(), "en-US".to_owned()]);
         assert_eq!(locale.language_tags(), vec!["ru-RU", "en-US"]);
-        assert_eq!(locale.app_locale(), "ru");
+        assert_eq!(locale.app_locale().code(), "ru");
 
         assert_eq!(
             NookClientRunModeUtil::parse("local").expect("local mode"),
@@ -358,9 +316,9 @@ mod tests {
         );
 
         let args = NookStorageConnectArgs::from(nook_core::StorageConnectArgs::local());
-        assert_eq!(args.mode(), "local");
-        assert_eq!(args.pat(), "");
-        assert_eq!(args.repo(), "");
+        assert_eq!(args.mode, "local");
+        assert_eq!(args.pat, "");
+        assert_eq!(args.repo, "");
 
         let folder = NookGoogleDriveFolder::new("folder-1".to_owned(), "Vault".to_owned());
         assert_eq!(folder.id(), "folder-1");
@@ -414,7 +372,7 @@ mod browser_tests {
     fn runtime_adapters_project_all_modes_and_overrides_in_wasm() {
         let locale = NookBrowserLocale::from_tags(vec!["de-DE".into(), "ru-RU".into()]);
         assert_eq!(locale.language_tags(), vec!["de-DE", "ru-RU"]);
-        assert_eq!(locale.app_locale(), "ru");
+        assert_eq!(locale.app_locale().code(), "ru");
 
         for (raw, expected) in [
             ("local", NookClientRunMode::Local),
@@ -430,9 +388,9 @@ mod browser_tests {
             pat: "pat".into(),
             repo: "owner/repo".into(),
         });
-        assert_eq!(args.mode(), "github");
-        assert_eq!(args.pat(), "pat");
-        assert_eq!(args.repo(), "owner/repo");
+        assert_eq!(args.mode, "github");
+        assert_eq!(args.pat, "pat");
+        assert_eq!(args.repo, "owner/repo");
 
         let folder = NookGoogleDriveFolder::new("folder".into(), "Vault".into());
         assert_eq!(folder.id(), "folder");

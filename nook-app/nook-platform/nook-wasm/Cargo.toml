@@ -10,6 +10,7 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+tsify = { version = "0.5.6", default-features = false, features = ["js"] }
 nook-companion-core = { path = "../nook-companion-core" }
 nook-core = { path = "../nook-core" }
 nook-auth2 = { path = "../nook-auth2" }

@@ -1865,6 +1865,8 @@ version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1892,6 +1894,7 @@ dependencies = [
  "tracing",
  "wasm-bindgen",
  "zeroize",
+ "tsify",
 ]
 
 [[package]]
@@ -1901,6 +1904,8 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1996,6 +2001,8 @@ dependencies = [
  "serde_yaml",
  "sha2 0.11.0",
  "thiserror 2.0.20",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2042,6 +2049,7 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "zeroize",
+ "tsify",
 ]
 
 [[package]]

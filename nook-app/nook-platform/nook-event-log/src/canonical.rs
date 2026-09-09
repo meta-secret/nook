@@ -22,7 +22,8 @@ const SHA256_BASE64URL_LEN: usize = 43;
 const SHA256_BYTES_LEN: usize = 32;
 
 /// Content-addressed event identifier (`sha256u:{base64url_no_pad}`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct EventId(String);
 
@@ -131,7 +132,8 @@ impl TryFrom<String> for EventId {
 }
 
 /// Ed25519 signature string (`ed25519:{hex}`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct Ed25519Signature(String);
 

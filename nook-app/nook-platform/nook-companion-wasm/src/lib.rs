@@ -58,10 +58,6 @@ pub use grant_authority::*;
 pub use page_form_policy::*;
 pub use response_decoding::*;
 
-#[wasm_bindgen(typescript_custom_section)]
-const EXTENSION_VAULT_EVENT_TYPESCRIPT: &str =
-    nook_companion_core::EXTENSION_VAULT_EVENT_TYPESCRIPT;
-
 #[wasm_bindgen]
 #[must_use]
 pub fn page_has_backup_code_hint(text: &str) -> bool {

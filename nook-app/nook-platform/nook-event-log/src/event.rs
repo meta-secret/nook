@@ -19,7 +19,9 @@ use serde_json::Value;
 use serde_json::json;
 
 /// Supported `schema_version` values on the event wire.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
+)]
 #[serde(transparent)]
 pub struct VaultEventSchemaVersion(u32);
 
@@ -47,7 +49,7 @@ impl fmt::Display for VaultEventSchemaVersion {
 }
 
 /// Encrypted secret payload embedded in an event operation.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 pub struct EncryptedSecretPayload {
     pub id: SecretId,
     #[serde(rename = "type")]
@@ -86,7 +88,7 @@ impl EncryptedSecretPayload {
 }
 
 /// One sentinel share encrypted to a participant device, recorded in the event log.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(rename_all = "snake_case")]
 pub struct SentinelShareIssuedPayload {
     pub device_id: DeviceId,
@@ -174,7 +176,7 @@ impl EpochPasswordState {
 }
 
 /// Atomic domain operations recorded in the immutable event log.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum VaultOperation {
     VaultImported {
@@ -262,12 +264,16 @@ pub enum VaultOperation {
             skip_serializing_if = "EpochMetadataState::is_legacy_retain",
             serialize_with = "EpochMetadataState::serialize_epoch_metadata_state"
         )]
+        // This custom serde field emits Replace records as an array and omits LegacyRetain.
+        #[tsify(type = "StoredSecretRecord[]", optional)]
         rotated_meta_records: EpochMetadataState,
         #[serde(
             default,
             skip_serializing_if = "EpochPasswordState::is_legacy_retain",
             serialize_with = "EpochPasswordState::serialize_epoch_password_state"
         )]
+        // The custom serializer likewise preserves the legacy omitted/explicit-array distinction.
+        #[tsify(type = "PasswordUnlockEntry[]", optional)]
         password_entries: EpochPasswordState,
     },
 }
@@ -292,7 +298,7 @@ impl VaultOperation {
 }
 
 /// Signed event body (everything except the signature field).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(rename_all = "snake_case")]
 pub struct VaultEventBody {
     pub schema_version: VaultEventSchemaVersion,
@@ -325,7 +331,7 @@ impl VaultEventBody {
 }
 
 /// Full signed vault event.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(rename_all = "snake_case")]
 pub struct VaultEvent {
     #[serde(flatten)]

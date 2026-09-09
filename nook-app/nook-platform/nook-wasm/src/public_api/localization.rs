@@ -131,17 +131,17 @@ pub fn resolve_app_locale_from_tag(tag: &str) -> NookAppLocaleParse {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> String {
-    AppLocale::resolve_app_locale_from_tags(tags.iter().map(String::as_str)).to_owned()
+pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> crate::types::NookAppLocale {
+    nook_core::SupportedAppLocale::resolve(tags.iter().map(String::as_str))
 }
 
 #[wasm_bindgen]
 pub fn supported_app_locale_code(
     locale: NookAppLocaleParse,
-) -> Result<String, wasm_bindgen::JsError> {
+) -> Result<crate::types::NookAppLocale, wasm_bindgen::JsError> {
     match locale {
-        NookAppLocaleParse::English => Ok("en".to_owned()),
-        NookAppLocaleParse::Russian => Ok("ru".to_owned()),
+        NookAppLocaleParse::English => Ok(nook_core::SupportedAppLocale::English),
+        NookAppLocaleParse::Russian => Ok(nook_core::SupportedAppLocale::Russian),
         NookAppLocaleParse::Unsupported => Err(JsError::new(
             "unsupported locale does not have an application locale code",
         )),
@@ -255,15 +255,19 @@ mod tests {
             NookAppLocaleParse::Russian
         );
         assert_eq!(
-            resolve_app_locale_from_tags(vec!["xx".into(), "ru".into()]),
+            resolve_app_locale_from_tags(vec!["xx".into(), "ru".into()]).code(),
             "ru"
         );
         assert_eq!(
-            supported_app_locale_code(NookAppLocaleParse::English).unwrap(),
+            supported_app_locale_code(NookAppLocaleParse::English)
+                .unwrap()
+                .code(),
             "en"
         );
         assert_eq!(
-            supported_app_locale_code(NookAppLocaleParse::Russian).unwrap(),
+            supported_app_locale_code(NookAppLocaleParse::Russian)
+                .unwrap()
+                .code(),
             "ru"
         );
         assert!(supported_app_locale_code(NookAppLocaleParse::Unsupported).is_err());

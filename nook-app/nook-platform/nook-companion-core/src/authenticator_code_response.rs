@@ -20,7 +20,7 @@ const MAX_SAFE_JAVASCRIPT_INTEGER: f64 = 9_007_199_254_740_991.0;
 pub struct AuthenticatorCodeExpiryEpochMilliseconds(f64);
 
 impl AuthenticatorCodeExpiryEpochMilliseconds {
-    fn is_valid(self) -> bool {
+    pub(crate) fn is_valid(self) -> bool {
         self.0.is_finite()
             && self.0 > 0.0
             && self.0.fract() == 0.0

@@ -7,7 +7,8 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 /// Bare SHA-256 hex digest (64 chars).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct Sha256Hex(String);
 
@@ -126,7 +127,10 @@ impl TryFrom<String> for IdentityVaultEventId {
 }
 
 /// Ed25519 verifying-key state used by persisted membership and event records.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify,
+)]
+#[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub enum DeviceSigningPublicKey {
     #[default]
@@ -203,7 +207,8 @@ impl TryFrom<String> for DeviceSigningPublicKey {
 }
 
 /// RFC 3339 timestamp string (`created_at`, `enrolled_at`, `requested_at`, ...).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct IsoTimestamp(String);
 

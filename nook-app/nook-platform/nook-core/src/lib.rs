@@ -115,8 +115,8 @@ pub use import_support::{SecretImportSourceRecordCount, SecretImportUnsupportedR
 pub use keepassxc_import::{KeePassXcCsvInput, KeePassXcImportError, KeePassXcImportPlan};
 pub use keeper_import::{KeeperCsvInput, KeeperImportError, KeeperImportPlan};
 pub use lastpass_import::{LastPassCsvInput, LastPassImportError, LastPassImportPlan};
-pub use nook_app_common::AppLocale;
 pub use nook_app_common::i18n_keys;
+pub use nook_app_common::{AppLocale, SupportedAppLocale};
 pub use nook_auth2::{
     ContextBoundSentinelUnlock, LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring,
     LocalIdentityKeyringEntry, SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness,
@@ -264,15 +264,15 @@ pub use sync_provider_store::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup, ActiveVaultProviderRows,
     ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection,
-    DuplicateProviderSelection, GoogleOAuthTokenInput, ICloudOAuthTokenInput,
-    LegacyAuthProvidersSnapshot, LocalFolderConfigData, LocalProviderRowRequest,
-    ManagerStoreScopeRef, NormalizedAuthSnapshot, OAuthAccessTokenRef, OAuthFileConfigData,
-    ProviderEnrollmentRequest, ProviderLabelLabels, ProviderRows, ProviderSaveOutcome,
-    ProviderSaveRequest, ProviderSaveSetup, ProviderSelectionRequest, ProviderStorageDetailLabels,
-    ProviderSyncCheckpoint, ProviderSyncRevision, ProviderSyncRevisionRef,
-    ProviderSyncedVaultVersion, ProviderVaultScope, SharedGrantProviderSelection,
-    StagedRemoteConnection, StorageConnectArgs, StorageProviderData, StoredGithubPat,
-    StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
+    DuplicateProviderSelection, DuplicateSyncProvider, GoogleOAuthTokenInput,
+    ICloudOAuthTokenInput, LegacyAuthProvidersSnapshot, LocalFolderConfigData,
+    LocalProviderRowRequest, ManagerStoreScopeRef, NormalizedAuthSnapshot, OAuthAccessToken,
+    OAuthAccessTokenRef, OAuthFileConfigData, ProviderEnrollmentRequest, ProviderLabelLabels,
+    ProviderRows, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup,
+    ProviderSelectionRequest, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
+    ProviderSyncRevision, ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope,
+    SharedGrantProviderSelection, StagedRemoteConnection, StorageConnectArgs, StorageProviderData,
+    StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
     StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
     StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
     StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,

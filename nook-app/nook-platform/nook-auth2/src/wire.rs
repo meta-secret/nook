@@ -52,7 +52,8 @@ impl serde::Serialize for SymmetricKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct AgeArmoredCiphertext(String);
 
@@ -91,7 +92,8 @@ impl serde::Serialize for AgeArmoredCiphertext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct DevicePublicKey(String);
 
@@ -130,7 +132,8 @@ impl serde::Serialize for DevicePublicKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(from = "String")]
 pub struct MemberLabel(String);
 
@@ -169,7 +172,8 @@ impl serde::Serialize for MemberLabel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct PasswordEntryId(String);
 
@@ -208,7 +212,8 @@ impl serde::Serialize for PasswordEntryId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(from = "String")]
 pub struct OpaqueCiphertext(String);
 

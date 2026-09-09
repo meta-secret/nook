@@ -12,7 +12,7 @@ use std::fmt;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(rename_all = "kebab-case")]
 pub enum SecretType {
     Login,
@@ -58,7 +58,8 @@ impl SecretType {
 }
 
 /// Opaque on-disk payload — user secrets are age-armored YAML; auth/join/member rows use JSON or nested armor.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(transparent)]
 pub struct StoredRecordPayload(String);
 
@@ -97,7 +98,7 @@ impl AsRef<str> for StoredRecordPayload {
 }
 
 /// One record on disk — label is plaintext, `value` is an opaque encrypted or JSON payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 pub struct StoredSecretRecord {
     #[serde(rename = "id")]
     pub key: SecretId,

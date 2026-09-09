@@ -7,7 +7,10 @@ const SECRET_VERSION_FINGERPRINT_SCHEME: &str = "hmac-sha256:v2:";
 /// The HMAC computation remains in `nook-core`, where plaintext secret domain
 /// values live. The event log owns the serialized opaque value because it is
 /// part of the immutable event schema.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
+)]
+#[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct SecretFingerprint(String);
 

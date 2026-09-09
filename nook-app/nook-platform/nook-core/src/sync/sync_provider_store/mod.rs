@@ -113,6 +113,41 @@ impl From<OAuthFileConfigWire> for OAuthFileConfig {
 
 pub type OAuthFileConfigData = OAuthFileConfig;
 
+/// Owned credential snapshot returned to the browser for immediate use.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi)]
+pub enum OAuthAccessToken {
+    Missing,
+    Available { token: String },
+}
+impl From<OAuthAccessTokenRef<'_>> for OAuthAccessToken {
+    fn from(value: OAuthAccessTokenRef<'_>) -> Self {
+        match value {
+            OAuthAccessTokenRef::Missing => Self::Missing,
+            OAuthAccessTokenRef::Available(token) => Self::Available {
+                token: token.to_owned(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi)]
+pub enum DuplicateSyncProvider {
+    Unique,
+    Duplicate { provider: StorageProvider },
+}
+impl From<Option<StorageProvider>> for DuplicateSyncProvider {
+    fn from(provider: Option<StorageProvider>) -> Self {
+        match provider {
+            Some(provider) => Self::Duplicate { provider },
+            None => Self::Unique,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OAuthAccessTokenRef<'a> {
     Missing,

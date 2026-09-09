@@ -5,19 +5,11 @@ use super::NookVaultManager;
 use crate::NookReplacementConflict;
 use crate::NookSecurityConflict;
 use crate::types;
+#[cfg(test)]
 use serde::Serialize;
-use serde_wasm_bindgen::Serializer;
-use wasm_bindgen::{JsCast, JsError, prelude::wasm_bindgen};
-
-impl NookVaultManager {
-    fn serialize_js_array<T: Serialize>(
-        value: &T,
-    ) -> Result<js_sys::Array, serde_wasm_bindgen::Error> {
-        Ok(value
-            .serialize(&Serializer::new().serialize_maps_as_objects(true))?
-            .unchecked_into())
-    }
-}
+#[cfg(test)]
+use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
 pub struct NookEventLogStorageRecord(EventLogStorageRecord);
@@ -28,9 +20,8 @@ pub struct NookEventLogRecords(Vec<EventLogStorageRecord>);
 #[wasm_bindgen]
 impl NookEventLogRecords {
     #[wasm_bindgen]
-    pub fn to_array(&self) -> Result<js_sys::Array, JsError> {
-        NookVaultManager::serialize_js_array(&self.0)
-            .map_err(|error| JsError::new(&error.to_string()))
+    pub fn to_array(&self) -> Vec<EventLogStorageRecord> {
+        self.0.clone()
     }
 }
 
@@ -40,12 +31,8 @@ pub struct NookExternalEventLogRecords(pub(in crate::manager) Vec<ExternalEventL
 #[wasm_bindgen]
 impl NookExternalEventLogRecords {
     #[wasm_bindgen]
-    pub fn from_array(records: &js_sys::Array) -> Result<Self, JsError> {
-        let records = records
-            .iter()
-            .map(serde_wasm_bindgen::from_value)
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self(records))
+    pub fn from_array(records: Vec<ExternalEventLogRecord>) -> Self {
+        Self(records)
     }
 }
 
@@ -244,7 +231,7 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn event_log_export_serializes_flattened_signed_events_as_plain_objects()
     -> Result<(), wasm_bindgen::JsError> {
-        let value = NookVaultManager::serialize_js_array(&vec![ExportedRecord {
+        let value = serde_wasm_bindgen::to_value(&vec![ExportedRecord {
             event_id: "event-1".to_owned(),
             event: SignedEvent {
                 body: SignedEventBody { schema_version: 1 },
@@ -252,6 +239,7 @@ mod wasm_tests {
             },
         }])
         .map_err(|error| JsError::new(&error.to_string()))?;
+        let value: Array = value.unchecked_into();
         let record: js_sys::Object = value.get(0).unchecked_into();
         let event = get(&record, "event")?;
 
@@ -268,7 +256,7 @@ mod wasm_tests {
             path: "events/fixture.yaml".to_owned(),
             event: event.clone(),
         }]);
-        let array = records.to_array()?;
+        let array: Array = serde_wasm_bindgen::to_value(&records.to_array())?.unchecked_into();
         assert_eq!(array.length(), 1);
         let record: Object = array.get(0).unchecked_into();
         assert_eq!(get_string(&record, "eventId")?, event_id);
@@ -305,7 +293,9 @@ mod wasm_tests {
             .map_err(|_| JsError::new("failed to set event"))?;
         let valid_records = Array::new();
         valid_records.push(&valid);
-        assert!(NookExternalEventLogRecords::from_array(&valid_records).is_ok());
+        let admitted: Vec<ExternalEventLogRecord> =
+            serde_wasm_bindgen::from_value(valid_records.into())?;
+        let _records = NookExternalEventLogRecords::from_array(admitted);
 
         let malformed = Object::new();
         Reflect::set(
@@ -316,7 +306,10 @@ mod wasm_tests {
         .map_err(|_| JsError::new("failed to set malformed event id"))?;
         let malformed_records = Array::new();
         malformed_records.push(&malformed);
-        assert!(NookExternalEventLogRecords::from_array(&malformed_records).is_err());
+        assert!(
+            serde_wasm_bindgen::from_value::<Vec<ExternalEventLogRecord>>(malformed_records.into())
+                .is_err()
+        );
         Ok(())
     }
 
@@ -342,7 +335,7 @@ mod wasm_tests {
     async fn empty_manager_exports_no_event_log_records() -> Result<(), JsError> {
         let manager = NookVaultManager::new();
         let records = manager.export_event_log_records_js().await?;
-        assert_eq!(records.to_array()?.length(), 0);
+        assert_eq!(records.to_array().len(), 0);
         assert!(!manager.event_log_mode());
         Ok(())
     }
@@ -354,7 +347,7 @@ mod wasm_tests {
         let synced = manager
             .sync_external_event_log_records_js(NookExternalEventLogRecords(Vec::new()))
             .await?;
-        assert_eq!(synced.to_array()?.length(), 0);
+        assert_eq!(synced.to_array().len(), 0);
         assert!(
             manager
                 .import_extension_event_log_records_js(

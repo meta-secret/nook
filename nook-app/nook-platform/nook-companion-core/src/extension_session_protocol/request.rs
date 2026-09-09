@@ -79,15 +79,15 @@ impl Drop for SessionSecretBytes {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
-pub struct SerializedStorageProvider {
+pub struct ExtensionStorageProviderIdentity {
     id: String,
     #[serde(rename = "type")]
-    provider_type: SerializedStorageProviderType,
+    provider_type: ExtensionStorageProviderType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-pub enum SerializedStorageProviderType {
+pub enum ExtensionStorageProviderType {
     Local,
     LocalFolder,
     Github,
@@ -169,7 +169,7 @@ pub struct ImportVaultPayload {
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
-    providers: Vec<SerializedStorageProvider>,
+    providers: Vec<ExtensionStorageProviderIdentity>,
     event_log_records: Vec<ExtensionEventLogRecord>,
     queue: QueueDisposition,
 }

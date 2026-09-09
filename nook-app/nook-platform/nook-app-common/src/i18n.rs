@@ -11,6 +11,41 @@ pub enum AppLocale {
     Unsupported,
 }
 
+/// Locale that can be selected and persisted by the application.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum SupportedAppLocale {
+    #[serde(rename = "en")]
+    English,
+    #[serde(rename = "ru")]
+    Russian,
+}
+impl SupportedAppLocale {
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::English => "en",
+            Self::Russian => "ru",
+        }
+    }
+    pub fn resolve<'a>(tags: impl IntoIterator<Item = &'a str>) -> Self {
+        tags.into_iter()
+            .find_map(|tag| Self::try_from(AppLocale::resolve_app_locale_from_tag(tag)).ok())
+            .unwrap_or(Self::English)
+    }
+}
+impl TryFrom<AppLocale> for SupportedAppLocale {
+    type Error = &'static str;
+    fn try_from(locale: AppLocale) -> Result<Self, Self::Error> {
+        match locale {
+            AppLocale::English => Ok(Self::English),
+            AppLocale::Russian => Ok(Self::Russian),
+            AppLocale::Unsupported => {
+                Err("unsupported locale does not have an application locale code")
+            }
+        }
+    }
+}
+
 /// Parsed translation data; raw JSON is decoded once at the catalog boundary.
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
@@ -169,13 +204,7 @@ impl AppLocale {
     pub fn resolve_app_locale_from_tags<'a>(
         tags: impl IntoIterator<Item = &'a str>,
     ) -> &'static str {
-        for tag in tags {
-            let locale = AppLocale::resolve_app_locale_from_tag(tag);
-            if locale.is_supported() {
-                return locale.code();
-            }
-        }
-        AppLocale::English.code()
+        SupportedAppLocale::resolve(tags).code()
     }
 }
 

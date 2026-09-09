@@ -93,7 +93,7 @@ impl From<EnrollmentKeyDerivationIterations> for u32 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
 #[serde(transparent)]
 pub struct PasswordWorkFactor(pub(crate) u8);
 impl From<u8> for PasswordWorkFactor {
@@ -107,7 +107,7 @@ impl From<PasswordWorkFactor> for u8 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
 #[serde(transparent)]
 pub struct SentinelParticipantCount(pub(crate) u8);
 impl From<u8> for SentinelParticipantCount {
@@ -164,7 +164,9 @@ impl Display for SentinelShareCount {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, tsify::Tsify,
+)]
 #[serde(transparent)]
 pub struct SentinelShareIndex(pub(crate) u8);
 impl From<u8> for SentinelShareIndex {
@@ -178,7 +180,7 @@ impl From<SentinelShareIndex> for u8 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
 #[serde(transparent)]
 pub struct SentinelThreshold(pub(crate) u8);
 impl From<u8> for SentinelThreshold {

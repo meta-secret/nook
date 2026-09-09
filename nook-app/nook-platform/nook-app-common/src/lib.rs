@@ -18,7 +18,7 @@ mod generated;
 mod i18n;
 
 pub use generated::i18n_keys;
-pub use i18n::AppLocale;
+pub use i18n::{AppLocale, SupportedAppLocale};
 
 pub use i18n::{
     LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,

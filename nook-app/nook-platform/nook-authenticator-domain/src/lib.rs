@@ -65,7 +65,7 @@ impl BackupCodeAttachMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum TotpAlgorithm {
     #[default]
@@ -96,7 +96,8 @@ impl TotpAlgorithm {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, tsify::Tsify)]
+#[tsify(type = "number")]
 #[serde(try_from = "u32")]
 pub enum TotpDigits {
     #[default]
@@ -148,7 +149,7 @@ impl TryFrom<u32> for TotpDigits {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Deserialize, tsify::Tsify)]
 #[serde(try_from = "u64")]
 pub struct TotpPeriod(u64);
 

@@ -78,7 +78,7 @@ impl PasswordPolicy {
 
 /// A labelled password unlock slot. Each entry wraps the same vault keys with
 /// a distinct password so devices (or people) can maintain separate credentials.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 pub struct PasswordUnlockEntry {
     pub id: String,
     pub label: String,
@@ -88,7 +88,7 @@ pub struct PasswordUnlockEntry {
 
 /// On-disk password envelope. Salt + KDF params are embedded in the age
 /// header; the `kdf` / `work_factor` fields are redundant hints for tooling.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 pub struct PasswordEnvelope {
     pub version: PasswordEnvelopeVersion,
     pub kdf: String,
@@ -101,7 +101,7 @@ pub struct PasswordEnvelope {
 }
 
 /// Supported persisted password-envelope wire versions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
 #[serde(try_from = "u32")]
 pub struct PasswordEnvelopeVersion(u32);
 

@@ -316,36 +316,6 @@ pub async fn reconcile_extension_pairing_state(
     Ok(())
 }
 
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookDuplicateSyncProviderState {
-    Unique,
-    Duplicate,
-}
-
-#[wasm_bindgen]
-pub struct NookDuplicateSyncProvider(Option<nook_core::StorageProviderData>);
-
-#[wasm_bindgen]
-impl NookDuplicateSyncProvider {
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn state(&self) -> NookDuplicateSyncProviderState {
-        if self.0.is_some() {
-            NookDuplicateSyncProviderState::Duplicate
-        } else {
-            NookDuplicateSyncProviderState::Unique
-        }
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn provider(&self) -> Result<nook_core::StorageProviderData, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("sync provider target does not have a duplicate"))
-    }
-}
-
 /// Find an existing provider whose sync target matches `candidate`.
 #[wasm_bindgen]
 #[must_use]
@@ -353,8 +323,8 @@ impl NookDuplicateSyncProvider {
 pub fn find_duplicate_sync_provider(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
-) -> NookDuplicateSyncProvider {
-    NookDuplicateSyncProvider(
+) -> nook_core::DuplicateSyncProvider {
+    nook_core::DuplicateSyncProvider::from(
         DuplicateProviderSelection {
             providers: &snapshot.providers,
             candidate: &candidate,
@@ -372,8 +342,8 @@ pub fn find_duplicate_sync_provider_excluding(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
     exclude_id: &str,
-) -> NookDuplicateSyncProvider {
-    NookDuplicateSyncProvider(
+) -> nook_core::DuplicateSyncProvider {
+    nook_core::DuplicateSyncProvider::from(
         DuplicateProviderSelection {
             providers: &snapshot.providers,
             candidate: &candidate,
@@ -559,13 +529,13 @@ mod projection_tests {
         };
 
         let duplicate = find_duplicate_sync_provider(snapshot.clone(), provider.clone());
-        assert_eq!(duplicate.state(), NookDuplicateSyncProviderState::Duplicate);
-        assert_eq!(duplicate.provider().unwrap().id, "provider-1");
+        assert!(
+            matches!(duplicate, nook_core::DuplicateSyncProvider::Duplicate { provider } if provider.id == "provider-1")
+        );
 
         let unique =
             find_duplicate_sync_provider_excluding(snapshot, provider.clone(), "provider-1");
-        assert_eq!(unique.state(), NookDuplicateSyncProviderState::Unique);
-        assert!(unique.provider().is_err());
+        assert_eq!(unique, nook_core::DuplicateSyncProvider::Unique);
 
         let empty = NookActiveVaultSelection(None);
         assert_eq!(empty.state(), NookActiveVaultSelectionState::NotSelected);

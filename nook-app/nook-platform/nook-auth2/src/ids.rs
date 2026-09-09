@@ -64,11 +64,15 @@ impl AsRef<str> for CompactToken {
 /// Short app-key fingerprint (16 hex chars — first 8 bytes of SHA256).
 ///
 /// Historical name was `DeviceId`. New code must use [`AppId`].
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
+)]
+#[tsify(type = "string")]
 #[serde(transparent)]
 pub struct AppId(String);
 
 /// Migration alias for [`AppId`].
+#[tsify::declare]
 pub type DeviceId = AppId;
 
 impl AppId {
@@ -114,7 +118,10 @@ impl AsRef<str> for AppId {
 }
 
 /// Vault store identifier (`store_{compact_token}`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
+)]
+#[tsify(type = "string")]
 #[serde(transparent)]
 pub struct StoreId(String);
 
@@ -173,7 +180,10 @@ impl AsRef<str> for StoreId {
 }
 
 /// On-disk secret label — prefixed compact id or legacy human label (e.g. `github.com`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
+)]
+#[tsify(type = "string")]
 #[serde(transparent)]
 pub struct SecretId(String);
 
@@ -237,7 +247,10 @@ impl AsRef<str> for SecretId {
 }
 
 /// Device auth key identifier (`key_{sha256_hex}`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
+)]
+#[tsify(type = "string")]
 #[serde(transparent)]
 pub struct AuthKeyId(String);
 

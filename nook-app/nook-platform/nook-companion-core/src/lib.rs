@@ -168,10 +168,11 @@ pub use extension_session_protocol::{
     LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
 };
 pub use extension_session_status_response::{
-    ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceWire,
+    ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceResponse,
+    ExtensionSessionDeviceWire, ExtensionSessionOperationResponseWire, ExtensionSessionStatus,
     ExtensionSessionStatusAvailability, ExtensionSessionStatusResponseWire,
 };
-pub use extension_vault_event::{EXTENSION_VAULT_EVENT_TYPESCRIPT, ExtensionVaultEventPayload};
+pub use extension_vault_event::ExtensionVaultEventPayload;
 pub use generated_password_response::{
     GeneratedPasswordResponse, GeneratedPasswordResponseDecodeError, GeneratedPasswordResponseKind,
     GeneratedPasswordResponseWire,
@@ -252,3 +253,6 @@ pub use authentication_workflow::{
 pub use authentication_workflow_response::SavedLoginActionPresentationRequest;
 pub use extension_pairing_state::ImportedExtensionEventLogError;
 pub use page_field_classification::AuthenticationControlTransportability;
+
+mod authenticator_session_response;
+pub use authenticator_session_response::*;

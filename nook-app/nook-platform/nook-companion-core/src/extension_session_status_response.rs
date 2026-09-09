@@ -1,6 +1,6 @@
 //! Closed decoder for extension-session status responses.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -46,7 +46,13 @@ impl TryFrom<u32> for ExtensionSessionDeviceProtectionStatusWire {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Tsify)]
+impl Serialize for ExtensionSessionDeviceProtectionStatusWire {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u32(*self as u32)
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ExtensionSessionDeviceWire {
     #[serde(rename = "deviceId")]
@@ -111,6 +117,80 @@ impl ExtensionSessionStatusAvailability {
             | ExtensionSessionDeviceProtectionStatusWire::Unknown => {
                 ExtensionSessionStatusAvailability::Unavailable
             }
+        }
+    }
+}
+
+/// Concrete success payload owned by the extension-session protocol.
+#[derive(Debug, Clone, Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct ExtensionSessionDeviceResponse {
+    pub device: ExtensionSessionDeviceWire,
+}
+#[derive(Debug, Clone, Serialize, Tsify)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi)]
+pub enum ExtensionSessionStatus {
+    Inactive {
+        status: ExtensionSessionDeviceProtectionStatusWire,
+    },
+    Active {
+        status: ExtensionSessionDeviceProtectionStatusWire,
+        device: ExtensionSessionDeviceWire,
+    },
+}
+
+/// Unknown browser responses are admitted before any success value is projected.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionSessionOperationResponseWire {
+    ok: bool,
+    #[serde(default)]
+    device: Option<ExtensionSessionDeviceWire>,
+    #[serde(default)]
+    status: Option<ExtensionSessionDeviceProtectionStatusWire>,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    reason: Option<String>,
+}
+impl ExtensionSessionOperationResponseWire {
+    pub fn into_device(self) -> Result<ExtensionSessionDeviceResponse, String> {
+        if !self.ok {
+            return Err(self
+                .error
+                .or(self.reason)
+                .unwrap_or_else(|| "Extension session operation failed.".to_owned()));
+        }
+        let device = self
+            .device
+            .ok_or_else(|| "Extension session did not return device identity.".to_owned())?;
+        if device.id.is_empty()
+            || device.public_key.is_empty()
+            || device.signing_public_key.is_empty()
+        {
+            return Err("Extension session returned invalid device identity.".to_owned());
+        }
+        Ok(ExtensionSessionDeviceResponse { device })
+    }
+    pub fn into_status(self) -> Result<ExtensionSessionStatus, String> {
+        if !self.ok {
+            return Err(self
+                .error
+                .or(self.reason)
+                .unwrap_or_else(|| "Extension session operation failed.".to_owned()));
+        }
+        let status = self
+            .status
+            .ok_or_else(|| "Unsupported extension device protection status.".to_owned())?;
+        if status == ExtensionSessionDeviceProtectionStatusWire::Unlocked {
+            let response = self.into_device()?;
+            Ok(ExtensionSessionStatus::Active {
+                status,
+                device: response.device,
+            })
+        } else {
+            Ok(ExtensionSessionStatus::Inactive { status })
         }
     }
 }

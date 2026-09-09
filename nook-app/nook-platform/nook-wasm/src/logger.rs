@@ -119,8 +119,9 @@ impl LogLevel {
     }
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-struct LogEntry {
+#[derive(Clone, serde::Serialize, serde::Deserialize, tsify::Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct LogEntry {
     ts: nook_core::IsoTimestamp,
     level: String,
     scope: String,
@@ -135,8 +136,8 @@ pub struct NookLogEntries(Vec<LogEntry>);
 #[wasm_bindgen]
 impl NookLogEntries {
     #[wasm_bindgen]
-    pub fn to_array(&self) -> Result<js_sys::Array, wasm_bindgen::JsError> {
-        Ok(serde_wasm_bindgen::to_value(&self.0)?.unchecked_into())
+    pub fn to_array(&self) -> Vec<LogEntry> {
+        self.0.clone()
     }
 }
 

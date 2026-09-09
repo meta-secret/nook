@@ -2,7 +2,7 @@ use super::{NookStorageConnectArgs, wasm_bindgen};
 use nook_core::DraftStorageConnection;
 use nook_core::{
     ActiveProviderCredentialsProjection, ExistingVaultProviderReadiness, GithubPatMask,
-    OAuthAccessTokenRef, StorageConnectArgs, StorageProviderType, StoredLocalFolderConfiguration,
+    StorageConnectArgs, StorageProviderType, StoredLocalFolderConfiguration,
     StoredOAuthFileConfiguration,
 };
 use wasm_bindgen::JsError;
@@ -120,58 +120,14 @@ pub fn existing_vault_provider_readiness(
 }
 
 #[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookOAuthAccessTokenKind {
-    Missing,
-    Available,
-}
-
-enum NookOAuthAccessTokenValue {
-    Missing,
-    Available(String),
-}
-
-#[wasm_bindgen]
-pub struct NookOAuthAccessToken(NookOAuthAccessTokenValue);
-
-#[wasm_bindgen]
-impl NookOAuthAccessToken {
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn kind(&self) -> NookOAuthAccessTokenKind {
-        match self.0 {
-            NookOAuthAccessTokenValue::Missing => NookOAuthAccessTokenKind::Missing,
-            NookOAuthAccessTokenValue::Available(_) => NookOAuthAccessTokenKind::Available,
-        }
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn token(&self) -> Result<String, wasm_bindgen::JsError> {
-        match &self.0 {
-            NookOAuthAccessTokenValue::Missing => {
-                Err(JsError::new("OAuth access token is missing"))
-            }
-            NookOAuthAccessTokenValue::Available(token) => Ok(token.clone()),
-        }
-    }
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> NookOAuthAccessToken {
-    match config.usable_access_token() {
-        OAuthAccessTokenRef::Missing => NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing),
-        OAuthAccessTokenRef::Available(token) => {
-            NookOAuthAccessToken(NookOAuthAccessTokenValue::Available(token.to_owned()))
-        }
-    }
+pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> nook_core::OAuthAccessToken {
+    config.usable_access_token().into()
 }
-
 #[wasm_bindgen]
 #[must_use]
-pub fn missing_oauth_access_token() -> NookOAuthAccessToken {
-    NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing)
+pub fn missing_oauth_access_token() -> nook_core::OAuthAccessToken {
+    nook_core::OAuthAccessToken::Missing
 }
 
 #[wasm_bindgen]
@@ -504,13 +460,16 @@ mod tests {
     #[wasm_bindgen_test]
     fn provider_state_values_keep_secret_boundaries_and_defaults() {
         let missing = missing_oauth_access_token();
-        assert_eq!(missing.kind(), NookOAuthAccessTokenKind::Missing);
-        assert!(missing.token().is_err());
+        assert_eq!(missing, nook_core::OAuthAccessToken::Missing);
         let mut config = nook_core::OAuthFileConfigData::default();
         config.access_token = nook_core::StoredOAuthAccessCredential::AccessToken(" token ".into());
         let available = oauth_access_token(config.clone());
-        assert_eq!(available.kind(), NookOAuthAccessTokenKind::Available);
-        assert_eq!(available.token().unwrap(), "token");
+        assert_eq!(
+            available,
+            nook_core::OAuthAccessToken::Available {
+                token: "token".to_owned()
+            }
+        );
 
         let missing_selection = NookProviderSelection(None);
         assert_eq!(
@@ -555,13 +514,13 @@ mod tests {
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
         assert!(ready.args().is_ok());
 
-        assert_eq!(local_vault_storage_args().mode(), "local");
-        assert_eq!(draft_local_storage_args().mode(), "local");
+        assert_eq!(local_vault_storage_args().mode, "local");
+        assert_eq!(draft_local_storage_args().mode, "local");
         let github_args = draft_github_storage_args("pat", "owner/repo");
-        assert_eq!(github_args.mode(), "github");
-        assert_eq!(github_args.pat(), "pat");
-        assert_eq!(github_args.repo(), "owner/repo");
-        assert_eq!(draft_oauth_storage_args(config).mode(), "google-drive");
+        assert_eq!(github_args.mode, "github");
+        assert_eq!(github_args.pat, "pat");
+        assert_eq!(github_args.repo, "owner/repo");
+        assert_eq!(draft_oauth_storage_args(config).mode, "google-drive");
 
         let no_hint = mask_github_pat_hint(nook_core::StoredGithubPat::Missing);
         assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
@@ -583,12 +542,11 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     fn provider_state_wrappers_cover_typed_getters_and_storage_drafts() {
-        let missing = NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing);
-        assert_eq!(missing.kind(), NookOAuthAccessTokenKind::Missing);
-        assert!(missing.token().is_err());
+        let missing = nook_core::OAuthAccessToken::Missing;
+        assert_eq!(missing, nook_core::OAuthAccessToken::Missing);
         assert_eq!(
-            missing_oauth_access_token().kind(),
-            NookOAuthAccessTokenKind::Missing
+            missing_oauth_access_token(),
+            nook_core::OAuthAccessToken::Missing
         );
 
         let configured = nook_core::OAuthFileConfigData {
@@ -598,8 +556,12 @@ mod browser_tests {
             ..Default::default()
         };
         let token = oauth_access_token(configured.clone());
-        assert_eq!(token.kind(), NookOAuthAccessTokenKind::Available);
-        assert_eq!(token.token().unwrap(), "token");
+        assert_eq!(
+            token,
+            nook_core::OAuthAccessToken::Available {
+                token: "token".to_owned()
+            }
+        );
 
         let missing_selection = NookProviderSelection(None);
         assert_eq!(
@@ -642,7 +604,7 @@ mod browser_tests {
         assert!(incomplete.args().is_err());
         let ready = NookStagedStorageArgs::new(Some(nook_core::StorageConnectArgs::local()));
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
-        assert_eq!(ready.args().unwrap().mode(), "local");
+        assert_eq!(ready.args().unwrap().mode, "local");
 
         let no_hint = mask_github_pat_hint(nook_core::StoredGithubPat::Missing);
         assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
@@ -653,13 +615,13 @@ mod browser_tests {
         assert_eq!(hint.state(), NookGithubPatHintState::Available);
         assert_eq!(hint.value().unwrap(), "ghp_123456…");
 
-        assert_eq!(local_vault_storage_args().mode(), "local");
-        assert_eq!(draft_local_storage_args().mode(), "local");
+        assert_eq!(local_vault_storage_args().mode, "local");
+        assert_eq!(draft_local_storage_args().mode, "local");
         let github = draft_github_storage_args("pat", "owner/repo");
-        assert_eq!(github.mode(), "github");
-        assert_eq!(github.pat(), "pat");
-        assert_eq!(github.repo(), "owner/repo");
+        assert_eq!(github.mode, "github");
+        assert_eq!(github.pat, "pat");
+        assert_eq!(github.repo, "owner/repo");
         let oauth = draft_oauth_storage_args(configured);
-        assert_eq!(oauth.mode(), "google-drive");
+        assert_eq!(oauth.mode, "google-drive");
     }
 }

@@ -382,3 +382,44 @@ mod wasm_tests {
         Ok(())
     }
 }
+
+#[wasm_bindgen]
+pub fn decode_authenticator_code_session_response(
+    value: wasm_bindgen::JsValue,
+) -> Result<nook_companion_core::AuthenticatorCodeSessionResponse, JsError> {
+    let wire: nook_companion_core::AuthenticatorCodeSessionWire =
+        serde_wasm_bindgen::from_value(value)
+            .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
+    nook_companion_core::AuthenticatorCodeSessionResponse::try_from(wire).map_err(JsError::new)
+}
+
+#[wasm_bindgen]
+pub fn decode_authenticator_preview_session_response(
+    value: wasm_bindgen::JsValue,
+) -> Result<nook_companion_core::AuthenticatorPreviewSessionResponse, JsError> {
+    let wire: nook_companion_core::AuthenticatorPreviewSessionWire =
+        serde_wasm_bindgen::from_value(value)
+            .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
+    nook_companion_core::AuthenticatorPreviewSessionResponse::try_from(wire).map_err(JsError::new)
+}
+
+#[wasm_bindgen]
+pub fn decode_authenticator_secret_session_response(
+    value: wasm_bindgen::JsValue,
+) -> Result<nook_companion_core::AuthenticatorSecretSessionResponse, JsError> {
+    let wire: nook_companion_core::AuthenticatorSecretSessionWire =
+        serde_wasm_bindgen::from_value(value)
+            .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
+    nook_companion_core::AuthenticatorSecretSessionResponse::try_from(wire).map_err(JsError::new)
+}
+
+#[wasm_bindgen]
+pub fn decode_authenticator_backup_verification_session_response(
+    value: wasm_bindgen::JsValue,
+) -> Result<nook_companion_core::VerifiedAuthenticatorBackupAttachResponse, JsError> {
+    let wire: nook_companion_core::AuthenticatorBackupVerificationSessionWire =
+        serde_wasm_bindgen::from_value(value)
+            .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
+    nook_companion_core::VerifiedAuthenticatorBackupAttachResponse::try_from(wire)
+        .map_err(JsError::new)
+}
