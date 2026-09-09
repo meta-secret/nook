@@ -1,3 +1,7 @@
+import {
+  CortexMarkdownHeadingText,
+  CortexMarkdownSource,
+} from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 
 import { execFileSync } from 'node:child_process';
@@ -405,12 +409,14 @@ export class CortexIdentifierCatalog {
     }
     if (
       fragment &&
-      !CortexDocumentStructure.markdownHeadingFragments(
-        CortexDocumentStructure.normalizedCortexMarkdown({
+      !new CortexMarkdownHeadingText(
+        new CortexMarkdownSource({
           relativePath,
           content: readFileSync(absolutePath, 'utf8'),
-        }),
-      ).has(fragment)
+        }).normalized(),
+      )
+        .fragments()
+        .has(fragment)
     ) {
       args.findings.push(
         CortexIdentifierCatalog.finding(

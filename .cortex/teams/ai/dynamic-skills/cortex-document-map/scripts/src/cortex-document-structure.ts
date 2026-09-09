@@ -12,16 +12,6 @@ export class CortexDocumentStructure {
     private readonly request: AuditCortexDocumentStructureArgs,
   ) {}
 
-  static normalizedCortexMarkdown(args: NormalizedCortexMarkdownArgs): string {
-    return args.relativePath.endsWith('/SKILL.md') ||
-      args.relativePath === 'SKILL.md'
-      ? args.content.replace(
-          /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u,
-          (frontmatter) => frontmatter.replace(/[^\r\n]/gu, ' '),
-        )
-      : args.content;
-  }
-
   static from(args: AuditCortexDocumentStructureArgs): CortexDocumentStructure {
     return new CortexDocumentStructure(args);
   }
@@ -29,14 +19,12 @@ export class CortexDocumentStructure {
   public execute(): CortexStructureFinding[] {
     const args = this.request;
     const findings: CortexStructureFinding[] = [];
-    const parsedDocuments = args.documents.map(
-      CortexDocumentStructure.parseDocument,
+    const parsedDocuments = args.documents.map((value) =>
+      this.parseDocument(value),
     );
     const catalog = new Map(
       parsedDocuments.map((document) => [
-        CortexDocumentStructure.normalizeCortexRelativePath(
-          document.relativePath,
-        ),
+        this.normalizeCortexRelativePath(document.relativePath),
         document,
       ]),
     );
@@ -63,7 +51,7 @@ export class CortexDocumentStructure {
         message:
           'Centralized Cortex knowledge graph `.cortex/knowledge-graph.md` is missing.',
       };
-      CortexDocumentStructure.addFinding(findingArgs);
+      this.addFinding(findingArgs);
     } else {
       const ownerGraphPaths = [
         '.cortex/gizmo/knowledge-graph.md',
@@ -78,7 +66,7 @@ export class CortexDocumentStructure {
         catalog.has(graphPath),
       );
       const graphDocuments = new Map<string, ParsedDocument>();
-      const rootGraphPath = CortexDocumentStructure.normalizeCortexRelativePath(
+      const rootGraphPath = this.normalizeCortexRelativePath(
         rootIndexDoc.relativePath,
       );
       graphDocuments.set(rootGraphPath, rootIndexDoc);
@@ -93,7 +81,7 @@ export class CortexDocumentStructure {
               line: 1,
               message: `Required owner knowledge graph is missing: ${graphPath}`,
             };
-            CortexDocumentStructure.addFinding(findingArgs);
+            this.addFinding(findingArgs);
             continue;
           }
           graphDocuments.set(graphPath, graphDocument);
@@ -111,14 +99,13 @@ export class CortexDocumentStructure {
           indexedFiles,
           repoRoot: args.repoRoot,
         };
-        CortexDocumentStructure.validateIndex(validateIndexArgs);
+        this.validateIndex(validateIndexArgs);
         indexedByGraph.set(graphPath, indexedFiles);
       }
 
       for (const [normPath] of catalog) {
-        if (CortexDocumentStructure.isKnowledgeGraphPath(normPath)) continue;
-        const canonicalOwnerGraphPath =
-          CortexDocumentStructure.owningKnowledgeGraphPath(normPath);
+        if (this.isKnowledgeGraphPath(normPath)) continue;
+        const canonicalOwnerGraphPath = this.owningKnowledgeGraphPath(normPath);
         const ownerGraphPath =
           canonicalOwnerGraphPath === '.cortex/knowledge-graph.md'
             ? rootGraphPath
@@ -132,7 +119,7 @@ export class CortexDocumentStructure {
           line: 1,
           message: `Document is not indexed in its owning knowledge graph ${ownerGraphPath}: ${normPath}`,
         };
-        CortexDocumentStructure.addFinding(findingArgs);
+        this.addFinding(findingArgs);
       }
 
       if (distributedTopology) {
@@ -148,18 +135,16 @@ export class CortexDocumentStructure {
               line: 1,
               message: `Root knowledge graph must link the owner graph: ${ownerGraphPath}`,
             };
-            CortexDocumentStructure.addFinding(findingArgs);
+            this.addFinding(findingArgs);
           }
         }
         for (const ownerGraphPath of ownerGraphPaths) {
-          const graphOwner =
-            CortexDocumentStructure.cortexGraphOwner(ownerGraphPath);
+          const graphOwner = this.cortexGraphOwner(ownerGraphPath);
           const [ownerIndexedFiles = new Set<string>()] = [
             indexedByGraph.get(ownerGraphPath),
           ];
           for (const indexedPath of ownerIndexedFiles) {
-            const indexedOwner =
-              CortexDocumentStructure.cortexGraphOwner(indexedPath);
+            const indexedOwner = this.cortexGraphOwner(indexedPath);
             if (indexedOwner === false || indexedOwner === graphOwner) continue;
             const findingArgs: AddFindingArgs = {
               findings,
@@ -168,7 +153,7 @@ export class CortexDocumentStructure {
               line: 1,
               message: `Owning knowledge graph cannot index another context's document: ${indexedPath}`,
             };
-            CortexDocumentStructure.addFinding(findingArgs);
+            this.addFinding(findingArgs);
           }
         }
         for (const indexedPath of rootIndexedFiles) {
@@ -187,50 +172,26 @@ export class CortexDocumentStructure {
               line: 1,
               message: `Root knowledge graph must route through owner graphs instead of indexing owned documents directly: ${indexedPath}`,
             };
-            CortexDocumentStructure.addFinding(findingArgs);
+            this.addFinding(findingArgs);
           }
         }
       }
     }
 
     for (const document of parsedDocuments) {
-      const normPath = CortexDocumentStructure.normalizeCortexRelativePath(
-        document.relativePath,
-      );
-      if (CortexDocumentStructure.isKnowledgeGraphPath(normPath)) continue;
+      const normPath = this.normalizeCortexRelativePath(document.relativePath);
+      if (this.isKnowledgeGraphPath(normPath)) continue;
       const validateArgs: ValidateDocumentArgs = {
         document,
         findings,
       };
-      CortexDocumentStructure.validateDocument(validateArgs);
+      this.validateDocument(validateArgs);
     }
 
     return findings;
   }
 
-  static auditCortexMarkdownSyntax(
-    args: AuditCortexMarkdownSyntaxArgs,
-  ): CortexStructureFinding[] {
-    const findings: CortexStructureFinding[] = [];
-    for (const document of args.documents.map(
-      CortexDocumentStructure.parseDocument,
-    )) {
-      const syntaxArgs: ValidateMarkdownSyntaxArgs = { document, findings };
-      CortexDocumentStructure.validateMarkdownSyntax(syntaxArgs);
-    }
-    return findings;
-  }
-
-  private static validateMarkdownSyntax(
-    args: ValidateMarkdownSyntaxArgs,
-  ): void {
-    CortexDocumentStructure.visitMarkdownSyntax({
-      args,
-      node: args.document.root,
-    });
-  }
-
-  private static normalizeCortexRelativePath(filePath: string): string {
+  private normalizeCortexRelativePath(filePath: string): string {
     const normalized = filePath.replace(/\\/g, '/');
     if (normalized.startsWith('.cortex/')) {
       return normalized;
@@ -241,34 +202,15 @@ export class CortexDocumentStructure {
     return `.cortex/${normalized}`;
   }
 
-  private static parseDocument(document: CortexDocumentSource): ParsedDocument {
+  private parseDocument(document: CortexDocumentSource): ParsedDocument {
     const root = fromMarkdown(document.content);
-    const fragments = CortexDocumentStructure.headingFragmentsForRoot(root);
+    const fragments = new CortexMarkdownHeadings(root).fragments();
     return { ...document, root, fragments };
   }
 
-  static markdownHeadingFragments(markdown: string): ReadonlySet<string> {
-    return CortexDocumentStructure.headingFragmentsForRoot(
-      fromMarkdown(markdown),
-    );
-  }
-
-  private static headingFragmentsForRoot(root: Root): ReadonlySet<string> {
-    const slugger = new GithubSlugger();
-    const fragments = new Set<string>();
-    for (const node of root.children) {
-      if (node.type === 'heading') {
-        const headingText = CortexDocumentStructure.nodeText(node);
-        const slug = slugger.slug(headingText);
-        fragments.add(slug);
-      }
-    }
-    return fragments;
-  }
-
-  private static validateDocument(args: ValidateDocumentArgs): void {
-    const headings = args.document.root.children.filter(
-      CortexDocumentStructure.isHeading,
+  private validateDocument(args: ValidateDocumentArgs): void {
+    const headings = args.document.root.children.filter((value) =>
+      this.isHeading(value),
     );
     const h1s = headings.filter((heading) => heading.depth === 1);
     const [firstH1 = false] = h1s;
@@ -279,16 +221,16 @@ export class CortexDocumentStructure {
         findings: args.findings,
         code: CortexStructureFindingCode.InvalidTitle,
         file: args.document.relativePath,
-        line: CortexDocumentStructure.nodeLine(firstH1),
+        line: new CortexMarkdownNode(firstH1).line(),
         message: 'Document must begin with exactly one H1 title.',
       };
-      CortexDocumentStructure.addFinding(findingArgs);
+      this.addFinding(findingArgs);
     }
   }
 
-  private static validateIndex(args: ValidateIndexArgs): void {
-    const headings = args.indexDocument.root.children.filter(
-      CortexDocumentStructure.isHeading,
+  private validateIndex(args: ValidateIndexArgs): void {
+    const headings = args.indexDocument.root.children.filter((value) =>
+      this.isHeading(value),
     );
     const h1s = headings.filter((heading) => heading.depth === 1);
     const [firstH1 = false] = h1s;
@@ -299,22 +241,20 @@ export class CortexDocumentStructure {
         findings: args.findings,
         code: CortexStructureFindingCode.InvalidTitle,
         file: args.indexDocument.relativePath,
-        line: CortexDocumentStructure.nodeLine(firstH1),
+        line: new CortexMarkdownNode(firstH1).line(),
         message: 'Knowledge graph must begin with exactly one H1 title.',
       };
-      CortexDocumentStructure.addFinding(findingArgs);
+      this.addFinding(findingArgs);
     }
 
-    const allLinks = CortexDocumentStructure.collectAllLinks(
-      args.indexDocument.root,
-    );
+    const allLinks = this.collectAllLinks(args.indexDocument.root);
     const indexedLinkCounts = new Map<string, number>();
     for (const link of allLinks) {
       const resolveArgs: ResolveIndexLinkArgs = {
         url: link.url,
         indexRelativePath: args.indexDocument.relativePath,
       };
-      const resolved = CortexDocumentStructure.resolveIndexLink(resolveArgs);
+      const resolved = this.resolveIndexLink(resolveArgs);
       if (resolved === false) {
         continue;
       }
@@ -330,10 +270,10 @@ export class CortexDocumentStructure {
           findings: args.findings,
           code: CortexStructureFindingCode.InvalidIndexEntry,
           file: args.indexDocument.relativePath,
-          line: CortexDocumentStructure.nodeLine(link),
+          line: new CortexMarkdownNode(link).line(),
           message: `Index link points to non-existent document: ${resolved.targetRelativePath}`,
         };
-        CortexDocumentStructure.addFinding(findingArgs);
+        this.addFinding(findingArgs);
         continue;
       }
 
@@ -349,19 +289,19 @@ export class CortexDocumentStructure {
             findings: args.findings,
             code: CortexStructureFindingCode.BrokenFragment,
             file: args.indexDocument.relativePath,
-            line: CortexDocumentStructure.nodeLine(link),
+            line: new CortexMarkdownNode(link).line(),
             message: `Index link points to missing heading fragment #${resolved.fragment} in ${resolved.targetRelativePath}`,
           };
-          CortexDocumentStructure.addFinding(findingArgs);
+          this.addFinding(findingArgs);
         }
         const findingArgs: AddFindingArgs = {
           findings: args.findings,
           code: CortexStructureFindingCode.InvalidIndexEntry,
           file: args.indexDocument.relativePath,
-          line: CortexDocumentStructure.nodeLine(link),
+          line: new CortexMarkdownNode(link).line(),
           message: `Knowledge graphs route at document level and must not duplicate section links: ${resolved.targetRelativePath}#${resolved.fragment}`,
         };
-        CortexDocumentStructure.addFinding(findingArgs);
+        this.addFinding(findingArgs);
       }
     }
 
@@ -374,11 +314,11 @@ export class CortexDocumentStructure {
         line: 1,
         message: `Knowledge graph must index each document once: ${targetPath}`,
       };
-      CortexDocumentStructure.addFinding(findingArgs);
+      this.addFinding(findingArgs);
     }
   }
 
-  private static resolveIndexLink(
+  private resolveIndexLink(
     args: ResolveIndexLinkArgs,
   ): ResolvedIndexLink | false {
     const rawUrl = args.url.trim();
@@ -399,16 +339,14 @@ export class CortexDocumentStructure {
     }
 
     const cleanPath = pathPart.replace(/\\/g, '/');
-    const normalizedIndexPath =
-      CortexDocumentStructure.normalizeCortexRelativePath(
-        args.indexRelativePath,
-      );
-    const targetRelativePath =
-      CortexDocumentStructure.normalizeCortexRelativePath(
-        path.posix.normalize(
-          path.posix.join(path.posix.dirname(normalizedIndexPath), cleanPath),
-        ),
-      );
+    const normalizedIndexPath = this.normalizeCortexRelativePath(
+      args.indexRelativePath,
+    );
+    const targetRelativePath = this.normalizeCortexRelativePath(
+      path.posix.normalize(
+        path.posix.join(path.posix.dirname(normalizedIndexPath), cleanPath),
+      ),
+    );
 
     return {
       targetRelativePath,
@@ -416,7 +354,7 @@ export class CortexDocumentStructure {
     };
   }
 
-  private static isKnowledgeGraphPath(filePath: string): boolean {
+  private isKnowledgeGraphPath(filePath: string): boolean {
     return (
       filePath === '.cortex/knowledge-graph.md' ||
       filePath === 'knowledge-graph.md' ||
@@ -430,7 +368,7 @@ export class CortexDocumentStructure {
     );
   }
 
-  private static owningKnowledgeGraphPath(filePath: string): string {
+  private owningKnowledgeGraphPath(filePath: string): string {
     if (filePath.startsWith('.cortex/gizmo/')) {
       return '.cortex/gizmo/knowledge-graph.md';
     }
@@ -451,7 +389,7 @@ export class CortexDocumentStructure {
     return '.cortex/knowledge-graph.md';
   }
 
-  private static cortexGraphOwner(filePath: string): CortexGraphOwner | false {
+  private cortexGraphOwner(filePath: string): CortexGraphOwner | false {
     if (filePath.startsWith('.cortex/gizmo/')) return CortexGraphOwner.Gizmo;
     if (filePath.startsWith('.cortex/shared/')) return CortexGraphOwner.Shared;
     const match = /^\.cortex\/teams\/(ai|dev-core|security|sre|web-dev)\//.exec(
@@ -470,40 +408,18 @@ export class CortexDocumentStructure {
     return false;
   }
 
-  private static collectAllLinks(root: Root): Link[] {
+  private collectAllLinks(root: Root): Link[] {
     const links: Link[] = [];
 
-    CortexDocumentStructure.visitMarkdownLinks({ links, node: root });
+    this.visitMarkdownLinks({ links, node: root });
     return links;
   }
 
-  private static isHeading(node: RootContent): node is Heading {
+  private isHeading(node: RootContent): node is Heading {
     return node.type === 'heading';
   }
 
-  private static nodeText(node: RootContent | Parent | false): string {
-    if (!node) {
-      return '';
-    }
-    if ('value' in node && typeof node.value === 'string') {
-      return node.value;
-    }
-    if ('children' in node && Array.isArray(node.children)) {
-      return node.children
-        .map((child) => CortexDocumentStructure.nodeText(child as RootContent))
-        .join('');
-    }
-    return '';
-  }
-
-  private static nodeLine(node: RootContent | Parent | false): number {
-    if (!node || !node.position) {
-      return 1;
-    }
-    return node.position.start.line;
-  }
-
-  private static addFinding(args: AddFindingArgs): void {
+  private addFinding(args: AddFindingArgs): void {
     const finding: CortexStructureFinding = {
       code: args.code,
       file: args.file,
@@ -512,35 +428,15 @@ export class CortexDocumentStructure {
     };
     args.findings.push(finding);
   }
-  private static visitMarkdownSyntax(request: MarkdownSyntaxVisit): void {
-    const { args, node } = request;
-    if (node.type === 'html') {
-      const findingArgs: AddFindingArgs = {
-        findings: args.findings,
-        code: CortexStructureFindingCode.ProhibitedHtml,
-        file: args.document.relativePath,
-        line: CortexDocumentStructure.nodeLine(node),
-        message:
-          'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
-      };
-      CortexDocumentStructure.addFinding(findingArgs);
-    }
-    if (!('children' in node) || !Array.isArray(node.children)) return;
-    for (const child of node.children)
-      CortexDocumentStructure.visitMarkdownSyntax({
-        args,
-        node: child as RootContent,
-      });
-  }
 
-  private static visitMarkdownLinks(request: MarkdownLinkVisit): void {
+  private visitMarkdownLinks(request: MarkdownLinkVisit): void {
     const { links, node } = request;
     if (node.type === 'link') {
       links.push(node as Link);
     }
     if ('children' in node && Array.isArray(node.children)) {
       for (const child of node.children) {
-        CortexDocumentStructure.visitMarkdownLinks({
+        this.visitMarkdownLinks({
           links,
           node: child as RootContent,
         });
@@ -650,3 +546,111 @@ type MarkdownLinkVisit = {
   readonly links: Link[];
   readonly node: RootContent | Parent;
 };
+
+export class CortexMarkdownSource {
+  constructor(private readonly args: NormalizedCortexMarkdownArgs) {}
+  normalized(): string {
+    const args = this.args;
+    return args.relativePath.endsWith('/SKILL.md') ||
+      args.relativePath === 'SKILL.md'
+      ? args.content.replace(
+          /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u,
+          (frontmatter) => frontmatter.replace(/[^\r\n]/gu, ' '),
+        )
+      : args.content;
+  }
+}
+
+export class CortexMarkdownHeadings {
+  constructor(private readonly root: Root) {}
+  fragments(): ReadonlySet<string> {
+    const root = this.root;
+    const slugger = new GithubSlugger();
+    const fragments = new Set<string>();
+    for (const node of root.children) {
+      if (node.type === 'heading') {
+        const headingText = new CortexMarkdownNode(node).text();
+        const slug = slugger.slug(headingText);
+        fragments.add(slug);
+      }
+    }
+    return fragments;
+  }
+}
+
+export class CortexMarkdownHeadingText {
+  constructor(private readonly markdown: string) {}
+  fragments(): ReadonlySet<string> {
+    return new CortexMarkdownHeadings(fromMarkdown(this.markdown)).fragments();
+  }
+}
+
+export class CortexMarkdownNode {
+  constructor(private readonly node: RootContent | Parent | false) {}
+  text(): string {
+    const node = this.node;
+    if (!node) {
+      return '';
+    }
+    if ('value' in node && typeof node.value === 'string') {
+      return node.value;
+    }
+    if ('children' in node && Array.isArray(node.children)) {
+      return node.children
+        .map((child) => new CortexMarkdownNode(child as RootContent).text())
+        .join('');
+    }
+    return '';
+  }
+  line(): number {
+    const node = this.node;
+    if (!node || !node.position) {
+      return 1;
+    }
+    return node.position.start.line;
+  }
+}
+
+export class CortexMarkdownSyntaxAudit {
+  constructor(private readonly args: AuditCortexMarkdownSyntaxArgs) {}
+  execute(): CortexStructureFinding[] {
+    return this.args.documents.flatMap((document) =>
+      new CortexMarkdownSyntax({
+        relativePath: document.relativePath,
+        root: fromMarkdown(document.content),
+      }).findings(),
+    );
+  }
+}
+
+class CortexMarkdownSyntax {
+  constructor(
+    private readonly document: {
+      readonly relativePath: string;
+      readonly root: Root;
+    },
+  ) {}
+  findings(): CortexStructureFinding[] {
+    return this.visit(this.document.root);
+  }
+  private visit(node: Root | RootContent): CortexStructureFinding[] {
+    const own: CortexStructureFinding[] =
+      node.type === 'html'
+        ? [
+            {
+              code: CortexStructureFindingCode.ProhibitedHtml,
+              file: this.document.relativePath,
+              line: new CortexMarkdownNode(node).line(),
+              message:
+                'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
+            },
+          ]
+        : [];
+    return 'children' in node
+      ? [
+          ...own,
+          ...node.children.flatMap((child) => this.visit(child as RootContent)),
+        ]
+      : own;
+  }
+}

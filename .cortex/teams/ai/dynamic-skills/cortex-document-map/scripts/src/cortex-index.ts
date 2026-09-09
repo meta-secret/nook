@@ -1,3 +1,4 @@
+import { CortexMarkdownNode } from './cortex-document-structure.ts';
 import path from 'node:path';
 
 // Legacy migration helpers remain deterministic and side-effect free.
@@ -12,28 +13,13 @@ import type { CortexDocumentSource } from './cortex-document-structure.ts';
 export class CortexNavigationIndex {
   private constructor(private readonly request: ParseDocumentIndexArgs) {}
 
-  private static nodeText(node: RootContent | Parent | false): string {
-    if (!node) {
-      return '';
-    }
-    if ('value' in node && typeof node.value === 'string') {
-      return node.value;
-    }
-    if ('children' in node && Array.isArray(node.children)) {
-      return node.children
-        .map((child) => CortexNavigationIndex.nodeText(child as RootContent))
-        .join('');
-    }
-    return '';
-  }
-
-  private static findFirstLink(parent: Parent): Link | false {
+  private findFirstLink(parent: Parent): Link | false {
     for (const child of parent.children) {
       if (child.type === 'link') {
         return child;
       }
       if ('children' in child && Array.isArray(child.children)) {
-        const nested = CortexNavigationIndex.findFirstLink(child as Parent);
+        const nested = this.findFirstLink(child as Parent);
         if (nested !== false) {
           return nested;
         }
@@ -42,7 +28,7 @@ export class CortexNavigationIndex {
     return false;
   }
 
-  private static collectNavigationItems(args: CollectEntriesArgs): void {
+  private collectNavigationItems(args: CollectEntriesArgs): void {
     for (const item of args.list.children) {
       const paragraph = item.children.find(
         (child) => child.type === 'paragraph',
@@ -50,11 +36,11 @@ export class CortexNavigationIndex {
       if (!paragraph || paragraph.type !== 'paragraph') {
         continue;
       }
-      const link = CortexNavigationIndex.findFirstLink(paragraph);
+      const link = this.findFirstLink(paragraph);
       if (link === false) {
         continue;
       }
-      const text = CortexNavigationIndex.nodeText(link).trim();
+      const text = new CortexMarkdownNode(link).text().trim();
       const url = link.url.trim();
       const explanations: string[] = [];
       const nestedLists = item.children.filter(
@@ -62,9 +48,10 @@ export class CortexNavigationIndex {
       );
       for (const childList of nestedLists) {
         for (const nestedItem of childList.children) {
-          if (CortexNavigationIndex.findFirstLink(nestedItem) === false) {
-            const explanation =
-              CortexNavigationIndex.nodeText(nestedItem).trim();
+          if (this.findFirstLink(nestedItem) === false) {
+            const explanation = new CortexMarkdownNode(nestedItem)
+              .text()
+              .trim();
             if (explanation.length > 0) {
               explanations.push(explanation);
             }
@@ -84,12 +71,12 @@ export class CortexNavigationIndex {
           entries: args.entries,
           list: childList,
         };
-        CortexNavigationIndex.collectNavigationItems(nestedArgs);
+        this.collectNavigationItems(nestedArgs);
       }
     }
   }
 
-  private static parseNavigationSection(
+  private parseNavigationSection(
     args: ParseNavigationSectionArgs,
   ): CortexNavigationItem[] {
     const entries: CortexNavigationItem[] = [];
@@ -100,7 +87,7 @@ export class CortexNavigationIndex {
           entries,
           list: node,
         };
-        CortexNavigationIndex.collectNavigationItems(collectArgs);
+        this.collectNavigationItems(collectArgs);
       }
     }
     return entries;
@@ -118,17 +105,17 @@ export class CortexNavigationIndex {
     );
     const h1 = headings.find((heading) => heading.depth === 1);
     const title = h1
-      ? CortexNavigationIndex.nodeText(h1).trim()
+      ? new CortexMarkdownNode(h1).text().trim()
       : path.basename(args.source.relativePath, '.md');
 
     const rootH2s = headings.filter((heading) => heading.depth === 2);
     const relationshipsHeading = rootH2s.find(
       (heading) =>
-        CortexNavigationIndex.nodeText(heading).trim() === 'Relationships',
+        new CortexMarkdownNode(heading).text().trim() === 'Relationships',
     );
     const mapHeading = rootH2s.find(
       (heading) =>
-        CortexNavigationIndex.nodeText(heading).trim() === 'Document map',
+        new CortexMarkdownNode(heading).text().trim() === 'Document map',
     );
 
     const relIndex = relationshipsHeading
@@ -140,7 +127,7 @@ export class CortexNavigationIndex {
     if (h1 && relIndex > 1) {
       const introNodes = root.children.slice(1, relIndex);
       const introText = introNodes
-        .map(CortexNavigationIndex.nodeText)
+        .map((node) => new CortexMarkdownNode(node).text())
         .join(' ')
         .trim();
       if (introText.length > 0) {
@@ -164,7 +151,7 @@ export class CortexNavigationIndex {
         ? root.children.slice(mapIndex + 1, contentStartIndex)
         : [];
     const parseMapArgs: ParseNavigationSectionArgs = { nodes: mapNodes };
-    let mapEntries = CortexNavigationIndex.parseNavigationSection(parseMapArgs);
+    let mapEntries = this.parseNavigationSection(parseMapArgs);
 
     // If map entries were not present in the doc, derive them from content headings
     if (mapEntries.length === 0) {
@@ -175,7 +162,7 @@ export class CortexNavigationIndex {
       const derived: CortexNavigationItem[] = [];
       const depthStack: number[] = [];
       for (const heading of headingNodes) {
-        const headingText = CortexNavigationIndex.nodeText(heading).trim();
+        const headingText = new CortexMarkdownNode(heading).text().trim();
         const slug = slugger.slug(headingText);
         if (heading.depth === 1) {
           continue;
@@ -202,8 +189,7 @@ export class CortexNavigationIndex {
         ? root.children.slice(relIndex + 1, mapIndex)
         : [];
     const parseRelArgs: ParseNavigationSectionArgs = { nodes: relNodes };
-    const relationships =
-      CortexNavigationIndex.parseNavigationSection(parseRelArgs);
+    const relationships = this.parseNavigationSection(parseRelArgs);
 
     const relativeToCortex = args.source.relativePath.startsWith('.cortex/')
       ? args.source.relativePath.slice('.cortex/'.length)
@@ -217,8 +203,59 @@ export class CortexNavigationIndex {
       mapEntries,
     };
   }
+}
 
-  static extractCortexIndex(args: ExtractCortexIndexArgs): CortexIndex {
+export type CortexNavigationItem = {
+  readonly depth: number;
+  readonly text: string;
+  readonly url: string;
+  readonly explanations: readonly string[];
+};
+
+export type CortexDocumentIndex = {
+  readonly relativePath: string;
+  readonly title: string;
+  readonly intro: string | false;
+  readonly relationships: readonly CortexNavigationItem[];
+  readonly mapEntries: readonly CortexNavigationItem[];
+};
+
+export type CortexIndex = {
+  readonly documents: readonly CortexDocumentIndex[];
+};
+
+export type ExtractCortexIndexArgs = {
+  readonly documents: readonly CortexDocumentSource[];
+  readonly repoRoot: string;
+};
+
+export type RenderCortexIndexMarkdownArgs = {
+  readonly index: CortexIndex;
+};
+
+export type StripDocumentNavigationArgs = {
+  readonly content: string;
+};
+
+type CollectEntriesArgs = {
+  readonly depth: number;
+  readonly entries: CortexNavigationItem[];
+  readonly list: List;
+};
+
+type ParseNavigationSectionArgs = {
+  readonly nodes: readonly RootContent[];
+};
+
+type ParseDocumentIndexArgs = {
+  readonly source: CortexDocumentSource;
+  readonly repoRoot: string;
+};
+
+export class CortexNavigationExtraction {
+  constructor(private readonly request: ExtractCortexIndexArgs) {}
+  execute(): CortexIndex {
+    const args = this.request;
     const parsedMap = new Map<string, CortexDocumentIndex>();
     for (const source of args.documents) {
       const rel = source.relativePath.startsWith('.cortex/')
@@ -250,11 +287,9 @@ export class CortexNavigationIndex {
 
     return { documents };
   }
+}
 
-  static renderCortexIndexMarkdown(
-    _args: RenderCortexIndexMarkdownArgs,
-  ): string {
-    return `# Cortex Context Router
+export const CORTEX_CONTEXT_ROUTER_MARKDOWN = `# Cortex Context Router
 
 Use this file only to select one owning context. Do not preload linked graphs.
 
@@ -291,9 +326,11 @@ architecture, catalogs, references, and engineering rules. Load it only for a
 named dependency, then return to the selected owning context. Return a
 foreign-team write requirement to Gizmo Prime.
 `;
-  }
 
-  static stripDocumentNavigation(args: StripDocumentNavigationArgs): string {
+export class CortexNavigationStripping {
+  constructor(private readonly request: StripDocumentNavigationArgs) {}
+  execute(): string {
+    const args = this.request;
     const root = fromMarkdown(args.content);
     const headings = root.children.filter(
       (node): node is Heading => node.type === 'heading',
@@ -306,11 +343,11 @@ foreign-team write requirement to Gizmo Prime.
     const rootH2s = headings.filter((heading) => heading.depth === 2);
     const relationshipsHeading = rootH2s.find(
       (heading) =>
-        CortexNavigationIndex.nodeText(heading).trim() === 'Relationships',
+        new CortexMarkdownNode(heading).text().trim() === 'Relationships',
     );
     const mapHeading = rootH2s.find(
       (heading) =>
-        CortexNavigationIndex.nodeText(heading).trim() === 'Document map',
+        new CortexMarkdownNode(heading).text().trim() === 'Document map',
     );
 
     if (!relationshipsHeading || !mapHeading) {
@@ -366,50 +403,3 @@ foreign-team write requirement to Gizmo Prime.
     return `${titleText}\n\n${contentBody}\n`;
   }
 }
-
-export type CortexNavigationItem = {
-  readonly depth: number;
-  readonly text: string;
-  readonly url: string;
-  readonly explanations: readonly string[];
-};
-
-export type CortexDocumentIndex = {
-  readonly relativePath: string;
-  readonly title: string;
-  readonly intro: string | false;
-  readonly relationships: readonly CortexNavigationItem[];
-  readonly mapEntries: readonly CortexNavigationItem[];
-};
-
-export type CortexIndex = {
-  readonly documents: readonly CortexDocumentIndex[];
-};
-
-export type ExtractCortexIndexArgs = {
-  readonly documents: readonly CortexDocumentSource[];
-  readonly repoRoot: string;
-};
-
-export type RenderCortexIndexMarkdownArgs = {
-  readonly index: CortexIndex;
-};
-
-export type StripDocumentNavigationArgs = {
-  readonly content: string;
-};
-
-type CollectEntriesArgs = {
-  readonly depth: number;
-  readonly entries: CortexNavigationItem[];
-  readonly list: List;
-};
-
-type ParseNavigationSectionArgs = {
-  readonly nodes: readonly RootContent[];
-};
-
-type ParseDocumentIndexArgs = {
-  readonly source: CortexDocumentSource;
-  readonly repoRoot: string;
-};

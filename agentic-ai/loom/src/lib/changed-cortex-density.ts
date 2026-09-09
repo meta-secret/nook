@@ -1,3 +1,4 @@
+import { CortexMarkdownSyntaxAudit } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
 
 import path from 'node:path';
@@ -74,9 +75,10 @@ export class ChangedCortexDensity {
       return document;
     });
     const syntaxInvalidPaths = new Set(
-      CortexDocumentStructure.auditCortexMarkdownSyntax({
+      new CortexMarkdownSyntaxAudit({
         documents: candidateDocuments,
       })
+        .execute()
         .filter(
           (finding) =>
             finding.code === CortexStructureFindingCode.ProhibitedHtml,
@@ -152,7 +154,7 @@ export class ChangedCortexDensity {
     };
     const tokens = this.gitPaths(statusArgs);
     const changes: ChangedCortexPath[] = [];
-    for (let index = 0; index < tokens.length; ) {
+    for (let index = 0; index < tokens.length;) {
       const status = tokens[index];
       index += 1;
       if (typeof status !== 'string')

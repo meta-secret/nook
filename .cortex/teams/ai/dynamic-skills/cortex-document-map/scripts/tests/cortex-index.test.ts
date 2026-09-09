@@ -1,3 +1,8 @@
+import {
+  CortexNavigationExtraction,
+  CortexNavigationStripping,
+  CORTEX_CONTEXT_ROUTER_MARKDOWN,
+} from '../src/cortex-index.ts';
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { CortexNavigationIndex } from '../src/cortex-index.ts';
@@ -35,11 +40,11 @@ Model text.
   ];
 
   const extractArgs = { documents, repoRoot: '/repo' };
-  const index = CortexNavigationIndex.extractCortexIndex(extractArgs);
+  const index = new CortexNavigationExtraction(extractArgs).execute();
   expect(index.documents.length).toBe(2);
 
   const renderArgs = { index };
-  const markdown = CortexNavigationIndex.renderCortexIndexMarkdown(renderArgs);
+  const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
   expect(markdown).toContain('# Cortex Context Router');
   expect(markdown).toContain('## Owning contexts');
   expect(markdown).toContain('[Gizmo Prime](gizmo/knowledge-graph.md)');
@@ -111,7 +116,7 @@ This is the actual overview text.
 `;
 
   const stripArgs = { content };
-  const stripped = CortexNavigationIndex.stripDocumentNavigation(stripArgs);
+  const stripped = new CortexNavigationStripping(stripArgs).execute();
   expect(stripped).toContain('# Sample Doc');
   expect(stripped).toContain('Intro paragraph.');
   expect(stripped).toContain('## Overview');

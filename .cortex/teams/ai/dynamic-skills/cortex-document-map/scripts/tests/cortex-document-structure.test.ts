@@ -1,3 +1,4 @@
+import { CortexMarkdownSyntaxAudit } from '../src/cortex-document-structure.ts';
 import path from 'node:path';
 
 import { expect, test } from 'bun:test';
@@ -54,7 +55,7 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
 
   static auditSyntax(documents: readonly CortexDocumentSource[]) {
     const args: AuditCortexMarkdownSyntaxArgs = { documents };
-    return CortexDocumentStructure.auditCortexMarkdownSyntax(args);
+    return new CortexMarkdownSyntaxAudit(args).execute();
   }
 
   static distributedDocuments(

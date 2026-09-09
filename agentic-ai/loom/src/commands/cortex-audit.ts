@@ -1,3 +1,4 @@
+import { CortexMarkdownSource } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import { err, ok, type Result } from 'neverthrow';
 import type { CortexArticleRequestDecodeError } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/decode-error.ts';
 import type { CortexDocumentMapFailure } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/application.ts';
@@ -486,10 +487,10 @@ export class CortexAuditCommand {
 
   private static readCortexMarkdown(filePath: string): string {
     const content = readFileSync(filePath, 'utf8');
-    return CortexDocumentStructure.normalizedCortexMarkdown({
+    return new CortexMarkdownSource({
       relativePath: filePath.replaceAll(path.sep, '/'),
       content,
-    });
+    }).normalized();
   }
 
   private static skillDiagnosticName(filePath: string): string {

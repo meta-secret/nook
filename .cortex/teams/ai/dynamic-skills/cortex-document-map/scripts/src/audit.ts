@@ -1,4 +1,8 @@
 import {
+  CortexMarkdownSyntaxAudit,
+  CortexMarkdownSource,
+} from './cortex-document-structure.ts';
+import {
   CortexStructureFindingCode,
   type CortexDocumentSource,
   type CortexStructureFinding,
@@ -21,9 +25,9 @@ export class CortexDocumentMapAudit {
     const rawDocuments = request.documents.map((value) =>
       this.toDocumentSource(value),
     );
-    const syntaxFindings = CortexDocumentStructure.auditCortexMarkdownSyntax({
+    const syntaxFindings = new CortexMarkdownSyntaxAudit({
       documents: rawDocuments,
-    });
+    }).execute();
     const invalidSyntaxPaths = new Set(
       syntaxFindings
         .filter(
@@ -40,7 +44,7 @@ export class CortexDocumentMapAudit {
       .filter((document) => !omittedFromTopology.has(document.relativePath))
       .map((document) => ({
         ...document,
-        content: CortexDocumentStructure.normalizedCortexMarkdown(document),
+        content: new CortexMarkdownSource(document).normalized(),
       }));
     const structureFindings = CortexDocumentStructure.from({
       documents: structureDocuments,
