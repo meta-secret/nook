@@ -6151,6 +6151,7 @@ dependencies = [
  "neo4rs",
  "rand 0.10.2",
  "rustls",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -6159,6 +6160,7 @@ dependencies = [
  "time",
  "tokio",
  "tower-http 0.7.0",
+ "ts-rs",
  "uuid",
 ]
 

@@ -861,3 +861,6 @@ struct ObserverTaskQuery<'a> {
     locale: &'a str,
     selection: ObserverTaskSelection,
 }
+
+#[cfg(feature = "observer-contract-export")]
+pub mod contract_export;

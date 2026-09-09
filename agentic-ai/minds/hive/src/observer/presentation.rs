@@ -6,10 +6,16 @@ use super::{AGENT_PRESENCE_WINDOW_MS, ALERT_LIMIT, STALE_ACTIVITY_MS, STUCK_CANC
 use crate::observer::ObserverCopy;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "observer-contract-export",
+    derive(ts_rs::TS, schemars::JsonSchema)
+)]
 pub struct ObserverSnapshot {
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub generated_at: i64,
     pub copy: ObserverCopy,
     pub agents: Vec<ObservedAgent>,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub active_task_count: i64,
     pub tasks: Vec<ObservedTask>,
     pub alerts: Vec<ObservedAlert>,
@@ -17,16 +23,25 @@ pub struct ObserverSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "observer-contract-export",
+    derive(ts_rs::TS, schemars::JsonSchema)
+)]
 pub struct ObservedAlert {
     pub id: String,
     pub kind: AlertKind,
     pub severity: AlertSeverity,
     pub task_id: String,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub first_observed_at: i64,
     pub reason: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "observer-contract-export",
+    derive(ts_rs::TS, schemars::JsonSchema)
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum AlertKind {
     TaskFailed,
@@ -49,6 +64,10 @@ impl AlertKind {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(
+    feature = "observer-contract-export",
+    derive(ts_rs::TS, schemars::JsonSchema)
+)]
 #[serde(rename_all = "lowercase")]
 pub enum AlertSeverity {
     Critical,
@@ -56,12 +75,18 @@ pub enum AlertSeverity {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "observer-contract-export",
+    derive(ts_rs::TS, schemars::JsonSchema)
+)]
 pub struct ObservedAgent {
     pub id: String,
     pub pod_name: String,
     pub status: String,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub last_seen_at: i64,
     /// Observation deadline in Unix milliseconds; consumers still compare their live clock.
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub presence_expires_at: i64,
 }
 
@@ -72,26 +97,43 @@ impl ObservedAgent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "observer-contract-export",
+    derive(ts_rs::TS, schemars::JsonSchema)
+)]
 pub struct ObservedTask {
     pub id: String,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "string"))]
+    #[cfg_attr(feature = "observer-contract-export", schemars(with = "String"))]
     pub kind: TaskKind,
     pub kind_label: String,
     #[serde(skip)]
     pub trigger_kind: ObservedTaskTrigger,
     pub trigger: String,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "string"))]
+    #[cfg_attr(feature = "observer-contract-export", schemars(with = "String"))]
     pub status: ObservedTaskState,
     pub source_commit: String,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub priority: i64,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub attempt_count: i64,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub max_attempts: i64,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub created_at: i64,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub updated_at: i64,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub lease_until: i64,
     pub agent_id: String,
     pub pod_name: String,
     pub latest_attempt_status: String,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub latest_attempt_started_at: i64,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub latest_attempt_completed_at: i64,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub latest_activity_at: i64,
     pub latest_error: String,
     pub latest_summary: String,
@@ -102,19 +144,29 @@ pub struct ObservedTask {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "observer-contract-export",
+    derive(ts_rs::TS, schemars::JsonSchema)
+)]
 pub struct ObservedDependency {
     pub id: String,
     pub status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "observer-contract-export",
+    derive(ts_rs::TS, schemars::JsonSchema)
+)]
 pub struct ObservedActivity {
     pub id: String,
     pub kind: String,
     pub message: String,
     pub detail: String,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub created_at: i64,
     pub attempt_id: String,
+    #[cfg_attr(feature = "observer-contract-export", ts(type = "number"))]
     pub attempt_number: i64,
 }
 

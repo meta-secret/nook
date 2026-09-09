@@ -28,10 +28,13 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ObservedTask,
     ObserverCopy,
     ObserverSnapshot,
-  } from './types';
-  import { ObservedAlertSeverity, ObservedExecutionStatus } from './types';
+  } from './generated/index';
+  import { ObservedAlertSeverity, ObservedTaskState } from './generated/values';
+  import isObservedTask from './generated/ObservedTask.validator.js';
+  import isObserverSnapshot from './generated/ObserverSnapshot.validator.js';
   import { EmergencyCopyCatalog } from './emergency-copy';
   import {
+    WorkerDisplayStatus,
     DurableTaskLookupKind,
     DetailPanelMountKind,
     ObserverFeedKind,
@@ -121,7 +124,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   const executingTasks = $derived.by(() => {
     if (snapshotState.kind !== ObserverFeedKind.Loaded) return [];
     return snapshotState.snapshot.tasks
-      .filter((t) => t.status === ObservedExecutionStatus.Running)
+      .filter((t) => t.status === ObservedTaskState.Running)
       .sort((left, right) => right.updated_at - left.updated_at);
   });
 
@@ -132,15 +135,15 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         : [];
     const attention = attentionEntries.length;
     const running = all.filter(
-      (t) => t.status === ObservedExecutionStatus.Running,
+      (t) => t.status === ObservedTaskState.Running,
     ).length;
     const failed = all.filter(
       (t) =>
-        t.status === ObservedExecutionStatus.Failed ||
-        t.status === ObservedExecutionStatus.Blocked,
+        t.status === ObservedTaskState.Failed ||
+        t.status === ObservedTaskState.Blocked,
     ).length;
     const completed = all.filter(
-      (t) => t.status === ObservedExecutionStatus.Completed,
+      (t) => t.status === ObservedTaskState.Completed,
     ).length;
     return { all: all.length, attention, running, failed, completed };
   });
@@ -162,18 +165,16 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     if (selectedTab === TaskTabFilter.Attention) {
       tasks = tasks.filter((t) => attentionTaskIds.has(t.id));
     } else if (selectedTab === TaskTabFilter.Running) {
-      tasks = tasks.filter((t) => t.status === ObservedExecutionStatus.Running);
+      tasks = tasks.filter((t) => t.status === ObservedTaskState.Running);
     } else if (selectedTab === TaskTabFilter.Failed) {
       tasks = tasks.filter(
         (t) =>
-          t.status === ObservedExecutionStatus.Failed ||
-          t.status === ObservedExecutionStatus.Blocked ||
+          t.status === ObservedTaskState.Failed ||
+          t.status === ObservedTaskState.Blocked ||
           attentionTaskIds.has(t.id),
       );
     } else if (selectedTab === TaskTabFilter.Completed) {
-      tasks = tasks.filter(
-        (t) => t.status === ObservedExecutionStatus.Completed,
-      );
+      tasks = tasks.filter((t) => t.status === ObservedTaskState.Completed);
     }
 
     const query = search.trim().toLocaleLowerCase();
@@ -284,7 +285,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           return;
         }
         if (!response.ok) return;
-        const match = (await response.json()) as ObservedTask;
+        const match: unknown = await response.json();
+        if (!isObservedTask(match))
+          throw new Error('Invalid observer task response');
         durableMatchState = { kind: DurableTaskLookupKind.Found, task: match };
         if (!detailsClosed)
           selectedIdState = {
@@ -334,7 +337,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         requestInit,
       );
       if (!response.ok) throw new Error(`observer returned ${response.status}`);
-      const next = (await response.json()) as ObserverSnapshot;
+      const next: unknown = await response.json();
+      if (!isObserverSnapshot(next))
+        throw new Error('Invalid observer snapshot response');
       snapshotState = { kind: ObserverFeedKind.Loaded, snapshot: next };
       unavailable = false;
       let selectedTaskStillAvailable = false;
@@ -370,14 +375,14 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function statusLabel(status: string) {
     const labels: Record<string, string> = {
-      [ObservedExecutionStatus.Blocked]: copy.blocked,
-      [ObservedExecutionStatus.Cancelled]: copy.cancelled,
-      [ObservedExecutionStatus.Cancelling]: copy.cancelling,
-      [ObservedExecutionStatus.Completed]: copy.completed,
-      [ObservedExecutionStatus.Failed]: copy.failed,
-      [ObservedExecutionStatus.Idle]: copy.idle,
-      [ObservedExecutionStatus.Ready]: copy.ready,
-      [ObservedExecutionStatus.Running]: copy.running,
+      [ObservedTaskState.Blocked]: copy.blocked,
+      [ObservedTaskState.Cancelled]: copy.cancelled,
+      [ObservedTaskState.Cancelling]: copy.cancelling,
+      [ObservedTaskState.Completed]: copy.completed,
+      [ObservedTaskState.Failed]: copy.failed,
+      [WorkerDisplayStatus.Idle]: copy.idle,
+      [ObservedTaskState.Ready]: copy.ready,
+      [ObservedTaskState.Running]: copy.running,
     };
     for (const [candidate, label] of Object.entries(labels)) {
       if (candidate === status) return label;
@@ -387,9 +392,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function isAttentionStatus(status: string): boolean {
     return (
-      status === ObservedExecutionStatus.Blocked ||
-      status === ObservedExecutionStatus.Failed ||
-      status === ObservedExecutionStatus.Cancelling
+      status === ObservedTaskState.Blocked ||
+      status === ObservedTaskState.Failed ||
+      status === ObservedTaskState.Cancelling
     );
   }
 
@@ -503,8 +508,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <div class="worker-capacity" aria-label={copy.workers}>
         {#each snapshotState.kind === ObserverFeedKind.Loaded ? snapshotState.snapshot.agents : [] as agent (agent.id)}
           <span
-            class:worker-running={agent.status ===
-              ObservedExecutionStatus.Running}
+            class:worker-running={agent.status === ObservedTaskState.Running}
             class:worker-stale={!isAgentHealthy(agent)}
             title={`${agent.pod_name}: ${statusLabel(agent.status)}`}
           ></span>
@@ -540,8 +544,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           {#each snapshotState.kind === ObserverFeedKind.Loaded ? snapshotState.snapshot.agents : [] as agent (agent.id)}
             <div class="worker-row">
               <div
-                class:state-running={agent.status ===
-                  ObservedExecutionStatus.Running}
+                class:state-running={agent.status === ObservedTaskState.Running}
                 class:state-stale={!isAgentHealthy(agent)}
                 class="worker-state"
               >
@@ -933,11 +936,11 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     class={`status-mark status-mark-${status.toLocaleLowerCase()}`}
     aria-hidden="true"
   >
-    {#if status === ObservedExecutionStatus.Completed}
+    {#if status === ObservedTaskState.Completed}
       <CheckCircle2 size={compact ? 13 : 16} />
     {:else if isAttentionStatus(status)}
       <AlertTriangle size={compact ? 13 : 16} />
-    {:else if status === ObservedExecutionStatus.Running}
+    {:else if status === ObservedTaskState.Running}
       <Activity size={compact ? 13 : 16} />
     {:else}
       <Clock3 size={compact ? 13 : 16} />

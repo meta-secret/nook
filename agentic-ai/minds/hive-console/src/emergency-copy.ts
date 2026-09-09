@@ -1,6 +1,6 @@
 import english from '../locales/en.json';
 import russian from '../locales/ru.json';
-import type { ObserverCopy } from './types';
+import type { ObserverCopy } from './generated/index';
 
 export class EmergencyCopyCatalog {
   constructor(private readonly locale: string) {}

@@ -4,6 +4,10 @@ use std::io;
 use tokio::time as async_time;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "observer-contract-export",
+    derive(ts_rs::TS, schemars::JsonSchema)
+)]
 pub struct ObserverCopy {
     pub product_name: String,
     pub product_description: String,

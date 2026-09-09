@@ -116,23 +116,44 @@ FROM toolchain AS chef-planner
 COPY Cargo.toml Cargo.lock ./
 COPY vendor vendor
 COPY hive/Cargo.toml hive/Cargo.toml
-RUN mkdir -p hive/src \
-    && touch hive/src/main.rs
+RUN mkdir -p hive/src/bin \
+    && touch hive/src/main.rs hive/src/bin/export_observer_contract.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
+FROM toolchain AS fetched-dependencies
+COPY Cargo.toml Cargo.lock ./
+COPY vendor vendor
+COPY hive/Cargo.toml hive/Cargo.toml
+RUN --network=default mkdir -p hive/src/bin \
+    && touch hive/src/lib.rs hive/src/main.rs hive/src/bin/export_observer_contract.rs \
+    && cargo fetch --locked --config net.git-fetch-with-cli=false
+
+# Native contract output is rebuilt from the same Rust sources as this console.
+FROM fetched-dependencies AS observer-contract-exporter
+COPY hive/src hive/src
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
+    cargo run --locked -p hive --features observer-contract-export \
+      --bin hive-export-observer-contract -- --output /observer-contract
+
 FROM bun AS console-builder
+ENV HIVE_OBSERVER_CONTRACT_INPUT=/usr/local/share/hive-observer-contract
+COPY --from=observer-contract-exporter /observer-contract /usr/local/share/hive-observer-contract
 WORKDIR /console
 COPY hive-console/package.json hive-console/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY hive-console/index.html hive-console/svelte.config.js hive-console/tsconfig.json hive-console/vite.config.ts ./
 COPY hive-console/src src
 COPY hive-console/locales locales
+COPY hive-console/scripts scripts
+COPY hive-console/.prettierignore ./
 RUN bun run check \
     && bun run build
 
 # The hosted console check needs Bun, Chromium, and only the console source.
 # Keep it independent from Nook Web's Rust/WASM preparation graph.
 FROM bun AS console-verification
+ENV HIVE_OBSERVER_CONTRACT_INPUT=/usr/local/share/hive-observer-contract
+COPY --from=observer-contract-exporter /observer-contract /usr/local/share/hive-observer-contract
 USER root
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
@@ -151,17 +172,11 @@ RUN bun install --frozen-lockfile
 COPY hive-console/index.html hive-console/svelte.config.js hive-console/tsconfig.json hive-console/vite.config.ts hive-console/playwright.config.ts hive-console/.prettierrc ./
 COPY hive-console/src src
 COPY hive-console/locales locales
+COPY hive-console/scripts scripts
+COPY hive-console/.prettierignore ./
 COPY hive-console/e2e e2e
 COPY hive-console/PRODUCT.md hive-console/DESIGN.md ./
 RUN bun run format
-
-FROM toolchain AS fetched-dependencies
-COPY Cargo.toml Cargo.lock ./
-COPY vendor vendor
-COPY hive/Cargo.toml hive/Cargo.toml
-RUN --network=default mkdir -p hive/src \
-    && touch hive/src/lib.rs hive/src/main.rs \
-    && cargo fetch --locked --config net.git-fetch-with-cli=false
 
 # Production image builds use a release-profile cargo-chef layer.
 FROM fetched-dependencies AS dependencies

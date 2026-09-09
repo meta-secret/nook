@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { ObserverSnapshot } from '../src/types';
-import { ObservedAlertKind, ObservedAlertSeverity } from '../src/types';
+import type { ObserverSnapshot } from '../src/generated/index';
+import {
+  ObservedAlertKind,
+  ObservedAlertSeverity,
+} from '../src/generated/values';
 
 const now = Date.now();
 
