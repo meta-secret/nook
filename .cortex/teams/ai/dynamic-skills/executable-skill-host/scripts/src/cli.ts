@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 import {
   SKILL_TOOLS_LIST_INVOKE,
   ExecutableSkillActions,
@@ -78,34 +77,25 @@ export class ExecutableSkillCli {
       };
       return ExecutableSkillCli.errorOutcome(outcomeRequest);
     }
-    try {
-      const execution = decoded.request.execute();
-      if (execution.isErr()) {
-        return ExecutableSkillCli.errorOutcome({
-          phase: SkillCommandPhase.Execute,
-          issue: SkillCommandIssue.InvalidRequest,
-          message: 'Executable skill action failed validation or verification.',
-        });
-      }
-      const response: SkillSuccessResponse = {
-        ok: true,
-        family: decoded.request.family,
-        operation: decoded.request.operation,
-        result: execution.value,
-      };
-      const finalRequest: FinalSkillCliResponseRequest = {
-        exitCode: 0,
-        response: response as UntrustedSkillYamlNode,
-      };
-      return ExecutableSkillCli.finalizeSkillCliResponse(finalRequest);
-    } catch {
-      const outcomeRequest: SkillErrorOutcomeRequest = {
+    const execution = decoded.request.execute();
+    if (execution.isErr()) {
+      return ExecutableSkillCli.errorOutcome({
         phase: SkillCommandPhase.Execute,
         issue: SkillCommandIssue.InvalidRequest,
         message: 'Executable skill action failed validation or verification.',
-      };
-      return ExecutableSkillCli.errorOutcome(outcomeRequest);
+      });
     }
+    const response: SkillSuccessResponse = {
+      ok: true,
+      family: decoded.request.family,
+      operation: decoded.request.operation,
+      result: execution.value,
+    };
+    const finalRequest: FinalSkillCliResponseRequest = {
+      exitCode: 0,
+      response: response as UntrustedSkillYamlNode,
+    };
+    return ExecutableSkillCli.finalizeSkillCliResponse(finalRequest);
   }
 
   private static requestTooLargeOutcome(): SkillCliOutcome {

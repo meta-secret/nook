@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import {
   CortexArticleSemanticKind,
   CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
@@ -31,141 +32,162 @@ import {
 export { CortexArticleRequestDecodeError } from './decode-error.ts';
 
 export class CortexArticleTransport {
-  static encodeCortexArticleRequest(
-    request: AuditCortexArticleStructureRequest,
-  ): string {
-    const serialized = JSON.stringify(request);
-    CortexArticleTransport.assertSerializedByteLimit({
-      label: SerializedCortexArticleContract.Request,
-      maximumBytes: CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
-      serialized,
-    });
-    return serialized;
+  private constructor(private readonly serialized: string) {}
+
+  static from(serialized: string): CortexArticleTransport {
+    return new CortexArticleTransport(serialized);
   }
 
-  static decodeCortexArticleRequest(
-    serialized: string,
-  ): AuditCortexArticleStructureRequest {
+  decodeRequest(): Result<
+    AuditCortexArticleStructureRequest,
+    CortexArticleRequestDecodeError
+  > {
+    const serialized = this.serialized;
     if (
       UTF8_ENCODER.encode(serialized).byteLength >
       CORTEX_ARTICLE_REQUEST_BYTE_LIMIT
     ) {
-      throw new CortexArticleRequestDecodeError({
-        kind: CortexArticleRequestFailureKind.RequestBytes,
-        path: '',
-      });
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.RequestBytes,
+          path: '',
+        }),
+      );
     }
     let transport: unknown;
     try {
       transport = JSON.parse(serialized);
     } catch {
-      throw new CortexArticleRequestDecodeError({
-        kind: CortexArticleRequestFailureKind.InvalidRequest,
-        path: '',
-      });
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidRequest,
+          path: '',
+        }),
+      );
     }
     const envelope = CORTEX_ARTICLE_REQUEST_ENVELOPE_SCHEMA.safeParse(
       transport,
       { reportInput: true },
     );
     if (!envelope.success) {
-      throw new CortexArticleSchemaFailure({
-        error: envelope.error,
-        kind: CortexArticleRequestFailureKind.InvalidRequest,
-        path: '',
-      }).error();
-    }
-    const documents = new CortexArticleDocumentSequence();
-    for (const [index, candidate] of envelope.data.documents.entries()) {
-      documents.append(
-        CortexArticleTransport.decodeDocument({
-          path: `documents[${index}]`,
-          transport: candidate,
-        }),
+      return err(
+        new CortexArticleSchemaFailure({
+          error: envelope.error,
+          kind: CortexArticleRequestFailureKind.InvalidRequest,
+          path: '',
+        }).error(),
       );
+    }
+    let documents = new CortexArticleDocumentSequence();
+    for (const [index, candidate] of envelope.data.documents.entries()) {
+      const document = this.decodeDocument({
+        path: `documents[${index}]`,
+        transport: candidate,
+      });
+      if (document.isErr()) return err(document.error);
+      const appended = documents.append(document.value);
+      if (appended.isErr()) return err(appended.error);
+      documents = appended.value;
     }
     const request: AuditCortexArticleStructureRequest = {
       kind: envelope.data.kind,
       documents: documents.values(),
     };
-    new CortexArticleRequestCapacity(request).assertWithinBounds();
-    return request;
+    return new CortexArticleRequestCapacity(request).admit().map(() => request);
   }
 
-  static encodeCortexArticleResult(
-    result: CortexArticleStructureResult,
-  ): string {
-    const serialized = JSON.stringify(result);
-    CortexArticleTransport.assertSerializedByteLimit({
-      label: SerializedCortexArticleContract.Result,
-      maximumBytes: CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
-      serialized,
-    });
-    return serialized;
-  }
-
-  static decodeCortexArticleResult(
-    serialized: string,
-  ): CortexArticleStructureResult {
-    CortexArticleTransport.assertSerializedByteLimit({
-      label: SerializedCortexArticleContract.Result,
-      maximumBytes: CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
-      serialized,
-    });
-    const transport: unknown = JSON.parse(serialized);
+  decodeResult(): Result<
+    CortexArticleStructureResult,
+    CortexArticleRequestDecodeError
+  > {
+    const serialized = this.serialized;
+    if (
+      UTF8_ENCODER.encode(serialized).byteLength >
+      CORTEX_ARTICLE_RESULT_BYTE_LIMIT
+    ) {
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.ResultBytes,
+          path: '',
+        }),
+      );
+    }
+    let transport: unknown;
+    try {
+      transport = JSON.parse(serialized);
+    } catch {
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidResult,
+          path: '',
+        }),
+      );
+    }
     const envelope = CORTEX_ARTICLE_RESULT_ENVELOPE_SCHEMA.safeParse(transport);
     if (!envelope.success)
-      throw new Error('Invalid Cortex article-structure result.');
-    return {
-      kind: envelope.data.kind,
-      findings: envelope.data.findings.map(
-        CortexArticleTransport.decodeFinding,
-      ),
-    };
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidResult,
+          path: '',
+        }),
+      );
+    const findings: CortexArticleFinding[] = [];
+    for (const transport of envelope.data.findings) {
+      const finding = this.decodeFinding(transport);
+      if (finding.isErr()) return err(finding.error);
+      findings.push(finding.value);
+    }
+    return ok({ kind: envelope.data.kind, findings });
   }
 
-  private static decodeDocument(
+  private decodeDocument(
     request: DecodeDocumentRequest,
-  ): CortexArticleDocument {
+  ): Result<CortexArticleDocument, CortexArticleRequestDecodeError> {
     const envelope = CORTEX_ARTICLE_DOCUMENT_ENVELOPE_SCHEMA.safeParse(
       request.transport,
       { reportInput: true },
     );
     if (!envelope.success) {
-      throw new CortexArticleSchemaFailure({
-        error: envelope.error,
-        kind: CortexArticleRequestFailureKind.InvalidDocument,
-        path: request.path,
-      }).error();
-    }
-    const blocks = new CortexArticleBlockSequence(request.path);
-    for (const [index, candidate] of envelope.data.blocks.entries()) {
-      blocks.append(
-        CortexArticleTransport.decodeBlock({
-          path: `${request.path}.blocks[${index}]`,
-          transport: candidate,
-        }),
+      return err(
+        new CortexArticleSchemaFailure({
+          error: envelope.error,
+          kind: CortexArticleRequestFailureKind.InvalidDocument,
+          path: request.path,
+        }).error(),
       );
     }
-    return {
+    let blocks = new CortexArticleBlockSequence(request.path);
+    for (const [index, candidate] of envelope.data.blocks.entries()) {
+      const block = this.decodeBlock({
+        path: `${request.path}.blocks[${index}]`,
+        transport: candidate,
+      });
+      if (block.isErr()) return err(block.error);
+      const appended = blocks.append(block.value);
+      if (appended.isErr()) return err(appended.error);
+      blocks = appended.value;
+    }
+    return ok({
       relativePath: envelope.data.relativePath,
       blocks: blocks.values(),
-    };
+    });
   }
 
-  private static decodeBlock(
+  private decodeBlock(
     request: DecodeBlockRequest,
-  ): CortexArticleSemanticBlock {
+  ): Result<CortexArticleSemanticBlock, CortexArticleRequestDecodeError> {
     // The legacy contract admits source line before the variant or exact keys.
     const line = CORTEX_ARTICLE_BLOCK_LINE_SCHEMA.safeParse(request.transport);
     if (!line.success) {
       const path = line.error.issues.some((issue) => issue.path.length > 0)
         ? `${request.path}.line`
         : request.path;
-      throw new CortexArticleRequestDecodeError({
-        kind: CortexArticleRequestFailureKind.InvalidBlock,
-        path,
-      });
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidBlock,
+          path,
+        }),
+      );
     }
     if (line.data.kind === CortexArticleSemanticKind.Heading) {
       const heading = CORTEX_ARTICLE_HEADING_SCHEMA.safeParse(
@@ -173,67 +195,78 @@ export class CortexArticleTransport {
         { reportInput: true },
       );
       if (!heading.success) {
-        throw new CortexArticleSchemaFailure({
-          error: heading.error,
-          kind: CortexArticleRequestFailureKind.InvalidHeading,
-          path: request.path,
-        }).error();
+        return err(
+          new CortexArticleSchemaFailure({
+            error: heading.error,
+            kind: CortexArticleRequestFailureKind.InvalidHeading,
+            path: request.path,
+          }).error(),
+        );
       }
-      return heading.data;
+      return ok(heading.data);
     }
     if (!CORTEX_ARTICLE_SIMPLE_KIND_SCHEMA.safeParse(line.data.kind).success) {
-      throw new CortexArticleRequestDecodeError({
-        kind: CortexArticleRequestFailureKind.InvalidBlockKind,
-        path: `${request.path}.kind`,
-      });
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidBlockKind,
+          path: `${request.path}.kind`,
+        }),
+      );
     }
     const block = CORTEX_ARTICLE_SIMPLE_BLOCK_SCHEMA.safeParse(
       request.transport,
       { reportInput: true },
     );
     if (!block.success) {
-      throw new CortexArticleSchemaFailure({
-        error: block.error,
-        kind: CortexArticleRequestFailureKind.InvalidBlock,
-        path: request.path,
-      }).error();
-    }
-    return block.data;
-  }
-
-  private static decodeFinding(transport: unknown): CortexArticleFinding {
-    const finding = CORTEX_ARTICLE_FINDING_SCHEMA.safeParse(transport);
-    if (!finding.success) throw new Error('Invalid Cortex article finding.');
-    new CortexArticleFindingAdmission(finding.data).assertCanonical();
-    return finding.data;
-  }
-
-  private static assertSerializedByteLimit(
-    request: AssertSerializedByteLimitRequest,
-  ): void {
-    if (
-      UTF8_ENCODER.encode(request.serialized).byteLength > request.maximumBytes
-    ) {
-      throw new Error(
-        `Cortex article ${request.label} exceeds its byte bound.`,
+      return err(
+        new CortexArticleSchemaFailure({
+          error: block.error,
+          kind: CortexArticleRequestFailureKind.InvalidBlock,
+          path: request.path,
+        }).error(),
       );
     }
+    return ok(block.data);
+  }
+
+  private decodeFinding(
+    transport: unknown,
+  ): Result<CortexArticleFinding, CortexArticleRequestDecodeError> {
+    const finding = CORTEX_ARTICLE_FINDING_SCHEMA.safeParse(transport);
+    if (!finding.success)
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidFinding,
+          path: '',
+        }),
+      );
+    return new CortexArticleFindingAdmission(finding.data)
+      .admit()
+      .map(() => finding.data);
   }
 }
 
 class CortexArticleDocumentSequence {
-  private readonly documents: CortexArticleDocument[] = [];
-  private readonly paths = new Set<string>();
+  constructor(
+    private readonly documents: readonly CortexArticleDocument[] = [],
+  ) {}
 
-  append(document: CortexArticleDocument): void {
-    if (this.paths.has(document.relativePath)) {
-      throw new CortexArticleRequestDecodeError({
-        kind: CortexArticleRequestFailureKind.DuplicateDocument,
-        path: `documents[${this.documents.length}].relativePath`,
-      });
+  append(
+    document: CortexArticleDocument,
+  ): Result<CortexArticleDocumentSequence, CortexArticleRequestDecodeError> {
+    if (
+      this.documents.some(
+        (existing) => existing.relativePath === document.relativePath,
+      )
+    ) {
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.DuplicateDocument,
+          path: `documents[${this.documents.length}].relativePath`,
+        }),
+      );
     }
-    this.paths.add(document.relativePath);
-    this.documents.push(document);
+    return ok(new CortexArticleDocumentSequence([...this.documents, document]));
   }
 
   values(): readonly CortexArticleDocument[] {
@@ -242,20 +275,28 @@ class CortexArticleDocumentSequence {
 }
 
 class CortexArticleBlockSequence {
-  private readonly blocks: CortexArticleSemanticBlock[] = [];
-  private previousLine = 0;
+  constructor(
+    private readonly documentPath: string,
+    private readonly blocks: readonly CortexArticleSemanticBlock[] = [],
+  ) {}
 
-  constructor(private readonly documentPath: string) {}
-
-  append(block: CortexArticleSemanticBlock): void {
-    if (block.line <= this.previousLine) {
-      throw new CortexArticleRequestDecodeError({
-        kind: CortexArticleRequestFailureKind.NonmonotonicLine,
-        path: `${this.documentPath}.blocks[${this.blocks.length}].line`,
-      });
+  append(
+    block: CortexArticleSemanticBlock,
+  ): Result<CortexArticleBlockSequence, CortexArticleRequestDecodeError> {
+    if (block.line <= (this.blocks.at(-1)?.line ?? 0)) {
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.NonmonotonicLine,
+          path: `${this.documentPath}.blocks[${this.blocks.length}].line`,
+        }),
+      );
     }
-    this.previousLine = block.line;
-    this.blocks.push(block);
+    return ok(
+      new CortexArticleBlockSequence(this.documentPath, [
+        ...this.blocks,
+        block,
+      ]),
+    );
   }
 
   values(): readonly CortexArticleSemanticBlock[] {
@@ -271,13 +312,56 @@ type DecodeBlockRequest = {
   readonly path: string;
   readonly transport: unknown;
 };
-type AssertSerializedByteLimitRequest = {
-  readonly label: SerializedCortexArticleContract;
-  readonly maximumBytes: number;
-  readonly serialized: string;
-};
-enum SerializedCortexArticleContract {
-  Request = 'request',
-  Result = 'result',
-}
 const UTF8_ENCODER = new TextEncoder();
+
+export class CortexArticleRequestEncoding {
+  constructor(private readonly request: AuditCortexArticleStructureRequest) {}
+  execute(): Result<string, CortexArticleRequestDecodeError> {
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(this.request);
+    } catch {
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidRequest,
+          path: '',
+        }),
+      );
+    }
+    return UTF8_ENCODER.encode(serialized).byteLength >
+      CORTEX_ARTICLE_REQUEST_BYTE_LIMIT
+      ? err(
+          new CortexArticleRequestDecodeError({
+            kind: CortexArticleRequestFailureKind.RequestBytes,
+            path: '',
+          }),
+        )
+      : ok(serialized);
+  }
+}
+
+export class CortexArticleResultEncoding {
+  constructor(private readonly result: CortexArticleStructureResult) {}
+  execute(): Result<string, CortexArticleRequestDecodeError> {
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(this.result);
+    } catch {
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidResult,
+          path: '',
+        }),
+      );
+    }
+    return UTF8_ENCODER.encode(serialized).byteLength >
+      CORTEX_ARTICLE_RESULT_BYTE_LIMIT
+      ? err(
+          new CortexArticleRequestDecodeError({
+            kind: CortexArticleRequestFailureKind.ResultBytes,
+            path: '',
+          }),
+        )
+      : ok(serialized);
+  }
+}

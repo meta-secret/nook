@@ -1,3 +1,6 @@
+import { err, ok, type Result } from 'neverthrow';
+import type { CortexArticleRequestDecodeError } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/decode-error.ts';
+import type { CortexDocumentMapFailure } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/application.ts';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
@@ -87,7 +90,7 @@ export class CortexAuditCommand {
 
   static async runCortexAudit(
     request: CortexAuditRequest,
-  ): Promise<CortexAuditReport> {
+  ): Promise<Result<CortexAuditReport, CortexAuditFailure>> {
     const args: RunCortexAuditFromDirectoryArgs = {
       request,
       startDirectory: process.cwd(),
@@ -97,7 +100,7 @@ export class CortexAuditCommand {
 
   static async runCortexAuditFromDirectory(
     args: RunCortexAuditFromDirectoryArgs,
-  ): Promise<CortexAuditReport> {
+  ): Promise<Result<CortexAuditReport, CortexAuditFailure>> {
     const repoRoot = RepositoryRoot.find(args.startDirectory);
     const cortexRoot = path.join(repoRoot, '.cortex');
     if (!existsSync(cortexRoot)) {
@@ -149,7 +152,8 @@ export class CortexAuditCommand {
       })),
       excludedDocumentPaths,
     }).execute();
-    const structureFindings = [...documentMapResult.findings];
+    if (documentMapResult.isErr()) return err(documentMapResult.error);
+    const structureFindings = [...documentMapResult.value.findings];
     const syntaxInvalidPaths = new Set(
       structureFindings
         .filter(
@@ -209,9 +213,11 @@ export class CortexAuditCommand {
     const articleStructureAuditArgs: AuditCortexArticleStructureArgs = {
       documents,
     };
-    const articleStructureFindings = CortexMarkdownArticle.audit(
+    const articleAudit = CortexMarkdownArticle.from(
       articleStructureAuditArgs,
-    );
+    ).execute();
+    if (articleAudit.isErr()) return err(articleAudit.error);
+    const articleStructureFindings = articleAudit.value;
 
     const aiSkillsDir = path.join(cortexRoot, 'teams', 'ai', 'dynamic-skills');
     const skillDirectories = [
@@ -297,7 +303,7 @@ export class CortexAuditCommand {
       documents: allDocuments,
     });
 
-    return {
+    return ok({
       brokenLinks,
       invalidExecutableSkillPackages: executableSkillPackageFindings,
       missingFromIndex,
@@ -321,7 +327,7 @@ export class CortexAuditCommand {
         articleStructureFindings.length === 0 &&
         identifierFindings.length === 0 &&
         contractFindings.length === 0,
-    };
+    });
   }
 
   private static publishedIdentifierRegistry(
@@ -497,3 +503,6 @@ type IsPersistentCortexMarkdownFileArgs = {
   readonly cortexRoot: string;
   readonly filePath: string;
 };
+
+export type CortexAuditFailure =
+  CortexArticleRequestDecodeError | CortexDocumentMapFailure;

@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow';
 import { expect, test } from 'bun:test';
 
 import { CortexDocumentMapApplication } from '../src/application.ts';
@@ -43,11 +44,14 @@ type MakeRequest = {
 };
 
 test('audits supplied documents without repository I/O', () => {
-  const result = CortexDocumentMapApplication.from(
+  const resultOutcome = CortexDocumentMapApplication.from(
     CortexDocumentMapApplicationScenario.request({
       content: '# Cortex Context Router\n',
     }),
   ).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   expect(result).toEqual({
     kind: CortexDocumentMapContractKind.Result,
     findings: [],
@@ -55,11 +59,14 @@ test('audits supplied documents without repository I/O', () => {
 });
 
 test('rejects HTML before topology and preserves the syntax diagnostic', () => {
-  const result = CortexDocumentMapApplication.from(
+  const resultOutcome = CortexDocumentMapApplication.from(
     CortexDocumentMapApplicationScenario.request({
       content: '# Cortex Context Router\n\n<div>hidden</div>\n',
     }),
   ).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   expect(result.findings.map((finding) => finding.code)).toEqual([
     CortexStructureFindingCode.ProhibitedHtml,
     CortexStructureFindingCode.MissingIndex,
@@ -80,8 +87,10 @@ test('keeps excluded transient documents in syntax enforcement only', () => {
     excludedDocumentPaths: [excluded],
   };
   expect(
-    CortexDocumentMapApplication.from(auditRequest).execute().findings,
-  ).toEqual([]);
+    CortexDocumentMapApplication.from(auditRequest)
+      .execute()
+      .map((result) => result.findings),
+  ).toEqual(ok([]));
 });
 
 test('does not suppress persistent links to excluded transient documents', () => {
@@ -98,16 +107,20 @@ test('does not suppress persistent links to excluded transient documents', () =>
     excludedDocumentPaths: [excluded],
   };
   expect(
-    CortexDocumentMapApplication.from(auditRequest).execute().findings,
-  ).toEqual([
-    {
-      code: CortexStructureFindingCode.InvalidIndexEntry,
-      file: '.cortex/knowledge-graph.md',
-      line: 3,
-      message:
-        'Index link points to non-existent document: .cortex/.session/note.md',
-    },
-  ]);
+    CortexDocumentMapApplication.from(auditRequest)
+      .execute()
+      .map((result) => result.findings),
+  ).toEqual(
+    ok([
+      {
+        code: CortexStructureFindingCode.InvalidIndexEntry,
+        file: '.cortex/knowledge-graph.md',
+        line: 3,
+        message:
+          'Index link points to non-existent document: .cortex/.session/note.md',
+      },
+    ]),
+  );
 });
 
 test('fails closed for unknown keys, unsafe paths, and missing exclusions', () => {
@@ -126,8 +139,15 @@ test('fails closed for unknown keys, unsafe paths, and missing exclusions', () =
     }),
   ];
   for (const serialized of cases) {
-    expect(() => CortexDocumentMapTransport.from(serialized).execute()).toThrow(
-      CortexDocumentMapRequestDecodeError,
-    );
+    CortexDocumentMapTransport.from(serialized)
+      .execute()
+      .match(
+        (value) => {
+          expect(value).toBeUndefined();
+        },
+        (outcome) => {
+          expect(outcome).toBeInstanceOf(CortexDocumentMapRequestDecodeError);
+        },
+      );
   }
 });

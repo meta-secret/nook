@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
@@ -17,15 +18,17 @@ import {
 
 export class CortexArticleRequestCapacity {
   constructor(private readonly request: AuditCortexArticleStructureRequest) {}
-  assertWithinBounds(): void {
+  admit(): Result<void, CortexArticleRequestDecodeError> {
     const request = this.request;
     const findings = CortexArticleAudit.from(request).execute();
     const contributor = this.findingContributorPath(findings);
     if (findings.length > CORTEX_ARTICLE_FINDING_LIMIT) {
-      throw new CortexArticleRequestDecodeError({
-        kind: CortexArticleRequestFailureKind.FindingCapacity,
-        path: contributor,
-      });
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.FindingCapacity,
+          path: contributor,
+        }),
+      );
     }
     const result: CortexArticleStructureResult = {
       kind: CortexArticleContractKind.Result,
@@ -35,11 +38,14 @@ export class CortexArticleRequestCapacity {
       UTF8_ENCODER.encode(JSON.stringify(result)).byteLength >
       CORTEX_ARTICLE_RESULT_BYTE_LIMIT
     ) {
-      throw new CortexArticleRequestDecodeError({
-        kind: CortexArticleRequestFailureKind.ResultBudget,
-        path: contributor,
-      });
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.ResultBudget,
+          path: contributor,
+        }),
+      );
     }
+    return ok(undefined);
   }
 
   private findingContributorPath(
@@ -63,18 +69,29 @@ export class CortexArticleRequestCapacity {
 export class CortexArticleFindingAdmission {
   constructor(private readonly finding: CortexArticleFinding) {}
 
-  assertCanonical(): void {
+  admit(): Result<void, CortexArticleRequestDecodeError> {
     if (
       !CORTEX_ARTICLE_MARKDOWN_PATH_SCHEMA.safeParse(this.finding.file).success
     ) {
-      throw new Error('Invalid Cortex article finding diagnostics.');
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidDiagnostics,
+          path: '',
+        }),
+      );
     }
     const shape = new CortexArticleDiagnosticKind(this.finding.code).shape();
     if (
       shape.match(this.finding.message) === CortexArticleDiagnosticMatch.Invalid
     ) {
-      throw new Error('Invalid Cortex article finding diagnostics.');
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.InvalidDiagnostics,
+          path: '',
+        }),
+      );
     }
+    return ok(undefined);
   }
 }
 

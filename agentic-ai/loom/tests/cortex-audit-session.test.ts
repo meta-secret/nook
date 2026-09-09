@@ -259,8 +259,11 @@ test('fails the integrated Cortex audit for rendered Markdown tables', async () 
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
     const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
-    const report =
+    const reportOutcome =
       await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
+    expect(reportOutcome.isOk()).toBe(true);
+    if (reportOutcome.isErr()) return;
+    const report = reportOutcome.value;
     expect(report.auditOk).toBe(false);
     expect(report.articleStructureFindings).toContainEqual({
       code: CortexArticleFindingCode.MarkdownTable,
@@ -329,8 +332,11 @@ Fourth paragraph.
     );
     const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
-    const report =
+    const reportOutcome =
       await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
+    expect(reportOutcome.isOk()).toBe(true);
+    if (reportOutcome.isErr()) return;
+    const report = reportOutcome.value;
     expect(report.auditOk).toBe(false);
     const agentFindings = report.structureFindings.filter(
       (finding) => finding.file === '.cortex/AGENTS.md',
@@ -405,8 +411,11 @@ test('admits session Markdown only through the global HTML syntax gate', async (
     );
     const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
-    const ordinaryReport =
+    const ordinaryReportOutcome =
       await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
+    expect(ordinaryReportOutcome.isOk()).toBe(true);
+    if (ordinaryReportOutcome.isErr()) return;
+    const ordinaryReport = ordinaryReportOutcome.value;
     expect(
       ordinaryReport.structureFindings.some((finding) =>
         finding.file.includes('.session'),
@@ -424,8 +433,11 @@ test('admits session Markdown only through the global HTML syntax gate', async (
     ).toBe(false);
 
     writeFileSync(sessionPath, '<!-- forbidden session HTML -->\n');
-    const htmlReport =
+    const htmlReportOutcome =
       await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
+    expect(htmlReportOutcome.isOk()).toBe(true);
+    if (htmlReportOutcome.isErr()) return;
+    const htmlReport = htmlReportOutcome.value;
     expect(htmlReport.auditOk).toBe(false);
     const sessionHtmlFindings = htmlReport.structureFindings.filter(
       (finding) =>
@@ -537,8 +549,11 @@ ${gizmoIndexRows}
     unlinkSync(path.join(repoRoot, '.vale', 'density.ini'));
     const request = { includeDensityLint: false };
     const auditArgs = { request, startDirectory: repoRoot };
-    const report =
+    const reportOutcome =
       await CortexAuditCommand.runCortexAuditFromDirectory(auditArgs);
+    expect(reportOutcome.isOk()).toBe(true);
+    if (reportOutcome.isErr()) return;
+    const report = reportOutcome.value;
     const expectedReport: CortexAuditReport = {
       brokenLinks: [],
       invalidExecutableSkillPackages: [],

@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import {
   CortexDocumentMapContractKind,
   CORTEX_DOCUMENT_MAP_CONTENT_LIMIT,
@@ -20,7 +21,7 @@ import {
 } from './cortex-document-structure.ts';
 
 export class CortexDocumentMapTransport {
-  private static isTransportRecord(
+  private isTransportRecord(
     value: unknown,
   ): value is { readonly [key: string]: unknown } {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
@@ -28,98 +29,97 @@ export class CortexDocumentMapTransport {
 
   private constructor(private readonly request: string) {}
 
-  static encodeCortexDocumentMapRequest(
-    request: AuditCortexDocumentMapRequest,
-  ): string {
-    const serialized = JSON.stringify(request);
-    if (
-      UTF8_ENCODER.encode(serialized).byteLength >
-      CORTEX_DOCUMENT_MAP_REQUEST_BYTE_LIMIT
-    ) {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Request exceeds its byte bound.',
-        path: '',
-      });
-    }
-    return serialized;
-  }
-
   static from(serialized: string): CortexDocumentMapTransport {
     return new CortexDocumentMapTransport(serialized);
   }
 
-  public execute(): AuditCortexDocumentMapRequest {
+  public execute(): Result<
+    AuditCortexDocumentMapRequest,
+    CortexDocumentMapRequestDecodeError
+  > {
     const serialized = this.request;
     if (
       UTF8_ENCODER.encode(serialized).byteLength >
       CORTEX_DOCUMENT_MAP_REQUEST_BYTE_LIMIT
     ) {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Request exceeds its byte bound.',
-        path: '',
-      });
+      return err(
+        this.failure({
+          message: 'Request exceeds its byte bound.',
+          path: '',
+        }),
+      );
     }
     let transport: unknown;
     try {
       transport = JSON.parse(serialized);
     } catch {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Invalid Cortex document-map request.',
-        path: '',
-      });
+      return err(
+        this.failure({
+          message: 'Invalid Cortex document-map request.',
+          path: '',
+        }),
+      );
     }
-    if (!CortexDocumentMapTransport.isRecord(transport)) {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Invalid Cortex document-map request.',
-        path: '',
-      });
+    if (!this.isRecord(transport)) {
+      return err(
+        this.failure({
+          message: 'Invalid Cortex document-map request.',
+          path: '',
+        }),
+      );
     }
-    CortexDocumentMapTransport.assertExactKeys({
+    const shape = this.assertExactKeys({
       value: transport,
       expected: REQUEST_KEYS,
       path: '',
     });
+    if (shape.isErr()) return err(shape.error);
     if (transport.kind !== CortexDocumentMapContractKind.Request) {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Invalid Cortex document-map request kind.',
-        path: 'kind',
-      });
+      return err(
+        this.failure({
+          message: 'Invalid Cortex document-map request kind.',
+          path: 'kind',
+        }),
+      );
     }
     if (
       !Array.isArray(transport.documents) ||
       transport.documents.length > CORTEX_DOCUMENT_MAP_DOCUMENT_LIMIT
     ) {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Invalid Cortex document collection.',
-        path: 'documents',
-      });
+      return err(
+        this.failure({
+          message: 'Invalid Cortex document collection.',
+          path: 'documents',
+        }),
+      );
     }
     if (
       !Array.isArray(transport.excludedDocumentPaths) ||
       transport.excludedDocumentPaths.length >
         CORTEX_DOCUMENT_MAP_EXCLUDED_PATH_LIMIT
     ) {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Invalid excluded document paths.',
-        path: 'excludedDocumentPaths',
-      });
+      return err(
+        this.failure({
+          message: 'Invalid excluded document paths.',
+          path: 'excludedDocumentPaths',
+        }),
+      );
     }
     const documents: CortexDocumentMapDocument[] = [];
     for (const [index, document] of transport.documents.entries()) {
-      documents.push(
-        CortexDocumentMapTransport.decodeDocument({
-          transport: document,
-          index,
-        }),
-      );
+      const decoded = this.decodeDocument({ transport: document, index });
+      if (decoded.isErr()) return err(decoded.error);
+      documents.push(decoded.value);
     }
     const documentPaths = new Set<string>();
     for (const [index, document] of documents.entries()) {
       if (documentPaths.has(document.relativePath)) {
-        throw CortexDocumentMapTransport.failure({
-          message: 'Duplicate Cortex document path.',
-          path: `documents[${index}].relativePath`,
-        });
+        return err(
+          this.failure({
+            message: 'Duplicate Cortex document path.',
+            path: `documents[${index}].relativePath`,
+          }),
+        );
       }
       documentPaths.add(document.relativePath);
     }
@@ -130,158 +130,178 @@ export class CortexDocumentMapTransport {
       excludedPath,
     ] of transport.excludedDocumentPaths.entries()) {
       const fieldPath = `excludedDocumentPaths[${index}]`;
-      if (
-        !CortexDocumentMapTransport.validPath(excludedPath) ||
-        !documentPaths.has(excludedPath)
-      ) {
-        throw CortexDocumentMapTransport.failure({
-          message: 'Invalid excluded Cortex document path.',
-          path: fieldPath,
-        });
+      if (!this.validPath(excludedPath) || !documentPaths.has(excludedPath)) {
+        return err(
+          this.failure({
+            message: 'Invalid excluded Cortex document path.',
+            path: fieldPath,
+          }),
+        );
       }
       if (excludedPaths.has(excludedPath)) {
-        throw CortexDocumentMapTransport.failure({
-          message: 'Duplicate excluded Cortex document path.',
-          path: fieldPath,
-        });
+        return err(
+          this.failure({
+            message: 'Duplicate excluded Cortex document path.',
+            path: fieldPath,
+          }),
+        );
       }
       excludedPaths.add(excludedPath);
       excludedDocumentPaths.push(excludedPath);
     }
-    return {
+    return ok({
       kind: CortexDocumentMapContractKind.Request,
       documents,
       excludedDocumentPaths,
-    };
+    });
   }
 
-  static encodeCortexDocumentMapResult(
-    result: CortexDocumentMapResult,
-  ): string {
-    const serialized = JSON.stringify(result);
-    CortexDocumentMapTransport.assertResultByteLimit(serialized);
-    return serialized;
-  }
-
-  static decodeCortexDocumentMapResult(
-    serialized: string,
-  ): CortexDocumentMapResult {
-    CortexDocumentMapTransport.assertResultByteLimit(serialized);
+  decodeResult(): Result<
+    CortexDocumentMapResult,
+    CortexDocumentMapResultDecodeError
+  > {
+    const serialized = this.request;
+    const capacity = this.assertResultByteLimit(serialized);
+    if (capacity.isErr()) return err(capacity.error);
     let transport: unknown;
     try {
       transport = JSON.parse(serialized);
     } catch {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Invalid Cortex document-map result.',
-        path: '',
-      });
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex document-map result.',
+          path: '',
+        }),
+      );
     }
-    if (!CortexDocumentMapTransport.isResultRecord(transport)) {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Invalid Cortex document-map result.',
-        path: '',
-      });
+    if (!this.isResultRecord(transport)) {
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex document-map result.',
+          path: '',
+        }),
+      );
     }
-    CortexDocumentMapTransport.assertResultExactKeys({
+    const shape = this.assertResultExactKeys({
       value: transport,
       expected: RESULT_KEYS,
       path: '',
     });
+    if (shape.isErr()) return err(shape.error);
     if (transport.kind !== CortexDocumentMapContractKind.Result) {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Invalid Cortex document-map result kind.',
-        path: 'kind',
-      });
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex document-map result kind.',
+          path: 'kind',
+        }),
+      );
     }
     if (
       !Array.isArray(transport.findings) ||
       transport.findings.length > CORTEX_DOCUMENT_MAP_FINDING_LIMIT
     ) {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Invalid Cortex document-map findings.',
-        path: 'findings',
-      });
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex document-map findings.',
+          path: 'findings',
+        }),
+      );
     }
     const findings: CortexStructureFinding[] = [];
     for (const [index, findingTransport] of transport.findings.entries()) {
-      const finding = CortexDocumentMapTransport.decodeFinding({
+      const finding = this.decodeFinding({
         transport: findingTransport,
         index,
       });
-      findings.push(finding);
+      if (finding.isErr()) return err(finding.error);
+      findings.push(finding.value);
     }
-    return { kind: CortexDocumentMapContractKind.Result, findings };
+    return ok({ kind: CortexDocumentMapContractKind.Result, findings });
   }
 
-  private static decodeDocument(
+  private decodeDocument(
     request: DecodeDocumentRequest,
-  ): CortexDocumentMapDocument {
+  ): Result<CortexDocumentMapDocument, CortexDocumentMapRequestDecodeError> {
     const path = `documents[${request.index}]`;
-    if (!CortexDocumentMapTransport.isRecord(request.transport)) {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Invalid Cortex document.',
-        path,
-      });
+    if (!this.isRecord(request.transport)) {
+      return err(
+        this.failure({
+          message: 'Invalid Cortex document.',
+          path,
+        }),
+      );
     }
-    CortexDocumentMapTransport.assertExactKeys({
+    const shape = this.assertExactKeys({
       value: request.transport,
       expected: DOCUMENT_KEYS,
       path,
     });
-    if (!CortexDocumentMapTransport.validPath(request.transport.relativePath)) {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Invalid Cortex document path.',
-        path: `${path}.relativePath`,
-      });
+    if (shape.isErr()) return err(shape.error);
+    if (!this.validPath(request.transport.relativePath)) {
+      return err(
+        this.failure({
+          message: 'Invalid Cortex document path.',
+          path: `${path}.relativePath`,
+        }),
+      );
     }
     if (
       typeof request.transport.content !== 'string' ||
       request.transport.content.length > CORTEX_DOCUMENT_MAP_CONTENT_LIMIT ||
       PROHIBITED_CONTENT.test(request.transport.content)
     ) {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Invalid Cortex document content.',
-        path: `${path}.content`,
-      });
+      return err(
+        this.failure({
+          message: 'Invalid Cortex document content.',
+          path: `${path}.content`,
+        }),
+      );
     }
-    return {
+    return ok({
       relativePath: request.transport.relativePath,
       content: request.transport.content,
-    };
+    });
   }
 
-  private static decodeFinding(
+  private decodeFinding(
     request: DecodeFindingRequest,
-  ): CortexStructureFinding {
+  ): Result<CortexStructureFinding, CortexDocumentMapResultDecodeError> {
     const transport = request.transport;
     const path = `findings[${request.index}]`;
-    if (!CortexDocumentMapTransport.isFindingRecord(transport)) {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Invalid Cortex finding.',
-        path,
-      });
+    if (!this.isFindingRecord(transport)) {
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex finding.',
+          path,
+        }),
+      );
     }
-    CortexDocumentMapTransport.assertResultExactKeys({
+    const shape = this.assertResultExactKeys({
       value: transport,
       expected: FINDING_KEYS,
       path,
     });
+    if (shape.isErr()) return err(shape.error);
     const [code = false] = [
       Object.values(CortexStructureFindingCode).find(
         (candidate) => candidate === transport.code,
       ),
     ];
     if (code === false) {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Invalid Cortex finding code.',
-        path: `${path}.code`,
-      });
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex finding code.',
+          path: `${path}.code`,
+        }),
+      );
     }
-    if (!CortexDocumentMapTransport.validPath(transport.file)) {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Invalid Cortex finding path.',
-        path: `${path}.file`,
-      });
+    if (!this.validPath(transport.file)) {
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex finding path.',
+          path: `${path}.file`,
+        }),
+      );
     }
     if (
       typeof transport.line !== 'number' ||
@@ -289,10 +309,12 @@ export class CortexDocumentMapTransport {
       transport.line < 1 ||
       transport.line > CORTEX_DOCUMENT_MAP_FINDING_LINE_LIMIT
     ) {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Invalid Cortex finding line.',
-        path: `${path}.line`,
-      });
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex finding line.',
+          path: `${path}.line`,
+        }),
+      );
     }
     if (
       typeof transport.message !== 'string' ||
@@ -300,20 +322,22 @@ export class CortexDocumentMapTransport {
       transport.message.length > CORTEX_DOCUMENT_MAP_FINDING_MESSAGE_LIMIT ||
       PROHIBITED_CONTENT.test(transport.message)
     ) {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Invalid Cortex finding message.',
-        path: `${path}.message`,
-      });
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex finding message.',
+          path: `${path}.message`,
+        }),
+      );
     }
-    return {
+    return ok({
       code,
       file: transport.file,
       line: transport.line,
       message: transport.message,
-    };
+    });
   }
 
-  private static validPath(value: unknown): value is string {
+  private validPath(value: unknown): value is string {
     return (
       typeof value === 'string' &&
       value.length <= CORTEX_DOCUMENT_MAP_PATH_LIMIT &&
@@ -321,87 +345,112 @@ export class CortexDocumentMapTransport {
     );
   }
 
-  private static isRecord(
+  private isRecord(
     value: unknown,
   ): value is { readonly [key: string]: unknown } {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   }
 
-  private static isResultRecord(
+  private isResultRecord(
     value: unknown,
   ): value is { readonly [key: string]: unknown } {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   }
 
-  private static isFindingRecord(
+  private isFindingRecord(
     value: unknown,
   ): value is { readonly [key: string]: unknown } {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   }
 
-  private static assertExactKeys(request: ExactKeysRequest): void {
-    if (!CortexDocumentMapTransport.isTransportRecord(request.value))
-      throw new Error('Invalid Cortex transport object.');
+  private assertExactKeys(
+    request: ExactKeysRequest,
+  ): Result<void, CortexDocumentMapRequestDecodeError> {
+    if (!this.isTransportRecord(request.value))
+      return err(
+        this.failure({
+          message: 'Invalid Cortex transport object.',
+          path: request.path,
+        }),
+      );
     const actual = Object.keys(request.value);
     const unexpected = actual.find((key) => !request.expected.includes(key));
     if (typeof unexpected === 'string') {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Unexpected request field.',
-        path: `${request.path}["<unknown-key>"]`,
-      });
+      return err(
+        this.failure({
+          message: 'Unexpected request field.',
+          path: `${request.path}["<unknown-key>"]`,
+        }),
+      );
     }
     const missing = request.expected.find((key) => !actual.includes(key));
     if (typeof missing === 'string') {
-      throw CortexDocumentMapTransport.failure({
-        message: 'Missing request field.',
-        path: request.path ? `${request.path}.${missing}` : missing,
-      });
+      return err(
+        this.failure({
+          message: 'Missing request field.',
+          path: request.path ? `${request.path}.${missing}` : missing,
+        }),
+      );
     }
+    return ok(undefined);
   }
 
-  private static assertResultExactKeys(request: {
+  private assertResultExactKeys(request: {
     readonly value: unknown;
     readonly expected: readonly string[];
     readonly path: string;
-  }): void {
-    if (!CortexDocumentMapTransport.isTransportRecord(request.value))
-      throw new Error('Invalid Cortex transport object.');
+  }): Result<void, CortexDocumentMapResultDecodeError> {
+    if (!this.isTransportRecord(request.value))
+      return err(
+        this.resultFailure({
+          message: 'Invalid Cortex transport object.',
+          path: request.path,
+        }),
+      );
     const actual = Object.keys(request.value);
     const unexpected = actual.find((key) => !request.expected.includes(key));
     if (typeof unexpected === 'string') {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Unexpected result field.',
-        path: `${request.path}["<unknown-key>"]`,
-      });
+      return err(
+        this.resultFailure({
+          message: 'Unexpected result field.',
+          path: `${request.path}["<unknown-key>"]`,
+        }),
+      );
     }
     const missing = request.expected.find((key) => !actual.includes(key));
     if (typeof missing === 'string') {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Missing result field.',
-        path: request.path ? `${request.path}.${missing}` : missing,
-      });
+      return err(
+        this.resultFailure({
+          message: 'Missing result field.',
+          path: request.path ? `${request.path}.${missing}` : missing,
+        }),
+      );
     }
+    return ok(undefined);
   }
 
-  private static assertResultByteLimit(serialized: string): void {
+  private assertResultByteLimit(
+    serialized: string,
+  ): Result<void, CortexDocumentMapResultDecodeError> {
     if (
       UTF8_ENCODER.encode(serialized).byteLength >
       CORTEX_DOCUMENT_MAP_RESULT_BYTE_LIMIT
     ) {
-      throw CortexDocumentMapTransport.resultFailure({
-        message: 'Result exceeds its byte bound.',
-        path: '',
-      });
+      return err(
+        this.resultFailure({
+          message: 'Result exceeds its byte bound.',
+          path: '',
+        }),
+      );
     }
+    return ok(undefined);
   }
 
-  private static failure(
-    request: DecodeFailure,
-  ): CortexDocumentMapRequestDecodeError {
+  private failure(request: DecodeFailure): CortexDocumentMapRequestDecodeError {
     return new CortexDocumentMapRequestDecodeError(request);
   }
 
-  private static resultFailure(
+  private resultFailure(
     request: DecodeFailure,
   ): CortexDocumentMapResultDecodeError {
     return new CortexDocumentMapResultDecodeError(request);
@@ -442,22 +491,77 @@ const CORTEX_PATH =
 const PROHIBITED_CONTENT =
   /[\u0000\u007f-\u009f\u061c\u200e-\u200f\u2028-\u202e\u2066-\u206f]/u;
 
-export class CortexDocumentMapRequestDecodeError extends Error {
+export class CortexDocumentMapRequestDecodeError {
+  readonly message: string;
+  readonly name: string;
   readonly path: string;
 
   constructor(failure: DecodeFailure) {
-    super(failure.message);
+    this.message = failure.message;
     this.name = 'CortexDocumentMapRequestDecodeError';
     this.path = failure.path;
   }
 }
 
-export class CortexDocumentMapResultDecodeError extends Error {
+export class CortexDocumentMapResultDecodeError {
+  readonly message: string;
+  readonly name: string;
   readonly path: string;
 
   constructor(failure: DecodeFailure) {
-    super(failure.message);
+    this.message = failure.message;
     this.name = 'CortexDocumentMapResultDecodeError';
     this.path = failure.path;
+  }
+}
+
+export class CortexDocumentMapRequestEncoding {
+  constructor(private readonly request: AuditCortexDocumentMapRequest) {}
+  execute(): Result<string, CortexDocumentMapRequestDecodeError> {
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(this.request);
+    } catch {
+      return err(
+        new CortexDocumentMapRequestDecodeError({
+          message: 'Invalid Cortex document-map request.',
+          path: '',
+        }),
+      );
+    }
+    return UTF8_ENCODER.encode(serialized).byteLength >
+      CORTEX_DOCUMENT_MAP_REQUEST_BYTE_LIMIT
+      ? err(
+          new CortexDocumentMapRequestDecodeError({
+            message: 'Request exceeds its byte bound.',
+            path: '',
+          }),
+        )
+      : ok(serialized);
+  }
+}
+export class CortexDocumentMapResultEncoding {
+  constructor(private readonly result: CortexDocumentMapResult) {}
+  execute(): Result<string, CortexDocumentMapResultDecodeError> {
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(this.result);
+    } catch {
+      return err(
+        new CortexDocumentMapResultDecodeError({
+          message: 'Invalid Cortex document-map result.',
+          path: '',
+        }),
+      );
+    }
+    return UTF8_ENCODER.encode(serialized).byteLength >
+      CORTEX_DOCUMENT_MAP_RESULT_BYTE_LIMIT
+      ? err(
+          new CortexDocumentMapResultDecodeError({
+            message: 'Result exceeds its byte bound.',
+            path: '',
+          }),
+        )
+      : ok(serialized);
   }
 }

@@ -1,3 +1,5 @@
+import { ok, type Result } from 'neverthrow';
+import type { CortexAuditFailure } from '../commands/cortex-audit.ts';
 import {
   AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
   AGENT_STATS_FILE_INPUT_SCHEMA,
@@ -233,52 +235,74 @@ export class LoomRequestCatalog {
 
   static async executeRequest(
     request: LoomRequest,
-  ): Promise<LoomCommandResult> {
+  ): Promise<Result<LoomCommandResult, CortexAuditFailure>> {
     switch (request.family) {
       case RequestFamily.PrePush:
-        return PrePushCommand.run(request.prePush);
+        return ok(await PrePushCommand.run(request.prePush));
       case RequestFamily.CortexAudit:
         return CortexAuditCommand.runCortexAudit(request.cortexAudit);
       case RequestFamily.CortexSessionClean:
-        return CortexSessionDirectory.runCortexSessionClean(
-          request.cortexSessionClean,
+        return ok(
+          await CortexSessionDirectory.runCortexSessionClean(
+            request.cortexSessionClean,
+          ),
         );
       case RequestFamily.SkillScaffold:
-        return SkillScaffoldCommand.runSkillScaffold(request.skillScaffold);
+        return ok(
+          await SkillScaffoldCommand.runSkillScaffold(request.skillScaffold),
+        );
       case RequestFamily.AgentStats: {
         switch (request.operation) {
           case AgentStatsOperation.Assemble:
-            return AgentStatisticsCommand.runAgentStatsAssemble(
-              request.assemble,
+            return ok(
+              await AgentStatisticsCommand.runAgentStatsAssemble(
+                request.assemble,
+              ),
             );
           case AgentStatsOperation.Validate:
-            return AgentStatisticsCommand.runAgentStatsValidate(
-              request.validate,
+            return ok(
+              await AgentStatisticsCommand.runAgentStatsValidate(
+                request.validate,
+              ),
             );
           case AgentStatsOperation.Publish:
-            return AgentStatisticsCommand.runAgentStatsPublish(request.publish);
+            return ok(
+              await AgentStatisticsCommand.runAgentStatsPublish(
+                request.publish,
+              ),
+            );
         }
         break;
       }
       case RequestFamily.PrLand: {
         switch (request.operation) {
           case PrLandOperation.Status:
-            return PullRequestDeliveryCommand.runPrLandStatus(request.status);
+            return ok(
+              await PullRequestDeliveryCommand.runPrLandStatus(request.status),
+            );
           case PrLandOperation.Validate:
-            return PullRequestDeliveryCommand.runPrLandValidate(
-              request.validate,
+            return ok(
+              await PullRequestDeliveryCommand.runPrLandValidate(
+                request.validate,
+              ),
             );
           case PrLandOperation.Ready:
-            return PullRequestDeliveryCommand.runPrLandReady(request.ready);
+            return ok(
+              await PullRequestDeliveryCommand.runPrLandReady(request.ready),
+            );
           case PrLandOperation.MergeCheck:
-            return PullRequestDeliveryCommand.runPrLandMergeCheck(
-              request.mergeCheck,
+            return ok(
+              await PullRequestDeliveryCommand.runPrLandMergeCheck(
+                request.mergeCheck,
+              ),
             );
         }
         break;
       }
       case RequestFamily.DependencyPopularity:
-        return DependencyPopularityCommand.run(request.dependencyPopularity);
+        return ok(
+          await DependencyPopularityCommand.run(request.dependencyPopularity),
+        );
       case RequestFamily.ToolsList:
       case RequestFamily.ToolsCall: {
         const loomFailureDetailArgs: LoomFailureDetailArgs = {

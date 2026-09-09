@@ -11,6 +11,11 @@ export enum CortexArticleRequestFailureKind {
   FindingCapacity = 'Cortex article request finding capacity exceeds its bound.',
   ResultBudget = 'Cortex article request result budget exceeds its bound.',
   RequestBytes = 'Cortex article request exceeds its byte bound.',
+  InvalidResult = 'Invalid Cortex article-structure result.',
+  InvalidFinding = 'Invalid Cortex article finding.',
+  InvalidDiagnostics = 'Invalid Cortex article finding diagnostics.',
+  Verification = 'Cortex article-structure semantic verification failed.',
+  ResultBytes = 'Cortex article result exceeds its byte bound.',
 }
 
 type CortexArticleRequestDecodeFailure = {
@@ -18,12 +23,14 @@ type CortexArticleRequestDecodeFailure = {
   readonly path: string;
 };
 
-export class CortexArticleRequestDecodeError extends Error {
+export class CortexArticleRequestDecodeError {
+  readonly message: string;
+  readonly name: string;
   readonly kind: CortexArticleRequestFailureKind;
   readonly path: string;
 
   constructor(failure: CortexArticleRequestDecodeFailure) {
-    super(failure.kind);
+    this.message = failure.kind;
     this.name = 'CortexArticleRequestDecodeError';
     this.kind = failure.kind;
     this.path = failure.path;

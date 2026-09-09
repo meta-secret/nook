@@ -1,3 +1,8 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  CortexArticleRequestDecodeError,
+  CortexArticleRequestFailureKind,
+} from './decode-error.ts';
 import {
   ArticleHeadingSelectionKind,
   ArticleBodyContribution,
@@ -34,38 +39,47 @@ export class CortexArticleResultVerifier {
     return new CortexArticleResultVerifier(request);
   }
 
-  public execute(): void {
+  public execute(): Result<void, CortexArticleRequestDecodeError> {
     const request = this.request;
     if (
       request.auditRequest.kind !== CortexArticleContractKind.Request ||
       request.result.kind !== CortexArticleContractKind.Result
     ) {
-      throw new Error(VERIFICATION_FAILURE);
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.Verification,
+          path: '',
+        }),
+      );
     }
-    const expected = CortexArticleResultVerifier.independentlyDeriveFindings(
-      request.auditRequest,
-    );
+    const expected = this.independentlyDeriveFindings(request.auditRequest);
     if (
       new CortexArticleFindingSequence(request.result.findings).agreementWith(
         expected,
       ) === ArticleFindingAgreement.Different
     ) {
-      throw new Error(VERIFICATION_FAILURE);
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.Verification,
+          path: '',
+        }),
+      );
     }
+    return ok(undefined);
   }
 
-  private static independentlyDeriveFindings(
+  private independentlyDeriveFindings(
     request: AuditCortexArticleStructureRequest,
   ): CortexArticleFinding[] {
     const expected: CortexArticleFinding[] = [];
     for (const document of request.documents) {
       const documentRequest: VerifyDocumentRequest = { document, expected };
-      CortexArticleResultVerifier.verifyDocument(documentRequest);
+      this.verifyDocument(documentRequest);
     }
     return expected;
   }
 
-  private static verifyDocument(request: VerifyDocumentRequest): void {
+  private verifyDocument(request: VerifyDocumentRequest): void {
     for (const block of request.document.blocks) {
       if (block.kind !== CortexArticleSemanticKind.Table) continue;
       const finding: CortexArticleFinding = {
@@ -89,11 +103,11 @@ export class CortexArticleResultVerifier {
           startIndex: index + 1,
         }),
       };
-      CortexArticleResultVerifier.verifyArticle(articleRequest);
+      this.verifyArticle(articleRequest);
     }
   }
 
-  private static verifyArticle(request: VerifyArticleRequest): void {
+  private verifyArticle(request: VerifyArticleRequest): void {
     if (
       !request.sectionBlocks.some(
         (block) =>
@@ -110,7 +124,7 @@ export class CortexArticleResultVerifier {
       request.expected.push(finding);
       return;
     }
-    CortexArticleResultVerifier.verifyParagraphDensity(request);
+    this.verifyParagraphDensity(request);
     if (
       new CortexArticleSection(request.heading).procedureRequirement(
         request.sectionBlocks,
@@ -126,7 +140,7 @@ export class CortexArticleResultVerifier {
     }
   }
 
-  private static verifyParagraphDensity(request: VerifyArticleRequest): void {
+  private verifyParagraphDensity(request: VerifyArticleRequest): void {
     let consecutive = 0;
     for (const block of request.sectionBlocks) {
       const contribution = new CortexArticleBlock(block).densityContribution();
@@ -165,6 +179,3 @@ type VerifyArticleRequest = VerifyDocumentRequest & {
 };
 
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
-
-const VERIFICATION_FAILURE =
-  'Cortex article-structure semantic verification failed.';

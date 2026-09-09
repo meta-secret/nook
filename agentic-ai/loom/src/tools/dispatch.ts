@@ -121,7 +121,17 @@ export class LoomRequestDispatch {
     }
 
     try {
-      const result = await LoomRequestCatalog.executeRequest(request);
+      const execution = await LoomRequestCatalog.executeRequest(request);
+      if (execution.isErr()) {
+        return {
+          exitCode: 1,
+          body: LoomRequestDispatch.buildExecuteErrorResponse({
+            request,
+            detail: execution.error.message,
+          }),
+        };
+      }
+      const result = execution.value;
       const responseValue =
         LoomResponseEncoder.commandResultToResponseValue(result);
       if (request.family === RequestFamily.CortexAudit && 'auditOk' in result) {

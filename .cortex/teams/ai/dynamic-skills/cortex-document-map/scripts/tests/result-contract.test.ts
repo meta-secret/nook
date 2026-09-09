@@ -1,3 +1,6 @@
+import { ok } from 'neverthrow';
+import { CortexDocumentMapResultAcceptance } from '../src/application.ts';
+import { CortexDocumentMapResultEncoding } from '../src/codec.ts';
 import { expect, test } from 'bun:test';
 
 import { CortexDocumentMapApplication } from '../src/application.ts';
@@ -70,13 +73,18 @@ const validFinding = {
 };
 
 test('round-trips the exact bounded result contract', () => {
-  const result =
+  const resultOutcome =
     CortexDocumentMapApplication.from(invalidRootRequest).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   expect(
-    CortexDocumentMapTransport.decodeCortexDocumentMapResult(
-      CortexDocumentMapTransport.encodeCortexDocumentMapResult(result),
-    ),
-  ).toEqual(result);
+    new CortexDocumentMapResultEncoding(result)
+      .execute()
+      .andThen((serialized) =>
+        CortexDocumentMapTransport.from(serialized).decodeResult(),
+      ),
+  ).toEqual(ok(result));
 });
 
 test('rejects malformed envelopes and unknown or missing fields', () => {
@@ -101,9 +109,16 @@ test('rejects malformed envelopes and unknown or missing fields', () => {
     ]),
   ];
   for (const serialized of malformed) {
-    expect(() =>
-      CortexDocumentMapTransport.decodeCortexDocumentMapResult(serialized),
-    ).toThrow(CortexDocumentMapResultDecodeError);
+    CortexDocumentMapTransport.from(serialized)
+      .decodeResult()
+      .match(
+        (value) => {
+          expect(value).toBeUndefined();
+        },
+        (outcome) => {
+          expect(outcome).toBeInstanceOf(CortexDocumentMapResultDecodeError);
+        },
+      );
   }
 });
 
@@ -121,25 +136,42 @@ test('rejects invalid finding codes, paths, lines, and messages', () => {
     { ...validFinding, message: 'hidden\u0000control' },
   ];
   for (const finding of invalidFindings) {
-    expect(() =>
-      CortexDocumentMapTransport.decodeCortexDocumentMapResult(
-        CortexDocumentMapResultContractScenario.serializedResult([finding]),
-      ),
-    ).toThrow(CortexDocumentMapResultDecodeError);
+    CortexDocumentMapTransport.from(
+      CortexDocumentMapResultContractScenario.serializedResult([finding]),
+    )
+      .decodeResult()
+      .match(
+        (value) => {
+          expect(value).toBeUndefined();
+        },
+        (outcome) => {
+          expect(outcome).toBeInstanceOf(CortexDocumentMapResultDecodeError);
+        },
+      );
   }
 });
 
 test('rejects oversized serialized results', () => {
-  expect(() =>
-    CortexDocumentMapTransport.decodeCortexDocumentMapResult(
-      'x'.repeat(CORTEX_DOCUMENT_MAP_RESULT_BYTE_LIMIT + 1),
-    ),
-  ).toThrow(CortexDocumentMapResultDecodeError);
+  CortexDocumentMapTransport.from(
+    'x'.repeat(CORTEX_DOCUMENT_MAP_RESULT_BYTE_LIMIT + 1),
+  )
+    .decodeResult()
+    .match(
+      (value) => {
+        expect(value).toBeUndefined();
+      },
+      (outcome) => {
+        expect(outcome).toBeInstanceOf(CortexDocumentMapResultDecodeError);
+      },
+    );
 });
 
 test('acceptance rejects removal, reordering, duplication, and mutation', () => {
-  const result =
+  const resultOutcome =
     CortexDocumentMapApplication.from(invalidRootRequest).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   const [first = false, second = false] = result.findings;
   expect(first).not.toBe(false);
   expect(second).not.toBe(false);
@@ -169,18 +201,30 @@ test('acceptance rejects removal, reordering, duplication, and mutation', () => 
     },
   ];
   for (const candidate of candidates) {
-    expect(() =>
-      CortexDocumentMapApplication.acceptCortexDocumentMapResult({
-        auditRequest: invalidRootRequest,
-        result: candidate,
-      }),
-    ).toThrow('Cortex document-map verification failed.');
+    new CortexDocumentMapResultAcceptance({
+      auditRequest: invalidRootRequest,
+      result: candidate,
+    })
+      .execute()
+      .match(
+        (value) => {
+          expect(value).toBeUndefined();
+        },
+        (outcome) => {
+          expect(outcome.message).toContain(
+            'Cortex document-map verification failed.',
+          );
+        },
+      );
   }
 });
 
 test('acceptance binds findings to the exact admitted request', () => {
-  const result =
+  const resultOutcome =
     CortexDocumentMapApplication.from(invalidRootRequest).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   const cleanRequest: AuditCortexDocumentMapRequest = {
     ...invalidRootRequest,
     documents: [
@@ -190,24 +234,45 @@ test('acceptance binds findings to the exact admitted request', () => {
       },
     ],
   };
-  expect(() =>
-    CortexDocumentMapApplication.acceptCortexDocumentMapResult({
-      auditRequest: cleanRequest,
-      result,
-    }),
-  ).toThrow('Cortex document-map verification failed.');
+  new CortexDocumentMapResultAcceptance({
+    auditRequest: cleanRequest,
+    result,
+  })
+    .execute()
+    .match(
+      (value) => {
+        expect(value).toBeUndefined();
+      },
+      (outcome) => {
+        expect(outcome.message).toContain(
+          'Cortex document-map verification failed.',
+        );
+      },
+    );
 });
 
 test('acceptance rejects an omitted transient-link diagnostic', () => {
-  const result =
+  const resultOutcome =
     CortexDocumentMapApplication.from(transientLinkRequest).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   expect(result.findings.map((finding) => finding.code)).toEqual([
     CortexStructureFindingCode.InvalidIndexEntry,
   ]);
-  expect(() =>
-    CortexDocumentMapApplication.acceptCortexDocumentMapResult({
-      auditRequest: transientLinkRequest,
-      result: { ...result, findings: [] },
-    }),
-  ).toThrow('Cortex document-map verification failed.');
+  new CortexDocumentMapResultAcceptance({
+    auditRequest: transientLinkRequest,
+    result: { ...result, findings: [] },
+  })
+    .execute()
+    .match(
+      (value) => {
+        expect(value).toBeUndefined();
+      },
+      (outcome) => {
+        expect(outcome.message).toContain(
+          'Cortex document-map verification failed.',
+        );
+      },
+    );
 });

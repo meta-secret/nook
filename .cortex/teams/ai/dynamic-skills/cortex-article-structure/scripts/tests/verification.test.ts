@@ -35,16 +35,16 @@ export class CortexArticleStructureVerificationScenario {
   static expectVerified(
     request: VerifyCortexArticleStructureResultRequest,
   ): void {
-    expect(() =>
-      CortexArticleResultVerifier.from(request).execute(),
-    ).not.toThrow();
+    expect(CortexArticleResultVerifier.from(request).execute().isOk()).toBe(
+      true,
+    );
   }
 
   static expectRejected(
     request: VerifyCortexArticleStructureResultRequest,
   ): void {
-    expect(() => CortexArticleResultVerifier.from(request).execute()).toThrow(
-      'semantic verification failed',
+    expect(CortexArticleResultVerifier.from(request).execute().isErr()).toBe(
+      true,
     );
   }
 }

@@ -83,15 +83,14 @@ export class ExecutableSkillHostCliScenario {
   static providerFailurePath(
     request: AuditCortexArticleStructureRequest,
   ): string {
-    try {
-      CortexArticleTransport.decodeCortexArticleRequest(
-        JSON.stringify(request),
-      );
-    } catch (error) {
-      if (error instanceof CortexArticleRequestDecodeError) return error.path;
-      throw error;
-    }
-    throw new Error('Expected provider rejection.');
+    const decoded = CortexArticleTransport.from(
+      JSON.stringify(request),
+    ).decodeRequest();
+    expect(decoded.isErr()).toBe(true);
+    return decoded.match(
+      () => '',
+      (failure) => failure.path,
+    );
   }
 }
 
@@ -391,11 +390,11 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(
       ExecutableSkillInputSchema.from(validationRequest).execute().ok,
     ).toBe(true);
-    expect(() =>
-      CortexArticleTransport.decodeCortexArticleRequest(
-        JSON.stringify(accepted),
-      ),
-    ).not.toThrow();
+    expect(
+      CortexArticleTransport.from(JSON.stringify(accepted))
+        .decodeRequest()
+        .isOk(),
+    ).toBe(true);
     const wrapped = {
       [SkillRequestFamily.CortexArticleStructure]: {
         audit: accepted,

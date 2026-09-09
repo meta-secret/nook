@@ -1,60 +1,64 @@
+import type { Result } from 'neverthrow';
 import { CortexArticleAudit } from './audit.ts';
-
-import { CortexArticleTransport } from './codec.ts';
-
+import {
+  CortexArticleTransport,
+  CortexArticleRequestEncoding,
+  CortexArticleResultEncoding,
+} from './codec.ts';
+import type { CortexArticleRequestDecodeError } from './decode-error.ts';
 import {
   CortexArticleContractKind,
   type AuditCortexArticleStructureRequest,
   type CortexArticleStructureResult,
 } from './domain.ts';
-
-import {
-  type VerifyCortexArticleStructureResultRequest,
-  CortexArticleResultVerifier,
-} from './verification.ts';
+import { CortexArticleResultVerifier } from './verification.ts';
 
 export class CortexArticleApplication {
   private constructor(
     private readonly request: AuditCortexArticleStructureRequest,
   ) {}
-
   static from(
     request: AuditCortexArticleStructureRequest,
   ): CortexArticleApplication {
     return new CortexArticleApplication(request);
   }
-
-  public execute(): CortexArticleStructureResult {
-    const request = this.request;
-    const serializedRequest =
-      CortexArticleTransport.encodeCortexArticleRequest(request);
-    const validatedRequest =
-      CortexArticleTransport.decodeCortexArticleRequest(serializedRequest);
-    const result: CortexArticleStructureResult = {
-      kind: CortexArticleContractKind.Result,
-      findings: CortexArticleAudit.from(validatedRequest).execute(),
-    };
-    const acceptanceRequest: AcceptCortexArticleStructureResultRequest = {
-      auditRequest: validatedRequest,
-      result,
-    };
-    return CortexArticleApplication.acceptCortexArticleStructureResult(
-      acceptanceRequest,
-    );
+  execute(): Result<
+    CortexArticleStructureResult,
+    CortexArticleRequestDecodeError
+  > {
+    return new CortexArticleRequestEncoding(this.request)
+      .execute()
+      .andThen((serialized) =>
+        CortexArticleTransport.from(serialized).decodeRequest(),
+      )
+      .andThen((auditRequest) =>
+        new CortexArticleResultAcceptance({
+          auditRequest,
+          result: {
+            kind: CortexArticleContractKind.Result,
+            findings: CortexArticleAudit.from(auditRequest).execute(),
+          },
+        }).execute(),
+      );
   }
+}
 
-  static acceptCortexArticleStructureResult(
-    request: AcceptCortexArticleStructureResultRequest,
-  ): CortexArticleStructureResult {
-    const verificationRequest: VerifyCortexArticleStructureResultRequest = {
-      auditRequest: request.auditRequest,
-      result: request.result,
-    };
-    CortexArticleResultVerifier.from(verificationRequest).execute();
-    const serializedResult = CortexArticleTransport.encodeCortexArticleResult(
-      request.result,
-    );
-    return CortexArticleTransport.decodeCortexArticleResult(serializedResult);
+export class CortexArticleResultAcceptance {
+  constructor(
+    private readonly request: AcceptCortexArticleStructureResultRequest,
+  ) {}
+  execute(): Result<
+    CortexArticleStructureResult,
+    CortexArticleRequestDecodeError
+  > {
+    return CortexArticleResultVerifier.from(this.request)
+      .execute()
+      .andThen(() =>
+        new CortexArticleResultEncoding(this.request.result).execute(),
+      )
+      .andThen((serialized) =>
+        CortexArticleTransport.from(serialized).decodeResult(),
+      );
   }
 }
 

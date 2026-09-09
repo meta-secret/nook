@@ -36,7 +36,7 @@ export class CortexArticleActionDecoder {
 
   public execute() {
     const serialized = this.request;
-    return CortexArticleTransport.decodeCortexArticleRequest(serialized);
+    return CortexArticleTransport.from(serialized).decodeRequest();
   }
 }
 

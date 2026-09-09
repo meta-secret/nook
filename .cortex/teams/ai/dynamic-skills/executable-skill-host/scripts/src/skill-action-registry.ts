@@ -1,3 +1,4 @@
+import type { CortexDocumentMapFailure } from '../../../cortex-document-map/scripts/src/application.ts';
 import { ok, type Result } from 'neverthrow';
 import type { CompileCortexContractsRequest } from '../../../cortex-consistency/scripts/src/domain.ts';
 import type { RenderDelegationVisualizationRequest } from '../../../delegation-visualization/scripts/src/domain.ts';
@@ -242,27 +243,25 @@ export class ExecutableSkillActions {
       };
       return ExecutableSkillActions.invalidRequest(request);
     }
-    try {
-      return {
-        ok: true,
-        request: {
-          family: SkillRequestFamily.CortexArticleStructure,
-          operation: CortexArticleStructureOperation.Audit,
-          request: CortexArticleActionDecoder.from(
-            JSON.stringify(audit.value),
-          ).execute(),
-        },
-      };
-    } catch (error) {
-      const suffix =
-        error instanceof CortexArticleRequestDecodeError ? error.path : '';
+    const decoded = CortexArticleActionDecoder.from(
+      JSON.stringify(audit.value),
+    ).execute();
+    if (decoded.isErr()) {
+      const suffix = decoded.error.path;
       const separator = suffix.startsWith('[') ? '' : '.';
-      const request: InvalidSkillRequest = {
+      return ExecutableSkillActions.invalidRequest({
         path: `cortexArticleStructure.audit${suffix ? `${separator}${suffix}` : ''}`,
-        message: error instanceof Error ? error.message : String(error),
-      };
-      return ExecutableSkillActions.invalidRequest(request);
+        message: decoded.error.message,
+      });
     }
+    return {
+      ok: true,
+      request: {
+        family: SkillRequestFamily.CortexArticleStructure,
+        operation: CortexArticleStructureOperation.Audit,
+        request: decoded.value,
+      },
+    };
   }
 
   private static decodeCortexDocumentMapAction(
@@ -310,26 +309,25 @@ export class ExecutableSkillActions {
         message: validation.message,
       });
     }
-    try {
-      return {
-        ok: true,
-        request: {
-          family: SkillRequestFamily.CortexDocumentMap,
-          operation: CortexDocumentMapOperation.Audit,
-          request: CortexDocumentMapActionDecoder.from(
-            JSON.stringify(audit.value),
-          ).execute(),
-        },
-      };
-    } catch (error) {
-      const suffix =
-        error instanceof CortexDocumentMapRequestDecodeError ? error.path : '';
+    const decoded = CortexDocumentMapActionDecoder.from(
+      JSON.stringify(audit.value),
+    ).execute();
+    if (decoded.isErr()) {
+      const suffix = decoded.error.path;
       const separator = suffix.startsWith('[') ? '' : '.';
       return ExecutableSkillActions.invalidRequest({
         path: `cortexDocumentMap.audit${suffix ? `${separator}${suffix}` : ''}`,
-        message: error instanceof Error ? error.message : String(error),
+        message: decoded.error.message,
       });
     }
+    return {
+      ok: true,
+      request: {
+        family: SkillRequestFamily.CortexDocumentMap,
+        operation: CortexDocumentMapOperation.Audit,
+        request: decoded.value,
+      },
+    };
   }
 
   private static decodeCortexConsistencyAction(
@@ -659,22 +657,24 @@ export class AdmittedSkillAction {
   get operation(): SkillActionRequest['operation'] {
     return this.request.operation;
   }
-  execute(): Result<
-    SkillActionResult,
-    DelegationVisualizationResultVerificationError
-  > {
+  execute(): Result<SkillActionResult, SkillExecutionFailure> {
     const request = this.request;
     if (request.family === SkillRequestFamily.ToolsList) {
       return ok(ExecutableSkillActions.listDiscoverableSkillActions());
     }
     if (request.family === SkillRequestFamily.CortexArticleStructure) {
-      return ok(executeCortexArticleAction(request.request));
+      return executeCortexArticleAction(request.request);
     }
     if (request.family === SkillRequestFamily.CortexDocumentMap) {
-      return ok(executeCortexDocumentMapAction(request.request));
+      return executeCortexDocumentMapAction(request.request);
     }
     return request.family === SkillRequestFamily.CortexConsistency
       ? ok(executeCortexConsistencyAction(request.request))
       : executeDelegationVisualizationAction(request.request);
   }
 }
+
+export type SkillExecutionFailure =
+  | CortexArticleRequestDecodeError
+  | CortexDocumentMapFailure
+  | DelegationVisualizationResultVerificationError;

@@ -1,3 +1,4 @@
+import { CortexArticleResultAcceptance } from '../src/application.ts';
 import { expect, test } from 'bun:test';
 
 import {
@@ -39,11 +40,14 @@ export class CortexArticleStructureApplicationScenario {
       auditRequest: AUDIT_REQUEST,
       result,
     };
-    expect(() =>
-      CortexArticleApplication.acceptCortexArticleStructureResult(
-        acceptanceRequest,
-      ),
-    ).toThrow('semantic verification failed');
+    new CortexArticleResultAcceptance(acceptanceRequest).execute().match(
+      (value) => {
+        expect(value).toBeUndefined();
+      },
+      (outcome) => {
+        expect(outcome.message).toContain('semantic verification failed');
+      },
+    );
   }
 }
 
@@ -76,7 +80,10 @@ const AUDIT_REQUEST: AuditCortexArticleStructureRequest = {
 };
 
 test('validates, audits, verifies, and bounds the accepted application result', () => {
-  const result = CortexArticleApplication.from(AUDIT_REQUEST).execute();
+  const resultOutcome = CortexArticleApplication.from(AUDIT_REQUEST).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   expect(result.findings).toHaveLength(2);
   expect(result.findings.map((finding) => finding.code)).toEqual([
     CortexArticleFindingCode.EmptyArticle,
@@ -101,7 +108,10 @@ test('returns a bounded table finding for the longest accepted Cortex path', () 
     ],
   };
 
-  const result = CortexArticleApplication.from(request).execute();
+  const resultOutcome = CortexArticleApplication.from(request).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
 
   expect(result.findings).toHaveLength(1);
   expect(result.findings[0]?.code).toBe(CortexArticleFindingCode.MarkdownTable);
@@ -115,7 +125,10 @@ test('returns a bounded table finding for the longest accepted Cortex path', () 
 });
 
 test('production acceptance rejects reordered, duplicated, and mutated results', () => {
-  const result = CortexArticleApplication.from(AUDIT_REQUEST).execute();
+  const resultOutcome = CortexArticleApplication.from(AUDIT_REQUEST).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   const first = result.findings.at(0);
   const second = result.findings.at(1);
   if (!first || !second) throw new Error('Expected two application findings.');

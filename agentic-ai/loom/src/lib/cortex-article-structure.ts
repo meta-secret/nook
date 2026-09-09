@@ -1,3 +1,5 @@
+import type { Result } from 'neverthrow';
+import type { CortexArticleRequestDecodeError } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/decode-error.ts';
 import type { Nodes } from 'mdast';
 import { CortexMarkdownArticleNode } from './cortex-markdown-article-node.ts';
 
@@ -24,10 +26,10 @@ export class CortexMarkdownArticle {
   private constructor(
     private readonly request: AuditCortexArticleStructureArgs,
   ) {}
-  static audit(args: AuditCortexArticleStructureArgs): CortexArticleFinding[] {
-    return new CortexMarkdownArticle(args).execute();
+  static from(args: AuditCortexArticleStructureArgs): CortexMarkdownArticle {
+    return new CortexMarkdownArticle(args);
   }
-  private execute(): CortexArticleFinding[] {
+  execute(): Result<CortexArticleFinding[], CortexArticleRequestDecodeError> {
     const args = this.request;
     const documents = args.documents.map((document) => {
       const request: SemanticDocumentRequest = { document };
@@ -37,7 +39,9 @@ export class CortexMarkdownArticle {
       kind: CortexArticleContractKind.Request,
       documents,
     };
-    return [...CortexArticleApplication.from(request).execute().findings];
+    return CortexArticleApplication.from(request)
+      .execute()
+      .map((result) => [...result.findings]);
   }
 
   private semanticDocument(
