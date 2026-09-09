@@ -739,3 +739,14 @@ mod browser_tests {
         assert!(icloud_shared.is_shared_provider_grant());
     }
 }
+
+#[wasm_bindgen]
+pub fn login_unlock_decision(
+    access: nook_core::VaultAccessStatus,
+    passwords: nook_core::PasswordEntryPresence,
+) -> nook_core::LoginUnlockDecision {
+    nook_core::LoginUnlockAssessment { access, passwords }.decide()
+}
+
+mod passkey_material_admission;
+pub use passkey_material_admission::*;

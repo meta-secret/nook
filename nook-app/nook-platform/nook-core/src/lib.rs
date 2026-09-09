@@ -462,3 +462,16 @@ pub use nook_companion_core::{
 pub use nook_companion_core::BackupCodePageText;
 
 pub use nook_companion_core::{VaultHostObservation, VaultHostPolicy};
+
+pub use vault_client_policy::{
+    LoginDeviceKeyAvailability, LoginPasswordPromptUpdate, LoginUnlockAssessment,
+    LoginUnlockDecision, PasswordEntryPresence,
+};
+
+pub use sync_provider_store::{AuthProviderPersistenceMode, AuthProviderPersistenceRequest};
+
+pub use sync_provider_store::{
+    EnrollmentOAuthConfigurationError, EnrollmentOAuthConfigurationRequest,
+};
+
+pub use sync_provider_store::{SharedGrantProviderOutcome, SharedGrantProviderRequest};

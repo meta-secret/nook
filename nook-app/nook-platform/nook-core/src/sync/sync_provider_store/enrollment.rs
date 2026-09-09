@@ -90,9 +90,20 @@ pub struct SharedGrantProviderSelection<'a> {
 /// Select a saved OAuth provider that can authorize a shared enrollment
 /// target. A bound target may reuse only the credential persisted for that
 /// exact Drive folder or iCloud share.
-impl SharedGrantProviderSelection<'_> {
+impl<'a> SharedGrantProviderSelection<'a> {
     #[must_use]
     pub fn select(self) -> Option<String> {
+        self.selected_provider().map(|provider| provider.id.clone())
+    }
+    pub fn resolve(self) -> super::SharedGrantProviderOutcome {
+        match self.selected_provider() {
+            Some(provider) => super::SharedGrantProviderOutcome::Existing {
+                provider: provider.clone(),
+            },
+            None => super::SharedGrantProviderOutcome::AuthorizationRequired,
+        }
+    }
+    fn selected_provider(self) -> Option<&'a StorageProviderData> {
         let Self {
             providers,
             preset,
@@ -119,7 +130,7 @@ impl SharedGrantProviderSelection<'_> {
                         || oauth.icloud_share_target.as_deref() == Some(target_id.as_str())
                 }
             };
-            target_matches.then(|| provider.id.clone())
+            target_matches.then_some(provider)
         })
     }
 }

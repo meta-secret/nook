@@ -751,3 +751,35 @@ mod projection_tests {
         Ok(())
     }
 }
+
+#[wasm_bindgen]
+impl NookVaultManager {
+    /// Persist one provider draft using Rust-owned reconciliation and identity sealing.
+    pub async fn persist_auth_providers_snapshot(
+        &self,
+        request: nook_core::AuthProviderPersistenceRequest,
+    ) -> Result<nook_core::AuthProvidersSnapshotData, JsError> {
+        use nook_core::AuthProviderPersistenceMode;
+        let identity = self.device_identity()?;
+        let snapshot = match request.mode {
+            AuthProviderPersistenceMode::Replace => request.snapshot,
+            AuthProviderPersistenceMode::PreserveUnlistedSyncProviders => {
+                if has_local_vault().await? {
+                    let stored = AuthProviderDatabase::load_auth_providers(&identity).await?;
+                    request
+                        .snapshot
+                        .preserve_unlisted_sync_providers(&stored.snapshot)
+                } else {
+                    request.snapshot
+                }
+            }
+        };
+        ProviderSnapshotPublication {
+            identity: &identity,
+            snapshot: &snapshot,
+        }
+        .save()
+        .await?;
+        Ok(snapshot)
+    }
+}

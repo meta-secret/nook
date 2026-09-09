@@ -12,7 +12,9 @@ mod observation_binding;
 mod observation_facts;
 mod observation_validation;
 mod snapshot_contract;
+mod transport;
 mod vocabulary;
+pub use transport::*;
 
 pub use candidate_selection::AuthenticationFormObservationPriority;
 

@@ -624,3 +624,18 @@ mod tests {
         assert!(empty.is_empty());
     }
 }
+
+#[wasm_bindgen]
+impl NookEnrollmentProvider {
+    pub fn oauth_configuration(
+        &self,
+        defaults: nook_core::OAuthFileConfigData,
+    ) -> Result<nook_core::OAuthFileConfigData, JsError> {
+        nook_core::EnrollmentOAuthConfigurationRequest {
+            provider: &self.0,
+            defaults,
+        }
+        .project()
+        .map_err(|error| JsError::new(&error.to_string()))
+    }
+}

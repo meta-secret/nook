@@ -988,3 +988,6 @@ pub fn compare_extension_pairing_records(
 ) -> nook_companion_core::ExtensionPairingRecordComparison {
     request.compare()
 }
+
+mod browser_material_admission;
+pub use browser_material_admission::*;

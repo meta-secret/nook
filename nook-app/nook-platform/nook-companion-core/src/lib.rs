@@ -224,3 +224,12 @@ pub use authentication_workflow::{
 pub use backup_code_candidates::BackupCodePageText;
 
 pub use vault_host_policy::{VaultHostObservation, VaultHostPolicy};
+
+pub use authentication_workflow::{
+    AuthenticationRecoveryCopyEvidence, AuthenticationRecoveryCopyRequest,
+    AuthenticationWorkflowSnapshotTransport, AuthenticationWorkflowTransportAdmission,
+    AuthenticationWorkflowTransportPayload, AuthenticationWorkflowTransportType,
+};
+
+mod passkey_session_material;
+pub use passkey_session_material::*;

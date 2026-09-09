@@ -326,3 +326,12 @@ mod tests {
         Ok(())
     }
 }
+
+mod persistence;
+pub use persistence::*;
+
+mod enrollment_projection;
+pub use enrollment_projection::*;
+
+mod shared_grant;
+pub use shared_grant::*;

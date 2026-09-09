@@ -300,3 +300,10 @@ pub fn enrollment_icloud_shared_provider_for_architecture(
         .build()?,
     ))
 }
+
+#[wasm_bindgen]
+pub fn select_shared_grant_provider(
+    request: nook_core::SharedGrantProviderRequest,
+) -> nook_core::SharedGrantProviderOutcome {
+    request.select()
+}
