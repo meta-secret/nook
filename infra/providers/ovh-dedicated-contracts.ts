@@ -153,11 +153,6 @@ export interface HostIdentityInput {
   hostname: string;
 }
 
-export interface PreparedReinstall {
-  hostIdentity: HostIdentity;
-  publicKey: string;
-}
-
 export interface OvhRecoveryMarker {
   hostname: string;
   operatingSystem: string;

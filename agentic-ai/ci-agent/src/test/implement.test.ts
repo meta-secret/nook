@@ -8,6 +8,9 @@ import { OpenPrLookupKind } from "../main/github.js";
 import { AuthoredChangeBudgetExceededError } from "../main/git.js";
 import {
   CiEditOutcome,
+  CiChangeKind,
+  ChangedCiImplementation,
+  CiImplementationPhaseError,
   CiImplementationMode,
   ImplementPrTargetKind,
   AgentImplementationPreserveImplementedBranchBeforePr as AgentImplementationPreserveImplementedBranchBeforePrPreserve,
@@ -173,16 +176,9 @@ test("legacy implement short-circuits an existing PR and otherwise delivers once
 
   const editOnlyEvents: string[] = [];
   await new AgentImplementationRunCiImplementationPhases({
-    deliver: async () => {
-      editOnlyEvents.push("deliver");
-    },
     edit: async () => {
       editOnlyEvents.push("edit");
       return CiEditOutcome.Changed;
-    },
-    legacyPrExists: async () => {
-      editOnlyEvents.push("find-pr");
-      return true;
     },
     mode: CiImplementationMode.EditOnly,
   }).execute();
@@ -224,4 +220,33 @@ describe("resolveImplementPrTarget", () => {
       }).execute(),
     );
   });
+});
+
+test("a changed implementation consumes delivery before an asynchronous effect", async () => {
+  let deliveries = 0;
+  const result = await ChangedCiImplementation.edit({
+    mode: CiImplementationMode.LegacyMonolithic,
+    legacyPrExists: async () => false,
+    edit: async () => CiEditOutcome.Changed,
+    deliver: async () => {
+      deliveries += 1;
+    },
+  });
+  assert.equal(result.kind, CiChangeKind.Deliverable);
+  if (result.kind !== CiChangeKind.Deliverable) return;
+  const alias = result.change;
+  await result.change.deliver();
+  await assert.rejects(alias.deliver(), CiImplementationPhaseError);
+  assert.equal(deliveries, 1);
+});
+test("skipped edits never expose a delivery capability", async () => {
+  const result = await ChangedCiImplementation.edit({
+    mode: CiImplementationMode.LegacyMonolithic,
+    legacyPrExists: async () => false,
+    edit: async () => CiEditOutcome.Skipped,
+    deliver: async () => {
+      throw new Error("skipped edit must not deliver");
+    },
+  });
+  assert.deepEqual(result, { kind: CiChangeKind.Skipped });
 });

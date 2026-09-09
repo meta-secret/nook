@@ -185,27 +185,27 @@ impl TaskWorkspace<'_> {
                     )
                     .await?;
                 }
-                return Ok(WorkspacePreparation {
-                    baseline: String::new(),
-                    conflicted: true,
+                return Ok(WorkspacePreparation::Conflicted(ConflictedWorkspace {
+                    repository,
                     resumed: did_resume,
-                });
+                }));
             }
             applied_dependency = true;
         }
         if applied_dependency {
             let baseline = TaskWorkspace::commit_dependency_baseline(&repository).await?;
-            return Ok(WorkspacePreparation {
+            return Ok(WorkspacePreparation::Prepared(PreparedWorkspace {
+                repository,
                 baseline,
-                conflicted: false,
                 resumed: did_resume,
-            });
+            }));
         }
-        Ok(WorkspacePreparation {
-            baseline: TaskWorkspace::git_output(&repository, &["rev-parse", "HEAD"]).await?,
-            conflicted: false,
+        let baseline = TaskWorkspace::git_output(&repository, &["rev-parse", "HEAD"]).await?;
+        Ok(WorkspacePreparation::Prepared(PreparedWorkspace {
+            repository,
+            baseline,
             resumed: did_resume,
-        })
+        }))
     }
 }
 
@@ -271,14 +271,47 @@ impl TaskWorkspace<'_> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(super) struct WorkspacePreparation {
-    pub(super) baseline: String,
-    pub(super) conflicted: bool,
-    pub(super) resumed: bool,
+pub(super) enum WorkspacePreparation {
+    Conflicted(ConflictedWorkspace),
+    Prepared(PreparedWorkspace),
+}
+
+/// Owns an unresolved checkout. No baseline or completion operation exists yet.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct ConflictedWorkspace {
+    repository: PathBuf,
+    resumed: bool,
+}
+
+/// A checkout whose dependency baseline was established by preparation.
+/// This local sequencing capability does not replace the task store's live lease checks.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct PreparedWorkspace {
+    repository: PathBuf,
+    baseline: String,
+    resumed: bool,
+}
+
+impl ConflictedWorkspace {
+    pub(super) async fn finish_dependency_resolution(self) -> crate::HiveResult<PreparedWorkspace> {
+        TaskWorkspace::ensure_dependencies_resolved(&self.repository).await?;
+        let baseline = TaskWorkspace::commit_dependency_baseline(&self.repository).await?;
+        Ok(PreparedWorkspace {
+            repository: self.repository,
+            baseline,
+            resumed: self.resumed,
+        })
+    }
+}
+
+impl PreparedWorkspace {
+    pub(super) fn repository(&self) -> &Path {
+        &self.repository
+    }
 }
 
 impl TaskWorkspace<'_> {
-    pub(super) async fn ensure_dependencies_resolved(repository: &Path) -> crate::HiveResult<()> {
+    async fn ensure_dependencies_resolved(repository: &Path) -> crate::HiveResult<()> {
         let unmerged =
             TaskWorkspace::git_output(repository, &["diff", "--name-only", "--diff-filter=U"])
                 .await?;
@@ -297,7 +330,7 @@ impl TaskWorkspace<'_> {
 }
 
 impl TaskWorkspace<'_> {
-    pub(super) async fn commit_dependency_baseline(repository: &Path) -> crate::HiveResult<String> {
+    async fn commit_dependency_baseline(repository: &Path) -> crate::HiveResult<String> {
         TaskWorkspace::run_git_status(
             repository,
             &["add", "--all", "--", "."],
@@ -371,14 +404,19 @@ impl TaskWorkspace<'_> {
     }
 }
 
-impl TaskWorkspace<'_> {
+impl PreparedWorkspace {
     pub(super) async fn persistable_patch(
-        repository: &Path,
-        baseline: &str,
+        self,
         task: &ClaimedTask,
         result: &TerminalResult,
-        resumed: bool,
     ) -> crate::HiveResult<CompletionArtifact> {
+        let Self {
+            repository,
+            baseline,
+            resumed,
+        } = self;
+        let repository = repository.as_path();
+        let baseline = baseline.as_str();
         let add_status = Command::new("git")
             .args(["add", "--intent-to-add", "--", "."])
             .current_dir(repository)
@@ -450,7 +488,7 @@ mod tests {
     use std::process;
     use std::slice;
 
-    use super::TaskWorkspace;
+    use super::{ConflictedWorkspace, PreparedWorkspace, TaskWorkspace, WorkspacePreparation};
     use crate::model::{
         Artifact, AttemptId, ClaimedTask, CompletionArtifact, LeaseToken, TaskId, TerminalResult,
     };
@@ -564,9 +602,13 @@ mod tests {
             obsolete: false,
         };
 
-        let artifact =
-            TaskWorkspace::persistable_patch(repository.path(), baseline, &task, &result, false)
-                .await?;
+        let artifact = PreparedWorkspace {
+            repository: repository.path().to_owned(),
+            baseline: baseline.to_owned(),
+            resumed: false,
+        }
+        .persistable_patch(&task, &result)
+        .await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
             return Err(crate::HiveError::message("patch artifact must be produced"));
         };
@@ -656,8 +698,11 @@ mod tests {
         })
         .prepare_workspace()
         .await?;
-        assert!(!preparation.conflicted);
-        let baseline = preparation.baseline;
+        let WorkspacePreparation::Prepared(preparation) = preparation else {
+            return Err(crate::HiveError::message(
+                "dependency workspace must be prepared",
+            ));
+        };
         let repository = workspace.path().join("repository");
         assert_eq!(
             fs::read_to_string(repository.join("dependency.txt"))?,
@@ -676,7 +721,10 @@ mod tests {
         })
         .prepare_workspace()
         .await?;
-        assert!(!resumed_preparation.conflicted);
+        assert!(matches!(
+            resumed_preparation,
+            WorkspacePreparation::Prepared(PreparedWorkspace { resumed: true, .. })
+        ));
         let resumed_repository = resumed_workspace.path().join("repository");
         assert_eq!(
             fs::read_to_string(resumed_repository.join("dependency.txt"))?,
@@ -705,13 +753,103 @@ mod tests {
             tests: Vec::new(),
             obsolete: false,
         };
-        let artifact =
-            TaskWorkspace::persistable_patch(&repository, &baseline, &task, &result, false).await?;
+        let artifact = preparation.persistable_patch(&task, &result).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
             return Err(crate::HiveError::message("task patch must be produced"));
         };
         assert!(artifact.content.contains("diff --git a/task.txt"));
         assert!(!artifact.content.contains("dependency.txt"));
+        Ok(())
+    }
+    #[tokio::test]
+    async fn resumed_repair_accepts_changes_already_published_on_its_branch()
+    -> crate::HiveResult<()> {
+        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
+        let repository = tempfile::tempdir()?;
+        let run_git = |arguments: &[&str]| -> io::Result<()> {
+            let status = process::Command::new("git")
+                .args(arguments)
+                .current_dir(repository.path())
+                .status()?;
+            assert!(status.success());
+            Ok(())
+        };
+        run_git(&["init", "--quiet"])?;
+        fs::write(repository.path().join("repair.txt"), "published\n")?;
+        run_git(&["add", "repair.txt"])?;
+        run_git(&[
+            "-c",
+            "user.name=Hive Test",
+            "-c",
+            "user.email=hive@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "published repair",
+        ])?;
+        let baseline = process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(repository.path())
+            .output()?;
+        let baseline = String::from_utf8(baseline.stdout)?;
+        let task = ClaimedTask {
+            id: TaskId::new("resumed-task")?,
+            kind: "main-repair".to_owned(),
+            prompt: "finish delivery".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            attempt_id: AttemptId::new("resumed-attempt")?,
+            attempt_number: 1,
+            lease_token: LeaseToken::new("resumed-lease")?,
+            owning_repairs: Vec::new(),
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+        let result = TerminalResult::Completed {
+            summary: "published repair delivered".to_owned(),
+            changed_files: vec!["repair.txt".to_owned()],
+            tests: Vec::new(),
+            obsolete: false,
+        };
+
+        assert!(matches!(
+            PreparedWorkspace {
+                repository: repository.path().to_owned(),
+                baseline: baseline.trim().to_owned(),
+                resumed: true
+            }
+            .persistable_patch(&task, &result)
+            .await?,
+            CompletionArtifact::NotProduced
+        ));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn pending_dependency_patches_do_not_admit_a_prepared_workspace() -> crate::HiveResult<()>
+    {
+        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
+        let repository = tempfile::tempdir()?;
+        TaskWorkspace::run_git_status(
+            repository.path(),
+            &["init", "--quiet"],
+            "initialize conflict fixture",
+        )
+        .await?;
+        fs::create_dir(repository.path().join(".hive-pending"))?;
+        let conflicted = ConflictedWorkspace {
+            repository: repository.path().to_owned(),
+            resumed: false,
+        };
+        let error = conflicted
+            .finish_dependency_resolution()
+            .await
+            .err()
+            .ok_or_else(|| crate::HiveError::message("pending patches must prevent admission"))?;
+        assert!(
+            error
+                .to_string()
+                .contains("did not apply every pending patch")
+        );
         Ok(())
     }
 }

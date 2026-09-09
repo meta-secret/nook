@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import {
   ApiMethod,
+  PreparedNeo4jPolicyPatch,
+  Neo4jPolicyPreparationKind,
+  ConsumedNeo4jPolicyPatch,
   createReaperRequestHandler,
   KubernetesApiError,
   ReaperController,
@@ -325,4 +328,45 @@ test("bounds deletion polling and reports Kubernetes API failures", async () => 
     (await reaperController(failedControllerInput).reap("hive-worker-bad"))
       .status,
   ).toBe(502);
+});
+
+test("a prepared policy patch cannot be applied twice through an alias", async () => {
+  const api = new MockApi();
+  api.conflictOnce = false;
+  const preparation = PreparedNeo4jPolicyPatch.prepare({
+    api,
+    policy: policy(),
+    policyPath:
+      "/apis/networking.k8s.io/v1/namespaces/hive-system/networkpolicies/hive-worker-egress",
+    destinations: [{ ipBlock: { cidr: newEndpoint } }],
+  });
+  expect(preparation.kind).toBe(Neo4jPolicyPreparationKind.Prepared);
+  if (preparation.kind !== Neo4jPolicyPreparationKind.Prepared) return;
+  const alias = preparation.patch;
+  await preparation.patch.apply();
+  await expect(alias.apply()).rejects.toBeInstanceOf(ConsumedNeo4jPolicyPatch);
+  expect(api.patches).toHaveLength(1);
+});
+
+test("policy admission retains its resource version and isolates caller mutations", async () => {
+  const api = new MockApi();
+  api.conflictOnce = false;
+  const observed = policy();
+  const destinations = [{ ipBlock: { cidr: newEndpoint } }];
+  const preparation = PreparedNeo4jPolicyPatch.prepare({
+    api,
+    policy: observed,
+    policyPath:
+      "/apis/networking.k8s.io/v1/namespaces/hive-system/networkpolicies/hive-worker-egress",
+    destinations,
+  });
+  expect(preparation.kind).toBe(Neo4jPolicyPreparationKind.Prepared);
+  if (preparation.kind !== Neo4jPolicyPreparationKind.Prepared) return;
+  observed.metadata.resourceVersion = "changed-after-admission";
+  destinations[0].ipBlock.cidr = "changed-after-admission";
+  await preparation.patch.apply();
+  expect(api.patches[0].payload?.metadata.resourceVersion).toBe("10");
+  expect(api.patches[0].payload?.spec.egress[1].to).toEqual([
+    { ipBlock: { cidr: newEndpoint } },
+  ]);
 });

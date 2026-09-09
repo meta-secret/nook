@@ -1,27 +1,27 @@
 import {
+  OvhDedicatedOvhApi,
+  OvhDedicatedGetServer,
+  OvhDedicatedRequireCompatibleTemplate,
+} from "./ovh-dedicated-api";
+export { OvhDedicatedCreateOvhSignature } from "./ovh-dedicated-api";
+import {
   type OvhCredentials,
-  type OvhServer,
   ArcTier,
   EndpointMode,
   CliAction,
   HttpMethod,
   ProvisionResult,
   RecoveryMarkerStatus,
-  OvhServerState,
   OvhTaskStatus,
   DedicatedServerField,
-  type OvhTask,
-  type CompatibleTemplates,
   type DedicatedServerDefinition,
   type DedicatedServerInventory,
   type CliArguments,
   type ApiRequest,
-  type SignatureInput,
   type ReinstallRequest,
   type ProvisionContext,
   type HostIdentity,
   type HostIdentityInput,
-  type PreparedReinstall,
   type OvhRecoveryMarker,
   type AbsentRecoveryMarker,
   type PendingRecoveryMarker,
@@ -32,7 +32,6 @@ export {
   type OvhRecoveryMarker,
 } from "./ovh-dedicated-contracts";
 import { OvhDocument } from "./ovh-dedicated-document";
-import { createHash } from "node:crypto";
 import {
   chmod,
   mkdir,
@@ -299,23 +298,6 @@ systemctl restart ssh.service
   }
 }
 
-export class OvhDedicatedCreateOvhSignature {
-  constructor(private readonly request: SignatureInput) {}
-  execute(): string {
-    const input = this.request;
-
-    const material = [
-      input.applicationSecret,
-      input.consumerKey,
-      input.method,
-      input.url,
-      input.body,
-      input.timestamp,
-    ].join("+");
-    return `$1$${createHash("sha1").update(material).digest("hex")}`;
-  }
-}
-
 export class OvhDedicatedRequiresReinstall {
   constructor(
     private readonly request: {
@@ -467,169 +449,51 @@ class OvhDedicatedLoadCredentials {
   }
 }
 
-class OvhDedicatedApiRoot {
-  constructor(private readonly request: OvhCredentials) {}
-  execute(): string {
-    const credentials = this.request;
-
-    const roots: Record<string, string> = {
-      "https://api.us.ovhcloud.com": "https://api.us.ovhcloud.com/1.0",
-      "https://api.us.ovhcloud.com/1.0": "https://api.us.ovhcloud.com/1.0",
-      "ovh-us": "https://api.us.ovhcloud.com/1.0",
-    };
-    const root = roots[credentials.endpoint];
-    if (!root)
-      throw new Error(
-        "OVH credential endpoint is not an approved US API endpoint",
-      );
-    return root.endsWith("/1.0") ? root : `${root}/1.0`;
-  }
+enum ReinstallPreparationState {
+  Ready = "ready",
+  Consumed = "consumed",
 }
-
-class OvhDedicatedOvhApi<T> {
-  constructor(
-    private readonly request: {
-      credentials: OvhCredentials;
-      request: ApiRequest;
-      decode: (text: string) => T;
-    },
-  ) {}
-  async execute(): Promise<T> {
-    const input = this.request;
-
-    const root = new OvhDedicatedApiRoot(input.credentials).execute();
-    const { body = "" } = input.request;
-    const url = `${root}${input.request.path}`;
-    const timeResponse = await fetch(`${root}/auth/time`);
-    if (!timeResponse.ok) throw new Error("OVH time endpoint failed");
-    const timestamp = Number(await timeResponse.text());
-    const signatureInput: SignatureInput = {
-      applicationSecret: input.credentials.applicationSecret,
-      body,
-      consumerKey: input.credentials.consumerKey,
-      method: input.request.method,
-      timestamp,
-      url,
-    };
-    const headers = new Headers({
-      "Content-Type": "application/json",
-      "X-Ovh-Application": input.credentials.applicationKey,
-      "X-Ovh-Consumer": input.credentials.consumerKey,
-      "X-Ovh-Signature": new OvhDedicatedCreateOvhSignature(
-        signatureInput,
-      ).execute(),
-      "X-Ovh-Timestamp": String(timestamp),
-    });
-    const options: RequestInit = {
-      headers,
-      method: input.request.method,
-    };
-    if (input.request.method === HttpMethod.Post) options.body = body;
-    const response = await fetch(url, options);
-    const responseBody = await response.text();
-    if (!response.ok) {
-      throw new Error(
-        `OVH API ${input.request.method} ${input.request.path} failed: HTTP_${response.status}`,
-      );
-    }
-    return input.decode(responseBody);
-  }
+interface ReadyReinstall {
+  kind: ReinstallPreparationState.Ready;
+  context: ProvisionContext;
+  hostIdentity: HostIdentity;
+  publicKey: string;
 }
-
-class OvhDedicatedValidateServer {
-  constructor(
-    private readonly request: {
-      definition: DedicatedServerDefinition;
-      server: OvhServer;
-    },
-  ) {}
-  execute(): void {
-    const input = this.request;
-
-    const expected = input.definition;
-    const actual = input.server;
-    if (
-      actual.name !== expected.serviceName ||
-      actual.ip !== expected.publicAddress ||
-      actual.commercialRange !== expected.expectedCommercialRange ||
-      actual.datacenter !== expected.expectedDatacenter ||
-      actual.state !== OvhServerState.Ready
-    ) {
-      throw new Error(
-        "OVH server does not match the declared identity and ready-state contract",
-      );
-    }
-  }
+type ReinstallPreparation =
+  ReadyReinstall | { kind: ReinstallPreparationState.Consumed };
+enum ReinstallDispatchKind {
+  Unchanged = "unchanged",
+  Submitted = "submitted",
 }
+interface DispatchedReinstall {
+  kind: ReinstallDispatchKind.Submitted;
+  context: ProvisionContext;
+  taskId: number;
+}
+type ReinstallDispatch =
+  DispatchedReinstall | { kind: ReinstallDispatchKind.Unchanged };
+type ReinstallSubmission =
+  | { kind: ReinstallDispatchKind.Submitted; task: SubmittedOvhReinstall }
+  | { kind: ReinstallDispatchKind.Unchanged };
 
-class OvhDedicatedGetServer {
-  constructor(
-    private readonly request: {
-      credentials: OvhCredentials;
-      definition: DedicatedServerDefinition;
-    },
-  ) {}
-  async execute(): Promise<OvhServer> {
-    const input = this.request;
-
-    const request: ApiRequest = {
-      method: HttpMethod.Get,
-      path: `/dedicated/server/${encodeURIComponent(input.definition.serviceName)}`,
+/** Admission owns validated local inputs; dispatch still rechecks current server state. */
+class PreparedOvhReinstall {
+  #state: ReinstallPreparation;
+  private constructor(input: ReadyReinstall) {
+    this.#state = input;
+  }
+  static async prepare(input: ProvisionContext): Promise<PreparedOvhReinstall> {
+    const context = {
+      ...input,
+      credentials: { ...input.credentials },
+      definition: { ...input.definition },
     };
-    const server = await new OvhDedicatedOvhApi({
-      decode: OvhDocument.server,
-      credentials: input.credentials,
-      request,
-    }).execute();
-    new OvhDedicatedValidateServer({
-      definition: input.definition,
-      server,
-    }).execute();
-    return server;
-  }
-}
-
-class OvhDedicatedRequireCompatibleTemplate {
-  constructor(
-    private readonly request: {
-      credentials: OvhCredentials;
-      definition: DedicatedServerDefinition;
-    },
-  ) {}
-  async execute(): Promise<void> {
-    const input = this.request;
-
-    const request: ApiRequest = {
-      method: HttpMethod.Get,
-      path: `/dedicated/server/${encodeURIComponent(input.definition.serviceName)}/install/compatibleTemplates`,
-    };
-    const templates = await new OvhDedicatedOvhApi({
-      decode: OvhDocument.compatibleTemplates,
-      credentials: input.credentials,
-      request,
-    }).execute();
-    if (!templates.ovh.includes(input.definition.operatingSystem)) {
-      throw new Error(
-        "declared operating system is not compatible with this server",
-      );
-    }
-  }
-}
-
-class OvhDedicatedPrepareReinstall {
-  constructor(private readonly request: ProvisionContext) {}
-  async execute(): Promise<PreparedReinstall> {
-    const input = this.request;
-
-    await new OvhDedicatedRequireCompatibleTemplate({
-      credentials: input.credentials,
-      definition: input.definition,
-    }).execute();
+    await new OvhDedicatedRequireCompatibleTemplate(context).execute();
     const publicKey = await readFile(
-      new OvhDedicatedExpandHome(input.definition.sshPublicKeyFile).execute(),
+      new OvhDedicatedExpandHome(context.definition.sshPublicKeyFile).execute(),
       "utf8",
     );
-    if (!/^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(input.hostname)) {
+    if (!/^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(context.hostname)) {
       throw new Error("hostname is not a valid lowercase host label");
     }
     if (
@@ -637,46 +501,128 @@ class OvhDedicatedPrepareReinstall {
     ) {
       throw new Error("SSH public key must be an OpenSSH ed25519 or RSA key");
     }
-    return {
-      hostIdentity: await new OvhDedicatedLoadHostIdentity({
-        allowCreate: true,
-        hostname: input.hostname,
-      }).execute(),
+    const hostIdentity = await new OvhDedicatedLoadHostIdentity({
+      allowCreate: true,
+      hostname: context.hostname,
+    }).execute();
+    return new PreparedOvhReinstall({
+      kind: ReinstallPreparationState.Ready,
+      context,
+      hostIdentity,
       publicKey: publicKey.trim(),
+    });
+  }
+  async dispatch(): Promise<ReinstallDispatch> {
+    if (this.#state.kind === ReinstallPreparationState.Consumed)
+      throw new Error("OVH reinstall preparation has already been consumed");
+    const { context, hostIdentity, publicKey } = this.#state;
+    this.#state = { kind: ReinstallPreparationState.Consumed };
+    const payload: ReinstallRequest = {
+      customizations: {
+        hostname: context.hostname,
+        postInstallationScript: new OvhDedicatedHostIdentityInstallScript(
+          hostIdentity,
+        ).execute(),
+        sshKey: publicKey,
+      },
+      operatingSystem: context.definition.operatingSystem,
+    };
+    const request: ApiRequest = {
+      body: JSON.stringify(payload),
+      method: HttpMethod.Post,
+      path:
+        "/dedicated/server/" +
+        encodeURIComponent(context.definition.serviceName) +
+        "/reinstall",
+    };
+    const current = await new OvhDedicatedGetServer(context).execute();
+    if (
+      !new OvhDedicatedRequiresReinstall({
+        allowReinstall: context.allowReinstall,
+        currentOperatingSystem: current.os,
+        desiredOperatingSystem: context.definition.operatingSystem,
+      }).execute()
+    ) {
+      return { kind: ReinstallDispatchKind.Unchanged };
+    }
+    await new OvhDedicatedPersistRecoveryMarker(context).execute();
+    const task = await new OvhDedicatedOvhApi({
+      decode: OvhDocument.task,
+      credentials: context.credentials,
+      request,
+    }).execute();
+    return {
+      kind: ReinstallDispatchKind.Submitted,
+      context,
+      taskId: task.taskId,
     };
   }
 }
 
-class OvhDedicatedWaitForTask {
-  constructor(
-    private readonly request: {
-      credentials: OvhCredentials;
-      definition: DedicatedServerDefinition;
+enum SubmittedReinstallState {
+  Awaiting = "awaiting",
+  Consumed = "consumed",
+}
+type SubmittedReinstall =
+  | {
+      kind: SubmittedReinstallState.Awaiting;
+      context: ProvisionContext;
       taskId: number;
-    },
-  ) {}
-  async execute(): Promise<void> {
-    const input = this.request;
-
+    }
+  | { kind: SubmittedReinstallState.Consumed };
+class SubmittedOvhReinstall {
+  #state: SubmittedReinstall;
+  private constructor(dispatched: DispatchedReinstall) {
+    this.#state = {
+      kind: SubmittedReinstallState.Awaiting,
+      context: dispatched.context,
+      taskId: dispatched.taskId,
+    };
+  }
+  static async submit(
+    prepared: PreparedOvhReinstall,
+  ): Promise<ReinstallSubmission> {
+    const dispatched = await prepared.dispatch();
+    if (dispatched.kind === ReinstallDispatchKind.Unchanged) return dispatched;
+    return {
+      kind: ReinstallDispatchKind.Submitted,
+      task: new SubmittedOvhReinstall(dispatched),
+    };
+  }
+  async complete(): Promise<ProvisionResult> {
+    if (this.#state.kind === SubmittedReinstallState.Consumed)
+      throw new Error("OVH reinstall task has already been consumed");
+    const { context, taskId } = this.#state;
+    this.#state = { kind: SubmittedReinstallState.Consumed };
     const deadline = Date.now() + 45 * 60 * 1000;
-    while (Date.now() < deadline) {
+    for (;;) {
+      if (Date.now() >= deadline)
+        throw new Error("OVH reinstall task exceeded 45 minutes");
       const request: ApiRequest = {
         method: HttpMethod.Get,
-        path: `/dedicated/server/${encodeURIComponent(input.definition.serviceName)}/task/${input.taskId}`,
+        path:
+          "/dedicated/server/" +
+          encodeURIComponent(context.definition.serviceName) +
+          "/task/" +
+          taskId,
       };
       const task = await new OvhDedicatedOvhApi({
         decode: OvhDocument.task,
-        credentials: input.credentials,
+        credentials: context.credentials,
         request,
       }).execute();
-      if (task.status === OvhTaskStatus.Done) return;
-      if (new OvhDedicatedIsTerminalTaskFailure(task.status).execute()) {
-        throw new Error(`OVH reinstall task ended in ${task.status}`);
-      }
-      process.stderr.write(`OVH reinstall ${task.status}\n`);
+      if (task.status === OvhTaskStatus.Done) break;
+      if (new OvhDedicatedIsTerminalTaskFailure(task.status).execute())
+        throw new Error("OVH reinstall task ended in " + task.status);
+      process.stderr.write("OVH reinstall " + task.status + "\n");
       await Bun.sleep(15_000);
     }
-    throw new Error("OVH reinstall task exceeded 45 minutes");
+    const installed = await new OvhDedicatedGetServer(context).execute();
+    if (installed.os !== context.definition.operatingSystem)
+      throw new Error(
+        "OVH task completed without the declared operating system",
+      );
+    return ProvisionResult.Reinstalled;
   }
 }
 
@@ -684,76 +630,26 @@ class OvhDedicatedProvision {
   constructor(private readonly request: ProvisionContext) {}
   async execute(): Promise<ProvisionResult> {
     const input = this.request;
-
-    const current = await new OvhDedicatedGetServer({
-      credentials: input.credentials,
-      definition: input.definition,
-    }).execute();
-    const recoveryMarker = await new OvhDedicatedLoadRecoveryMarker({
-      definition: input.definition,
-      hostname: input.hostname,
-    }).execute();
-    if (recoveryMarker.status === RecoveryMarkerStatus.Pending) {
+    const current = await new OvhDedicatedGetServer(input).execute();
+    const recoveryMarker = await new OvhDedicatedLoadRecoveryMarker(
+      input,
+    ).execute();
+    if (recoveryMarker.status === RecoveryMarkerStatus.Pending)
       return ProvisionResult.Reinstalled;
-    }
-    const reinstallInput = {
-      allowReinstall: input.allowReinstall,
-      currentOperatingSystem: current.os,
-      desiredOperatingSystem: input.definition.operatingSystem,
-    };
-    if (!new OvhDedicatedRequiresReinstall(reinstallInput).execute())
+    if (
+      !new OvhDedicatedRequiresReinstall({
+        allowReinstall: input.allowReinstall,
+        currentOperatingSystem: current.os,
+        desiredOperatingSystem: input.definition.operatingSystem,
+      }).execute()
+    )
       return ProvisionResult.Unchanged;
-    const prepared = await new OvhDedicatedPrepareReinstall(input).execute();
-    const payload: ReinstallRequest = {
-      customizations: {
-        hostname: input.hostname,
-        postInstallationScript: new OvhDedicatedHostIdentityInstallScript(
-          prepared.hostIdentity,
-        ).execute(),
-        sshKey: prepared.publicKey,
-      },
-      operatingSystem: input.definition.operatingSystem,
-    };
-    const request: ApiRequest = {
-      body: JSON.stringify(payload),
-      method: HttpMethod.Post,
-      path: `/dedicated/server/${encodeURIComponent(input.definition.serviceName)}/reinstall`,
-    };
-    const preSubmission = await new OvhDedicatedGetServer({
-      credentials: input.credentials,
-      definition: input.definition,
-    }).execute();
-    const preSubmissionInput = {
-      allowReinstall: input.allowReinstall,
-      currentOperatingSystem: preSubmission.os,
-      desiredOperatingSystem: input.definition.operatingSystem,
-    };
-    if (!new OvhDedicatedRequiresReinstall(preSubmissionInput).execute())
+    const submission = await SubmittedOvhReinstall.submit(
+      await PreparedOvhReinstall.prepare(input),
+    );
+    if (submission.kind === ReinstallDispatchKind.Unchanged)
       return ProvisionResult.Unchanged;
-    await new OvhDedicatedPersistRecoveryMarker({
-      definition: input.definition,
-      hostname: input.hostname,
-    }).execute();
-    const task = await new OvhDedicatedOvhApi({
-      decode: OvhDocument.task,
-      credentials: input.credentials,
-      request,
-    }).execute();
-    await new OvhDedicatedWaitForTask({
-      credentials: input.credentials,
-      definition: input.definition,
-      taskId: task.taskId,
-    }).execute();
-    const installed = await new OvhDedicatedGetServer({
-      credentials: input.credentials,
-      definition: input.definition,
-    }).execute();
-    if (installed.os !== input.definition.operatingSystem) {
-      throw new Error(
-        "OVH task completed without the declared operating system",
-      );
-    }
-    return ProvisionResult.Reinstalled;
+    return submission.task.complete();
   }
 }
 
@@ -831,12 +727,12 @@ async function main(): Promise<void> {
             desiredOperatingSystem: definition.operatingSystem,
           }).execute();
     if (required) {
-      await new OvhDedicatedPrepareReinstall({
+      await PreparedOvhReinstall.prepare({
         allowReinstall: args.allowReinstall,
         credentials,
         definition,
         hostname: args.node,
-      }).execute();
+      });
     }
     process.stdout.write(`${required}\n`);
     return;

@@ -127,20 +127,79 @@ function normalizeIpv4(value: string): string {
   return parts.map((part) => String(Number(part))).join(".");
 }
 
-function isNeo4jIpRule(rule: EgressRule): boolean {
-  const [ports = []] = [rule.ports];
-  const [targets = []] = [rule.to];
-  return (
-    ports.some((port) => port.protocol === "TCP" && port.port === 7687) &&
-    targets.some((target) => "ipBlock" in target)
-  );
+export enum Neo4jPolicyPreparationKind {
+  Unchanged = "unchanged",
+  Prepared = "prepared",
 }
-
-function destinationsEqual(input: {
-  left: NetworkTarget[];
-  right: NetworkTarget[];
-}): boolean {
-  return JSON.stringify(input.left) === JSON.stringify(input.right);
+type Neo4jPolicyPreparation =
+  | { kind: Neo4jPolicyPreparationKind.Unchanged }
+  | {
+      kind: Neo4jPolicyPreparationKind.Prepared;
+      patch: PreparedNeo4jPolicyPatch;
+    };
+interface Neo4jPolicyAdmission {
+  api: KubernetesApi;
+  policyPath: string;
+  policy: NetworkPolicy;
+  destinations: NetworkTarget[];
+}
+enum Neo4jPatchStateKind {
+  Ready = "ready",
+  Consumed = "consumed",
+}
+type Neo4jPatchState =
+  | { kind: Neo4jPatchStateKind.Ready; api: KubernetesApi; request: ApiRequest }
+  | { kind: Neo4jPatchStateKind.Consumed };
+export class ConsumedNeo4jPolicyPatch extends Error {
+  constructor() {
+    super("Neo4j policy patch has already been consumed");
+  }
+}
+/** A one-use update admitted from one observed resource version. */
+export class PreparedNeo4jPolicyPatch {
+  #state: Neo4jPatchState;
+  private constructor(api: KubernetesApi, request: ApiRequest) {
+    this.#state = { kind: Neo4jPatchStateKind.Ready, api, request };
+  }
+  static prepare(input: Neo4jPolicyAdmission): Neo4jPolicyPreparation {
+    const egress = structuredClone(input.policy.spec.egress);
+    const rules = egress.filter(PreparedNeo4jPolicyPatch.isNeo4jIpRule);
+    if (rules.length !== 1)
+      throw new Error("Neo4j endpoint egress rule is missing");
+    const [rule] = rules;
+    if (!rule) throw new Error("Neo4j endpoint egress rule is missing");
+    const { to: previous = [] } = rule;
+    if (JSON.stringify(previous) === JSON.stringify(input.destinations))
+      return { kind: Neo4jPolicyPreparationKind.Unchanged };
+    rule.to = structuredClone(input.destinations);
+    const payload: NetworkPolicyPatch = {
+      metadata: { resourceVersion: input.policy.metadata.resourceVersion },
+      spec: { egress },
+    };
+    return {
+      kind: Neo4jPolicyPreparationKind.Prepared,
+      patch: new PreparedNeo4jPolicyPatch(input.api, {
+        method: ApiMethod.Patch,
+        path: input.policyPath,
+        payload,
+      }),
+    };
+  }
+  private static isNeo4jIpRule(rule: EgressRule): boolean {
+    const { ports = [], to = [] } = rule;
+    return (
+      ports.some((port) => port.protocol === "TCP" && port.port === 7687) &&
+      to.some((target) => "ipBlock" in target)
+    );
+  }
+  async apply(): Promise<void> {
+    if (this.#state.kind === Neo4jPatchStateKind.Consumed)
+      throw new ConsumedNeo4jPolicyPatch();
+    const { api, request } = this.#state;
+    this.#state = { kind: Neo4jPatchStateKind.Consumed };
+    // Kubernetes enforces the live resourceVersion precondition; conflicts require a fresh read.
+    await api.request(request);
+  }
 }
 
 export interface ReaperControllerOptions {
@@ -217,32 +276,15 @@ export class ReaperController {
         ...readRequest,
         decode: KubernetesDocument.networkPolicy,
       });
-      const egress = structuredClone(policy.spec.egress);
-      const rules = egress.filter(isNeo4jIpRule);
-      if (rules.length !== 1) {
-        throw new Error("Neo4j endpoint egress rule is missing");
-      }
-      const rule = rules[0]!;
-      const [left = []] = [rule.to];
-      const comparison = {
-        left,
-        right: input.destinations,
-      };
-      if (destinationsEqual(comparison)) {
-        return;
-      }
-      rule.to = input.destinations;
-      const payload: NetworkPolicyPatch = {
-        metadata: { resourceVersion: policy.metadata.resourceVersion },
-        spec: { egress },
-      };
-      const patchRequest: ApiRequest = {
-        method: ApiMethod.Patch,
-        path: policyPath,
-        payload,
-      };
+      const preparation = PreparedNeo4jPolicyPatch.prepare({
+        api: this.api,
+        policyPath,
+        policy,
+        destinations: input.destinations,
+      });
+      if (preparation.kind === Neo4jPolicyPreparationKind.Unchanged) return;
       try {
-        await this.api.request(patchRequest);
+        await preparation.patch.apply();
         return;
       } catch (error) {
         if (!(error instanceof KubernetesApiError) || error.status !== 409) {

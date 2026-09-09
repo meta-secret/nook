@@ -221,16 +221,17 @@ impl<S: TaskStore> Worker<S> {
                     .prepare_workspace()
                     .await?;
                     let repository = self.config.workspace.join("repository");
-                    let baseline = if preparation.conflicted {
-                        let mut codex_options = CodexOptions::new(repository.clone())
-                            .with_workspace_write()
-                            .with_activity_sender(activity_tx.clone());
-                        codex_options.model.clone_from(&self.config.model);
-                        codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
-                        codex_options
-                            .reasoning_effort
-                            .clone_from(&self.config.reasoning_effort);
-                        let result = InProcessCodexRunner::with_external_auth(
+                    let prepared = match preparation {
+                        WorkspacePreparation::Conflicted(conflicted) => {
+                            let mut codex_options = CodexOptions::new(repository.clone())
+                                .with_workspace_write()
+                                .with_activity_sender(activity_tx.clone());
+                            codex_options.model.clone_from(&self.config.model);
+                            codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
+                            codex_options
+                                .reasoning_effort
+                                .clone_from(&self.config.reasoning_effort);
+                            let result = InProcessCodexRunner::with_external_auth(
                             codex_options,
                             external_auth.clone(),
                         )
@@ -243,16 +244,16 @@ impl<S: TaskStore> Worker<S> {
                         )
                         .await
                         .hive_context("embedded Codex dependency resolution failed")?;
-                        if !matches!(result, TerminalResult::Completed { .. }) {
-                            return Err(crate::HiveError::message(
-                                "Codex could not integrate dependency artifacts",
-                            ));
+                            if !matches!(result, TerminalResult::Completed { .. }) {
+                                return Err(crate::HiveError::message(
+                                    "Codex could not integrate dependency artifacts",
+                                ));
+                            }
+                            conflicted.finish_dependency_resolution().await?
                         }
-                        TaskWorkspace::ensure_dependencies_resolved(&repository).await?;
-                        TaskWorkspace::commit_dependency_baseline(&repository).await?
-                    } else {
-                        preparation.baseline
+                        WorkspacePreparation::Prepared(prepared) => prepared,
                     };
+                    let repository = prepared.repository().to_owned();
                     let prompt = ClaimedTask::task_prompt(task);
                     let mut codex_options = CodexOptions::new(repository.clone())
                         .with_workspace_write()
@@ -315,15 +316,7 @@ impl<S: TaskStore> Worker<S> {
                         TaskDisposition::bullet_list(result.changed_files()),
                         TaskDisposition::bullet_list(result.tests())
                     ));
-                    let repository = self.config.workspace.join("repository");
-                    let artifact = TaskWorkspace::persistable_patch(
-                        &repository,
-                        &baseline,
-                        task,
-                        &result,
-                        preparation.resumed,
-                    )
-                    .await?;
+                    let artifact = prepared.persistable_patch(task, &result).await?;
                     if obsolete && !matches!(artifact, CompletionArtifact::NotProduced) {
                         return Err(crate::HiveError::message(
                             "obsolete blocker retirement cannot persist a patch artifact",
@@ -781,70 +774,6 @@ mod tests {
         assert!(prompt.contains("Do not repeatedly audit an immutable merged branch"));
         assert!(prompt.contains("Never return the failed status"));
         assert!(prompt.contains("exactly one prerequisite request"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn resumed_repair_accepts_changes_already_published_on_its_branch()
-    -> crate::HiveResult<()> {
-        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
-        let repository = tempfile::tempdir()?;
-        let run_git = |arguments: &[&str]| -> io::Result<()> {
-            let status = process::Command::new("git")
-                .args(arguments)
-                .current_dir(repository.path())
-                .status()?;
-            assert!(status.success());
-            Ok(())
-        };
-        run_git(&["init", "--quiet"])?;
-        fs::write(repository.path().join("repair.txt"), "published\n")?;
-        run_git(&["add", "repair.txt"])?;
-        run_git(&[
-            "-c",
-            "user.name=Hive Test",
-            "-c",
-            "user.email=hive@example.invalid",
-            "commit",
-            "--quiet",
-            "-m",
-            "published repair",
-        ])?;
-        let baseline = process::Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(repository.path())
-            .output()?;
-        let baseline = String::from_utf8(baseline.stdout)?;
-        let task = ClaimedTask {
-            id: TaskId::new("resumed-task")?,
-            kind: "main-repair".to_owned(),
-            prompt: "finish delivery".to_owned(),
-            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("resumed-attempt")?,
-            attempt_number: 1,
-            lease_token: LeaseToken::new("resumed-lease")?,
-            owning_repairs: Vec::new(),
-            dependency_context: Vec::new(),
-            dependency_artifacts: Vec::new(),
-        };
-        let result = TerminalResult::Completed {
-            summary: "published repair delivered".to_owned(),
-            changed_files: vec!["repair.txt".to_owned()],
-            tests: Vec::new(),
-            obsolete: false,
-        };
-
-        assert!(matches!(
-            TaskWorkspace::persistable_patch(
-                repository.path(),
-                baseline.trim(),
-                &task,
-                &result,
-                true
-            )
-            .await?,
-            CompletionArtifact::NotProduced
-        ));
         Ok(())
     }
 

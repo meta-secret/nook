@@ -93,18 +93,16 @@ export class CiImplementationCommand {
 
   async runCiEditOnly(): Promise<void> {
     await new AgentImplementationRunCiImplementationPhases({
-      deliver: runCiDeliver,
-      edit: runCiEdit,
-      legacyPrExists: () => Promise.resolve(false),
+      edit: () => this.runCiEdit(),
       mode: CiImplementationMode.EditOnly,
     }).execute();
   }
 
   async runCiImplement(): Promise<void> {
     await new AgentImplementationRunCiImplementationPhases({
-      deliver: runCiDeliver,
-      edit: runCiEdit,
-      legacyPrExists: legacyStandalonePrExists,
+      deliver: () => this.runCiDeliver(),
+      edit: () => this.runCiEdit(),
+      legacyPrExists: () => this.legacyStandalonePrExists(),
       mode: CiImplementationMode.LegacyMonolithic,
     }).execute();
   }
@@ -279,24 +277,77 @@ export class AgentImplementationResolveImplementPrTarget {
   }
 }
 
+export enum CiImplementationPhaseFailureKind {
+  Consumed = "consumed",
+}
+export class CiImplementationPhaseError extends Error {
+  readonly kind = CiImplementationPhaseFailureKind.Consumed;
+  constructor() {
+    super("CI implementation phase has already been consumed");
+  }
+}
+enum EditingPhaseKind {
+  Pending = "pending",
+  Consumed = "consumed",
+}
+type EditingPhase =
+  | { kind: EditingPhaseKind.Pending; request: CiImplementationPhases }
+  | { kind: EditingPhaseKind.Consumed };
 export class AgentImplementationRunCiImplementationPhases {
-  constructor(private readonly request: CiImplementationPhases) {}
+  #phase: EditingPhase;
+  constructor(request: CiImplementationPhases) {
+    this.#phase = { kind: EditingPhaseKind.Pending, request: { ...request } };
+  }
   async execute(): Promise<void> {
-    const phases = this.request;
-
-    if (
-      phases.mode === CiImplementationMode.LegacyMonolithic &&
-      (await phases.legacyPrExists())
-    ) {
+    if (this.#phase.kind === EditingPhaseKind.Consumed)
+      throw new CiImplementationPhaseError();
+    const { request } = this.#phase;
+    this.#phase = { kind: EditingPhaseKind.Consumed };
+    if (request.mode === CiImplementationMode.EditOnly) {
+      await request.edit();
       return;
     }
-    const outcome = await phases.edit();
-    if (
-      phases.mode === CiImplementationMode.LegacyMonolithic &&
-      outcome === CiEditOutcome.Changed
-    ) {
-      await phases.deliver();
-    }
+    const result = await ChangedCiImplementation.edit(request);
+    if (result.kind === CiChangeKind.Deliverable) await result.change.deliver();
+  }
+}
+export enum CiChangeKind {
+  Skipped = "skipped",
+  Deliverable = "deliverable",
+}
+type CiChange =
+  | { kind: CiChangeKind.Skipped }
+  | { kind: CiChangeKind.Deliverable; change: ChangedCiImplementation };
+enum ChangeDeliveryKind {
+  Pending = "pending",
+  Consumed = "consumed",
+}
+type ChangeDelivery =
+  | { kind: ChangeDeliveryKind.Pending; deliver: () => Promise<void> }
+  | { kind: ChangeDeliveryKind.Consumed };
+/** A delivery operation exists only after the editing effect reports a change. */
+export class ChangedCiImplementation {
+  #delivery: ChangeDelivery;
+  private constructor(deliver: () => Promise<void>) {
+    this.#delivery = { kind: ChangeDeliveryKind.Pending, deliver };
+  }
+  static async edit(request: LegacyCiImplementation): Promise<CiChange> {
+    const { edit, deliver, legacyPrExists } = request;
+    if (await legacyPrExists()) return { kind: CiChangeKind.Skipped };
+    const result = await edit();
+    if (result === CiEditOutcome.Skipped) return { kind: CiChangeKind.Skipped };
+    return {
+      kind: CiChangeKind.Deliverable,
+      change: new ChangedCiImplementation(deliver),
+    };
+  }
+  async deliver(): Promise<void> {
+    if (this.#delivery.kind === ChangeDeliveryKind.Consumed)
+      throw new CiImplementationPhaseError();
+    const { deliver } = this.#delivery;
+    this.#delivery = { kind: ChangeDeliveryKind.Consumed };
+    // The trusted delivery command still checks the live repository and published head.
+    await deliver();
   }
 }
 
@@ -332,9 +383,14 @@ export enum CiImplementationMode {
   LegacyMonolithic = "legacy-monolithic",
 }
 
-type CiImplementationPhases = {
+interface EditOnlyCiImplementation {
+  mode: CiImplementationMode.EditOnly;
+  edit: () => Promise<CiEditOutcome>;
+}
+interface LegacyCiImplementation {
+  mode: CiImplementationMode.LegacyMonolithic;
   deliver: () => Promise<void>;
   edit: () => Promise<CiEditOutcome>;
   legacyPrExists: () => Promise<boolean>;
-  mode: CiImplementationMode;
-};
+}
+type CiImplementationPhases = EditOnlyCiImplementation | LegacyCiImplementation;
