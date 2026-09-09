@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import {
   CST,
   Lexer,
@@ -22,10 +23,10 @@ export class ExecutableSkillYaml {
     try {
       const normalizedText = text.replace(/\r\n?/gu, '\n');
       if (
-        !ExecutableSkillYaml.skillYamlSourceWithinBounds(normalizedText) ||
+        !this.skillYamlSourceWithinBounds(normalizedText) ||
         /^%[A-Z]+(?:[ \t]|$)/mu.test(normalizedText)
       ) {
-        return { ok: false, message: YAML_SYNTAX_FAILURE };
+        return err({ message: YAML_SYNTAX_FAILURE });
       }
       const document = parseDocument(normalizedText, YAML_PARSE_OPTIONS);
       if (
@@ -38,27 +39,22 @@ export class ExecutableSkillYaml {
         ) ||
         !document.contents
       ) {
-        return { ok: false, message: YAML_SYNTAX_FAILURE };
+        return err({ message: YAML_SYNTAX_FAILURE });
       }
-      const astIssue = ExecutableSkillYaml.validateSkillYamlAst(
-        document.contents,
-      );
+      const astIssue = this.validateSkillYamlAst(document.contents);
       if (astIssue === SkillYamlAstIssue.Reference) {
-        return { ok: false, message: YAML_REFERENCE_FAILURE };
+        return err({ message: YAML_REFERENCE_FAILURE });
       }
       if (astIssue === SkillYamlAstIssue.Unsupported) {
-        return { ok: false, message: YAML_SYNTAX_FAILURE };
+        return err({ message: YAML_SYNTAX_FAILURE });
       }
-      return {
-        ok: true,
-        value: document.toJS(YAML_TO_JS_OPTIONS) as UntrustedSkillYamlNode,
-      };
+      return ok(document.toJS(YAML_TO_JS_OPTIONS) as UntrustedSkillYamlNode);
     } catch {
-      return { ok: false, message: YAML_SYNTAX_FAILURE };
+      return err({ message: YAML_SYNTAX_FAILURE });
     }
   }
 
-  private static skillYamlSourceWithinBounds(source: string): boolean {
+  private skillYamlSourceWithinBounds(source: string): boolean {
     if (UTF8_ENCODER.encode(source).byteLength > SKILL_YAML_DOCUMENT_BYTE_LIMIT)
       return false;
     let depth = 0;
@@ -110,7 +106,7 @@ export class ExecutableSkillYaml {
     return true;
   }
 
-  private static validateSkillYamlAst(node: ParsedNode): SkillYamlAstIssue {
+  private validateSkillYamlAst(node: ParsedNode): SkillYamlAstIssue {
     const pending: Array<{
       readonly depth: number;
       readonly node: ParsedNode;
@@ -164,86 +160,6 @@ export class ExecutableSkillYaml {
     }
     return SkillYamlAstIssue.None;
   }
-
-  static stringifySkillYaml(value: UntrustedSkillYamlNode): string {
-    ExecutableSkillYaml.assertSerializableSkillYaml(value);
-    const serialized = stringify(value, YAML_STRINGIFY_OPTIONS);
-    return serialized.endsWith('\n') ? serialized : `${serialized}\n`;
-  }
-
-  private static assertSerializableSkillYaml(
-    value: UntrustedSkillYamlNode,
-  ): void {
-    const pending: Array<{
-      readonly depth: number;
-      readonly value: UntrustedSkillYamlNode;
-    }> = [{ depth: 0, value }];
-    const seen = new Set<SkillYamlContainer>();
-    let nodes = 0;
-    while (pending.length > 0) {
-      const current = pending.pop();
-      if (!current) throw new Error('Invalid YAML response.');
-      nodes += 1;
-      if (
-        nodes > SKILL_YAML_NODE_LIMIT ||
-        current.depth > SKILL_YAML_DEPTH_LIMIT
-      )
-        throw new Error('Invalid YAML response.');
-      if (
-        typeof current.value === 'number' &&
-        (!Number.isFinite(current.value) ||
-          (Number.isInteger(current.value) &&
-            !Number.isSafeInteger(current.value)))
-      )
-        throw new Error('Invalid YAML response.');
-      if (ExecutableSkillYaml.oversizedSkillYamlScalar(current.value))
-        throw new Error('Invalid YAML response.');
-      if (typeof current.value !== 'object') continue;
-      if (seen.has(current.value)) throw new Error('Invalid YAML response.');
-      seen.add(current.value);
-      const keys = Array.isArray(current.value)
-        ? []
-        : Object.keys(current.value);
-      if (keys.some(ExecutableSkillYaml.oversizedSkillYamlScalar))
-        throw new Error('Invalid YAML response.');
-      const values = Array.isArray(current.value)
-        ? current.value
-        : Object.values(current.value);
-      nodes += keys.length;
-      for (const child of values) {
-        const next = { depth: current.depth + 1, value: child };
-        pending.push(next);
-      }
-    }
-  }
-
-  private static oversizedSkillYamlScalar(
-    value: UntrustedSkillYamlNode,
-  ): boolean {
-    return (
-      typeof value === 'string' &&
-      UTF8_ENCODER.encode(value).byteLength > SKILL_YAML_SCALAR_BYTE_LIMIT
-    );
-  }
-
-  static isSkillYamlMap(
-    value: UntrustedSkillYamlNode,
-  ): value is UntrustedSkillYamlMap {
-    return (
-      typeof value === 'object' &&
-      value instanceof Object &&
-      !Array.isArray(value)
-    );
-  }
-
-  static skillYamlProperty(
-    request: SkillYamlPropertyRequest,
-  ): SkillYamlProperty {
-    for (const [key, value] of Object.entries(request.map)) {
-      if (key === request.key) return { found: true, value };
-    }
-    return { found: false };
-  }
 }
 
 /**
@@ -264,18 +180,14 @@ export type UntrustedSkillYamlMap = {
 type SkillYamlContainer =
   readonly UntrustedSkillYamlNode[] | UntrustedSkillYamlMap;
 
-export type SkillYamlParseSuccess = {
-  readonly ok: true;
-  readonly value: UntrustedSkillYamlNode;
-};
-
 export type SkillYamlParseFailure = {
-  readonly ok: false;
   readonly message: string;
 };
 
-export type SkillYamlParseOutcome =
-  SkillYamlParseFailure | SkillYamlParseSuccess;
+export type SkillYamlParseOutcome = Result<
+  UntrustedSkillYamlNode,
+  SkillYamlParseFailure
+>;
 
 const YAML_REFERENCE_FAILURE =
   'YAML anchors and aliases are not supported by executable skills.';
@@ -323,3 +235,128 @@ export type SkillYamlPropertyRequest = {
 export type SkillYamlProperty =
   | { readonly found: true; readonly value: UntrustedSkillYamlNode }
   | { readonly found: false };
+
+export enum SkillYamlEncodingIssue {
+  InvalidValue = 'invalidValue',
+  Library = 'library',
+  ResponseCapacity = 'responseCapacity',
+}
+export type SkillYamlEncodingFailure = {
+  readonly kind: SkillYamlEncodingIssue;
+  readonly message: string;
+};
+export class ExecutableSkillYamlEncoding {
+  constructor(private readonly value: UntrustedSkillYamlNode) {}
+  execute(): Result<string, SkillYamlEncodingFailure> {
+    const value = this.value;
+    const admission = this.admit();
+    if (admission.isErr()) return err(admission.error);
+    try {
+      const serialized = stringify(value, YAML_STRINGIFY_OPTIONS);
+      return ok(serialized.endsWith('\n') ? serialized : `${serialized}\n`);
+    } catch {
+      return err({
+        kind: SkillYamlEncodingIssue.Library,
+        message: 'Invalid YAML response.',
+      });
+    }
+  }
+
+  private admit(): Result<void, SkillYamlEncodingFailure> {
+    const value = this.value;
+    const pending: Array<{
+      readonly depth: number;
+      readonly value: UntrustedSkillYamlNode;
+    }> = [{ depth: 0, value }];
+    const seen = new Set<SkillYamlContainer>();
+    let nodes = 0;
+    while (pending.length > 0) {
+      const current = pending.pop();
+      if (!current)
+        return err({
+          kind: SkillYamlEncodingIssue.InvalidValue,
+          message: 'Invalid YAML response.',
+        });
+      nodes += 1;
+      if (
+        nodes > SKILL_YAML_NODE_LIMIT ||
+        current.depth > SKILL_YAML_DEPTH_LIMIT
+      )
+        return err({
+          kind: SkillYamlEncodingIssue.InvalidValue,
+          message: 'Invalid YAML response.',
+        });
+      if (
+        typeof current.value === 'number' &&
+        (!Number.isFinite(current.value) ||
+          (Number.isInteger(current.value) &&
+            !Number.isSafeInteger(current.value)))
+      )
+        return err({
+          kind: SkillYamlEncodingIssue.InvalidValue,
+          message: 'Invalid YAML response.',
+        });
+      if (this.oversizedSkillYamlScalar(current.value))
+        return err({
+          kind: SkillYamlEncodingIssue.InvalidValue,
+          message: 'Invalid YAML response.',
+        });
+      if (typeof current.value !== 'object') continue;
+      if (!(current.value instanceof Object))
+        return err({
+          kind: SkillYamlEncodingIssue.InvalidValue,
+          message: 'Invalid YAML response.',
+        });
+      if (seen.has(current.value))
+        return err({
+          kind: SkillYamlEncodingIssue.InvalidValue,
+          message: 'Invalid YAML response.',
+        });
+      seen.add(current.value);
+      const keys = Array.isArray(current.value)
+        ? []
+        : Object.keys(current.value);
+      if (keys.some((key) => this.oversizedSkillYamlScalar(key)))
+        return err({
+          kind: SkillYamlEncodingIssue.InvalidValue,
+          message: 'Invalid YAML response.',
+        });
+      const values = Array.isArray(current.value)
+        ? current.value
+        : Object.values(current.value);
+      nodes += keys.length;
+      for (const child of values) {
+        const next = { depth: current.depth + 1, value: child };
+        pending.push(next);
+      }
+    }
+    return ok(undefined);
+  }
+
+  private oversizedSkillYamlScalar(value: UntrustedSkillYamlNode): boolean {
+    return (
+      typeof value === 'string' &&
+      UTF8_ENCODER.encode(value).byteLength > SKILL_YAML_SCALAR_BYTE_LIMIT
+    );
+  }
+}
+
+export class SkillYamlValue {
+  constructor(readonly value: UntrustedSkillYamlNode) {}
+  isMap(): this is SkillYamlValue & { readonly value: UntrustedSkillYamlMap } {
+    return (
+      typeof this.value === 'object' &&
+      this.value instanceof Object &&
+      !Array.isArray(this.value)
+    );
+  }
+}
+export class ExecutableSkillYamlProperty {
+  constructor(private readonly request: SkillYamlPropertyRequest) {}
+  execute(): SkillYamlProperty {
+    for (const [key, value] of Object.entries(this.request.map)) {
+      if (key === this.request.key) return { found: true, value };
+    }
+    return { found: false };
+  }
+}

@@ -14,10 +14,6 @@ export class ExecutableSkillCommandPath {
     }
     return `${request.parent}[${JSON.stringify(request.field)}]`;
   }
-
-  static unknownSkillCommandPath(parent: string): string {
-    return `${parent}["<unknown-key>"]`;
-  }
 }
 export type SkillCommandPathRequest = {
   readonly field: string;
@@ -25,3 +21,10 @@ export type SkillCommandPathRequest = {
 };
 
 const SIMPLE_FIELD = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
+
+export class UnknownSkillCommandPath {
+  constructor(private readonly parent: string) {}
+  execute(): string {
+    return `${this.parent}["<unknown-key>"]`;
+  }
+}

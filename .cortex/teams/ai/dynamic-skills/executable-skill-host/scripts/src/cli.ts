@@ -1,3 +1,11 @@
+#!/usr/bin/env bun
+import { EXECUTABLE_SKILL_CATALOG } from './skill-action-registry.ts';
+import { err, ok, type Result } from 'neverthrow';
+import {
+  ExecutableSkillYamlEncoding,
+  SkillYamlEncodingIssue,
+  type SkillYamlEncodingFailure,
+} from './skill-yaml-codec.ts';
 import {
   SKILL_TOOLS_LIST_INVOKE,
   ExecutableSkillActions,
@@ -30,7 +38,7 @@ export class ExecutableSkillCli {
     return new ExecutableSkillCli(request);
   }
 
-  public execute(): SkillCliOutcome {
+  public execute(): Result<SkillCliOutcome, SkillYamlEncodingFailure> {
     const request = this.request;
     const invocationRequest: ParseSkillCliInvocationRequest = {
       argv: request.argv,
@@ -38,9 +46,9 @@ export class ExecutableSkillCli {
     const invocation =
       ExecutableSkillInvocation.from(invocationRequest).execute();
     if (invocation.kind === SkillCliInvocationKind.ToolsList) {
-      return ExecutableSkillCli.dispatchSkillYamlText(
-        ExecutableSkillActions.defaultSkillBlueprint(),
-      );
+      return new ExecutableSkillRequest(
+        EXECUTABLE_SKILL_CATALOG.example(),
+      ).execute();
     }
     if (invocation.kind === SkillCliInvocationKind.UsageError) {
       const outcomeRequest: SkillErrorOutcomeRequest = {
@@ -48,149 +56,9 @@ export class ExecutableSkillCli {
         issue: SkillCommandIssue.UsageError,
         message: invocation.message,
       };
-      return ExecutableSkillCli.errorOutcome(outcomeRequest);
+      return new ExecutableSkillFailureResponse(outcomeRequest).execute();
     }
-    return ExecutableSkillCli.dispatchSkillYamlText(invocation.requestYaml);
-  }
-
-  static dispatchSkillYamlText(text: string): SkillCliOutcome {
-    if (UTF8_ENCODER.encode(text).byteLength > SKILL_HOST_REQUEST_BYTE_LIMIT)
-      return ExecutableSkillCli.requestTooLargeOutcome();
-    const parsed = ExecutableSkillYaml.from(text).execute();
-    if (!parsed.ok) {
-      const outcomeRequest: SkillErrorOutcomeRequest = {
-        phase: SkillCommandPhase.Decode,
-        issue: SkillCommandIssue.InvalidYaml,
-        message: 'Invalid YAML syntax.',
-      };
-      return ExecutableSkillCli.errorOutcome(outcomeRequest);
-    }
-    const decoded = ExecutableSkillActions.decodeSkillActionRequest(
-      parsed.value,
-    );
-    if (!decoded.ok) {
-      const outcomeRequest: SkillErrorOutcomeRequest = {
-        phase: SkillCommandPhase.Decode,
-        issue: SkillCommandIssue.InvalidRequest,
-        message: decoded.message,
-        path: decoded.path,
-      };
-      return ExecutableSkillCli.errorOutcome(outcomeRequest);
-    }
-    const execution = decoded.request.execute();
-    if (execution.isErr()) {
-      return ExecutableSkillCli.errorOutcome({
-        phase: SkillCommandPhase.Execute,
-        issue: SkillCommandIssue.InvalidRequest,
-        message: 'Executable skill action failed validation or verification.',
-      });
-    }
-    const response: SkillSuccessResponse = {
-      ok: true,
-      family: decoded.request.family,
-      operation: decoded.request.operation,
-      result: execution.value,
-    };
-    const finalRequest: FinalSkillCliResponseRequest = {
-      exitCode: 0,
-      response: response as UntrustedSkillYamlNode,
-    };
-    return ExecutableSkillCli.finalizeSkillCliResponse(finalRequest);
-  }
-
-  private static requestTooLargeOutcome(): SkillCliOutcome {
-    const request: SkillErrorOutcomeRequest = {
-      phase: SkillCommandPhase.Decode,
-      issue: SkillCommandIssue.RequestTooLarge,
-      message: `Skill request exceeds ${SKILL_HOST_REQUEST_BYTE_LIMIT} bytes.`,
-    };
-    return ExecutableSkillCli.errorOutcome(request);
-  }
-
-  private static errorOutcome(
-    request: SkillErrorOutcomeRequest,
-  ): SkillCliOutcome {
-    const { path = '' } = request;
-    const response: SkillCommandErrorResponse = {
-      ok: false,
-      isError: true,
-      phase: request.phase,
-      errors: [{ path, issue: request.issue, message: request.message }],
-      recover: {
-        toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
-        hint: 'List skill actions, copy the matching YAML example, and retry.',
-      },
-    };
-    const finalRequest: FinalSkillCliResponseRequest = {
-      exitCode: request.phase === SkillCommandPhase.Execute ? 1 : 2,
-      response: response as UntrustedSkillYamlNode,
-    };
-    return ExecutableSkillCli.finalizeSkillCliResponse(finalRequest);
-  }
-
-  static finalizeSkillCliResponse(
-    request: FinalSkillCliResponseRequest,
-  ): SkillCliOutcome {
-    let yaml: string;
-    try {
-      yaml = ExecutableSkillYaml.stringifySkillYaml(request.response);
-    } catch {
-      const invalidResponse: SkillCommandErrorResponse = {
-        ok: false,
-        isError: true,
-        phase: SkillCommandPhase.Execute,
-        errors: [
-          {
-            path: 'result',
-            issue: SkillCommandIssue.InvalidResponse,
-            message: 'Skill action returned an invalid YAML response value.',
-          },
-        ],
-        recover: {
-          toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
-          hint: 'Use only finite values permitted by the action result schema.',
-        },
-      };
-      return {
-        exitCode: 1,
-        yaml: ExecutableSkillYaml.stringifySkillYaml(
-          invalidResponse as UntrustedSkillYamlNode,
-        ),
-      };
-    }
-    if (
-      UTF8_ENCODER.encode(yaml).byteLength <= SKILL_HOST_RESPONSE_BYTE_LIMIT
-    ) {
-      return { exitCode: request.exitCode, yaml };
-    }
-    const response: SkillCommandErrorResponse = {
-      ok: false,
-      isError: true,
-      phase: SkillCommandPhase.Execute,
-      errors: [
-        {
-          path: 'result',
-          issue: SkillCommandIssue.ResponseTooLarge,
-          message: `Encoded YAML response exceeds ${SKILL_HOST_RESPONSE_BYTE_LIMIT} bytes.`,
-        },
-      ],
-      recover: {
-        toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
-        hint: 'Reduce the request cardinality and retry the skill action.',
-      },
-    };
-    const fallbackYaml = ExecutableSkillYaml.stringifySkillYaml(
-      response as UntrustedSkillYamlNode,
-    );
-    if (
-      UTF8_ENCODER.encode(fallbackYaml).byteLength >
-      SKILL_HOST_RESPONSE_BYTE_LIMIT
-    ) {
-      throw new Error(
-        'Static response-too-large failure exceeds its byte limit.',
-      );
-    }
-    return { exitCode: 1, yaml: fallbackYaml };
+    return new ExecutableSkillRequest(invocation.requestYaml).execute();
   }
 }
 
@@ -224,9 +92,169 @@ type SkillErrorOutcomeRequest = {
   readonly path?: string;
 };
 
+export class ExecutableSkillRequest {
+  constructor(private readonly text: string) {}
+  execute(): Result<SkillCliOutcome, SkillYamlEncodingFailure> {
+    const text = this.text;
+    if (UTF8_ENCODER.encode(text).byteLength > SKILL_HOST_REQUEST_BYTE_LIMIT)
+      return this.requestTooLargeOutcome();
+    const parsed = ExecutableSkillYaml.from(text).execute();
+    if (parsed.isErr()) {
+      const outcomeRequest: SkillErrorOutcomeRequest = {
+        phase: SkillCommandPhase.Decode,
+        issue: SkillCommandIssue.InvalidYaml,
+        message: 'Invalid YAML syntax.',
+      };
+      return new ExecutableSkillFailureResponse(outcomeRequest).execute();
+    }
+    const decoded = ExecutableSkillActions.from(parsed.value).execute();
+    if (decoded.isErr()) {
+      const outcomeRequest: SkillErrorOutcomeRequest = {
+        phase: SkillCommandPhase.Decode,
+        issue: SkillCommandIssue.InvalidRequest,
+        message: decoded.error.message,
+        path: decoded.error.path,
+      };
+      return new ExecutableSkillFailureResponse(outcomeRequest).execute();
+    }
+    const execution = decoded.value.execute();
+    if (execution.isErr()) {
+      return new ExecutableSkillFailureResponse({
+        phase: SkillCommandPhase.Execute,
+        issue: SkillCommandIssue.InvalidRequest,
+        message: 'Executable skill action failed validation or verification.',
+      }).execute();
+    }
+    const response: SkillSuccessResponse = {
+      ok: true,
+      family: decoded.value.family,
+      operation: decoded.value.operation,
+      result: execution.value,
+    };
+    const finalRequest: FinalSkillCliResponseRequest = {
+      exitCode: 0,
+      response: response as UntrustedSkillYamlNode,
+    };
+    return new ExecutableSkillResponse(finalRequest).execute();
+  }
+
+  private requestTooLargeOutcome(): Result<
+    SkillCliOutcome,
+    SkillYamlEncodingFailure
+  > {
+    const request: SkillErrorOutcomeRequest = {
+      phase: SkillCommandPhase.Decode,
+      issue: SkillCommandIssue.RequestTooLarge,
+      message: `Skill request exceeds ${SKILL_HOST_REQUEST_BYTE_LIMIT} bytes.`,
+    };
+    return new ExecutableSkillFailureResponse(request).execute();
+  }
+}
+
+export class ExecutableSkillFailureResponse {
+  constructor(private readonly request: SkillErrorOutcomeRequest) {}
+  execute(): Result<SkillCliOutcome, SkillYamlEncodingFailure> {
+    const request = this.request;
+    const { path = '' } = request;
+    const response: SkillCommandErrorResponse = {
+      ok: false,
+      isError: true,
+      phase: request.phase,
+      errors: [{ path, issue: request.issue, message: request.message }],
+      recover: {
+        toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
+        hint: 'List skill actions, copy the matching YAML example, and retry.',
+      },
+    };
+    const finalRequest: FinalSkillCliResponseRequest = {
+      exitCode: request.phase === SkillCommandPhase.Execute ? 1 : 2,
+      response: response as UntrustedSkillYamlNode,
+    };
+    return new ExecutableSkillResponse(finalRequest).execute();
+  }
+}
+
+export class ExecutableSkillResponse {
+  constructor(private readonly request: FinalSkillCliResponseRequest) {}
+  execute(): Result<SkillCliOutcome, SkillYamlEncodingFailure> {
+    const request = this.request;
+    const serialized = new ExecutableSkillYamlEncoding(
+      request.response,
+    ).execute();
+    if (serialized.isErr()) {
+      const invalidResponse: SkillCommandErrorResponse = {
+        ok: false,
+        isError: true,
+        phase: SkillCommandPhase.Execute,
+        errors: [
+          {
+            path: 'result',
+            issue: SkillCommandIssue.InvalidResponse,
+            message: 'Skill action returned an invalid YAML response value.',
+          },
+        ],
+        recover: {
+          toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
+          hint: 'Use only finite values permitted by the action result schema.',
+        },
+      };
+      return new ExecutableSkillYamlEncoding(
+        invalidResponse as UntrustedSkillYamlNode,
+      )
+        .execute()
+        .map((yaml) => ({ exitCode: 1, yaml }));
+    }
+    const yaml = serialized.value;
+    if (
+      UTF8_ENCODER.encode(yaml).byteLength <= SKILL_HOST_RESPONSE_BYTE_LIMIT
+    ) {
+      return ok({ exitCode: request.exitCode, yaml });
+    }
+    const response: SkillCommandErrorResponse = {
+      ok: false,
+      isError: true,
+      phase: SkillCommandPhase.Execute,
+      errors: [
+        {
+          path: 'result',
+          issue: SkillCommandIssue.ResponseTooLarge,
+          message: `Encoded YAML response exceeds ${SKILL_HOST_RESPONSE_BYTE_LIMIT} bytes.`,
+        },
+      ],
+      recover: {
+        toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
+        hint: 'Reduce the request cardinality and retry the skill action.',
+      },
+    };
+    const fallback = new ExecutableSkillYamlEncoding(
+      response as UntrustedSkillYamlNode,
+    ).execute();
+    if (fallback.isErr()) return err(fallback.error);
+    const fallbackYaml = fallback.value;
+    if (
+      UTF8_ENCODER.encode(fallbackYaml).byteLength >
+      SKILL_HOST_RESPONSE_BYTE_LIMIT
+    ) {
+      return err({
+        kind: SkillYamlEncodingIssue.ResponseCapacity,
+        message: 'Failure response exceeds its byte limit.',
+      });
+    }
+    return ok({ exitCode: 1, yaml: fallbackYaml });
+  }
+}
+
 if (import.meta.main) {
   const request: RunSkillCliRequest = { argv: process.argv.slice(2) };
   const outcome = ExecutableSkillCli.from(request).execute();
-  process.stdout.write(outcome.yaml);
-  process.exitCode = outcome.exitCode;
+  outcome.match(
+    (response) => {
+      process.stdout.write(response.yaml);
+      process.exitCode = response.exitCode;
+    },
+    (failure) => {
+      process.stderr.write(`${failure.message}\n`);
+      process.exitCode = 1;
+    },
+  );
 }

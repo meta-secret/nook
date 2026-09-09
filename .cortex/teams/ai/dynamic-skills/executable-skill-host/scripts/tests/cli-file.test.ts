@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import { ok } from 'neverthrow';
 import { expect, test } from 'bun:test';
 
 import { join } from 'node:path';
@@ -28,7 +30,11 @@ test('preserves multiline YAML in exactly one command-line token', () => {
   const request: RunSkillCliRequest = {
     argv: [`--request-yaml=${yaml}`],
   };
-  expect(ExecutableSkillCli.from(request).execute().exitCode).toBe(0);
+  expect(
+    ExecutableSkillCli.from(request)
+      .execute()
+      .map((response) => response.exitCode),
+  ).toEqual(ok(0));
   const outcome = Bun.spawnSync(
     [
       'bun',
@@ -49,7 +55,9 @@ test('does not accept paths, file flags, stdin, or split YAML arguments', () => 
     ['--request-yaml=skillToolsList:', 'list: {}'],
   ] as const) {
     const request: RunSkillCliRequest = { argv };
-    const outcome = ExecutableSkillCli.from(request).execute();
+    const outcomeResult = ExecutableSkillCli.from(request).execute();
+    assert(outcomeResult.isOk());
+    const outcome = outcomeResult.value;
     expect(outcome.exitCode).toBe(2);
     expect(
       ExecutableSkillHostCliFileScenario.parseResponse(outcome.yaml).errors?.at(
@@ -64,7 +72,9 @@ test('returns bounded redacted YAML for invalid inline input', () => {
   const request: RunSkillCliRequest = {
     argv: [`--request-yaml=skillToolsList: [${secret}`],
   };
-  const outcome = ExecutableSkillCli.from(request).execute();
+  const outcomeResult = ExecutableSkillCli.from(request).execute();
+  assert(outcomeResult.isOk());
+  const outcome = outcomeResult.value;
   expect(outcome.exitCode).toBe(2);
   expect(
     ExecutableSkillHostCliFileScenario.parseResponse(outcome.yaml).errors?.at(0)

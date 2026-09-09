@@ -1,5 +1,8 @@
+import { ExecutableSkillYamlProperty } from './skill-yaml-codec.ts';
+import { UnknownSkillCommandPath } from './skill-command-path.ts';
+import { SkillYamlValue } from './skill-yaml-codec.ts';
 import type { CortexDocumentMapFailure } from '../../../cortex-document-map/scripts/src/application.ts';
-import { ok, type Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import type { CompileCortexContractsRequest } from '../../../cortex-consistency/scripts/src/domain.ts';
 import type { RenderDelegationVisualizationRequest } from '../../../delegation-visualization/scripts/src/domain.ts';
 import type { AuditCortexArticleStructureRequest } from '../../../cortex-article-structure/scripts/src/domain.ts';
@@ -77,109 +80,97 @@ import { ExecutableSkillCommandPath } from './skill-command-path.ts';
 export class ExecutableSkillActions {
   private constructor(private readonly request: UntrustedSkillYamlNode) {}
 
-  static listDiscoverableSkillActions(): SkillToolsListResult {
-    return { actions: DISCOVERABLE_ACTIONS };
+  static from(value: UntrustedSkillYamlNode): ExecutableSkillActions {
+    return new ExecutableSkillActions(value);
   }
 
-  static decodeSkillActionRequest(
-    value: UntrustedSkillYamlNode,
-  ): SkillActionAdmissionOutcome {
-    const decoded = new ExecutableSkillActions(value).execute();
-    if (!decoded.ok) return decoded;
-    return {
-      ok: true,
-      request: AdmittedSkillAction.admit({
-        key: SKILL_ADMISSION,
-        request: decoded.request,
-      }),
-    };
+  execute(): Result<AdmittedSkillAction, InvalidSkillRequest> {
+    const decoded = this.decode();
+    if (!decoded.ok)
+      return err({ path: decoded.path, message: decoded.message });
+    return AdmittedSkillAction.admit({
+      key: SKILL_ADMISSION,
+      request: decoded.request,
+    });
   }
 
-  private execute(): SkillActionDecodeOutcome {
-    const value = this.request;
-    if (
-      !ExecutableSkillYaml.isSkillYamlMap(value) ||
-      Object.keys(value).length !== 1
-    ) {
+  private decode(): SkillActionDecodeOutcome {
+    const candidate = new SkillYamlValue(this.request);
+    if (!candidate.isMap() || Object.keys(candidate.value).length !== 1) {
       const request: InvalidSkillRequest = {
         path: '',
         message: 'Expected exactly one skill request family.',
       };
-      return ExecutableSkillActions.invalidRequest(request);
+      return this.invalidRequest(request);
     }
+    const value = candidate.value;
     if (Object.hasOwn(value, SkillRequestFamily.ToolsList)) {
-      return ExecutableSkillActions.decodeToolsList(value);
+      return this.decodeToolsList(value);
     }
     if (Object.hasOwn(value, SkillRequestFamily.CortexArticleStructure)) {
-      return ExecutableSkillActions.decodeCortexArticleAction(value);
+      return this.decodeCortexArticleAction(value);
     }
     if (Object.hasOwn(value, SkillRequestFamily.CortexDocumentMap)) {
-      return ExecutableSkillActions.decodeCortexDocumentMapAction(value);
+      return this.decodeCortexDocumentMapAction(value);
     }
     if (Object.hasOwn(value, SkillRequestFamily.CortexConsistency)) {
-      return ExecutableSkillActions.decodeCortexConsistencyAction(value);
+      return this.decodeCortexConsistencyAction(value);
     }
     if (Object.hasOwn(value, SkillRequestFamily.DelegationVisualization)) {
-      return ExecutableSkillActions.decodeDelegationVisualizationAction(value);
+      return this.decodeDelegationVisualizationAction(value);
     }
     const request: InvalidSkillRequest = {
-      path: ExecutableSkillCommandPath.unknownSkillCommandPath(''),
+      path: new UnknownSkillCommandPath('').execute(),
       message: 'Unknown skill request family.',
     };
-    return ExecutableSkillActions.invalidRequest(request);
+    return this.invalidRequest(request);
   }
 
-  static defaultSkillBlueprint(): string {
-    return TOOLS_LIST_EXAMPLE;
-  }
-
-  private static decodeToolsList(
+  private decodeToolsList(
     root: UntrustedSkillYamlMap,
   ): SkillActionDecodeOutcome {
     const familyRequest: SkillYamlPropertyRequest = {
       map: root,
       key: SkillRequestFamily.ToolsList,
     };
-    const family = ExecutableSkillYaml.skillYamlProperty(familyRequest);
-    if (!family.found || !ExecutableSkillYaml.isSkillYamlMap(family.value)) {
+    const family = new ExecutableSkillYamlProperty(familyRequest).execute();
+    const familyValue = new SkillYamlValue(family.found ? family.value : false);
+    if (!family.found || !familyValue.isMap()) {
       const request: InvalidSkillRequest = {
         path: 'skillToolsList',
         message: 'Expected an action object.',
       };
-      return ExecutableSkillActions.invalidRequest(request);
+      return this.invalidRequest(request);
     }
-    const keys = Object.keys(family.value);
+    const keys = Object.keys(familyValue.value);
     const listRequest: SkillYamlPropertyRequest = {
-      map: family.value,
+      map: familyValue.value,
       key: SkillToolsOperation.List,
     };
-    const list = ExecutableSkillYaml.skillYamlProperty(listRequest);
+    const list = new ExecutableSkillYamlProperty(listRequest).execute();
     const extra = keys.find((key) => key !== SkillToolsOperation.List);
     if (typeof extra === 'string') {
       const request: InvalidSkillRequest = {
-        path: ExecutableSkillCommandPath.unknownSkillCommandPath(
-          'skillToolsList',
-        ),
+        path: new UnknownSkillCommandPath('skillToolsList').execute(),
         message: 'Expected only the empty list action.',
       };
-      return ExecutableSkillActions.invalidRequest(request);
+      return this.invalidRequest(request);
     }
-    if (!list.found || !ExecutableSkillYaml.isSkillYamlMap(list.value)) {
+    const listValue = new SkillYamlValue(list.found ? list.value : false);
+    if (!list.found || !listValue.isMap()) {
       const request: InvalidSkillRequest = {
         path: 'skillToolsList.list',
         message: 'Expected the empty list action.',
       };
-      return ExecutableSkillActions.invalidRequest(request);
+      return this.invalidRequest(request);
     }
-    const listExtra = Object.keys(list.value).at(0);
+    const listExtra = Object.keys(listValue.value).at(0);
     if (typeof listExtra === 'string') {
       const request: InvalidSkillRequest = {
-        path: ExecutableSkillCommandPath.unknownSkillCommandPath(
-          'skillToolsList.list',
-        ),
+        path: new UnknownSkillCommandPath('skillToolsList.list').execute(),
         message: 'Expected the empty list action.',
       };
-      return ExecutableSkillActions.invalidRequest(request);
+      return this.invalidRequest(request);
     }
     return {
       ok: true,
@@ -190,44 +181,43 @@ export class ExecutableSkillActions {
     };
   }
 
-  private static decodeCortexArticleAction(
+  private decodeCortexArticleAction(
     root: UntrustedSkillYamlMap,
   ): SkillActionDecodeOutcome {
     const familyRequest: SkillYamlPropertyRequest = {
       map: root,
       key: SkillRequestFamily.CortexArticleStructure,
     };
-    const family = ExecutableSkillYaml.skillYamlProperty(familyRequest);
-    if (!family.found || !ExecutableSkillYaml.isSkillYamlMap(family.value)) {
+    const family = new ExecutableSkillYamlProperty(familyRequest).execute();
+    const familyValue = new SkillYamlValue(family.found ? family.value : false);
+    if (!family.found || !familyValue.isMap()) {
       const request: InvalidSkillRequest = {
         path: 'cortexArticleStructure',
         message: 'Expected an action object.',
       };
-      return ExecutableSkillActions.invalidRequest(request);
+      return this.invalidRequest(request);
     }
     const auditRequest: SkillYamlPropertyRequest = {
-      map: family.value,
+      map: familyValue.value,
       key: CortexArticleStructureOperation.Audit,
     };
-    const audit = ExecutableSkillYaml.skillYamlProperty(auditRequest);
-    const operation = Object.keys(family.value).find(
+    const audit = new ExecutableSkillYamlProperty(auditRequest).execute();
+    const operation = Object.keys(familyValue.value).find(
       (key) => key !== CortexArticleStructureOperation.Audit,
     );
     if (typeof operation === 'string') {
       const request: InvalidSkillRequest = {
-        path: ExecutableSkillCommandPath.unknownSkillCommandPath(
-          'cortexArticleStructure',
-        ),
+        path: new UnknownSkillCommandPath('cortexArticleStructure').execute(),
         message: 'Expected only the audit action.',
       };
-      return ExecutableSkillActions.invalidRequest(request);
+      return this.invalidRequest(request);
     }
     if (!audit.found) {
       const request: InvalidSkillRequest = {
         path: 'cortexArticleStructure.audit',
         message: 'Expected the audit action.',
       };
-      return ExecutableSkillActions.invalidRequest(request);
+      return this.invalidRequest(request);
     }
     const validationRequest: SkillSchemaValidationRequest = {
       path: 'cortexArticleStructure.audit',
@@ -236,12 +226,12 @@ export class ExecutableSkillActions {
     };
     const validation =
       ExecutableSkillInputSchema.from(validationRequest).execute();
-    if (!validation.ok) {
+    if (!validation.isOk()) {
       const request: InvalidSkillRequest = {
-        path: validation.path,
-        message: validation.message,
+        path: validation.error.path,
+        message: validation.error.message,
       };
-      return ExecutableSkillActions.invalidRequest(request);
+      return this.invalidRequest(request);
     }
     const decoded = CortexArticleActionDecoder.from(
       JSON.stringify(audit.value),
@@ -249,7 +239,7 @@ export class ExecutableSkillActions {
     if (decoded.isErr()) {
       const suffix = decoded.error.path;
       const separator = suffix.startsWith('[') ? '' : '.';
-      return ExecutableSkillActions.invalidRequest({
+      return this.invalidRequest({
         path: `cortexArticleStructure.audit${suffix ? `${separator}${suffix}` : ''}`,
         message: decoded.error.message,
       });
@@ -264,36 +254,35 @@ export class ExecutableSkillActions {
     };
   }
 
-  private static decodeCortexDocumentMapAction(
+  private decodeCortexDocumentMapAction(
     root: UntrustedSkillYamlMap,
   ): SkillActionDecodeOutcome {
-    const family = ExecutableSkillYaml.skillYamlProperty({
+    const family = new ExecutableSkillYamlProperty({
       map: root,
       key: SkillRequestFamily.CortexDocumentMap,
-    });
-    if (!family.found || !ExecutableSkillYaml.isSkillYamlMap(family.value)) {
-      return ExecutableSkillActions.invalidRequest({
+    }).execute();
+    const familyValue = new SkillYamlValue(family.found ? family.value : false);
+    if (!family.found || !familyValue.isMap()) {
+      return this.invalidRequest({
         path: 'cortexDocumentMap',
         message: 'Expected an action object.',
       });
     }
-    const audit = ExecutableSkillYaml.skillYamlProperty({
-      map: family.value,
+    const audit = new ExecutableSkillYamlProperty({
+      map: familyValue.value,
       key: CortexDocumentMapOperation.Audit,
-    });
-    const operation = Object.keys(family.value).find(
+    }).execute();
+    const operation = Object.keys(familyValue.value).find(
       (key) => key !== CortexDocumentMapOperation.Audit,
     );
     if (typeof operation === 'string') {
-      return ExecutableSkillActions.invalidRequest({
-        path: ExecutableSkillCommandPath.unknownSkillCommandPath(
-          'cortexDocumentMap',
-        ),
+      return this.invalidRequest({
+        path: new UnknownSkillCommandPath('cortexDocumentMap').execute(),
         message: 'Expected only the audit action.',
       });
     }
     if (!audit.found) {
-      return ExecutableSkillActions.invalidRequest({
+      return this.invalidRequest({
         path: 'cortexDocumentMap.audit',
         message: 'Expected the audit action.',
       });
@@ -303,10 +292,10 @@ export class ExecutableSkillActions {
       schema: CORTEX_DOCUMENT_MAP_ACTION_DEFINITION.inputSchema,
       value: audit.value,
     }).execute();
-    if (!validation.ok) {
-      return ExecutableSkillActions.invalidRequest({
-        path: validation.path,
-        message: validation.message,
+    if (!validation.isOk()) {
+      return this.invalidRequest({
+        path: validation.error.path,
+        message: validation.error.message,
       });
     }
     const decoded = CortexDocumentMapActionDecoder.from(
@@ -315,7 +304,7 @@ export class ExecutableSkillActions {
     if (decoded.isErr()) {
       const suffix = decoded.error.path;
       const separator = suffix.startsWith('[') ? '' : '.';
-      return ExecutableSkillActions.invalidRequest({
+      return this.invalidRequest({
         path: `cortexDocumentMap.audit${suffix ? `${separator}${suffix}` : ''}`,
         message: decoded.error.message,
       });
@@ -330,38 +319,37 @@ export class ExecutableSkillActions {
     };
   }
 
-  private static decodeCortexConsistencyAction(
+  private decodeCortexConsistencyAction(
     root: UntrustedSkillYamlMap,
   ): SkillActionDecodeOutcome {
     const familyRequest: SkillYamlPropertyRequest = {
       map: root,
       key: SkillRequestFamily.CortexConsistency,
     };
-    const family = ExecutableSkillYaml.skillYamlProperty(familyRequest);
-    if (!family.found || !ExecutableSkillYaml.isSkillYamlMap(family.value)) {
-      return ExecutableSkillActions.invalidRequest({
+    const family = new ExecutableSkillYamlProperty(familyRequest).execute();
+    const familyValue = new SkillYamlValue(family.found ? family.value : false);
+    if (!family.found || !familyValue.isMap()) {
+      return this.invalidRequest({
         path: 'cortexConsistency',
         message: 'Expected an action object.',
       });
     }
     const compileRequest: SkillYamlPropertyRequest = {
-      map: family.value,
+      map: familyValue.value,
       key: CortexConsistencyOperation.Compile,
     };
-    const compile = ExecutableSkillYaml.skillYamlProperty(compileRequest);
-    const operation = Object.keys(family.value).find(
+    const compile = new ExecutableSkillYamlProperty(compileRequest).execute();
+    const operation = Object.keys(familyValue.value).find(
       (key) => key !== CortexConsistencyOperation.Compile,
     );
     if (typeof operation === 'string') {
-      return ExecutableSkillActions.invalidRequest({
-        path: ExecutableSkillCommandPath.unknownSkillCommandPath(
-          'cortexConsistency',
-        ),
+      return this.invalidRequest({
+        path: new UnknownSkillCommandPath('cortexConsistency').execute(),
         message: 'Expected only the compile action.',
       });
     }
     if (!compile.found) {
-      return ExecutableSkillActions.invalidRequest({
+      return this.invalidRequest({
         path: 'cortexConsistency.compile',
         message: 'Expected the compile action.',
       });
@@ -371,10 +359,10 @@ export class ExecutableSkillActions {
       schema: CORTEX_CONSISTENCY_ACTION_DEFINITION.inputSchema,
       value: compile.value,
     }).execute();
-    if (!validation.ok) {
-      return ExecutableSkillActions.invalidRequest({
-        path: validation.path,
-        message: validation.message,
+    if (!validation.isOk()) {
+      return this.invalidRequest({
+        path: validation.error.path,
+        message: validation.error.message,
       });
     }
     const decoded = decodeCortexConsistencyActionPayload(
@@ -383,7 +371,7 @@ export class ExecutableSkillActions {
     if (decoded.isErr()) {
       const suffix = decoded.error.path;
       const separator = suffix.startsWith('[') ? '' : '.';
-      return ExecutableSkillActions.invalidRequest({
+      return this.invalidRequest({
         path: `cortexConsistency.compile${suffix ? `${separator}${suffix}` : ''}`,
         message: decoded.error.message,
       });
@@ -398,36 +386,35 @@ export class ExecutableSkillActions {
     };
   }
 
-  private static decodeDelegationVisualizationAction(
+  private decodeDelegationVisualizationAction(
     root: UntrustedSkillYamlMap,
   ): SkillActionDecodeOutcome {
-    const family = ExecutableSkillYaml.skillYamlProperty({
+    const family = new ExecutableSkillYamlProperty({
       map: root,
       key: SkillRequestFamily.DelegationVisualization,
-    });
-    if (!family.found || !ExecutableSkillYaml.isSkillYamlMap(family.value)) {
-      return ExecutableSkillActions.invalidRequest({
+    }).execute();
+    const familyValue = new SkillYamlValue(family.found ? family.value : false);
+    if (!family.found || !familyValue.isMap()) {
+      return this.invalidRequest({
         path: 'delegationVisualization',
         message: 'Expected an action object.',
       });
     }
-    const render = ExecutableSkillYaml.skillYamlProperty({
-      map: family.value,
+    const render = new ExecutableSkillYamlProperty({
+      map: familyValue.value,
       key: DelegationVisualizationOperation.Render,
-    });
-    const operation = Object.keys(family.value).find(
+    }).execute();
+    const operation = Object.keys(familyValue.value).find(
       (key) => key !== DelegationVisualizationOperation.Render,
     );
     if (typeof operation === 'string') {
-      return ExecutableSkillActions.invalidRequest({
-        path: ExecutableSkillCommandPath.unknownSkillCommandPath(
-          'delegationVisualization',
-        ),
+      return this.invalidRequest({
+        path: new UnknownSkillCommandPath('delegationVisualization').execute(),
         message: 'Expected only the render action.',
       });
     }
     if (!render.found) {
-      return ExecutableSkillActions.invalidRequest({
+      return this.invalidRequest({
         path: 'delegationVisualization.render',
         message: 'Expected the render action.',
       });
@@ -437,10 +424,10 @@ export class ExecutableSkillActions {
       schema: DELEGATION_VISUALIZATION_ACTION_DEFINITION.inputSchema,
       value: render.value,
     }).execute();
-    if (!validation.ok) {
-      return ExecutableSkillActions.invalidRequest({
-        path: validation.path,
-        message: validation.message,
+    if (!validation.isOk()) {
+      return this.invalidRequest({
+        path: validation.error.path,
+        message: validation.error.message,
       });
     }
     const decoded = decodeDelegationVisualizationActionPayload(
@@ -449,7 +436,7 @@ export class ExecutableSkillActions {
     if (decoded.isErr()) {
       const suffix = decoded.error.path;
       const separator = suffix.startsWith('[') ? '' : '.';
-      return ExecutableSkillActions.invalidRequest({
+      return this.invalidRequest({
         path: `delegationVisualization.render${suffix ? `${separator}${suffix}` : ''}`,
         message: decoded.error.message,
       });
@@ -464,7 +451,7 @@ export class ExecutableSkillActions {
     };
   }
 
-  private static invalidRequest(
+  private invalidRequest(
     request: InvalidSkillRequest,
   ): SkillActionDecodeOutcome {
     return { ok: false, path: request.path, message: request.message };
@@ -640,16 +627,15 @@ type AdmittedSkillActionRequest = {
   readonly key: typeof SKILL_ADMISSION;
   readonly request: SkillActionRequest;
 };
-export type SkillActionAdmissionOutcome =
-  | { readonly ok: true; readonly request: AdmittedSkillAction }
-  | { readonly ok: false; readonly path: string; readonly message: string };
 /** Validation issues the only executable capability; wire requests remain DTOs. */
 export class AdmittedSkillAction {
   private constructor(private readonly request: SkillActionRequest) {}
-  static admit(admission: AdmittedSkillActionRequest): AdmittedSkillAction {
+  static admit(
+    admission: AdmittedSkillActionRequest,
+  ): Result<AdmittedSkillAction, InvalidSkillRequest> {
     if (admission.key !== SKILL_ADMISSION)
-      throw new Error('Invalid executable skill admission.');
-    return new AdmittedSkillAction(admission.request);
+      return err({ path: '', message: 'Invalid executable skill admission.' });
+    return ok(new AdmittedSkillAction(admission.request));
   }
   get family(): SkillActionRequest['family'] {
     return this.request.family;
@@ -660,7 +646,7 @@ export class AdmittedSkillAction {
   execute(): Result<SkillActionResult, SkillExecutionFailure> {
     const request = this.request;
     if (request.family === SkillRequestFamily.ToolsList) {
-      return ok(ExecutableSkillActions.listDiscoverableSkillActions());
+      return ok(EXECUTABLE_SKILL_CATALOG.list());
     }
     if (request.family === SkillRequestFamily.CortexArticleStructure) {
       return executeCortexArticleAction(request.request);
@@ -678,3 +664,20 @@ export type SkillExecutionFailure =
   | CortexArticleRequestDecodeError
   | CortexDocumentMapFailure
   | DelegationVisualizationResultVerificationError;
+
+export class ExecutableSkillCatalog {
+  constructor(
+    private readonly actions: readonly DiscoverableSkillAction[],
+    private readonly blueprint: string,
+  ) {}
+  list(): SkillToolsListResult {
+    return { actions: this.actions };
+  }
+  example(): string {
+    return this.blueprint;
+  }
+}
+export const EXECUTABLE_SKILL_CATALOG = new ExecutableSkillCatalog(
+  DISCOVERABLE_ACTIONS,
+  TOOLS_LIST_EXAMPLE,
+);

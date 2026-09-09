@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { expect, test } from 'bun:test';
 
 import {
@@ -32,8 +33,8 @@ export class ExecutableSkillHostSchemaValidatorScenario {
       value: rejection.value,
     };
     const result = ExecutableSkillInputSchema.from(request).execute();
-    if (result.ok) throw new Error('Expected schema rejection.');
-    return result.path;
+    assert(result.isErr());
+    return result.error.path;
   }
 }
 
@@ -143,9 +144,9 @@ test('counts string limits in UTF-16 code units', () => {
       schema,
       value: accepted,
     };
-    expect(ExecutableSkillInputSchema.from(acceptedRequest).execute().ok).toBe(
-      true,
-    );
+    expect(
+      ExecutableSkillInputSchema.from(acceptedRequest).execute().isOk(),
+    ).toBe(true);
     const rejection: RejectionRequest = { schema, value: rejected };
     expect(ExecutableSkillHostSchemaValidatorScenario.reject(rejection)).toBe(
       'blocks[4]',
@@ -165,7 +166,9 @@ test('accepts only safe integer values', () => {
       schema,
       value,
     };
-    expect(ExecutableSkillInputSchema.from(request).execute().ok).toBe(true);
+    expect(ExecutableSkillInputSchema.from(request).execute().isOk()).toBe(
+      true,
+    );
   }
   for (const value of [
     Number.MIN_SAFE_INTEGER - 1,

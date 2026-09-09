@@ -1,3 +1,4 @@
+import { ExecutableSkillYamlEncoding } from '../src/skill-yaml-codec.ts';
 import { expect, test } from 'bun:test';
 
 import {
@@ -42,9 +43,9 @@ test('rejects anchors and aliases before they reach semantic decoding', () => {
     ),
   ]) {
     const outcome = ExecutableSkillYaml.from(yaml).execute();
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) throw new Error('Expected YAML reference rejection.');
-    expect(outcome.message).toContain('anchors and aliases');
+    expect(outcome.isOk()).toBe(false);
+    if (outcome.isOk()) return;
+    expect(outcome.error.message).toContain('anchors and aliases');
   }
 });
 
@@ -68,7 +69,7 @@ test('accepts anchor-like text inside quoted, plain, commented, and block scalar
   ];
   for (const lineEnding of YAML_LINE_ENDINGS) {
     const yaml = `${lines.join(lineEnding)}${lineEnding}`;
-    expect(ExecutableSkillYaml.from(yaml).execute().ok).toBe(true);
+    expect(ExecutableSkillYaml.from(yaml).execute().isOk()).toBe(true);
   }
 });
 
@@ -78,9 +79,9 @@ test('rejects duplicate mapping keys at root and nested levels', () => {
     'cortexArticleStructure:\n  audit:\n    kind: first\n    kind: second\n',
   ]) {
     const outcome = ExecutableSkillYaml.from(yaml).execute();
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) throw new Error('Expected duplicate-key rejection.');
-    expect(outcome.message).toBe('Invalid YAML syntax.');
+    expect(outcome.isOk()).toBe(false);
+    if (outcome.isOk()) return;
+    expect(outcome.error.message).toBe('Invalid YAML syntax.');
   }
 });
 
@@ -88,9 +89,9 @@ test('rejects multiple YAML documents instead of selecting one', () => {
   const outcome = ExecutableSkillYaml.from(
     'skillToolsList:\n  list: {}\n---\nskillToolsList:\n  list: {}\n',
   ).execute();
-  expect(outcome.ok).toBe(false);
-  if (outcome.ok) throw new Error('Expected multi-document rejection.');
-  expect(outcome.message).toBe('Invalid YAML syntax.');
+  expect(outcome.isOk()).toBe(false);
+  if (outcome.isOk()) return;
+  expect(outcome.error.message).toBe('Invalid YAML syntax.');
 });
 
 test('rejects tagged keys before conversion can collapse them', () => {
@@ -99,9 +100,9 @@ test('rejects tagged keys before conversion can collapse them', () => {
     'cortexArticleStructure:\n  !!binary YXVkaXQ=: hidden\n  audit: visible\n',
   ]) {
     const outcome = ExecutableSkillYaml.from(yaml).execute();
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) throw new Error('Expected tagged-key rejection.');
-    expect(outcome.message).toBe('Invalid YAML syntax.');
+    expect(outcome.isOk()).toBe(false);
+    if (outcome.isOk()) return;
+    expect(outcome.error.message).toBe('Invalid YAML syntax.');
   }
 });
 
@@ -118,7 +119,7 @@ test('rejects warnings and every explicit YAML tag', () => {
     'value: !!set { marker: ~ }\n',
     'value: !!omap\n  - marker: value\n',
   ]) {
-    expect(ExecutableSkillYaml.from(yaml).execute().ok).toBe(false);
+    expect(ExecutableSkillYaml.from(yaml).execute().isOk()).toBe(false);
   }
 });
 
@@ -126,9 +127,9 @@ test('rejects every YAML directive across accepted line endings', () => {
   for (const newline of ['\n', '\r\n', '\r']) {
     for (const directive of ['%YAML 1.2', '%TAG !! tag:yaml.org,2002:']) {
       expect(
-        ExecutableSkillYaml.from(
-          `${directive}${newline}---${newline}value: 1`,
-        ).execute().ok,
+        ExecutableSkillYaml.from(`${directive}${newline}---${newline}value: 1`)
+          .execute()
+          .isOk(),
       ).toBe(false);
     }
   }
@@ -142,7 +143,7 @@ test('requires every mapping key to be a plain string scalar', () => {
     'true: boolean\n',
     '~: empty\n',
   ]) {
-    expect(ExecutableSkillYaml.from(yaml).execute().ok).toBe(false);
+    expect(ExecutableSkillYaml.from(yaml).execute().isOk()).toBe(false);
   }
 });
 
@@ -151,11 +152,12 @@ test('preserves ordinary quoted and unquoted duplicate detection', () => {
     'plain: first\nplain: second\n',
     '"quoted": first\n\'quoted\': second\n',
   ]) {
-    expect(ExecutableSkillYaml.from(yaml).execute().ok).toBe(false);
+    expect(ExecutableSkillYaml.from(yaml).execute().isOk()).toBe(false);
   }
   expect(
-    ExecutableSkillYaml.from('plain: first\n"quoted key": second\n').execute()
-      .ok,
+    ExecutableSkillYaml.from('plain: first\n"quoted key": second\n')
+      .execute()
+      .isOk(),
   ).toBe(true);
 });
 
@@ -165,12 +167,12 @@ test('rejects unsafe integer scalars without rejecting decimals', () => {
     'value: -9007199254740992\n',
     'value: 1e100\n',
   ]) {
-    expect(ExecutableSkillYaml.from(yaml).execute().ok).toBe(false);
+    expect(ExecutableSkillYaml.from(yaml).execute().isOk()).toBe(false);
   }
   expect(
-    ExecutableSkillYaml.from(
-      'value: 9007199254740991\ndecimal: 1.5\n',
-    ).execute().ok,
+    ExecutableSkillYaml.from('value: 9007199254740991\ndecimal: 1.5\n')
+      .execute()
+      .isOk(),
   ).toBe(true);
 });
 
@@ -178,26 +180,32 @@ test('enforces exact structural node and depth limits', () => {
   const exactNodes = `[${new Array<string>(SKILL_YAML_NODE_LIMIT - 1)
     .fill('true')
     .join(',')}]`;
-  expect(ExecutableSkillYaml.from(exactNodes).execute().ok).toBe(true);
+  expect(ExecutableSkillYaml.from(exactNodes).execute().isOk()).toBe(true);
   expect(
-    ExecutableSkillYaml.from(`${exactNodes.slice(0, -1)},true]`).execute().ok,
+    ExecutableSkillYaml.from(`${exactNodes.slice(0, -1)},true]`)
+      .execute()
+      .isOk(),
   ).toBe(false);
   const nested = (depth: number): string =>
     `${'['.repeat(depth)}true${']'.repeat(depth)}`;
   expect(
-    ExecutableSkillYaml.from(nested(SKILL_YAML_DEPTH_LIMIT)).execute().ok,
+    ExecutableSkillYaml.from(nested(SKILL_YAML_DEPTH_LIMIT)).execute().isOk(),
   ).toBe(true);
   expect(
-    ExecutableSkillYaml.from(nested(SKILL_YAML_DEPTH_LIMIT + 1)).execute().ok,
+    ExecutableSkillYaml.from(nested(SKILL_YAML_DEPTH_LIMIT + 1))
+      .execute()
+      .isOk(),
   ).toBe(false);
 });
 
 test('stringify preserves scalar trailing line breaks and spaces', () => {
-  expect(() =>
-    ExecutableSkillYaml.stringifySkillYaml(
+  expect(
+    new ExecutableSkillYamlEncoding(
       'é'.repeat(SKILL_YAML_SCALAR_BYTE_LIMIT / 2 + 1),
-    ),
-  ).toThrow('Invalid YAML response');
+    )
+      .execute()
+      .isErr(),
+  ).toBe(true);
   for (const value of [
     'line\n',
     'line\n\n',
@@ -205,10 +213,11 @@ test('stringify preserves scalar trailing line breaks and spaces', () => {
     'é'.repeat(SKILL_YAML_SCALAR_BYTE_LIMIT / 2),
   ]) {
     const node: UntrustedSkillYamlNode = value;
-    const outcome = ExecutableSkillYaml.from(
-      ExecutableSkillYaml.stringifySkillYaml(node),
-    ).execute();
-    if (!outcome.ok) throw new Error('Expected scalar round trip.');
+    const outcome = new ExecutableSkillYamlEncoding(node)
+      .execute()
+      .andThen((yaml) => ExecutableSkillYaml.from(yaml).execute());
+    expect(outcome.isOk()).toBe(true);
+    if (outcome.isErr()) return;
     expect(outcome.value).toBe(value);
   }
 });

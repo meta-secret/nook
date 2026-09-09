@@ -1,3 +1,7 @@
+import { err, ok, type Result } from 'neverthrow';
+import { UnknownSkillCommandPath } from './skill-command-path.ts';
+import { ExecutableSkillYamlProperty } from './skill-yaml-codec.ts';
+import { SkillYamlValue } from './skill-yaml-codec.ts';
 import {
   SkillSchemaType,
   type SkillArraySchema,
@@ -41,7 +45,7 @@ export class ExecutableSkillInputSchema {
         };
         const result =
           ExecutableSkillInputSchema.from(variantRequest).execute();
-        if (result.ok) {
+        if (result.isOk()) {
           matches += 1;
           continue;
         }
@@ -49,25 +53,22 @@ export class ExecutableSkillInputSchema {
           schema,
           value: request.value,
         };
-        if (!ExecutableSkillInputSchema.matchesVariant(discriminatorRequest))
-          continue;
+        if (!this.matchesVariant(discriminatorRequest)) continue;
         if (selected !== false) ambiguous = true;
         selected = result;
       }
-      if (matches === 1) return { ok: true };
+      if (matches === 1) return ok(undefined);
       if (matches > 1)
-        return ExecutableSkillInputSchema.invalidAt(request.path)(
-          'Value matches multiple variants.',
-        );
+        return this.invalidAt(request.path)('Value matches multiple variants.');
       if (selected !== false && !ambiguous) return selected;
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
+      return this.invalidAt(request.path)(
         'Value does not match an allowed variant.',
       );
     }
     if ('const' in request.schema) {
       return request.value === request.schema.const
-        ? { ok: true }
-        : ExecutableSkillInputSchema.invalidAt(request.path)('Expected false.');
+        ? ok(undefined)
+        : this.invalidAt(request.path)('Expected false.');
     }
     if (request.schema.type === SkillSchemaType.Object) {
       const objectRequest: SkillObjectValidationRequest = {
@@ -75,7 +76,7 @@ export class ExecutableSkillInputSchema {
         schema: request.schema,
         value: request.value,
       };
-      return ExecutableSkillInputSchema.validateObject(objectRequest);
+      return this.validateObject(objectRequest);
     }
     if (request.schema.type === SkillSchemaType.Array) {
       const arrayRequest: SkillArrayValidationRequest = {
@@ -83,7 +84,7 @@ export class ExecutableSkillInputSchema {
         schema: request.schema,
         value: request.value,
       };
-      return ExecutableSkillInputSchema.validateArray(arrayRequest);
+      return this.validateArray(arrayRequest);
     }
     if (request.schema.type === SkillSchemaType.String) {
       const stringRequest: SkillStringValidationRequest = {
@@ -91,7 +92,7 @@ export class ExecutableSkillInputSchema {
         schema: request.schema,
         value: request.value,
       };
-      return ExecutableSkillInputSchema.validateString(stringRequest);
+      return this.validateString(stringRequest);
     }
     if (request.schema.type === SkillSchemaType.Integer) {
       const integerRequest: SkillIntegerValidationRequest = {
@@ -99,16 +100,14 @@ export class ExecutableSkillInputSchema {
         schema: request.schema,
         value: request.value,
       };
-      return ExecutableSkillInputSchema.validateInteger(integerRequest);
+      return this.validateInteger(integerRequest);
     }
     return typeof request.value === 'boolean'
-      ? { ok: true }
-      : ExecutableSkillInputSchema.invalidAt(request.path)(
-          'Expected a boolean.',
-        );
+      ? ok(undefined)
+      : this.invalidAt(request.path)('Expected a boolean.');
   }
 
-  private static matchesVariant(request: SkillDiscriminatorRequest): boolean {
+  private matchesVariant(request: SkillDiscriminatorRequest): boolean {
     if ('const' in request.schema)
       return request.value === request.schema.const;
     if ('type' in request.schema) {
@@ -125,8 +124,9 @@ export class ExecutableSkillInputSchema {
         return typeof request.value === 'boolean';
       }
     }
+    const candidate = new SkillYamlValue(request.value);
     if (
-      !ExecutableSkillYaml.isSkillYamlMap(request.value) ||
+      !candidate.isMap() ||
       !('type' in request.schema) ||
       request.schema.type !== SkillSchemaType.Object
     ) {
@@ -142,9 +142,9 @@ export class ExecutableSkillInputSchema {
     }
     const propertyRequest: SkillYamlPropertyRequest = {
       key: 'kind',
-      map: request.value,
+      map: candidate.value,
     };
-    const property = ExecutableSkillYaml.skillYamlProperty(propertyRequest);
+    const property = new ExecutableSkillYamlProperty(propertyRequest).execute();
     return (
       property.found &&
       typeof property.value === 'string' &&
@@ -152,63 +152,62 @@ export class ExecutableSkillInputSchema {
     );
   }
 
-  private static validateObject(
+  private validateObject(
     request: SkillObjectValidationRequest,
   ): SkillSchemaValidation {
-    if (!ExecutableSkillYaml.isSkillYamlMap(request.value)) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
-        'Expected an object.',
-      );
+    const candidate = new SkillYamlValue(request.value);
+    if (!candidate.isMap()) {
+      return this.invalidAt(request.path)('Expected an object.');
     }
     const allowed = new Set(Object.keys(request.schema.properties));
-    const unexpected = Object.keys(request.value).find(
+    const unexpected = Object.keys(candidate.value).find(
       (key) => !allowed.has(key),
     );
     if (typeof unexpected === 'string') {
-      return ExecutableSkillInputSchema.invalidAt(
-        ExecutableSkillCommandPath.unknownSkillCommandPath(request.path),
+      return this.invalidAt(
+        new UnknownSkillCommandPath(request.path).execute(),
       )('Unknown field.');
     }
     for (const field of request.schema.required) {
-      if (!Object.hasOwn(request.value, field)) {
-        return ExecutableSkillInputSchema.invalidAt(
-          ExecutableSkillInputSchema.childPath(request.path)(field),
-        )('Required field is missing.');
+      if (!Object.hasOwn(candidate.value, field)) {
+        return this.invalidAt(this.childPath(request.path)(field))(
+          'Required field is missing.',
+        );
       }
     }
     for (const [field, schema] of Object.entries(request.schema.properties)) {
       const propertyRequest: SkillYamlPropertyRequest = {
         key: field,
-        map: request.value,
+        map: candidate.value,
       };
-      const property = ExecutableSkillYaml.skillYamlProperty(propertyRequest);
+      const property = new ExecutableSkillYamlProperty(
+        propertyRequest,
+      ).execute();
       if (!property.found) continue;
       const fieldRequest: SkillSchemaValidationRequest = {
-        path: ExecutableSkillInputSchema.childPath(request.path)(field),
+        path: this.childPath(request.path)(field),
         schema,
         value: property.value,
       };
       const result = ExecutableSkillInputSchema.from(fieldRequest).execute();
-      if (!result.ok) return result;
+      if (!result.isOk()) return result;
     }
-    return { ok: true };
+    return ok(undefined);
   }
 
-  private static validateArray(
+  private validateArray(
     request: SkillArrayValidationRequest,
   ): SkillSchemaValidation {
     if (!Array.isArray(request.value)) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
-        'Expected an array.',
-      );
+      return this.invalidAt(request.path)('Expected an array.');
     }
     if (
       typeof request.schema.maxItems === 'number' &&
       request.value.length > request.schema.maxItems
     ) {
-      return ExecutableSkillInputSchema.invalidAt(
-        `${request.path}[${request.schema.maxItems}]`,
-      )(`Expected at most ${request.schema.maxItems} items.`);
+      return this.invalidAt(`${request.path}[${request.schema.maxItems}]`)(
+        `Expected at most ${request.schema.maxItems} items.`,
+      );
     }
     for (const [index, value] of request.value.entries()) {
       const itemRequest: SkillSchemaValidationRequest = {
@@ -217,24 +216,22 @@ export class ExecutableSkillInputSchema {
         value,
       };
       const result = ExecutableSkillInputSchema.from(itemRequest).execute();
-      if (!result.ok) return result;
+      if (!result.isOk()) return result;
     }
-    return { ok: true };
+    return ok(undefined);
   }
 
-  private static validateString(
+  private validateString(
     request: SkillStringValidationRequest,
   ): SkillSchemaValidation {
     if (typeof request.value !== 'string') {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
-        'Expected a string.',
-      );
+      return this.invalidAt(request.path)('Expected a string.');
     }
     if (
       typeof request.schema.maxUtf16CodeUnits === 'number' &&
       request.value.length > request.schema.maxUtf16CodeUnits
     ) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
+      return this.invalidAt(request.path)(
         `Expected at most ${request.schema.maxUtf16CodeUnits} UTF-16 code units.`,
       );
     }
@@ -244,47 +241,41 @@ export class ExecutableSkillInputSchema {
       typeof request.schema.maxTrimmedLines === 'number' &&
       lines.length > request.schema.maxTrimmedLines
     ) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
-        'Value contains too many lines.',
-      );
+      return this.invalidAt(request.path)('Value contains too many lines.');
     }
     if (
       typeof maximumLineLength === 'number' &&
       lines.some((line) => line.trim().length > maximumLineLength)
     ) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
+      return this.invalidAt(request.path)(
         'A trimmed line exceeds the allowed length.',
       );
     }
     if (request.schema.enum && !request.schema.enum.includes(request.value)) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
-        'Value is not in the allowed enum.',
-      );
+      return this.invalidAt(request.path)('Value is not in the allowed enum.');
     }
     if (
       request.schema.pattern &&
       !new RegExp(request.schema.pattern, 'u').test(request.value)
     ) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
+      return this.invalidAt(request.path)(
         'Value does not match the required pattern.',
       );
     }
-    return { ok: true };
+    return ok(undefined);
   }
 
-  private static validateInteger(
+  private validateInteger(
     request: SkillIntegerValidationRequest,
   ): SkillSchemaValidation {
     if (
       typeof request.value !== 'number' ||
       !Number.isSafeInteger(request.value)
     ) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
-        'Expected a safe integer.',
-      );
+      return this.invalidAt(request.path)('Expected a safe integer.');
     }
     if (request.value < request.schema.minimum) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
+      return this.invalidAt(request.path)(
         `Expected at least ${request.schema.minimum}.`,
       );
     }
@@ -292,24 +283,22 @@ export class ExecutableSkillInputSchema {
       typeof request.schema.maximum === 'number' &&
       request.value > request.schema.maximum
     ) {
-      return ExecutableSkillInputSchema.invalidAt(request.path)(
+      return this.invalidAt(request.path)(
         `Expected at most ${request.schema.maximum}.`,
       );
     }
-    return { ok: true };
+    return ok(undefined);
   }
 
-  private static childPath(parent: string): (child: string) => string {
+  private childPath(parent: string): (child: string) => string {
     return (child: string) => {
       const request: SkillCommandPathRequest = { field: child, parent };
       return ExecutableSkillCommandPath.from(request).execute();
     };
   }
 
-  private static invalidAt(
-    path: string,
-  ): (message: string) => SkillSchemaValidation {
-    return (message: string) => ({ ok: false, path, message });
+  private invalidAt(path: string): (message: string) => SkillSchemaValidation {
+    return (message: string) => err({ path, message });
   }
 }
 
@@ -319,9 +308,11 @@ export type SkillSchemaValidationRequest = {
   readonly value: UntrustedSkillYamlNode;
 };
 
-export type SkillSchemaValidation =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly path: string; readonly message: string };
+export type SkillSchemaFailure = {
+  readonly path: string;
+  readonly message: string;
+};
+export type SkillSchemaValidation = Result<void, SkillSchemaFailure>;
 
 type SkillObjectValidationRequest = {
   readonly path: string;
