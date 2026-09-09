@@ -440,7 +440,7 @@ mod tests {
     use std::ptr;
 
     #[test]
-    fn encrypted_payload_count_preserves_scalar_json() -> Result<(), serde_json::Error> {
+    fn encrypted_payload_count_preserves_scalar_json() -> serde_json::Result<()> {
         let count = VaultEncryptedPayloadCount::from(3);
         assert_eq!(serde_json::to_string(&count)?, "3");
         assert_eq!(

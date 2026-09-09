@@ -3,8 +3,8 @@
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{
-    AuthenticatorSecret, CreditCardSecret, FileAttachmentByteCount, SecretId, SecretRecord,
-    SecretType, SecretValue,
+    ApiKeySecret, AuthenticatorSecret, CreditCardSecret, FileAttachmentByteCount, LoginSecret,
+    SecretId, SecretRecord, SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret,
 };
 use crate::{CreditCardFields, ValidationError};
 use serde::{Deserialize, Serialize};
@@ -176,12 +176,6 @@ pub enum SecretFormFields {
     FileAttachment(FileAttachmentSecretForm),
 }
 
-/// Named values required by SecretFormFields::build_secret_yaml.
-pub struct SecretFormJson<'a> {
-    pub secret_type: SecretType,
-    pub fields: &'a serde_json::Value,
-}
-
 impl SecretFormFields {
     #[must_use]
     pub const fn secret_type(&self) -> SecretType {
@@ -197,114 +191,34 @@ impl SecretFormFields {
     }
 }
 
-/// Build a validated YAML payload for `add_secret` / `replace_secret` from form fields.
-impl SecretFormFields {
-    pub fn build_secret_yaml(
-        request: SecretFormJson<'_>,
-    ) -> SecretPayloadResult<SecretPayloadYaml> {
-        let SecretFormJson {
-            secret_type,
-            fields,
-        } = request;
-        let string_field = |name| {
-            fields
-                .get(name)
-                .and_then(|value| value.as_str())
-                .unwrap_or_default()
-                .to_owned()
-        };
-        let fields = match secret_type {
-            SecretType::Login => SecretFormFields::Login(LoginSecretForm {
-                website_url: string_field("websiteUrl"),
-                username: string_field("username"),
-                password: string_field("password"),
-                notes: string_field("notes"),
-            }),
-            SecretType::ApiKey => SecretFormFields::ApiKey(ApiKeySecretForm {
-                website_url: string_field("websiteUrl"),
-                key: string_field("key"),
-                expires_at: string_field("expiresAt"),
-            }),
-            SecretType::SeedPhrase => SecretFormFields::SeedPhrase(SeedPhraseSecretForm {
-                name: string_field("name"),
-                seed: string_field("seed"),
-            }),
-            SecretType::SecureNote => SecretFormFields::SecureNote(SecureNoteSecretForm {
-                title: string_field("title"),
-                note: string_field("note"),
-            }),
-            SecretType::Passkey => {
-                return Err(SecretPayloadError::PasskeyCreationRequiresAuthenticator);
-            }
-            SecretType::Authenticator => SecretFormFields::Authenticator(AuthenticatorSecretForm {
-                issuer: string_field("issuer"),
-                account: string_field("account"),
-                website_url: string_field("websiteUrl"),
-                totp_secret: string_field("totpSecret"),
-                algorithm: string_field("algorithm"),
-                digits: string_field("digits"),
-                period: string_field("period"),
-                backup_codes: string_field("backupCodes"),
-            }),
-            SecretType::CreditCard => SecretFormFields::CreditCard(CreditCardSecretForm {
-                title: string_field("title"),
-                cardholder_name: string_field("cardholderName"),
-                number: string_field("number"),
-                expiration_month: string_field("expirationMonth"),
-                expiration_year: string_field("expirationYear"),
-                cvv: string_field("cvv"),
-                notes: string_field("notes"),
-            }),
-            SecretType::FileAttachment => {
-                let size_bytes = fields
-                    .get("sizeBytes")
-                    .and_then(|value| {
-                        value
-                            .as_u64()
-                            .or_else(|| value.as_str().and_then(|raw| raw.parse().ok()))
-                    })
-                    .unwrap_or(0);
-                SecretFormFields::FileAttachment(FileAttachmentSecretForm {
-                    title: string_field("title"),
-                    file_name: string_field("fileName"),
-                    mime_type: string_field("mimeType"),
-                    size_bytes: size_bytes.into(),
-                    content_base64: string_field("contentBase64"),
-                })
-            }
-        };
-        SecretFormFields::build_secret_yaml_from_form(&fields)
-    }
-}
-
 /// Build a validated YAML payload from variant-specific form input.
 impl SecretFormFields {
     pub fn build_secret_yaml_from_form(
         fields: &SecretFormFields,
     ) -> SecretPayloadResult<SecretPayloadYaml> {
-        let filtered = match fields {
-            SecretFormFields::Login(fields) => serde_json::json!({
-                "websiteUrl": fields.website_url,
-                "username": fields.username,
-                "password": fields.password,
-                "notes": fields.notes,
+        let value = match fields {
+            SecretFormFields::Login(fields) => SecretValue::Login(LoginSecret {
+                website_url: fields.website_url.clone(),
+                username: fields.username.clone(),
+                password: fields.password.clone(),
+                notes: fields.notes.clone(),
             }),
-            SecretFormFields::ApiKey(fields) => serde_json::json!({
-                "websiteUrl": fields.website_url,
-                "key": fields.key,
-                "expiresAt": fields.expires_at,
+            SecretFormFields::ApiKey(fields) => SecretValue::ApiKey(ApiKeySecret {
+                website_url: fields.website_url.clone(),
+                key: fields.key.clone(),
+                expires_at: fields.expires_at.clone(),
             }),
-            SecretFormFields::SeedPhrase(fields) => serde_json::json!({
-                "name": fields.name,
-                "seed": fields.seed,
+            SecretFormFields::SeedPhrase(fields) => SecretValue::SeedPhrase(SeedPhraseSecret {
+                name: fields.name.clone(),
+                seed: fields.seed.clone(),
             }),
             SecretFormFields::SecureNote(fields) => {
                 if fields.note.trim().is_empty() {
                     return Err(ValidationError::SecretDataRequired.into());
                 }
-                serde_json::json!({
-                    "title": fields.title,
-                    "note": fields.note,
+                SecretValue::SecureNote(SecureNoteSecret {
+                    title: fields.title.clone(),
+                    note: fields.note.clone(),
                 })
             }
             SecretFormFields::Authenticator(fields) => {
@@ -352,7 +266,7 @@ impl SecretFormFields {
                 return SecretValue::FileAttachment(value).to_yaml();
             }
         };
-        let yaml = serde_yaml::to_string(&filtered).map_err(SecretPayloadError::Serialize)?;
+        let yaml = value.to_yaml()?;
         SecretPayloadYaml::parse(fields.secret_type(), &yaml)
     }
 }
@@ -420,16 +334,13 @@ mod tests {
 
     #[test]
     fn build_secret_yaml_round_trips_login_fields() -> anyhow::Result<()> {
-        let fields = serde_json::json!({
-            "websiteUrl": "https://example.com",
-            "username": "bob",
-            "password": "pw",
-            "notes": "note"
+        let fields = SecretFormFields::Login(LoginSecretForm {
+            website_url: "https://example.com".to_owned(),
+            username: "bob".to_owned(),
+            password: "pw".to_owned(),
+            notes: "note".to_owned(),
         });
-        let yaml = SecretFormFields::build_secret_yaml(SecretFormJson {
-            secret_type: SecretType::Login,
-            fields: &fields,
-        })?;
+        let yaml = SecretFormFields::build_secret_yaml_from_form(&fields)?;
         let parsed = SecretValue::from_yaml(SecretType::Login, &yaml)?;
         match parsed {
             SecretValue::Login(value) => {
@@ -443,22 +354,12 @@ mod tests {
 
     #[test]
     fn build_secret_yaml_round_trips_api_key_from_flat_form() -> anyhow::Result<()> {
-        let fields = serde_json::json!({
-            "websiteUrl": "https://api.example.com",
-            "username": "",
-            "password": "",
-            "notes": "",
-            "key": "tok123",
-            "expiresAt": "2030-01-01",
-            "name": "",
-            "seed": "",
-            "title": "",
-            "note": ""
+        let fields = SecretFormFields::ApiKey(ApiKeySecretForm {
+            website_url: "https://api.example.com".to_owned(),
+            key: "tok123".to_owned(),
+            expires_at: "2030-01-01".to_owned(),
         });
-        let yaml = SecretFormFields::build_secret_yaml(SecretFormJson {
-            secret_type: SecretType::ApiKey,
-            fields: &fields,
-        })?;
+        let yaml = SecretFormFields::build_secret_yaml_from_form(&fields)?;
         let parsed = SecretValue::from_yaml(SecretType::ApiKey, &yaml)?;
         match parsed {
             SecretValue::ApiKey(value) => {
@@ -473,49 +374,27 @@ mod tests {
 
     #[test]
     fn build_secret_yaml_validates_seed_phrase() {
-        let fields = serde_json::json!({
-            "name": "Main",
-            "seed": "invalid phrase"
+        let fields = SecretFormFields::SeedPhrase(SeedPhraseSecretForm {
+            name: "Main".to_owned(),
+            seed: "invalid phrase".to_owned(),
         });
-        assert!(
-            SecretFormFields::build_secret_yaml(SecretFormJson {
-                secret_type: SecretType::SeedPhrase,
-                fields: &fields
-            })
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn build_secret_yaml_rejects_manual_passkey_creation() -> anyhow::Result<()> {
-        let error = SecretFormFields::build_secret_yaml(SecretFormJson {
-            secret_type: SecretType::Passkey,
-            fields: &serde_json::json!({}),
-        })
-        .err()
-        .ok_or_else(|| anyhow::anyhow!("secret view test should reject invalid input"))?;
-        assert!(matches!(
-            error,
-            SecretPayloadError::PasskeyCreationRequiresAuthenticator
-        ));
-        Ok(())
+        assert!(SecretFormFields::build_secret_yaml_from_form(&fields).is_err());
     }
 
     #[test]
     fn build_secret_yaml_accepts_authenticator_uri() -> anyhow::Result<()> {
-        let fields = serde_json::json!({
-            "issuer": "",
-            "account": "",
-            "totpSecret": "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example",
-            "algorithm": "",
-            "digits": "",
-            "period": "",
-            "backupCodes": "one\ntwo"
+        let fields = SecretFormFields::Authenticator(AuthenticatorSecretForm {
+            issuer: "".to_owned(),
+            account: "".to_owned(),
+            website_url: "".to_owned(),
+            totp_secret: "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example"
+                .to_owned(),
+            algorithm: "".to_owned(),
+            digits: "".to_owned(),
+            period: "".to_owned(),
+            backup_codes: "one\ntwo".to_owned(),
         });
-        let yaml = SecretFormFields::build_secret_yaml(SecretFormJson {
-            secret_type: SecretType::Authenticator,
-            fields: &fields,
-        })?;
+        let yaml = SecretFormFields::build_secret_yaml_from_form(&fields)?;
         let parsed = SecretValue::from_yaml(SecretType::Authenticator, &yaml)?;
         match parsed {
             SecretValue::Authenticator(value) => {
@@ -531,17 +410,14 @@ mod tests {
     fn build_secret_yaml_round_trips_file_attachment_and_hides_content_in_list()
     -> anyhow::Result<()> {
         let content = Base64Engine::encode(&general_purpose::STANDARD, b"secret-bytes");
-        let fields = serde_json::json!({
-            "title": "",
-            "fileName": "notes.txt",
-            "mimeType": "text/plain",
-            "sizeBytes": 12,
-            "contentBase64": content,
+        let fields = SecretFormFields::FileAttachment(FileAttachmentSecretForm {
+            title: "".to_owned(),
+            file_name: "notes.txt".to_owned(),
+            mime_type: "text/plain".to_owned(),
+            size_bytes: 12_u64.into(),
+            content_base64: content,
         });
-        let yaml = SecretFormFields::build_secret_yaml(SecretFormJson {
-            secret_type: SecretType::FileAttachment,
-            fields: &fields,
-        })?;
+        let yaml = SecretFormFields::build_secret_yaml_from_form(&fields)?;
         let parsed = SecretValue::from_yaml(SecretType::FileAttachment, &yaml)?;
         let SecretValue::FileAttachment(value) = parsed else {
             panic!("expected file attachment");
@@ -564,7 +440,7 @@ mod tests {
                 title: "notes.txt".to_owned(),
                 file_name: "notes.txt".to_owned(),
                 mime_type: "text/plain".to_owned(),
-                size_bytes: 12.into(),
+                size_bytes: 12_u64.into(),
             }
         );
         assert!(!format!("{item:?}").contains("secret-bytes"));

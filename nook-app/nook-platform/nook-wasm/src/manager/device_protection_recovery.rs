@@ -2,6 +2,8 @@
 
 use super::NookVaultManager;
 use crate::AuthProviderDatabase;
+#[cfg(test)]
+use crate::manager::session::ExtensionHandoffState;
 use crate::storage::{auth_providers, indexed_db};
 use crate::{NookDatabase, NookError};
 use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, DriveEventParent, StorageMode};
@@ -126,7 +128,8 @@ mod tests {
 
         manager.device.id = "device-id".to_owned();
         manager.device.identity_private_key = "private-key".to_owned();
-        manager.device.extension_handoff_private_key = "handoff-key".to_owned();
+        manager.device.extension_handoff_private_key =
+            ExtensionHandoffState::Recipient(("handoff-key".to_owned()).into());
         manager.event_log.signing_seed = "signing-seed".to_owned();
         manager.storage.access_token = "provider-token".to_owned();
         manager.storage.remote_ref = "owner/repo".to_owned();

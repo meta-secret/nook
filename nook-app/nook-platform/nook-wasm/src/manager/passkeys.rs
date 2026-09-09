@@ -231,27 +231,9 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn website_passkey_mutations_reject_invalid_json_after_guard() -> Result<(), JsError> {
-        let identity = nook_core::DeviceIdentity::generate()?;
-        let keys = nook_core::VaultKeys::generate()?;
-        let mut manager = NookVaultManager::new();
-        manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.apply_vault_keys(&keys.secrets_key.to_string(), &keys.members_key.to_string())?;
-        let active = Function::new_no_args("return true;");
-
-        assert!(
-            manager
-                .register_website_passkey("not-json", &active)
-                .await
-                .is_err()
-        );
-        assert!(
-            manager
-                .assert_website_passkey("not-json", &active)
-                .await
-                .is_err()
-        );
-        Ok(())
+    fn website_passkey_decoders_reject_invalid_json() {
+        assert!(super::decode_website_passkey_registration_request("not-json").is_err());
+        assert!(super::decode_website_passkey_assertion_request("not-json").is_err());
     }
 
     #[wasm_bindgen_test]
@@ -262,13 +244,13 @@ mod browser_tests {
 
         assert!(
             manager
-                .register_website_passkey("not-json", &inactive)
+                .register_website_passkey(super::decode_website_passkey_registration_request(r#"{"origin":"https://example.com","challenge":"challenge","relyingParty":{"id":"example.com","name":"Example"},"user":{"id":"user","name":"User","displayName":"User"},"algorithms":[-7],"residentKeyRequired":true,"userVerificationRequired":true}"#)?, &inactive)
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .assert_website_passkey("not-json", &inactive)
+                .assert_website_passkey(super::decode_website_passkey_assertion_request(r#"{"origin":"https://example.com","challenge":"challenge","rpId":"example.com","userVerificationRequired":true}"#)?, &inactive)
                 .await
                 .is_err()
         );
@@ -473,14 +455,12 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn register_website_passkey(
         &mut self,
-        request_json: &str,
+        request: nook_core::PasskeyRegistrationRequest,
         ceremony_active: &js_sys::Function,
     ) -> Result<NookPasskeyRegistration, JsError> {
         NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        let request: nook_core::PasskeyRegistrationRequest = serde_json::from_str(request_json)
-            .map_err(|_| JsError::new("passkey-invalid-request"))?;
         let existing = self.decrypt_passkeys()?;
         let existing_values = Zeroizing::new(
             existing
@@ -516,8 +496,6 @@ impl NookVaultManager {
         NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        let request: nook_core::WebsitePasskeyAssertionRequest = serde_json::from_str(request_json)
-            .map_err(|_| JsError::new("passkey-invalid-request"))?;
         let passkeys = self.decrypt_passkeys()?;
         let values = Zeroizing::new(
             passkeys
@@ -566,4 +544,19 @@ impl NookVaultManager {
         self.append_vault_operations(operations).await?;
         Ok(response)
     }
+}
+
+/// Decode the external JSON message exactly once into the canonical registration request.
+#[wasm_bindgen]
+pub fn decode_website_passkey_registration_request(
+    json: &str,
+) -> Result<nook_core::PasskeyRegistrationRequest, JsError> {
+    serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))
+}
+/// Decode the external JSON message exactly once into the canonical assertion request.
+#[wasm_bindgen]
+pub fn decode_website_passkey_assertion_request(
+    json: &str,
+) -> Result<nook_core::WebsitePasskeyAssertionRequest, JsError> {
+    serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))
 }

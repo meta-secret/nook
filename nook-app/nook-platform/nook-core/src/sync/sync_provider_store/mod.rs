@@ -20,6 +20,7 @@ mod active_credentials;
 mod catalog;
 mod enrollment;
 mod legacy_storage;
+pub use legacy_storage::LegacyAuthProvidersSnapshot;
 mod oauth;
 mod save;
 mod scope;

@@ -11,7 +11,22 @@ use nook_core::i18n_keys;
 use reqwest::Client;
 
 use crate::NookError;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DriveFolderCreateRequest<'a> {
+    name: &'a str,
+    mime_type: &'static str,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DriveFolderPermissionRequest<'a> {
+    #[serde(rename = "type")]
+    permission_type: &'static str,
+    role: &'static str,
+    email_address: &'a str,
+}
 
 #[derive(Deserialize)]
 struct DriveFileCreateResponse {
@@ -135,10 +150,10 @@ impl DriveStorageClient<'_> {
             .query(&[("fields", "id,name")])
             .header("Authorization", format!("Bearer {}", token.as_ref()))
             .header("Content-Type", "application/json")
-            .json(&serde_json::json!({
-                "name": folder_name,
-                "mimeType": "application/vnd.google-apps.folder",
-            }))
+            .json(&DriveFolderCreateRequest {
+                name: folder_name,
+                mime_type: "application/vnd.google-apps.folder",
+            })
             .send()
             .await?;
         if !response.status().is_success() {
@@ -195,11 +210,11 @@ impl DriveStorageClient<'_> {
             ])
             .header("Authorization", format!("Bearer {}", token.as_ref()))
             .header("Content-Type", "application/json")
-            .json(&serde_json::json!({
-                "type": "user",
-                "role": "writer",
-                "emailAddress": email,
-            }))
+            .json(&DriveFolderPermissionRequest {
+                permission_type: "user",
+                role: "writer",
+                email_address: email,
+            })
             .send()
             .await?;
         if !response.status().is_success() {

@@ -1,7 +1,15 @@
 //! Untrusted offscreen response decoding with requested-vault binding.
 use super::{ExtensionGrantAuthority, PairingVaultId, StoredExtensionPairingGrant};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
+enum GrantAuthorityResponseWire {
+    NoMatchingAuthority,
+    MissingActiveAuthority,
+    InvalidStoredAuthority,
+    Authorized { grant: StoredExtensionPairingGrant },
+}
 use tsify::Tsify;
 
 #[derive(Debug, Deserialize, Serialize, Tsify)]
@@ -26,31 +34,26 @@ impl GrantAuthorityResponseJson {
     ) -> Result<ExtensionGrantAuthority, GrantAuthorityResponseError> {
         let PairingVaultId(requested) = requested;
         let requested_key = StoredExtensionPairingGrant::storage_key_for(&requested);
-        let Value::Object(mut fields) =
-            serde_json::from_str(&self.0).map_err(|_| GrantAuthorityResponseError)?
-        else {
-            return Err(GrantAuthorityResponseError);
-        };
-        let Some(Value::String(kind)) = fields.remove("kind") else {
-            return Err(GrantAuthorityResponseError);
-        };
-        let result = match kind.as_str() {
-            "NoMatchingAuthority" => ExtensionGrantAuthority::NoMatchingAuthority,
-            "MissingActiveAuthority" => ExtensionGrantAuthority::MissingActiveAuthority,
-            "InvalidStoredAuthority" => ExtensionGrantAuthority::InvalidStoredAuthority,
-            "Authorized" => {
-                let value = fields.remove("grant").ok_or(GrantAuthorityResponseError)?;
-                let result = ExtensionGrantAuthority::from_target_value(value, &requested_key);
+        let wire: GrantAuthorityResponseWire =
+            serde_json::from_str(&self.0).map_err(|_| GrantAuthorityResponseError)?;
+        let result = match wire {
+            GrantAuthorityResponseWire::NoMatchingAuthority => {
+                ExtensionGrantAuthority::NoMatchingAuthority
+            }
+            GrantAuthorityResponseWire::MissingActiveAuthority => {
+                ExtensionGrantAuthority::MissingActiveAuthority
+            }
+            GrantAuthorityResponseWire::InvalidStoredAuthority => {
+                ExtensionGrantAuthority::InvalidStoredAuthority
+            }
+            GrantAuthorityResponseWire::Authorized { grant } => {
+                let result = ExtensionGrantAuthority::from_target_grant(grant, &requested_key);
                 let ExtensionGrantAuthority::Authorized(_) = &result else {
                     return Err(GrantAuthorityResponseError);
                 };
                 result
             }
-            _ => return Err(GrantAuthorityResponseError),
         };
-        if !fields.is_empty() {
-            return Err(GrantAuthorityResponseError);
-        }
         Ok(result)
     }
 }

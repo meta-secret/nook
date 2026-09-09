@@ -2,7 +2,15 @@
 
 use super::{ExtensionPairingRecord, StoredExtensionPairingGrant};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use std::collections::BTreeMap;
+
+/// Other browser keys and invalid grants are discarded without keeping their raw payload.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredGrantEntry {
+    Grant(StoredExtensionPairingGrant),
+    Invalid(serde::de::IgnoredAny),
+}
 use tsify::Tsify;
 
 mod response;
@@ -73,7 +81,9 @@ pub enum ExtensionGrantAuthority {
 impl ExtensionGrantAuthorityRequest {
     #[must_use]
     pub fn classify(self) -> ExtensionGrantAuthority {
-        let Ok(Value::Object(mut entries)) = serde_json::from_str(&self.stored_json.0) else {
+        let Ok(mut entries) =
+            serde_json::from_str::<BTreeMap<String, StoredGrantEntry>>(&self.stored_json.0)
+        else {
             return ExtensionGrantAuthority::InvalidStoredAuthority;
         };
         let key = StoredExtensionPairingGrant::storage_key_for(&self.vault_store_id.0);
@@ -89,15 +99,17 @@ impl ExtensionGrantAuthorityRequest {
                 }
             };
         };
-        ExtensionGrantAuthority::from_target_value(value, &key)
+        match value {
+            StoredGrantEntry::Grant(grant) => {
+                ExtensionGrantAuthority::from_target_grant(grant, &key)
+            }
+            StoredGrantEntry::Invalid(_) => ExtensionGrantAuthority::InvalidStoredAuthority,
+        }
     }
 }
 
 impl ExtensionGrantAuthority {
-    fn from_target_value(value: serde_json::Value, key: &str) -> Self {
-        let Ok(grant) = serde_json::from_value::<StoredExtensionPairingGrant>(value) else {
-            return ExtensionGrantAuthority::InvalidStoredAuthority;
-        };
+    fn from_target_grant(grant: StoredExtensionPairingGrant, key: &str) -> Self {
         let record = ExtensionPairingRecord::Grant(grant);
         let Ok(()) = record.validate_for_key(key) else {
             return ExtensionGrantAuthority::InvalidStoredAuthority;
@@ -113,7 +125,7 @@ impl ExtensionGrantAuthority {
 mod tests {
     use super::*;
     use crate::extension_pairing_state::{ExtensionConnectScope, ExtensionPairingVaultType};
-    use serde_json::Map;
+    use serde_json::{Map, Value};
     use std::collections::HashMap;
 
     #[derive(Deserialize)]

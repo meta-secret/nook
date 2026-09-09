@@ -9,6 +9,7 @@ use crate::BrowserPasskeyPrfOutput;
 use crate::BrowserPasskeyRequestOptions;
 use crate::BrowserPasskeySignalCurrentUserDetails;
 use crate::NookDatabase;
+use crate::manager::session::ExtensionHandoffState;
 use nook_companion_core::CompanionIdentityHandoffContext;
 #[path = "device_protection_recovery.rs"]
 mod device_protection_recovery;
@@ -310,7 +311,8 @@ impl NookVaultManager {
     pub fn begin_extension_identity_handoff(&mut self) -> Result<String, JsError> {
         self.device.extension_handoff_private_key.zeroize();
         let recipient = DeviceIdentity::generate()?;
-        self.device.extension_handoff_private_key = recipient.secret_string().into_inner();
+        self.device.extension_handoff_private_key =
+            ExtensionHandoffState::Recipient((recipient.secret_string().into_inner()).into());
         Ok(recipient.public_key().into_inner())
     }
 
@@ -347,13 +349,14 @@ impl NookVaultManager {
         expected_device_signing_public_key: &str,
         context: &NookExtensionIdentityHandoffContext,
     ) -> Result<(), JsError> {
-        let private_key = Zeroizing::new(mem::take(&mut self.device.extension_handoff_private_key));
-        if private_key.is_empty() {
+        let Some(private_key) =
+            mem::take(&mut self.device.extension_handoff_private_key).into_recipient()
+        else {
             return Err(NookError::Decryption(
                 "Extension identity handoff was not initialized.".to_owned(),
             )
             .into());
-        }
+        };
         let recipient =
             DeviceIdentity::from_secret_str(&DeviceIdentitySecret::parse(&private_key)?)?;
         let expected_signing_public_key =

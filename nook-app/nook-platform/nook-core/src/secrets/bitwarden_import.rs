@@ -9,7 +9,15 @@ mod items;
 use crate::SecretValue;
 use encryption::EncryptedBitwardenExport;
 use items::BitwardenItems;
-use serde_json::Value;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BitwardenExportHeader {
+    #[serde(default)]
+    encrypted: bool,
+    password_protected: Option<bool>,
+}
 use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum BitwardenImportError {
@@ -67,18 +75,14 @@ pub struct BitwardenExport<'a> {
 }
 impl BitwardenExport<'_> {
     pub fn plan(self) -> Result<BitwardenImportPlan, BitwardenImportError> {
-        let value: Value = serde_json::from_str(self.json)?;
-        if !value
-            .get("encrypted")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
-            return Ok(BitwardenItems::parse(&value)?.plan());
+        let header: BitwardenExportHeader = serde_json::from_str(self.json)?;
+        if !header.encrypted {
+            return Ok(BitwardenItems::parse(self.json)?.plan());
         }
-        if value.get("passwordProtected").and_then(Value::as_bool) == Some(false) {
+        if header.password_protected == Some(false) {
             return Err(BitwardenImportError::AccountRestrictedExport);
         }
-        EncryptedBitwardenExport::parse(value)?
+        EncryptedBitwardenExport::parse(self.json)?
             .check(self.password)?
             .plan()
     }

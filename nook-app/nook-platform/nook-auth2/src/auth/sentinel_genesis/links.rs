@@ -11,7 +11,12 @@ use super::{
 };
 use crate::{MultiDeviceError, MultiDeviceResult};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde_json::Value;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct SentinelPayloadHeader {
+    kind: Option<String>,
+}
 
 const SENTINEL_REQUEST_HASH_PREFIX: &str = "#sentinel-request=";
 const SENTINEL_RESPONSE_HASH_PREFIX: &str = "#sentinel-response=";
@@ -89,12 +94,12 @@ impl SentinelGenesisLinkInput<'_> {
     pub fn canonical_response(&self) -> MultiDeviceResult<String> {
         let input = self.input;
         let json = (SentinelGenesisLinkInput { input }).decode(SentinelLinkKind::Response)?;
-        let value: Value = serde_json::from_str(&json)
+        let header: SentinelPayloadHeader = serde_json::from_str(&json)
             .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        if value.get("kind").and_then(Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
+        if header.kind.as_deref() == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
             return Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected);
         }
-        let response: SentinelGenesisParticipantResponse = serde_json::from_value(value)
+        let response: SentinelGenesisParticipantResponse = serde_json::from_str(&json)
             .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
         serde_json::to_string(&response)
             .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)

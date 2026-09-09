@@ -22,7 +22,12 @@ use crate::{
 };
 use ed25519_dalek::{Signer, SigningKey};
 use multi_device::{VaultMember, VaultMetaRecord};
-use serde_json::Value;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct SentinelPayloadHeader {
+    kind: Option<String>,
+}
 
 /// Public observations never construct a verified roster.
 ///
@@ -249,9 +254,9 @@ impl SentinelGenesisSession {
     fn response_from_payload(
         payload: &str,
     ) -> MultiDeviceResult<SentinelGenesisParticipantResponse> {
-        let value: Value = serde_json::from_str(payload)
+        let header: SentinelPayloadHeader = serde_json::from_str(payload)
             .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        if value.get("kind").and_then(Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
+        if header.kind.as_deref() == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
             return Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected);
         }
         serde_json::from_str(payload).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)

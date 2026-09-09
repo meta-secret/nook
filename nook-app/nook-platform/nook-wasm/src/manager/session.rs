@@ -1,10 +1,11 @@
+use super::companion_protocol::PendingCompanionWebsiteHandoff;
 use crate::ConfiguredVaultApplication;
 use nook_core::{
     DriveEventParent, ICloudEventTarget, SentinelGenesisPhase, StorageMode, VaultArchitecture,
     VaultMetaState, VaultUnlock,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use super::device_protection::PendingExtensionIdentityHandoff;
 use crate::application;
@@ -231,7 +232,7 @@ impl VaultSessionState {
 pub(in crate::manager) struct DeviceSessionState {
     pub(in crate::manager) id: String,
     pub(in crate::manager) identity_private_key: String,
-    pub(in crate::manager) extension_handoff_private_key: String,
+    pub(in crate::manager) extension_handoff_private_key: ExtensionHandoffState,
     pub(in crate::manager) pending_extension_handoff: Option<PendingExtensionIdentityHandoff>,
     pub(in crate::manager) pending_local_identity_label: Option<String>,
 }
@@ -492,5 +493,34 @@ mod tests {
     fn sync_issue_result_exposes_clear_state() {
         let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
         assert_eq!(result.state(), NookEventLogSyncIssueState::Clear);
+    }
+}
+
+/// The recipient secret and companion transaction are distinct in-memory states.
+/// Neither state is serialized, and replacing it immediately drops protected material.
+#[derive(Default)]
+pub(in crate::manager) enum ExtensionHandoffState {
+    #[default]
+    Idle,
+    Recipient(Zeroizing<String>),
+    Companion(PendingCompanionWebsiteHandoff),
+}
+impl ExtensionHandoffState {
+    pub(in crate::manager) fn clear(&mut self) {
+        *self = Self::Idle;
+    }
+    pub(in crate::manager) fn is_empty(&self) -> bool {
+        matches!(self, Self::Idle)
+    }
+    pub(in crate::manager) fn into_recipient(self) -> Option<Zeroizing<String>> {
+        match self {
+            Self::Recipient(secret) => Some(secret),
+            Self::Idle | Self::Companion(_) => None,
+        }
+    }
+}
+impl Zeroize for ExtensionHandoffState {
+    fn zeroize(&mut self) {
+        self.clear();
     }
 }

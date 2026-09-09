@@ -8,6 +8,9 @@
 //! Network errors bubble up as `NookError::Network` (from `reqwest`) or
 //! `NookError::GitHub` for protocol-shaped failures.
 
+mod create_request;
+use create_request::GithubRepositoryCreateRequest;
+
 use js_sys::Date;
 use reqwest::{Client, StatusCode};
 
@@ -365,12 +368,12 @@ impl GitHubStorageClient<'_> {
             .nth(1)
             .ok_or_else(|| NookError::GitHub(format!("Invalid repository name: {repo}")))?;
 
-        let body = serde_json::json!({
-            "name": repo_name,
-            "description": "Nook encrypted vault",
-            "private": true,
-            "auto_init": true
-        });
+        let body = GithubRepositoryCreateRequest {
+            name: repo_name,
+            description: "Nook encrypted vault",
+            private: true,
+            auto_init: true,
+        };
 
         let create = client
             .post("https://api.github.com/user/repos")
@@ -379,7 +382,7 @@ impl GitHubStorageClient<'_> {
             .header("X-GitHub-Api-Version", "2022-11-28")
             .header("User-Agent", "nook-wasm")
             .header("Content-Type", "application/json")
-            .body(body.to_string())
+            .json(&body)
             .send()
             .await?;
 

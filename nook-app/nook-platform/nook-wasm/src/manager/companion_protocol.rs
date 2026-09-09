@@ -1,3 +1,4 @@
+use super::session::ExtensionHandoffState;
 use super::{NookExtensionIdentityHandoffContext, NookVaultManager};
 use crate::NookError;
 use nook_companion_core::{
@@ -13,10 +14,9 @@ use nook_core::{
     DeviceId, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey, SigningIdentity,
     VaultApplication,
 };
-use serde::{Deserialize, Serialize};
 use std::mem;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 
 #[derive(Debug, thiserror::Error)]
 enum CompanionOperationError {
@@ -24,8 +24,6 @@ enum CompanionOperationError {
     Protocol(#[from] CompanionProtocolError),
     #[error(transparent)]
     Manager(#[from] NookError),
-    #[error("{0}")]
-    Serialization(#[from] serde_json::Error),
     #[error("Companion app-key handoff is not pending.")]
     HandoffNotPending,
     #[error("Companion handoff request does not match the active extension vault.")]
@@ -56,23 +54,13 @@ pub fn admit_companion_handoff_response(
     CompanionHandoffResponseAdmission::admit(response)
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct PendingCompanionWebsiteHandoff {
+pub(in crate::manager) struct PendingCompanionWebsiteHandoff {
     request: CompanionIdentityHandoffRequest,
     context: CompanionIdentityHandoffContext,
     recipient_secret: String,
 }
 
 impl PendingCompanionWebsiteHandoff {
-    fn encode(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string(self)
-    }
-
-    fn decode(serialized: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(serialized)
-    }
-
     fn take_recipient_secret(&mut self) -> String {
         mem::take(&mut self.recipient_secret)
     }
@@ -237,11 +225,12 @@ impl NookVaultManager {
         &mut self,
         response: &CompanionIdentityHandoffResponse,
     ) -> Result<PendingCompanionWebsiteHandoff, CompanionOperationError> {
-        let serialized = Zeroizing::new(mem::take(&mut self.device.extension_handoff_private_key));
-        if serialized.is_empty() {
-            return Err(CompanionOperationError::HandoffNotPending);
-        }
-        let pending = PendingCompanionWebsiteHandoff::decode(&serialized)?;
+        let pending = match mem::take(&mut self.device.extension_handoff_private_key) {
+            ExtensionHandoffState::Companion(pending) => pending,
+            ExtensionHandoffState::Idle | ExtensionHandoffState::Recipient(_) => {
+                return Err(CompanionOperationError::HandoffNotPending);
+            }
+        };
         response.validate()?;
         if pending.request != response.request {
             return Err(CompanionProtocolError::RequestMismatch.into());
@@ -267,7 +256,7 @@ impl NookVaultManager {
             context,
             recipient_secret: recipient.secret_string().into_inner(),
         };
-        self.device.extension_handoff_private_key = pending.encode()?;
+        self.device.extension_handoff_private_key = ExtensionHandoffState::Companion(pending);
         Ok(request)
     }
 }
@@ -299,7 +288,8 @@ impl NookVaultManager {
             ));
         };
         let app_key = app_key.clone();
-        self.device.extension_handoff_private_key = pending.take_recipient_secret();
+        self.device.extension_handoff_private_key =
+            ExtensionHandoffState::Recipient(pending.take_recipient_secret().into());
         let expected = &app_key.app_key;
         self.finish_extension_identity_handoff(
             &response.encrypted_envelope,

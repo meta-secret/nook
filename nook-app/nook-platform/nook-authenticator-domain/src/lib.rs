@@ -235,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_closed_authenticator_values_for_wire_boundaries() -> Result<(), serde_json::Error> {
+    fn renders_closed_authenticator_values_for_wire_boundaries() -> serde_json::Result<()> {
         assert_eq!(
             PasskeyDeviceProtectionMode::AntiHacker.as_str(),
             "anti-hacker"

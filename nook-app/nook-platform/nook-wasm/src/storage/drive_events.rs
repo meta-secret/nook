@@ -8,6 +8,7 @@
 
 use nook_core::GenesisImportRequest;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::str;
 
 use super::checked_event_write::CheckedEventWrite;
@@ -17,6 +18,32 @@ use nook_core::{DriveEventParent, EventId, VaultEvent};
 pub(crate) struct DriveEventStore<'a> {
     pub(crate) token: &'a str,
     pub(crate) parent: &'a DriveEventParent,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DriveEventListResponse {
+    #[serde(default)]
+    files: Vec<DriveEventFile>,
+    next_page_token: Option<String>,
+}
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DriveEventFile {
+    id: Option<String>,
+    name: Option<String>,
+    app_properties: Option<DriveEventProperties>,
+}
+#[derive(Deserialize, Serialize)]
+struct DriveEventProperties {
+    event_id: String,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DriveEventMetadata<'a> {
+    name: &'a str,
+    parents: [&'a str; 1],
+    app_properties: DriveEventProperties,
 }
 
 const DRIVE_EVENT_MISSING: &str = "Drive event file missing.";
@@ -47,26 +74,21 @@ impl DriveEventStore<'_> {
         }
     }
 
-    fn list_event_ids_from_response(body: &serde_json::Value) -> Vec<String> {
-        body.get("files")
-            .and_then(|value| value.as_array())
-            .into_iter()
-            .flatten()
+    fn list_event_ids_from_response(body: &DriveEventListResponse) -> Vec<String> {
+        body.files
+            .iter()
             .filter_map(|file| {
-                let name = file.get("name").and_then(|value| value.as_str())?;
-                let app_event_id = file
-                    .get("appProperties")
-                    .and_then(|properties| properties.get("event_id"))
-                    .and_then(|value| value.as_str());
-                Self::drive_listed_event_id(name, app_event_id)
+                Self::drive_listed_event_id(
+                    file.name.as_deref()?,
+                    file.app_properties
+                        .as_ref()
+                        .map(|properties| properties.event_id.as_str()),
+                )
             })
             .collect()
     }
-
-    fn list_page_token(body: &serde_json::Value) -> Option<String> {
-        body.get("nextPageToken")
-            .and_then(|value| value.as_str())
-            .map(str::to_owned)
+    fn list_page_token(body: &DriveEventListResponse) -> Option<String> {
+        body.next_page_token.clone()
     }
 }
 
@@ -164,7 +186,7 @@ impl DriveEventStore<'_> {
                     response.status()
                 )));
             }
-            let body: serde_json::Value = response
+            let body: DriveEventListResponse = response
                 .json()
                 .await
                 .map_err(|e| NookError::Serialization(e.to_string()))?;
@@ -241,17 +263,11 @@ impl DriveEventStore<'_> {
                 response.status()
             )));
         }
-        let body: serde_json::Value = response
+        let body: DriveEventListResponse = response
             .json()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let Some(files) = body.get("files").and_then(|v| v.as_array()) else {
-            return Ok(Vec::new());
-        };
-        Ok(files
-            .iter()
-            .filter_map(|file| file.get("id").and_then(|v| v.as_str()).map(str::to_owned))
-            .collect())
+        Ok(body.files.into_iter().filter_map(|file| file.id).collect())
     }
 
     async fn download_drive_event_file(
@@ -307,7 +323,8 @@ impl DriveEventStore<'_> {
         let file_name = format!("{}.yaml", event_id.encoded_digest());
         let content = str::from_utf8(bytes)
             .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
-        let (boundary, body) = Self::event_upload_body(parent, event_id, &file_name, content);
+        let (boundary, body) = Self::event_upload_body(parent, event_id, &file_name, content)
+            .map_err(|error| NookError::Serialization(error.to_string()))?;
 
         let client = Client::new();
         let response = client
@@ -327,17 +344,13 @@ impl DriveEventStore<'_> {
                 response.status()
             )));
         }
-        let parsed: serde_json::Value = response
+        let parsed: DriveEventFile = response
             .json()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        parsed
-            .get("id")
-            .and_then(|v| v.as_str())
-            .map(str::to_owned)
-            .ok_or_else(|| {
-                NookError::Drive("Drive event create response missing file id.".to_owned())
-            })
+        parsed.id.ok_or_else(|| {
+            NookError::Drive("Drive event create response missing file id.".to_owned())
+        })
     }
 
     fn event_upload_body(
@@ -345,20 +358,20 @@ impl DriveEventStore<'_> {
         event_id: &EventId,
         file_name: &str,
         content: &str,
-    ) -> (String, String) {
-        let metadata = serde_json::json!({
-            "name": file_name,
-            "parents": [Self::parent_id_for_create(parent)],
-            "appProperties": {
-                "event_id": event_id.as_str(),
-            }
-        });
+    ) -> serde_json::Result<(String, String)> {
+        let metadata = DriveEventMetadata {
+            name: file_name,
+            parents: [Self::parent_id_for_create(parent)],
+            app_properties: DriveEventProperties {
+                event_id: event_id.to_string(),
+            },
+        };
         let boundary = "nook_event_boundary";
         let mut body = String::new();
         body.push_str("--");
         body.push_str(boundary);
         body.push_str("\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n");
-        body.push_str(&metadata.to_string());
+        body.push_str(&serde_json::to_string(&metadata)?);
         body.push_str("\r\n--");
         body.push_str(boundary);
         body.push_str("\r\nContent-Type: application/x-yaml\r\n\r\n");
@@ -366,7 +379,7 @@ impl DriveEventStore<'_> {
         body.push_str("\r\n--");
         body.push_str(boundary);
         body.push_str("--");
-        (boundary.to_owned(), body)
+        Ok((boundary.to_owned(), body))
     }
 }
 
@@ -492,7 +505,7 @@ mod tests {
             folder_id: "shared-folder".to_owned(),
         };
         let (boundary, body) =
-            DriveEventStore::event_upload_body(&parent, &event_id, "event.yaml", "event: yaml");
+            DriveEventStore::event_upload_body(&parent, &event_id, "event.yaml", "event: yaml")?;
         assert_eq!(boundary, "nook_event_boundary");
         assert!(body.contains("\"name\":\"event.yaml\""));
         assert!(body.contains("\"parents\":[\"shared-folder\"]"));
@@ -593,21 +606,20 @@ mod tests {
     fn list_response_projection_accepts_only_matching_event_rows() -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         let event_id = format!("sha256u:{digest}");
-        let body = serde_json::json!({
+        let body: DriveEventListResponse = serde_json::from_value(serde_json::json!({
             "files": [
                 {"name": format!("{digest}.yaml"), "appProperties": {"event_id": event_id}},
                 {"name": format!("{digest}.yaml")},
                 {"name": "notes.yaml", "appProperties": {"event_id": "sha256u:notes"}},
-                {"name": 42, "appProperties": {"event_id": "ignored"}},
                 {"name": format!("{digest}.yaml"), "appProperties": {"event_id": "wrong"}}
             ]
-        });
+        }))?;
         assert_eq!(
             DriveEventStore::list_event_ids_from_response(&body),
             vec![event_id]
         );
         assert_eq!(
-            DriveEventStore::list_event_ids_from_response(&serde_json::json!({})),
+            DriveEventStore::list_event_ids_from_response(&DriveEventListResponse::default()),
             Vec::<String>::new()
         );
         Ok(())
@@ -618,16 +630,14 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn list_response_projection_preserves_page_token_only_when_string() {
-        let body = serde_json::json!({"nextPageToken": "page-2"});
+    fn list_response_projection_preserves_page_token_only_when_string() -> anyhow::Result<()> {
+        let body: DriveEventListResponse = serde_json::from_str(r#"{"nextPageToken":"page-2"}"#)?;
         assert_eq!(
             DriveEventStore::list_page_token(&body).as_deref(),
             Some("page-2")
         );
-        assert_eq!(
-            DriveEventStore::list_page_token(&serde_json::json!({"nextPageToken": 2})),
-            None
-        );
+        assert!(serde_json::from_str::<DriveEventListResponse>(r#"{"nextPageToken":2}"#).is_err());
+        Ok(())
     }
 
     #[wasm_bindgen_test]

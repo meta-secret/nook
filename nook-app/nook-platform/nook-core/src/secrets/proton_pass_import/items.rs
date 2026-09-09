@@ -9,7 +9,8 @@ use super::{ProtonPassImportError, ProtonPassImportPlan};
 use crate::CreditCardFields;
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
-use serde_json::Value;
+use serde::de::IgnoredAny;
+use serde_json::Number;
 use std::{collections::BTreeMap, str};
 #[derive(Debug, Deserialize)]
 pub(super) struct ProtonPassExport {
@@ -33,7 +34,7 @@ struct ProtonPassItem {
     #[serde(default)]
     pinned: bool,
     #[serde(default)]
-    files: Vec<Value>,
+    files: Vec<IgnoredAny>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,7 +74,7 @@ struct ProtonPassContent {
     #[serde(default)]
     totp_uri: String,
     #[serde(default)]
-    passkeys: Vec<Value>,
+    passkeys: Vec<IgnoredAny>,
     #[serde(default)]
     cardholder_name: String,
     #[serde(default)]
@@ -94,20 +95,47 @@ struct ProtonPassField {
     #[serde(rename = "type", default)]
     field_type: String,
     #[serde(default)]
-    data: Value,
+    data: ProtonPassFieldData,
 }
 
+/// Only recognized scalar field content enters imported metadata.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProtonPassFieldData {
+    #[serde(default)]
+    content: ProtonPassFieldScalar,
+    #[serde(default)]
+    totp_uri: ProtonPassFieldScalar,
+    #[serde(default)]
+    timestamp: ProtonPassFieldScalar,
+}
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ProtonPassFieldScalar {
+    Text(String),
+    Number(Number),
+    Unsupported(IgnoredAny),
+}
+impl Default for ProtonPassFieldScalar {
+    fn default() -> Self {
+        Self::Unsupported(IgnoredAny)
+    }
+}
+impl ProtonPassFieldScalar {
+    fn text(&self) -> Option<String> {
+        match self {
+            Self::Text(value) if !value.trim().is_empty() => Some(value.clone()),
+            Self::Number(value) => Some(value.to_string()),
+            Self::Text(_) | Self::Unsupported(_) => None,
+        }
+    }
+}
 impl ProtonPassField {
     fn value(&self) -> Option<String> {
-        let key = match self.field_type.as_str() {
-            "totp" => "totpUri",
-            "timestamp" => "timestamp",
-            "text" | "hidden" => "content",
-            _ => return None,
-        };
-        match self.data.get(key) {
-            Some(Value::String(value)) if !value.trim().is_empty() => Some(value.clone()),
-            Some(Value::Number(value)) => Some(value.to_string()),
+        match self.field_type.as_str() {
+            "totp" => self.data.totp_uri.text(),
+            "timestamp" => self.data.timestamp.text(),
+            "text" | "hidden" => self.data.content.text(),
             _ => None,
         }
     }

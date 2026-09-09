@@ -12,13 +12,19 @@ use std::{collections, str};
 use super::checked_event_write::CheckedEventWrite;
 use crate::NookError;
 use nook_core::{EventId, ICloudEventTarget, ICloudShareRole};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 
 pub(crate) struct ICloudEventStore<'a> {
     pub(crate) web_auth_token: &'a str,
     pub(crate) target: &'a ICloudEventTarget,
 }
+
+mod wire;
+use wire::{
+    ICloudCreate, ICloudCreateOperation, ICloudCreateRecord, ICloudEventFields, ICloudLookup,
+    ICloudQuery, ICloudQueryPage, ICloudRecordReference, ICloudRequest, ICloudTextField,
+    ICloudZone,
+};
 
 const ICLOUD_CONTAINER_ID: &str = match option_env!("NOOK_ICLOUD_CONTAINER_ID") {
     Some(value) => value,
@@ -86,24 +92,21 @@ impl ICloudEventStore<'_> {
         )
     }
 
-    fn icloud_zone_id(target: &ICloudEventTarget) -> Option<serde_json::Value> {
+    fn icloud_zone_id(target: &ICloudEventTarget) -> Option<ICloudZone> {
         match target {
             ICloudEventTarget::Private => None,
-            ICloudEventTarget::Shared(shared) => Some(json!({
-                "zoneName": shared.zone_name,
-                "ownerRecordName": shared.owner_record_name,
-            })),
+            ICloudEventTarget::Shared(shared) => Some(ICloudZone {
+                zone_name: shared.zone_name.clone(),
+                owner_record_name: shared.owner_record_name.clone(),
+            }),
         }
     }
 
-    fn with_icloud_zone(
-        mut body: serde_json::Value,
-        target: &ICloudEventTarget,
-    ) -> serde_json::Value {
-        if let Some(zone_id) = Self::icloud_zone_id(target) {
-            body["zoneID"] = zone_id;
+    fn with_icloud_zone<T: Serialize>(payload: T, target: &ICloudEventTarget) -> ICloudRequest<T> {
+        ICloudRequest {
+            payload,
+            zone: Self::icloud_zone_id(target),
         }
-        body
     }
 
     fn icloud_auth_query(web_auth_token: &str) -> [(&'static str, String); 2] {
@@ -275,9 +278,11 @@ impl ICloudEventStore<'_> {
         );
         let client = Client::new();
         let body = Self::with_icloud_zone(
-            json!({
-                "records": [{ "recordName": record_name }]
-            }),
+            ICloudLookup {
+                records: [ICloudRecordReference {
+                    record_name: record_name.to_owned(),
+                }],
+            },
             target,
         );
         let mut request = client
@@ -327,18 +332,16 @@ impl ICloudEventStore<'_> {
         const PATH: &str = "records/query";
 
         loop {
-            let mut body = Self::with_icloud_zone(
-                json!({
-                    "query": {
-                        "recordType": ICLOUD_EVENT_RECORD_TYPE,
+            let body = Self::with_icloud_zone(
+                ICloudQueryPage {
+                    query: ICloudQuery {
+                        record_type: ICLOUD_EVENT_RECORD_TYPE,
                     },
-                    "resultsLimit": 200,
-                }),
+                    results_limit: 200,
+                    continuation_marker: continuation_marker.clone(),
+                },
                 target,
             );
-            if let Some(marker) = continuation_marker.as_deref() {
-                body["continuationMarker"] = json!(marker);
-            }
 
             Self::log_icloud_request_start(OPERATION, PATH, token.as_ref());
             tracing::info!(
@@ -518,25 +521,32 @@ impl ICloudEventStore<'_> {
         event_id: &EventId,
         record_name: &str,
         content: &str,
-    ) -> serde_json::Value {
-        let mut record = json!({
-            "recordType": ICLOUD_EVENT_RECORD_TYPE,
-            "recordName": record_name,
-            "fields": {
-                ICLOUD_EVENT_ID_FIELD: { "value": event_id.as_str() },
-                ICLOUD_CONTENT_FIELD: { "value": content }
-            }
-        });
-        if let ICloudEventTarget::Shared(shared) = target {
-            record["parent"] = json!({ "recordName": shared.root_record_name });
-        }
-        Self::with_icloud_zone(
-            json!({
-                "operations": [{
-                    "operationType": "create",
-                    "record": record
-                }]
+    ) -> ICloudRequest<ICloudCreate> {
+        let parent = match target {
+            ICloudEventTarget::Private => None,
+            ICloudEventTarget::Shared(shared) => Some(ICloudRecordReference {
+                record_name: shared.root_record_name.clone(),
             }),
+        };
+        Self::with_icloud_zone(
+            ICloudCreate {
+                operations: [ICloudCreateOperation {
+                    operation_type: "create",
+                    record: ICloudCreateRecord {
+                        record_type: ICLOUD_EVENT_RECORD_TYPE,
+                        record_name: record_name.to_owned(),
+                        fields: ICloudEventFields {
+                            event_id: ICloudTextField {
+                                value: event_id.to_string(),
+                            },
+                            content: ICloudTextField {
+                                value: content.to_owned(),
+                            },
+                        },
+                        parent,
+                    },
+                }],
+            },
             target,
         )
     }
@@ -609,7 +619,7 @@ impl ICloudEventStore<'_> {
         let status = response.status();
         Self::log_icloud_response(OPERATION, PATH, status);
         if response.status().is_success() {
-            let _parsed: serde_json::Value = response.json().await.map_err(|e| {
+            let _parsed: ICloudRecordsResponse = response.json().await.map_err(|e| {
                 NookError::Serialization(format!("Failed to parse CloudKit event create: {e}"))
             })?;
             tracing::info!(
@@ -744,7 +754,7 @@ mod tests {
             "encrypted-event",
         );
 
-        let body: CreateBody = serde_json::from_value(body)?;
+        let body: CreateBody = serde_json::from_str(&serde_json::to_string(&body)?)?;
         let zone = body
             .zone
             .ok_or_else(|| anyhow::anyhow!("missing shared zone"))?;
@@ -777,7 +787,7 @@ mod tests {
             "encrypted-event",
         );
 
-        let body: CreateBody = serde_json::from_value(body)?;
+        let body: CreateBody = serde_json::from_str(&serde_json::to_string(&body)?)?;
         assert!(body.zone.is_none());
         assert!(body.operations[0].record.parent.is_none());
         Ok(())
@@ -822,16 +832,26 @@ mod tests {
         let shared = SharedTargetFixture::new(ICloudShareRole::Participant)?.0;
         let zone = ICloudEventStore::icloud_zone_id(&shared)
             .ok_or_else(|| anyhow::anyhow!("missing shared zone"))?;
-        assert_eq!(zone["zoneName"], "shared-zone");
-        assert_eq!(zone["ownerRecordName"], "owner-record");
-        let zoned = ICloudEventStore::with_icloud_zone(serde_json::json!({"query": {}}), &shared);
-        assert_eq!(zoned["zoneID"], zone);
-        assert!(
-            !ICloudEventStore::with_icloud_zone(serde_json::json!({}), &private)
-                .as_object()
-                .unwrap()
-                .contains_key("zoneID")
+        assert_eq!(zone.zone_name, "shared-zone");
+        assert_eq!(zone.owner_record_name, "owner-record");
+        let zoned = ICloudEventStore::with_icloud_zone(
+            ICloudLookup {
+                records: [ICloudRecordReference {
+                    record_name: "record".to_owned(),
+                }],
+            },
+            &shared,
         );
+        assert_eq!(zoned.zone, Some(zone));
+        let private_request = ICloudEventStore::with_icloud_zone(
+            ICloudLookup {
+                records: [ICloudRecordReference {
+                    record_name: "record".to_owned(),
+                }],
+            },
+            &private,
+        );
+        assert!(private_request.zone.is_none());
 
         let query = ICloudEventStore::icloud_auth_query("  web-token  ");
         assert_eq!(query[0].0, "ckAPIToken");

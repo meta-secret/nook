@@ -9,7 +9,6 @@ use super::{BitwardenImportError, BitwardenImportPlan};
 use crate::CreditCardFields;
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
-use serde_json::Value;
 use std::ops::Deref;
 #[derive(Debug, Default, Deserialize)]
 #[serde(from = "Option<String>")]
@@ -83,16 +82,19 @@ struct BitwardenUri {
     uri: BitwardenText,
 }
 
+#[derive(Deserialize)]
+struct BitwardenItemsWire {
+    items: Option<Vec<BitwardenItem>>,
+}
+
 pub(super) struct BitwardenItems {
     items: Vec<BitwardenItem>,
 }
 impl BitwardenItems {
-    pub(super) fn parse(value: &Value) -> Result<Self, BitwardenImportError> {
-        let items = value
-            .get("items")
-            .ok_or(BitwardenImportError::InvalidResponse)?;
+    pub(super) fn parse(json: &str) -> Result<Self, BitwardenImportError> {
+        let wire: BitwardenItemsWire = serde_json::from_str(json)?;
         Ok(Self {
-            items: serde_json::from_value(items.clone())?,
+            items: wire.items.ok_or(BitwardenImportError::InvalidResponse)?,
         })
     }
     #[must_use]
@@ -259,7 +261,7 @@ mod tests {
     #[test]
     fn login_conversion_keeps_credential_bytes_and_trimmed_url() -> anyhow::Result<()> {
         let json = r#"{"items":[{"type":1,"name":"Title","login":{"username":"  alice  ","password":"  sécret 🔑  ","uris":[{"uri":"  https://example.com  "}]}}]}"#;
-        let plan = BitwardenItems::parse(&serde_json::from_str(json)?)?.plan();
+        let plan = BitwardenItems::parse(json)?.plan();
         let [SecretValue::Login(login)] = plan.items.as_slice() else {
             anyhow::bail!("expected one login")
         };

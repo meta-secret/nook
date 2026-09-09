@@ -25,9 +25,9 @@ use crate::NookError;
 use js_sys::Date;
 use nook_core::IsoTimestamp;
 use rexie::{ObjectStore, Rexie, TransactionMode};
-use serde_json::Value;
 use serde_wasm_bindgen::from_value;
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::{fmt, mem};
 use tracing::field::{Field, Visit};
 use tracing::{Level, subscriber};
@@ -242,12 +242,12 @@ impl FieldVisitor {
         if self.fields.is_empty() {
             return None;
         }
-        let map: serde_json::Map<String, serde_json::Value> = self
+        let map: BTreeMap<&str, &str> = self
             .fields
             .iter()
-            .map(|(k, v)| (k.clone(), Value::String(v.clone())))
+            .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
-        serde_json::to_string(&Value::Object(map)).ok()
+        serde_json::to_string(&map).ok()
     }
 }
 

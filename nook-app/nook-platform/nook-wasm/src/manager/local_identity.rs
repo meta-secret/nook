@@ -3,6 +3,8 @@
 use crate::AuthProviderDatabase;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::IdentityDbSaveProtectedLocalIdentity;
+#[cfg(test)]
+use crate::manager::session::ExtensionHandoffState;
 use crate::storage::device_access::DeviceAccessProfileKey;
 use crate::storage::identity_record::LocalIdentitySigner;
 use crate::storage::{auth_providers, identity_record, indexed_db};
@@ -165,7 +167,8 @@ mod tests {
         let authorizer = AppKey::generate()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let mut manager = NookVaultManager::new();
-        manager.device.extension_handoff_private_key = "handoff-private-key".to_owned();
+        manager.device.extension_handoff_private_key =
+            ExtensionHandoffState::Recipient(("handoff-private-key".to_owned()).into());
         manager.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
             enrollment: PendingExtensionIdentityEnrollment::PairedVault {
                 authorizer,

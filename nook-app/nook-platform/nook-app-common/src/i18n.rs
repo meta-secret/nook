@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
 const EN_JSON: &str = include_str!("../locales/en.json");
 const RU_JSON: &str = include_str!("../locales/ru.json");
 
@@ -9,8 +12,35 @@ pub enum AppLocale {
 }
 
 /// Parsed translation data; raw JSON is decoded once at the catalog boundary.
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct TranslationCatalog {
-    document: serde_json::Value,
+    document: TranslationNode,
+}
+
+/// Catalogs contain translation text or named groups, never arbitrary JSON values.
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum TranslationNode {
+    Text(String),
+    Group(BTreeMap<String, TranslationNode>),
+}
+impl TranslationNode {
+    fn overlay(&mut self, overlay: Self) {
+        match (self, overlay) {
+            (Self::Group(base), Self::Group(overlay)) => {
+                for (key, value) in overlay {
+                    match base.get_mut(&key) {
+                        Some(existing) => existing.overlay(value),
+                        None => {
+                            base.insert(key, value);
+                        }
+                    }
+                }
+            }
+            (base, overlay) => *base = overlay,
+        }
+    }
 }
 
 /// Named values required by TranslationCatalog::lookup_translation.
@@ -59,12 +89,6 @@ pub struct TranslateRequest<'a> {
     pub key: &'a str,
 }
 
-/// Named values required by TranslationCatalog::merge_json_values.
-struct MergeJsonValuesRequest<'a> {
-    base: &'a mut serde_json::Value,
-    overlay: serde_json::Value,
-}
-
 /// Named values required by TranslationCatalog::lookup_key.
 struct LookupKeyRequest<'a> {
     json_str: &'a str,
@@ -77,15 +101,21 @@ struct TranslationPrefix<'a> {
 }
 
 impl TranslationCatalog {
-    pub fn parse(catalog_json: &str) -> Result<Self, serde_json::Error> {
+    pub fn parse(catalog_json: &str) -> serde_json::Result<Self> {
         serde_json::from_str(catalog_json).map(|document| Self { document })
     }
     pub fn lookup(&self, key: &str) -> Option<String> {
         let mut current = &self.document;
         for part in key.split('.') {
-            current = current.get(part)?;
+            let TranslationNode::Group(group) = current else {
+                return None;
+            };
+            current = group.get(part)?;
         }
-        current.as_str().map(String::from)
+        match current {
+            TranslationNode::Text(text) => Some(text.clone()),
+            TranslationNode::Group(_) => None,
+        }
     }
 }
 
@@ -270,17 +300,14 @@ impl TranslationCatalog {
 impl TranslationCatalog {
     pub fn merge_translation_catalogs(
         request: MergeTranslationCatalogsRequest<'_>,
-    ) -> Result<String, serde_json::Error> {
+    ) -> serde_json::Result<String> {
         let MergeTranslationCatalogsRequest {
             base_json,
             overlay_json,
         } = request;
-        let mut base: serde_json::Value = serde_json::from_str(base_json)?;
-        let overlay: serde_json::Value = serde_json::from_str(overlay_json)?;
-        TranslationCatalog::merge_json_values(MergeJsonValuesRequest {
-            base: &mut base,
-            overlay: overlay,
-        });
+        let mut base = Self::parse(base_json)?;
+        let overlay = Self::parse(overlay_json)?;
+        base.document.overlay(overlay.document);
         serde_json::to_string(&base)
     }
 }
@@ -318,29 +345,6 @@ impl TranslationCatalog {
             locale: locale,
             key: key,
         })
-    }
-}
-
-impl TranslationCatalog {
-    fn merge_json_values(request: MergeJsonValuesRequest<'_>) {
-        let MergeJsonValuesRequest { base, overlay } = request;
-        if let (Some(base_map), serde_json::Value::Object(overlay_map)) =
-            (base.as_object_mut(), overlay)
-        {
-            for (key, overlay_value) in overlay_map {
-                match base_map.get_mut(&key) {
-                    Some(base_value) if base_value.is_object() && overlay_value.is_object() => {
-                        TranslationCatalog::merge_json_values(MergeJsonValuesRequest {
-                            base: base_value,
-                            overlay: overlay_value,
-                        });
-                    }
-                    _ => {
-                        base_map.insert(key, overlay_value);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -508,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_translation_catalogs_overlay_wins_recursively() -> Result<(), serde_json::Error> {
+    fn test_merge_translation_catalogs_overlay_wins_recursively() -> serde_json::Result<()> {
         let base = r#"{"provider_picker":{"this_device":"Это устройство","github":"GitHub"}}"#;
         let overlay =
             r#"{"provider_picker":{"github":"GitHub updated","google_drive":"Google Drive"}}"#;

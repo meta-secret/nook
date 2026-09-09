@@ -102,7 +102,7 @@ impl AuthProvidersSnapshotData {
     }
 
     /// Hash the canonical typed provider snapshot, including encrypted fields.
-    pub fn companion_pairing_manifest_digest(&self) -> Result<Sha256Hex, serde_json::Error> {
+    pub fn companion_pairing_manifest_digest(&self) -> serde_json::Result<Sha256Hex> {
         Ok(Sha256Hex::from_bytes(&serde_json::to_vec(self)?))
     }
 }

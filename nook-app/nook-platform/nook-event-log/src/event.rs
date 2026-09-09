@@ -14,7 +14,9 @@ use nook_auth2::{
     Sha256Hex, StoreId, StoredRecordPayload, StoredSecretRecord,
 };
 use serde::{Deserialize, Serialize, ser::Error as _};
-use serde_json::{Value, json};
+use serde_json::Value;
+#[cfg(test)]
+use serde_json::json;
 
 /// Supported `schema_version` values on the event wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -315,16 +317,11 @@ pub struct VaultEventBody {
 
 impl VaultEventBody {
     pub fn to_canonical_value(&self) -> EventResult<Value> {
-        let mut value = serde_json::to_value(self).map_err(EventError::EventBodySerialize)?;
-        if let Value::Object(ref mut map) = value {
-            let mut sorted_parents: Vec<String> = self
-                .parents
-                .iter()
-                .map(|id| id.as_str().to_owned())
-                .collect();
-            sorted_parents.sort();
-            map.insert("parents".to_owned(), json!(sorted_parents));
-        }
+        let mut body = self.clone();
+        body.parents
+            .sort_by(|left, right| left.as_str().cmp(right.as_str()));
+        // The generic canonical JSON writer is the signing wire boundary.
+        let value = serde_json::to_value(&body).map_err(EventError::EventBodySerialize)?;
         Ok(CanonicalEventBodyBytes::canonical_value(&value))
     }
 

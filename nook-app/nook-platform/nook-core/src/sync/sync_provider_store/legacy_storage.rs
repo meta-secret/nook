@@ -118,18 +118,18 @@ impl<'a> From<&'a StorageProviderData> for LegacyStorageProvider<'a> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LegacyAuthProvidersSnapshot<'a> {
+pub struct LegacyAuthProvidersSnapshot<'a> {
     providers: Vec<LegacyStorageProvider<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     active_vault_store_id: Option<&'a str>,
 }
 
 impl AuthProvidersSnapshotData {
-    pub fn legacy_storage_value(&self) -> Result<serde_json::Value, serde_json::Error> {
-        serde_json::to_value(LegacyAuthProvidersSnapshot {
+    pub fn legacy_storage_snapshot(&self) -> LegacyAuthProvidersSnapshot<'_> {
+        LegacyAuthProvidersSnapshot {
             providers: self.providers.iter().map(Into::into).collect(),
             active_vault_store_id: self.active_vault_store_id.as_deref(),
-        })
+        }
     }
 }
 
@@ -150,7 +150,7 @@ mod tests {
             active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
         };
 
-        let value = snapshot.legacy_storage_value()?;
+        let value = serde_json::to_value(snapshot.legacy_storage_snapshot())?;
         let round_trip = NormalizedAuthSnapshot::from_wire(&value).snapshot;
         assert_eq!(round_trip, snapshot);
         Ok(())

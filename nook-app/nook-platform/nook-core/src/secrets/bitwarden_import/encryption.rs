@@ -13,7 +13,6 @@ use hkdf::Hkdf;
 use hmac::{Hmac, KeyInit, Mac};
 use pbkdf2::{pbkdf2_hmac, sha2::Sha256 as Pbkdf2Sha256};
 use serde::Deserialize;
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -51,8 +50,8 @@ struct EncStringParts {
 }
 
 impl EncryptedBitwardenExport {
-    pub(super) fn parse(value: Value) -> Result<Self, BitwardenImportError> {
-        serde_json::from_value(value).map_err(|error| {
+    pub(super) fn parse(json: &str) -> Result<Self, BitwardenImportError> {
+        serde_json::from_str(json).map_err(|error| {
             BitwardenImportError::encrypted(format!("missing or invalid metadata: {error}"))
         })
     }
@@ -158,9 +157,9 @@ pub(super) struct CheckedBitwardenDecryption {
 impl CheckedBitwardenDecryption {
     pub(super) fn plan(self) -> Result<BitwardenImportPlan, BitwardenImportError> {
         let decrypted = self.key.decrypt(&self.export.data)?;
-        let value: Value = serde_json::from_str(decrypted.as_str())
+        let items = BitwardenItems::parse(decrypted.as_str())
             .map_err(|_| BitwardenImportError::InvalidPassword)?;
-        Ok(BitwardenItems::parse(&value)?.plan())
+        Ok(items.plan())
     }
 }
 struct BitwardenKdfRange {
