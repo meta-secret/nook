@@ -50,7 +50,8 @@ pub use event::{
 pub use event_bytes::{CanonicalEventBodyBytes, EventStorageBytes};
 pub use fingerprint::SecretFingerprint;
 pub use graph::{
-    EventGraph, EventGraphReplacementEvidence, EventGraphVaultArchitecture, EventInsertStatus,
+    EventGraph, EventGraphInsert, EventGraphInsertion, EventGraphRejection,
+    EventGraphReplacementEvidence, EventGraphVaultArchitecture, EventInsertStatus,
     EventPendingReason,
 };
 pub use nook_replication::CausalGraphEventCount as EventCount;
@@ -61,7 +62,10 @@ pub use projection::{
 pub use remote_epoch_visibility::RemoteEventWrites;
 pub use signing::SigningIdentity;
 pub use store::{
-    CheckedRemoteEvent, LocalEventStore, RemoteEventBatch, RemoteEventLogClassification,
+    CheckedRemoteEvent, LocalEventAppend, LocalEventAppendOutcome, LocalEventStore,
+    LocalEventStoreRejection, LocalEventWrite, LocalOutboxRemoval, LocalOutboxRemoved,
+    LocalOutboxWrite, LocalRemoteUnion, LocalRemoteUnionOutcome, RemoteEventBatch,
+    RemoteEventLogClassification,
 };
 
 // Re-export typed wire values that appear in the event-log public API.

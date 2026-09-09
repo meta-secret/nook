@@ -28,8 +28,13 @@ fn join_approval_converges_across_all_delivery_orders() -> anyhow::Result<()> {
     let timeline = Timeline::new()
         .step("genesis: request + approve join", move |world| {
             let pending = JoinApproval::request(world, 0, &joiner_for_step)?;
-            pending.approve(world, 0)?;
-            Ok(())
+            match pending.approval.approve(pending.world, 0) {
+                Ok(outcome) => Ok(outcome.world),
+                Err(rejected) => Err(sim::SimRejection {
+                    world: rejected.world,
+                    cause: rejected.cause,
+                }),
+            }
         })
         .step("genesis: push outbox", |world| world.push(0))
         .step("peer: pull remote", |world| world.pull(1))
@@ -64,13 +69,18 @@ fn peer_converges_after_pull_push_pull() -> anyhow::Result<()> {
     let mut world = SimWorld::new(1)?;
 
     // Genesis records and approves the join.
-    let pending = JoinApproval::request(&mut world, 0, &joiner)?;
-    let approved = pending.approve(&mut world, 0)?;
-    assert_eq!(approved.device_id(), joiner_id);
+    let pending =
+        JoinApproval::request(world, 0, &joiner).map_err(sim::SimRejection::into_cause)?;
+    let approved = pending
+        .approval
+        .approve(pending.world, 0)
+        .map_err(sim::JoinRejection::into_cause)?;
+    world = approved.world;
+    assert_eq!(approved.approval.device_id(), joiner_id);
 
     // Peer pulls first — nothing has been pushed yet, so it must see no join at all
     // (the request event lives only in genesis' local log).
-    world.pull(1)?;
+    world = world.pull(1).map_err(sim::SimRejection::into_cause)?;
     let before = world.roster_view(1)?;
     assert!(
         !before.has_pending_join(&joiner_id),
@@ -78,8 +88,8 @@ fn peer_converges_after_pull_push_pull() -> anyhow::Result<()> {
     );
 
     // Genesis pushes, peer pulls again, and now converges to resolved.
-    world.push(0)?;
-    world.pull(1)?;
+    world = world.push(0).map_err(sim::SimRejection::into_cause)?;
+    world = world.pull(1).map_err(sim::SimRejection::into_cause)?;
     let after = world.roster_view(1)?;
     assert!(
         !after.has_pending_join(&joiner_id),
@@ -99,8 +109,13 @@ fn join_denial_converges_across_all_delivery_orders() -> anyhow::Result<()> {
     let timeline = Timeline::new()
         .step("genesis: request + deny join", move |world| {
             let pending = JoinApproval::request(world, 0, &joiner_for_step)?;
-            pending.deny(world, 0)?;
-            Ok(())
+            match pending.approval.deny(pending.world, 0) {
+                Ok(outcome) => Ok(outcome.world),
+                Err(rejected) => Err(sim::SimRejection {
+                    world: rejected.world,
+                    cause: rejected.cause,
+                }),
+            }
         })
         .step("genesis: push outbox", |world| world.push(0))
         .step("peer: pull remote", |world| world.pull(1));

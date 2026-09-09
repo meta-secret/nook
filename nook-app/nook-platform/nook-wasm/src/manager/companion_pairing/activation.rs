@@ -109,7 +109,10 @@ impl NookPrevalidatedCompanionPairingApproval {
             if !checked.belongs_to_store(store_id.as_str()) {
                 return Err(CompanionPairingPreparationFailure::VaultMismatch);
             }
-            event_store.put_event(event_id, bytes);
+            event_store = event_store.put_event(nook_core::LocalEventWrite {
+                event_id: event_id,
+                bytes: bytes,
+            });
         }
         if unique.is_empty() {
             return Err(CompanionPairingPreparationFailure::GraphInvalid);

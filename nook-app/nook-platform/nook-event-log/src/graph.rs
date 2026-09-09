@@ -5,7 +5,9 @@ mod authorization;
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
 use crate::{EventCount, EventError, EventResult};
-use nook_replication::{CausalGraph, CausalGraphError, CausalInsertStatus};
+use nook_replication::{
+    CausalEventInsertion, CausalGraph, CausalGraphError, CausalInsertStatus, CausalQuarantine,
+};
 use std::collections::BTreeMap;
 
 /// Why an event is not yet applicable to projection.
@@ -21,6 +23,33 @@ pub enum EventInsertStatus {
     Pending(EventPendingReason),
     Quarantined(String),
     Duplicate,
+}
+
+pub struct EventGraphInsert<'a> {
+    pub event: VaultEvent,
+    pub expected_store_id: &'a str,
+}
+#[derive(Debug)]
+pub struct EventGraphInsertion {
+    pub graph: EventGraph,
+    pub status: EventInsertStatus,
+}
+#[derive(Debug, thiserror::Error)]
+#[error("{cause}")]
+pub struct EventGraphRejection {
+    pub graph: EventGraph,
+    #[source]
+    pub cause: EventError,
+}
+impl EventGraphRejection {
+    pub fn into_cause(self) -> EventError {
+        self.cause
+    }
+}
+enum EventGraphAdmission {
+    Duplicate,
+    Conflict(EventId),
+    Insert(EventId),
 }
 
 /// Vault architecture implied by immutable operation history.
@@ -120,44 +149,74 @@ impl EventGraph {
 
     /// Insert an event after envelope and current-schema signature validation.
     pub fn insert(
-        &mut self,
-        event: VaultEvent,
-        expected_store_id: &str,
-    ) -> EventResult<EventInsertStatus> {
-        let event_id = event.validate_envelope(&crate::StoreId::parse(expected_store_id)?)?;
-        if let Some(existing) = self.events.get(&event_id) {
-            if existing.body.to_canonical_bytes()? == event.body.to_canonical_bytes()? {
-                return Ok(EventInsertStatus::Duplicate);
+        mut self,
+        request: EventGraphInsert<'_>,
+    ) -> Result<EventGraphInsertion, EventGraphRejection> {
+        let EventGraphInsert {
+            event,
+            expected_store_id,
+        } = request;
+        let admission: EventResult<EventGraphAdmission> = (|| {
+            let event_id = event.validate_envelope(&crate::StoreId::parse(expected_store_id)?)?;
+            if let Some(existing) = self.events.get(&event_id) {
+                if existing.body.to_canonical_bytes()? == event.body.to_canonical_bytes()? {
+                    return Ok(EventGraphAdmission::Duplicate);
+                }
+                return Ok(EventGraphAdmission::Conflict(event_id));
             }
-            self.causal.quarantine(
-                event_id.clone(),
-                "Same event id with different canonical bytes".to_owned(),
-            );
-            return Ok(EventInsertStatus::Quarantined(
-                "hash mismatch at event path".to_owned(),
-            ));
-        }
-
+            Ok(EventGraphAdmission::Insert(event_id))
+        })();
+        let event_id = match admission {
+            Err(cause) => return Err(EventGraphRejection { graph: self, cause }),
+            Ok(EventGraphAdmission::Duplicate) => {
+                return Ok(EventGraphInsertion {
+                    graph: self,
+                    status: EventInsertStatus::Duplicate,
+                });
+            }
+            Ok(EventGraphAdmission::Conflict(event_id)) => {
+                self.causal = self.causal.quarantine(CausalQuarantine {
+                    id: event_id,
+                    reason: "Same event id with different canonical bytes".to_owned(),
+                });
+                return Ok(EventGraphInsertion {
+                    graph: self,
+                    status: EventInsertStatus::Quarantined(
+                        "hash mismatch at event path".to_owned(),
+                    ),
+                });
+            }
+            Ok(EventGraphAdmission::Insert(event_id)) => event_id,
+        };
         let parents = event.body.parents.clone();
         self.events.insert(event_id.clone(), event);
-        let causal_status = self.causal.insert(event_id.clone(), parents);
-        self.quarantine_rejected_applicable_events()?;
-        if let Some(reason) = self.causal.quarantined().get(&event_id) {
-            return Ok(EventInsertStatus::Quarantined(reason.clone()));
-        }
-        match causal_status {
-            CausalInsertStatus::Applied => Ok(EventInsertStatus::Applied),
-            CausalInsertStatus::Pending { missing_parents } => Ok(EventInsertStatus::Pending(
-                EventPendingReason::MissingParents(missing_parents),
-            )),
-            CausalInsertStatus::Quarantined { reason } => {
-                Ok(EventInsertStatus::Quarantined(reason))
+        let inserted = self.causal.insert(CausalEventInsertion {
+            id: event_id.clone(),
+            parents,
+        });
+        self.causal = inserted.graph;
+        self = self.quarantine_rejected_applicable_events()?;
+        let status = if let Some(reason) = self.causal.quarantined().get(&event_id) {
+            EventInsertStatus::Quarantined(reason.clone())
+        } else {
+            match inserted.status {
+                CausalInsertStatus::Applied => EventInsertStatus::Applied,
+                CausalInsertStatus::Pending { missing_parents } => {
+                    EventInsertStatus::Pending(EventPendingReason::MissingParents(missing_parents))
+                }
+                CausalInsertStatus::Quarantined { reason } => {
+                    EventInsertStatus::Quarantined(reason)
+                }
+                CausalInsertStatus::Duplicate => EventInsertStatus::Duplicate,
+                CausalInsertStatus::Conflict => EventInsertStatus::Quarantined(
+                    "Conflicting causal parent sets for the same event id".to_owned(),
+                ),
             }
-            CausalInsertStatus::Duplicate => Ok(EventInsertStatus::Duplicate),
-            CausalInsertStatus::Conflict => Ok(EventInsertStatus::Quarantined(
-                "Conflicting causal parent sets for the same event id".to_owned(),
-            )),
-        }
+        };
+        Ok(EventGraphInsertion {
+            graph: self,
+            status,
+        })
     }
 
     /// Events whose parents are all present (ready for projection).
@@ -227,8 +286,8 @@ impl EventGraph {
 
     /// Union of events from two graphs (commutative, associative, idempotent).
     #[must_use]
-    pub fn union(&self, other: &Self) -> Self {
-        let mut merged = self.clone();
+    pub fn union(self, other: &Self) -> Self {
+        let mut merged = self;
         for (id, event) in &other.events {
             if merged.events.contains_key(id) {
                 continue;
@@ -331,14 +390,74 @@ mod tests {
         let child = signed_child(vec![genesis.id()?], "secret_child00001", &key)?;
 
         let mut left = EventGraph::new();
-        left.insert(genesis.clone(), STORE_STR)?;
+        match left.insert(crate::EventGraphInsert {
+            event: genesis.clone(),
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                left = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                left = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         let mut right = EventGraph::new();
-        right.insert(child.clone(), STORE_STR)?;
-        right.insert(genesis.clone(), STORE_STR)?;
+        match right.insert(crate::EventGraphInsert {
+            event: child.clone(),
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                right = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                right = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
+        match right.insert(crate::EventGraphInsert {
+            event: genesis.clone(),
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                right = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                right = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let mut only_left = EventGraph::new();
-        only_left.insert(genesis, STORE_STR)?;
-        only_left.insert(child, STORE_STR)?;
+        match only_left.insert(crate::EventGraphInsert {
+            event: genesis,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                only_left = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                only_left = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
+        match only_left.insert(crate::EventGraphInsert {
+            event: child,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                only_left = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                only_left = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert_eq!(left.union(&right).len(), only_left.len());
         assert_eq!(right.union(&only_left).len(), only_left.len());
@@ -351,14 +470,50 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key)?, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis_event(&key)?,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         let head = graph.heads()[0].clone();
         let a = signed_child(vec![head.clone()], "secret_concurrenta", &key)?;
         let b = signed_child(vec![head], "secret_concurrentb", &key)?;
         let a_id = a.id()?;
         let b_id = b.id()?;
-        graph.insert(a, store_str)?;
-        graph.insert(b, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: a,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
+        match graph.insert(crate::EventGraphInsert {
+            event: b,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         assert!(graph.are_concurrent(&a_id, &b_id));
         assert_eq!(graph.heads().len(), 2);
         Ok(())
@@ -375,11 +530,35 @@ mod tests {
         let child = signed_child(vec![genesis_id.clone()], "secret_pending001", &key)?;
 
         let mut graph = EventGraph::new();
-        let status = graph.insert(child, store_str)?;
+        let status = match graph.insert(crate::EventGraphInsert {
+            event: child,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         assert!(matches!(status, EventInsertStatus::Pending(_)));
         assert_eq!(graph.pending_events().len(), 1);
 
-        graph.insert(genesis, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         assert!(graph.pending_events().is_empty());
         Ok(())
     }
@@ -390,15 +569,51 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key)?, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis_event(&key)?,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         let head = graph.heads()[0].clone();
         let child = signed_child(vec![head], "secret_duplicate01", &key)?;
         assert_eq!(
-            graph.insert(child.clone(), store_str)?,
+            match graph.insert(crate::EventGraphInsert {
+                event: child.clone(),
+                expected_store_id: store_str
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
             EventInsertStatus::Applied
         );
         assert_eq!(
-            graph.insert(child, store_str)?,
+            match graph.insert(crate::EventGraphInsert {
+                event: child,
+                expected_store_id: store_str
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
             EventInsertStatus::Duplicate
         );
         Ok(())
@@ -410,15 +625,51 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key)?, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis_event(&key)?,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         let head = graph.heads()[0].clone();
         let child = signed_child(vec![head.clone()], "secret_child00001", &key)?;
         let child_id = child.id()?;
-        graph.insert(child, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: child,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let grandchild = signed_child(vec![child_id.clone()], "secret_grandchild1", &key)?;
         let grandchild_id = grandchild.id()?;
-        graph.insert(grandchild, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: grandchild,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert!(graph.is_ancestor(&head, &grandchild_id));
         assert!(!graph.is_ancestor(&grandchild_id, &head));
@@ -431,18 +682,66 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key)?, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis_event(&key)?,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         let head = graph.heads()[0].clone();
         let a = signed_child(vec![head.clone()], "secret_concurrenta", &key)?;
         let b = signed_child(vec![head], "secret_concurrentb", &key)?;
         let a_id = a.id()?;
         let b_id = b.id()?;
-        graph.insert(a, store_str)?;
-        graph.insert(b, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: a,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
+        match graph.insert(crate::EventGraphInsert {
+            event: b,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         assert_eq!(graph.heads().len(), 2);
 
         let join = signed_child(vec![a_id, b_id], "secret_joinmerge1", &key)?;
-        graph.insert(join, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: join,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         assert_eq!(graph.heads().len(), 1);
         Ok(())
     }
@@ -453,16 +752,46 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key)?, store_str)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis_event(&key)?,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         let head = graph.heads()[0].clone();
-        graph.insert(
-            signed_child(vec![head.clone()], "secret_concurrenta", &key)?,
-            store_str,
-        )?;
-        graph.insert(
-            signed_child(vec![head], "secret_concurrentb", &key)?,
-            store_str,
-        )?;
+        match graph.insert(crate::EventGraphInsert {
+            event: signed_child(vec![head.clone()], "secret_concurrenta", &key)?,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
+        match graph.insert(crate::EventGraphInsert {
+            event: signed_child(vec![head], "secret_concurrentb", &key)?,
+            expected_store_id: store_str,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let first = graph.topological_order()?;
         let second = graph.topological_order()?;
@@ -475,8 +804,32 @@ mod tests {
         let first_key = signing_key();
         let second_key = signing_key();
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&first_key)?, STORE_STR)?;
-        graph.insert(genesis_event(&second_key)?, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis_event(&first_key)?,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis_event(&second_key)?,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert!(matches!(
             graph.topological_order(),
@@ -502,10 +855,22 @@ mod tests {
             &key,
         )?;
         let mut graph = EventGraph::new();
-        graph.insert(genesis, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert!(matches!(
-            graph.insert(checkpoint, STORE_STR)?,
+            match graph.insert(crate::EventGraphInsert { event: checkpoint, expected_store_id: STORE_STR }) { Ok(inserted) => { graph = inserted.graph; Ok(inserted.status) }, Err(rejected) => { graph = rejected.graph; Err(rejected.cause) } }?,
             EventInsertStatus::Quarantined(reason)
                 if reason.contains("parent must be one security rotation trigger")
         ));

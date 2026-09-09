@@ -692,7 +692,10 @@ mod tests {
     fn event_export_round_trips_content_addressed_records() -> anyhow::Result<()> {
         let (event_id, bytes, event) = event_fixture()?;
         let mut store = nook_core::LocalEventStore::new();
-        store.put_event(event_id.clone(), bytes);
+        store = store.put_event(nook_core::LocalEventWrite {
+            event_id: event_id.clone(),
+            bytes: bytes,
+        });
 
         let records = NookVaultManager::export_event_records_from_store(&store)?;
 
@@ -707,7 +710,10 @@ mod tests {
     fn event_export_rejects_corrupt_local_bytes() -> anyhow::Result<()> {
         let event_id = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
         let mut store = nook_core::LocalEventStore::new();
-        store.put_event(event_id, b"corrupt event bytes".to_vec().into());
+        store = store.put_event(nook_core::LocalEventWrite {
+            event_id: event_id,
+            bytes: b"corrupt event bytes".to_vec().into(),
+        });
 
         assert!(NookVaultManager::export_event_records_from_store(&store).is_err());
         Ok(())

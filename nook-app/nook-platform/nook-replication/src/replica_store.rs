@@ -25,6 +25,43 @@ impl ReplicaInsertStatus {
     }
 }
 
+pub struct ReplicaEventWrite<Id> {
+    pub event_id: Id,
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: opaque immutable event storage bytes"
+        )
+    )]
+    pub bytes: Vec<u8>,
+}
+pub struct ReplicaOutboxWrite<'a, Id> {
+    pub provider_id: &'a str,
+    pub event: ReplicaEventWrite<Id>,
+}
+pub struct ReplicaOutboxRemoval<'a, Id> {
+    pub provider_id: &'a str,
+    pub event_id: &'a Id,
+}
+#[derive(Debug)]
+pub struct ReplicaWrite<Id> {
+    pub store: ReplicaStore<Id>,
+    pub status: ReplicaInsertStatus,
+}
+#[derive(Debug)]
+pub struct ReplicaDequeue<Id> {
+    pub store: ReplicaStore<Id>,
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: removed opaque event storage bytes"
+        )
+    )]
+    pub bytes: Option<Vec<u8>>,
+}
+
 /// Provider event-set classification before a connect or sync path mutates
 /// remote state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,14 +105,11 @@ where
         Self::default()
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: accepts opaque immutable event storage bytes"
-        )
-    )]
-    pub fn put_event(&mut self, event_id: Id, storage_bytes: Vec<u8>) -> ReplicaInsertStatus {
+    pub fn put_event(mut self, request: ReplicaEventWrite<Id>) -> ReplicaWrite<Id> {
+        let ReplicaEventWrite {
+            event_id,
+            bytes: storage_bytes,
+        } = request;
         let status = ReplicaInsertStatus::classify(
             self.events.get(&event_id).map(Vec::as_slice),
             &storage_bytes,
@@ -83,7 +117,10 @@ where
         if status == ReplicaInsertStatus::Inserted {
             self.events.insert(event_id, storage_bytes);
         }
-        status
+        ReplicaWrite {
+            store: self,
+            status,
+        }
     }
 
     #[must_use]
@@ -108,39 +145,29 @@ where
         self.events.keys().cloned().collect()
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: queues opaque immutable event storage bytes"
-        )
-    )]
-    pub fn queue_outbox(
-        &mut self,
-        provider_id: &str,
-        event_id: Id,
-        bytes: Vec<u8>,
-    ) -> ReplicaInsertStatus {
+    pub fn queue_outbox(mut self, request: ReplicaOutboxWrite<'_, Id>) -> ReplicaWrite<Id> {
+        let ReplicaOutboxWrite {
+            provider_id,
+            event: ReplicaEventWrite { event_id, bytes },
+        } = request;
         let entries = self.outbox.entry(provider_id.to_owned()).or_default();
         let status =
             ReplicaInsertStatus::classify(entries.get(&event_id).map(Vec::as_slice), &bytes);
         if status == ReplicaInsertStatus::Inserted {
             entries.insert(event_id, bytes);
         }
-        status
+        ReplicaWrite {
+            store: self,
+            status,
+        }
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: releases opaque immutable event storage bytes from the provider outbox"
-        )
-    )]
-    pub fn dequeue_outbox(&mut self, provider_id: &str, event_id: &Id) -> Option<Vec<u8>> {
-        self.outbox
-            .get_mut(provider_id)
-            .and_then(|entries| entries.remove(event_id))
+    pub fn dequeue_outbox(mut self, request: ReplicaOutboxRemoval<'_, Id>) -> ReplicaDequeue<Id> {
+        let bytes = self
+            .outbox
+            .get_mut(request.provider_id)
+            .and_then(|entries| entries.remove(request.event_id));
+        ReplicaDequeue { store: self, bytes }
     }
 
     #[must_use]
@@ -184,6 +211,15 @@ where
             .collect()
     }
 
+    /// Commit a validated exclusion set across events and their pending writes.
+    pub fn excluding_events(mut self, excluded: &BTreeSet<Id>) -> Self {
+        self.events.retain(|id, _| !excluded.contains(id));
+        for entries in self.outbox.values_mut() {
+            entries.retain(|id, _| !excluded.contains(id));
+        }
+        self
+    }
+
     /// Event identifiers available locally but absent from the observed remote
     /// event set.
     #[must_use]
@@ -206,28 +242,79 @@ mod tests {
     fn empty_payload_is_present_and_immutable_after_insertion() {
         let mut store = ReplicaStore::new();
         assert_eq!(
-            store.put_event(1_u8, Vec::new()),
+            {
+                let outcome = store.put_event(ReplicaEventWrite {
+                    event_id: 1_u8,
+                    bytes: Vec::new(),
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Inserted
         );
         assert_eq!(
-            store.put_event(1_u8, Vec::new()),
+            {
+                let outcome = store.put_event(ReplicaEventWrite {
+                    event_id: 1_u8,
+                    bytes: Vec::new(),
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Duplicate
         );
         assert_eq!(
-            store.put_event(1_u8, vec![1]),
+            {
+                let outcome = store.put_event(ReplicaEventWrite {
+                    event_id: 1_u8,
+                    bytes: vec![1],
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Conflict
         );
         assert_eq!(store.get_bytes(&1), Some([].as_slice()));
         assert_eq!(
-            store.queue_outbox("drive", 1_u8, Vec::new()),
+            {
+                let outcome = store.queue_outbox(ReplicaOutboxWrite {
+                    provider_id: "drive",
+                    event: ReplicaEventWrite {
+                        event_id: 1_u8,
+                        bytes: Vec::new(),
+                    },
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Inserted
         );
         assert_eq!(
-            store.queue_outbox("drive", 1_u8, Vec::new()),
+            {
+                let outcome = store.queue_outbox(ReplicaOutboxWrite {
+                    provider_id: "drive",
+                    event: ReplicaEventWrite {
+                        event_id: 1_u8,
+                        bytes: Vec::new(),
+                    },
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Duplicate
         );
         assert_eq!(
-            store.queue_outbox("drive", 1_u8, vec![1]),
+            {
+                let outcome = store.queue_outbox(ReplicaOutboxWrite {
+                    provider_id: "drive",
+                    event: ReplicaEventWrite {
+                        event_id: 1_u8,
+                        bytes: vec![1],
+                    },
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Conflict
         );
         assert_eq!(store.pending_outbox("drive"), vec![(1, Vec::new())]);
@@ -237,24 +324,74 @@ mod tests {
     fn outbox_is_idempotent_per_provider_and_event() {
         let mut store = ReplicaStore::new();
         assert_eq!(
-            store.queue_outbox("drive", 1_u8, vec![1]),
+            {
+                let outcome = store.queue_outbox(ReplicaOutboxWrite {
+                    provider_id: "drive",
+                    event: ReplicaEventWrite {
+                        event_id: 1_u8,
+                        bytes: vec![1],
+                    },
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Inserted
         );
         assert_eq!(
-            store.queue_outbox("drive", 1_u8, vec![1]),
+            {
+                let outcome = store.queue_outbox(ReplicaOutboxWrite {
+                    provider_id: "drive",
+                    event: ReplicaEventWrite {
+                        event_id: 1_u8,
+                        bytes: vec![1],
+                    },
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Duplicate
         );
         assert_eq!(
-            store.queue_outbox("drive", 1_u8, vec![2]),
+            {
+                let outcome = store.queue_outbox(ReplicaOutboxWrite {
+                    provider_id: "drive",
+                    event: ReplicaEventWrite {
+                        event_id: 1_u8,
+                        bytes: vec![2],
+                    },
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Conflict
         );
         assert_eq!(
-            store.queue_outbox("github", 1_u8, vec![3]),
+            {
+                let outcome = store.queue_outbox(ReplicaOutboxWrite {
+                    provider_id: "github",
+                    event: ReplicaEventWrite {
+                        event_id: 1_u8,
+                        bytes: vec![3],
+                    },
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Inserted
         );
 
         assert_eq!(store.pending_outbox("drive"), vec![(1, vec![1])]);
-        assert_eq!(store.dequeue_outbox("drive", &1), Some(vec![1]));
+        assert_eq!(
+            {
+                let outcome = store.dequeue_outbox(ReplicaOutboxRemoval {
+                    provider_id: "drive",
+                    event_id: &1,
+                });
+                store = outcome.store;
+                outcome.bytes
+            },
+            Some(vec![1])
+        );
         assert!(store.pending_outbox("drive").is_empty());
         assert_eq!(store.pending_outbox("github"), vec![(1, vec![3])]);
     }
@@ -262,9 +399,30 @@ mod tests {
     #[test]
     fn repair_plan_contains_only_events_missing_remotely() {
         let mut store = ReplicaStore::new();
-        store.put_event(1_u8, vec![1]);
-        store.put_event(2_u8, vec![2]);
-        store.put_event(3_u8, vec![3]);
+        {
+            let outcome = store.put_event(ReplicaEventWrite {
+                event_id: 1_u8,
+                bytes: vec![1],
+            });
+            store = outcome.store;
+            outcome.status
+        };
+        {
+            let outcome = store.put_event(ReplicaEventWrite {
+                event_id: 2_u8,
+                bytes: vec![2],
+            });
+            store = outcome.store;
+            outcome.status
+        };
+        {
+            let outcome = store.put_event(ReplicaEventWrite {
+                event_id: 3_u8,
+                bytes: vec![3],
+            });
+            store = outcome.store;
+            outcome.status
+        };
 
         assert_eq!(store.missing_event_ids(&BTreeSet::from([2_u8])), vec![1, 3]);
     }
@@ -273,15 +431,36 @@ mod tests {
     fn immutable_event_id_keeps_first_payload_and_reports_conflicts() {
         let mut store = ReplicaStore::new();
         assert_eq!(
-            store.put_event(1_u8, vec![1]),
+            {
+                let outcome = store.put_event(ReplicaEventWrite {
+                    event_id: 1_u8,
+                    bytes: vec![1],
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Inserted
         );
         assert_eq!(
-            store.put_event(1_u8, vec![1]),
+            {
+                let outcome = store.put_event(ReplicaEventWrite {
+                    event_id: 1_u8,
+                    bytes: vec![1],
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Duplicate
         );
         assert_eq!(
-            store.put_event(1_u8, vec![2]),
+            {
+                let outcome = store.put_event(ReplicaEventWrite {
+                    event_id: 1_u8,
+                    bytes: vec![2],
+                });
+                store = outcome.store;
+                outcome.status
+            },
             ReplicaInsertStatus::Conflict
         );
         assert_eq!(store.get_bytes(&1), Some([1_u8].as_slice()));
@@ -295,7 +474,7 @@ mod tests {
         ) {
             let mut store = ReplicaStore::new();
             for event_id in &local {
-                let _ = store.put_event(*event_id, vec![*event_id]);
+                let _ = { let outcome = store.put_event(ReplicaEventWrite { event_id: *event_id, bytes: vec![*event_id] }); store = outcome.store; outcome.status };
             }
 
             let expected = local.difference(&remote).copied().collect::<Vec<_>>();
@@ -341,14 +520,28 @@ mod loom_tests {
                     Ok(guard) => guard,
                     Err(poisoned) => poisoned.into_inner(),
                 };
-                guard.put_event(1_u8, vec![1])
+                {
+                    let outcome = guard.put_event(ReplicaEventWrite {
+                        event_id: 1_u8,
+                        bytes: vec![1],
+                    });
+                    guard = outcome.store;
+                    outcome.status
+                }
             });
             let second_writer = thread::spawn(move || {
                 let mut guard = match second.lock() {
                     Ok(guard) => guard,
                     Err(poisoned) => poisoned.into_inner(),
                 };
-                guard.put_event(1_u8, vec![2])
+                {
+                    let outcome = guard.put_event(ReplicaEventWrite {
+                        event_id: 1_u8,
+                        bytes: vec![2],
+                    });
+                    guard = outcome.store;
+                    outcome.status
+                }
             });
 
             let first_status = match first_writer.join() {

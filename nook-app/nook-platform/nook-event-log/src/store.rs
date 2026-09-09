@@ -10,12 +10,53 @@ use crate::GenesisImportRequest;
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
 use crate::graph::{EventGraph, EventInsertStatus};
+mod outbox;
 mod remote;
 use crate::{EventError, EventResult, EventStorageBytes};
 pub use nook_replication::RemoteEventLogClassification;
 use nook_replication::ReplicaStore;
-pub use remote::{CheckedRemoteEvent, RemoteEventBatch};
+pub use remote::{CheckedRemoteEvent, LocalRemoteUnion, LocalRemoteUnionOutcome, RemoteEventBatch};
 use std::collections::BTreeSet;
+
+pub struct LocalEventWrite {
+    pub event_id: EventId,
+    pub bytes: EventStorageBytes,
+}
+pub struct LocalOutboxWrite<'a> {
+    pub provider_id: &'a str,
+    pub event: LocalEventWrite,
+}
+pub struct LocalOutboxRemoval<'a> {
+    pub provider_id: &'a str,
+    pub event_id: &'a EventId,
+}
+pub struct LocalEventAppend<'a> {
+    pub event: &'a VaultEvent,
+    pub store_id: &'a str,
+}
+#[derive(Debug)]
+pub struct LocalEventAppendOutcome {
+    pub store: LocalEventStore,
+    pub event_id: EventId,
+    pub status: EventInsertStatus,
+}
+#[derive(Debug)]
+pub struct LocalOutboxRemoved {
+    pub store: LocalEventStore,
+    pub bytes: Option<EventStorageBytes>,
+}
+#[derive(Debug, thiserror::Error)]
+#[error("{cause}")]
+pub struct LocalEventStoreRejection {
+    pub store: LocalEventStore,
+    #[source]
+    pub cause: EventError,
+}
+impl LocalEventStoreRejection {
+    pub fn into_cause(self) -> EventError {
+        self.cause
+    }
+}
 
 /// Local event persistence surface (`IndexedDB` / provider adapters implement I/O).
 #[derive(Debug, Clone, Default)]
@@ -29,8 +70,15 @@ impl LocalEventStore {
         Self::default()
     }
 
-    pub fn put_event(&mut self, event_id: EventId, storage_bytes: EventStorageBytes) {
-        let _ = self.replica.put_event(event_id, storage_bytes.into());
+    pub fn put_event(mut self, request: LocalEventWrite) -> Self {
+        self.replica = self
+            .replica
+            .put_event(nook_replication::ReplicaEventWrite {
+                event_id: request.event_id,
+                bytes: request.bytes.into(),
+            })
+            .store;
+        self
     }
 
     #[must_use]
@@ -43,31 +91,6 @@ impl LocalEventStore {
     #[must_use]
     pub fn event_ids(&self) -> Vec<EventId> {
         self.replica.event_ids()
-    }
-
-    pub fn queue_outbox(&mut self, provider_id: &str, event_id: EventId, bytes: EventStorageBytes) {
-        let _ = self
-            .replica
-            .queue_outbox(provider_id, event_id, bytes.into());
-    }
-
-    pub fn dequeue_outbox(
-        &mut self,
-        provider_id: &str,
-        event_id: &EventId,
-    ) -> Option<EventStorageBytes> {
-        self.replica
-            .dequeue_outbox(provider_id, event_id)
-            .map(Into::into)
-    }
-
-    #[must_use]
-    pub fn pending_outbox(&self, provider_id: &str) -> Vec<(EventId, EventStorageBytes)> {
-        self.replica
-            .pending_outbox(provider_id)
-            .into_iter()
-            .map(|(event_id, bytes)| (event_id, bytes.into()))
-            .collect()
     }
 
     #[must_use]
@@ -86,28 +109,54 @@ impl LocalEventStore {
                         event_id: event_id.as_str().to_owned(),
                     })?;
             let event = VaultEvent::parse_event_storage_bytes(&bytes.to_vec().into())?;
-            let _ = graph.insert(event, store_id)?;
+            graph = graph
+                .insert(crate::EventGraphInsert {
+                    event,
+                    expected_store_id: store_id,
+                })
+                .map_err(|rejected| rejected.into_cause())?
+                .graph;
         }
         Ok(graph)
     }
 
     /// Insert a signed event into the local store.
     pub fn append_event(
-        &mut self,
-        event: &VaultEvent,
-        store_id: &str,
-    ) -> EventResult<(EventId, EventInsertStatus)> {
-        let event_id = event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
-        let bytes = VaultEvent::serialize_event_storage_yaml(event)?;
-        if self.replica.contains_event(&event_id) {
-            return Ok((event_id, EventInsertStatus::Duplicate));
-        }
-        let mut graph = self.load_graph(store_id)?;
-        let status = graph.insert(event.clone(), store_id)?;
-        if !matches!(status, EventInsertStatus::Quarantined(_)) {
-            self.put_event(event_id.clone(), bytes);
-        }
-        Ok((event_id, status))
+        self,
+        request: LocalEventAppend<'_>,
+    ) -> Result<LocalEventAppendOutcome, LocalEventStoreRejection> {
+        let LocalEventAppend { event, store_id } = request;
+        let prepared: EventResult<_> = (|| {
+            let event_id = event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
+            let bytes = VaultEvent::serialize_event_storage_yaml(event)?;
+            if self.replica.contains_event(&event_id) {
+                return Ok((event_id, bytes, EventInsertStatus::Duplicate));
+            }
+            let graph = self.load_graph(store_id)?;
+            let inserted = graph
+                .insert(crate::EventGraphInsert {
+                    event: event.clone(),
+                    expected_store_id: store_id,
+                })
+                .map_err(|rejected| rejected.into_cause())?;
+            Ok((event_id, bytes, inserted.status))
+        })();
+        let (event_id, bytes, status) = match prepared {
+            Ok(prepared) => prepared,
+            Err(cause) => return Err(LocalEventStoreRejection { store: self, cause }),
+        };
+        let store = match status {
+            EventInsertStatus::Quarantined(_) | EventInsertStatus::Duplicate => self,
+            _ => self.put_event(LocalEventWrite {
+                event_id: event_id.clone(),
+                bytes,
+            }),
+        };
+        Ok(LocalEventAppendOutcome {
+            store,
+            event_id,
+            status,
+        })
     }
 }
 
@@ -217,7 +266,19 @@ mod tests {
         let bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
-        local.union_remote(&[(id.clone(), bytes)], STORE)?;
+        match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(id.clone(), bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
         assert!(local.get_bytes(&id).is_some());
         Ok(())
     }
@@ -231,24 +292,21 @@ mod tests {
         .genesis()?;
 
         let mut local = LocalEventStore::new();
-        let (id, status) = local.append_event(&genesis, STORE)?;
+        let (id, status) = match local.append_event(crate::LocalEventAppend {
+            event: &genesis,
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok((outcome.event_id, outcome.status))
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
         assert!(local.get_bytes(&id).is_some());
         assert_eq!(status, EventInsertStatus::Applied);
-        Ok(())
-    }
-
-    #[test]
-    fn outbox_queue_and_dequeue() -> EventResult<()> {
-        let mut local = LocalEventStore::new();
-        let id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
-        let bytes = EventStorageBytes::from(b"event-bytes".to_vec());
-        local.queue_outbox("github", id.clone(), bytes.clone());
-        assert_eq!(local.pending_outbox("github").len(), 1);
-        let dequeued = local
-            .dequeue_outbox("github", &id)
-            .ok_or(EventError::MissingOutboxEntry)?;
-        assert_eq!(dequeued, bytes);
-        assert!(local.pending_outbox("github").is_empty());
         Ok(())
     }
 
@@ -260,8 +318,32 @@ mod tests {
         }
         .genesis()?;
         let mut local = LocalEventStore::new();
-        let (_, first) = local.append_event(&genesis, STORE)?;
-        let (_, second) = local.append_event(&genesis, STORE)?;
+        let (_, first) = match local.append_event(crate::LocalEventAppend {
+            event: &genesis,
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok((outcome.event_id, outcome.status))
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
+        let (_, second) = match local.append_event(crate::LocalEventAppend {
+            event: &genesis,
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok((outcome.event_id, outcome.status))
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
         assert_eq!(first, EventInsertStatus::Applied);
         assert_eq!(second, EventInsertStatus::Duplicate);
         Ok(())
@@ -278,7 +360,19 @@ mod tests {
         let bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
-        let heads = local.union_remote_and_heads(&[(id.clone(), bytes)], STORE)?;
+        let heads = match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(id.clone(), bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.heads)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
         assert_eq!(heads.len(), 1);
         assert_eq!(heads[0], id.as_str());
         Ok(())
@@ -295,12 +389,51 @@ mod tests {
         let genesis_bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut local_a = LocalEventStore::new();
-        local_a.put_event(genesis_id.clone(), genesis_bytes.clone());
+        local_a = local_a.put_event(crate::LocalEventWrite {
+            event_id: genesis_id.clone(),
+            bytes: genesis_bytes.clone(),
+        });
         let mut local_b = LocalEventStore::new();
 
-        local_a.union_remote(&[], STORE)?;
-        local_b.union_remote(&[(genesis_id.clone(), genesis_bytes.clone())], STORE)?;
-        local_a.union_remote(&[(genesis_id, genesis_bytes)], STORE)?;
+        match local_a.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local_a = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local_a = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
+        match local_b.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(genesis_id.clone(), genesis_bytes.clone())],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local_b = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local_b = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
+        match local_a.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(genesis_id, genesis_bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local_a = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local_a = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert_eq!(local_a.event_ids().len(), local_b.event_ids().len());
         Ok(())
@@ -318,10 +451,21 @@ mod tests {
         let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
 
         let mut local = LocalEventStore::new();
-        let err = local
-            .union_remote(&[(wrong_id, bytes)], STORE)
-            .err()
-            .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
+        let err = match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(wrong_id, bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(err, EventError::RemoteEventIdMismatch { .. }));
         assert!(local.get_bytes(&real_id).is_none());
         Ok(())
@@ -490,10 +634,21 @@ mod tests {
         let bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
-        let err = local
-            .union_remote(&[(event_id.clone(), bytes)], STORE)
-            .err()
-            .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
+        let err = match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(event_id.clone(), bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(err, EventError::SignatureVerificationFailed));
         assert!(local.get_bytes(&event_id).is_none());
         Ok(())
@@ -517,8 +672,32 @@ mod tests {
         let child_bytes = VaultEvent::serialize_event_storage_yaml(&child)?;
 
         let mut local = LocalEventStore::new();
-        local.union_remote(&[(genesis_id, genesis_bytes)], STORE)?;
-        let imported = local.union_remote(&[(child_id.clone(), child_bytes)], STORE)?;
+        match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(genesis_id, genesis_bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
+        let imported = match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(child_id.clone(), child_bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
         assert!(imported.is_empty());
         assert!(local.load_graph(STORE)?.quarantined().is_empty());
         assert!(local.get_bytes(&child_id).is_none());
@@ -543,13 +722,22 @@ mod tests {
         let child_bytes = VaultEvent::serialize_event_storage_yaml(&child)?;
 
         let mut local = LocalEventStore::new();
-        let imported = local.union_remote(
-            &[
+        let imported = match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[
                 (genesis_id.clone(), genesis_bytes),
                 (child_id.clone(), child_bytes),
             ],
-            STORE,
-        )?;
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert_eq!(imported, vec![genesis_id.clone()]);
         assert!(local.get_bytes(&genesis_id).is_some());
@@ -576,11 +764,35 @@ mod tests {
         let child_bytes = VaultEvent::serialize_event_storage_yaml(&child)?;
 
         let mut local = LocalEventStore::new();
-        let imported = local.union_remote(&[(child_id.clone(), child_bytes)], STORE)?;
+        let imported = match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(child_id.clone(), child_bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
         assert_eq!(imported, vec![child_id.clone()]);
         assert!(local.get_bytes(&child_id).is_some());
 
-        local.union_remote(&[(genesis_id.clone(), genesis_bytes)], STORE)?;
+        match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(genesis_id.clone(), genesis_bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
         assert!(local.get_bytes(&genesis_id).is_some());
         assert!(local.get_bytes(&child_id).is_none());
         assert!(local.load_graph(STORE)?.quarantined().is_empty());
@@ -600,12 +812,33 @@ mod tests {
         let existing_bytes = EventStorageBytes::from(b"not event yaml".to_vec());
 
         let mut local = LocalEventStore::new();
-        local.put_event(existing_id.clone(), existing_bytes.clone());
-        local.queue_outbox("drive", existing_id.clone(), existing_bytes.clone());
+        local = local.put_event(crate::LocalEventWrite {
+            event_id: existing_id.clone(),
+            bytes: existing_bytes.clone(),
+        });
+        local = local.queue_outbox(crate::LocalOutboxWrite {
+            provider_id: "drive",
+            event: crate::LocalEventWrite {
+                event_id: existing_id.clone(),
+                bytes: existing_bytes.clone(),
+            },
+        });
         let before_event_ids = local.event_ids();
         let before_outbox = local.pending_outbox("drive");
 
-        let result = local.union_remote(&[(remote_id.clone(), remote_bytes)], STORE);
+        let result = match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(remote_id.clone(), remote_bytes)],
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        };
 
         assert!(matches!(result, Err(EventError::ParseStoredEvent(_))));
         assert_eq!(local.event_ids(), before_event_ids);
@@ -632,11 +865,32 @@ mod tests {
         let child_bytes = VaultEvent::serialize_event_storage_yaml(&child)?;
 
         let mut local = LocalEventStore::new();
-        local.put_event(genesis_id.clone(), genesis_bytes.clone());
-        local.queue_outbox("drive", genesis_id.clone(), genesis_bytes.clone());
+        local = local.put_event(crate::LocalEventWrite {
+            event_id: genesis_id.clone(),
+            bytes: genesis_bytes.clone(),
+        });
+        local = local.queue_outbox(crate::LocalOutboxWrite {
+            provider_id: "drive",
+            event: crate::LocalEventWrite {
+                event_id: genesis_id.clone(),
+                bytes: genesis_bytes.clone(),
+            },
+        });
 
         assert_eq!(
-            local.union_remote(&[(child_id.clone(), child_bytes)], STORE)?,
+            match local.union_remote(crate::LocalRemoteUnion {
+                remote_events: &[(child_id.clone(), child_bytes)],
+                store_id: STORE
+            }) {
+                Ok(outcome) => {
+                    local = outcome.store;
+                    Ok(outcome.imported)
+                }
+                Err(rejected) => {
+                    local = rejected.store;
+                    Err(rejected.cause)
+                }
+            }?,
             vec![child_id]
         );
         assert_eq!(
@@ -657,27 +911,51 @@ mod tests {
         let genesis_bytes = VaultEvent::serialize_event_storage_yaml(&genesis)?;
 
         let mut device_a = LocalEventStore::new();
-        device_a.put_event(genesis_id.clone(), genesis_bytes.clone());
+        device_a = device_a.put_event(crate::LocalEventWrite {
+            event_id: genesis_id.clone(),
+            bytes: genesis_bytes.clone(),
+        });
 
         let mut device_b = LocalEventStore::new();
-        device_b.put_event(genesis_id.clone(), genesis_bytes.clone());
+        device_b = device_b.put_event(crate::LocalEventWrite {
+            event_id: genesis_id.clone(),
+            bytes: genesis_bytes.clone(),
+        });
 
-        device_a.union_remote(
-            &device_b
+        match device_a.union_remote(crate::LocalRemoteUnion {
+            remote_events: &device_b
                 .event_ids()
                 .iter()
                 .filter_map(|id| device_b.get_bytes(id).map(|bytes| (id.clone(), bytes)))
                 .collect::<Vec<_>>(),
-            STORE,
-        )?;
-        device_b.union_remote(
-            &device_a
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                device_a = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                device_a = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
+        match device_b.union_remote(crate::LocalRemoteUnion {
+            remote_events: &device_a
                 .event_ids()
                 .iter()
                 .filter_map(|id| device_a.get_bytes(id).map(|bytes| (id.clone(), bytes)))
                 .collect::<Vec<_>>(),
-            STORE,
-        )?;
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                device_b = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                device_b = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert_eq!(device_a.event_ids(), device_b.event_ids());
         Ok(())

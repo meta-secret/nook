@@ -243,9 +243,12 @@ pub use multi_device::{
 pub use nook_event_log::{
     AppendEventInput, CanonicalEventBodyBytes, CheckedRemoteEvent, ConcurrentEpochRotations,
     Ed25519Signature, EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, EpochRecord,
-    EpochRotationReason, EpochTransition, EventCount, EventGraph, EventGraphVaultArchitecture,
-    EventId, EventInsertStatus, EventPendingReason, EventStorageBytes, GenesisImportPayload,
-    GenesisImportRequest, KeyEpoch, LocalEventStore, ObservedHeads, ProjectedSecret,
+    EpochRotationReason, EpochTransition, EventCount, EventGraph, EventGraphInsert,
+    EventGraphInsertion, EventGraphRejection, EventGraphVaultArchitecture, EventId,
+    EventInsertStatus, EventPendingReason, EventStorageBytes, GenesisImportPayload,
+    GenesisImportRequest, KeyEpoch, LocalEventAppend, LocalEventAppendOutcome, LocalEventStore,
+    LocalEventStoreRejection, LocalEventWrite, LocalOutboxRemoval, LocalOutboxRemoved,
+    LocalOutboxWrite, LocalRemoteUnion, LocalRemoteUnionOutcome, ObservedHeads, ProjectedSecret,
     ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch, RemoteEventBatch,
     RemoteEventLogClassification, RemoteEventWrites, SecretFingerprint, SecretReplacementConflict,
     SecurityConflict, SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
@@ -335,7 +338,11 @@ pub use vault_epoch_crypto::{
     MembersCheckpointHash, SecretEpochReencryption, VaultKeyRotation, VaultMetaRecordRewrap,
     VaultMetaRewrap,
 };
-pub use vault_event_session::{VaultEventSession, VaultSecurityEpochRotationInput};
+pub use vault_event_session::{
+    VaultEpochRotated, VaultEventAppend, VaultEventAppended, VaultEventSession,
+    VaultEventSessionRejection, VaultOutboxFlush, VaultOutboxFlushed,
+    VaultSecurityEpochRotationInput,
+};
 pub use vault_format::{
     VaultFormat, VaultFormatDocument, VaultName, VaultNameRef, VaultRecordSet, VaultStoreIdentity,
     VaultStoreIdentityRef, VaultVersionWrite,

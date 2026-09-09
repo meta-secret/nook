@@ -29,6 +29,31 @@ pub struct EventLogDevice {
     pub crypto: VaultCrypto,
 }
 
+pub struct DeviceRejection {
+    pub device: EventLogDevice,
+    pub cause: VaultError,
+}
+pub struct DeviceAppended {
+    pub device: EventLogDevice,
+    pub event_id: EventId,
+}
+pub struct DeviceFlushed {
+    pub device: EventLogDevice,
+    pub remote: LocalEventStore,
+}
+pub struct DeviceJoinRequested {
+    pub device: EventLogDevice,
+    pub join: JoinRequest,
+}
+pub struct DeviceProvidersFlushed {
+    pub device: EventLogDevice,
+    pub providers: ProviderBuckets,
+}
+pub struct ProviderRejection {
+    pub providers: ProviderBuckets,
+    pub cause: VaultError,
+}
+
 impl EventLogDevice {
     pub fn genesis(label: &str) -> VaultResult<Self> {
         let keys = VaultKeys::generate()?;
@@ -47,11 +72,14 @@ impl EventLogDevice {
             projection_cache_yaml,
             crypto,
         };
-        device.append_signed(vec![VaultOperation::VaultImported {
-            source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
-            secrets: Vec::new(),
-            password_entries: Vec::new(),
-        }])?;
+        device = device
+            .append_signed(vec![VaultOperation::VaultImported {
+                source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                secrets: Vec::new(),
+                password_entries: Vec::new(),
+            }])
+            .map_err(|rejected| rejected.cause)?
+            .device;
         let _ = label;
         Ok(device)
     }
@@ -82,8 +110,20 @@ impl EventLogDevice {
         self.session.actor_id()
     }
 
-    pub fn append_secret(&mut self, secret_id: &str, plaintext: &str) -> VaultResult<EventId> {
-        let ciphertext = self.crypto.encrypt_value(plaintext)?;
+    pub fn append_secret(
+        self,
+        secret_id: &str,
+        plaintext: &str,
+    ) -> Result<DeviceAppended, DeviceRejection> {
+        let ciphertext = match self.crypto.encrypt_value(plaintext) {
+            Ok(ciphertext) => ciphertext,
+            Err(cause) => {
+                return Err(DeviceRejection {
+                    device: self,
+                    cause,
+                });
+            }
+        };
         self.append_signed(vec![VaultOperation::SecretCreated {
             secret: EncryptedSecretPayload::from_armored(
                 &SecretId::from_vault_record(secret_id),
@@ -97,32 +137,41 @@ impl EventLogDevice {
 
     /// Append a login secret with identity/version fingerprints (matches WASM `add_secret`).
     pub fn append_login(
-        &mut self,
+        self,
         secret_id: &str,
         website_url: &str,
         username: &str,
         password: &str,
         notes: &str,
-    ) -> VaultResult<EventId> {
+    ) -> Result<DeviceAppended, DeviceRejection> {
         let value = SecretValue::Login(LoginSecret {
             website_url: website_url.to_owned(),
             username: username.to_owned(),
             password: password.to_owned(),
             notes: notes.to_owned(),
         });
-        let secrets_key = SymmetricKey::parse(&self.secrets_key)?;
-        let identity = value.identity_fingerprint(&secrets_key)?;
-        let version = value.fingerprint(&secrets_key)?;
-        let ciphertext = self.crypto.encrypt_value(value.to_yaml()?.as_str())?;
-        self.append_signed(vec![VaultOperation::SecretCreated {
-            secret: EncryptedSecretPayload::from_armored(
-                &SecretId::from_vault_record(secret_id),
-                SecretType::Login,
-                ciphertext.as_str(),
-                identity,
-                version,
-            ),
-        }])
+        let operation: VaultResult<_> = (|| {
+            let secrets_key = SymmetricKey::parse(&self.secrets_key)?;
+            let identity = value.identity_fingerprint(&secrets_key)?;
+            let version = value.fingerprint(&secrets_key)?;
+            let ciphertext = self.crypto.encrypt_value(value.to_yaml()?.as_str())?;
+            Ok(VaultOperation::SecretCreated {
+                secret: EncryptedSecretPayload::from_armored(
+                    &SecretId::from_vault_record(secret_id),
+                    SecretType::Login,
+                    ciphertext.as_str(),
+                    identity,
+                    version,
+                ),
+            })
+        })();
+        match operation {
+            Ok(operation) => self.append_signed(vec![operation]),
+            Err(cause) => Err(DeviceRejection {
+                device: self,
+                cause,
+            }),
+        }
     }
 
     pub fn decrypt_live_login_passwords(&self) -> VaultResult<BTreeSet<String>> {
@@ -158,25 +207,50 @@ impl EventLogDevice {
         Ok(fingerprints)
     }
 
-    pub fn append_signed(&mut self, ops: Vec<VaultOperation>) -> VaultResult<EventId> {
-        self.session.append_operations(ops, TS, Some("github"))
+    pub fn append_signed(
+        mut self,
+        ops: Vec<VaultOperation>,
+    ) -> Result<DeviceAppended, DeviceRejection> {
+        match self.session.append_operations(nook_core::VaultEventAppend {
+            operations: ops,
+            created_at: TS,
+            provider_id: Some("github"),
+        }) {
+            Ok(appended) => {
+                self.session = appended.session;
+                Ok(DeviceAppended {
+                    device: self,
+                    event_id: appended.event_id,
+                })
+            }
+            Err(rejected) => {
+                self.session = rejected.session;
+                Err(DeviceRejection {
+                    device: self,
+                    cause: rejected.cause,
+                })
+            }
+        }
     }
 
-    pub fn union_from(&mut self, remote: &EventLogDevice) -> VaultResult<()> {
-        let remote_events: Vec<(EventId, Vec<u8>)> = remote
-            .session
-            .store
-            .event_ids()
-            .into_iter()
-            .filter_map(|id| {
-                remote
-                    .session
-                    .store
-                    .get_bytes(&id)
-                    .map(|bytes| (id, bytes.into()))
-            })
-            .collect();
-        self.session.union_remote(&remote_events)
+    pub fn union_events(mut self, events: &[(EventId, Vec<u8>)]) -> Result<Self, DeviceRejection> {
+        match self.session.union_remote(events) {
+            Ok(session) => {
+                self.session = session;
+                Ok(self)
+            }
+            Err(rejected) => {
+                self.session = rejected.session;
+                Err(DeviceRejection {
+                    device: self,
+                    cause: rejected.cause,
+                })
+            }
+        }
+    }
+
+    pub fn union_from(self, remote: &EventLogDevice) -> Result<Self, DeviceRejection> {
+        self.union_events(&remote.remote_events())
     }
 
     pub fn project(&self) -> VaultResult<VaultProjection> {
@@ -192,12 +266,18 @@ impl EventLogDevice {
             .collect()
     }
 
-    pub fn flush_outbox_to(
-        &mut self,
-        provider: &str,
-        remote: &mut LocalEventStore,
-    ) -> VaultResult<()> {
-        self.session.flush_outbox_to_remote(provider, remote)
+    pub fn flush_outbox_to(mut self, provider: &str, remote: LocalEventStore) -> DeviceFlushed {
+        let flushed = self
+            .session
+            .flush_outbox_to_remote(nook_core::VaultOutboxFlush {
+                provider_id: provider,
+                remote,
+            });
+        self.session = flushed.session;
+        DeviceFlushed {
+            device: self,
+            remote: flushed.remote,
+        }
     }
 
     pub fn remote_events(&self) -> Vec<(EventId, Vec<u8>)> {
@@ -214,16 +294,27 @@ impl EventLogDevice {
             .collect()
     }
 
-    pub fn drop_crypto_simulating_sync(&mut self) -> VaultResult<()> {
-        self.secrets_key.clear();
-        self.members_key.clear();
-        let (secrets_key, members_key) =
-            VaultProjectionCache::new(&self.projection_cache_yaml).unlock(&self.identity)?;
-        self.secrets_key.clone_from(&secrets_key);
-        self.members_key.clone_from(&members_key);
-        self.crypto =
-            VaultCrypto::new(&SymmetricKey::parse(&secrets_key).map_err(VaultError::Validation)?)?;
-        Ok(())
+    pub fn drop_crypto_simulating_sync(mut self) -> Result<Self, DeviceRejection> {
+        let prepared: VaultResult<_> = (|| {
+            let (secrets_key, members_key) =
+                VaultProjectionCache::new(&self.projection_cache_yaml).unlock(&self.identity)?;
+            let crypto = VaultCrypto::new(
+                &SymmetricKey::parse(&secrets_key).map_err(VaultError::Validation)?,
+            )?;
+            Ok((secrets_key, members_key, crypto))
+        })();
+        match prepared {
+            Ok((secrets_key, members_key, crypto)) => {
+                self.secrets_key = secrets_key;
+                self.members_key = members_key;
+                self.crypto = crypto;
+                Ok(self)
+            }
+            Err(cause) => Err(DeviceRejection {
+                device: self,
+                cause,
+            }),
+        }
     }
 }
 
@@ -271,41 +362,51 @@ pub fn live_secret_ids(device: &EventLogDevice) -> VaultResult<BTreeSet<String>>
 
 pub fn write_all_device_events_to_provider(
     device: &EventLogDevice,
-    providers: &mut ProviderBuckets,
+    mut providers: ProviderBuckets,
     provider: &str,
-) -> VaultResult<()> {
-    let bucket = providers
-        .get_mut(provider)
-        .ok_or_else(|| missing_provider_bucket(provider))?;
+) -> Result<ProviderBuckets, ProviderRejection> {
+    let Some(mut bucket) = providers.remove(provider) else {
+        return Err(ProviderRejection {
+            providers,
+            cause: missing_provider_bucket(provider).into(),
+        });
+    };
     for (id, bytes) in device.remote_events() {
         if bucket.get_bytes(&id).is_none() {
-            bucket.put_event(id, bytes.into());
+            bucket = bucket.put_event(nook_core::LocalEventWrite {
+                event_id: id,
+                bytes: bytes.into(),
+            });
         }
     }
-    Ok(())
+    providers.insert(provider.to_owned(), bucket);
+    Ok(providers)
 }
 
 pub fn pull_provider_into_device(
-    device: &mut EventLogDevice,
+    device: EventLogDevice,
     providers: &ProviderBuckets,
     provider: &str,
-) -> VaultResult<()> {
-    let bucket = providers
-        .get(provider)
-        .ok_or_else(|| missing_provider_bucket(provider))?;
+) -> Result<EventLogDevice, DeviceRejection> {
+    let Some(bucket) = providers.get(provider) else {
+        return Err(DeviceRejection {
+            device,
+            cause: missing_provider_bucket(provider).into(),
+        });
+    };
     let events = bucket
         .event_ids()
         .into_iter()
         .filter_map(|id| bucket.get_bytes(&id).map(|bytes| (id, bytes.into())))
         .collect::<Vec<_>>();
-    device.session.union_remote(&events)
+    device.union_events(&events)
 }
 
 pub fn request_join(
-    device: &mut EventLogDevice,
+    device: EventLogDevice,
     joiner: &DeviceIdentity,
     label: &str,
-) -> VaultResult<JoinRequest> {
+) -> Result<DeviceJoinRequested, DeviceRejection> {
     let signing_public_key = DeviceSigningPublicKey::from_trusted(String::new());
     let join = JoinRequest {
         device_id: joiner.device_id().clone(),
@@ -313,47 +414,60 @@ pub fn request_join(
         signing_public_key: signing_public_key.clone(),
         requested_at: TS.to_owned(),
     };
-    device.append_signed(vec![VaultOperation::JoinRequested {
+    let appended = device.append_signed(vec![VaultOperation::JoinRequested {
         device_id: join.device_id.clone(),
         encryption_public_key: join.public_key.clone(),
         signing_public_key,
         label: MemberLabel::from_trusted(label.to_owned()),
     }])?;
-    Ok(join)
+    Ok(DeviceJoinRequested {
+        device: appended.device,
+        join,
+    })
 }
 
 pub fn approve_join(
-    device: &mut EventLogDevice,
+    device: EventLogDevice,
     join: &JoinRequest,
     label: &str,
-) -> VaultResult<()> {
-    let secrets_key_ciphertext = device.crypto.encrypt_value(&device.secrets_key)?;
-    let members_key_ciphertext = device.crypto.encrypt_value(&device.members_key)?;
-    device.append_signed(vec![VaultOperation::JoinApproved {
-        device_id: join.device_id.clone(),
-        encryption_public_key: join.public_key.clone(),
-        signing_public_key: join.signing_public_key.clone(),
-        label: MemberLabel::from_trusted(label.to_owned()),
-        secrets_key_ciphertext,
-        members_key_ciphertext,
-    }])?;
-    Ok(())
+) -> Result<EventLogDevice, DeviceRejection> {
+    let prepared: VaultResult<_> = (|| {
+        Ok(VaultOperation::JoinApproved {
+            device_id: join.device_id.clone(),
+            encryption_public_key: join.public_key.clone(),
+            signing_public_key: join.signing_public_key.clone(),
+            label: MemberLabel::from_trusted(label.to_owned()),
+            secrets_key_ciphertext: device.crypto.encrypt_value(&device.secrets_key)?,
+            members_key_ciphertext: device.crypto.encrypt_value(&device.members_key)?,
+        })
+    })();
+    let operation = match prepared {
+        Ok(operation) => operation,
+        Err(cause) => return Err(DeviceRejection { device, cause }),
+    };
+    Ok(device.append_signed(vec![operation])?.device)
 }
 
 pub fn push_device_outbox(
-    device: &mut EventLogDevice,
-    providers: &mut ProviderBuckets,
-) -> VaultResult<()> {
-    for (provider, bucket) in providers.iter_mut() {
-        device.flush_outbox_to(provider, bucket)?;
+    mut device: EventLogDevice,
+    providers: ProviderBuckets,
+) -> DeviceProvidersFlushed {
+    let mut flushed_providers = HashMap::with_capacity(providers.len());
+    for (provider, bucket) in providers {
+        let flushed = device.flush_outbox_to(&provider, bucket);
+        device = flushed.device;
+        flushed_providers.insert(provider, flushed.remote);
     }
-    Ok(())
+    DeviceProvidersFlushed {
+        device,
+        providers: flushed_providers,
+    }
 }
 
 pub fn union_device_from_providers(
-    device: &mut EventLogDevice,
+    device: EventLogDevice,
     providers: &ProviderBuckets,
-) -> VaultResult<()> {
+) -> Result<EventLogDevice, DeviceRejection> {
     let mut remote: Vec<(EventId, Vec<u8>)> = Vec::new();
     for bucket in providers.values() {
         for id in bucket.event_ids() {
@@ -362,7 +476,7 @@ pub fn union_device_from_providers(
             }
         }
     }
-    device.session.union_remote(&remote)
+    device.union_events(&remote)
 }
 
 pub fn sample_stored_vault_yaml(crypto: &VaultCrypto) -> VaultResult<String> {

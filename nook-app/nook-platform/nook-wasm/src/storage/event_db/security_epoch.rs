@@ -174,7 +174,19 @@ impl<'a> VaultEventPersistence<'a> {
             .iter()
             .map(|(event_id, bytes)| (event_id.clone(), bytes.clone().into()))
             .collect::<Vec<_>>();
-        let heads = local.union_remote_and_heads(&typed_events, store_id)?;
+        let heads = match local.union_remote(nook_core::LocalRemoteUnion {
+            remote_events: &typed_events,
+            store_id: store_id,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.heads)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
         let graph = local.load_graph(store_id)?;
         if !nook_core::VaultProjection::from_graph(&graph, store_id)?
             .security_conflicts
@@ -210,7 +222,19 @@ impl VaultAppendGraph<'_> {
                 ));
             }
         }
-        match graph.insert(event.clone(), store_id)? {
+        match match graph.insert(nook_core::EventGraphInsert {
+            event: event.clone(),
+            expected_store_id: store_id,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }? {
             EventInsertStatus::Applied | EventInsertStatus::Duplicate => {}
             EventInsertStatus::Quarantined(reason) => {
                 return Err(NookError::Database(format!(
@@ -260,7 +284,19 @@ impl VaultAppendGraph<'_> {
             ));
         }
         for event in [trigger, checkpoint] {
-            match graph.insert(event.clone(), store_id)? {
+            match match graph.insert(nook_core::EventGraphInsert {
+                event: event.clone(),
+                expected_store_id: store_id,
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }? {
                 EventInsertStatus::Applied | EventInsertStatus::Duplicate => {}
                 EventInsertStatus::Quarantined(reason) => {
                     return Err(NookError::Database(format!(

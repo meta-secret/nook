@@ -95,6 +95,12 @@ impl SimpleIdentityGenesisOperationsInput<'_> {
 
 #[cfg(test)]
 mod tests {
+    struct FixturePasswordRotation {
+        graph: EventGraph,
+        event_id: EventId,
+        envelopes: AuthEnvelopes,
+    }
+
     use crate::{
         AppKey, EpochMetadataState, EpochPasswordState, IdentityRecord, PasswordEntryId, SecretId,
         SecretType, StoredRecordPayload, StoredSecretRecord,
@@ -168,17 +174,29 @@ mod tests {
             )?;
             let root_id = root.id()?;
             let mut graph = EventGraph::new();
-            graph.insert(root, store_id.as_str())?;
+            match graph.insert(crate::EventGraphInsert {
+                event: root,
+                expected_store_id: store_id.as_str(),
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?;
             Ok((graph, root_id))
         }
 
         fn append_password_rotation_checkpoint(
-            graph: &mut EventGraph,
+            mut graph: EventGraph,
             signing: &SigningIdentity,
             store_id: &StoreId,
             parent: EventId,
             device: &DeviceIdentity,
-        ) -> anyhow::Result<(EventId, AuthEnvelopes)> {
+        ) -> anyhow::Result<FixturePasswordRotation> {
             let replacement_keys = crate::VaultKeys::generate()?;
             let replacement_record =
                 device.auth_record(&replacement_keys.secrets_key, &replacement_keys.members_key)?;
@@ -201,7 +219,19 @@ mod tests {
                 "2026-08-15T00:01:30Z",
             )?;
             let trigger_id = trigger.id()?;
-            graph.insert(trigger, store_id.as_str())?;
+            match graph.insert(crate::EventGraphInsert {
+                event: trigger,
+                expected_store_id: store_id.as_str(),
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?;
             let checkpoint = VaultEvent::sign(
                 VaultEventBody {
                     schema_version: VaultEventSchemaVersion::CURRENT,
@@ -223,8 +253,24 @@ mod tests {
                 signing.signing_key(),
             )?;
             let checkpoint_id = checkpoint.id()?;
-            graph.insert(checkpoint, store_id.as_str())?;
-            Ok((checkpoint_id, replacement_auth))
+            match graph.insert(crate::EventGraphInsert {
+                event: checkpoint,
+                expected_store_id: store_id.as_str(),
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?;
+            Ok(FixturePasswordRotation {
+                graph,
+                event_id: checkpoint_id,
+                envelopes: replacement_auth,
+            })
         }
 
         fn active_envelopes_for(
@@ -280,7 +326,19 @@ mod tests {
             )?;
             let trigger_id = trigger.id()?;
             anyhow::ensure!(
-                graph.insert(trigger, store_id.as_str())? == EventInsertStatus::Applied,
+                match graph.insert(crate::EventGraphInsert {
+                    event: trigger,
+                    expected_store_id: store_id.as_str()
+                }) {
+                    Ok(inserted) => {
+                        graph = inserted.graph;
+                        Ok(inserted.status)
+                    }
+                    Err(rejected) => {
+                        graph = rejected.graph;
+                        Err(rejected.cause)
+                    }
+                }? == EventInsertStatus::Applied,
                 "security trigger must apply"
             );
             let share_records = SentinelShareEnvelope::create_sentinel_share_records(
@@ -312,7 +370,19 @@ mod tests {
             )?;
             let checkpoint_id = checkpoint.id()?;
             anyhow::ensure!(
-                graph.insert(checkpoint, store_id.as_str())? == EventInsertStatus::Applied,
+                match graph.insert(crate::EventGraphInsert {
+                    event: checkpoint,
+                    expected_store_id: store_id.as_str()
+                }) {
+                    Ok(inserted) => {
+                        graph = inserted.graph;
+                        Ok(inserted.status)
+                    }
+                    Err(rejected) => {
+                        graph = rejected.graph;
+                        Err(rejected.cause)
+                    }
+                }? == EventInsertStatus::Applied,
                 "Sentinel checkpoint must apply"
             );
             graph.validate_authorizations()?;
@@ -518,7 +588,19 @@ mod tests {
             "2026-07-14T00:00:00Z",
         )?;
         let approval_id = approval.id()?;
-        graph.insert(approval, store_id.as_str())?;
+        match graph.insert(crate::EventGraphInsert {
+            event: approval,
+            expected_store_id: store_id.as_str(),
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let extension_public_key = extension.public_key();
         let signing_public_key = signing.public_key();
@@ -566,7 +648,19 @@ mod tests {
             }],
             "2026-07-14T00:01:00Z",
         )?;
-        graph.insert(revocation, store_id.as_str())?;
+        match graph.insert(crate::EventGraphInsert {
+            event: revocation,
+            expected_store_id: store_id.as_str(),
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         assert!(!EventGraphDeviceAccess::new(&graph).has_access(
             &EventGraphDeviceAccessRequest {
                 expected_device_id: extension.device_id(),
@@ -758,14 +852,30 @@ mod tests {
             "2026-08-15T00:01:00Z",
         )?;
         let approval_id = approval.id()?;
-        graph.insert(approval, store_id.as_str())?;
-        let (checkpoint_id, replacement_auth) = Fixtures::append_password_rotation_checkpoint(
-            &mut graph,
-            &owner_signing,
-            &store_id,
-            approval_id,
-            &extension,
-        )?;
+        match graph.insert(crate::EventGraphInsert {
+            event: approval,
+            expected_store_id: store_id.as_str(),
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
+        let (checkpoint_id, replacement_auth) = {
+            let prepared = Fixtures::append_password_rotation_checkpoint(
+                graph,
+                &owner_signing,
+                &store_id,
+                approval_id,
+                &extension,
+            )?;
+            graph = prepared.graph;
+            (prepared.event_id, prepared.envelopes)
+        };
         assert_eq!(
             Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?,
             Some(replacement_auth)
@@ -780,7 +890,19 @@ mod tests {
             "2026-08-15T00:02:00Z",
         )?;
         let revocation_id = revocation.id()?;
-        graph.insert(revocation, store_id.as_str())?;
+        match graph.insert(crate::EventGraphInsert {
+            event: revocation,
+            expected_store_id: store_id.as_str(),
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         assert!(Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?.is_none());
 
         let replacement_keys = crate::VaultKeys::generate()?;
@@ -805,7 +927,19 @@ mod tests {
             }],
             "2026-08-15T00:03:00Z",
         )?;
-        graph.insert(reapproval, store_id.as_str())?;
+        match graph.insert(crate::EventGraphInsert {
+            event: reapproval,
+            expected_store_id: store_id.as_str(),
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert_eq!(
             Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?,

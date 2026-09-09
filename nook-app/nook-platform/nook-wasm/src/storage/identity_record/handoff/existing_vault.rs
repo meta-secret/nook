@@ -453,7 +453,10 @@ mod tests {
                 events.revocation_bytes.clone(),
             ),
         ] {
-            local.put_event(event_id, bytes.into());
+            local = local.put_event(nook_core::LocalEventWrite {
+                event_id: event_id,
+                bytes: bytes.into(),
+            });
         }
         let graph = local.load_graph(fixture.store_id.as_str())?;
 

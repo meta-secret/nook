@@ -385,7 +385,10 @@ impl NookDatabase {
                 .await?
                     && let Ok(event_id) = EventId::parse(&raw_id)
                 {
-                    local.put_event(event_id, bytes.into_bytes().into());
+                    local = local.put_event(nook_core::LocalEventWrite {
+                        event_id: event_id,
+                        bytes: bytes.into_bytes().into(),
+                    });
                 }
             }
         }
@@ -504,7 +507,10 @@ impl NookDatabase {
                     "Event row {raw_id} contains event {stored_event_id}."
                 )));
             }
-            local.put_event(event_id, bytes);
+            local = local.put_event(nook_core::LocalEventWrite {
+                event_id: event_id,
+                bytes: bytes,
+            });
         }
         Ok(local)
     }

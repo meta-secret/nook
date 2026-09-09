@@ -228,6 +228,11 @@ impl VaultSyncConflict {
 
 #[cfg(test)]
 mod tests {
+    struct FixtureGraphEvent {
+        graph: EventGraph,
+        event_id: EventId,
+    }
+
     use crate::{IdentityVaultAppGrantKind, VaultEvent, VaultEventSchemaVersion, VaultOperation};
 
     use super::*;
@@ -278,7 +283,19 @@ mod tests {
             })?;
             let event_id = event.id()?;
             let mut graph = EventGraph::new();
-            graph.insert(event, TEST_STORE_ID)?;
+            match graph.insert(crate::EventGraphInsert {
+                event: event,
+                expected_store_id: TEST_STORE_ID,
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?;
             Ok((graph, signing, event_id))
         }
 
@@ -287,11 +304,11 @@ mod tests {
         }
 
         fn append_operation(
-            graph: &mut EventGraph,
+            mut graph: EventGraph,
             signing: &SigningIdentity,
             parent: EventId,
             operation: crate::VaultOperation,
-        ) -> anyhow::Result<EventId> {
+        ) -> anyhow::Result<FixtureGraphEvent> {
             let event = VaultEvent::sign(
                 crate::VaultEventBody {
                     schema_version: VaultEventSchemaVersion::CURRENT,
@@ -308,8 +325,20 @@ mod tests {
                 signing.signing_key(),
             )?;
             let event_id = event.id()?;
-            graph.insert(event, TEST_STORE_ID)?;
-            Ok(event_id)
+            match graph.insert(crate::EventGraphInsert {
+                event: event,
+                expected_store_id: TEST_STORE_ID,
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?;
+            Ok(FixtureGraphEvent { graph, event_id })
         }
     }
 
@@ -503,12 +532,16 @@ mod tests {
         let mut graph = EventGraph::new();
         let missing_parent =
             EventId::from_sha256_hex(nook_auth2::Sha256Hex::from_trusted("2".repeat(64)).as_str())?;
-        Fixtures::append_operation(
-            &mut graph,
-            &signing,
-            missing_parent,
-            VaultOperation::VaultCleared,
-        )?;
+        {
+            let prepared = Fixtures::append_operation(
+                graph,
+                &signing,
+                missing_parent,
+                VaultOperation::VaultCleared,
+            )?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
 
         assert!(!graph.is_empty());
         assert!(!graph.pending_events().is_empty());
@@ -522,7 +555,12 @@ mod tests {
     #[test]
     fn accepted_post_genesis_nonsecret_mutation_requires_preservation() -> anyhow::Result<()> {
         let (mut graph, signing, genesis) = Fixtures::accepted_graph_fixture(false)?;
-        Fixtures::append_operation(&mut graph, &signing, genesis, VaultOperation::VaultCleared)?;
+        {
+            let prepared =
+                Fixtures::append_operation(graph, &signing, genesis, VaultOperation::VaultCleared)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
 
         assert_eq!(
             CurrentVaultReplaceability::from_event_graph(&graph, TEST_STORE_ID),
@@ -535,20 +573,28 @@ mod tests {
     fn created_then_deleted_secret_still_requires_preservation() -> anyhow::Result<()> {
         let (mut graph, signing, genesis) = Fixtures::accepted_graph_fixture(false)?;
         let secret_id = SecretId::parse("secret_conflictux2")?;
-        let created = Fixtures::append_operation(
-            &mut graph,
-            &signing,
-            genesis,
-            VaultOperation::SecretCreated {
-                secret: Fixtures::encrypted_secret(secret_id.as_str())?,
-            },
-        )?;
-        Fixtures::append_operation(
-            &mut graph,
-            &signing,
-            created,
-            VaultOperation::SecretDeleted { secret_id },
-        )?;
+        let created = {
+            let prepared = Fixtures::append_operation(
+                graph,
+                &signing,
+                genesis,
+                VaultOperation::SecretCreated {
+                    secret: Fixtures::encrypted_secret(secret_id.as_str())?,
+                },
+            )?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
+        {
+            let prepared = Fixtures::append_operation(
+                graph,
+                &signing,
+                created,
+                VaultOperation::SecretDeleted { secret_id },
+            )?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
 
         assert_eq!(
             CurrentVaultReplaceability::from_event_graph(&graph, TEST_STORE_ID),

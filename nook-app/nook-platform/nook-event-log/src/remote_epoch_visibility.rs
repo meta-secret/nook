@@ -38,35 +38,55 @@ impl VaultEvent {
     }
 }
 
-impl LocalEventStore {
-    fn authorized_checkpoint_parents(
-        &self,
-        remote_events: &[(EventId, EventStorageBytes)],
-        store_id: &str,
-    ) -> EventResult<BTreeSet<EventId>> {
-        let mut candidate = self.clone();
-        for (event_id, bytes) in remote_events {
-            candidate.put_event(event_id.clone(), bytes.clone());
-        }
-        let graph = candidate.load_graph(store_id)?;
-        let mut parents = BTreeSet::new();
-        for event in graph.applicable_events() {
-            if let Some(parent) = event.committed_epoch_parent() {
-                parents.insert(parent.clone());
+pub(crate) struct LocalGraphProjection<'a> {
+    pub(crate) local: &'a LocalEventStore,
+    pub(crate) remote: &'a [(EventId, EventStorageBytes)],
+    pub(crate) store_id: &'a str,
+    pub(crate) excluded: &'a BTreeSet<EventId>,
+}
+impl LocalGraphProjection<'_> {
+    pub(crate) fn build(self) -> EventResult<crate::EventGraph> {
+        let mut events = BTreeMap::new();
+        for id in self.local.event_ids() {
+            if self.excluded.contains(&id) {
+                continue;
             }
+            let bytes =
+                self.local
+                    .get_bytes(&id)
+                    .ok_or_else(|| crate::EventError::MissingEvent {
+                        event_id: id.to_string(),
+                    })?;
+            events.insert(id, VaultEvent::parse_event_storage_bytes(&bytes)?);
         }
-        Ok(parents)
+        for (id, bytes) in self.remote {
+            if self.excluded.contains(id) || events.contains_key(id) {
+                continue;
+            }
+            events.insert(id.clone(), VaultEvent::parse_event_storage_bytes(bytes)?);
+        }
+        let mut graph = crate::EventGraph::new();
+        for event in events.into_values() {
+            graph = graph
+                .insert(crate::EventGraphInsert {
+                    event,
+                    expected_store_id: self.store_id,
+                })
+                .map_err(|rejected| rejected.into_cause())?
+                .graph;
+        }
+        Ok(graph)
     }
 }
-
-impl LocalEventStore {
-    pub(crate) fn incomplete_security_transition_events(
-        &self,
-        store_id: &str,
-    ) -> EventResult<BTreeSet<EventId>> {
-        let graph = self.load_graph(store_id)?;
-        let committed = self.authorized_checkpoint_parents(&[], store_id)?;
-        let security_triggers = graph
+impl crate::EventGraph {
+    pub(crate) fn incomplete_security_transition_events(&self) -> EventResult<BTreeSet<EventId>> {
+        let committed = self
+            .applicable_events()
+            .into_iter()
+            .filter_map(VaultEvent::committed_epoch_parent)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let security_triggers = self
             .applicable_events()
             .into_iter()
             .filter(|event| event.starts_security_epoch())
@@ -74,15 +94,15 @@ impl LocalEventStore {
             .collect::<EventResult<Vec<_>>>()?;
         let incomplete = security_triggers
             .into_iter()
-            .filter(|event_id| !committed.contains(event_id))
+            .filter(|id| !committed.contains(id))
             .collect::<Vec<_>>();
-        Ok(graph
+        Ok(self
             .events()
-            .map(|(event_id, _)| event_id.clone())
-            .filter(|event_id| {
+            .map(|(id, _)| id.clone())
+            .filter(|id| {
                 incomplete
                     .iter()
-                    .any(|trigger| trigger == event_id || graph.is_ancestor(trigger, event_id))
+                    .any(|trigger| trigger == id || self.is_ancestor(trigger, id))
             })
             .collect())
     }
@@ -97,11 +117,14 @@ impl LocalEventStore {
         remote_events: &[(EventId, EventStorageBytes)],
         store_id: &str,
     ) -> EventResult<Vec<(EventId, EventStorageBytes)>> {
-        let mut candidate = self.clone();
-        for (event_id, bytes) in remote_events {
-            candidate.put_event(event_id.clone(), bytes.clone());
+        let graph = LocalGraphProjection {
+            local: self,
+            remote: remote_events,
+            store_id,
+            excluded: &BTreeSet::new(),
         }
-        let hidden = candidate.incomplete_security_transition_events(store_id)?;
+        .build()?;
+        let hidden = graph.incomplete_security_transition_events()?;
         remote_events
             .iter()
             .map(|(event_id, bytes)| {
@@ -255,10 +278,10 @@ mod tests {
             })?;
             let previous = genesis.id()?;
             let mut local = LocalEventStore::new();
-            local.put_event(
-                previous.clone(),
-                VaultEvent::serialize_event_storage_yaml(&genesis)?,
-            );
+            local = local.put_event(crate::LocalEventWrite {
+                event_id: previous.clone(),
+                bytes: VaultEvent::serialize_event_storage_yaml(&genesis)?,
+            });
             let trigger = Self::signed_event(
                 &signing_key,
                 vec![previous.clone()],
@@ -396,7 +419,10 @@ mod tests {
     #[test]
     fn quarantines_a_legacy_local_trigger_and_its_remote_descendant() -> EventResult<()> {
         let EpochPairFixture(mut local, trigger, _) = EpochPairFixture::new()?;
-        local.put_event(trigger.0.clone(), trigger.1.clone());
+        local = local.put_event(crate::LocalEventWrite {
+            event_id: trigger.0.clone(),
+            bytes: trigger.1.clone(),
+        });
         let signing_key = test_support::signing_key();
         let descendant = EpochPairFixture::signed_event(
             &signing_key,
@@ -405,13 +431,22 @@ mod tests {
             VaultOperation::VaultCleared,
         )?;
         let descendant_id = descendant.id()?;
-        let imported = local.union_remote(
-            &[(
+        let imported = match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(
                 descendant_id.clone(),
                 VaultEvent::serialize_event_storage_yaml(&descendant)?,
             )],
-            STORE,
-        )?;
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert!(imported.is_empty());
         assert!(local.get_bytes(&trigger.0).is_none());
