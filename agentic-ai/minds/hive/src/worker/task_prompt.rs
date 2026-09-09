@@ -120,15 +120,6 @@ impl ClaimedTask {
 }
 
 impl ClaimedTask {
-    pub(super) fn completion_is_obsolete(
-        task: &ClaimedTask,
-        result: &model::TerminalResult,
-    ) -> bool {
-        task.kind.is_blocker() && result.is_obsolete()
-    }
-}
-
-impl ClaimedTask {
     pub(super) async fn verify_obsolete_owner_deliveries(
         repository: &Path,
         owning_repairs: &[TaskId],

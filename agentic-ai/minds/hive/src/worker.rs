@@ -1,3 +1,5 @@
+mod completion;
+use completion::{CompletionPlan, TaskCompletionProposal};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -288,23 +290,14 @@ impl<S: TaskStore> Worker<S> {
                             reason: TaskDisposition::bounded(summary),
                         });
                     }
-                    let obsolete = ClaimedTask::completion_is_obsolete(task, &result);
-                    if obsolete {
-                        if task.owning_repairs.is_empty() {
-                            return Err(crate::HiveError::message(
-                                "obsolete blocker retirement requires active owning Main repairs",
-                            ));
-                        }
-                        if !result.changed_files().is_empty() {
-                            return Err(crate::HiveError::message(
-                                "obsolete blocker retirement cannot report changed files",
-                            ));
-                        }
-                        ClaimedTask::verify_obsolete_owner_deliveries(
-                            &repository,
-                            &task.owning_repairs,
-                        )
-                        .await?;
+                    let plan = TaskCompletionProposal {
+                        task,
+                        result: &result,
+                    }
+                    .admit()?;
+                    if let CompletionPlan::ObsoleteRetirement { owning_repairs } = &plan {
+                        ClaimedTask::verify_obsolete_owner_deliveries(&repository, owning_repairs)
+                            .await?;
                     }
                     if task.kind.is_main_repair() {
                         (MainRepairDelivery {
@@ -321,19 +314,11 @@ impl<S: TaskStore> Worker<S> {
                         TaskDisposition::bullet_list(result.tests())
                     ));
                     let artifact = prepared.persistable_patch(task, &result).await?;
-                    if obsolete && !matches!(artifact, CompletionArtifact::NotProduced) {
-                        return Err(crate::HiveError::message(
-                            "obsolete blocker retirement cannot persist a patch artifact",
-                        ));
-                    }
+                    let completion = plan.admit_artifact(artifact)?;
                     Ok::<TaskDisposition, crate::HiveError>(TaskDisposition::Completed {
                         summary,
-                        artifact,
-                        relevance: if obsolete {
-                            crate::model::CompletionRelevance::Obsolete
-                        } else {
-                            crate::model::CompletionRelevance::Current
-                        },
+                        artifact: completion.artifact,
+                        relevance: completion.relevance,
                     })
                 }
                 .await;
@@ -635,9 +620,17 @@ mod tests {
             obsolete: true,
         };
 
-        assert!(!ClaimedTask::completion_is_obsolete(&task, &result));
+        assert_eq!(
+            task.kind
+                .completion_relevance(result.completion_relevance()),
+            crate::model::CompletionRelevance::Current
+        );
         task.kind = "blocker".into();
-        assert!(ClaimedTask::completion_is_obsolete(&task, &result));
+        assert_eq!(
+            task.kind
+                .completion_relevance(result.completion_relevance()),
+            crate::model::CompletionRelevance::Obsolete
+        );
         Ok(())
     }
 

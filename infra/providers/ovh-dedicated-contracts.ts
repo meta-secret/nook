@@ -1,3 +1,4 @@
+import type { OvhRecoveryMarkerObservation } from "./ovh-dedicated-observations";
 export interface OvhCredentials {
   applicationKey: string;
   applicationSecret: string;
@@ -165,7 +166,7 @@ export interface AbsentRecoveryMarker {
 }
 
 export interface PendingRecoveryMarker {
-  marker: OvhRecoveryMarker;
+  marker: OvhRecoveryMarkerObservation;
   status: RecoveryMarkerStatus.Pending;
 }
 

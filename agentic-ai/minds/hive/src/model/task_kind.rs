@@ -81,3 +81,15 @@ mod tests {
         Ok(())
     }
 }
+
+impl TaskKind {
+    pub fn completion_relevance(
+        &self,
+        reported: super::CompletionRelevance,
+    ) -> super::CompletionRelevance {
+        match self {
+            Self::Blocker => reported,
+            Self::MainRepair | Self::Other(_) => super::CompletionRelevance::Current,
+        }
+    }
+}

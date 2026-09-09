@@ -309,13 +309,7 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
         } = wire;
         match status {
             WireTerminalStatus::Completed => {
-                if blocker.present {
-                    return Err(ModelError::CompletedWithBlocker);
-                }
-                if !blocker.id.is_empty() || !blocker.title.is_empty() || !blocker.prompt.is_empty()
-                {
-                    return Err(ModelError::AbsentBlockerHasDetails);
-                }
+                blocker.require_absent(AbsentBlockerContext::Completed)?;
                 Ok(Self::Completed {
                     summary,
                     changed_files,
@@ -327,37 +321,18 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
                 if obsolete {
                     return Err(ModelError::BlockedObsolete);
                 }
-                if !blocker.present {
-                    return Err(ModelError::BlockedWithoutBlocker);
-                }
-                if blocker.title.trim().is_empty() {
-                    return Err(ModelError::EmptyBlockerTitle);
-                }
-                if blocker.prompt.trim().is_empty() {
-                    return Err(ModelError::EmptyBlockerPrompt);
-                }
                 Ok(Self::Blocked {
                     summary,
                     changed_files,
                     tests,
-                    blocker: BlockerRequest {
-                        id: TaskId::try_from(blocker.id)?,
-                        title: blocker.title,
-                        prompt: blocker.prompt,
-                    },
+                    blocker: BlockerRequest::try_from(blocker)?,
                 })
             }
             WireTerminalStatus::Failed => {
                 if obsolete {
                     return Err(ModelError::FailedObsolete);
                 }
-                if blocker.present {
-                    return Err(ModelError::FailedWithBlocker);
-                }
-                if !blocker.id.is_empty() || !blocker.title.is_empty() || !blocker.prompt.is_empty()
-                {
-                    return Err(ModelError::AbsentBlockerHasDetails);
-                }
+                blocker.require_absent(AbsentBlockerContext::Failed)?;
                 Ok(Self::Failed {
                     summary,
                     changed_files,
@@ -394,10 +369,14 @@ impl TerminalResult {
     }
 
     #[must_use]
-    pub const fn is_obsolete(&self) -> bool {
+    pub const fn completion_relevance(&self) -> CompletionRelevance {
         match self {
-            Self::Completed { obsolete, .. } => *obsolete,
-            Self::Blocked { .. } | Self::Failed { .. } => false,
+            Self::Completed { obsolete: true, .. } => CompletionRelevance::Obsolete,
+            Self::Completed {
+                obsolete: false, ..
+            }
+            | Self::Blocked { .. }
+            | Self::Failed { .. } => CompletionRelevance::Current,
         }
     }
 }
@@ -405,8 +384,8 @@ impl TerminalResult {
 #[cfg(test)]
 mod tests {
     use super::{
-        ActivityKind, AgentId, AttemptId, ClaimOutcome, EnqueueTask, LeaseToken, ModelError,
-        TaskId, TaskTrigger, TerminalResult,
+        ActivityKind, AgentId, AttemptId, ClaimOutcome, CompletionRelevance, EnqueueTask,
+        LeaseToken, ModelError, TaskId, TaskTrigger, TerminalResult,
     };
 
     #[test]
@@ -691,7 +670,7 @@ mod tests {
         assert_eq!(blocked.summary(), "Waiting for prerequisite");
         assert_eq!(blocked.changed_files(), ["src/worker.rs"]);
         assert_eq!(blocked.tests(), ["cargo test -p hive"]);
-        assert!(!blocked.is_obsolete());
+        assert_eq!(blocked.completion_relevance(), CompletionRelevance::Current);
 
         let completed: TerminalResult = serde_json::from_value(serde_json::json!({
             "status": "completed",
@@ -701,7 +680,10 @@ mod tests {
             "obsolete": true,
             "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
         }))?;
-        assert!(completed.is_obsolete());
+        assert_eq!(
+            completed.completion_relevance(),
+            CompletionRelevance::Obsolete
+        );
 
         let invalid = [
             (
@@ -785,4 +767,42 @@ pub use task_kind::TaskKind;
 pub struct ActiveDeliveryQuery<'a> {
     pub source_commit: &'a str,
     pub kind: &'a TaskKind,
+}
+
+enum AbsentBlockerContext {
+    Completed,
+    Failed,
+}
+impl WireBlockerResult {
+    fn require_absent(self, context: AbsentBlockerContext) -> Result<(), ModelError> {
+        if self.present {
+            return Err(match context {
+                AbsentBlockerContext::Completed => ModelError::CompletedWithBlocker,
+                AbsentBlockerContext::Failed => ModelError::FailedWithBlocker,
+            });
+        }
+        if !self.id.is_empty() || !self.title.is_empty() || !self.prompt.is_empty() {
+            return Err(ModelError::AbsentBlockerHasDetails);
+        }
+        Ok(())
+    }
+}
+impl TryFrom<WireBlockerResult> for BlockerRequest {
+    type Error = ModelError;
+    fn try_from(blocker: WireBlockerResult) -> Result<Self, Self::Error> {
+        if !blocker.present {
+            return Err(ModelError::BlockedWithoutBlocker);
+        }
+        if blocker.title.trim().is_empty() {
+            return Err(ModelError::EmptyBlockerTitle);
+        }
+        if blocker.prompt.trim().is_empty() {
+            return Err(ModelError::EmptyBlockerPrompt);
+        }
+        Ok(Self {
+            id: TaskId::try_from(blocker.id)?,
+            title: blocker.title,
+            prompt: blocker.prompt,
+        })
+    }
 }

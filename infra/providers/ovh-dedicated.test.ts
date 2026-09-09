@@ -1,6 +1,16 @@
-import {describe,expect,test} from "bun:test";
+import {
+  OvhRecoveryMarkerObservation,
+  RecoveryMarkerCompatibilityKind,
+} from "./ovh-dedicated-observations";
+import { ArcTier, EndpointMode } from "./ovh-dedicated-contracts";
+import { describe, expect, test } from "bun:test";
 
-import {OvhDedicatedCreateOvhSignature,OvhDedicatedIsTerminalTaskFailure,OvhTaskStatus,OvhDedicatedRecoveryMarkerMatches,OvhDedicatedRequiresReinstall} from "./ovh-dedicated";
+import {
+  OvhDedicatedCreateOvhSignature,
+  OvhDedicatedIsTerminalTaskFailure,
+  OvhTaskStatus,
+  OvhDedicatedRequiresReinstall,
+} from "./ovh-dedicated";
 
 describe("OVH dedicated provider", () => {
   test("signs the canonical OVH request material", () => {
@@ -72,8 +82,8 @@ describe("OVH dedicated provider", () => {
 
   test("accepts only the exact durable recovery operation", () => {
     const definition = {
-      arcTier: "primary",
-      endpointMode: "direct",
+      arcTier: ArcTier.Primary,
+      endpointMode: EndpointMode.Direct,
       expectedCommercialRange: "RISE-S | AMD Ryzen 7 9700X",
       expectedDatacenter: "vin",
       meshAddress: "10.202.0.4",
@@ -82,6 +92,7 @@ describe("OVH dedicated provider", () => {
       serviceName: "ns513432.ip-167-114-158.net",
       sshPublicKeyFile: "~/.ssh/id_ed25519.pub",
       sshUser: "debian",
+      sshPublicKeyFile: "unused-public-key.pub",
     } as const;
     const marker = {
       hostname: "nook-rise-s-2",
@@ -90,18 +101,16 @@ describe("OVH dedicated provider", () => {
       version: 1,
     } as const;
     expect(
-      new OvhDedicatedRecoveryMarkerMatches({
+      OvhRecoveryMarkerObservation.fromRecord(marker).compatibility({
         definition,
         hostname: "nook-rise-s-2",
-        marker,
-      }).execute(),
-    ).toBeTrue();
+      }).kind,
+    ).toBe(RecoveryMarkerCompatibilityKind.Matching);
     expect(
-      new OvhDedicatedRecoveryMarkerMatches({
+      OvhRecoveryMarkerObservation.fromRecord(marker).compatibility({
         definition,
         hostname: "nook-rise-s-1",
-        marker,
-      }).execute(),
-    ).toBeFalse();
+      }).kind,
+    ).toBe(RecoveryMarkerCompatibilityKind.DifferentInventory);
   });
 });

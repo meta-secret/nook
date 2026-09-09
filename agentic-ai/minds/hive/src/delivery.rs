@@ -1,4 +1,6 @@
+mod outcome;
 use main_run::MainRunSelection;
+use outcome::{CheckAdmission, RepositoryCheckSet};
 mod check_state;
 use check_state::{CheckConclusion, CheckExecution, RunConclusion, RunExecution};
 pub(crate) struct MainRepairDelivery<'a> {
@@ -344,10 +346,14 @@ impl DeliveryPullRequest {
                 .iter()
                 .filter(|check| check.name == required_check)
                 .collect::<Vec<_>>();
-            if !DeliveryCheck::successful_or_merge_cancelled(CheckAcceptance {
-                checks: &matching,
-                main_evidence,
-            }) {
+            if matches!(
+                (CheckAcceptance {
+                    checks: &matching,
+                    main_evidence,
+                })
+                .admit(),
+                CheckAdmission::Missing
+            ) {
                 return Err(crate::HiveError::message(format!(
                     "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `{}`",
                     self.number, self.head_ref_oid, required_check
@@ -368,10 +374,14 @@ impl DeliveryPullRequest {
             .iter()
             .filter(|check| check.name == "Verify and preview")
             .collect::<Vec<_>>();
-        if !DeliveryCheck::successful_or_merge_cancelled(CheckAcceptance {
-            checks: &verify_checks,
-            main_evidence,
-        }) {
+        if matches!(
+            (CheckAcceptance {
+                checks: &verify_checks,
+                main_evidence,
+            })
+            .admit(),
+            CheckAdmission::Missing
+        ) {
             return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `Verify and preview`",
                 self.number, self.head_ref_oid
@@ -395,68 +405,13 @@ impl DeliveryPullRequest {
             ) {
                 continue;
             }
-            if checks
-                .iter()
-                .any(|check| DeliveryCheck::successful_check(check))
-            {
-                continue;
+            RepositoryCheckSet {
+                name,
+                checks: &checks,
             }
-            if checks
-                .iter()
-                .any(|check| check.status != CheckExecution::Completed)
-            {
-                return Err(crate::HiveError::message(format!(
-                    "Hive repair delivery is incomplete: repository check `{name}` is still running"
-                )));
-            }
-            if let Some(check) = checks.iter().find(|check| {
-                !matches!(
-                    &check.conclusion,
-                    CheckConclusion::Skipped | CheckConclusion::Neutral
-                )
-            }) {
-                return Err(crate::HiveError::message(format!(
-                    "Hive repair delivery is incomplete: repository check `{name}` concluded {}",
-                    check.conclusion
-                )));
-            }
+            .validate()?;
         }
         Ok(())
-    }
-}
-
-impl DeliveryCheck {
-    fn successful_check(check: &DeliveryCheck) -> bool {
-        check.status == CheckExecution::Completed && check.conclusion == CheckConclusion::Success
-    }
-}
-
-impl DeliveryCheck {
-    fn successful_or_merge_cancelled(request: CheckAcceptance<'_>) -> bool {
-        let CheckAcceptance {
-            checks,
-            main_evidence,
-        } = request;
-        if checks
-            .iter()
-            .any(|check| DeliveryCheck::successful_check(check))
-        {
-            return true;
-        }
-        matches!(main_evidence, MainMergeEvidence::SuccessfulDescendant)
-            && checks.iter().any(|check| {
-                check.status == CheckExecution::Completed
-                    && check.conclusion == CheckConclusion::Cancelled
-            })
-            && checks.iter().all(|check| {
-                check.status == CheckExecution::Completed
-                    && matches!(
-                        &check.conclusion,
-                        CheckConclusion::Cancelled
-                            | CheckConclusion::Skipped
-                            | CheckConclusion::Neutral
-                    )
-            })
     }
 }
 

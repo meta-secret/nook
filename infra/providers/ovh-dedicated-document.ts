@@ -1,4 +1,8 @@
 import {
+  OvhRecoveryMarkerObservation,
+  OvhServerObservation,
+} from "./ovh-dedicated-observations";
+import {
   ArcTier,
   EndpointMode,
   OvhTaskStatus,
@@ -6,8 +10,6 @@ import {
   type DedicatedServerDefinition,
   type DedicatedServerInventory,
   type OvhCredentials,
-  type OvhRecoveryMarker,
-  type OvhServer,
   type OvhTask,
 } from "./ovh-dedicated-contracts";
 
@@ -50,7 +52,7 @@ export class OvhDocument {
       endpoint: value.endpoint,
     };
   }
-  static recoveryMarker(text: string): OvhRecoveryMarker {
+  static recoveryMarker(text: string): OvhRecoveryMarkerObservation {
     const value = OvhDocument.parse(text);
     if (
       !OvhDocument.record(value) ||
@@ -60,14 +62,14 @@ export class OvhDocument {
       typeof value.serviceName !== "string"
     )
       throw new OvhDocumentError("recovery marker");
-    return {
+    return OvhRecoveryMarkerObservation.fromRecord({
       version: value.version,
       hostname: value.hostname,
       operatingSystem: value.operatingSystem,
       serviceName: value.serviceName,
-    };
+    });
   }
-  static server(text: string): OvhServer {
+  static server(text: string): OvhServerObservation {
     const value = OvhDocument.parse(text);
     if (
       !OvhDocument.record(value) ||
@@ -79,14 +81,14 @@ export class OvhDocument {
       typeof value.state !== "string"
     )
       throw new OvhDocumentError("server");
-    return {
+    return OvhServerObservation.fromRecord({
       commercialRange: value.commercialRange,
       datacenter: value.datacenter,
       ip: value.ip,
       name: value.name,
       os: value.os,
       state: value.state,
-    };
+    });
   }
   static compatibleTemplates(text: string): CompatibleTemplates {
     const value = OvhDocument.parse(text);

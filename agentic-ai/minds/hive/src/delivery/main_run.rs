@@ -6,22 +6,19 @@ impl DeliveryRun {
     ) -> crate::HiveResult<&'a str> {
         let MainRunSelection { runs, merge_commit } = selection;
         for run in runs {
-            if run.status != RunExecution::Completed {
-                continue;
+            match run.outcome() {
+                RunOutcome::Pending | RunOutcome::Superseded => continue,
+                RunOutcome::Successful { head_sha } => return Ok(head_sha),
+                RunOutcome::Failed {
+                    head_sha,
+                    conclusion,
+                } => {
+                    return Err(crate::HiveError::message(format!(
+                        "Hive repair delivery failed on Main: run at {} concluded {}",
+                        head_sha, conclusion
+                    )));
+                }
             }
-            if run.conclusion == RunConclusion::Success {
-                return Ok(run.head_sha.as_str());
-            }
-            if matches!(
-                &run.conclusion,
-                RunConclusion::Cancelled | RunConclusion::Skipped | RunConclusion::Neutral
-            ) {
-                continue;
-            }
-            return Err(crate::HiveError::message(format!(
-                "Hive repair delivery failed on Main: run at {} concluded {}",
-                run.head_sha, run.conclusion
-            )));
         }
         Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: no successful Main workflow contains merge {}",
@@ -96,4 +93,35 @@ mod tests {
 pub(super) struct MainRunSelection<'a> {
     pub(super) runs: &'a [DeliveryRun],
     pub(super) merge_commit: &'a str,
+}
+
+enum RunOutcome<'a> {
+    Pending,
+    Successful {
+        head_sha: &'a str,
+    },
+    Superseded,
+    Failed {
+        head_sha: &'a str,
+        conclusion: &'a RunConclusion,
+    },
+}
+impl DeliveryRun {
+    fn outcome(&self) -> RunOutcome<'_> {
+        if self.status != RunExecution::Completed {
+            return RunOutcome::Pending;
+        }
+        match &self.conclusion {
+            RunConclusion::Success => RunOutcome::Successful {
+                head_sha: &self.head_sha,
+            },
+            RunConclusion::Cancelled | RunConclusion::Skipped | RunConclusion::Neutral => {
+                RunOutcome::Superseded
+            }
+            RunConclusion::Other(_) => RunOutcome::Failed {
+                head_sha: &self.head_sha,
+                conclusion: &self.conclusion,
+            },
+        }
+    }
 }

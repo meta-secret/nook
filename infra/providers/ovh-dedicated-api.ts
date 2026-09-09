@@ -1,12 +1,15 @@
+import {
+  ServerAdmissionKind,
+  OvhServerAdmissionError,
+  type OvhServerObservation,
+} from "./ovh-dedicated-observations";
 import { createHash } from "node:crypto";
 import { OvhDocument } from "./ovh-dedicated-document";
 import {
   HttpMethod,
-  OvhServerState,
   type ApiRequest,
   type OvhCredentials,
   type SignatureInput,
-  type OvhServer,
   type DedicatedServerDefinition,
   type CompatibleTemplates,
 } from "./ovh-dedicated-contracts";
@@ -96,32 +99,6 @@ export class OvhDedicatedOvhApi<T> {
   }
 }
 
-export class OvhDedicatedValidateServer {
-  constructor(
-    private readonly request: {
-      definition: DedicatedServerDefinition;
-      server: OvhServer;
-    },
-  ) {}
-  execute(): void {
-    const input = this.request;
-
-    const expected = input.definition;
-    const actual = input.server;
-    if (
-      actual.name !== expected.serviceName ||
-      actual.ip !== expected.publicAddress ||
-      actual.commercialRange !== expected.expectedCommercialRange ||
-      actual.datacenter !== expected.expectedDatacenter ||
-      actual.state !== OvhServerState.Ready
-    ) {
-      throw new Error(
-        "OVH server does not match the declared identity and ready-state contract",
-      );
-    }
-  }
-}
-
 export class OvhDedicatedGetServer {
   constructor(
     private readonly request: {
@@ -129,7 +106,7 @@ export class OvhDedicatedGetServer {
       definition: DedicatedServerDefinition;
     },
   ) {}
-  async execute(): Promise<OvhServer> {
+  async execute(): Promise<OvhServerObservation> {
     const input = this.request;
 
     const request: ApiRequest = {
@@ -141,11 +118,10 @@ export class OvhDedicatedGetServer {
       credentials: input.credentials,
       request,
     }).execute();
-    new OvhDedicatedValidateServer({
-      definition: input.definition,
-      server,
-    }).execute();
-    return server;
+    const admission = server.admission(input.definition);
+    if (admission.kind === ServerAdmissionKind.Incompatible)
+      throw new OvhServerAdmissionError();
+    return admission.server;
   }
 }
 

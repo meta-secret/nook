@@ -1,3 +1,4 @@
+import { RecoveryMarkerCompatibilityKind } from "./ovh-dedicated-observations";
 import {
   OvhDedicatedOvhApi,
   OvhDedicatedGetServer,
@@ -88,26 +89,6 @@ class OvhDedicatedRecoveryMarkerPath {
   }
 }
 
-export class OvhDedicatedRecoveryMarkerMatches {
-  constructor(
-    private readonly request: {
-      definition: DedicatedServerDefinition;
-      hostname: string;
-      marker: OvhRecoveryMarker;
-    },
-  ) {}
-  execute(): boolean {
-    const input = this.request;
-
-    return (
-      input.marker.version === 1 &&
-      input.marker.hostname === input.hostname &&
-      input.marker.serviceName === input.definition.serviceName &&
-      input.marker.operatingSystem === input.definition.operatingSystem
-    );
-  }
-}
-
 class OvhDedicatedLoadRecoveryMarker {
   constructor(
     private readonly request: {
@@ -123,14 +104,18 @@ class OvhDedicatedLoadRecoveryMarker {
       return { status: RecoveryMarkerStatus.Absent };
     }
     const marker = OvhDocument.recoveryMarker(await readFile(path, "utf8"));
+    const compatibility = marker.compatibility(input);
     if (
-      !new OvhDedicatedRecoveryMarkerMatches({ ...input, marker }).execute()
+      compatibility.kind === RecoveryMarkerCompatibilityKind.DifferentInventory
     ) {
       throw new Error(
         `recovery marker for ${input.hostname} does not match inventory`,
       );
     }
-    return { marker, status: RecoveryMarkerStatus.Pending };
+    return {
+      marker: compatibility.marker,
+      status: RecoveryMarkerStatus.Pending,
+    };
   }
 }
 

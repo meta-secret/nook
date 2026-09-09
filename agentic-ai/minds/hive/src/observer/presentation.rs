@@ -180,55 +180,15 @@ impl ObservedAlert {
         let mut alerts = tasks
             .iter()
             .filter_map(|task| {
-                let (kind, severity, first_observed_at, reason) = match &task.status {
-                    ObservedTaskState::Failed if task.dependency_failure => (
-                        AlertKind::DependencyFailed,
-                        AlertSeverity::Critical,
-                        task.updated_at,
-                        copy.alert_dependency_failed.as_str(),
-                    ),
-                    ObservedTaskState::Failed => (
-                        AlertKind::TaskFailed,
-                        AlertSeverity::Critical,
-                        task.latest_attempt_completed_at.max(task.updated_at),
-                        copy.alert_task_failed.as_str(),
-                    ),
-                    ObservedTaskState::Blocked => (
-                        AlertKind::DependencyBlocked,
-                        AlertSeverity::Warning,
-                        task.updated_at,
-                        copy.alert_dependency_blocked.as_str(),
-                    ),
-                    "RUNNING"
-                        if now
-                            - task
-                                .latest_activity_at
-                                .max(task.latest_attempt_started_at)
-                                .max(task.created_at)
-                            > STALE_ACTIVITY_MS =>
-                    {
-                        (
-                            AlertKind::ActivityStale,
-                            AlertSeverity::Warning,
-                            task.latest_activity_at
-                                .max(task.latest_attempt_started_at)
-                                .max(task.created_at)
-                                + STALE_ACTIVITY_MS,
-                            copy.alert_activity_stale.as_str(),
-                        )
-                    }
-                    ObservedTaskState::Cancelling
-                        if now - task.updated_at > STUCK_CANCELLATION_MS =>
-                    {
-                        (
-                            AlertKind::CancellationStuck,
-                            AlertSeverity::Warning,
-                            task.updated_at + STUCK_CANCELLATION_MS,
-                            copy.alert_cancellation_stuck.as_str(),
-                        )
-                    }
-                    _ => return None,
+                let TaskAttention::Required {
+                    kind,
+                    first_observed_at,
+                } = task.attention_at(now)
+                else {
+                    return None;
                 };
+                let severity = kind.severity();
+                let reason = copy.alert_reason(kind);
                 Some(ObservedAlert {
                     id: format!("{}:{}", kind.as_str(), task.id),
                     kind,
@@ -490,4 +450,76 @@ impl ObserverSnapshot {
 pub(super) struct TaskKindLabel<'a> {
     pub(super) kind: &'a TaskKind,
     pub(super) locale: &'a str,
+}
+
+enum TaskAttention {
+    None,
+    Required {
+        kind: AlertKind,
+        first_observed_at: i64,
+    },
+}
+impl ObservedTask {
+    fn attention_at(&self, now: i64) -> TaskAttention {
+        match &self.status {
+            ObservedTaskState::Failed if self.dependency_failure => TaskAttention::Required {
+                kind: AlertKind::DependencyFailed,
+                first_observed_at: self.updated_at,
+            },
+            ObservedTaskState::Failed => TaskAttention::Required {
+                kind: AlertKind::TaskFailed,
+                first_observed_at: self.latest_attempt_completed_at.max(self.updated_at),
+            },
+            ObservedTaskState::Blocked => TaskAttention::Required {
+                kind: AlertKind::DependencyBlocked,
+                first_observed_at: self.updated_at,
+            },
+            ObservedTaskState::Running => {
+                let progress = self
+                    .latest_activity_at
+                    .max(self.latest_attempt_started_at)
+                    .max(self.created_at);
+                if now - progress > STALE_ACTIVITY_MS {
+                    TaskAttention::Required {
+                        kind: AlertKind::ActivityStale,
+                        first_observed_at: progress + STALE_ACTIVITY_MS,
+                    }
+                } else {
+                    TaskAttention::None
+                }
+            }
+            ObservedTaskState::Cancelling if now - self.updated_at > STUCK_CANCELLATION_MS => {
+                TaskAttention::Required {
+                    kind: AlertKind::CancellationStuck,
+                    first_observed_at: self.updated_at + STUCK_CANCELLATION_MS,
+                }
+            }
+            ObservedTaskState::Ready
+            | ObservedTaskState::Completed
+            | ObservedTaskState::Cancelled
+            | ObservedTaskState::Cancelling
+            | ObservedTaskState::Other(_) => TaskAttention::None,
+        }
+    }
+}
+impl AlertKind {
+    fn severity(self) -> AlertSeverity {
+        match self {
+            Self::TaskFailed | Self::DependencyFailed => AlertSeverity::Critical,
+            Self::DependencyBlocked | Self::ActivityStale | Self::CancellationStuck => {
+                AlertSeverity::Warning
+            }
+        }
+    }
+}
+impl ObserverCopy {
+    fn alert_reason(&self, kind: AlertKind) -> &str {
+        match kind {
+            AlertKind::TaskFailed => &self.alert_task_failed,
+            AlertKind::DependencyFailed => &self.alert_dependency_failed,
+            AlertKind::DependencyBlocked => &self.alert_dependency_blocked,
+            AlertKind::ActivityStale => &self.alert_activity_stale,
+            AlertKind::CancellationStuck => &self.alert_cancellation_stuck,
+        }
+    }
 }
