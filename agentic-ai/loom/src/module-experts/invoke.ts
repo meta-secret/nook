@@ -1,3 +1,4 @@
+import { AgentAttemptTransport } from '../agent-workflow/attempt-codec.ts';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -281,8 +282,8 @@ export class ModuleExpertInvocation {
   private static validateAgentCompletion(
     context: ValidateAgentCompletionContext,
   ): ValidatedAgentCompletion {
-    const output = WorkflowResultSchema.decodeWorkflowTaskOutput(
-      JSON.stringify(context.completion.output),
+    const output = WorkflowResultSchema.decodeWorkflowTaskOutputNode(
+      context.completion.output,
     );
     if (
       context.completion.threadId.trim() === '' ||
@@ -343,16 +344,17 @@ export class ModuleExpertInvocation {
     let projectedTerminal: TaskTerminal<string>;
     let events: readonly AgentAttemptEvent[];
     try {
-      projectedTerminal = JSON.parse(resultSerialized) as TaskTerminal<string>;
-      events = eventsSerialized
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line) as AgentAttemptEvent);
+      projectedTerminal =
+        AgentAttemptTransport.decodeTerminal(resultSerialized);
+      events = AgentAttemptTransport.decodeEvents(eventsSerialized);
     } catch {
       ModuleExpertInvocation.processingVerificationFailed();
     }
     if (
-      JSON.stringify(projectedTerminal) !== JSON.stringify(result.terminal) ||
+      JSON.stringify(projectedTerminal) !==
+        JSON.stringify(
+          AgentAttemptTransport.decodeTerminalValue(result.terminal),
+        ) ||
       viewSerialized.trim() === ''
     ) {
       ModuleExpertInvocation.processingVerificationFailed();
@@ -362,8 +364,8 @@ export class ModuleExpertInvocation {
         typeof WorkflowResultSchema.decodeWorkflowTaskOutput
       >;
       try {
-        projectedOutput = WorkflowResultSchema.decodeWorkflowTaskOutput(
-          JSON.stringify(projectedTerminal.output),
+        projectedOutput = WorkflowResultSchema.decodeWorkflowTaskOutputNode(
+          projectedTerminal.output,
         );
       } catch {
         ModuleExpertInvocation.processingVerificationFailed();

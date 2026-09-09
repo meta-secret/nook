@@ -10,6 +10,12 @@ import {
 } from './domain.ts';
 
 export class DelegationVisualizationRequestDecoder {
+  private static isTransportRecord(
+    value: unknown,
+  ): value is { readonly [key: string]: unknown } {
+    return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
+  }
+
   private constructor(private readonly request: string) {}
 
   static decodeDelegationVisualizationRequest(
@@ -26,11 +32,9 @@ export class DelegationVisualizationRequestDecoder {
     ) {
       throw new DelegationVisualizationRequestDecodeError('');
     }
-    let transport: DelegationVisualizationRequestTransport;
+    let transport: unknown;
     try {
-      transport = JSON.parse(
-        serialized,
-      ) as DelegationVisualizationRequestTransport;
+      transport = JSON.parse(serialized);
     } catch {
       throw new DelegationVisualizationRequestDecodeError('');
     }
@@ -39,7 +43,7 @@ export class DelegationVisualizationRequestDecoder {
       expected: Object.values(DelegationVisualizationRequestField),
     };
     if (
-      !transport ||
+      !DelegationVisualizationRequestDecoder.isTransportRecord(transport) ||
       !DelegationVisualizationRequestDecoder.exactRequestKeys(requestKeys)
     ) {
       throw new DelegationVisualizationRequestDecodeError('');
@@ -77,7 +81,9 @@ export class DelegationVisualizationRequestDecoder {
       expected: Object.values(DelegationVisualizationTaskField),
     };
     if (
-      !request.candidate ||
+      !DelegationVisualizationRequestDecoder.isTransportRecord(
+        request.candidate,
+      ) ||
       !DelegationVisualizationRequestDecoder.exactTaskKeys(taskKeys)
     ) {
       throw new DelegationVisualizationRequestDecodeError(path);
@@ -129,7 +135,7 @@ export class DelegationVisualizationRequestDecoder {
   }
 
   private static isDelegationTeam(
-    value: string | false,
+    value: unknown,
   ): value is DelegationVisualizationTeam {
     return (
       typeof value === 'string' &&
@@ -138,14 +144,18 @@ export class DelegationVisualizationRequestDecoder {
   }
 
   private static exactRequestKeys(request: ExactRequestKeys): boolean {
+    if (!DelegationVisualizationRequestDecoder.isTransportRecord(request.value))
+      return false;
     const keys = Object.keys(request.value);
     return (
       keys.length === request.expected.length &&
-      keys.every((key) => request.expected.includes(key as never))
+      keys.every((key) => request.expected.some((expected) => expected === key))
     );
   }
 
   private static exactTaskKeys(request: ExactTaskKeys): boolean {
+    if (!DelegationVisualizationRequestDecoder.isTransportRecord(request.value))
+      return false;
     const keys = Object.keys(request.value);
     return (
       keys.length === request.expected.length &&
@@ -166,25 +176,13 @@ enum DelegationVisualizationTaskField {
   Dependencies = 'dependencies',
 }
 
-type DelegationVisualizationTaskTransport = {
-  readonly id: string | false;
-  readonly team: string | false;
-  readonly description: string | false;
-  readonly dependencies: readonly (string | false)[] | false;
-};
-
-type DelegationVisualizationRequestTransport = {
-  readonly kind: string | false;
-  readonly tasks: readonly DelegationVisualizationTaskTransport[] | false;
-};
-
 type ExactRequestKeys = {
-  readonly value: DelegationVisualizationRequestTransport;
+  readonly value: unknown;
   readonly expected: readonly DelegationVisualizationRequestField[];
 };
 
 type ExactTaskKeys = {
-  readonly value: DelegationVisualizationTaskTransport;
+  readonly value: unknown;
   readonly expected: readonly DelegationVisualizationTaskField[];
 };
 
@@ -201,7 +199,7 @@ export class DelegationVisualizationRequestDecodeError extends Error {
 }
 
 type DecodeDelegationVisualizationTaskRequest = {
-  readonly candidate: DelegationVisualizationTaskTransport;
+  readonly candidate: unknown;
   readonly index: number;
   readonly priorTaskIds: ReadonlySet<string>;
 };

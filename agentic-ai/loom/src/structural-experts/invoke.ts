@@ -1,3 +1,4 @@
+import { AgentAttemptTransport } from '../agent-workflow/attempt-codec.ts';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -135,8 +136,8 @@ export class StructuralExpertInvocation {
       typeof WorkflowResultSchema.decodeWorkflowTaskOutput
     >;
     try {
-      output = WorkflowResultSchema.decodeWorkflowTaskOutput(
-        JSON.stringify(completion.output),
+      output = WorkflowResultSchema.decodeWorkflowTaskOutputNode(
+        completion.output,
       );
       if (
         completion.threadId.trim() === '' ||
@@ -294,16 +295,16 @@ export class StructuralExpertInvocation {
     let projected: TaskTerminal<string>;
     let events: readonly AgentAttemptEvent[];
     try {
-      projected = JSON.parse(resultSerialized) as TaskTerminal<string>;
-      events = eventsSerialized
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line) as AgentAttemptEvent);
+      projected = AgentAttemptTransport.decodeTerminal(resultSerialized);
+      events = AgentAttemptTransport.decodeEvents(eventsSerialized);
     } catch {
       StructuralExpertInvocation.verificationFailed();
     }
     if (
-      JSON.stringify(projected) !== JSON.stringify(result.terminal) ||
+      JSON.stringify(projected) !==
+        JSON.stringify(
+          AgentAttemptTransport.decodeTerminalValue(result.terminal),
+        ) ||
       viewSerialized.trim() === ''
     ) {
       StructuralExpertInvocation.verificationFailed();

@@ -430,9 +430,7 @@ export class StructuralExpertRuntimeAuthority {
     if ('threadId' in value) {
       const canonical = {
         threadId: value.threadId,
-        output: WorkflowResultSchema.decodeWorkflowTaskOutput(
-          JSON.stringify(value.output),
-        ),
+        output: WorkflowResultSchema.decodeWorkflowTaskOutputNode(value.output),
       };
       return createHash('sha256')
         .update(JSON.stringify(canonical))

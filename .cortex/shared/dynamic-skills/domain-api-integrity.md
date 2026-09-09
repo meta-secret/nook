@@ -47,6 +47,10 @@ external decoding through state, behavior, persistence, and results.
 ### Boundaries and versions
 
 - Decode raw external data into concrete domain values at the narrowest edge.
+- Decode known JSON schemas into their concrete record or enum types.
+- Keep parsed values typed throughout internal operations.
+- Validate TypeScript transport fields before constructing the concrete type.
+- Keep raw JSON trees only inside decoding or genuinely dynamic protocol edges.
 - Encode domain values only when crossing a required external boundary.
 - Give every persisted or wire schema version a named domain type.
 - Keep one explicit current writer version and an explicit supported-reader
@@ -69,6 +73,8 @@ external decoding through state, behavior, persistence, and results.
 - Do not use an erased value bag as a domain or application value.
   - This includes `unknown`, `any`, `object`, generic records, raw JSON trees,
     `dyn Any`, and equivalent catch-all values.
+- Do not cast parsed JSON into a known type without validating its fields.
+- Do not serialize a typed value merely to pass it between internal operations.
 - Do not use an unchecked cast, non-null assertion, panic shortcut, or
   equivalent escape hatch to manufacture a valid state.
 - Do not use multiple positional parameters, tuples, arrays, or collections to

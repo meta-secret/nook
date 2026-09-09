@@ -20,6 +20,12 @@ import {
 } from './cortex-document-structure.ts';
 
 export class CortexDocumentMapTransport {
+  private static isTransportRecord(
+    value: unknown,
+  ): value is { readonly [key: string]: unknown } {
+    return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
+  }
+
   private constructor(private readonly request: string) {}
 
   static encodeCortexDocumentMapRequest(
@@ -55,9 +61,9 @@ export class CortexDocumentMapTransport {
         path: '',
       });
     }
-    let transport: RequestTransport;
+    let transport: unknown;
     try {
-      transport = JSON.parse(serialized) as RequestTransport;
+      transport = JSON.parse(serialized);
     } catch {
       throw CortexDocumentMapTransport.failure({
         message: 'Invalid Cortex document-map request.',
@@ -163,9 +169,9 @@ export class CortexDocumentMapTransport {
     serialized: string,
   ): CortexDocumentMapResult {
     CortexDocumentMapTransport.assertResultByteLimit(serialized);
-    let transport: ResultTransport;
+    let transport: unknown;
     try {
-      transport = JSON.parse(serialized) as ResultTransport;
+      transport = JSON.parse(serialized);
     } catch {
       throw CortexDocumentMapTransport.resultFailure({
         message: 'Invalid Cortex document-map result.',
@@ -249,21 +255,22 @@ export class CortexDocumentMapTransport {
   private static decodeFinding(
     request: DecodeFindingRequest,
   ): CortexStructureFinding {
+    const transport = request.transport;
     const path = `findings[${request.index}]`;
-    if (!CortexDocumentMapTransport.isFindingRecord(request.transport)) {
+    if (!CortexDocumentMapTransport.isFindingRecord(transport)) {
       throw CortexDocumentMapTransport.resultFailure({
         message: 'Invalid Cortex finding.',
         path,
       });
     }
     CortexDocumentMapTransport.assertResultExactKeys({
-      value: request.transport,
+      value: transport,
       expected: FINDING_KEYS,
       path,
     });
     const [code = false] = [
       Object.values(CortexStructureFindingCode).find(
-        (candidate) => candidate === request.transport.code,
+        (candidate) => candidate === transport.code,
       ),
     ];
     if (code === false) {
@@ -272,17 +279,17 @@ export class CortexDocumentMapTransport {
         path: `${path}.code`,
       });
     }
-    if (!CortexDocumentMapTransport.validPath(request.transport.file)) {
+    if (!CortexDocumentMapTransport.validPath(transport.file)) {
       throw CortexDocumentMapTransport.resultFailure({
         message: 'Invalid Cortex finding path.',
         path: `${path}.file`,
       });
     }
     if (
-      typeof request.transport.line !== 'number' ||
-      !Number.isSafeInteger(request.transport.line) ||
-      request.transport.line < 1 ||
-      request.transport.line > CORTEX_DOCUMENT_MAP_FINDING_LINE_LIMIT
+      typeof transport.line !== 'number' ||
+      !Number.isSafeInteger(transport.line) ||
+      transport.line < 1 ||
+      transport.line > CORTEX_DOCUMENT_MAP_FINDING_LINE_LIMIT
     ) {
       throw CortexDocumentMapTransport.resultFailure({
         message: 'Invalid Cortex finding line.',
@@ -290,11 +297,10 @@ export class CortexDocumentMapTransport {
       });
     }
     if (
-      typeof request.transport.message !== 'string' ||
-      request.transport.message.length === 0 ||
-      request.transport.message.length >
-        CORTEX_DOCUMENT_MAP_FINDING_MESSAGE_LIMIT ||
-      PROHIBITED_CONTENT.test(request.transport.message)
+      typeof transport.message !== 'string' ||
+      transport.message.length === 0 ||
+      transport.message.length > CORTEX_DOCUMENT_MAP_FINDING_MESSAGE_LIMIT ||
+      PROHIBITED_CONTENT.test(transport.message)
     ) {
       throw CortexDocumentMapTransport.resultFailure({
         message: 'Invalid Cortex finding message.',
@@ -303,13 +309,13 @@ export class CortexDocumentMapTransport {
     }
     return {
       code,
-      file: request.transport.file,
-      line: request.transport.line,
-      message: request.transport.message,
+      file: transport.file,
+      line: transport.line,
+      message: transport.message,
     };
   }
 
-  private static validPath(value: string | false): value is string {
+  private static validPath(value: unknown): value is string {
     return (
       typeof value === 'string' &&
       value.length <= CORTEX_DOCUMENT_MAP_PATH_LIMIT &&
@@ -318,20 +324,26 @@ export class CortexDocumentMapTransport {
   }
 
   private static isRecord(
-    value: RequestTransport | DocumentTransport,
-  ): boolean {
+    value: unknown,
+  ): value is { readonly [key: string]: unknown } {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   }
 
-  private static isResultRecord(value: ResultTransport): boolean {
+  private static isResultRecord(
+    value: unknown,
+  ): value is { readonly [key: string]: unknown } {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   }
 
-  private static isFindingRecord(value: FindingTransport): boolean {
+  private static isFindingRecord(
+    value: unknown,
+  ): value is { readonly [key: string]: unknown } {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   }
 
   private static assertExactKeys(request: ExactKeysRequest): void {
+    if (!CortexDocumentMapTransport.isTransportRecord(request.value))
+      throw new Error('Invalid Cortex transport object.');
     const actual = Object.keys(request.value);
     const unexpected = actual.find((key) => !request.expected.includes(key));
     if (typeof unexpected === 'string') {
@@ -340,9 +352,7 @@ export class CortexDocumentMapTransport {
         path: `${request.path}["<unknown-key>"]`,
       });
     }
-    const missing = request.expected.find(
-      (key) => !Object.hasOwn(request.value, key),
-    );
+    const missing = request.expected.find((key) => !actual.includes(key));
     if (typeof missing === 'string') {
       throw CortexDocumentMapTransport.failure({
         message: 'Missing request field.',
@@ -352,10 +362,12 @@ export class CortexDocumentMapTransport {
   }
 
   private static assertResultExactKeys(request: {
-    readonly value: ResultTransport | FindingTransport;
+    readonly value: unknown;
     readonly expected: readonly string[];
     readonly path: string;
   }): void {
+    if (!CortexDocumentMapTransport.isTransportRecord(request.value))
+      throw new Error('Invalid Cortex transport object.');
     const actual = Object.keys(request.value);
     const unexpected = actual.find((key) => !request.expected.includes(key));
     if (typeof unexpected === 'string') {
@@ -364,9 +376,7 @@ export class CortexDocumentMapTransport {
         path: `${request.path}["<unknown-key>"]`,
       });
     }
-    const missing = request.expected.find(
-      (key) => !Object.hasOwn(request.value, key),
-    );
+    const missing = request.expected.find((key) => !actual.includes(key));
     if (typeof missing === 'string') {
       throw CortexDocumentMapTransport.resultFailure({
         message: 'Missing result field.',
@@ -400,44 +410,21 @@ export class CortexDocumentMapTransport {
   }
 }
 
-type DocumentTransport = {
-  readonly relativePath: string | false;
-  readonly content: string | false;
-};
-
-type RequestTransport = {
-  readonly kind: string | false;
-  readonly documents: readonly DocumentTransport[] | false;
-  readonly excludedDocumentPaths: readonly string[] | false;
-};
-
-type FindingTransport = {
-  readonly code: string | false;
-  readonly file: string | false;
-  readonly line: number | false;
-  readonly message: string | false;
-};
-
-type ResultTransport = {
-  readonly kind: string | false;
-  readonly findings: readonly FindingTransport[] | false;
-};
-
 type DecodeFailure = { readonly path: string; readonly message: string };
 
 type ExactKeysRequest = {
-  readonly value: RequestTransport | DocumentTransport;
+  readonly value: unknown;
   readonly expected: readonly string[];
   readonly path: string;
 };
 
 type DecodeDocumentRequest = {
-  readonly transport: DocumentTransport;
+  readonly transport: unknown;
   readonly index: number;
 };
 
 type DecodeFindingRequest = {
-  readonly transport: FindingTransport;
+  readonly transport: unknown;
   readonly index: number;
 };
 

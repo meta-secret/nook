@@ -1,3 +1,4 @@
+import { AgentAttemptTransport } from './attempt-codec.ts';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, realpath } from 'node:fs/promises';
@@ -110,11 +111,8 @@ export class VerifiedAttemptArtifacts {
     let events: readonly AgentAttemptEvent[];
     let terminal: TaskTerminal<string>;
     try {
-      events = eventsSerialized
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line) as AgentAttemptEvent);
-      terminal = JSON.parse(resultSerialized) as TaskTerminal<string>;
+      events = AgentAttemptTransport.decodeEvents(eventsSerialized);
+      terminal = AgentAttemptTransport.decodeTerminal(resultSerialized);
     } catch {
       VerifiedAttemptArtifacts.authorizationFailed();
     }
@@ -196,8 +194,8 @@ export class VerifiedAttemptArtifacts {
       typeof WorkflowResultSchema.decodeWorkflowTaskOutput
     >;
     try {
-      decodedOutput = WorkflowResultSchema.decodeWorkflowTaskOutput(
-        JSON.stringify(terminal.output),
+      decodedOutput = WorkflowResultSchema.decodeWorkflowTaskOutputNode(
+        terminal.output,
       );
     } catch {
       VerifiedAttemptArtifacts.authorizationFailed();

@@ -21,6 +21,12 @@ import {
 import { CortexArticleAudit } from './audit.ts';
 
 export class CortexArticleTransport {
+  private static isTransportRecord(
+    value: unknown,
+  ): value is { readonly [key: string]: unknown } {
+    return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
+  }
+
   private constructor(private readonly request: string) {}
 
   static encodeCortexArticleRequest(
@@ -50,15 +56,13 @@ export class CortexArticleTransport {
     ) {
       throw failRequestBytes('');
     }
-    let transport: CortexArticleRequestTransport;
+    let transport: unknown;
     try {
-      transport = JSON.parse(
-        serializedRequest,
-      ) as CortexArticleRequestTransport;
+      transport = JSON.parse(serializedRequest);
     } catch {
       throw failInvalidRequest('');
     }
-    if (!transport) {
+    if (!CortexArticleTransport.isTransportRecord(transport)) {
       throw failInvalidRequest('');
     }
     const exactKeysRequest: ExactKeysPathRequest = {
@@ -123,10 +127,9 @@ export class CortexArticleTransport {
       serialized: serializedResult,
     };
     CortexArticleTransport.assertSerializedByteLimit(byteRequest);
-    const transport = JSON.parse(
-      serializedResult,
-    ) as CortexArticleResultTransport;
-    if (!transport) throw new Error('Invalid Cortex article-structure result.');
+    const transport: unknown = JSON.parse(serializedResult);
+    if (!CortexArticleTransport.isTransportRecord(transport))
+      throw new Error('Invalid Cortex article-structure result.');
     const exactKeysRequest: ExactKeysRequest = {
       value: transport,
       expected: RESULT_KEYS,
@@ -149,7 +152,8 @@ export class CortexArticleTransport {
     request: DecodeDocumentRequest,
   ): CortexArticleDocument {
     const { path, transport } = request;
-    if (!transport) throw failInvalidDocument(path);
+    if (!CortexArticleTransport.isTransportRecord(transport))
+      throw failInvalidDocument(path);
     const exactKeysRequest: ExactKeysPathRequest = {
       value: transport,
       expected: DOCUMENT_KEYS,
@@ -192,7 +196,8 @@ export class CortexArticleTransport {
     request: DecodeBlockRequest,
   ): CortexArticleSemanticBlock {
     const { path, transport } = request;
-    if (!transport) throw failInvalidBlock(path);
+    if (!CortexArticleTransport.isTransportRecord(transport))
+      throw failInvalidBlock(path);
     if (!CortexArticleTransport.isPositiveLine(transport.line)) {
       throw failInvalidBlock(`${path}.line`);
     }
@@ -239,7 +244,7 @@ export class CortexArticleTransport {
   }
 
   private static isSimpleSemanticKind(
-    kind: string | false,
+    kind: unknown,
   ): kind is
     | CortexArticleSemanticKind.Paragraph
     | CortexArticleSemanticKind.VisibleOrderedList
@@ -257,10 +262,9 @@ export class CortexArticleTransport {
     );
   }
 
-  private static decodeFinding(
-    transport: CortexArticleFindingTransport,
-  ): CortexArticleFinding {
-    if (!transport) throw new Error('Invalid Cortex article finding.');
+  private static decodeFinding(transport: unknown): CortexArticleFinding {
+    if (!CortexArticleTransport.isTransportRecord(transport))
+      throw new Error('Invalid Cortex article finding.');
     const exactKeysRequest: ExactKeysRequest = {
       value: transport,
       expected: FINDING_KEYS,
@@ -276,7 +280,10 @@ export class CortexArticleTransport {
     ) {
       throw new Error('Invalid Cortex article finding.');
     }
-    const code = transport.code as CortexArticleFindingCode;
+    const code = Object.values(CortexArticleFindingCode).find(
+      (candidate) => candidate === transport.code,
+    );
+    if (!code) throw new Error('Invalid Cortex article finding.');
     const canonicalRequest: CanonicalFindingRequest = {
       code,
       file: transport.file,
@@ -419,6 +426,7 @@ export class CortexArticleTransport {
   }
 
   private static hasExactKeys(request: ExactKeysRequest): boolean {
+    if (!CortexArticleTransport.isTransportRecord(request.value)) return false;
     const actual = Object.keys(request.value).sort();
     const expected = [...request.expected].sort();
     if (actual.length !== expected.length) return false;
@@ -431,6 +439,8 @@ export class CortexArticleTransport {
   private static invalidExactKeysPath(
     request: ExactKeysPathRequest,
   ): string | false {
+    if (!CortexArticleTransport.isTransportRecord(request.value))
+      return request.path;
     const actual = Object.keys(request.value);
     const unexpected = actual.find(
       (field) => !request.expected.includes(field),
@@ -455,7 +465,7 @@ export class CortexArticleTransport {
       : `${request.parent}[${JSON.stringify(request.field)}]`;
   }
 
-  private static isCortexMarkdownPath(value: string | false): value is string {
+  private static isCortexMarkdownPath(value: unknown): value is string {
     return (
       CortexArticleTransport.isSafeRelativePath(value) &&
       value.startsWith('.cortex/') &&
@@ -463,24 +473,24 @@ export class CortexArticleTransport {
     );
   }
 
-  private static isBoundedDetail(value: string | false): value is string {
+  private static isBoundedDetail(value: unknown): value is string {
     return (
       typeof value === 'string' &&
       value.length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT
     );
   }
 
-  private static isPositiveLine(value: number | false): value is number {
+  private static isPositiveLine(value: unknown): value is number {
     return (
       typeof value === 'number' && Number.isSafeInteger(value) && value > 0
     );
   }
 
-  private static isNonblankString(value: string | false): value is string {
+  private static isNonblankString(value: unknown): value is string {
     return typeof value === 'string' && value.trim().length > 0;
   }
 
-  private static isSafeRelativePath(value: string | false): value is string {
+  private static isSafeRelativePath(value: unknown): value is string {
     return (
       CortexArticleTransport.isNonblankString(value) &&
       value.length <= CORTEX_ARTICLE_PATH_LIMIT &&
@@ -494,23 +504,6 @@ export class CortexArticleTransport {
   }
 }
 
-type CortexArticleDocumentTransport = {
-  readonly relativePath: string | false;
-  readonly blocks: readonly CortexArticleBlockTransport[] | false;
-};
-
-type CortexArticleBlockTransport = {
-  readonly depth: number | false;
-  readonly kind: string | false;
-  readonly line: number | false;
-  readonly text: string | false;
-};
-
-type CortexArticleRequestTransport = {
-  readonly kind: string | false;
-  readonly documents: readonly CortexArticleDocumentTransport[] | false;
-};
-
 type CortexArticleRequestDecodeFailure = {
   readonly message: string;
   readonly path: string;
@@ -522,12 +515,12 @@ type CortexArticleRequestFailure = (
 
 type DecodeDocumentRequest = {
   readonly path: string;
-  readonly transport: CortexArticleDocumentTransport;
+  readonly transport: unknown;
 };
 
 type DecodeBlockRequest = {
   readonly path: string;
-  readonly transport: CortexArticleBlockTransport;
+  readonly transport: unknown;
 };
 
 type FindingContributorRequest = {
@@ -535,24 +528,7 @@ type FindingContributorRequest = {
   readonly request: AuditCortexArticleStructureRequest;
 };
 
-type CortexArticleFindingTransport = {
-  readonly code: string | false;
-  readonly file: string | false;
-  readonly line: number | false;
-  readonly message: string | false;
-};
-
-type CortexArticleResultTransport = {
-  readonly kind: string | false;
-  readonly findings: readonly CortexArticleFindingTransport[] | false;
-};
-
-type ExactKeyValue =
-  | CortexArticleRequestTransport
-  | CortexArticleDocumentTransport
-  | CortexArticleBlockTransport
-  | CortexArticleResultTransport
-  | CortexArticleFindingTransport;
+type ExactKeyValue = unknown;
 
 type ExactKeysRequest = {
   readonly value: ExactKeyValue;

@@ -168,6 +168,11 @@ When you see `Option<T>`, ask:
 - Keep raw YAML or JSON strings at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
   wire strings when crossing storage, provider, or JS boundaries.
+- Deserialize known JSON schemas directly into concrete serde structs or enums.
+- Use `serde_json::Result<T>` for codecs whose only failure is serde JSON.
+- Return the decoded record from internal APIs instead of its JSON string.
+- Keep `JsValue` conversion at an externally required WASM or browser ABI.
+- Convert that ABI value before calling domain or application methods.
 - Tests of a known JSON contract serialize and deserialize through the concrete
   Rust wire or domain type, then assert typed fields and enum variants.
 - Raw `serde_json::Value` is reserved for tests whose actual subject is unknown,

@@ -389,15 +389,42 @@ export class CortexAuditCommand {
     const eventPath = process.env.GITHUB_EVENT_PATH;
     if (eventPath && existsSync(eventPath)) {
       try {
-        const event = JSON.parse(
+        const event = CortexAuditCommand.decodeRepositoryPolicyEvent(
           readFileSync(eventPath, 'utf8'),
-        ) as GitHubRepositoryPolicyEvent;
+        );
         return CortexAuditCommand.publishedBaseCandidatesForEvent(event);
       } catch {
         return ['origin/main'];
       }
     }
     return ['origin/main'];
+  }
+
+  private static decodeRepositoryPolicyEvent(
+    serialized: string,
+  ): GitHubRepositoryPolicyEvent {
+    const value: unknown = JSON.parse(serialized);
+    if (!CortexAuditCommand.isEventRecord(value))
+      throw new Error('Invalid GitHub policy event.');
+    const before =
+      typeof value.before === 'string' ? { before: value.before } : {};
+    if (
+      CortexAuditCommand.isEventRecord(value.pull_request) &&
+      CortexAuditCommand.isEventRecord(value.pull_request.base) &&
+      typeof value.pull_request.base.sha === 'string'
+    ) {
+      return {
+        ...before,
+        pull_request: { base: { sha: value.pull_request.base.sha } },
+      };
+    }
+    return before;
+  }
+
+  private static isEventRecord(
+    value: unknown,
+  ): value is { readonly [field: string]: unknown } {
+    return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
 
   static publishedBaseCandidatesForEvent(

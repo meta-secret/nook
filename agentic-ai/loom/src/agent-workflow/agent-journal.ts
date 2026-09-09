@@ -137,12 +137,10 @@ export class AgentAttemptJournal<TTask extends string> {
   private pendingAppend: Promise<void>;
   private finalized: boolean;
   private readonly moduleExpertJournalBinding:
-    | ModuleExpertJournalBinding
-    | false;
+    ModuleExpertJournalBinding | false;
   private trustedModuleExpertFinalization: boolean;
   private readonly structuralExpertJournalBinding:
-    | StructuralJournalBinding
-    | false;
+    StructuralJournalBinding | false;
   private trustedStructuralExpertFinalization: boolean;
 
   constructor(configuration: AgentAttemptJournalConfiguration) {
@@ -459,8 +457,8 @@ export class AgentAttemptJournal<TTask extends string> {
       throw new Error('Agent terminal identity differs from its journal.');
     }
     if (terminal.kind === TaskTerminalKind.Completed) {
-      const output = WorkflowResultSchema.decodeWorkflowTaskOutput(
-        JSON.stringify(terminal.output),
+      const output = WorkflowResultSchema.decodeWorkflowTaskOutputNode(
+        terminal.output,
       );
       const adapter = this.configuration.adapter as AgentAttemptAdapterKind;
       if (

@@ -56,11 +56,45 @@ export class CargoWorkspaceMetadata {
   ): CargoWorkspaceInventory {
     return new CargoWorkspaceMetadata(args).execute();
   }
+  private static parse(source: string): CargoMetadata {
+    const node: unknown = JSON.parse(source);
+    if (
+      !CargoWorkspaceMetadata.isRecord(node) ||
+      !Array.isArray(node.packages) ||
+      !Array.isArray(node.workspace_members)
+    )
+      throw new Error('Invalid Cargo metadata.');
+    const packages: CargoMetadataPackage[] = [];
+    for (const candidate of node.packages) {
+      if (
+        !CargoWorkspaceMetadata.isRecord(candidate) ||
+        typeof candidate.id !== 'string' ||
+        typeof candidate.manifest_path !== 'string'
+      )
+        throw new Error('Invalid Cargo package.');
+      packages.push({
+        id: candidate.id,
+        manifest_path: candidate.manifest_path,
+      });
+    }
+    const workspace_members: string[] = [];
+    for (const member of node.workspace_members) {
+      if (typeof member !== 'string')
+        throw new Error('Invalid Cargo workspace member.');
+      workspace_members.push(member);
+    }
+    return { packages, workspace_members };
+  }
+  private static isRecord(
+    value: unknown,
+  ): value is { readonly [field: string]: unknown } {
+    return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
+  }
   private execute(): CargoWorkspaceInventory {
     const args = this.request;
     let metadata: CargoMetadata;
     try {
-      metadata = JSON.parse(args.source) as CargoMetadata;
+      metadata = CargoWorkspaceMetadata.parse(args.source);
     } catch {
       return {
         kind: CargoWorkspaceInventoryKind.Failed,
@@ -146,13 +180,13 @@ export type DiscoverCargoWorkspaceArgs = {
 };
 
 type CargoMetadata = {
-  readonly packages?: readonly CargoMetadataPackage[];
-  readonly workspace_members?: readonly string[];
+  readonly packages: readonly CargoMetadataPackage[];
+  readonly workspace_members: readonly string[];
 };
 
 type CargoMetadataPackage = {
-  readonly id?: string;
-  readonly manifest_path?: string;
+  readonly id: string;
+  readonly manifest_path: string;
 };
 
 export type DecodeCargoWorkspaceMetadataArgs = {

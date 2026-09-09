@@ -1,6 +1,31 @@
 /** The host syntax edge; values leave it only through a concrete decoder. */
 export class UntrustedYamlBoundary {
   private constructor(private readonly value: UntrustedYamlNode) {}
+  static fromJson(value: unknown): UntrustedYamlNode {
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    )
+      return value;
+    if (Array.isArray(value))
+      return value.map((item: unknown) => UntrustedYamlBoundary.fromJson(item));
+    if (typeof value === 'object' && value instanceof Object) {
+      const result: UntrustedYamlMapBuilder = {};
+      for (const [key, item] of Object.entries(value)) {
+        // Match JSON omission for optional fields in already-typed values.
+        if (item === undefined) continue;
+        Object.defineProperty(result, key, {
+          value: UntrustedYamlBoundary.fromJson(item),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      }
+      return result;
+    }
+    throw new Error('Unsupported JSON syntax value.');
+  }
   static isRecord(value: UntrustedYamlNode): value is UntrustedYamlMap {
     return (
       typeof value === 'object' &&
@@ -29,11 +54,7 @@ export class UntrustedYamlBoundary {
  * results.
  */
 export type UntrustedYamlNode =
-  | string
-  | number
-  | boolean
-  | readonly UntrustedYamlNode[]
-  | UntrustedYamlMap;
+  string | number | boolean | readonly UntrustedYamlNode[] | UntrustedYamlMap;
 
 /** Untrusted object map from YAML/JSON. */
 export type UntrustedYamlMap = {

@@ -155,21 +155,29 @@ export class WorkflowResultSchema {
         'workflow structured result exceeds 131072 bytes',
       );
     }
-    const node = JSON.parse(serialized) as UntrustedYamlNode;
+    const node: unknown = JSON.parse(serialized);
+    return WorkflowResultSchema.decodeWorkflowTaskOutputNode(node);
+  }
+
+  static decodeWorkflowTaskOutputNode(input: unknown): WorkflowTaskOutput {
+    const node = UntrustedYamlBoundary.fromJson(input);
+    if (Buffer.byteLength(JSON.stringify(node), 'utf8') > 131_072) {
+      WorkflowResultSchema.invalidOutput(
+        'workflow structured result exceeds 131072 bytes',
+      );
+    }
     if (!UntrustedYamlBoundary.isRecord(node)) {
       WorkflowResultSchema.invalidOutput('workflow output must be an object');
     }
     const resultKindValue = WorkflowResultSchema.stringValue(
       WorkflowResultSchema.readProperty([node, 'resultKind']),
     );
-    if (
-      !Object.values(WorkflowResultKind).includes(
-        resultKindValue as WorkflowResultKind,
-      )
-    ) {
+    const resultKind = Object.values(WorkflowResultKind).find(
+      (candidate) => candidate === resultKindValue,
+    );
+    if (resultKind === undefined) {
       WorkflowResultSchema.invalidOutput('workflow resultKind is invalid');
     }
-    const resultKind = resultKindValue as WorkflowResultKind;
     if (StructuralResultSchema.isStructuralResultKind(resultKind)) {
       const structuralRequest = { node, resultKind };
       return StructuralResultSchema.decodeStructuralTaskOutput(

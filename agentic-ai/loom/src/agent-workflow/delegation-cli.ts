@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { AgentAttemptTransport } from './attempt-codec.ts';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { AgentAttemptJournal } from './agent-journal.ts';
@@ -223,7 +224,7 @@ export class DelegationJournalCli {
     commandLine: DelegationRecordCommandLine,
   ): Promise<number> {
     const serialized = await readFile(commandLine.requestPath, 'utf8');
-    const request = JSON.parse(serialized) as DelegationRecordRequest;
+    const request = DelegationJournalCli.decodeRecordRequest(serialized);
     DelegationJournalCli.assertRequest(request);
     const terminal = DelegationJournalCli.normalizedTerminal(request.terminal);
     const runDirectory = resolve(
@@ -342,6 +343,44 @@ export class DelegationJournalCli {
     };
   }
 
+  private static decodeRecordRequest(
+    serialized: string,
+  ): DelegationRecordRequest {
+    const value: unknown = JSON.parse(serialized);
+    if (
+      !DelegationJournalCli.isRecord(value) ||
+      Object.keys(value).length !== RECORD_REQUEST_KEYS.size ||
+      Object.keys(value).some((key) => !RECORD_REQUEST_KEYS.has(key)) ||
+      typeof value.runId !== 'string' ||
+      typeof value.sourceCommit !== 'string' ||
+      typeof value.task !== 'string' ||
+      typeof value.agent !== 'string' ||
+      typeof value.attempt !== 'number' ||
+      !Number.isSafeInteger(value.attempt) ||
+      typeof value.depth !== 'number' ||
+      !Number.isSafeInteger(value.depth)
+    )
+      throw new Error(
+        'Delegation journal request identity or terminal is invalid.',
+      );
+    return {
+      runId: value.runId,
+      sourceCommit: value.sourceCommit,
+      task: value.task,
+      agent: value.agent,
+      attempt: value.attempt,
+      depth: value.depth,
+      parent: AgentAttemptTransport.decodeParent(value.parent),
+      terminal: AgentAttemptTransport.decodeTerminalValue(value.terminal),
+    };
+  }
+
+  private static isRecord(
+    value: unknown,
+  ): value is { readonly [field: string]: unknown } {
+    return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
+  }
+
   private static assertRequest(request: DelegationRecordRequest): void {
     if (
       !request ||
@@ -415,8 +454,8 @@ export class DelegationJournalCli {
       task: terminal.task,
       attempt: terminal.attempt,
       threadId: terminal.threadId,
-      output: WorkflowResultSchema.decodeWorkflowTaskOutput(
-        JSON.stringify(terminal.output),
+      output: WorkflowResultSchema.decodeWorkflowTaskOutputNode(
+        terminal.output,
       ),
     };
   }

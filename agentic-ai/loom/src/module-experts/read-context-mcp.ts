@@ -1,3 +1,14 @@
+import {
+  RepositoryContextRpcSchema,
+  MODULE_EXPERT_READ_CONTEXT_TOOLS,
+  ToolCallDecodeKind,
+  type JsonRpcId,
+  type JsonRpcRequest,
+  type ToolArguments,
+  type ToolCallParams,
+  type ToolCallRequest,
+} from './read-context-rpc-codec.ts';
+export { MODULE_EXPERT_READ_CONTEXT_TOOLS } from './read-context-rpc-codec.ts';
 import { randomBytes } from 'node:crypto';
 
 import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
@@ -91,7 +102,8 @@ export class ModuleExpertRepositoryContext {
     }
     let request: JsonRpcRequest;
     try {
-      request = JSON.parse(body) as JsonRpcRequest;
+      const value: unknown = JSON.parse(body);
+      request = RepositoryContextRpcSchema.decodeJsonRpcRequest(value);
     } catch {
       const errorWrite: JsonRpcErrorWrite = {
         code: -32_700,
@@ -144,10 +156,13 @@ export class ModuleExpertRepositoryContext {
       jsonrpc: '2.0',
       error: { code: write.code, message: write.message },
     };
-    if ('id' in write) {
+    if (
+      'id' in write &&
+      (typeof write.id === 'string' || typeof write.id === 'number')
+    ) {
       const identifiedResponse: JsonRpcResponse = {
         ...response,
-        id: (write as IdentifiedJsonRpcErrorWrite).id,
+        id: write.id,
       };
       return ModuleExpertRepositoryContext.jsonResponse(identifiedResponse);
     }
@@ -286,17 +301,10 @@ export class ModuleExpertRepositoryContext {
   }
 
   private static decodeToolCall(params?: ToolCallParams): ToolCallRequest {
-    if (!ModuleExpertRepositoryContext.isValidToolCallParams(params)) {
-      throw new Error('Invalid MCP tool call.');
-    }
-    if (
-      !MODULE_EXPERT_READ_CONTEXT_TOOLS.includes(
-        params.name as (typeof MODULE_EXPERT_READ_CONTEXT_TOOLS)[number],
-      )
-    ) {
-      throw new Error('Unsupported MCP tool.');
-    }
-    return { name: params.name, arguments: params.arguments };
+    if (!params) throw new Error('Invalid MCP tool call.');
+    if (params.kind === ToolCallDecodeKind.Invalid)
+      throw new Error(params.message);
+    return params.call;
   }
 
   private static callTool(request: ToolExecutionRequest): string {
@@ -640,19 +648,6 @@ export class ModuleExpertRepositoryContext {
     }
   }
 
-  private static isValidToolCallParams(
-    value?: ToolCallParams,
-  ): value is ValidToolCallParams {
-    return (
-      typeof value === 'object' &&
-      Boolean(value) &&
-      typeof value.name === 'string' &&
-      typeof value.arguments === 'object' &&
-      Boolean(value.arguments) &&
-      !Array.isArray(value.arguments)
-    );
-  }
-
   private static stringValue(request: StringValueRequest): string {
     if (request.value.kind === OptionalArgumentKind.Omitted) {
       return request.fallback;
@@ -723,12 +718,6 @@ const MAX_RESULT_LINE_BYTES = 2_000;
 
 const MAX_REQUEST_BYTES = 65_536;
 
-export const MODULE_EXPERT_READ_CONTEXT_TOOLS = [
-  'list_files',
-  'read_file',
-  'search_text',
-] as const;
-
 const DENIED_SEGMENTS = new Set([
   '.git',
   '.codex',
@@ -746,32 +735,6 @@ enum JsonSchemaValueKind {
 enum McpContentKind {
   Text = 'text',
 }
-
-type JsonRpcId = number | string;
-
-type ToolArguments = {
-  readonly depth?: number;
-  readonly maxResults?: number;
-  readonly path?: string;
-  readonly query?: string;
-};
-
-type ToolCallParams = {
-  readonly arguments?: ToolArguments;
-  readonly name?: string;
-};
-
-type ValidToolCallParams = {
-  readonly arguments: ToolArguments;
-  readonly name: string;
-};
-
-type JsonRpcRequest = {
-  readonly id?: JsonRpcId;
-  readonly jsonrpc?: string;
-  readonly method?: string;
-  readonly params?: ToolCallParams;
-};
 
 type IdentifiedJsonRpcRequest = JsonRpcRequest & {
   readonly id: JsonRpcId;
@@ -826,11 +789,6 @@ type JsonRpcResponse = {
     readonly code: number;
     readonly message: string;
   };
-};
-
-type ToolCallRequest = {
-  readonly arguments: ToolArguments;
-  readonly name: string;
 };
 
 type RepositoryContext = {

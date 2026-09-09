@@ -9,6 +9,12 @@ import {
 } from './domain.ts';
 
 export class CortexConsistencyRequestDecoder {
+  private static isTransportRecord(
+    value: unknown,
+  ): value is { readonly [key: string]: unknown } {
+    return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
+  }
+
   private constructor(private readonly request: string) {}
 
   static decodeCortexConsistencyRequest(
@@ -25,14 +31,14 @@ export class CortexConsistencyRequestDecoder {
     ) {
       throw new CortexConsistencyRequestDecodeError('');
     }
-    let transport: CortexConsistencyRequestTransport;
+    let transport: unknown;
     try {
-      transport = JSON.parse(serialized) as CortexConsistencyRequestTransport;
+      transport = JSON.parse(serialized);
     } catch {
       throw new CortexConsistencyRequestDecodeError('');
     }
     if (
-      !transport ||
+      !CortexConsistencyRequestDecoder.isTransportRecord(transport) ||
       !CortexConsistencyRequestDecoder.exactKeys({
         value: transport,
         expected: REQUEST_KEYS,
@@ -54,7 +60,7 @@ export class CortexConsistencyRequestDecoder {
     for (const [index, candidate] of transport.documents.entries()) {
       const path = `documents[${index}]`;
       if (
-        !candidate ||
+        !CortexConsistencyRequestDecoder.isTransportRecord(candidate) ||
         !CortexConsistencyRequestDecoder.exactKeys({
           value: candidate,
           expected: DOCUMENT_KEYS,
@@ -73,10 +79,10 @@ export class CortexConsistencyRequestDecoder {
       if (
         !Array.isArray(candidate.references) ||
         candidate.references.length > CORTEX_CONSISTENCY_REFERENCE_LIMIT ||
-        candidate.references.some(
-          (reference: string | false) =>
-            typeof reference !== 'string' ||
-            reference.length > CORTEX_CONSISTENCY_PATH_LIMIT,
+        !candidate.references.every(
+          (reference: unknown): reference is string =>
+            typeof reference === 'string' &&
+            reference.length <= CORTEX_CONSISTENCY_PATH_LIMIT,
         )
       ) {
         throw new CortexConsistencyRequestDecodeError(`${path}.references`);
@@ -84,10 +90,10 @@ export class CortexConsistencyRequestDecoder {
       if (
         !Array.isArray(candidate.commands) ||
         candidate.commands.length > CORTEX_CONSISTENCY_REFERENCE_LIMIT ||
-        candidate.commands.some(
-          (command: string | false) =>
-            typeof command !== 'string' ||
-            command.length > CORTEX_CONSISTENCY_PATH_LIMIT,
+        !candidate.commands.every(
+          (command: unknown): command is string =>
+            typeof command === 'string' &&
+            command.length <= CORTEX_CONSISTENCY_PATH_LIMIT,
         )
       ) {
         throw new CortexConsistencyRequestDecodeError(`${path}.commands`);
@@ -95,8 +101,8 @@ export class CortexConsistencyRequestDecoder {
       paths.add(candidate.relativePath);
       documents.push({
         relativePath: candidate.relativePath,
-        references: candidate.references as readonly string[],
-        commands: candidate.commands as readonly string[],
+        references: candidate.references,
+        commands: candidate.commands,
       });
     }
     return {
@@ -106,6 +112,8 @@ export class CortexConsistencyRequestDecoder {
   }
 
   private static exactKeys(request: ExactKeysRequest): boolean {
+    if (!CortexConsistencyRequestDecoder.isTransportRecord(request.value))
+      return false;
     const keys = Object.keys(request.value);
     return (
       keys.length === request.expected.length &&
@@ -113,17 +121,6 @@ export class CortexConsistencyRequestDecoder {
     );
   }
 }
-
-type CortexConsistencyDocumentTransport = {
-  readonly relativePath: string | false;
-  readonly references: readonly (string | false)[] | false;
-  readonly commands: readonly (string | false)[] | false;
-};
-
-type CortexConsistencyRequestTransport = {
-  readonly kind: string | false;
-  readonly documents: readonly CortexConsistencyDocumentTransport[] | false;
-};
 
 const REQUEST_KEYS = ['kind', 'documents'] as const;
 
@@ -148,8 +145,6 @@ export class CortexConsistencyRequestDecodeError extends Error {
 }
 
 type ExactKeysRequest = {
-  readonly value:
-    | CortexConsistencyRequestTransport
-    | CortexConsistencyDocumentTransport;
+  readonly value: unknown;
   readonly expected: readonly string[];
 };
