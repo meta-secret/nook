@@ -1,3 +1,10 @@
+import {
+  decode_website_passkey_registration_request,
+  decode_website_passkey_assertion_request,
+  type PasskeyRegistrationRequest,
+  type PasskeyAssertionRequest,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { extensionWasmRuntime } from './nook-wasm'
 export enum WebsitePasskeyCeremony {
   Create = 'create',
   Get = 'get',
@@ -54,51 +61,35 @@ export class WebsitePasskeyOptionsMessage {
     )
   }
 
-  static parsedWebsitePasskeyRequest(
+  static async parsedWebsitePasskeyRequest(
     args: ParseWebsitePasskeyRequestArgs,
-  ): WebsitePasskeyRequestParse {
+  ): Promise<WebsitePasskeyRequestParse> {
+    await extensionWasmRuntime.ensureNookWasm()
     try {
-      const parsed = JSON.parse(args.requestJson) as
-        WebsitePasskeyCreateRequestCandidate | WebsitePasskeyGetRequestCandidate
-      if (
-        !parsed ||
-        typeof parsed !== 'object' ||
-        Array.isArray(parsed) ||
-        !('origin' in parsed) ||
-        typeof parsed.origin !== 'string'
-      ) {
-        return { kind: WebsitePasskeyRequestParseKind.Rejected }
-      }
       if (args.ceremony === WebsitePasskeyCeremony.Get) {
-        return 'rpId' in parsed && typeof parsed.rpId === 'string'
-          ? {
-              kind: WebsitePasskeyRequestParseKind.Parsed,
-              request: {
-                ceremony: WebsitePasskeyCeremony.Get,
-                origin: parsed.origin,
-                rpId: parsed.rpId,
-                requestJson: args.requestJson,
-              },
-            }
-          : { kind: WebsitePasskeyRequestParseKind.Rejected }
+        const value = decode_website_passkey_assertion_request(args.requestJson)
+        return {
+          kind: WebsitePasskeyRequestParseKind.Parsed,
+          request: {
+            ceremony: WebsitePasskeyCeremony.Get,
+            origin: value.origin,
+            rpId: value.rpId,
+            value,
+          },
+        }
       }
-      const relyingParty =
-        'relyingParty' in parsed ? parsed.relyingParty : false
-      return relyingParty &&
-        typeof relyingParty === 'object' &&
-        !Array.isArray(relyingParty) &&
-        'id' in relyingParty &&
-        typeof relyingParty.id === 'string'
-        ? {
-            kind: WebsitePasskeyRequestParseKind.Parsed,
-            request: {
-              ceremony: WebsitePasskeyCeremony.Create,
-              origin: parsed.origin,
-              rpId: relyingParty.id,
-              requestJson: args.requestJson,
-            },
-          }
-        : { kind: WebsitePasskeyRequestParseKind.Rejected }
+      const value = decode_website_passkey_registration_request(
+        args.requestJson,
+      )
+      return {
+        kind: WebsitePasskeyRequestParseKind.Parsed,
+        request: {
+          ceremony: WebsitePasskeyCeremony.Create,
+          origin: value.origin,
+          rpId: value.relyingParty.id,
+          value,
+        },
+      }
     } catch {
       return { kind: WebsitePasskeyRequestParseKind.Rejected }
     }
@@ -112,25 +103,16 @@ export class WebsitePasskeyOptionsMessage {
       args.credentialSelection.kind ===
         WebsitePasskeyCredentialSelectionKind.RequestDefaults
     ) {
-      return args.request.requestJson
+      return JSON.stringify(args.request.value)
     }
     if (args.credentialSelection.credentialId.length === 0) {
       throw new Error('Selected passkey credential ID must not be empty.')
     }
-    const parsed = JSON.parse(
-      args.request.requestJson,
-    ) as WebsitePasskeyGetRequestCandidate
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('Validated passkey request could not be reconstructed.')
+    const request: PasskeyAssertionRequest = {
+      ...args.request.value,
+      allowCredentials: [{ id: args.credentialSelection.credentialId }],
     }
-    const descriptor: PropertyDescriptor = {
-      value: [{ id: args.credentialSelection.credentialId }],
-      enumerable: true,
-      configurable: true,
-      writable: true,
-    }
-    Object.defineProperty(parsed, 'allowCredentials', descriptor)
-    return JSON.stringify(parsed)
+    return JSON.stringify(request)
   }
 }
 
@@ -257,29 +239,18 @@ export type WebsitePasskeyRequest =
       ceremony: WebsitePasskeyCeremony.Create
       origin: string
       rpId: string
-      requestJson: string
+      value: PasskeyRegistrationRequest
     }
   | {
       ceremony: WebsitePasskeyCeremony.Get
       origin: string
       rpId: string
-      requestJson: string
+      value: PasskeyAssertionRequest
     }
 
 export type ParseWebsitePasskeyRequestArgs = {
   ceremony: WebsitePasskeyCeremony
   requestJson: string
-}
-
-type WebsitePasskeyCreateRequestCandidate = {
-  origin?: string
-  relyingParty?: { id?: string }
-}
-
-type WebsitePasskeyGetRequestCandidate = {
-  origin?: string
-  rpId?: string
-  allowCredentials?: { id: string }[]
 }
 
 export type WebsitePasskeyRequestJsonArgs = {

@@ -55,7 +55,7 @@ describe('website passkey options', () => {
       passkeyPairingGrants: mock(() =>
         Promise.resolve([pairingGrant('a'), pairingGrant('b')]),
       ),
-      requestOriginAndRpId: mock(() => ({
+      requestOriginAndRpId: mock(async () => ({
         kind: WebsitePasskeyRequestContextKind.Validated,
         origin: 'https://example.test',
         rpId: 'example.test',
@@ -63,7 +63,13 @@ describe('website passkey options', () => {
           ceremony: WebsitePasskeyCeremony.Get,
           origin: 'https://example.test',
           rpId: 'example.test',
-          requestJson: '{}',
+          value: {
+            origin: 'https://example.test',
+            rpId: 'example.test',
+            challenge: 'challenge',
+            userVerificationRequired: false,
+            allowCredentials: [],
+          },
         },
       })),
       sendSessionMessage,

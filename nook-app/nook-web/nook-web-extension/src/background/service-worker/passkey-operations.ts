@@ -234,7 +234,8 @@ class WebsitePasskeyRequests {
       ceremony: message.payload.ceremony,
       requestJson: message.payload.requestJson,
     }
-    const context = resolvedDependencies.requestOriginAndRpId(nookTypedArgs0_2)
+    const context =
+      await resolvedDependencies.requestOriginAndRpId(nookTypedArgs0_2)
     if (context.kind === WebsitePasskeyRequestContextKind.Rejected) {
       return { ok: false, reason: 'passkey-forbidden-origin' }
     }
@@ -338,7 +339,7 @@ class WebsitePasskeyRequests {
       requestJson: message.payload.requestJson,
     }
     const context =
-      extensionPairingIdentity.requestOriginAndRpId(nookTypedArgs0_6)
+      await extensionPairingIdentity.requestOriginAndRpId(nookTypedArgs0_6)
     if (context.kind === WebsitePasskeyRequestContextKind.Rejected) {
       return { ok: false, reason: 'passkey-forbidden-origin' }
     }

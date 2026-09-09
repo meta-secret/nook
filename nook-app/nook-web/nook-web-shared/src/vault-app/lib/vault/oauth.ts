@@ -138,10 +138,14 @@ export class VaultOAuthActions {
         ? await iCloudOAuthSession.ensureValidICloudOAuthFileConfig(oauthFile)
         : await googleOAuthSession.ensureValidOAuthFileConfig(oauthFile);
     if (
-      JSON.stringify(refreshed.accessToken) ===
-        JSON.stringify(oauthFile.accessToken) &&
-      JSON.stringify(refreshed.expiresAt) ===
-        JSON.stringify(oauthFile.expiresAt)
+      refreshed.accessToken.state === oauthFile.accessToken.state &&
+      (refreshed.accessToken.state === "signedOut" ||
+        (oauthFile.accessToken.state === "accessToken" &&
+          refreshed.accessToken.value === oauthFile.accessToken.value)) &&
+      refreshed.expiresAt.state === oauthFile.expiresAt.state &&
+      (refreshed.expiresAt.state === "unknown" ||
+        (oauthFile.expiresAt.state === "expiresAt" &&
+          refreshed.expiresAt.value === oauthFile.expiresAt.value))
     ) {
       log.info("oauth token freshness check kept existing token");
       return;

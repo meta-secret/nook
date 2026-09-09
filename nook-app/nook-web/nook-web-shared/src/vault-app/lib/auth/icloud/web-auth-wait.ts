@@ -133,9 +133,28 @@ class CloudKitSignInBrowser {
       headers: { Accept: "application/json" },
     };
     const response = await fetch(this.cloudKitCurrentUserURL(), fetchArgs);
-    const body = (await response
-      .json()
-      .catch(() => ({}))) as CloudKitAuthChallenge;
+    const value: unknown = await response.json();
+    if (!value || typeof value !== "object") {
+      throw new Error(CloudKitAuthErrorTranslationKey.UnknownError);
+    }
+    const body: CloudKitAuthChallenge = {
+      reason:
+        "reason" in value && typeof value.reason === "string"
+          ? value.reason
+          : undefined,
+      redirectURL:
+        "redirectURL" in value && typeof value.redirectURL === "string"
+          ? value.redirectURL
+          : undefined,
+      serverErrorCode:
+        "serverErrorCode" in value && typeof value.serverErrorCode === "string"
+          ? value.serverErrorCode
+          : undefined,
+      uuid:
+        "uuid" in value && typeof value.uuid === "string"
+          ? value.uuid
+          : undefined,
+    };
     log.info("CloudKit direct web auth challenge received");
     if (
       body.serverErrorCode === "AUTHENTICATION_REQUIRED" &&
@@ -169,14 +188,22 @@ class CloudKitSignInBrowser {
     if (!data || typeof data !== "object") {
       return { kind: WebAuthTokenLookupKind.Unavailable };
     }
-    const record = data as Record<string, unknown>;
     for (const key of [
       "ckWebAuthToken",
       "webAuthToken",
       "authToken",
       "token",
     ]) {
-      const candidate = record[key];
+      const candidate =
+        key === "ckWebAuthToken" && "ckWebAuthToken" in data
+          ? data.ckWebAuthToken
+          : key === "webAuthToken" && "webAuthToken" in data
+            ? data.webAuthToken
+            : key === "authToken" && "authToken" in data
+              ? data.authToken
+              : key === "token" && "token" in data
+                ? data.token
+                : undefined;
       if (typeof candidate === "string" && candidate.trim()) {
         return {
           kind: WebAuthTokenLookupKind.Available,
@@ -211,7 +238,7 @@ class CloudKitSignInBrowser {
             typeof cloudKitRuntime.storeCloudKitWebAuthToken
           >[0] = {
             containerIdentifier: ICLOUD_CONTAINER_ID,
-            authToken: token.token,
+            token,
           };
           cloudKitRuntime.storeCloudKitWebAuthToken(
             storeCloudKitWebAuthTokenArgs,
@@ -266,7 +293,7 @@ class CloudKitSignInBrowser {
             typeof cloudKitRuntime.storeCloudKitWebAuthToken
           >[0] = {
             containerIdentifier: ICLOUD_CONTAINER_ID,
-            authToken: token.token,
+            token,
           };
           cloudKitRuntime.storeCloudKitWebAuthToken(
             storeCloudKitWebAuthTokenArgs2,

@@ -171,7 +171,7 @@ type ExternalCloudKitContainer = Omit<
 export type CloudKitAuthTokenStore = {
   // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
   putToken: (containerIdentifier: string, authToken: unknown) => void;
-  getToken: (containerIdentifier: string) => unknown;
+  getToken: (containerIdentifier: string) => string | undefined;
 };
 
 export type CloudKitConfiguration = {
@@ -214,7 +214,7 @@ export type WebAuthTokenLookup =
 
 type CloudKitWebAuthTokenPersistence = {
   readonly containerIdentifier: string;
-  readonly authToken: unknown;
+  readonly token: WebAuthTokenLookup;
 };
 
 export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
@@ -223,7 +223,10 @@ export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
     log.debug("CloudKit putToken");
     const storeCloudKitWebAuthTokenArgs: Parameters<
       typeof cloudKitRuntime.storeCloudKitWebAuthToken
-    >[0] = { containerIdentifier, authToken };
+    >[0] = {
+      containerIdentifier,
+      token: cloudKitRuntime.normalizeWebAuthToken(authToken),
+    };
     cloudKitRuntime.storeCloudKitWebAuthToken(storeCloudKitWebAuthTokenArgs);
   },
   getToken(containerIdentifier) {
@@ -234,7 +237,10 @@ export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
       return;
     }
     try {
-      return JSON.parse(raw) as unknown;
+      const token = cloudKitRuntime.normalizeWebAuthToken(JSON.parse(raw));
+      return token.kind === WebAuthTokenLookupKind.Available
+        ? token.token
+        : undefined;
     } catch {
       return;
     }
@@ -467,7 +473,6 @@ class CloudKitRuntime {
       };
     }
     if (stored && typeof stored === "object") {
-      const record = stored as Record<string, unknown>;
       for (const key of [
         "token",
         "ckWebAuthToken",
@@ -475,7 +480,18 @@ class CloudKitRuntime {
         "authToken",
         "value",
       ]) {
-        const candidate = record[key];
+        const candidate =
+          key === "token" && "token" in stored
+            ? stored.token
+            : key === "ckWebAuthToken" && "ckWebAuthToken" in stored
+              ? stored.ckWebAuthToken
+              : key === "webAuthToken" && "webAuthToken" in stored
+                ? stored.webAuthToken
+                : key === "authToken" && "authToken" in stored
+                  ? stored.authToken
+                  : key === "value" && "value" in stored
+                    ? stored.value
+                    : undefined;
         if (typeof candidate === "string" && candidate.trim()) {
           return {
             kind: WebAuthTokenLookupKind.Available,
@@ -489,16 +505,15 @@ class CloudKitRuntime {
 
   storeCloudKitWebAuthToken({
     containerIdentifier,
-    authToken,
+    token,
   }: CloudKitWebAuthTokenPersistence): WebAuthTokenLookup {
     const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`;
-    if (!authToken) {
+    if (token.kind === WebAuthTokenLookupKind.Unavailable) {
       sessionStorage.removeItem(key);
       log.info("CloudKit web auth token cleared");
       return { kind: WebAuthTokenLookupKind.Unavailable };
     }
-    sessionStorage.setItem(key, JSON.stringify(authToken));
-    const token = this.normalizeWebAuthToken(authToken);
+    sessionStorage.setItem(key, JSON.stringify(token.token));
     log.info("CloudKit web auth token stored");
     if (
       containerIdentifier === ICLOUD_CONTAINER_ID &&

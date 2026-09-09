@@ -1,3 +1,7 @@
+import {
+  decode_website_passkey_registration_request,
+  decode_website_passkey_assertion_request,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { NookVaultManager } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionSessionMessageType } from './session-message-dispatch'
 import {
@@ -97,7 +101,7 @@ class SessionWebsitePasskeys {
         await openVault(openArgs)
         try {
           const registration = await activeManager.register_website_passkey(
-            payload.requestJson,
+            decode_website_passkey_registration_request(payload.requestJson),
             () => {
               const activityArgs: WebsitePasskeyRequestActivityArgs = {
                 requestId: payload.requestId as string,
@@ -145,7 +149,7 @@ class SessionWebsitePasskeys {
         await openVault(openArgs)
         try {
           const assertion = await activeManager.assert_website_passkey(
-            payload.requestJson,
+            decode_website_passkey_assertion_request(payload.requestJson),
             () => {
               const activityArgs: WebsitePasskeyRequestActivityArgs = {
                 requestId: payload.requestId as string,

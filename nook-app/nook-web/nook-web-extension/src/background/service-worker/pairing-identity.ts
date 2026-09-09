@@ -734,10 +734,10 @@ class ExtensionPairingIdentity {
     return key in stored ? { [key]: stored[key] } : {}
   }
 
-  requestOriginAndRpId({
+  async requestOriginAndRpId({
     ceremony,
     requestJson,
-  }: RequestOriginAndRpIdArgs): WebsitePasskeyRequestContext {
+  }: RequestOriginAndRpIdArgs): Promise<WebsitePasskeyRequestContext> {
     const parseArgs: Parameters<
       typeof WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest
     >[0] = {
@@ -745,7 +745,9 @@ class ExtensionPairingIdentity {
       requestJson,
     }
     const parsed =
-      WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(parseArgs)
+      await WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(
+        parseArgs,
+      )
     if (parsed.kind === WebsitePasskeyRequestParseKind.Rejected) {
       return { kind: WebsitePasskeyRequestContextKind.Rejected }
     }

@@ -1,4 +1,14 @@
-import { describe, expect, test } from 'bun:test'
+import initNookWasm from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+beforeAll(async () => {
+  const bytes = await Bun.file(
+    new URL(
+      '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+      import.meta.url,
+    ),
+  ).arrayBuffer()
+  await initNookWasm({ module_or_path: bytes })
+})
+import { beforeAll, describe, expect, test } from 'bun:test'
 import type { NookVaultManager } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 import {
@@ -76,7 +86,16 @@ function registerRequest(requestId: string): RegisterPasskeyRequest {
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
       requestId,
-      requestJson: '{}',
+      requestJson: JSON.stringify({
+        origin: 'https://example.test',
+        challenge: 'challenge',
+        relyingParty: { id: 'example.test', name: 'Example' },
+        user: { id: 'user', name: 'user', displayName: 'User' },
+        algorithms: [-7],
+        excludeCredentials: [],
+        residentKeyRequired: false,
+        userVerificationRequired: false,
+      }),
       queue: extensionSessionPasskeyCeremonyDeadline(Date.now() + 60_000),
     },
   }
@@ -91,7 +110,13 @@ function assertRequest(requestId: string): AssertPasskeyRequest {
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
       requestId,
-      requestJson: '{}',
+      requestJson: JSON.stringify({
+        origin: 'https://example.test',
+        challenge: 'challenge',
+        rpId: 'example.test',
+        allowCredentials: [],
+        userVerificationRequired: false,
+      }),
       queue: extensionSessionPasskeyCeremonyDeadline(Date.now() + 60_000),
     },
   }

@@ -1,3 +1,4 @@
+import { cloudKitAuthTokenStore } from '$lib/auth/icloud/cloudkit-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ICLOUD_SIGN_IN_TIMEOUT_MS,
@@ -936,5 +937,29 @@ describe('icloud-oauth', () => {
         iCloudTokensWithoutAccountName('retry-token'),
       )
     })
+  })
+})
+
+describe('CloudKit token transport decoding', () => {
+  it('persists only a decoded token from SDK payloads', () => {
+    cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, {
+      token: ' accepted ',
+      unrelated: 'not-persisted',
+    })
+    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBe(
+      'accepted',
+    )
+    expect(
+      sessionStorage.getItem('nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID),
+    ).toBe(JSON.stringify('accepted'))
+  })
+  it('rejects malformed persisted JSON and invalid token shapes', () => {
+    sessionStorage.setItem(
+      'nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID,
+      '{',
+    )
+    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBeUndefined()
+    cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, { token: 42 })
+    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBeUndefined()
   })
 })

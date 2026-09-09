@@ -1,4 +1,14 @@
-import { describe, expect, test } from 'bun:test'
+import initNookWasm from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+beforeAll(async () => {
+  const bytes = await Bun.file(
+    new URL(
+      '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+      import.meta.url,
+    ),
+  ).arrayBuffer()
+  await initNookWasm({ module_or_path: bytes })
+})
+import { beforeAll, describe, expect, test } from 'bun:test'
 import {
   WebsitePasskeyCeremony,
   WebsitePasskeyCredentialSelectionKind,
@@ -12,6 +22,9 @@ import {
 const requestJson = JSON.stringify({
   origin: 'https://login.example.com',
   rpId: 'example.com',
+  challenge: 'challenge',
+  userVerificationRequired: false,
+  allowCredentials: [],
 })
 
 describe('website passkey runtime messages', () => {
@@ -42,7 +55,7 @@ describe('website passkey runtime messages', () => {
     ).toBe(true)
   })
 
-  test('rejects oversized, malformed, and unscoped messages', () => {
+  test('rejects oversized, malformed, and unscoped messages', async () => {
     expect(
       WebsitePasskeyOptionsMessageSchema.is({
         type: 'nook:website-passkey-options',
@@ -82,19 +95,23 @@ describe('website passkey runtime messages', () => {
       requestJson: '{',
     }
     expect(
-      WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(parseArgs),
+      await WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(
+        parseArgs,
+      ),
     ).toEqual({
       kind: WebsitePasskeyRequestParseKind.Rejected,
     })
   })
 
-  test('models selected and request-default credential states explicitly', () => {
+  test('models selected and request-default credential states explicitly', async () => {
     const parseArgs = {
       ceremony: WebsitePasskeyCeremony.Get,
       requestJson,
     }
     const parsed =
-      WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(parseArgs)
+      await WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(
+        parseArgs,
+      )
     expect(parsed.kind).toBe(WebsitePasskeyRequestParseKind.Parsed)
     if (parsed.kind !== WebsitePasskeyRequestParseKind.Parsed) return
 
@@ -105,10 +122,12 @@ describe('website passkey runtime messages', () => {
       },
     }
     expect(
-      WebsitePasskeyOptionsMessageSchema.websitePasskeyRequestJson(
-        requestDefaultsArgs,
+      JSON.parse(
+        WebsitePasskeyOptionsMessageSchema.websitePasskeyRequestJson(
+          requestDefaultsArgs,
+        ),
       ),
-    ).toBe(requestJson)
+    ).toEqual(JSON.parse(requestJson))
 
     const selectedArgs: WebsitePasskeyRequestJsonArgs = {
       request: parsed.request,
@@ -126,6 +145,8 @@ describe('website passkey runtime messages', () => {
     ).toEqual({
       origin: 'https://login.example.com',
       rpId: 'example.com',
+      challenge: 'challenge',
+      userVerificationRequired: false,
       allowCredentials: [{ id: 'credential_test' }],
     })
 
@@ -141,5 +162,16 @@ describe('website passkey runtime messages', () => {
         emptySelectionArgs,
       ),
     ).toThrow('Selected passkey credential ID must not be empty.')
+  })
+  test('rejects a JSON object missing canonical Rust request fields', async () => {
+    const result =
+      await WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest({
+        ceremony: WebsitePasskeyCeremony.Get,
+        requestJson: JSON.stringify({
+          origin: 'https://example.test',
+          rpId: 'example.test',
+        }),
+      })
+    expect(result).toEqual({ kind: WebsitePasskeyRequestParseKind.Rejected })
   })
 })
