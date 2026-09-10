@@ -39,7 +39,10 @@ await companionWasmReady
 const started = new AccountPickerAuthorizationLifecycle('opening')
   .begin_cleanup('cleanup')
   .into_lifecycle()
-const rejectedTransition = started.complete_cleanup('stale', CleanupEvidence.Full)
+const rejectedTransition = started.complete_cleanup(
+  'stale',
+  CleanupEvidence.Full,
+)
 const rejectedCleanup = rejectedTransition.outcome()
 const pendingTransition = rejectedTransition
   .into_lifecycle()
@@ -56,9 +59,13 @@ completedTransition.into_lifecycle().free()
 const unusedAsyncDependency = mock(() =>
   Promise.reject(new Error('unused routing test dependency')),
 )
-const ensureExtensionSessionDocument = mock(() => Promise.resolve(ok(undefined)))
+const ensureExtensionSessionDocument = mock(() =>
+  Promise.resolve(ok(undefined)),
+)
 const openCompanionLauncher = mock(() => Promise.resolve())
-const accountPickerAuthorizationCleanupPending = mock(() => Promise.resolve(false))
+const accountPickerAuthorizationCleanupPending = mock(() =>
+  Promise.resolve(false),
+)
 const beginAccountPickerAuthorizationCleanup = mock(() =>
   Promise.resolve({
     authorizationGeneration: 'epoch-1',
@@ -267,7 +274,8 @@ describe('service worker routing', () => {
         ...lifecycleDependencies,
         clearPendingAccountPickers: () => Promise.resolve(),
         closeExtensionSessionDocument: () => Promise.resolve(ok(undefined)),
-        completeAccountPickerAuthorizationCleanup: () => Promise.resolve(outcome),
+        completeAccountPickerAuthorizationCleanup: () =>
+          Promise.resolve(outcome),
         isExtensionSessionEnsureMessage: () => false,
         isExtensionSessionLockMessage: () => true,
       }
@@ -285,6 +293,44 @@ describe('service worker routing', () => {
           ? { ok: false, reason: 'session-lock-failed' }
           : { ok: true },
       )
+    },
+  )
+
+  test.each([
+    ExtensionSessionTransportFailureKind.ObservationFailed,
+    ExtensionSessionTransportFailureKind.ClosureFailed,
+  ])(
+    'reports lock failure when inherited document cleanup fails with %s',
+    async (kind) => {
+      const { routeExtensionLifecycleMessage } =
+        await import('../src/background/service-worker/extension-lifecycle-routing')
+      const sendResponse = mock(() => {})
+      const completeCleanup = mock(() => Promise.resolve(completedCleanup))
+      const dependencies: ExtensionLifecycleRoutingDependencies = {
+        ...lifecycleDependencies,
+        clearPendingAccountPickers: () => Promise.resolve(),
+        closeExtensionSessionDocument: () =>
+          Promise.resolve(err(new ExtensionSessionTransportFailure(kind))),
+        completeAccountPickerAuthorizationCleanup: completeCleanup,
+        isExtensionSessionEnsureMessage: () => false,
+        isExtensionSessionLockMessage: () => true,
+      }
+      expect(
+        routeExtensionLifecycleMessage({
+          dependencies,
+          message: { type: 'test-session-lock' },
+          sender: { id: 'nook-extension' },
+          sendResponse,
+        }),
+      ).toBe(true)
+      await flushResponses()
+      await flushResponses()
+      await flushResponses()
+      expect(sendResponse).toHaveBeenCalledWith({
+        ok: false,
+        reason: 'session-lock-failed',
+      })
+      expect(completeCleanup).not.toHaveBeenCalled()
     },
   )
 
@@ -341,11 +387,14 @@ describe('service worker routing', () => {
     const {
       recoverInterruptedAuthorizationCleanup,
       AuthorizationCleanupFailureKind,
-    } = await import('../src/background/service-worker/extension-lifecycle-routing')
+    } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
 
     await expect(
       recoverInterruptedAuthorizationCleanup(dependencies),
-    ).resolves.toEqual(err([AuthorizationCleanupFailureKind.MarkerLookupFailed]))
+    ).resolves.toEqual(
+      err([AuthorizationCleanupFailureKind.MarkerLookupFailed]),
+    )
     expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
     const rejectedDependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,

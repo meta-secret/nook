@@ -3,6 +3,7 @@ import { err, ok, type Result } from 'neverthrow'
 export const extensionSessionDocument = 'offscreen/session.html'
 
 export enum ExtensionSessionTransportFailureKind {
+  ObservationFailed = 'extension-session-document-observation-failed',
   CreationFailed = 'extension-session-document-creation-failed',
   Closed = 'extension-session-document-closed',
   DeliveryFailed = 'extension-session-delivery-failed',
@@ -23,7 +24,9 @@ export type ExtensionSessionTransportResult<T> = Result<
 
 /** Host wire values are admitted by the concrete Rust response decoder at the caller. */
 export interface ExtensionSessionTransport {
-  sendMessage(message: unknown): Promise<ExtensionSessionTransportResult<unknown>>
+  sendMessage(
+    message: unknown,
+  ): Promise<ExtensionSessionTransportResult<unknown>>
 }
 
 enum SessionDocumentAccess {
@@ -35,7 +38,9 @@ enum SessionDocumentAccess {
 class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   private access = SessionDocumentAccess.Sending
 
-  sendMessage(message: unknown): Promise<ExtensionSessionTransportResult<unknown>> {
+  sendMessage(
+    message: unknown,
+  ): Promise<ExtensionSessionTransportResult<unknown>> {
     if (this.access === SessionDocumentAccess.Revoked)
       return Promise.resolve(
         err(
@@ -96,6 +101,8 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
 }
 
 enum ExtensionSessionDocumentStateKind {
+  Unobserved = 'unobserved',
+  ObservationFailed = 'observation-failed',
   Closed = 'closed',
   Creating = 'creating',
   Open = 'open',
@@ -104,6 +111,11 @@ enum ExtensionSessionDocumentStateKind {
 }
 
 type ExtensionSessionDocumentState =
+  | { readonly kind: ExtensionSessionDocumentStateKind.Unobserved }
+  | {
+      readonly kind: ExtensionSessionDocumentStateKind.ObservationFailed
+      readonly failure: ExtensionSessionTransportFailure
+    }
   | { readonly kind: ExtensionSessionDocumentStateKind.Closed }
   | {
       readonly kind: ExtensionSessionDocumentStateKind.Creating
@@ -128,7 +140,7 @@ type ExtensionSessionDocumentState =
 /** Owns one browser document and serializes opening with acknowledged revocation. */
 export class ExtensionSessionDocumentOwner {
   private state: ExtensionSessionDocumentState = {
-    kind: ExtensionSessionDocumentStateKind.Closed,
+    kind: ExtensionSessionDocumentStateKind.Unobserved,
   }
 
   private async create(): Promise<
@@ -153,7 +165,9 @@ export class ExtensionSessionDocumentOwner {
     return ok(new OpenExtensionSessionDocument())
   }
 
-  async open(): Promise<ExtensionSessionTransportResult<ExtensionSessionTransport>> {
+  async open(): Promise<
+    ExtensionSessionTransportResult<ExtensionSessionTransport>
+  > {
     const state = this.state
     switch (state.kind) {
       case ExtensionSessionDocumentStateKind.Closing: {
@@ -161,12 +175,14 @@ export class ExtensionSessionDocumentOwner {
         if (closed.isErr()) return err(closed.error)
         return this.open()
       }
+      case ExtensionSessionDocumentStateKind.ObservationFailed:
       case ExtensionSessionDocumentStateKind.ClosureFailed:
         return err(state.failure)
       case ExtensionSessionDocumentStateKind.Open:
         return ok(state.document)
       case ExtensionSessionDocumentStateKind.Creating:
         return this.admitCreatedDocument(state.operation)
+      case ExtensionSessionDocumentStateKind.Unobserved:
       case ExtensionSessionDocumentStateKind.Closed:
         break
     }
@@ -176,8 +192,11 @@ export class ExtensionSessionDocumentOwner {
         this.state.operation === operation
       ) {
         this.state = created.isOk()
-          ? { kind: ExtensionSessionDocumentStateKind.Open, document: created.value }
-          : { kind: ExtensionSessionDocumentStateKind.Closed }
+          ? {
+              kind: ExtensionSessionDocumentStateKind.Open,
+              document: created.value,
+            }
+          : { kind: ExtensionSessionDocumentStateKind.Unobserved }
       }
       return created
     })
@@ -218,19 +237,60 @@ export class ExtensionSessionDocumentOwner {
     return closed
   }
 
+  private async closeUnobservedDocument(): Promise<
+    ExtensionSessionTransportResult<void>
+  > {
+    try {
+      const contexts = await chrome.runtime.getContexts({
+        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+        documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],
+      })
+      if (contexts.length === 0) {
+        this.state = { kind: ExtensionSessionDocumentStateKind.Closed }
+        return ok(undefined)
+      }
+    } catch {
+      const failure = new ExtensionSessionTransportFailure(
+        ExtensionSessionTransportFailureKind.ObservationFailed,
+      )
+      this.state = {
+        kind: ExtensionSessionDocumentStateKind.ObservationFailed,
+        failure,
+      }
+      return err(failure)
+    }
+    return this.closeDocument(new OpenExtensionSessionDocument())
+  }
+
   close(): Promise<ExtensionSessionTransportResult<void>> {
     const state = this.state
     if (state.kind === ExtensionSessionDocumentStateKind.Closed)
       return Promise.resolve(ok(undefined))
     if (state.kind === ExtensionSessionDocumentStateKind.Closing)
       return state.operation
+    if (
+      state.kind === ExtensionSessionDocumentStateKind.Unobserved ||
+      state.kind === ExtensionSessionDocumentStateKind.ObservationFailed
+    ) {
+      // Publish Closing before observation can settle or throw synchronously.
+      const operation = Promise.resolve().then(() =>
+        this.closeUnobservedDocument(),
+      )
+      this.state = {
+        kind: ExtensionSessionDocumentStateKind.Closing,
+        operation,
+      }
+      return operation
+    }
     // Already-open aliases are revoked synchronously by closeDocument before its first await.
     const operation =
       state.kind === ExtensionSessionDocumentStateKind.Creating
         ? state.operation.then(
             (created): Promise<ExtensionSessionTransportResult<void>> => {
               if (created.isErr()) {
-                this.state = { kind: ExtensionSessionDocumentStateKind.Closed }
+                this.state = {
+                  kind: ExtensionSessionDocumentStateKind.Unobserved,
+                }
                 return Promise.resolve(err(created.error))
               }
               return this.closeDocument(created.value)

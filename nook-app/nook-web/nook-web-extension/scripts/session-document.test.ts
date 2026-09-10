@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { err, ok, type Result } from 'neverthrow'
 import {
+  extensionSessionDocument,
   ExtensionSessionDocumentOwner,
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
@@ -28,7 +29,8 @@ class DeferredBrowserEffect<T> {
   })
   complete(value: T): Result<void, BrowserEffectPhase> {
     const completion = this.completion
-    if (completion.kind !== BrowserEffectPhase.Pending) return err(completion.kind)
+    if (completion.kind !== BrowserEffectPhase.Pending)
+      return err(completion.kind)
     this.completion = { kind: BrowserEffectPhase.Complete }
     completion.resolve(value)
     return ok(undefined)
@@ -50,22 +52,49 @@ class SessionDocumentFixture {
   readonly owner = new ExtensionSessionDocumentOwner()
   readonly creation = new DeferredBrowserEffect<void>()
   readonly closure = new DeferredBrowserEffect<void>()
+  readonly closureRequested = new DeferredBrowserEffect<void>()
   readonly createDocument = mock(() => this.creation.operation)
-  readonly closeDocument = mock(() => this.closure.operation)
+  readonly closeDocument = mock(() => {
+    this.closureRequested.complete()
+    return this.closure.operation
+  })
+  readonly getContexts = mock(
+    async (): Promise<chrome.runtime.ExtensionContext[]> => [],
+  )
   private reply: BrowserReply = { kind: BrowserReplyPhase.Unrequested }
 
   constructor() {
     globalThis.chrome = {
       offscreen: {
+        Reason: { WORKERS: 'WORKERS' },
         createDocument: this.createDocument,
         closeDocument: this.closeDocument,
       },
       runtime: {
+        ContextType: { OFFSCREEN_DOCUMENT: 'OFFSCREEN_DOCUMENT' },
+        getURL: (path: string) => `chrome-extension://fixture/${path}`,
+        getContexts: this.getContexts,
         sendMessage: (_message: unknown, respond: (value: unknown) => void) => {
           this.reply = { kind: BrowserReplyPhase.Pending, respond }
         },
       },
     } as typeof chrome
+  }
+
+  inheritDocument(): void {
+    this.getContexts.mockResolvedValue([
+      {
+        contextType: chrome.runtime.ContextType.OFFSCREEN_DOCUMENT,
+        contextId: 'inherited-session',
+        documentUrl: chrome.runtime.getURL(extensionSessionDocument),
+        documentOrigin: 'chrome-extension://fixture',
+        documentId: 'inherited-document',
+        frameId: 0,
+        tabId: -1,
+        windowId: -1,
+        incognito: false,
+      },
+    ])
   }
 
   respond(value: unknown): Result<void, BrowserReplyPhase> {
@@ -78,6 +107,91 @@ class SessionDocumentFixture {
 }
 
 describe('extension session document ownership', () => {
+  test('closes an inherited session and waits for browser acknowledgement without creating one', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+    const settled = mock(() => {})
+    const closing = fixture.owner.close()
+    void closing.then(settled)
+    await fixture.closureRequested.operation
+    expect(fixture.getContexts).toHaveBeenCalledWith({
+      contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+      documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],
+    })
+    expect(fixture.createDocument).not.toHaveBeenCalled()
+    expect(fixture.closeDocument).toHaveBeenCalledTimes(1)
+    expect(settled).not.toHaveBeenCalled()
+    expect(fixture.closure.complete()).toEqual(ok(undefined))
+    expect(await closing).toEqual(ok(undefined))
+  })
+
+  test('coalesces inherited cleanup and prevents open from overtaking closure', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+    const first = fixture.owner.close()
+    const second = fixture.owner.close()
+    expect(second).toBe(first)
+    const opening = fixture.owner.open()
+    await fixture.closureRequested.operation
+    expect(fixture.getContexts).toHaveBeenCalledTimes(1)
+    expect(fixture.createDocument).not.toHaveBeenCalled()
+    expect(fixture.closeDocument).toHaveBeenCalledTimes(1)
+    expect(fixture.closure.complete()).toEqual(ok(undefined))
+    expect(await first).toEqual(ok(undefined))
+    expect(await second).toEqual(ok(undefined))
+    expect(fixture.creation.complete()).toEqual(ok(undefined))
+    expect((await opening).isOk()).toBe(true)
+    expect(fixture.createDocument).toHaveBeenCalledTimes(1)
+  })
+
+  test('admits browser-confirmed absence without creating or closing a document', async () => {
+    const fixture = new SessionDocumentFixture()
+    expect(await fixture.owner.close()).toEqual(ok(undefined))
+    expect(await fixture.owner.close()).toEqual(ok(undefined))
+    expect(fixture.getContexts).toHaveBeenCalledTimes(1)
+    expect(fixture.createDocument).not.toHaveBeenCalled()
+    expect(fixture.closeDocument).not.toHaveBeenCalled()
+  })
+
+  test('denies opening when inherited-document observation fails', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.getContexts.mockRejectedValueOnce(
+      new Error('native observation failed'),
+    )
+    const closing = fixture.owner.close()
+    const opening = fixture.owner.open()
+    const failure = err(
+      new ExtensionSessionTransportFailure(
+        ExtensionSessionTransportFailureKind.ObservationFailed,
+      ),
+    )
+    expect(await closing).toEqual(failure)
+    expect(await opening).toEqual(failure)
+    expect(await fixture.owner.open()).toEqual(failure)
+    expect(fixture.createDocument).not.toHaveBeenCalled()
+    expect(fixture.closeDocument).not.toHaveBeenCalled()
+  })
+
+  test('denies opening when inherited-document closure fails', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+    fixture.closeDocument.mockRejectedValueOnce(
+      new Error('native close failed'),
+    )
+    const closing = fixture.owner.close()
+    const opening = fixture.owner.open()
+    const failure = err(
+      new ExtensionSessionTransportFailure(
+        ExtensionSessionTransportFailureKind.ClosureFailed,
+      ),
+    )
+    expect(await closing).toEqual(failure)
+    expect(await opening).toEqual(failure)
+    expect(await fixture.owner.open()).toEqual(failure)
+    expect(fixture.createDocument).not.toHaveBeenCalled()
+    expect(fixture.closeDocument).toHaveBeenCalledTimes(1)
+  })
+
   test('coalesces opens until creation completes', async () => {
     const fixture = new SessionDocumentFixture()
     const first = fixture.owner.open()
@@ -119,7 +233,9 @@ describe('extension session document ownership', () => {
     if (opened.isErr()) return expect.fail('document creation must succeed')
     const delivery = opened.value.sendMessage({ type: 'fixture-request' })
     const closing = fixture.owner.close()
-    expect(await opened.value.sendMessage({ type: 'fixture-after-close' })).toEqual(
+    expect(
+      await opened.value.sendMessage({ type: 'fixture-after-close' }),
+    ).toEqual(
       err(
         new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.Closed,
