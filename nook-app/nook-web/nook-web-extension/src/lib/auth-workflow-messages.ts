@@ -1,6 +1,7 @@
 import type {
   AuthenticationPageObservationFacts,
   AuthenticationWorkflowSnapshot,
+  AuthenticationWorkflowSnapshotTransport,
   AuthenticationPageObservationFactsBatch,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
@@ -80,10 +81,8 @@ export enum AuthenticationWorkflowSnapshotMessageType {
 
 export const MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS = 64
 
-export type AuthenticationWorkflowSnapshotMessage = Extract<
-  ReturnType<typeof admit_authentication_workflow_snapshot_message>,
-  { kind: 'accepted' }
->['message']
+export type AuthenticationWorkflowSnapshotMessage =
+  AuthenticationWorkflowSnapshotTransport
 
 /** Canonical protocol admission is owned by Rust; browser callers retain the decoded message. */
 export class AuthenticationWorkflowSnapshotIngress {

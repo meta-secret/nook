@@ -10,7 +10,7 @@ use std::cell::Cell;
 use nook_core::VaultApplication;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ConfiguredVaultApplication {
+pub struct ConfiguredVaultApplication {
     application: nook_core::VaultApplication,
 }
 #[derive(Clone, Copy)]

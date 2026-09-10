@@ -55,6 +55,7 @@ export type SessionMessageDispatchContext<SessionResponse> = {
   handleCompanionIdentityHandoff: (
     message: CompanionIdentityHandoffSessionTransportRequest,
   ) => Promise<Result<SessionResponse, SessionOperationFailure>>
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the admission boundary directly.
   decodeProviders: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 

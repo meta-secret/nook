@@ -300,7 +300,7 @@ pub(crate) use storage::extension_state::{
 
 pub(crate) use logger::LoggerState;
 
-pub(crate) use application::ConfiguredVaultApplication;
+pub use application::ConfiguredVaultApplication;
 
 pub(crate) use storage::session::VaultSessionLock;
 

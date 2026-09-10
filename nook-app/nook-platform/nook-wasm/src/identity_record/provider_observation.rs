@@ -108,9 +108,11 @@ impl NookIdentityDirectorySnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::identity_record::{self, ProtectedIdentityLookup};
     use nook_core::{
         AppKey, CurrentVaultReplaceability, DeviceIdentityProtection, IdentityDirectory,
-        IdentityRecord, LocalIdentityKeyring, LocalIdentityKeyringEntry, MemberLabelState,
+        IdentityRecord, IdentitySelection, LocalIdentityKeyring, LocalIdentityKeyringEntry,
+        MemberLabelState,
     };
     use nook_core::{
         ProviderVaultDecision as Decision, ProviderVaultDecisionReason as Reason,

@@ -2,13 +2,13 @@
 
 mod display_text;
 mod passkey_metadata;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::NookDatabase;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::SaveVaultBlobRequest;
 use crate::storage::device_access::DeviceAccessProfileKey;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::{ProtectedIdentityLookup, ProtectedLocalIdentity};
 use crate::storage::indexed_db::VaultUnlockHistory;

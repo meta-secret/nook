@@ -101,8 +101,7 @@ export class SitemapDocument {
 
     const isoDate = lastmod.toISOString().slice(0, 10);
     const body = PUBLIC_SITEMAP_ENTRIES.map(
-      (entry) => `  <url>
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      (entry: SitemapEntry) => `  <url>
     <loc>${this.locationXml(entry)}</loc>
     <lastmod>${isoDate}</lastmod>
     <changefreq>${entry.changefreq}</changefreq>

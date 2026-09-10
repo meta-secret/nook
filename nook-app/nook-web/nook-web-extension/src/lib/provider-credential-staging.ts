@@ -12,6 +12,7 @@ export enum ProviderCredentialFailure {
 }
 
 export type StageProviderCredentialsArgs = {
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the admission boundary directly.
   decode: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 
@@ -46,6 +47,7 @@ class SerializedProviderField {
 }
 
 export class ProviderCredentialBuffer {
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection is retained for credential cleanup.
   constructor(private readonly providers: StorageProvider[]) {}
   identities(): Result<
     ExtensionStorageProviderIdentities,

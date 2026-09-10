@@ -53,14 +53,24 @@ class IdentityHandoffFixture {
   private storageAdmission: Result<void, VaultStorageFailure> = ok()
 
   constructor() {
-    const browserWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+    const browserWindow = globalThis.window
+    const browserWindowDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      'window',
+    )
     Reflect.deleteProperty(globalThis, 'window')
     try {
       this.state = new VaultState()
     } finally {
-      if (browserWindow) {
-        Object.defineProperty(globalThis, 'window', browserWindow)
-      }
+      Object.defineProperty(
+        globalThis,
+        'window',
+        browserWindowDescriptor ?? {
+          configurable: true,
+          writable: true,
+          value: browserWindow,
+        },
+      )
     }
     this.lifecycle = new VaultInitializationActions(this.state)
     this.clearUnlockedSession = vi.spyOn(this.state, 'clearUnlockedSession')

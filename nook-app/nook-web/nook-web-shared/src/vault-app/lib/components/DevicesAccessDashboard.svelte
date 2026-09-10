@@ -665,13 +665,12 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
               {@const verifiedVaultCount = view.vaults.filter(
                 (entry) => entry.verified,
               ).length}
-              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments --
-              Existing call shape is preserved for this lint-only fix.
-              {@const selectedVaultView = new SelectedIdentityVault({
+              {@const selectedVaultRequest = {
                 selection: selectedVault,
                 vaults: identity.vaults,
                 fallbackLabel: vault.t(I18N_KEYS.DevicesAccessBridgeVault),
-              })}
+              } satisfies ConstructorParameters<typeof SelectedIdentityVault>[0]}
+              {@const selectedVaultView = new SelectedIdentityVault(selectedVaultRequest)}
               {@const selectedVaultIsVerified = selectedVaultView.verified}
               {@const selectedVaultName = selectedVaultView.label}
               {@const selectedVaultExists =
