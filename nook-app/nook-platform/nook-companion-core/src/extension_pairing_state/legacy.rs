@@ -98,7 +98,7 @@ impl ExtensionPairingState {
             return Err(ExtensionPairingStateError::InvalidLegacyState);
         }
         let mut entries = Vec::with_capacity(records.len());
-        let mut selected = None;
+        let mut selected = Err(ExtensionPairingStateError::InvalidLegacyState);
         for (key, record) in records {
             let grant = match record {
                 LegacyExtensionPairingRecord::CompleteGrant(grant) => grant,
@@ -127,14 +127,14 @@ impl ExtensionPairingState {
                 return Err(ExtensionPairingStateError::InvalidLegacyState);
             }
             if key == selected_key {
-                selected = Some(grant.clone());
+                selected = Ok(grant.clone());
             }
             entries.push(ExtensionPairingEntry {
                 key,
                 record: ExtensionPairingRecord::Grant(grant),
             });
         }
-        let selected = selected.ok_or(ExtensionPairingStateError::InvalidLegacyState)?;
+        let selected = selected?;
         if crate::ExtensionSyncProviderCount::from(setup.sync_provider_count)
             != selected.sync_provider_count
         {
