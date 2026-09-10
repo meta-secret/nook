@@ -620,12 +620,12 @@ mod tests {
         let first_loaded = AuthProviderDatabase::load_auth_providers(&first).await?;
         let second_loaded = AuthProviderDatabase::load_auth_providers(&second).await?;
         assert_eq!(
-            first_loaded.snapshot.providers[0].github_pat.as_deref(),
-            Some("github_pat_first_new")
+            first_loaded.snapshot.providers[0].github_pat,
+            nook_core::StoredGithubPat::Token(("github_pat_first_new").to_owned())
         );
         assert_eq!(
-            second_loaded.snapshot.providers[0].github_pat.as_deref(),
-            Some("github_pat_second")
+            second_loaded.snapshot.providers[0].github_pat,
+            nook_core::StoredGithubPat::Token(("github_pat_second").to_owned())
         );
         Ok(())
     }
@@ -697,8 +697,8 @@ mod tests {
         provider_ids.sort_unstable();
         assert_eq!(provider_ids, vec!["gh-incoming", "gh-retained"]);
         assert_eq!(
-            stored.active_vault_store_id.as_deref(),
-            Some("store-incoming")
+            stored.active_vault_store_id,
+            nook_core::ActiveVaultScope::StoreId(("store-incoming").to_owned())
         );
         assert_eq!(
             stored.credential_storage_admission(),
@@ -816,8 +816,8 @@ mod tests {
         assert_eq!(stored.providers.len(), 1);
         assert_eq!(stored.providers[0].id, "gh-retained");
         assert_eq!(
-            stored.active_vault_store_id.as_deref(),
-            Some("store-incoming")
+            stored.active_vault_store_id,
+            nook_core::ActiveVaultScope::StoreId(("store-incoming").to_owned())
         );
         Ok(())
     }

@@ -58,7 +58,7 @@ pub use oauth::{
 };
 pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
 pub use scope::{
-    ActiveVaultProviderRows, ProviderEventFlushTarget, ProviderRows,
+    ActiveVaultProviderRows, LocalProviderSelection, ProviderEventFlushTarget, ProviderRows,
     RemoteEventFlushProviderRequest,
 };
 pub use state::*;

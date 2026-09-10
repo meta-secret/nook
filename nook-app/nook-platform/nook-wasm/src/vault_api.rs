@@ -147,7 +147,7 @@ impl NookVaultManager {
         let created_at: String = Date::new_0().to_iso_string().into();
         let nook_core::LocalProviderRowOutcome { snapshot, change } =
             snapshot.ensure_local_row(LocalProviderRowRequest {
-                active_store_id: None,
+                active_store_id: &nook_core::ActiveVaultScope::Unselected,
                 new_id: &new_id,
                 created_at: &created_at,
             });
@@ -177,7 +177,7 @@ impl NookVaultManager {
         let created_at: String = Date::new_0().to_iso_string().into();
         let nook_core::LocalProviderRowOutcome { snapshot, change } =
             snapshot.ensure_local_row(LocalProviderRowRequest {
-                active_store_id: None,
+                active_store_id: &nook_core::ActiveVaultScope::Unselected,
                 new_id: &new_id,
                 created_at: &created_at,
             });
@@ -369,7 +369,7 @@ pub fn ensure_local_provider_row(
     let created_at: String = Date::new_0().to_iso_string().into();
     let nook_core::LocalProviderRowOutcome { snapshot: next, .. } =
         snapshot.ensure_local_row(LocalProviderRowRequest {
-            active_store_id: Some(active_store_id),
+            active_store_id: &nook_core::ActiveVaultScope::StoreId(active_store_id.to_owned()),
             new_id: &new_id,
             created_at: &created_at,
         });

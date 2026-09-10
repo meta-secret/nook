@@ -251,7 +251,7 @@ impl ActiveOAuthMerge<'_> {
 
 struct OAuthUpdateTarget<'a> {
     providers: &'a [StorageProviderData],
-    active_store_id: Option<&'a str>,
+    active_store_id: &'a crate::ActiveVaultScope,
     active_oauth: &'a OAuthFileConfigData,
 }
 
@@ -272,10 +272,7 @@ impl OAuthUpdateTarget<'_> {
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: String::new(),
         };
-        let sync_providers = ProviderRows { providers }
-            .for_vault(active_store_id)
-            .sync()
-            .ok()?;
+        let sync_providers = ProviderRows { providers }.for_vault(active_store_id).sync();
         DuplicateProviderSelection {
             providers: &sync_providers,
             candidate: &candidate,
@@ -286,9 +283,13 @@ impl OAuthUpdateTarget<'_> {
     }
 }
 
+struct ActiveProviderSnapshotRows {
+    active: Vec<StorageProviderData>,
+    local: crate::LocalProviderSelection,
+}
 impl ProviderSaveRequest {
-    fn active_provider_rows(&self) -> (Vec<StorageProviderData>, Option<StorageProviderData>) {
-        let active_store_id = self.snapshot.active_vault_store_id.as_deref();
+    fn active_provider_rows(&self) -> ActiveProviderSnapshotRows {
+        let active_store_id = &self.snapshot.active_vault_store_id;
         let active = ProviderRows {
             providers: &self.snapshot.providers,
         }
@@ -298,18 +299,19 @@ impl ProviderSaveRequest {
             providers: &self.snapshot.providers,
         }
         .for_vault(active_store_id)
-        .local()
-        .ok()
-        .flatten();
-        (active, local)
+        .local();
+        ActiveProviderSnapshotRows { active, local }
     }
 
     #[must_use]
     pub fn apply(&self) -> ProviderSaveOutcome {
         let request = self;
         let provider_type = request.setup.provider_type(request.storage_mode);
-        let active_store_id = request.snapshot.active_vault_store_id.as_deref();
-        let (active_providers, local_provider) = request.active_provider_rows();
+        let active_store_id = &request.snapshot.active_vault_store_id;
+        let ActiveProviderSnapshotRows {
+            active: active_providers,
+            local: local_provider,
+        } = request.active_provider_rows();
         let mut providers = request.snapshot.providers.clone();
         let mut oauth_update_id = None;
 
@@ -337,13 +339,13 @@ impl ProviderSaveRequest {
             }
         } else if request.setup.is_new()
             && provider_type == StorageProviderType::Local
-            && local_provider.is_none()
+            && matches!(local_provider, crate::LocalProviderSelection::Unseeded)
         {
             providers.push(request.provider_defaults(ProviderRowDefaults {
                 provider_type: StorageProviderType::Local,
                 label: crate::ProviderLabel::Local.render(),
             }));
-        } else if let Some(local_provider) = local_provider {
+        } else if let crate::LocalProviderSelection::Selected(local_provider) = local_provider {
             for provider in &mut providers {
                 if provider.id == local_provider.id {
                     provider.store_id = request.provider_store_id.clone();
@@ -354,8 +356,10 @@ impl ProviderSaveRequest {
                 providers,
                 active_vault_store_id: request.snapshot.active_vault_store_id.clone(),
             };
-            let (seeded, _) = snapshot.ensure_local_row(LocalProviderRowRequest {
-                active_store_id: Some(store_id),
+            let crate::LocalProviderRowOutcome {
+                snapshot: seeded, ..
+            } = snapshot.ensure_local_row(LocalProviderRowRequest {
+                active_store_id: &crate::ActiveVaultScope::StoreId(store_id.clone()),
                 new_id: &request.new_provider_id,
                 created_at: &request.created_at,
             });
@@ -460,9 +464,18 @@ mod tests {
         let provider = &snapshot.providers[0];
         assert_eq!(provider.id, "provider-new");
         assert_eq!(provider.label, "GitHub · owner/repo");
-        assert_eq!(provider.github_pat.as_deref(), Some("pat"));
-        assert_eq!(provider.github_repo.as_deref(), Some("owner/repo"));
-        assert_eq!(provider.store_id.as_deref(), Some("vault-1"));
+        assert_eq!(
+            provider.github_pat,
+            crate::StoredGithubPat::Token(("pat").to_owned())
+        );
+        assert_eq!(
+            provider.github_repo,
+            crate::StoredGithubRepository::Repository(("owner/repo").to_owned())
+        );
+        assert_eq!(
+            provider.store_id,
+            crate::ProviderVaultScope::StoreId(("vault-1").to_owned())
+        );
         Ok(())
     }
 
@@ -501,7 +514,10 @@ mod tests {
         assert_eq!(snapshot.providers[0], other_vault_provider);
         assert_eq!(snapshot.providers.len(), 2);
         assert_eq!(snapshot.providers[1].id, "provider-new");
-        assert_eq!(snapshot.providers[1].store_id.as_deref(), Some("vault-1"));
+        assert_eq!(
+            snapshot.providers[1].store_id,
+            crate::ProviderVaultScope::StoreId(("vault-1").to_owned())
+        );
         Ok(())
     }
 
@@ -533,7 +549,10 @@ mod tests {
             snapshot.providers[0].provider_type,
             StorageProviderType::Local
         );
-        assert_eq!(snapshot.providers[0].store_id.as_deref(), Some("vault-1"));
+        assert_eq!(
+            snapshot.providers[0].store_id,
+            crate::ProviderVaultScope::StoreId(("vault-1").to_owned())
+        );
         Ok(())
     }
 
@@ -561,9 +580,18 @@ mod tests {
             .oauth_file
             .as_ref()
             .ok_or("expected persisted OAuth config")?;
-        assert_eq!(persisted.access_token.as_deref(), Some("fresh-access"));
-        assert_eq!(persisted.file_id.as_deref(), Some("remote-file"));
-        assert_eq!(persisted.folder_id.as_deref(), Some("folder"));
+        assert_eq!(
+            persisted.access_token,
+            crate::StoredOAuthAccessCredential::AccessToken(("fresh-access").to_owned())
+        );
+        assert_eq!(
+            persisted.file_id,
+            crate::StoredOAuthRemoteFileId::FileId(("remote-file").to_owned())
+        );
+        assert_eq!(
+            persisted.folder_id,
+            crate::StoredGoogleDriveFolder::FolderId(("folder").to_owned())
+        );
         assert_eq!(
             persisted.refresh_token,
             StoredOAuthRefreshCredential::NotIssued
@@ -591,7 +619,10 @@ mod tests {
             drive_file: "nook.yaml",
         }
         .merge();
-        assert_eq!(merged.access_token.as_deref(), Some("persisted-token"));
+        assert_eq!(
+            merged.access_token,
+            crate::StoredOAuthAccessCredential::AccessToken(("persisted-token").to_owned())
+        );
     }
 
     #[test]
@@ -611,7 +642,10 @@ mod tests {
             drive_file: "nook.yaml",
         }
         .merge();
-        assert_eq!(merged.refresh_token.as_deref(), Some("persisted-refresh"));
+        assert_eq!(
+            merged.refresh_token,
+            crate::StoredOAuthRefreshCredential::Token(("persisted-refresh").to_owned())
+        );
     }
 
     #[test]
@@ -631,7 +665,10 @@ mod tests {
             drive_file: "fallback.yaml",
         }
         .merge();
-        assert_eq!(merged.file_name.as_deref(), Some("discovered.yaml"));
+        assert_eq!(
+            merged.file_name,
+            crate::StoredOAuthRemoteFileName::FileName(("discovered.yaml").to_owned())
+        );
 
         let blank_active = OAuthFileConfigData {
             file_name: StoredOAuthRemoteFileName::FileName("\t".to_owned()),
@@ -643,7 +680,10 @@ mod tests {
             drive_file: "fallback.yaml",
         }
         .merge();
-        assert_eq!(fallback.file_name.as_deref(), Some("fallback.yaml"));
+        assert_eq!(
+            fallback.file_name,
+            crate::StoredOAuthRemoteFileName::FileName(("fallback.yaml").to_owned())
+        );
     }
 
     #[test]

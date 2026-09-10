@@ -134,7 +134,10 @@ mod tests {
                 common_content_hash: crate::VaultRevision::content_hash(""),
             }
         );
-        assert_eq!(updated[0].store_id.as_deref(), Some("store-1"));
+        assert_eq!(
+            updated[0].store_id,
+            crate::ProviderVaultScope::StoreId(("store-1").to_owned())
+        );
         assert_eq!(updated[1], untouched);
     }
 }

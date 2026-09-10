@@ -1,6 +1,6 @@
 use super::{NookProviderSelection, NookStorageConnectArgs, wasm_bindgen};
 use crate::types::NookManagerStoreScope;
-use nook_core::{ManagerStoreScopeRef, ProviderRows};
+use nook_core::{ActiveVaultScope, LocalProviderSelection, ManagerStoreScopeRef, ProviderRows};
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
@@ -17,13 +17,13 @@ pub fn active_vault_providers(
     scope: &NookManagerStoreScope,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let active_store_id = match scope.as_core() {
-        ManagerStoreScopeRef::Unscoped => None,
-        ManagerStoreScopeRef::Store(store_id) => Some(store_id),
+        ManagerStoreScopeRef::Unscoped => ActiveVaultScope::Unselected,
+        ManagerStoreScopeRef::Store(store_id) => ActiveVaultScope::StoreId(store_id.to_owned()),
     };
     snapshot.providers = ProviderRows {
         providers: &snapshot.providers,
     }
-    .for_vault(active_store_id)
+    .for_vault(&active_store_id)
     .active();
     Ok(snapshot)
 }
@@ -35,14 +35,14 @@ pub fn sync_providers_for_active_vault(
     scope: &NookManagerStoreScope,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let active_store_id = match scope.as_core() {
-        ManagerStoreScopeRef::Unscoped => None,
-        ManagerStoreScopeRef::Store(store_id) => Some(store_id),
+        ManagerStoreScopeRef::Unscoped => ActiveVaultScope::Unselected,
+        ManagerStoreScopeRef::Store(store_id) => ActiveVaultScope::StoreId(store_id.to_owned()),
     };
     snapshot.providers = ProviderRows {
         providers: &snapshot.providers,
     }
-    .for_vault(active_store_id)
-    .sync()?;
+    .for_vault(&active_store_id)
+    .sync();
     Ok(snapshot)
 }
 
@@ -53,18 +53,20 @@ pub fn local_provider_for_active_vault(
     scope: &NookManagerStoreScope,
 ) -> Result<NookProviderSelection, wasm_bindgen::JsError> {
     let active_store_id = match scope.as_core() {
-        ManagerStoreScopeRef::Unscoped => None,
-        ManagerStoreScopeRef::Store(store_id) => Some(store_id),
+        ManagerStoreScopeRef::Unscoped => ActiveVaultScope::Unselected,
+        ManagerStoreScopeRef::Store(store_id) => ActiveVaultScope::StoreId(store_id.to_owned()),
     };
     Ok(NookProviderSelection(
         match (ProviderRows {
             providers: &snapshot.providers,
         })
-        .for_vault(active_store_id)
-        .local()?
+        .for_vault(&active_store_id)
+        .local()
         {
-            Some(provider) => nook_core::ProviderSelection::Selected(provider.id.into()),
-            None => nook_core::ProviderSelection::Unavailable,
+            LocalProviderSelection::Selected(provider) => {
+                nook_core::ProviderSelection::Selected(provider.id.into())
+            }
+            LocalProviderSelection::Unseeded => nook_core::ProviderSelection::Unavailable,
         },
     ))
 }

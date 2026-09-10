@@ -253,8 +253,8 @@ mod tests {
         let raw = json!({ "providers": [], "activeVaultStoreId": "vault-1" });
         let normalized = NormalizedAuthSnapshot::from(raw);
         assert_eq!(
-            normalized.snapshot.active_vault_store_id.as_deref(),
-            Some("vault-1")
+            normalized.snapshot.active_vault_store_id,
+            crate::ActiveVaultScope::StoreId(("vault-1").to_owned())
         );
         assert_eq!(normalized.migration, ProviderWireMigration::Migrated);
     }

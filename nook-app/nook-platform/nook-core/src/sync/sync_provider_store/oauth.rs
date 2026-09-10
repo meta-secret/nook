@@ -252,7 +252,10 @@ mod tests {
         assert_eq!(switched.account_email, StoredOAuthAccountIdentity::Unknown);
         assert_eq!(switched.file_id, StoredOAuthRemoteFileId::Unresolved);
         assert_eq!(switched.folder_id, StoredGoogleDriveFolder::Root);
-        assert_eq!(switched.file_name.as_deref(), Some("nook-events"));
+        assert_eq!(
+            switched.file_name,
+            crate::StoredOAuthRemoteFileName::FileName(("nook-events").to_owned())
+        );
     }
 
     #[test]
@@ -278,9 +281,15 @@ mod tests {
             google.access_token,
             StoredOAuthAccessCredential::AccessToken("new-google-token".to_owned())
         );
-        assert_eq!(google.expires_at.as_deref(), Some("2026-07-20T00:00:00Z"));
+        assert_eq!(
+            google.expires_at,
+            crate::StoredOAuthTokenExpiry::ExpiresAt(("2026-07-20T00:00:00Z").to_owned())
+        );
         assert_eq!(google.drive_mode, GoogleDriveMode::Shared);
-        assert_eq!(google.folder_id.as_deref(), Some("folder"));
+        assert_eq!(
+            google.folder_id,
+            crate::StoredGoogleDriveFolder::FolderId(("folder").to_owned())
+        );
         assert_eq!(google.icloud_mode, ICloudMode::Private);
 
         let icloud_existing = OAuthFileConfigData {
@@ -306,7 +315,10 @@ mod tests {
             icloud.access_token,
             StoredOAuthAccessCredential::AccessToken("new-icloud-token".to_owned())
         );
-        assert_eq!(icloud.account_email.as_deref(), Some("new@example.com"));
+        assert_eq!(
+            icloud.account_email,
+            crate::StoredOAuthAccountIdentity::Email(("new@example.com").to_owned())
+        );
         assert_eq!(icloud.icloud_mode, ICloudMode::Shared);
         assert_eq!(
             icloud.icloud_share_target,
@@ -329,14 +341,23 @@ mod tests {
         let bound = config
             .bound_google_drive_folder("https://drive.google.com/drive/folders/folder-team")?;
         assert_eq!(bound.drive_mode, GoogleDriveMode::Shared);
-        assert_eq!(bound.folder_id.as_deref(), Some("folder-team"));
+        assert_eq!(
+            bound.folder_id,
+            crate::StoredGoogleDriveFolder::FolderId(("folder-team").to_owned())
+        );
         assert_eq!(bound.file_id, StoredOAuthRemoteFileId::Unresolved);
         assert_eq!(
             bound.access_token,
             StoredOAuthAccessCredential::AccessToken("shared-token".to_owned())
         );
-        assert_eq!(bound.refresh_token.as_deref(), Some("refresh"));
-        assert_eq!(bound.file_name.as_deref(), Some("nook-events"));
+        assert_eq!(
+            bound.refresh_token,
+            crate::StoredOAuthRefreshCredential::Token(("refresh").to_owned())
+        );
+        assert_eq!(
+            bound.file_name,
+            crate::StoredOAuthRemoteFileName::FileName(("nook-events").to_owned())
+        );
         Ok(())
     }
 
@@ -358,7 +379,10 @@ mod tests {
         );
 
         let updated = google.with_remote_ref(" manager-ref ").updated()?;
-        assert_eq!(updated.file_id.as_deref(), Some("manager-ref"));
+        assert_eq!(
+            updated.file_id,
+            crate::StoredOAuthRemoteFileId::FileId(("manager-ref").to_owned())
+        );
         assert!(matches!(
             updated.with_remote_ref("manager-ref"),
             OAuthRemoteConfigurationUpdate::Unchanged
@@ -435,16 +459,28 @@ mod tests {
                 account_name: &account_name,
                 existing: &StoredOAuthFileConfiguration::Configured(existing.clone()),
             });
-            assert_eq!(projected.access_token.as_deref(), Some(" token "));
-            assert_eq!(projected.account_email.as_deref(), Some(expected));
+            assert_eq!(
+                projected.access_token,
+                crate::StoredOAuthAccessCredential::AccessToken((" token ").to_owned())
+            );
+            assert_eq!(
+                projected.account_email,
+                crate::StoredOAuthAccountIdentity::Email((expected).to_owned())
+            );
         }
         let google = OAuthFileConfigData::from_google_token(&GoogleOAuthTokenInput {
             access_token: " token ",
             expires_at: " expiry ",
             existing: &StoredOAuthFileConfiguration::NotApplicable,
         });
-        assert_eq!(google.access_token.as_deref(), Some(" token "));
-        assert_eq!(google.expires_at.as_deref(), Some(" expiry "));
+        assert_eq!(
+            google.access_token,
+            crate::StoredOAuthAccessCredential::AccessToken((" token ").to_owned())
+        );
+        assert_eq!(
+            google.expires_at,
+            crate::StoredOAuthTokenExpiry::ExpiresAt((" expiry ").to_owned())
+        );
     }
 
     #[test]

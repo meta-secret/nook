@@ -484,11 +484,26 @@ mod tests {
         assert_eq!(oauth.oauth_preset()?, "google-drive");
         assert_eq!(oauth.oauth_access_token()?, "access-token");
         let config = oauth.oauth_configuration(nook_core::OAuthFileConfigData::default())?;
-        assert_eq!(config.refresh_token.as_deref(), Some("refresh-token"));
-        assert_eq!(config.expires_at.as_deref(), Some("2030-01-01"));
-        assert_eq!(config.file_id.as_deref(), Some("file-1"));
-        assert_eq!(config.file_name.as_deref(), Some("vault.json"));
-        assert_eq!(config.account_email.as_deref(), Some("owner@example.com"));
+        assert_eq!(
+            config.refresh_token,
+            nook_core::StoredOAuthRefreshCredential::Token(("refresh-token").to_owned())
+        );
+        assert_eq!(
+            config.expires_at,
+            nook_core::StoredOAuthTokenExpiry::ExpiresAt(("2030-01-01").to_owned())
+        );
+        assert_eq!(
+            config.file_id,
+            nook_core::StoredOAuthRemoteFileId::FileId(("file-1").to_owned())
+        );
+        assert_eq!(
+            config.file_name,
+            nook_core::StoredOAuthRemoteFileName::FileName(("vault.json").to_owned())
+        );
+        assert_eq!(
+            config.account_email,
+            nook_core::StoredOAuthAccountIdentity::Email(("owner@example.com").to_owned())
+        );
 
         let drive =
             NookEnrollmentProvider::shared_provider_grant("joiner".into(), "folder-1".into());

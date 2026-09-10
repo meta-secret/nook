@@ -5,7 +5,7 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::{
-    ProviderSyncCheckpoint, StoredICloudShareTarget, StoredOAuthRemoteFileId,
+    ActiveVaultScope, ProviderSyncCheckpoint, StoredICloudShareTarget, StoredOAuthRemoteFileId,
     SyncProviderTargetIdentity,
 };
 
@@ -28,7 +28,7 @@ pub struct DuplicateProviderSelection<'a> {
 }
 #[derive(Clone, Copy)]
 pub struct LocalProviderRowRequest<'a> {
-    pub active_store_id: Option<&'a str>,
+    pub active_store_id: &'a ActiveVaultScope,
     pub new_id: &'a str,
     pub created_at: &'a str,
 }
@@ -234,17 +234,29 @@ impl AuthProvidersSnapshotData {
             new_id,
             created_at,
         } = request;
-        let store_id = CatalogProviderText(active_store_id)
-            .non_empty()
-            .or_else(|| CatalogProviderText(self.active_vault_store_id.as_deref()).non_empty());
+        let store_id = match active_store_id {
+            ActiveVaultScope::StoreId(id) if !id.trim().is_empty() => {
+                ProviderVaultScope::StoreId(id.trim().to_owned())
+            }
+            ActiveVaultScope::StoreId(_) | ActiveVaultScope::Unselected => {
+                match &self.active_vault_store_id {
+                    ActiveVaultScope::StoreId(id) if !id.trim().is_empty() => {
+                        ProviderVaultScope::StoreId(id.trim().to_owned())
+                    }
+                    ActiveVaultScope::StoreId(_) | ActiveVaultScope::Unselected => {
+                        ProviderVaultScope::Unscoped
+                    }
+                }
+            }
+        };
         let has_local_for_vault = self.providers.iter().any(|provider| {
             provider.provider_type == StorageProviderType::Local
-                && match (
-                    &store_id,
-                    CatalogProviderText(provider.store_id.as_deref()).non_empty(),
-                ) {
-                    (None, _) | (Some(_), None) => true,
-                    (Some(active), Some(existing)) => *active == existing,
+                && match (&store_id, &provider.store_id) {
+                    (ProviderVaultScope::Unscoped, _) | (_, ProviderVaultScope::Unscoped) => true,
+                    (
+                        ProviderVaultScope::StoreId(active),
+                        ProviderVaultScope::StoreId(existing),
+                    ) => existing.trim().is_empty() || active == existing.trim(),
                 }
         });
         if has_local_for_vault {
@@ -261,10 +273,7 @@ impl AuthProvidersSnapshotData {
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            store_id: match store_id {
-                Some(id) => ProviderVaultScope::StoreId(id),
-                None => ProviderVaultScope::Unscoped,
-            },
+            store_id,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: created_at.to_owned(),
         };
@@ -708,7 +717,7 @@ mod tests {
             snapshot: next,
             change,
         } = snapshot.ensure_local_row(LocalProviderRowRequest {
-            active_store_id: None,
+            active_store_id: &ActiveVaultScope::Unselected,
             new_id: "local-1",
             created_at: "2026-06-24T00:00:00.000Z",
         });
@@ -728,33 +737,41 @@ mod tests {
             snapshot: existing,
             change,
         } = existing.ensure_local_row(LocalProviderRowRequest {
-            active_store_id: Some("vault-1"),
+            active_store_id: &ActiveVaultScope::StoreId("vault-1".to_owned()),
             new_id: "local-2",
             created_at: "x",
         });
         assert_eq!(change, LocalProviderRowChange::Present);
         assert_eq!(existing.providers.len(), 1);
 
-        for active_store_id in [None, Some(" "), Some(" vault-1 "), Some("vault-2")] {
+        for active_store_id in [
+            ActiveVaultScope::Unselected,
+            ActiveVaultScope::StoreId(" ".to_owned()),
+            ActiveVaultScope::StoreId(" vault-1 ".to_owned()),
+            ActiveVaultScope::StoreId("vault-2".to_owned()),
+        ] {
             let LocalProviderRowOutcome {
                 snapshot: next,
                 change,
             } = existing.clone().ensure_local_row(LocalProviderRowRequest {
-                active_store_id,
+                active_store_id: &active_store_id,
                 new_id: "new",
                 created_at: "time",
             });
             assert_eq!(next.active_vault_store_id, existing.active_vault_store_id);
             assert_eq!(
                 change,
-                if active_store_id == Some("vault-2") {
+                if active_store_id == ActiveVaultScope::StoreId("vault-2".to_owned()) {
                     LocalProviderRowChange::Inserted
                 } else {
                     LocalProviderRowChange::Present
                 }
             );
             if change == LocalProviderRowChange::Inserted {
-                assert_eq!(next.providers[0].store_id.as_deref(), Some("vault-2"));
+                assert_eq!(
+                    next.providers[0].store_id,
+                    crate::ProviderVaultScope::StoreId(("vault-2").to_owned())
+                );
                 assert_eq!(next.providers[1], existing.providers[0]);
             } else {
                 assert_eq!(next, existing);

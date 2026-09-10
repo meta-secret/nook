@@ -409,8 +409,8 @@ mod wasm_idb_tests {
         .await?;
         let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
         assert_eq!(
-            loaded.snapshot.providers[0].github_pat.as_deref(),
-            Some(pat)
+            loaded.snapshot.providers[0].github_pat,
+            nook_core::StoredGithubPat::Token((pat).to_owned())
         );
         Ok(())
     }
@@ -576,8 +576,8 @@ mod wasm_idb_tests {
             .open_credentials(&first)
             .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
-            rollback.providers[0].github_pat.as_deref(),
-            Some("github_pat_legacy_first")
+            rollback.providers[0].github_pat,
+            nook_core::StoredGithubPat::Token(("github_pat_legacy_first").to_owned())
         );
         ProviderSnapshotPublication {
             identity: &second,
@@ -648,8 +648,8 @@ mod wasm_idb_tests {
             .open_credentials(&identity)
             .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
-            rollback.providers[0].github_pat.as_deref(),
-            Some("github_pat_newer")
+            rollback.providers[0].github_pat,
+            nook_core::StoredGithubPat::Token(("github_pat_newer").to_owned())
         );
         AuthProviderDatabase::clear_auth_providers_db().await?;
         Ok(())
@@ -755,8 +755,8 @@ mod wasm_idb_tests {
             .open_credentials(&first)
             .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
-            rollback.providers[0].github_pat.as_deref(),
-            Some("github_pat_locked_legacy")
+            rollback.providers[0].github_pat,
+            nook_core::StoredGithubPat::Token(("github_pat_locked_legacy").to_owned())
         );
         assert_eq!(
             AuthProviderDatabase::load_auth_providers(&first)
@@ -974,8 +974,14 @@ mod wasm_idb_tests {
             .oauth_file
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("loaded oauth_file configuration missing"))?;
-        assert_eq!(loaded_oauth.access_token.as_deref(), Some(access));
-        assert_eq!(loaded_oauth.refresh_token.as_deref(), Some(refresh));
+        assert_eq!(
+            loaded_oauth.access_token,
+            nook_core::StoredOAuthAccessCredential::AccessToken((access).to_owned())
+        );
+        assert_eq!(
+            loaded_oauth.refresh_token,
+            nook_core::StoredOAuthRefreshCredential::Token((refresh).to_owned())
+        );
         Ok(())
     }
 }

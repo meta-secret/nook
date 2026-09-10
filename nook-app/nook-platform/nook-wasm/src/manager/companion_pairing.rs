@@ -313,8 +313,8 @@ mod tests {
                 )
                 .map_err(|error| anyhow::anyhow!("unexpected rejection: {error:?}"))?;
             assert_eq!(
-                admitted.providers.active_vault_store_id.as_deref(),
-                Some("store-1")
+                admitted.providers.active_vault_store_id,
+                nook_core::ActiveVaultScope::StoreId(("store-1").to_owned())
             );
             assert_eq!(
                 admitted.providers.providers.len(),
