@@ -10,6 +10,7 @@ use crate::EventDbSaveEventBytes;
 use crate::EventDbSaveEventBytesToStore;
 use crate::storage::{event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
+use nook_core::DeviceAuthorization;
 use nook_core::{
     DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
     IdentityVaultKeyOpening,
@@ -106,18 +107,21 @@ impl<'a> ExistingVaultHandoff<'a> {
         }
         .ancestors()?;
         let expected_public_key = input.app_key.public_key();
-        let envelopes = EventGraphDeviceAccess::new(&graph)
-            .active_envelopes(&EventGraphDeviceAccessRequest {
+        let envelopes = match EventGraphDeviceAccess::new(&graph).active_envelopes(
+            &EventGraphDeviceAccessRequest {
                 expected_device_id: &input.existing.device_id,
                 expected_public_key: &expected_public_key,
                 expected_signing_public_key: input.signing_public_key,
-            })?
-            .ok_or_else(|| {
-                NookError::Database(
+            },
+        )? {
+            DeviceAuthorization::Granted(envelopes) => envelopes,
+            DeviceAuthorization::NotGranted => {
+                return Err(NookError::Database(
                     "Imported extension identity is not active in the signed vault roster."
                         .to_owned(),
-                )
-            })?;
+                ));
+            }
+        };
         let reconciliation = IdentityVaultDekReconciliation {
             secrets_envelope: envelopes.secrets_key,
             members_envelope: envelopes.members_key,

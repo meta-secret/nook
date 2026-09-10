@@ -25,6 +25,13 @@ pub use transition::{
     SigningSeedProtection, WrappedAppKeyReplacement,
 };
 
+/// Protected material must be opened or explicitly supplied by legacy migration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProtectedSigningMaterial {
+    Opened(SigningSeedHex),
+    LegacySeedRequired,
+}
+
 pub const LOCAL_IDENTITY_KEYRING_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -94,24 +101,33 @@ impl LocalIdentityKeyringEntry {
         self.signing_seed_envelope.is_some()
     }
 
-    pub fn open_signing_seed(&self, app_key: &AppKey) -> MultiDeviceResult<Option<String>> {
+    pub fn open_signing_seed(
+        &self,
+        app_key: &AppKey,
+    ) -> MultiDeviceResult<ProtectedSigningMaterial> {
         self.require_matching_app_key(app_key)?;
-        self.signing_seed_envelope
-            .as_ref()
-            .map(|envelope| app_key.open_utf8(envelope))
-            .transpose()
+        match &self.signing_seed_envelope {
+            Some(envelope) => Ok(ProtectedSigningMaterial::Opened(
+                SigningSeedHex::from_trusted(app_key.open_utf8(envelope)?),
+            )),
+            None => Ok(ProtectedSigningMaterial::LegacySeedRequired),
+        }
     }
 
     pub fn signing_public_key(
         &self,
         app_key: &AppKey,
     ) -> MultiDeviceResult<DeviceSigningPublicKey> {
-        let seed = self.open_signing_seed(app_key)?.ok_or_else(|| {
-            MultiDeviceError::InvalidDeviceIdentity(
-                "local identity keyring entry has no protected signing seed".to_owned(),
-            )
-        })?;
-        DeviceSigningPublicKey::derive_from_seed(&seed)
+        match self.open_signing_seed(app_key)? {
+            ProtectedSigningMaterial::Opened(seed) => {
+                DeviceSigningPublicKey::derive_from_seed(seed.as_str())
+            }
+            ProtectedSigningMaterial::LegacySeedRequired => {
+                Err(MultiDeviceError::InvalidDeviceIdentity(
+                    "local identity keyring entry has no protected signing seed".to_owned(),
+                ))
+            }
+        }
     }
 
     pub fn protect_signing_seed(

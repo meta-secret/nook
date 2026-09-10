@@ -9,6 +9,7 @@ use super::LocalIdentityRecovery;
 use crate::BrowserTimestamp;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
+use nook_core::AppKeyIdentityMembership;
 use nook_core::IsoTimestamp;
 use nook_core::{
     DirectoryCreationEnrollment, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
@@ -50,13 +51,13 @@ impl StagedSimpleGenesisInput<'_> {
             .identity_for_app_key(live_owner)
             .map_err(NookDatabase::map_domain_error)?
         {
-            Some(identity_id) => {
+            AppKeyIdentityMembership::Enrolled(identity_id) => {
                 directory = directory
                     .select(&identity_id)
                     .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
                 identity_id
             }
-            None => {
+            AppKeyIdentityMembership::Unenrolled => {
                 let created = directory
                     .create_identity(IdentityCreation {
                         label: self.label,
@@ -68,10 +69,10 @@ impl StagedSimpleGenesisInput<'_> {
                 created.identity_id
             }
         };
-        if directory
+        if matches!(directory
             .identity_for_app_key(self.app_key)
             .map_err(NookDatabase::map_domain_error)?
-            .is_some_and(|identity_id| identity_id != owner_identity_id)
+            , AppKeyIdentityMembership::Enrolled(identity_id) if identity_id != owner_identity_id)
         {
             return Err(NookError::Database(
                 "Staged app key belongs to another local identity.".to_owned(),
@@ -392,7 +393,10 @@ mod tests {
                 .iter()
                 .any(|identity| identity.owns_vault(&pending.store_id))
         );
-        assert!(current.identity_for_app_key(&concurrent)?.is_some());
+        assert!(matches!(
+            current.identity_for_app_key(&concurrent)?,
+            AppKeyIdentityMembership::Enrolled(_)
+        ));
         assert!(
             PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
                 .await?

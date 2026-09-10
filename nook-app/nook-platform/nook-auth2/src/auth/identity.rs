@@ -322,7 +322,9 @@ impl IdentityRecord {
     ) -> MultiDeviceResult<VaultKeys> {
         match self.existing_vault_keys(&request)? {
             CommittedVaultKeys::Opened(keys) => Ok(keys),
-            CommittedVaultKeys::VaultNotCreated => Err(MultiDeviceError::IdentityEnrollmentRequired),
+            CommittedVaultKeys::VaultNotCreated => {
+                Err(MultiDeviceError::IdentityEnrollmentRequired)
+            }
         }
     }
 

@@ -123,9 +123,10 @@ pub use nook_auth2::{
     ContextBoundSentinelUnlock, IdentitySigningSeedProtection, KeyringEntryRejection,
     KeyringRejection, LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring,
     LocalIdentityKeyringEntry, ProtectedIdentityKeyring, ProtectedSigningEntry,
-    RemovedLocalIdentityKey, SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness,
-    SentinelUnlockRejection, SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession,
-    SentinelUnlockStatus, SentinelUnlockVersion, SigningSeedProtection, WrappedAppKeyReplacement,
+    ProtectedSigningMaterial, RemovedLocalIdentityKey, SentinelUnlockPolicy, SentinelUnlockQuorum,
+    SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
+    SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
+    SigningSeedProtection, WrappedAppKeyReplacement,
 };
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
@@ -214,13 +215,14 @@ pub use nook_auth2::{
 };
 
 pub use auth::vault_meta_actions::{
-    EventGraphAuthorizationProjection, EventGraphDeviceAccess, EventGraphDeviceAccessRequest,
-    SentinelMemberRecordProjection, SentinelMemberRecordProjectionRequest,
-    VaultMetaGraphProjection, VaultMetaOperationApplier, VaultMetaOperationRequest,
+    DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
+    EventGraphDeviceAccessRequest, SentinelMemberRecordProjection,
+    SentinelMemberRecordProjectionRequest, VaultMetaGraphProjection, VaultMetaOperationApplier,
+    VaultMetaOperationRequest,
 };
 pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
-    AppId, AppKey, DirectoryCreationEnrollment, DirectoryLegacyMigration,
+    AppId, AppKey, AppKeyIdentityMembership, DirectoryCreationEnrollment, DirectoryLegacyMigration,
     DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
     DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
     IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityLegacyVaultImport,

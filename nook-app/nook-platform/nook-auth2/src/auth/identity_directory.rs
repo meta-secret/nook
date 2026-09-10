@@ -2,6 +2,13 @@
 mod enrollment;
 mod recovery;
 
+/// Membership of an admitted app key in the local identity directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppKeyIdentityMembership {
+    Enrolled(IdentityId),
+    Unenrolled,
+}
+
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
@@ -239,7 +246,7 @@ impl IdentityDirectory {
                 });
             }
         };
-        if let Some(identity_id) = identity_id {
+        if let AppKeyIdentityMembership::Enrolled(identity_id) = identity_id {
             let directory = self.take_identity(&identity_id)?.update(|identity| {
                 identity.import_legacy_vault(IdentityLegacyVaultImport {
                     app_key,
@@ -438,7 +445,10 @@ impl IdentityDirectory {
         Ok(())
     }
 
-    pub fn identity_for_app_key(&self, app_key: &AppKey) -> MultiDeviceResult<Option<IdentityId>> {
+    pub fn identity_for_app_key(
+        &self,
+        app_key: &AppKey,
+    ) -> MultiDeviceResult<AppKeyIdentityMembership> {
         self.ensure_app_key_active(app_key)?;
         let mut matches = Vec::new();
         for identity in &self.identities {
@@ -461,7 +471,10 @@ impl IdentityDirectory {
                 "app key belongs to multiple local identities".to_owned(),
             ));
         }
-        Ok(matches.pop())
+        Ok(match matches.pop() {
+            Some(identity_id) => AppKeyIdentityMembership::Enrolled(identity_id),
+            None => AppKeyIdentityMembership::Unenrolled,
+        })
     }
 
     pub fn set_member_signing_public_key(

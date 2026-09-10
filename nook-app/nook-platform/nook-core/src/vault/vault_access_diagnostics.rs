@@ -125,10 +125,11 @@ impl VaultAccessDiagnosticRequest<'_> {
         ) {
             return Ok(VaultKeyAccessDiagnosticStatus::UnsupportedEpoch);
         }
-        if let DeviceJoinStatus::Pending(_) = VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
-            records: records,
-            device_id: identity.device_id(),
-        })?
+        if let DeviceJoinStatus::Pending(_) =
+            VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+                records: records,
+                device_id: identity.device_id(),
+            })?
         {
             return Ok(VaultKeyAccessDiagnosticStatus::JoinPending);
         }

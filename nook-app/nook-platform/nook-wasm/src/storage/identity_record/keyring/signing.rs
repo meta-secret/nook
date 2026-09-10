@@ -12,6 +12,7 @@ use crate::KeyringDbLoadKeyringForStore;
 use crate::KeyringDbWriteKeyring;
 use crate::storage::{self, event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
+use nook_core::ProtectedSigningMaterial;
 use nook_core::{
     AppId, AppKey, DeviceSigningPublicKey, IdentityDirectory, IdentityId, IdentitySelection,
     IdentitySigningSeedProtection, LocalIdentityKeyring, LocalIdentityKeyringEntry,
@@ -82,12 +83,17 @@ impl IdentitySigningSource<'_> {
         let app_key = self.app_key;
         let legacy_signing_public_key = self.established;
         let seed = match existing {
-            Some(entry) if entry.has_signing_seed() => entry
+            Some(entry) if entry.has_signing_seed() => match entry
                 .open_signing_seed(app_key)
                 .map_err(|error| NookError::Database(error.to_string()))?
-                .ok_or_else(|| {
-                    NookError::Database("Protected signing seed is missing".to_owned())
-                })?,
+            {
+                ProtectedSigningMaterial::Opened(seed) => seed.into_inner(),
+                ProtectedSigningMaterial::LegacySeedRequired => {
+                    return Err(NookError::Database(
+                        "Protected signing seed is missing".to_owned(),
+                    ));
+                }
+            },
             Some(_) | None if matches!(self.origin, SigningSeedOrigin::MigrateLegacy) => {
                 match NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
                     store: store,

@@ -247,8 +247,8 @@ impl<'a> VaultMetaRewrap<'a> {
 mod tests {
     use crate::{EpochMetadataState, EpochPasswordState, SecretType, VaultMetaState};
 
-    use std::io;
     use nook_auth2::DeviceJoinStatus;
+    use std::io;
 
     use super::*;
     use crate::{
@@ -355,7 +355,9 @@ mod tests {
             device_id: joiner.device_id(),
         })? {
             DeviceJoinStatus::Pending(join) => join,
-            DeviceJoinStatus::NotRequested => return Err(io::Error::other("join request must exist").into()),
+            DeviceJoinStatus::NotRequested => {
+                return Err(io::Error::other("join request must exist").into());
+            }
         };
         let (joiner_auth, join_key, member_records) = JoinRequestApproval::new(
             &old_keys.secrets_key,

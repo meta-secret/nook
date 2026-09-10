@@ -2,6 +2,7 @@
 
 use super::NookPrevalidatedCompanionPairingApproval;
 use crate::manager::NookExternalEventLogRecords;
+use nook_core::DeviceAuthorization;
 use nook_core::{
     AuthEnvelopes, CheckedRemoteEvent, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId,
@@ -144,14 +145,19 @@ impl NookPrevalidatedCompanionPairingApproval {
             .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
         let signing_public_key = DeviceSigningPublicKey::parse(&installation.signing_public_key)
             .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
-        let envelopes = EventGraphDeviceAccess::new(&graph)
+        let envelopes = match EventGraphDeviceAccess::new(&graph)
             .active_envelopes(&EventGraphDeviceAccessRequest {
                 expected_device_id: &device_id,
                 expected_public_key: &public_key,
                 expected_signing_public_key: &signing_public_key,
             })
             .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?
-            .ok_or(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
+        {
+            DeviceAuthorization::Granted(envelopes) => envelopes,
+            DeviceAuthorization::NotGranted => {
+                return Err(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch);
+            }
+        };
         let mut meta = VaultMetaState::default();
         VaultMetaGraphProjection::new(&graph)
             .materialize(&mut meta)

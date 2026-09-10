@@ -29,6 +29,8 @@ use nook_core::{
     LocalIdentityKeyringEntry, WrappedDeviceIdentity,
 };
 use nook_core::{DirectoryMemberSigningUpdate, IdentityCreation, IdentityMemberSigningUpdate};
+#[cfg(test)]
+use nook_core::{ProtectedSigningMaterial, SigningSeedHex};
 use rexie::Store;
 
 mod admission;
@@ -434,7 +436,7 @@ mod tests {
                 })?
                 .open_signing_seed(&first_key)
                 .map_err(|error| NookError::Database(error.to_string()))?,
-            Some(legacy_seed)
+            ProtectedSigningMaterial::Opened(SigningSeedHex::from_trusted(legacy_seed))
         );
         assert!(
             NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY,)
@@ -857,9 +859,10 @@ mod tests {
         assert_eq!(
             entry
                 .open_signing_seed(&app_key)
-                .map_err(|error| NookError::Database(error.to_string()))?
-                .as_deref(),
-            Some(protected.signing_seed.as_str())
+                .map_err(|error| NookError::Database(error.to_string()))?,
+            ProtectedSigningMaterial::Opened(SigningSeedHex::from_trusted(
+                protected.signing_seed.as_str().to_owned()
+            ))
         );
         assert!(
             NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)

@@ -80,7 +80,9 @@ mod tests {
             device_id: joiner.device_id(),
         })? {
             DeviceJoinStatus::Pending(join) => join,
-            DeviceJoinStatus::NotRequested => return Err(io::Error::other("pending join fixture must exist").into()),
+            DeviceJoinStatus::NotRequested => {
+                return Err(io::Error::other("pending join fixture must exist").into());
+            }
         };
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
@@ -288,7 +290,9 @@ mod tests {
             device_id: joiner.device_id(),
         })? {
             DeviceJoinStatus::Pending(join) => join,
-            DeviceJoinStatus::NotRequested => return Err(io::Error::other("pending join must exist").into()),
+            DeviceJoinStatus::NotRequested => {
+                return Err(io::Error::other("pending join must exist").into());
+            }
         };
 
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(

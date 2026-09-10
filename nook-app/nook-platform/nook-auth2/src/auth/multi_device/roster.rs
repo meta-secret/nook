@@ -362,8 +362,8 @@ impl VaultMember {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
     use crate::DeviceJoinStatus;
+    use std::io;
 
     use super::*;
     use crate::auth::multi_device::{
@@ -407,7 +407,9 @@ mod tests {
             device_id: joiner.device_id(),
         })? {
             DeviceJoinStatus::Pending(join) => join,
-            DeviceJoinStatus::NotRequested => return Err(io::Error::other("pending join fixture must exist").into()),
+            DeviceJoinStatus::NotRequested => {
+                return Err(io::Error::other("pending join fixture must exist").into());
+            }
         };
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,

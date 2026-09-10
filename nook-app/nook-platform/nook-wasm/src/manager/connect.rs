@@ -18,6 +18,8 @@ use crate::IdentityDbEnsureLocalIdentityForAppKey;
 use crate::NookDatabase;
 use crate::conversion::LoadedVault;
 use crate::storage::identity_record::IdentityDirectoryWrite;
+#[cfg(test)]
+use nook_core::AppKeyIdentityMembership;
 use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
@@ -209,13 +211,19 @@ mod tests {
 
         manager.ensure_identity_after_connect(&extension).await?;
         let deferred = NookDatabase::load_identity_directory().await?;
-        assert!(deferred.identity_for_app_key(&extension)?.is_none());
+        assert_eq!(
+            deferred.identity_for_app_key(&extension)?,
+            AppKeyIdentityMembership::Unenrolled
+        );
 
         manager
             .complete_connected_identity(&extension, None)
             .await?;
         let committed = NookDatabase::load_identity_directory().await?;
-        assert!(committed.identity_for_app_key(&extension)?.is_some());
+        assert!(matches!(
+            committed.identity_for_app_key(&extension)?,
+            AppKeyIdentityMembership::Enrolled(_)
+        ));
         assert!(manager.device.pending_extension_handoff.is_none());
         NookDatabase::clear_identity_directory_for_test().await?;
         Ok(())

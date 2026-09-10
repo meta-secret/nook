@@ -122,10 +122,12 @@ impl VaultMetaState {
         let PendingJoinForDeviceRequest { records, device_id } = request;
         VaultRecordView::new(records)
             .list_join_requests()
-            .map(|joins| match joins.into_iter().find(|join| join.device_id == *device_id) {
-                Some(join) => DeviceJoinStatus::Pending(join),
-                None => DeviceJoinStatus::NotRequested,
-            })
+            .map(
+                |joins| match joins.into_iter().find(|join| join.device_id == *device_id) {
+                    Some(join) => DeviceJoinStatus::Pending(join),
+                    None => DeviceJoinStatus::NotRequested,
+                },
+            )
     }
 }
 
@@ -167,7 +169,9 @@ mod tests {
             device_id: joiner.device_id(),
         })? {
             DeviceJoinStatus::Pending(join) => join,
-            DeviceJoinStatus::NotRequested => return Err(io::Error::other("pending join fixture must exist").into()),
+            DeviceJoinStatus::NotRequested => {
+                return Err(io::Error::other("pending join fixture must exist").into());
+            }
         };
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,

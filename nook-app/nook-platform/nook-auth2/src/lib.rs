@@ -56,18 +56,19 @@ pub use auth::identity::{
     IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
 };
 pub use auth::identity_directory::{
-    DirectoryCreationEnrollment, DirectoryLegacyMigration, DirectoryLegacyVaultImport,
-    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
-    IdentityCreation, IdentityDirectory, IdentityDirectoryRejection, IdentityDirectoryResolution,
-    IdentityDirectoryVaultKeys, IdentitySelection, LegacyDirectoryBase, LocalIdentityKeyRetirement,
-    MigratedIdentityDirectory, PreparedLegacyDirectoryMigration, StagedIdentityRebase,
+    AppKeyIdentityMembership, DirectoryCreationEnrollment, DirectoryLegacyMigration,
+    DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
+    DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
+    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentitySelection,
+    LegacyDirectoryBase, LocalIdentityKeyRetirement, MigratedIdentityDirectory,
+    PreparedLegacyDirectoryMigration, StagedIdentityRebase,
 };
 
 pub use auth::local_identity_keyring::{
     IdentitySigningSeedProtection, KeyringEntryRejection, KeyringRejection,
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
-    ProtectedIdentityKeyring, ProtectedSigningEntry, RemovedLocalIdentityKey,
-    SigningSeedProtection, WrappedAppKeyReplacement,
+    ProtectedIdentityKeyring, ProtectedSigningEntry, ProtectedSigningMaterial,
+    RemovedLocalIdentityKey, SigningSeedProtection, WrappedAppKeyReplacement,
 };
 #[cfg(any(test, feature = "mock-passkey"))]
 pub use auth::mock_passkey::{
@@ -85,11 +86,12 @@ pub use nook_authenticator_domain::PasskeyDeviceProtectionMode;
 pub mod multi_device_api {
     pub use crate::auth::multi_device::{
         AppKey, AuthEnvelopes, AuthRecordIssuance, ConnectAccessStatus, DeviceEnrollment,
-        DeviceIdentity, DeviceJoinStatus, JoinRequest, JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance,
-        MEMBER_RECORD_PREFIX, MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX,
-        SelfRosterSync, SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareEnvelope,
-        SentinelShareOpening, SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord,
-        VaultMetaState, VaultRecordView,
+        DeviceIdentity, DeviceJoinStatus, JoinRequest, JoinRequestApproval, JoinRequestDenial,
+        JoinRequestIssuance, MEMBER_RECORD_PREFIX, MemberEntry, OpenedSentinelShare,
+        SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync, SentinelKeyReconstruction,
+        SentinelParticipantEntry, SentinelShareEnvelope, SentinelShareOpening,
+        SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
+        VaultRecordView,
     };
 }
 pub use auth::password_envelope::{

@@ -110,7 +110,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        EventGraph, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
+        DeviceAuthorization, EventGraph, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
         EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId, EventInsertStatus,
         IsoTimestamp, MemberLabel, SentinelMemberRecordProjection,
         SentinelMemberRecordProjectionRequest, SigningIdentity, StoreId, VaultEvent,
@@ -277,7 +277,7 @@ mod tests {
             graph: &EventGraph,
             device: &DeviceIdentity,
             signing: &SigningIdentity,
-        ) -> anyhow::Result<Option<AuthEnvelopes>> {
+        ) -> anyhow::Result<DeviceAuthorization> {
             let public_key = device.public_key();
             Ok(EventGraphDeviceAccess::new(graph).active_envelopes(
                 &EventGraphDeviceAccessRequest {
@@ -878,7 +878,7 @@ mod tests {
         };
         assert_eq!(
             Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?,
-            Some(replacement_auth)
+            DeviceAuthorization::Granted(replacement_auth)
         );
         let revocation = Fixtures::signed_event(
             &owner_signing,
@@ -903,7 +903,10 @@ mod tests {
                 Err(rejected.cause)
             }
         }?;
-        assert!(Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?.is_none());
+        assert_eq!(
+            Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?,
+            DeviceAuthorization::NotGranted
+        );
 
         let replacement_keys = crate::VaultKeys::generate()?;
         let replacement_auth = crate::AuthEnvelopes::parse(
@@ -943,7 +946,7 @@ mod tests {
 
         assert_eq!(
             Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?,
-            Some(expected)
+            DeviceAuthorization::Granted(expected)
         );
         Ok(())
     }

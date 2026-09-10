@@ -7,6 +7,7 @@ use crate::{
     DeviceProtectionDeviceModeState, IdbPutStringRequest, ImportVaultBlobRequest, NookDatabase,
     SaveWrappedDeviceIdentityRequest,
 };
+use nook_core::AppKeyIdentityMembership;
 
 use crate::storage::{event_db, identity_record, indexed_db};
 use crate::vault_api_local::list_local_vaults;
@@ -270,10 +271,15 @@ async fn simple_genesis_uses_the_tabs_app_key_after_another_tab_switches_identit
         .await
         .map_err(|error| anyhow::anyhow!("protect first identity: {error:?}"))?;
     let first_key = first_tab.device_identity()?;
-    let first_identity_id = NookDatabase::load_identity_directory()
+    let first_identity_id = match NookDatabase::load_identity_directory()
         .await?
         .identity_for_app_key(&first_key)?
-        .ok_or_else(|| anyhow::anyhow!("first identity is missing"))?;
+    {
+        AppKeyIdentityMembership::Enrolled(identity_id) => identity_id,
+        AppKeyIdentityMembership::Unenrolled => {
+            return Err(anyhow::anyhow!("first identity is missing"));
+        }
+    };
 
     let mut second_tab = NookVaultManager::new();
     second_tab
@@ -320,10 +326,15 @@ async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_iden
         .await
         .map_err(|error| anyhow::anyhow!("protect first identity: {error:?}"))?;
     let first_key = first_tab.device_identity()?;
-    let first_identity_id = NookDatabase::load_identity_directory()
+    let first_identity_id = match NookDatabase::load_identity_directory()
         .await?
         .identity_for_app_key(&first_key)?
-        .ok_or_else(|| anyhow::anyhow!("first identity is missing"))?;
+    {
+        AppKeyIdentityMembership::Enrolled(identity_id) => identity_id,
+        AppKeyIdentityMembership::Unenrolled => {
+            return Err(anyhow::anyhow!("first identity is missing"));
+        }
+    };
 
     let mut second_tab = NookVaultManager::new();
     second_tab
@@ -367,7 +378,7 @@ async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_iden
         .ok_or_else(|| anyhow::anyhow!("staged identity is missing"))?;
     assert_eq!(
         staged.directory.identity_for_app_key(&extension_key)?,
-        Some(first_identity_id),
+        AppKeyIdentityMembership::Enrolled(first_identity_id),
     );
     assert_eq!(
         NookDatabase::load_identity_directory().await?.selection(),

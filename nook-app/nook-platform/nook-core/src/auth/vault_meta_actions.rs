@@ -251,6 +251,13 @@ pub struct EventGraphDeviceAccessRequest<'a> {
     pub expected_signing_public_key: &'a DeviceSigningPublicKey,
 }
 
+/// Authorization for the exact active encryption and signing key tuple.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeviceAuthorization {
+    Granted(AuthEnvelopes),
+    NotGranted,
+}
+
 /// Owns graph-based authorization queries for one event log.
 pub struct EventGraphDeviceAccess<'a> {
     graph: &'a EventGraph,
@@ -266,14 +273,17 @@ impl<'a> EventGraphDeviceAccess<'a> {
         &self,
         request: &EventGraphDeviceAccessRequest<'_>,
     ) -> MultiDeviceResult<bool> {
-        Ok(self.active_envelopes(request)?.is_some())
+        Ok(matches!(
+            self.active_envelopes(request)?,
+            DeviceAuthorization::Granted(_)
+        ))
     }
 
     /// Return DEK envelopes only for the exact active device key tuple.
     pub fn active_envelopes(
         &self,
         request: &EventGraphDeviceAccessRequest<'_>,
-    ) -> MultiDeviceResult<Option<AuthEnvelopes>> {
+    ) -> MultiDeviceResult<DeviceAuthorization> {
         let derived_device_id = request.expected_public_key.try_app_id()?;
         if &derived_device_id != request.expected_device_id {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
@@ -282,7 +292,7 @@ impl<'a> EventGraphDeviceAccess<'a> {
         }
         let expected_auth_id = request.expected_public_key.auth_id()?;
 
-        let mut active = None;
+        let mut active = DeviceAuthorization::NotGranted;
         let order = self
             .graph
             .topological_order()
@@ -303,24 +313,31 @@ impl<'a> EventGraphDeviceAccess<'a> {
                         members_key_ciphertext,
                         ..
                     } if device_id == request.expected_device_id => {
-                        active = (encryption_public_key == request.expected_public_key
-                            && signing_public_key == request.expected_signing_public_key)
-                            .then(|| AuthEnvelopes {
+                        active = if encryption_public_key == request.expected_public_key
+                            && signing_public_key == request.expected_signing_public_key
+                        {
+                            DeviceAuthorization::Granted(AuthEnvelopes {
                                 secrets_key: secrets_key_ciphertext.clone(),
                                 members_key: members_key_ciphertext.clone(),
-                            });
+                            })
+                        } else {
+                            DeviceAuthorization::NotGranted
+                        };
                     }
                     VaultOperation::DeviceRevoked { device_id }
                         if device_id == request.expected_device_id =>
                     {
-                        active = None;
+                        active = DeviceAuthorization::NotGranted;
                     }
                     VaultOperation::EpochCheckpoint {
                         rotated_meta_records: EpochMetadataState::Replace(records),
                         ..
-                    } if active.is_some() => {
+                    } if matches!(active, DeviceAuthorization::Granted(_)) => {
                         let checkpoint_meta = VaultMetaState::from_stored_records(records)?;
-                        active = checkpoint_meta.auth.get(&expected_auth_id).cloned();
+                        active = match checkpoint_meta.auth.get(&expected_auth_id) {
+                            Some(envelopes) => DeviceAuthorization::Granted(envelopes.clone()),
+                            None => DeviceAuthorization::NotGranted,
+                        };
                     }
                     _ => {}
                 }

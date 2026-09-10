@@ -1,4 +1,5 @@
 //! Local identity-directory persistence, independent of vault `store_id`.
+use nook_core::AppKeyIdentityMembership;
 use nook_core::MigratedIdentityDirectory;
 
 use crate::storage::indexed_db;
@@ -561,8 +562,10 @@ impl NookDatabase {
             .identity_for_app_key(app_key)
             .map_err(NookDatabase::map_domain_error)?
         {
-            Some(identity_id) => identity_id,
-            None if directory.identities().is_empty() || allow_peer_only_bootstrap => {
+            AppKeyIdentityMembership::Enrolled(identity_id) => identity_id,
+            AppKeyIdentityMembership::Unenrolled
+                if directory.identities().is_empty() || allow_peer_only_bootstrap =>
+            {
                 let resolved_identity = directory
                     .create_identity(IdentityCreation {
                         label,
@@ -573,7 +576,7 @@ impl NookDatabase {
                 directory = resolved_identity.directory;
                 resolved_identity.identity_id
             }
-            None => {
+            AppKeyIdentityMembership::Unenrolled => {
                 return Err(NookError::Database(
                     MultiDeviceError::IdentityEnrollmentRequired.to_string(),
                 ));
