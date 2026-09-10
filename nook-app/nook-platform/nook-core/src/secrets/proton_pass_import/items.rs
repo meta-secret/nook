@@ -171,12 +171,12 @@ struct ProtonPassMetadataSelection<'a> {
     username: &'a str,
 }
 struct ProtonPassVaultItem<'a> {
-    item: &'a ProtonPassItem,
+    item: ProtonPassItem,
     vault_name: &'a str,
 }
 impl ProtonPassVaultItem<'_> {
     fn metadata(&self, selection: &ProtonPassMetadataSelection<'_>) -> Vec<(String, String)> {
-        let item = self.item;
+        let item = &self.item;
         let vault_name = self.vault_name;
         let primary_url = selection.primary_url;
         let selected_username = selection.username;
@@ -236,8 +236,8 @@ impl ProtonPassVaultItem<'_> {
     }
 }
 impl ProtonPassVaultItem<'_> {
-    fn login(&self) -> SecretValue {
-        let item = self.item;
+    fn login(self) -> SecretValue {
+        let item = &self.item;
 
         let content = &item.data.content;
         let website_url = content
@@ -256,7 +256,6 @@ impl ProtonPassVaultItem<'_> {
         .into_iter()
         .find(|candidate| !candidate.trim().is_empty())
         .map_or("", str::trim);
-        let mut notes = item.data.metadata.note.clone();
         let mut metadata = self.metadata(&ProtonPassMetadataSelection {
             primary_url: website_url.as_str(),
             username,
@@ -270,40 +269,47 @@ impl ProtonPassVaultItem<'_> {
         {
             metadata.insert(0, name);
         }
+        let mut notes = self.item.data.metadata.note;
+        let content = self.item.data.content;
+        let mut username = [content.item_username, content.username, content.item_email]
+            .into_iter()
+            .find(|candidate| !candidate.trim().is_empty())
+            .unwrap_or_default();
+        username.truncate(username.trim_end().len());
+        let leading_whitespace = username.len() - username.trim_start().len();
+        username.drain(..leading_whitespace);
         ProtonPassNotes { notes: &mut notes }.append(metadata);
         SecretValue::Login(LoginSecret {
             website_url,
-            username: username.to_owned(),
-            password: content.password.clone(),
+            username,
+            password: content.password,
             notes,
         })
     }
 }
 impl ProtonPassVaultItem<'_> {
-    fn note(&self) -> SecretValue {
-        let item = self.item;
+    fn note(self) -> SecretValue {
+        let item = &self.item;
 
-        let mut note = item.data.metadata.note.clone();
-        ProtonPassNotes { notes: &mut note }.append(self.metadata(&ProtonPassMetadataSelection {
+        let metadata = self.metadata(&ProtonPassMetadataSelection {
             primary_url: "",
             username: "",
-        }));
-        SecretValue::SecureNote(SecureNoteSecret {
-            title: item.data.metadata.name.trim().to_owned(),
-            note,
-        })
+        });
+        let title = item.data.metadata.name.trim().to_owned();
+        let mut note = self.item.data.metadata.note;
+        ProtonPassNotes { notes: &mut note }.append(metadata);
+        SecretValue::SecureNote(SecureNoteSecret { title, note })
     }
 }
 impl ProtonPassVaultItem<'_> {
-    fn credit_card(&self) -> Option<SecretValue> {
-        let item = self.item;
+    fn credit_card(self) -> Option<SecretValue> {
+        let item = &self.item;
 
         let content = &item.data.content;
         let (expiration_month, expiration_year) = ProtonPassExpiration {
             raw: &content.expiration_date,
         }
         .month_year();
-        let mut notes = item.data.metadata.note.clone();
         let mut metadata = self.metadata(&ProtonPassMetadataSelection {
             primary_url: "",
             username: "",
@@ -311,9 +317,11 @@ impl ProtonPassVaultItem<'_> {
         if !content.pin.trim().is_empty() {
             metadata.push(("pin".to_owned(), content.pin.trim().to_owned()));
         }
+        let mut notes = self.item.data.metadata.note;
+        let content = &self.item.data.content;
         ProtonPassNotes { notes: &mut notes }.append(metadata);
         CreditCardSecret::from_fields(CreditCardFields {
-            title: item.data.metadata.name.trim(),
+            title: self.item.data.metadata.name.trim(),
             cardholder_name: content.cardholder_name.trim(),
             number: content.number.trim(),
             expiration_month: expiration_month.trim(),
@@ -354,21 +362,21 @@ impl ProtonPassExport {
                 match item.data.item_type.as_str() {
                     "login" => items.push(
                         ProtonPassVaultItem {
-                            item: &item,
+                            item,
                             vault_name: &vault.name,
                         }
                         .login(),
                     ),
                     "note" => items.push(
                         ProtonPassVaultItem {
-                            item: &item,
+                            item,
                             vault_name: &vault.name,
                         }
                         .note(),
                     ),
                     "creditCard" => {
                         if let Some(card) = (ProtonPassVaultItem {
-                            item: &item,
+                            item,
                             vault_name: &vault.name,
                         })
                         .credit_card()
