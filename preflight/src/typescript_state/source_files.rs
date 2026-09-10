@@ -1,4 +1,3 @@
-use crate::typescript_state::TypeScriptApplicationState;
 use std::ffi::OsStr;
 use std::fs;
 use std::io;
@@ -6,19 +5,21 @@ use std::path::{Path, PathBuf};
 
 const LEGACY_IMPECCABLE_INSTALL: &str = ".agents/skills/impeccable";
 
-impl TypeScriptApplicationState<'_> {
-    pub(super) fn collect_authored_source_files(
-        directory: &Path,
-        files: &mut Vec<PathBuf>,
-    ) -> io::Result<()> {
+pub(super) struct AuthoredSourceFiles<'a> {
+    pub(super) directory: &'a Path,
+}
+impl AuthoredSourceFiles<'_> {
+    pub(super) fn collect(self) -> io::Result<Vec<PathBuf>> {
+        let directory = self.directory;
+        let mut files = Vec::new();
         if !directory.exists() {
-            return Ok(());
+            return Ok(files);
         }
         for entry in fs::read_dir(directory)? {
             let path = entry?.path();
             if path.is_dir() {
-                if !TypeScriptApplicationState::is_excluded_directory(&path) {
-                    TypeScriptApplicationState::collect_authored_source_files(&path, files)?;
+                if !Self::is_excluded_directory(&path) {
+                    files.extend(Self { directory: &path }.collect()?);
                 }
                 continue;
             }
@@ -46,11 +47,11 @@ impl TypeScriptApplicationState<'_> {
                 files.push(path);
             }
         }
-        Ok(())
+        Ok(files)
     }
 }
 
-impl TypeScriptApplicationState<'_> {
+impl AuthoredSourceFiles<'_> {
     fn is_excluded_directory(path: &Path) -> bool {
         if path.ends_with(Path::new(LEGACY_IMPECCABLE_INSTALL)) {
             return true;
@@ -76,15 +77,16 @@ impl TypeScriptApplicationState<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::AuthoredSourceFiles;
     use std::path::Path;
 
     #[test]
     fn excludes_only_the_legacy_impeccable_install() {
-        assert!(TypeScriptApplicationState::is_excluded_directory(
-            Path::new("/repo/.agents/skills/impeccable")
-        ));
-        assert!(!TypeScriptApplicationState::is_excluded_directory(
-            Path::new("/repo/.agents/skills/example")
-        ));
+        assert!(AuthoredSourceFiles::is_excluded_directory(Path::new(
+            "/repo/.agents/skills/impeccable"
+        )));
+        assert!(!AuthoredSourceFiles::is_excluded_directory(Path::new(
+            "/repo/.agents/skills/example"
+        )));
     }
 }

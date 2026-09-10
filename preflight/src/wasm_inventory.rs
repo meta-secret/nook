@@ -27,15 +27,12 @@ impl WasmTypeInventory {
     }
 }
 
-impl WasmTypeInventory {
-    pub(super) fn collect_wasm_inventory(request: WasmInventoryCollection<'_>) {
+impl WasmInventory {
+    pub(super) fn collect(mut self, request: WasmInventoryCollection<'_>) -> Self {
         let WasmInventoryCollection {
             items,
             enclosing_wasm_impl,
             inherited_aliases,
-            callable_names,
-            type_names,
-            types,
         } = request;
 
         let mut aliases = inherited_aliases.clone();
@@ -48,21 +45,21 @@ impl WasmTypeInventory {
                         && !WasmTypeInventory::is_wasm_accessor(&function.attrs, &aliases)
                     {
                         let name = function.sig.ident.to_string();
-                        callable_names.insert(name.clone());
+                        self.callable_names.insert(name.clone());
                         if let Some(returned) =
                             WasmTypeInventory::wasm_return_type(&function.sig.output)
                         {
-                            types.free_returns.insert(name, returned);
+                            self.types.free_returns.insert(name, returned);
                         }
                     }
                 }
                 Item::Struct(item)
                     if WasmTypeInventory::has_wasm_bindgen(&item.attrs, &aliases) =>
                 {
-                    type_names.insert(item.ident.to_string());
+                    self.type_names.insert(item.ident.to_string());
                 }
                 Item::Enum(item) if WasmTypeInventory::has_wasm_bindgen(&item.attrs, &aliases) => {
-                    type_names.insert(item.ident.to_string());
+                    self.type_names.insert(item.ident.to_string());
                 }
                 Item::Impl(implementation) => {
                     let wasm_impl = if matches!(enclosing_wasm_impl, WasmImplContext::Inside)
@@ -82,9 +79,9 @@ impl WasmTypeInventory {
                             && !WasmTypeInventory::is_wasm_accessor(&function.attrs, &aliases)
                         {
                             let name = function.sig.ident.to_string();
-                            callable_names.insert(name.clone());
+                            self.callable_names.insert(name.clone());
                             if let Some(owner) = &owner {
-                                types
+                                self.types
                                     .methods
                                     .entry(owner.clone())
                                     .or_default()
@@ -92,7 +89,7 @@ impl WasmTypeInventory {
                                 if let Some(returned) =
                                     WasmTypeInventory::wasm_return_type(&function.sig.output)
                                 {
-                                    types.returns.insert((owner.clone(), name), returned);
+                                    self.types.returns.insert((owner.clone(), name), returned);
                                 }
                             }
                         }
@@ -100,21 +97,17 @@ impl WasmTypeInventory {
                 }
                 Item::Mod(module) => {
                     if let Some((_, nested)) = &module.content {
-                        WasmTypeInventory::collect_wasm_inventory(
-                            crate::wasm_inventory::WasmInventoryCollection {
-                                items: nested,
-                                enclosing_wasm_impl,
-                                inherited_aliases: &aliases,
-                                callable_names,
-                                type_names,
-                                types,
-                            },
-                        );
+                        self = self.collect(crate::wasm_inventory::WasmInventoryCollection {
+                            items: nested,
+                            enclosing_wasm_impl,
+                            inherited_aliases: &aliases,
+                        });
                     }
                 }
                 _ => {}
             }
         }
+        self
     }
 }
 
@@ -159,7 +152,7 @@ impl WasmTypeInventory {
 mod tests {
     use std::collections::HashSet;
 
-    use super::{WasmImplContext, WasmTypeInventory};
+    use super::{WasmImplContext, WasmInventory};
 
     #[test]
     fn inventories_callables_but_excludes_accessors() -> Result<(), syn::Error> {
@@ -177,22 +170,18 @@ impl VaultManager {
 }
 ",
         )?;
-        let mut names = HashSet::new();
-        let mut types = WasmTypeInventory::default();
-        WasmTypeInventory::collect_wasm_inventory(crate::wasm_inventory::WasmInventoryCollection {
-            items: &syntax.items,
-            enclosing_wasm_impl: WasmImplContext::Outside,
-            inherited_aliases: &HashSet::new(),
-            callable_names: &mut names,
-            type_names: &mut HashSet::new(),
-            types: &mut types,
-        });
+        let inventory =
+            WasmInventory::default().collect(crate::wasm_inventory::WasmInventoryCollection {
+                items: &syntax.items,
+                enclosing_wasm_impl: WasmImplContext::Outside,
+                inherited_aliases: &HashSet::new(),
+            });
         assert_eq!(
-            names,
+            inventory.callable_names,
             HashSet::from(["connect".to_owned(), "generate_secret_id".to_owned()])
         );
         assert_eq!(
-            types.methods.get("VaultManager"),
+            inventory.types.methods.get("VaultManager"),
             Some(&HashSet::from(["generate_secret_id".to_owned()]))
         );
         Ok(())
@@ -208,16 +197,16 @@ use wasm_bindgen::prelude::wasm_bindgen as export_wasm;
 pub fn generate_secret_id() {}
 ",
         )?;
-        let mut names = HashSet::new();
-        WasmTypeInventory::collect_wasm_inventory(crate::wasm_inventory::WasmInventoryCollection {
-            items: &syntax.items,
-            enclosing_wasm_impl: WasmImplContext::Outside,
-            inherited_aliases: &HashSet::new(),
-            callable_names: &mut names,
-            type_names: &mut HashSet::new(),
-            types: &mut WasmTypeInventory::default(),
-        });
-        assert_eq!(names, HashSet::from(["generate_secret_id".to_owned()]));
+        let inventory =
+            WasmInventory::default().collect(crate::wasm_inventory::WasmInventoryCollection {
+                items: &syntax.items,
+                enclosing_wasm_impl: WasmImplContext::Outside,
+                inherited_aliases: &HashSet::new(),
+            });
+        assert_eq!(
+            inventory.callable_names,
+            HashSet::from(["generate_secret_id".to_owned()])
+        );
         Ok(())
     }
 }
@@ -232,7 +221,11 @@ pub(crate) struct WasmInventoryCollection<'a> {
     pub(crate) items: &'a [Item],
     pub(crate) enclosing_wasm_impl: WasmImplContext,
     pub(crate) inherited_aliases: &'a HashSet<String>,
-    pub(crate) callable_names: &'a mut HashSet<String>,
-    pub(crate) type_names: &'a mut HashSet<String>,
-    pub(crate) types: &'a mut WasmTypeInventory,
+}
+
+#[derive(Default)]
+pub(crate) struct WasmInventory {
+    pub(crate) callable_names: HashSet<String>,
+    pub(crate) type_names: HashSet<String>,
+    pub(crate) types: WasmTypeInventory,
 }

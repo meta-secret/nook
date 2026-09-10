@@ -30,9 +30,7 @@ impl RustWasmNames<'_> {
         RustWasmAttributes::collect_rust_files(&source_root, &mut files)?;
 
         let mut violations = Vec::new();
-        let mut callable_names = HashSet::new();
-        let mut wasm_type_names = HashSet::new();
-        let mut wasm_types = WasmTypeInventory::default();
+        let mut inventory = crate::wasm_inventory::WasmInventory::default();
         for path in files {
             let source = fs::read_to_string(&path)?;
             let syntax = syn::parse_file(&source).map_err(io::Error::other)?;
@@ -48,19 +46,19 @@ impl RustWasmNames<'_> {
             if relative_path.starts_with("nook-app/nook-platform/nook-wasm/src")
                 || relative_path.starts_with("nook-app/nook-platform/nook-companion-wasm/src")
             {
-                WasmTypeInventory::collect_wasm_inventory(
-                    crate::wasm_inventory::WasmInventoryCollection {
-                        items: &syntax.items,
-                        enclosing_wasm_impl: WasmImplContext::Outside,
-                        inherited_aliases: &HashSet::new(),
-                        callable_names: &mut callable_names,
-                        type_names: &mut wasm_type_names,
-                        types: &mut wasm_types,
-                    },
-                );
+                inventory = inventory.collect(crate::wasm_inventory::WasmInventoryCollection {
+                    items: &syntax.items,
+                    enclosing_wasm_impl: WasmImplContext::Outside,
+                    inherited_aliases: &HashSet::new(),
+                });
             }
         }
 
+        let crate::wasm_inventory::WasmInventory {
+            callable_names,
+            type_names: wasm_type_names,
+            types: wasm_types,
+        } = inventory;
         let mut web_files = Vec::new();
         (WebSourceInventory {
             directory: &root.join("nook-app/nook-web"),

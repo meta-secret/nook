@@ -36,8 +36,7 @@ mod svelte_raw_discriminants;
 impl TypeScriptApplicationState<'_> {
     pub fn typescript_implicit_application_state(self) -> io::Result<Vec<Violation>> {
         let Self { root } = self;
-        let mut files = Vec::new();
-        TypeScriptApplicationState::collect_authored_source_files(root, &mut files)?;
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
         let mut violations = Vec::new();
         for path in files {
@@ -69,8 +68,7 @@ impl TypeScriptApplicationState<'_> {
 /// Returns an error when the repository source tree cannot be read.
 impl TypeScriptApplicationState<'_> {
     pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violation>> {
-        let mut files = Vec::new();
-        TypeScriptApplicationState::collect_authored_source_files(root, &mut files)?;
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
         let mut violations = Vec::new();
         for path in files {
@@ -104,8 +102,7 @@ impl TypeScriptApplicationState<'_> {
 /// Returns an error when the repository source tree cannot be read.
 impl TypeScriptApplicationState<'_> {
     pub fn typescript_mutable_void_state(root: &Path) -> io::Result<Vec<Violation>> {
-        let mut files = Vec::new();
-        TypeScriptApplicationState::collect_authored_source_files(root, &mut files)?;
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
         let mut violations = Vec::new();
         for path in files {
@@ -134,8 +131,7 @@ impl TypeScriptApplicationState<'_> {
 /// Returns an error when the repository source tree cannot be read.
 impl TypeScriptApplicationState<'_> {
     pub fn typescript_generic_optional_state(root: &Path) -> io::Result<Vec<Violation>> {
-        let mut files = Vec::new();
-        TypeScriptApplicationState::collect_authored_source_files(root, &mut files)?;
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
         let mut violations = Vec::new();
         for path in files {
@@ -172,8 +168,7 @@ impl TypeScriptApplicationState<'_> {
 /// Returns an error when the repository source tree cannot be read.
 impl TypeScriptApplicationState<'_> {
     pub fn typescript_raw_string_discriminants(root: &Path) -> io::Result<Vec<Violation>> {
-        let mut files = Vec::new();
-        TypeScriptApplicationState::collect_authored_source_files(root, &mut files)?;
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
         let mut violations = Vec::new();
         for path in files {
