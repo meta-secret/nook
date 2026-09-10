@@ -9,6 +9,8 @@ export enum OAuthFailureKind {
   GoogleScript = "google-script",
   GoogleRequest = "google-request",
   GoogleResponse = "google-response",
+  GoogleAccountLookup = "google-account-lookup",
+  GoogleInvalidConfiguration = "google-invalid-configuration",
   RequestInProgress = "request-in-progress",
   CloudKitScript = "cloudkit-script",
   CloudKitUnavailable = "cloudkit-unavailable",
@@ -22,7 +24,6 @@ export enum OAuthFailureKind {
   BrowserStorage = "browser-storage",
   InvalidChallenge = "invalid-challenge",
   InvalidConfiguration = "invalid-configuration",
-  AccountLookup = "account-lookup",
   GoogleSharedSignInRequired = "google-shared-sign-in-required",
   GoogleSharedCreation = "google-shared-creation",
   GoogleSharedConnection = "google-shared-connection",
@@ -48,6 +49,8 @@ export class OAuthFailure {
       case OAuthFailureKind.GoogleScript:
       case OAuthFailureKind.GoogleRequest:
       case OAuthFailureKind.GoogleResponse:
+      case OAuthFailureKind.GoogleAccountLookup:
+      case OAuthFailureKind.GoogleInvalidConfiguration:
       case OAuthFailureKind.RequestInProgress:
         return I18N_KEYS.ErrorsGoogleSignInRequired;
       case OAuthFailureKind.GoogleSharedSignInRequired:

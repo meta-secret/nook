@@ -339,7 +339,7 @@ class GoogleOAuthSession {
         ),
       );
     } catch {
-      return err(new OAuthFailure(OAuthFailureKind.InvalidConfiguration));
+      return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
     }
   }
   isOAuthAccessTokenExpired({
@@ -384,10 +384,10 @@ class GoogleOAuthSession {
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       if (!response.ok)
-        return err(new OAuthFailure(OAuthFailureKind.AccountLookup));
+        return err(new OAuthFailure(OAuthFailureKind.GoogleAccountLookup));
       payload = await response.json();
     } catch {
-      return err(new OAuthFailure(OAuthFailureKind.AccountLookup));
+      return err(new OAuthFailure(OAuthFailureKind.GoogleAccountLookup));
     }
     if (!payload || typeof payload !== "object" || !("user" in payload))
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.

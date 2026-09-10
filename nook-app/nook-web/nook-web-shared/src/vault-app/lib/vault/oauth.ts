@@ -369,7 +369,7 @@ export class VaultOAuthActions {
         target.storageTargetId,
       );
     } catch {
-      return err(new OAuthFailure(OAuthFailureKind.InvalidConfiguration));
+      return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
     }
     state.configureOauthFile(bound);
     state.sharedGrantInstructions =
@@ -435,7 +435,7 @@ export class VaultOAuthActions {
     try {
       bound = bind_google_drive_shared_folder(config, folder.id);
     } catch {
-      return err(new OAuthFailure(OAuthFailureKind.InvalidConfiguration));
+      return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
     }
     state.configureOauthFile(bound);
     const tArgs3: Parameters<typeof state.t>[0] = {
@@ -612,7 +612,7 @@ export class VaultOAuthActions {
             : previous.accountEmail,
       });
     } catch {
-      return err(new OAuthFailure(OAuthFailureKind.InvalidConfiguration));
+      return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
     }
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const converted = googleOAuthSession.oauthTokensToConfig({

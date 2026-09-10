@@ -11,9 +11,30 @@ import {
   type GoogleTokenPromptRequest,
   googleOAuthSession,
 } from '$lib/auth/google/oauth'
+import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
 import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 describe('google-oauth', () => {
+  it('maps Google account lookup failures to Google sign-in guidance', () => {
+    expect(
+      new OAuthFailure(OAuthFailureKind.GoogleAccountLookup).translationKey,
+    ).toBe(I18N_KEYS.ErrorsGoogleSignInRequired)
+  })
+
+  it('maps invalid Google configuration to Google sign-in guidance', () => {
+    expect(
+      new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration)
+        .translationKey,
+    ).toBe(I18N_KEYS.ErrorsGoogleSignInRequired)
+  })
+
+  it('keeps shared invalid configuration mapped to iCloud guidance', () => {
+    expect(
+      new OAuthFailure(OAuthFailureKind.InvalidConfiguration).translationKey,
+    ).toBe(I18N_KEYS.ProviderSetupIcloudSignInFailed)
+  })
+
   it('is configured with the committed client id', () => {
     expect(googleOAuthSession.isGoogleOAuthConfigured()).toBe(true)
   })
