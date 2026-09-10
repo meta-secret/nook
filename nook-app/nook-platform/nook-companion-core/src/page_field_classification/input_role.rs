@@ -104,8 +104,7 @@ mod tests {
     #[test]
     fn exact_mixed_phone_or_email_identity_has_distinct_evidence() {
         assert_eq!(
-            (&PageInputFieldObservation::airbnb_mixed_identity())
-                .authentication_username_evidence(),
+            PageInputFieldObservation::airbnb_mixed_identity().authentication_username_evidence(),
             AuthenticationUsernameEvidence::MixedPhoneOrEmail
         );
     }
@@ -150,7 +149,7 @@ mod tests {
             oversized,
         ] {
             assert_ne!(
-                (&field).authentication_username_evidence(),
+                field.authentication_username_evidence(),
                 AuthenticationUsernameEvidence::MixedPhoneOrEmail
             );
         }

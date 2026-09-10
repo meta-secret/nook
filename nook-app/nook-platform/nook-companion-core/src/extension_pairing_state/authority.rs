@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 /// Other browser keys and invalid grants are discarded without keeping their raw payload.
 #[derive(Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 enum StoredGrantEntry {
     Grant(StoredExtensionPairingGrant),
     Invalid(IgnoredAny),

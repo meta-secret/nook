@@ -151,6 +151,7 @@ impl AuthenticationPageObservationFactsBatch {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use crate::{
@@ -483,7 +484,9 @@ mod tests {
         };
 
         assert!(
-            (&facts.authenticator.detailed_passkey_control)
+            facts
+                .authenticator
+                .detailed_passkey_control
                 .authentication_passkey_control_evidence_is_safe()
         );
         assert!(AuthenticationPageObservation::from(facts).passkey_control_present);
@@ -843,7 +846,9 @@ mod tests {
         };
 
         assert!(
-            (&facts.authenticator.detailed_passkey_control)
+            facts
+                .authenticator
+                .detailed_passkey_control
                 .authentication_passkey_control_evidence_is_safe()
         );
         assert!(!facts.authenticator.passkey_control_present(facts.fields));

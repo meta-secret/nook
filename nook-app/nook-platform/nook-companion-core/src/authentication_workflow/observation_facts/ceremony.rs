@@ -412,7 +412,7 @@ mod tests {
     #[test]
     fn tesla_inert_next_is_planning_evidence_without_actuation_authority() {
         let inert = TeslaInertPlanningScenario::observation();
-        assert!(!(&inert).authentication_advance_control_is_safe());
+        assert!(!inert.authentication_advance_control_is_safe());
         assert!(inert.is_inert_webauthn_email_planning_advance());
         assert!(TeslaInertPlanningScenario::fields().is_compatible_with_detailed_control(&inert));
         assert!(matches!(
@@ -422,7 +422,7 @@ mod tests {
 
         let mut refreshed = inert;
         refreshed.actionability = PageControlActionability::Actionable;
-        assert!((&refreshed).authentication_advance_control_is_safe());
+        assert!(refreshed.authentication_advance_control_is_safe());
         assert!(matches!(
             TeslaInertPlanningScenario::evidence(refreshed),
             AuthenticationAdvanceControlEvidence::Present

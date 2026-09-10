@@ -224,7 +224,7 @@ mod tests {
                 assert_eq!(
                     provider.origin_support(BrowserOAuthLocation::Observed(
                         BrowserOAuthLocationEvidence {
-                            origin: origin,
+                            origin,
                             hostname: "simple.nokey.sh"
                         }
                     )),
@@ -239,7 +239,7 @@ mod tests {
             assert!(matches!(
                 BrowserOAuthProvider::GoogleDrive.origin_support(BrowserOAuthLocation::Observed(
                     BrowserOAuthLocationEvidence {
-                        origin: origin,
+                        origin,
                         hostname: "localhost"
                     }
                 )),
@@ -248,7 +248,7 @@ mod tests {
             assert!(matches!(
                 BrowserOAuthProvider::ICloud.origin_support(BrowserOAuthLocation::Observed(
                     BrowserOAuthLocationEvidence {
-                        origin: origin,
+                        origin,
                         hostname: "localhost"
                     }
                 )),

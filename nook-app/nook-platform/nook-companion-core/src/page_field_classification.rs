@@ -804,24 +804,24 @@ mod tests {
     #[test]
     fn detects_otp_identity_without_hotpot_false_positive() {
         assert!(
-            (&field(PageInputType::Text, "Enter OTP Code", &[], false,))
+            field(PageInputType::Text, "Enter OTP Code", &[], false,)
                 .looks_like_one_time_code_field()
         );
         assert!(
-            (&field(PageInputType::Tel, "VerificationCode", &[], false,))
+            field(PageInputType::Tel, "VerificationCode", &[], false,)
                 .looks_like_one_time_code_field()
         );
         assert!(
-            !(&field(
+            !field(
                 PageInputType::Text,
                 "hotpot-special Favorite dish",
                 &[],
                 false,
-            ))
-                .looks_like_one_time_code_field()
+            )
+            .looks_like_one_time_code_field()
         );
         assert!(
-            !(&field(PageInputType::Text, "card-security-code", &[], false,))
+            !field(PageInputType::Text, "card-security-code", &[], false,)
                 .looks_like_one_time_code_field()
         );
     }
@@ -829,64 +829,62 @@ mod tests {
     #[test]
     fn detects_username_with_login_context_for_bare_email() {
         let context = |label: &str| {
-            (&LoginContextObservation {
+            LoginContextObservation {
                 form_identity: String::new(),
                 ancestor_identities: Vec::new(),
                 advance_control_label: label.to_owned(),
                 path_context: String::new(),
-            })
-                .has_login_context()
+            }
+            .has_login_context()
         };
         assert!(context("Entrar"));
         for label in "Submit|Entrar en el sorteo|Entrar con Amazon".split('|') {
             assert!(!context(label));
         }
         assert!(
-            !(&field(PageInputType::Email, "newsletter-email", &[], true,))
+            !field(PageInputType::Email, "newsletter-email", &[], true,)
                 .looks_like_username_field()
         );
-        assert!(
-            !(&field(PageInputType::Email, "primary", &[], false,)).looks_like_username_field()
-        );
-        assert!((&field(PageInputType::Email, "primary", &[], true,)).looks_like_username_field());
-        assert!((&field(PageInputType::Text, "loginfmt", &[], false,)).looks_like_username_field());
+        assert!(!field(PageInputType::Email, "primary", &[], false,).looks_like_username_field());
+        assert!(field(PageInputType::Email, "primary", &[], true,).looks_like_username_field());
+        assert!(field(PageInputType::Text, "loginfmt", &[], false,).looks_like_username_field());
     }
 
     #[test]
     fn email_webauthn_is_distinct_from_generic_standards_email() {
         assert_eq!(
-            (&field(
+            field(
                 PageInputType::Text,
                 "identity",
                 &["email", "webauthn"],
                 false,
-            ))
-                .authentication_username_evidence(),
+            )
+            .authentication_username_evidence(),
             AuthenticationUsernameEvidence::WebAuthnEmail
         );
         assert_eq!(
-            (&field(PageInputType::Text, "identity", &["email"], false,))
+            field(PageInputType::Text, "identity", &["email"], false,)
                 .authentication_username_evidence(),
             AuthenticationUsernameEvidence::StandardsBasedEmail
         );
         assert_eq!(
-            (&field(
+            field(
                 PageInputType::Text,
                 "newsletter-email",
                 &["email", "webauthn"],
                 false,
-            ))
-                .authentication_username_evidence(),
+            )
+            .authentication_username_evidence(),
             AuthenticationUsernameEvidence::Absent
         );
         assert_eq!(
-            (&field(
+            field(
                 PageInputType::Text,
                 "identity",
                 &["username", "webauthn"],
                 false,
-            ))
-                .authentication_username_evidence(),
+            )
+            .authentication_username_evidence(),
             AuthenticationUsernameEvidence::Explicit
         );
         assert_eq!(

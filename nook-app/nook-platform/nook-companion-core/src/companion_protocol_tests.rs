@@ -436,6 +436,7 @@ fn unlock_preserves_request_correlation_across_locked_and_unlocked_state() -> an
 struct ReplayEndpoint {
     phase: ReplayEndpointPhase,
 }
+#[allow(clippy::large_enum_variant)]
 enum ReplayEndpointPhase {
     Awaiting(CompanionExtensionHandoffEndpoint),
     Discovered(DiscoveredCompanionHandoffEndpoint),

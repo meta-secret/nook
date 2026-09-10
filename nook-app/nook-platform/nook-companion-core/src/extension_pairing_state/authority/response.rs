@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
+#[allow(clippy::large_enum_variant)]
 enum GrantAuthorityResponseWire {
     NoMatchingAuthority,
     MissingActiveAuthority,

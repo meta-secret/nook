@@ -109,6 +109,8 @@ impl AuthenticationWorkflowSnapshot {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Range;
+
     use super::super::{
         AuthenticationApprovalRequirement, AuthenticationPageObservation,
         AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
@@ -119,6 +121,7 @@ mod tests {
     use crate::{
         AuthenticationPilotPresentationCapability, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
     };
+    use proptest::collection::vec;
     use proptest::prelude::*;
     use proptest::test_runner::{TestCaseError, TestCaseResult};
 
@@ -233,8 +236,8 @@ mod tests {
     }
 
     impl WorkflowBatchCase {
-        fn strategy(lengths: std::ops::Range<usize>) -> BoxedStrategy<Self> {
-            proptest::collection::vec(WorkflowObservationCase::bounded_strategy(), lengths)
+        fn strategy(lengths: Range<usize>) -> BoxedStrategy<Self> {
+            vec(WorkflowObservationCase::bounded_strategy(), lengths)
                 .prop_map(|cases| Self {
                     observations: cases.into_iter().map(|case| case.observation).collect(),
                 })
@@ -273,15 +276,16 @@ mod tests {
             let current = u8::from(snapshot.current_step);
             let total = u8::from(snapshot.total_steps);
             prop_assert!(current > 0 && current <= total);
-            match snapshot.action {
-                AuthenticationWorkflowAction::TakeOver => prop_assert_eq!(
+            if snapshot.action == AuthenticationWorkflowAction::TakeOver {
+                prop_assert_eq!(
                     snapshot.approval_requirement,
                     AuthenticationApprovalRequirement::TakeoverRequired
-                ),
-                _ => prop_assert_eq!(
+                );
+            } else {
+                prop_assert_eq!(
                     snapshot.approval_requirement,
                     AuthenticationApprovalRequirement::ExplicitUserApproval
-                ),
+                );
             }
             let admitted = Self::admit_wire(snapshot).map_err(TestCaseError::fail)?;
             prop_assert_eq!(admitted, snapshot);
@@ -420,7 +424,7 @@ mod tests {
         #[test]
         fn malformed_progress_index_and_approval_cannot_retain_capabilities(
             case in WorkflowBatchCase::strategy(1..MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1),
-            invalid_index in MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS as u32..=u32::MAX,
+            invalid_index in u32::try_from(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS).unwrap_or(u32::MAX)..=u32::MAX,
         ) {
             case.assert_invalid_mutations(invalid_index)?;
         }

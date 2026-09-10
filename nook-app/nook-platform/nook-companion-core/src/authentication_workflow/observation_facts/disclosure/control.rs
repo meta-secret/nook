@@ -309,38 +309,38 @@ mod tests {
         ) -> CurrentAuthenticationDisclosureControlRequest {
             match self {
                 Self::InsecureOrigin => {
-                    request.observation.source_origin = "http://login.example.test".to_owned()
+                    request.observation.source_origin = "http://login.example.test".to_owned();
                 }
                 Self::InsecureDestination => {
                     request.observation.destination_identity =
-                        "http://login.example.test/login".to_owned()
+                        "http://login.example.test/login".to_owned();
                 }
                 Self::ForeignDestination => {
                     request.observation.destination_identity =
-                        "https://attacker.example/login".to_owned()
+                        "https://attacker.example/login".to_owned();
                 }
                 Self::RecoveryDestination => {
                     request.observation.destination_identity =
-                        "https://login.example.test/recover".to_owned()
+                        "https://login.example.test/recover".to_owned();
                 }
                 Self::ProviderLabel => request.observation.label = "Sign in with Google".to_owned(),
                 Self::SignupForm => request.observation.form_identity = "signup".to_owned(),
                 Self::ProviderIdentity => {
-                    request.observation.machine_identity = "provider".to_owned()
+                    request.observation.machine_identity = "provider".to_owned();
                 }
                 Self::StrongUsername => {
                     request.observation.authentication_username =
-                        AuthenticationUsernameEvidence::Strong
+                        AuthenticationUsernameEvidence::Strong;
                 }
                 Self::SemanticSubmit => {
-                    request.observation.semantics = PageControlSemantics::SemanticSubmit
+                    request.observation.semantics = PageControlSemantics::SemanticSubmit;
                 }
                 Self::GetSubmission => {
-                    request.observation.submission_method = PageControlSubmissionMethod::Get
+                    request.observation.submission_method = PageControlSubmissionMethod::Get;
                 }
                 Self::AuthoredDestination => {
                     request.observation.submission_destination_source =
-                        PageControlSubmissionDestinationSource::Authored
+                        PageControlSubmissionDestinationSource::Authored;
                 }
                 Self::Unowned => request.observation.ownership = PageControlOwnership::Unowned,
                 Self::Inert => request.observation.actionability = PageControlActionability::Inert,
@@ -351,7 +351,7 @@ mod tests {
                 Self::SubmitControl => request.observation.semantic_submit_control_count = 1.into(),
                 Self::OversizedOrigin => {
                     request.observation.source_origin =
-                        "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
+                        "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
                 }
             }
             request
