@@ -142,7 +142,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         "hostPath:",
     ] {
         assert!(
-            platform.contains(required) && platform.contains("assertExcludes"),
+            platform.contains(required) && platform.contains("ForbiddenOutputText"),
             "runtime manifest assertion is missing: {required}"
         );
     }

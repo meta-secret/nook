@@ -9,6 +9,7 @@ extern crate rustc_session;
 extern crate rustc_span;
 
 use clippy_utils::diagnostics::span_lint_and_help;
+use rustc_ast::attr::AttributeExt;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::intravisit::{self, FnKind, Visitor, VisitorExt};
 use rustc_hir::{

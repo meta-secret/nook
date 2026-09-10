@@ -58,8 +58,10 @@ WORKDIR /meta-secret/nook
 RUN --mount=type=bind,source=.,target=/meta-secret/nook,readonly \
     test -n "$WORKSPACE" \
     && test -n "$POLICY_RUN_NONCE" \
-    && trap 'rm -rf /tmp/nook-policy-cargo' EXIT \
+    && trap 'rm -rf /tmp/nook-policy-cargo /tmp/nook-policy-workspace' EXIT \
     && cp -a /usr/local/cargo /tmp/nook-policy-cargo \
+    && cp -a "$WORKSPACE" /tmp/nook-policy-workspace \
+    && WORKSPACE=/tmp/nook-policy-workspace \
     && export CARGO_HOME=/tmp/nook-policy-cargo \
     && cargo-deny --manifest-path "$WORKSPACE/Cargo.toml" --log-level error check --hide-inclusion-graph \
     && cd "$WORKSPACE" \

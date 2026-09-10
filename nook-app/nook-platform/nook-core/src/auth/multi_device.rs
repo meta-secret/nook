@@ -81,12 +81,10 @@ impl SimpleIdentityGenesisOperationsInput<'_> {
                     } else {
                         member.signing_public_key.clone()
                     },
-                    label: MemberLabel::from_trusted(
-                        member
-                            .label
-                            .clone()
-                            .unwrap_or_else(|| "Identity app key".to_owned()),
-                    ),
+                    label: MemberLabel::from_trusted(match member.label.clone() {
+                        MemberLabelState::Named(label) => label,
+                        MemberLabelState::Unnamed => "Identity app key".to_owned(),
+                    }),
                     secrets_key_ciphertext: envelopes.secrets_key,
                     members_key_ciphertext: envelopes.members_key,
                 })

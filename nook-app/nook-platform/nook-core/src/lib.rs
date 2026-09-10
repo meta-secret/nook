@@ -533,8 +533,8 @@ pub use vault_client_policy::{
     VaultPasswordActivity, VaultPasswordPromptState, VaultProviderSyncState, VaultSaveActivity,
     VaultSecretCreationPermission, VaultSelectionState, VaultSessionLockIntent,
     VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest, VaultSyncActivity, VaultSyncChange,
-    VaultSyncIntent, VaultSyncPermission, VaultSyncTimerStartDecisionRequest,
-    VaultSyncTimerTickDecisionRequest, VaultVerificationState,
+    VaultSyncConflictState, VaultSyncIntent, VaultSyncPermission,
+    VaultSyncTimerStartDecisionRequest, VaultSyncTimerTickDecisionRequest, VaultVerificationState,
 };
 
 pub use device_access::DeviceSessionLockState;

@@ -1,11 +1,11 @@
 //! Independent observations and intents for vault client policy.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultSyncConflict {
+pub enum VaultSyncConflictState {
     Clear,
     Conflicted,
 }
-impl From<bool> for VaultSyncConflict {
+impl From<bool> for VaultSyncConflictState {
     fn from(observed: bool) -> Self {
         if observed {
             Self::Conflicted

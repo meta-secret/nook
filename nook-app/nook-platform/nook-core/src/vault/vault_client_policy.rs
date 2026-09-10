@@ -162,7 +162,7 @@ impl VaultClientPolicy {
         }
         if matches!(
             request.has_sync_conflict,
-            crate::VaultSyncConflict::Conflicted
+            crate::VaultSyncConflictState::Conflicted
         ) {
             return VaultEditDecision::BlockedSyncConflict;
         }

@@ -3,21 +3,21 @@
 #[derive(Clone, Copy)]
 pub struct EditBlockReasonRequest {
     pub security_conflict_count: crate::VaultSecurityConflictCount,
-    pub has_sync_conflict: crate::VaultSyncConflict,
+    pub has_sync_conflict: crate::VaultSyncConflictState,
     pub architecture_allows_secret_creation: crate::VaultSecretCreationPermission,
 }
 
 #[derive(Clone, Copy)]
 pub struct EditsBlockedRequest {
     pub security_conflict_count: crate::VaultSecurityConflictCount,
-    pub has_sync_conflict: crate::VaultSyncConflict,
+    pub has_sync_conflict: crate::VaultSyncConflictState,
     pub architecture_allows_secret_creation: crate::VaultSecretCreationPermission,
 }
 
 #[derive(Clone, Copy)]
 pub struct EditBlockMessageRequest<'a> {
     pub security_conflict_count: crate::VaultSecurityConflictCount,
-    pub has_sync_conflict: crate::VaultSyncConflict,
+    pub has_sync_conflict: crate::VaultSyncConflictState,
     pub architecture_allows_secret_creation: crate::VaultSecretCreationPermission,
     pub catalog_json: &'a str,
     pub locale: &'a str,

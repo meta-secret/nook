@@ -267,8 +267,7 @@ impl SecretFormFields {
                 return SecretValue::FileAttachment(value).to_yaml();
             }
         };
-        let yaml = value.to_yaml()?;
-        SecretPayloadYaml::parse(fields.secret_type(), &yaml)
+        value.to_yaml()
     }
 }
 

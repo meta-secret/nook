@@ -189,7 +189,10 @@ impl Database {
         keys.into_iter()
             .map(|key| StoredSecretRecord {
                 key: key.clone(),
-                secret_type: secret_types.get(key).copied(),
+                secret_type: secret_types.get(key).copied().map_or(
+                    RecordTypeDeclaration::Undeclared,
+                    RecordTypeDeclaration::Secret,
+                ),
                 value: StoredRecordPayload::from_trusted(
                     armored.get(key).cloned().unwrap_or_default(),
                 ),
