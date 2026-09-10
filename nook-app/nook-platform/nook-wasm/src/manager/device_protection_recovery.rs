@@ -4,6 +4,9 @@ use super::NookVaultManager;
 use crate::AuthProviderDatabase;
 #[cfg(test)]
 use crate::manager::session::ExtensionHandoffState;
+use crate::storage::identity_record::{
+    LocalIdentityRecoveryRequest, ProtectedIdentityLookup, ProtectedLocalIdentity,
+};
 use crate::storage::{auth_providers, indexed_db};
 use crate::{NookDatabase, NookError};
 use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, DriveEventParent, StorageMode};
@@ -15,10 +18,14 @@ impl NookVaultManager {
     /// Resolve the persisted app identity targeted by locked local recovery.
     #[wasm_bindgen]
     pub async fn local_identity_recovery_app_id(&self) -> Result<String, JsError> {
-        self.load_protected_local_identity()
-            .await?
-            .map(|(app_id, _)| app_id)
-            .ok_or_else(|| JsError::new("No protected local identity found for recovery."))
+        match self.load_protected_local_identity().await? {
+            ProtectedIdentityLookup::Configured(identity) => {
+                Ok(identity.app_id.as_str().to_owned())
+            }
+            ProtectedIdentityLookup::Unconfigured => Err(JsError::new(
+                "No protected local identity found for recovery.",
+            )),
+        }
     }
 
     /// Zeroize this tab before another tab performs destructive local recovery.
@@ -48,7 +55,11 @@ impl NookVaultManager {
             Some(AppId::parse(expected_app_id)?)
         };
         self.quiesce_for_local_recovery();
-        let recovery = NookDatabase::delete_device_identity_for_recovery(expected_app_id).await?;
+        let recovery =
+            NookDatabase::delete_device_identity_for_recovery(LocalIdentityRecoveryRequest {
+                expected_app_id,
+            })
+            .await?;
         if recovery.has_remaining_local_identities {
             if let Some(app_id) = recovery.retired_app_id.as_ref() {
                 AuthProviderDatabase::delete_auth_providers_for_app_id(app_id).await?;
@@ -64,7 +75,7 @@ impl NookVaultManager {
 impl NookVaultManager {
     pub(super) async fn load_protected_local_identity(
         &self,
-    ) -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
+    ) -> Result<ProtectedIdentityLookup, NookError> {
         let session_app_id = self.device.public_app_id();
         if session_app_id.is_empty() {
             NookDatabase::load_wrapped_device_identity().await
@@ -76,7 +87,11 @@ impl NookVaultManager {
     pub(super) async fn persisted_device_protection_status(
         &self,
     ) -> Result<nook_core::DeviceProtectionStatus, NookError> {
-        let Some((_, wrapped)) = self.load_protected_local_identity().await? else {
+        let ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
+            wrapped_identity: wrapped,
+            ..
+        }) = self.load_protected_local_identity().await?
+        else {
             return Ok(DeviceProtectionStatus::Missing);
         };
         DeviceProtectionStatus::from_persisted(wrapped.protection_mode()).ok_or_else(|| {

@@ -1,5 +1,6 @@
 //! Commit prepared identity and signing material in transaction order.
 use super::*;
+use crate::storage::identity_record::StoredIdentityProtection;
 
 impl PreparedProtectedIdentity<'_> {
     pub(super) async fn persist(self) -> Result<ProtectedLocalIdentitySave, NookError> {
@@ -97,9 +98,12 @@ mod tests {
             .map_err(|error| NookError::Database(error.to_string()))?;
         assert_ne!(first_signing_public_key, second_signing_public_key);
         NookDatabase::select_local_identity(first.identity.identity_id.clone()).await?;
-        let selected = NookDatabase::load_selected_entry()
-            .await?
-            .ok_or_else(|| NookError::Database("Selected keyring entry is missing".to_owned()))?;
+        let selected = match NookDatabase::load_selected_entry().await? {
+            StoredIdentityProtection::Protected(value) => Ok(value),
+            StoredIdentityProtection::Unprotected => Err(NookError::Database(
+                "Selected keyring entry is missing".to_owned(),
+            )),
+        }?;
         assert_eq!(selected.app_id(), first_key.app_id());
         assert_eq!(
             selected

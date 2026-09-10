@@ -7,6 +7,7 @@ use crate::VaultSnapshotLookup;
 use crate::storage::auth_providers::{
     PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
 };
+use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::VaultUnlockHistory;
 use crate::storage::{auth_providers, extension_state, identity_record};
 use crate::vault_api_local::has_local_vault;
@@ -244,10 +245,10 @@ impl NookVaultManager {
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
         let app_id = AppId::parse(app_id)?;
-        if NookDatabase::load_entry_for_app_id(&app_id)
-            .await?
-            .is_none()
-        {
+        if matches!(
+            NookDatabase::load_entry_for_app_id(&app_id).await?,
+            StoredIdentityProtection::Unprotected
+        ) {
             return Err(JsError::new(
                 "Presealed provider snapshot has no protected local app key",
             ));

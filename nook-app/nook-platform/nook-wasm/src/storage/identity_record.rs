@@ -14,6 +14,11 @@ use nook_core::{
 };
 use rexie::TransactionMode;
 mod directory_migration;
+mod lookup;
+pub(crate) use lookup::{
+    LocalIdentityProjection, ProtectedIdentityLookup, ProtectedLocalIdentity,
+    SelectedIdentityRecord, StoredIdentityProtection, StoredIdentityRecord,
+};
 mod genesis_cleanup;
 mod genesis_flow;
 mod handoff;
@@ -27,12 +32,6 @@ pub(crate) use handoff::{ExistingVaultImportCommit, IdentityHandoffCommit};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use keyring::LOCAL_IDENTITY_KEYRING_KEY;
 pub(crate) use keyring::{LocalIdentitySigner, ProtectedLocalIdentitySave};
-
-pub(crate) struct LocalIdentityProjection {
-    pub(crate) directory: IdentityDirectory,
-    pub(crate) keyring: nook_core::LocalIdentityKeyring,
-    pub(crate) protected: Option<(String, nook_core::WrappedDeviceIdentity)>,
-}
 
 /// Named values required by NookDatabase::local_keyring_entry_for_app_id_from_store.
 pub(crate) struct IdentityDbLocalKeyringEntryForAppIdFromStore<'a> {
@@ -116,89 +115,6 @@ pub(crate) struct IdentityDbValidateVaultIdentityEnrollment<'a> {
     pub(crate) store_id: &'a nook_core::StoreId,
 }
 
-impl NookDatabase {
-    pub(crate) async fn load_local_identity_projection(
-        session_app_id: &str,
-    ) -> Result<LocalIdentityProjection, NookError> {
-        let requested_app_id = if session_app_id.is_empty() {
-            None
-        } else {
-            Some(
-                AppId::parse(session_app_id)
-                    .map_err(|error| NookError::Database(error.to_string()))?,
-            )
-        };
-        let rexie = NookDatabase::open_nook_database().await?;
-        let transaction = rexie
-            .transaction(&["vault"], TransactionMode::ReadWrite)
-            .map_err(|error| {
-                NookError::IndexedDb(format!("Identity projection transaction error: {error:?}"))
-            })?;
-        let store = transaction.store("vault").map_err(|error| {
-            NookError::IndexedDb(format!("Identity projection store error: {error:?}"))
-        })?;
-        let directory = NookDatabase::load_directory_for_write(&store).await?;
-        let keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
-            store: &store,
-            directory: &directory,
-        })
-        .await?;
-        let entry = match requested_app_id.as_ref() {
-            Some(app_id) => keyring
-                .entries()
-                .iter()
-                .find(|entry| entry.app_id() == app_id),
-            None => match directory.selection() {
-                IdentitySelection::Empty => None,
-                IdentitySelection::Selected(identity_id) => match keyring.entry(identity_id) {
-                    LocalIdentityProtection::Protected(entry) => Some(entry),
-                    LocalIdentityProtection::Unprotected => None,
-                },
-            },
-        };
-        let protected = match entry {
-            Some(entry) => Some((
-                entry.app_id().as_str().to_owned(),
-                entry.wrapped_app_key().clone(),
-            )),
-            None => NookDatabase::load_legacy_wrapped_device_identity_from_store(&store)
-                .await?
-                .filter(|(app_id, _)| {
-                    requested_app_id
-                        .as_ref()
-                        .is_none_or(|requested| requested.as_str() == app_id)
-                }),
-        };
-        transaction.done().await.map_err(|error| {
-            NookError::IndexedDb(format!("Identity projection completion error: {error:?}"))
-        })?;
-        Ok(LocalIdentityProjection {
-            directory,
-            keyring,
-            protected,
-        })
-    }
-}
-
-impl NookDatabase {
-    pub(super) async fn selected_local_keyring_entry_for_store(
-        store: &rexie::Store,
-    ) -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
-        NookDatabase::selected_entry_from_store(store).await
-    }
-}
-impl NookDatabase {
-    pub(super) async fn local_keyring_entry_for_app_id_from_store(
-        request: IdentityDbLocalKeyringEntryForAppIdFromStore<'_>,
-    ) -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
-        let IdentityDbLocalKeyringEntryForAppIdFromStore { store, app_id } = request;
-        NookDatabase::entry_for_app_id_from_store(KeyringDbEntryForAppIdFromStore {
-            store: store,
-            app_id: app_id,
-        })
-        .await
-    }
-}
 pub(crate) use reconciliation::{
     IdentityReconciliationStore, PendingIdentityRotation, ReconciliationIntent,
 };
@@ -226,10 +142,10 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn load_identity_directory() -> Result<IdentityDirectory, NookError> {
         let raw = NookDatabase::load_or_migrate_identity_directory_raw().await?;
-        raw.map_or_else(
-            || Ok(IdentityDirectory::empty()),
-            |raw| NookDatabase::decode_directory(&raw),
-        )
+        match raw {
+            StoredStringRecord::MissingKey => Ok(IdentityDirectory::empty()),
+            StoredStringRecord::Stored(raw) => NookDatabase::decode_directory(&raw),
+        }
     }
 }
 
@@ -468,34 +384,6 @@ impl NookDatabase {
             NookError::IndexedDb(format!("Identity creation completion error: {error:?}"))
         })?;
         Ok(identity)
-    }
-}
-
-impl NookDatabase {
-    pub(crate) async fn load_selected_identity()
-    -> Result<Option<nook_core::IdentityRecord>, NookError> {
-        let directory = NookDatabase::load_identity_directory().await?;
-        match directory.selection() {
-            IdentitySelection::Empty => Ok(None),
-            IdentitySelection::Selected(_) => directory
-                .selected()
-                .cloned()
-                .map(Some)
-                .map_err(|error| NookError::Database(error.to_string())),
-        }
-    }
-}
-
-impl NookDatabase {
-    pub(crate) async fn load_identity(
-        identity_id: &nook_core::IdentityId,
-    ) -> Result<Option<nook_core::IdentityRecord>, NookError> {
-        Ok(NookDatabase::load_identity_directory()
-            .await?
-            .identities()
-            .iter()
-            .find(|record| record.identity_id == *identity_id)
-            .cloned())
     }
 }
 

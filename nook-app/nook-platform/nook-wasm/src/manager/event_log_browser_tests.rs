@@ -4,6 +4,7 @@ use super::*;
 use crate::EventDbRemoveEventFixture;
 use crate::VaultSnapshotLookup;
 use crate::identity_record::NookIdentityDirectorySelectionKind;
+use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::ImportVaultLabel;
 use crate::{
     DeviceProtectionDeviceModeState, IdbPutStringRequest, ImportVaultBlobRequest, NookDatabase,
@@ -560,9 +561,12 @@ async fn keyring_backed_simple_genesis_keeps_the_signer_out_of_the_singleton_see
         ),
         "keyring-backed genesis must not recreate the plaintext singleton signer"
     );
-    let entry = NookDatabase::load_entry_for_app_id(identity.app_id())
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("protected identity keyring entry is missing"))?;
+    let entry = match NookDatabase::load_entry_for_app_id(identity.app_id()).await? {
+        StoredIdentityProtection::Protected(value) => Ok(value),
+        StoredIdentityProtection::Unprotected => Err(anyhow::anyhow!(
+            "protected identity keyring entry is missing"
+        )),
+    }?;
     assert!(entry.has_signing_seed());
     manager
         .delete_local_browser_data()

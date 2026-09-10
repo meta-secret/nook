@@ -1,6 +1,9 @@
 use super::StoredStringRecord;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::identity_record;
+use crate::storage::identity_record::ProtectedIdentityLookup;
+use crate::storage::identity_record::ProtectedLocalIdentity;
+use crate::storage::identity_record::StoredIdentityProtection;
 use crate::{IdbPutStringRequest, NookDatabase, ReadStringPreferringRequest};
 use nook_core::{AppId, WrappedDeviceIdentity};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -9,15 +12,12 @@ use rexie::TransactionMode;
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use super::{
     APP_ID_KEY, APP_KEY_WRAPPED_KEY, DEVICE_ID_KEY, NookError, WRAPPED_DEVICE_IDENTITY_KEY,
 };
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceProtectionStatus;
 
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+#[cfg(test)]
 /// Named values required by NookDatabase::save_wrapped_device_identity.
 pub(crate) struct SaveWrappedDeviceIdentityRequest<'a> {
     pub(crate) device_id: &'a str,
@@ -34,7 +34,11 @@ pub(crate) struct PutWrappedDeviceIdentityRequest<'a> {
 impl NookDatabase {
     async fn device_identity_protection_status()
     -> Result<nook_core::DeviceProtectionStatus, NookError> {
-        let Some((_, wrapped)) = NookDatabase::load_wrapped_device_identity().await? else {
+        let ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
+            wrapped_identity: wrapped,
+            ..
+        }) = NookDatabase::load_wrapped_device_identity().await?
+        else {
             return Ok(DeviceProtectionStatus::Missing);
         };
         DeviceProtectionStatus::from_persisted(wrapped.protection_mode()).ok_or_else(|| {
@@ -58,7 +62,11 @@ pub enum DeviceProtectionDeviceModeState {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 impl NookDatabase {
     async fn device_identity_device_mode() -> Result<DeviceProtectionDeviceModeState, NookError> {
-        let Some((_, wrapped)) = NookDatabase::load_wrapped_device_identity().await? else {
+        let ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
+            wrapped_identity: wrapped,
+            ..
+        }) = NookDatabase::load_wrapped_device_identity().await?
+        else {
             return Ok(DeviceProtectionDeviceModeState::Missing);
         };
         Ok(match wrapped {
@@ -72,13 +80,17 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(crate) async fn load_wrapped_device_identity()
-    -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
-        if let Some(entry) = NookDatabase::load_selected_entry().await? {
-            return Ok(Some((
-                entry.app_id().as_str().to_owned(),
-                entry.wrapped_app_key().clone(),
-            )));
+    pub(crate) async fn load_wrapped_device_identity() -> Result<ProtectedIdentityLookup, NookError>
+    {
+        if let StoredIdentityProtection::Protected(entry) =
+            NookDatabase::load_selected_entry().await?
+        {
+            return Ok(ProtectedIdentityLookup::Configured(
+                ProtectedLocalIdentity {
+                    app_id: entry.app_id().clone(),
+                    wrapped_identity: entry.wrapped_app_key().clone(),
+                },
+            ));
         }
         NookDatabase::load_legacy_wrapped_device_identity().await
     }
@@ -87,24 +99,34 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn load_wrapped_device_identity_for_app_id(
         app_id: &str,
-    ) -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
+    ) -> Result<ProtectedIdentityLookup, NookError> {
         let app_id =
             AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
-        if let Some(entry) = NookDatabase::load_entry_for_app_id(&app_id).await? {
-            return Ok(Some((
-                entry.app_id().as_str().to_owned(),
-                entry.wrapped_app_key().clone(),
-            )));
+        if let StoredIdentityProtection::Protected(entry) =
+            NookDatabase::load_entry_for_app_id(&app_id).await?
+        {
+            return Ok(ProtectedIdentityLookup::Configured(
+                ProtectedLocalIdentity {
+                    app_id: entry.app_id().clone(),
+                    wrapped_identity: entry.wrapped_app_key().clone(),
+                },
+            ));
         }
-        Ok(NookDatabase::load_legacy_wrapped_device_identity()
-            .await?
-            .filter(|(stored_app_id, _)| stored_app_id == app_id.as_str()))
+        Ok(
+            match NookDatabase::load_legacy_wrapped_device_identity().await? {
+                ProtectedIdentityLookup::Configured(identity) if identity.app_id == app_id => {
+                    ProtectedIdentityLookup::Configured(identity)
+                }
+                ProtectedIdentityLookup::Configured(_) | ProtectedIdentityLookup::Unconfigured => {
+                    ProtectedIdentityLookup::Unconfigured
+                }
+            },
+        )
     }
 }
 
 impl NookDatabase {
-    async fn load_legacy_wrapped_device_identity()
-    -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
+    async fn load_legacy_wrapped_device_identity() -> Result<ProtectedIdentityLookup, NookError> {
         let rexie = NookDatabase::open_nook_database().await?;
         // Writers replace the ID and wrapped credential together. Read both from
         // the same snapshot so a concurrent replacement cannot fabricate a mixed
@@ -130,7 +152,7 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn load_legacy_wrapped_device_identity_from_store(
         store: &rexie::Store,
-    ) -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
+    ) -> Result<ProtectedIdentityLookup, NookError> {
         let wrapped = NookDatabase::read_string_preferring(ReadStringPreferringRequest {
             store: store,
             preferred_key: APP_KEY_WRAPPED_KEY,
@@ -146,7 +168,7 @@ impl NookDatabase {
         })
         .await?;
         let StoredStringRecord::Stored(raw) = wrapped else {
-            return Ok(None);
+            return Ok(ProtectedIdentityLookup::Unconfigured);
         };
         let app_id = match app_id {
             StoredStringRecord::Stored(value) if !value.trim().is_empty() => value,
@@ -157,7 +179,13 @@ impl NookDatabase {
             }
         };
         let wrapped = WrappedDeviceIdentity::parse(&raw)?;
-        Ok(Some((app_id, wrapped)))
+        Ok(ProtectedIdentityLookup::Configured(
+            ProtectedLocalIdentity {
+                app_id: AppId::parse(&app_id)
+                    .map_err(|error| NookError::Database(error.to_string()))?,
+                wrapped_identity: wrapped,
+            },
+        ))
     }
 }
 
@@ -248,11 +276,9 @@ impl NookDatabase {
 
 impl NookDatabase {
     pub(crate) async fn delete_device_identity_for_recovery(
-        expected_app_id: Option<nook_core::AppId>,
+        request: identity_record::LocalIdentityRecoveryRequest,
     ) -> Result<identity_record::LocalIdentityRecovery, NookError> {
-        identity_record::LocalIdentityRecoveryRequest { expected_app_id }
-            .execute()
-            .await
+        request.execute().await
     }
 }
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -294,9 +320,15 @@ mod tests {
         })
         .await?;
 
-        let (_, reloaded) = NookDatabase::load_wrapped_device_identity()
-            .await?
-            .ok_or_else(|| JsError::new("wrapped device identity record should exist"))?;
+        let ProtectedLocalIdentity {
+            wrapped_identity: reloaded,
+            ..
+        } = match NookDatabase::load_wrapped_device_identity().await? {
+            ProtectedIdentityLookup::Configured(value) => Ok(value),
+            ProtectedIdentityLookup::Unconfigured => {
+                Err(JsError::new("wrapped device identity record should exist"))
+            }
+        }?;
         assert_eq!(reloaded.protection_mode(), "passkey");
         assert_eq!(reloaded.device_mode()?, "standard");
         assert_eq!(
@@ -369,19 +401,28 @@ mod tests {
         })
         .await?;
 
-        let (app_id, reloaded) =
-            NookDatabase::load_wrapped_device_identity_for_app_id(first_key.app_id().as_str())
-                .await?
-                .ok_or_else(|| JsError::new("first identity record is missing"))?;
+        let ProtectedLocalIdentity {
+            app_id,
+            wrapped_identity: reloaded,
+        } = match NookDatabase::load_wrapped_device_identity_for_app_id(first_key.app_id().as_str())
+            .await?
+        {
+            ProtectedIdentityLookup::Configured(value) => Ok(value),
+            ProtectedIdentityLookup::Unconfigured => {
+                Err(JsError::new("first identity record is missing"))
+            }
+        }?;
 
-        assert_eq!(app_id, first_key.app_id().as_str());
+        assert_eq!(&app_id, first_key.app_id());
         assert_eq!(reloaded, first_wrapped);
         assert_eq!(
-            NookDatabase::load_wrapped_device_identity()
-                .await?
-                .ok_or_else(|| JsError::new("selected identity record is missing"))?
-                .0,
-            second_key.app_id().as_str()
+            match NookDatabase::load_wrapped_device_identity().await? {
+                ProtectedIdentityLookup::Configured(value) => Ok(value),
+                ProtectedIdentityLookup::Unconfigured =>
+                    Err(JsError::new("selected identity record is missing")),
+            }?
+            .app_id,
+            second_key.app_id().clone()
         );
         Ok(())
     }
@@ -414,15 +455,17 @@ mod tests {
         })
         .await?;
 
-        let recovery =
-            NookDatabase::delete_device_identity_for_recovery(Some(identity.app_id().clone()))
-                .await?;
+        let recovery = NookDatabase::delete_device_identity_for_recovery(
+            identity_record::LocalIdentityRecoveryRequest {
+                expected_app_id: Some(identity.app_id().clone()),
+            },
+        )
+        .await?;
 
-        assert!(
-            NookDatabase::load_wrapped_device_identity()
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::load_wrapped_device_identity().await?,
+            ProtectedIdentityLookup::Unconfigured
+        ));
         assert!(
             NookDatabase::load_identity_directory()
                 .await?

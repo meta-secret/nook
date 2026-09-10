@@ -8,6 +8,8 @@ use crate::EventDbSaveEventBytes;
 use crate::EventDbSaveHeads;
 use crate::IdentityDbSetIdentityMemberSigningPublicKey;
 use crate::NookDatabase;
+use crate::storage::identity_record::StoredIdentityProtection;
+use crate::storage::identity_record::StoredIdentityRecord;
 use nook_core::StoredSigningSeed;
 
 use crate::storage::identity_record;
@@ -79,11 +81,12 @@ impl SimpleGenesisOperationsInput<'_> {
                 },
             )
             .await?;
-            NookDatabase::load_identity(&pending.identity_id)
-                .await?
-                .ok_or_else(|| {
+            match NookDatabase::load_identity(&pending.identity_id).await? {
+                StoredIdentityRecord::Registered(value) => Ok(value),
+                StoredIdentityRecord::NotRegistered => Err({
                     NookError::Database("Simple genesis identity no longer exists.".to_owned())
-                })?
+                }),
+            }?
         };
         nook_core::SimpleIdentityGenesisOperationsInput {
             identity: &identity_record,
@@ -347,9 +350,10 @@ impl NookVaultManager {
                 })
                 .await?;
             self.event_log.signing_seed.clone_from(&pinned.signing_seed);
-            let keyring_backed = NookDatabase::load_entry_for_app_id(app_key.app_id())
-                .await?
-                .is_some();
+            let keyring_backed = matches!(
+                NookDatabase::load_entry_for_app_id(app_key.app_id()).await?,
+                StoredIdentityProtection::Protected(_)
+            );
             if !pending.is_staged() && !keyring_backed {
                 NookDatabase::save_signing_seed(&pinned.signing_seed).await?;
             }

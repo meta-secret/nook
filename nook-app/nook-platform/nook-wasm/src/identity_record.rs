@@ -5,6 +5,7 @@ use crate::BrowserDeviceVaultAccessForIdentity;
 use crate::NookDatabase;
 use crate::storage::identity_record;
 use crate::storage::identity_record::IdentityDirectoryWrite;
+use crate::storage::identity_record::{ProtectedIdentityLookup, SelectedIdentityRecord};
 use crate::{
     NookError,
     device_access::{self, NookDeviceAccessSnapshot, NookDeviceVaultAccess},
@@ -449,7 +450,12 @@ impl NookIdentityDirectorySnapshot {
             .await
             .map_err(|error| JsError::new(&error.to_string()))?;
         let protected = projection.protected;
-        let protected_app_id = protected.as_ref().map(|(app_id, _)| app_id.clone());
+        let protected_app_id = match &protected {
+            ProtectedIdentityLookup::Configured(identity) => {
+                Some(identity.app_id.as_str().to_owned())
+            }
+            ProtectedIdentityLookup::Unconfigured => None,
+        };
         let current_app_id = if session_app_id.is_empty() {
             protected_app_id
         } else {
@@ -624,11 +630,14 @@ pub async fn select_identity(identity_id: String) -> Result<(), wasm_bindgen::Js
 
 #[wasm_bindgen]
 pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_bindgen::JsError> {
-    let current_app_id = NookDatabase::load_wrapped_device_identity()
+    let current_app_id = match NookDatabase::load_wrapped_device_identity()
         .await
         .map_err(|error| JsError::new(&error.to_string()))?
-        .map(|(app_id, _)| app_id);
-    let Some(record) = NookDatabase::load_selected_identity()
+    {
+        ProtectedIdentityLookup::Configured(identity) => Some(identity.app_id.as_str().to_owned()),
+        ProtectedIdentityLookup::Unconfigured => None,
+    };
+    let SelectedIdentityRecord::Selected(record) = NookDatabase::load_selected_identity()
         .await
         .map_err(|error| JsError::new(&error.to_string()))?
     else {

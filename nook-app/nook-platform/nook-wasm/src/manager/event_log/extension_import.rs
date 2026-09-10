@@ -1,5 +1,7 @@
 use super::{ExtensionEventLogImportStatus, ExternalEventLogRecord, NookVaultManager};
 use crate::manager::{CeremonyState, EventLogSessionState, SyncOutboxState, VaultSessionState};
+use crate::storage::identity_record::ProtectedIdentityLookup;
+use crate::storage::identity_record::ProtectedLocalIdentity;
 use nook_core::ActiveVaultScope;
 
 use crate::storage::indexed_db;
@@ -71,16 +73,19 @@ impl NookVaultManager {
         let device_public_key = DevicePublicKey::parse(expected_device_public_key)?;
         let device_signing_public_key =
             DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
-        let (stored_device_id, _) =
-            NookDatabase::load_wrapped_device_identity_for_app_id(device_id.as_str())
-                .await?
-                .ok_or_else(|| {
-                    NookError::IndexedDb(
-                        "Extension device protection must be configured before vault import."
-                            .to_owned(),
-                    )
-                })?;
-        if stored_device_id != device_id.as_str() {
+        let ProtectedLocalIdentity {
+            app_id: stored_device_id,
+            ..
+        } = match NookDatabase::load_wrapped_device_identity_for_app_id(device_id.as_str()).await? {
+            ProtectedIdentityLookup::Configured(value) => Ok(value),
+            ProtectedIdentityLookup::Unconfigured => Err({
+                NookError::IndexedDb(
+                    "Extension device protection must be configured before vault import."
+                        .to_owned(),
+                )
+            }),
+        }?;
+        if stored_device_id.as_str() != device_id.as_str() {
             return Err(NookError::Decryption(
                 "Approved extension device does not match the protected local identity.".to_owned(),
             ));

@@ -1,6 +1,7 @@
 //! Versioned persistence for independently protected local identity keys.
 
 use crate::IdentityDbWriteIdentityDirectory;
+use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::StoredStringRecord;
 use nook_core::LocalIdentityProtection;
 
@@ -247,7 +248,7 @@ impl NookDatabase {
 impl NookDatabase {
     pub(super) async fn selected_entry_from_store(
         store: &rexie::Store,
-    ) -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
+    ) -> Result<StoredIdentityProtection, NookError> {
         let directory = NookDatabase::load_directory_for_write(store).await?;
         let keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
             store: store,
@@ -255,11 +256,13 @@ impl NookDatabase {
         })
         .await?;
         let IdentitySelection::Selected(identity_id) = directory.selection() else {
-            return Ok(None);
+            return Ok(StoredIdentityProtection::Unprotected);
         };
         Ok(match keyring.entry(identity_id) {
-            LocalIdentityProtection::Protected(entry) => Some(entry.clone()),
-            LocalIdentityProtection::Unprotected => None,
+            LocalIdentityProtection::Protected(entry) => {
+                StoredIdentityProtection::Protected(entry.clone())
+            }
+            LocalIdentityProtection::Unprotected => StoredIdentityProtection::Unprotected,
         })
     }
 }
@@ -267,7 +270,7 @@ impl NookDatabase {
 impl NookDatabase {
     pub(super) async fn entry_for_app_id_from_store(
         request: KeyringDbEntryForAppIdFromStore<'_>,
-    ) -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
+    ) -> Result<StoredIdentityProtection, NookError> {
         let KeyringDbEntryForAppIdFromStore { store, app_id } = request;
         let directory = NookDatabase::load_directory_for_write(store).await?;
         Ok(
@@ -279,14 +282,15 @@ impl NookDatabase {
             .entries()
             .iter()
             .find(|entry| entry.app_id() == app_id)
-            .cloned(),
+            .map_or(StoredIdentityProtection::Unprotected, |entry| {
+                StoredIdentityProtection::Protected(entry.clone())
+            }),
         )
     }
 }
 
 impl NookDatabase {
-    pub(crate) async fn load_selected_entry()
-    -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
+    pub(crate) async fn load_selected_entry() -> Result<StoredIdentityProtection, NookError> {
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
@@ -310,7 +314,9 @@ impl NookDatabase {
 
 impl NookDatabase {
     pub(crate) async fn selected_legacy_signer_requires_authorization() -> Result<bool, NookError> {
-        let Some(entry) = NookDatabase::load_selected_entry().await? else {
+        let StoredIdentityProtection::Protected(entry) =
+            NookDatabase::load_selected_entry().await?
+        else {
             return Ok(false);
         };
         if entry.has_signing_seed() {
@@ -326,7 +332,7 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn load_entry_for_app_id(
         app_id: &nook_core::AppId,
-    ) -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
+    ) -> Result<StoredIdentityProtection, NookError> {
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
@@ -347,7 +353,9 @@ impl NookDatabase {
         .entries()
         .iter()
         .find(|entry| entry.app_id() == app_id)
-        .cloned();
+        .map_or(StoredIdentityProtection::Unprotected, |entry| {
+            StoredIdentityProtection::Protected(entry.clone())
+        });
         transaction.done().await.map_err(|error| {
             NookError::IndexedDb(format!(
                 "Local identity keyring load completion error: {error:?}"

@@ -7,6 +7,7 @@ use crate::IdentityDbSaveProtectedLocalIdentity;
 use crate::manager::session::ExtensionHandoffState;
 use crate::storage::device_access::DeviceAccessProfileKey;
 use crate::storage::identity_record::LocalIdentitySigner;
+use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::SentinelFinalizationJournal;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{auth_providers, identity_record, indexed_db};
@@ -103,9 +104,12 @@ impl NookVaultManager {
         let app_id = AppId::parse(&app_id)?;
         NookVaultManager::ensure_no_pending_vault_creation().await?;
         let changes_live_identity = self.device.public_app_id() != app_id.as_str();
-        let entry = NookDatabase::load_entry_for_app_id(&app_id)
-            .await?
-            .ok_or_else(|| JsError::new("App key has no protected local identity."))?;
+        let entry = match NookDatabase::load_entry_for_app_id(&app_id).await? {
+            StoredIdentityProtection::Protected(value) => Ok(value),
+            StoredIdentityProtection::Unprotected => {
+                Err(JsError::new("App key has no protected local identity."))
+            }
+        }?;
         let selection = NookDatabase::select_local_identity(entry.identity_id().clone()).await?;
         if changes_live_identity {
             self.finish_local_identity_activation(&selection.selected_app_id);
@@ -232,9 +236,12 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("protect personal identity: {error:?}"))?;
         let app_key = manager.device_identity()?;
         let signing_seed = manager.event_log.signing_seed.clone();
-        let protected = NookDatabase::load_selected_entry()
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("selected identity is missing"))?;
+        let protected = match NookDatabase::load_selected_entry().await? {
+            StoredIdentityProtection::Protected(value) => Ok(value),
+            StoredIdentityProtection::Unprotected => {
+                Err(anyhow::anyhow!("selected identity is missing"))
+            }
+        }?;
         let mut keyring = NookDatabase::load_keyring().await?;
         keyring
             .replace(LocalIdentityKeyringEntry::legacy(
@@ -267,10 +274,12 @@ mod browser_tests {
 
         assert!(manager.local_identity_creation_pending());
         assert!(
-            NookDatabase::load_selected_entry()
-                .await?
-                .ok_or_else(|| anyhow::anyhow!("migrated identity is missing"))?
-                .has_signing_seed()
+            match NookDatabase::load_selected_entry().await? {
+                StoredIdentityProtection::Protected(value) => Ok(value),
+                StoredIdentityProtection::Unprotected =>
+                    Err(anyhow::anyhow!("migrated identity is missing")),
+            }?
+            .has_signing_seed()
         );
         assert!(matches!(
             NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY,).await?,
@@ -314,9 +323,12 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("activate personal identity: {error:?}"))?;
 
         assert_ne!(previous_app_id, personal_app_id);
-        let selected = NookDatabase::load_selected_entry()
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("selected identity is missing"))?;
+        let selected = match NookDatabase::load_selected_entry().await? {
+            StoredIdentityProtection::Protected(value) => Ok(value),
+            StoredIdentityProtection::Unprotected => {
+                Err(anyhow::anyhow!("selected identity is missing"))
+            }
+        }?;
         assert_eq!(selected.app_id().as_str(), personal_app_id);
         assert_eq!(manager.device.public_app_id(), personal_app_id);
 
@@ -415,10 +427,10 @@ impl NookVaultManager {
         app_key: nook_core::AppKey,
         record: &nook_core::WrappedDeviceIdentity,
     ) -> Result<(), NookError> {
-        let signing_seed = if NookDatabase::load_entry_for_app_id(app_key.app_id())
-            .await?
-            .is_some()
-        {
+        let signing_seed = if matches!(
+            NookDatabase::load_entry_for_app_id(app_key.app_id()).await?,
+            StoredIdentityProtection::Protected(_)
+        ) {
             LocalIdentitySigner { app_key: &app_key }
                 .load_or_create()
                 .await?

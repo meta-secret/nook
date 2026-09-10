@@ -59,7 +59,7 @@ pub(crate) struct SetLocalVaultLabelRequest<'a> {
 /// Named values required by NookDatabase::import_vault_blob.
 pub(crate) struct ImportVaultBlobRequest<'a> {
     pub(crate) content: &'a str,
-    pub(crate) label: Option<&'a str>,
+    pub(crate) label: ImportVaultLabel<'a>,
 }
 
 /// Presence of an encrypted local vault snapshot or provider cache.

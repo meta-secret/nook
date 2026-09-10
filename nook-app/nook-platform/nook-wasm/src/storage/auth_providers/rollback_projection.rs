@@ -4,6 +4,7 @@ use crate::AuthProviderDatabase;
 use crate::NookDatabase;
 use crate::ProviderDbReadRawSnapshotFromStore;
 use crate::storage::identity_record;
+use crate::storage::identity_record::StoredIdentityProtection;
 use nook_core::{DeviceIdentity, NormalizedAuthSnapshot, ProviderCredentialStorageAdmission};
 use rexie::TransactionMode;
 
@@ -228,7 +229,9 @@ impl AuthProviderDatabase {
 impl AuthProviderDatabase {
     pub(crate) async fn migrate_legacy_auth_providers_for_selected_identity()
     -> Result<(), NookError> {
-        let Some(entry) = NookDatabase::load_selected_entry().await? else {
+        let StoredIdentityProtection::Protected(entry) =
+            NookDatabase::load_selected_entry().await?
+        else {
             return Ok(());
         };
         if !AuthProviderDatabase::may_migrate_legacy_snapshot(entry.app_id()).await? {

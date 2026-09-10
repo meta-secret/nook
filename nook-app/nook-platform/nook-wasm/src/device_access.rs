@@ -1,10 +1,14 @@
 //! Read-only dashboard projection for browser device and vault access metadata.
 
+mod display_text;
 mod passkey_metadata;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::device_access::DeviceAccessProfileKey;
+use crate::storage::identity_record::{ProtectedIdentityLookup, ProtectedLocalIdentity};
 use crate::storage::indexed_db::VaultUnlockHistory;
 use crate::{NookDatabase, SaveVaultBlobRequest};
+use display_text::NookDeviceAccessTextValue;
+pub use display_text::{NookDeviceAccessText, NookDeviceAccessTextKind};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
 use nook_core::MemberLabelState;
@@ -20,40 +24,6 @@ use crate::storage::device_access::{
     DeviceAccessProfile, PasskeyAccessProfile, PasskeyCreatedAtEvidence, PasskeyLastUsedAtEvidence,
 };
 use crate::storage::{device_access, indexed_db};
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookDeviceAccessTextKind {
-    Unknown,
-    Known,
-}
-
-#[derive(Clone)]
-enum NookDeviceAccessTextValue {
-    Unknown,
-    Known(String),
-}
-
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct NookDeviceAccessText(NookDeviceAccessTextValue);
-
-impl NookDeviceAccessText {
-    fn from_string(value: String) -> Self {
-        if value.is_empty() {
-            Self(NookDeviceAccessTextValue::Unknown)
-        } else {
-            Self(NookDeviceAccessTextValue::Known(value))
-        }
-    }
-
-    fn from_option(value: Option<String>) -> Self {
-        value.map_or_else(
-            || Self(NookDeviceAccessTextValue::Unknown),
-            Self::from_string,
-        )
-    }
-}
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -124,27 +94,6 @@ impl NookPasskeyTimestampEvidence {
             | NookPasskeyTimestampEvidenceValue::NotYetObserved => {
                 Err(JsError::new("Passkey timestamp evidence is unavailable"))
             }
-        }
-    }
-}
-
-#[wasm_bindgen]
-impl NookDeviceAccessText {
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn kind(&self) -> NookDeviceAccessTextKind {
-        match self.0 {
-            NookDeviceAccessTextValue::Unknown => NookDeviceAccessTextKind::Unknown,
-            NookDeviceAccessTextValue::Known(_) => NookDeviceAccessTextKind::Known,
-        }
-    }
-
-    pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
-        match &self.0 {
-            NookDeviceAccessTextValue::Unknown => {
-                Err(JsError::new("Device access value is unknown"))
-            }
-            NookDeviceAccessTextValue::Known(value) => Ok(value.clone()),
         }
     }
 }
@@ -317,7 +266,7 @@ pub(crate) struct BrowserDeviceAccessSnapshotForSession<'a> {
 pub(crate) struct BrowserDeviceAccessSnapshotForSessionWithProtected<'a> {
     pub(crate) session_device_id: &'a str,
     pub(crate) session_unlocked: nook_core::DeviceSessionLockState,
-    pub(crate) protected: Option<(String, nook_core::WrappedDeviceIdentity)>,
+    pub(crate) protected: ProtectedIdentityLookup,
 }
 
 impl NookDeviceAccessSnapshot {
@@ -452,25 +401,35 @@ impl NookDeviceAccessSnapshot {
         let identity_state = (&nook_core::DeviceAccessIdentityObservation {
             session_unlocked,
             session_device_id,
-            persisted_device_id: protected.as_ref().map(|(device_id, _)| device_id.as_str()),
+            persisted_device_id: match &protected {
+                ProtectedIdentityLookup::Configured(identity) => Some(identity.app_id.as_str()),
+                ProtectedIdentityLookup::Unconfigured => None,
+            },
         })
             .identity_state();
         let session_uses_companion = !session_device_id.is_empty()
-            && protected
-                .as_ref()
-                .is_none_or(|(persisted_device_id, _)| persisted_device_id != session_device_id);
+            && match &protected {
+                ProtectedIdentityLookup::Configured(identity) => {
+                    identity.app_id.as_str() != session_device_id
+                }
+                ProtectedIdentityLookup::Unconfigured => true,
+            };
         let protection = if session_uses_companion {
             DeviceAccessProtectionKind::CompanionSession
         } else {
-            nook_core::DeviceAccessProtectionKind::classify(
-                protected.as_ref().map(|(_, record)| record),
-            )
+            nook_core::DeviceAccessProtectionKind::classify(match &protected {
+                ProtectedIdentityLookup::Configured(identity) => Some(&identity.wrapped_identity),
+                ProtectedIdentityLookup::Unconfigured => None,
+            })
         };
         let (device_id, credential_id, user_handle_id) = if session_uses_companion {
             (session_device_id.to_owned(), String::new(), String::new())
         } else {
             match &protected {
-                Some((device_id, record)) => {
+                ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
+                    app_id: device_id,
+                    wrapped_identity: record,
+                }) => {
                     let credential_id = record
                         .credential_id()
                         .map(|bytes| {
@@ -483,9 +442,11 @@ impl NookDeviceAccessSnapshot {
                             nook_core::PasskeyAccessProfile::user_handle_identifier(bytes.as_ref())
                         })
                         .unwrap_or_default();
-                    (device_id.clone(), credential_id, user_handle_id)
+                    (device_id.as_str().to_owned(), credential_id, user_handle_id)
                 }
-                None => (String::new(), String::new(), String::new()),
+                ProtectedIdentityLookup::Unconfigured => {
+                    (String::new(), String::new(), String::new())
+                }
             }
         };
         let profile = if session_uses_companion {
@@ -541,7 +502,10 @@ impl NookDeviceAccessSnapshot {
                 .map(|kind| NookPasskeyTransport { kind })
                 .collect(),
             backup_state: NookPasskeyBackupState::backup_state(passkey.observation.backup_state),
-            aaguid: NookDeviceAccessText::from_option(passkey.observation.aaguid.clone()),
+            aaguid: match passkey.observation.aaguid.clone() {
+                Some(aaguid) => NookDeviceAccessText::from_string(aaguid),
+                None => NookDeviceAccessText(NookDeviceAccessTextValue::Unknown),
+            },
             keeper: nook_core::PasskeyKeeperKind::classify(passkey.observation.aaguid.as_deref()),
             observed_browser: passkey.observation.browser,
             observed_platform: passkey.observation.platform,
@@ -630,7 +594,10 @@ impl NookDeviceVaultAccess {
                         NookDeviceAccessText::from_string(timestamp.to_string())
                     }
                 },
-                verified_at: NookDeviceAccessText::from_option(verified_at),
+                verified_at: match verified_at {
+                    Some(timestamp) => NookDeviceAccessText::from_string(timestamp),
+                    None => NookDeviceAccessText(NookDeviceAccessTextValue::Unknown),
+                },
             });
         }
         vaults.sort_by(|left, right| left.label.cmp(&right.label));
@@ -662,8 +629,8 @@ mod tests {
         NookDeviceVaultAccess {
             store_id: store_id.to_string(),
             label: label.to_owned(),
-            last_local_update_at: NookDeviceAccessText::from_option(None),
-            verified_at: NookDeviceAccessText::from_option(None),
+            last_local_update_at: NookDeviceAccessText(NookDeviceAccessTextValue::Unknown),
+            verified_at: NookDeviceAccessText(NookDeviceAccessTextValue::Unknown),
         }
     }
 
@@ -893,7 +860,7 @@ mod browser_tests {
             BrowserDeviceAccessSnapshotForSessionWithProtected {
                 session_device_id: companion_id.as_str(),
                 session_unlocked: true.into(),
-                protected: None,
+                protected: ProtectedIdentityLookup::Unconfigured,
             },
         )
         .await
@@ -933,7 +900,7 @@ mod browser_tests {
         let unknown = NookDeviceAccessText::from_string(String::new());
         assert_eq!(unknown.kind(), NookDeviceAccessTextKind::Unknown);
         assert!(unknown.value().is_err());
-        let known = NookDeviceAccessText::from_option(Some("label".into()));
+        let known = NookDeviceAccessText::from_string("label".into());
         assert_eq!(known.kind(), NookDeviceAccessTextKind::Known);
         assert_eq!(known.value().unwrap(), "label");
 

@@ -10,6 +10,8 @@ use crate::BrowserPasskeyRequestOptions;
 use crate::BrowserPasskeySignalCurrentUserDetails;
 use crate::NookDatabase;
 use crate::manager::session::ExtensionHandoffState;
+use crate::storage::identity_record::ProtectedIdentityLookup;
+use crate::storage::identity_record::ProtectedLocalIdentity;
 use nook_companion_core::CompanionIdentityHandoffContext;
 #[path = "device_protection_recovery.rs"]
 mod device_protection_recovery;
@@ -413,7 +415,11 @@ impl NookVaultManager {
     pub async fn device_protection_device_mode(
         &self,
     ) -> Result<crate::DeviceProtectionDeviceModeState, JsError> {
-        let Some((_, wrapped)) = self.load_protected_local_identity().await? else {
+        let ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
+            wrapped_identity: wrapped,
+            ..
+        }) = self.load_protected_local_identity().await?
+        else {
             return Ok(DeviceProtectionDeviceModeState::Missing);
         };
         Ok(match wrapped {
@@ -730,9 +736,15 @@ impl NookVaultManager {
 
     #[wasm_bindgen]
     pub async fn passkey_unlock_options(&self) -> Result<NookPasskeyUnlockOptions, JsError> {
-        let (_, record) = self.load_protected_local_identity().await?.ok_or_else(|| {
-            NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
-        })?;
+        let ProtectedLocalIdentity {
+            wrapped_identity: record,
+            ..
+        } = match self.load_protected_local_identity().await? {
+            ProtectedIdentityLookup::Configured(value) => Ok(value),
+            ProtectedIdentityLookup::Unconfigured => Err({
+                NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
+            }),
+        }?;
         Ok(NookPasskeyUnlockOptions::from_core(&record)?)
     }
 
@@ -771,13 +783,18 @@ impl NookVaultManager {
     )]
     pub async fn unlock_device_identity(&mut self, mut prf_output: Vec<u8>) -> Result<(), JsError> {
         let result: Result<(), NookError> = async {
-            let (stored_device_id, record) =
-                self.load_protected_local_identity().await?.ok_or_else(|| {
+            let ProtectedLocalIdentity {
+                app_id: stored_device_id,
+                wrapped_identity: record,
+            } = match self.load_protected_local_identity().await? {
+                ProtectedIdentityLookup::Configured(value) => Ok(value),
+                ProtectedIdentityLookup::Unconfigured => Err({
                     NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
-                })?;
+                }),
+            }?;
             let typed_prf_output = WebAuthnPrfOutput::try_from(prf_output.clone())?;
             let secret = record.unlock_passkey(&nook_core::PasskeyIdentityUnlock {
-                stored_device_id: &stored_device_id,
+                stored_device_id: stored_device_id.as_str(),
                 prf_output: &typed_prf_output,
             })?;
             let app_key = DeviceIdentity::from_secret_str(&secret)?;
@@ -792,13 +809,18 @@ impl NookVaultManager {
     pub async fn unlock_pin_device_identity(&mut self, pin: String) -> Result<(), JsError> {
         let pin = Zeroizing::new(pin);
         let result = async {
-            let (stored_device_id, record) =
-                self.load_protected_local_identity().await?.ok_or_else(|| {
+            let ProtectedLocalIdentity {
+                app_id: stored_device_id,
+                wrapped_identity: record,
+            } = match self.load_protected_local_identity().await? {
+                ProtectedIdentityLookup::Configured(value) => Ok(value),
+                ProtectedIdentityLookup::Unconfigured => Err({
                     NookError::IndexedDb("No PIN-protected device identity found.".to_owned())
-                })?;
+                }),
+            }?;
             let secret = record.unwrap_pin(&pin)?;
             let identity = DeviceIdentity::from_secret_str(&secret)?;
-            if identity.device_id().as_str() != stored_device_id {
+            if identity.device_id().as_str() != stored_device_id.as_str() {
                 return Err(NookError::Decryption(
                     "Protected device identity does not match device_id.".to_owned(),
                 ));

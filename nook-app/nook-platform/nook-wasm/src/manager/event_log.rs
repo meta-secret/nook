@@ -6,6 +6,7 @@ use crate::EventDbSaveKeyEpoch;
 use crate::storage::event_db::StoredKeyEpoch;
 use crate::storage::identity_record;
 use crate::storage::identity_record::LocalIdentitySigner;
+use crate::storage::identity_record::StoredIdentityProtection;
 use crate::{NookDatabase, NookError};
 use nook_core::StoredSigningSeed;
 use nook_core::{
@@ -159,10 +160,10 @@ impl NookVaultManager {
             )?);
         }
         let app_key = self.device_identity()?;
-        if NookDatabase::load_entry_for_app_id(app_key.app_id())
-            .await?
-            .is_some()
-        {
+        if matches!(
+            NookDatabase::load_entry_for_app_id(app_key.app_id()).await?,
+            StoredIdentityProtection::Protected(_)
+        ) {
             self.event_log.signing_seed = LocalIdentitySigner { app_key: &app_key }
                 .load_or_create()
                 .await?;

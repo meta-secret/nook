@@ -5,6 +5,7 @@ use super::{
 };
 use crate::IdentityDbLocalKeyringEntryForAppIdFromStore;
 use crate::ReadStringPreferringRequest;
+use crate::storage::identity_record::StoredIdentityProtection;
 use crate::{NookDatabase, NookError};
 use nook_core::{AppId, WrappedDeviceIdentity};
 
@@ -82,8 +83,10 @@ impl NookDatabase {
             StringUpdateGuard::Unconditional => return Ok(StringUpdateResult::Applied),
             StringUpdateGuard::WrappedCredentialFingerprint(expected) => {
                 match NookDatabase::selected_local_keyring_entry_for_store(store).await? {
-                    Some(entry) => (entry.wrapped_app_key().clone(), expected),
-                    None => {
+                    StoredIdentityProtection::Protected(entry) => {
+                        (entry.wrapped_app_key().clone(), expected)
+                    }
+                    StoredIdentityProtection::Unprotected => {
                         let raw =
                             NookDatabase::read_string_preferring(ReadStringPreferringRequest {
                                 store,
@@ -92,7 +95,7 @@ impl NookDatabase {
                                 label: "Atomic string guard",
                             })
                             .await?;
-                        let Some(raw) = raw else {
+                        let StoredStringRecord::Stored(raw) = raw else {
                             return Ok(StringUpdateResult::GuardRejected);
                         };
                         let Ok(wrapped) = WrappedDeviceIdentity::parse(&raw) else {
@@ -114,7 +117,9 @@ impl NookDatabase {
                 .await?
                 {
                     Some(entry) => (entry.wrapped_app_key().clone(), expected),
-                    None => return Ok(StringUpdateResult::GuardRejected),
+                    StoredIdentityProtection::Unprotected => {
+                        return Ok(StringUpdateResult::GuardRejected);
+                    }
                 }
             }
         };

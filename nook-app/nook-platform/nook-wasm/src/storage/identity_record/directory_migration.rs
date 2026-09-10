@@ -169,8 +169,8 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(super) async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, NookError>
-    {
+    pub(super) async fn load_or_migrate_identity_directory_raw()
+    -> Result<StoredStringRecord, NookError> {
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
@@ -227,7 +227,7 @@ impl NookDatabase {
             transaction.done().await.map_err(|error| {
                 NookError::IndexedDb(format!("Identity migration completion error: {error:?}"))
             })?;
-            return Ok(Some(raw));
+            return Ok(StoredStringRecord::Stored(raw));
         }
         let legacy = store.get(legacy_id.clone()).await.map_err(|error| {
             NookError::IndexedDb(format!("Legacy identity read error: {error:?}"))
@@ -236,7 +236,7 @@ impl NookDatabase {
             transaction.done().await.map_err(|error| {
                 NookError::IndexedDb(format!("Identity migration completion error: {error:?}"))
             })?;
-            return Ok(None);
+            return Ok(StoredStringRecord::MissingKey);
         };
         let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
             NookError::IndexedDb(format!("Legacy identity value error: {error:?}"))
@@ -264,7 +264,7 @@ impl NookDatabase {
         transaction.done().await.map_err(|error| {
             NookError::IndexedDb(format!("Identity migration completion error: {error:?}"))
         })?;
-        Ok(Some(raw))
+        Ok(StoredStringRecord::Stored(raw))
     }
 }
 #[cfg(test)]

@@ -4,6 +4,7 @@ use super::{NookVaultManager, VaultNameState};
 use crate::IdentityDbGenerateVaultDekForIdentity;
 use crate::NookDatabase;
 use crate::storage::identity_record;
+use crate::storage::identity_record::StoredIdentityRecord;
 use crate::{NookError, NookSecretRecord};
 use nook_core::{DirectoryOwnedVaultOpening, IdentityVaultKeyOpening};
 use nook_core::{
@@ -81,11 +82,12 @@ impl NookVaultManager {
                 store_id: pending.store_id.clone(),
             })
             .await?;
-        let identity_record = NookDatabase::load_identity(&pending.identity_id)
-            .await?
-            .ok_or_else(|| {
+        let identity_record = match NookDatabase::load_identity(&pending.identity_id).await? {
+            StoredIdentityRecord::Registered(value) => Ok(value),
+            StoredIdentityRecord::NotRegistered => Err({
                 NookError::Database("Pending genesis identity no longer exists.".to_owned())
-            })?;
+            }),
+        }?;
         self.apply_identity_genesis_vault_keys(&identity_record, &keys)?;
         Ok(pending)
     }
