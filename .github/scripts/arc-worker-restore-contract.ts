@@ -690,12 +690,13 @@ export class ArcWorkerRestoreContract {
       'select(.type == "Ready") | .status',
       'preserved_taints="$(jq -c',
       "test \"$preparing_taint_state\" = $'1\\t1'",
-    ])
+    ]) {
       const contractAdmission19 = restore.requireBefore({
         first,
         second: 'kubectl uncordon "$node"',
       });
-    if (contractAdmission19.isErr()) return err(contractAdmission19.error);
+      if (contractAdmission19.isErr()) return err(contractAdmission19.error);
+    }
     const contractAdmission20 = restore.forbidAll([
       "k0s:mesh:ensure",
       "k0s:worker-mesh:reconcile",
