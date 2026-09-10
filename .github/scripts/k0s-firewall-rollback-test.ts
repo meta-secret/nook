@@ -91,8 +91,8 @@ class FirewallRollbackScenario {
       `flush chain inet bynull_filter input\n${originalInput}flush chain inet bynull_filter forward\n${originalForward}`,
     );
     if (prepared10.isErr()) return err(prepared10.error);
-    const sudoMock = {
-      path: join(mockBin, "sudo"),
+    const fixtureCommand = {
+      path: join(mockBin, "fixture-command"),
       source: `#!/usr/bin/env bash
 set -euo pipefail
 if test "\${1:-}" = -n; then shift; fi
@@ -128,14 +128,24 @@ else
 fi
 `,
     };
-    const sudoMockReady = new FirewallExecutable(sudoMock).execute();
-    if (sudoMockReady.isErr()) return err(sudoMockReady.error);
+    const fixtureCommandReady = new FirewallExecutable(
+      fixtureCommand,
+    ).execute();
+    if (fixtureCommandReady.isErr()) return err(fixtureCommandReady.error);
+    const fixtureRollbackSource = rollbackSource.replaceAll(
+      "sudo -n ",
+      `${JSON.stringify(fixtureCommand.path)} `,
+    );
     const trigger =
       exitMode === RollbackExitMode.Error ? "false" : "kill -TERM $$";
     const harness = {
       path: join(work, "harness.sh"),
       source: `#!/usr/bin/env bash
 set -Eeuo pipefail
+export MOCK_INPUT_STATE=${JSON.stringify(inputState)}
+export MOCK_FORWARD_STATE=${JSON.stringify(forwardState)}
+export MOCK_CONFIG=${JSON.stringify(config)}
+export MOCK_FRAGMENT=${JSON.stringify(fragment)}
 firewall_fragment=${join(work, "temporary-fragment")}
 firewall_config=${join(work, "temporary-config")}
 firewall_previous_config=${previousConfig}
@@ -149,7 +159,7 @@ cni_config_next=""
 recovery_key=""
 encrypted_backup=""
 expected_mac=""
-${rollbackSource}
+${fixtureRollbackSource}
 trap rollback_k0s_firewall EXIT
 trap rollback_k0s_firewall ERR
 trap 'exit 129' HUP
@@ -254,8 +264,8 @@ class FirewallReplacementScenario {
         'counter drop comment "later forward drop"\n',
     );
     if (prepared12.isErr()) return err(prepared12.error);
-    const sudoMock = {
-      path: join(mockBin, "sudo"),
+    const fixtureCommand = {
+      path: join(mockBin, "fixture-command"),
       source: `#!/usr/bin/env bash
 set -euo pipefail
 if test "\${1:-}" = -n; then shift; fi
@@ -288,14 +298,22 @@ else
 fi
 `,
     };
-    const sudoMockReady = new FirewallExecutable(sudoMock).execute();
-    if (sudoMockReady.isErr()) return err(sudoMockReady.error);
+    const fixtureCommandReady = new FirewallExecutable(
+      fixtureCommand,
+    ).execute();
+    if (fixtureCommandReady.isErr()) return err(fixtureCommandReady.error);
+    const fixtureReplaceSource = replaceSource.replaceAll(
+      "sudo -n ",
+      `${JSON.stringify(fixtureCommand.path)} `,
+    );
     const harness = {
       path: join(work, "harness.sh"),
       source: `#!/usr/bin/env bash
 set -Eeuo pipefail
+export MOCK_INPUT_STATE=${JSON.stringify(inputState)}
+export MOCK_FORWARD_STATE=${JSON.stringify(forwardState)}
 firewall_live_next=${next}
-${replaceSource}
+${fixtureReplaceSource}
 replace_k0s_firewall_rules committed
 `,
     };
