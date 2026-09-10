@@ -106,7 +106,7 @@ impl Neo4jTaskStore {
     pub(super) async fn active_delivery_task(
         &self,
         request: crate::model::ActiveDeliveryQuery<'_>,
-    ) -> crate::HiveResult<Option<TaskId>> {
+    ) -> crate::HiveResult<crate::model::ActiveDelivery> {
         let crate::model::ActiveDeliveryQuery {
             source_commit,
             kind,
@@ -129,9 +129,11 @@ impl Neo4jTaskStore {
                 .param("kind", kind.as_str()),
             )
             .await?;
-        rows.next()
-            .await?
-            .map(|row| Ok(TaskId::try_from(row.get::<String>("id")?)?))
-            .transpose()
+        match rows.next().await? {
+            Some(row) => Ok(crate::model::ActiveDelivery::Active(TaskId::try_from(
+                row.get::<String>("id")?,
+            )?)),
+            None => Ok(crate::model::ActiveDelivery::Idle),
+        }
     }
 }

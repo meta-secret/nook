@@ -16,7 +16,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
     async fn active_delivery(
         &self,
         request: crate::model::ActiveDeliveryQuery<'_>,
-    ) -> crate::HiveResult<Option<TaskId>>;
+    ) -> crate::HiveResult<crate::model::ActiveDelivery>;
 
     async fn cancel(&self, task_id: &TaskId, reason: &str) -> crate::HiveResult<bool>;
 

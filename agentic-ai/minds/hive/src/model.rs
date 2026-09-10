@@ -806,3 +806,10 @@ impl TryFrom<WireBlockerResult> for BlockerRequest {
         })
     }
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ActiveDelivery {
+    #[default]
+    Idle,
+    Active(TaskId),
+}

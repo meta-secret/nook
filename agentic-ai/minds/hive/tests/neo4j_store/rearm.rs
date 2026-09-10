@@ -391,10 +391,12 @@ pub async fn verify_blocked_release_retry(
         !retry_row.get::<String>("parent_blocked_reason")?.is_empty(),
         "a member that remains blocked must retain an operator-visible reason"
     );
-    let observed_parent = store
-        .observer_task_view(parent.id.as_str(), "en")
-        .await?
-        .context("retried blocked parent must be visible to the observer")?;
+    let observed_parent = match store.observer_task_view(parent.id.as_str(), "en").await? {
+        hive::observer::TaskObservation::Observed(task) => task,
+        hive::observer::TaskObservation::Missing => {
+            anyhow::bail!("retried blocked parent must be visible to the observer")
+        }
+    };
     assert_eq!(
         observed_parent.latest_error, "waiting for retried dependencies",
         "Control Center must prefer the current blocked reason over a stale attempt error"

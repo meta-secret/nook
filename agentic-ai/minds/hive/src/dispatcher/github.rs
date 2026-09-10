@@ -95,7 +95,9 @@ impl RunEvidence {
             .split_once(COMMIT_LINK_PREFIX)
             .and_then(|(_, remainder)| remainder.get(..40))
             .filter(|value| value.bytes().all(|byte| byte.is_ascii_hexdigit()))
-            .hive_context("GitHub run page has no full commit identity")?;
+            .ok_or_else(|| {
+                crate::HiveError::message("GitHub run page has no full commit identity")
+            })?;
         RunEvidence::require_marker(
             summary,
             "title=\"main\" href=\"/meta-secret/nook/tree/refs/heads/main\"",
@@ -145,13 +147,15 @@ impl RunEvidence {
         evidence: &str,
     ) -> crate::HiveResult<&'a str> {
         let start = format!("data-url=\"/meta-secret/nook/actions/runs/{run_id}/{partial}\"");
-        let (_, remainder) = page
-            .split_once(&start)
-            .with_hive_context(|| format!("GitHub run page has no run-scoped {evidence}"))?;
+        let (_, remainder) = page.split_once(&start).ok_or_else(|| {
+            crate::HiveError::message(format!("GitHub run page has no run-scoped {evidence}"))
+        })?;
         remainder
             .split_once(end)
             .map(|(scope, _)| scope)
-            .with_hive_context(|| format!("GitHub run page has no bounded {evidence}"))
+            .ok_or_else(|| {
+                crate::HiveError::message(format!("GitHub run page has no bounded {evidence}"))
+            })
     }
 }
 

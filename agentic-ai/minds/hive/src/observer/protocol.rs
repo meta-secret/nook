@@ -180,6 +180,15 @@ impl ObserverCopy {
     }
 }
 
+/// A missing lookup retains the coordinator's existing JSON null payload.
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum TaskObservation {
+    Observed(ObservedTask),
+    #[default]
+    Missing,
+}
+
 #[async_trait]
 pub trait ObserverStore: Clone + Send + Sync + 'static {
     async fn observer_snapshot_view(&self, locale: &str) -> crate::HiveResult<ObserverSnapshot>;
@@ -187,7 +196,7 @@ pub trait ObserverStore: Clone + Send + Sync + 'static {
         &self,
         task_id: &str,
         locale: &str,
-    ) -> crate::HiveResult<Option<ObservedTask>>;
+    ) -> crate::HiveResult<TaskObservation>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -201,7 +210,7 @@ pub(super) enum ObserverRequest {
 #[serde(tag = "result", content = "value", rename_all = "snake_case")]
 pub(super) enum ObserverResponse {
     Snapshot(ObserverSnapshot),
-    Task(Option<ObservedTask>),
+    Task(#[serde(default)] TaskObservation),
     Error(String),
 }
 
@@ -273,7 +282,7 @@ impl ObserverStore for ObserverCoordinatorStore {
         &self,
         task_id: &str,
         locale: &str,
-    ) -> crate::HiveResult<Option<ObservedTask>> {
+    ) -> crate::HiveResult<TaskObservation> {
         match self
             .request(ObserverRequest::Task {
                 task_id: task_id.to_owned(),
@@ -295,6 +304,7 @@ impl ObserverStore for ObserverCoordinatorStore {
 mod tests {
     use super::{
         ObserverCoordinatorStore, ObserverCopy, ObserverRequest, ObserverResponse, ObserverStore,
+        TaskObservation,
     };
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::net::UnixListener;
@@ -311,8 +321,10 @@ mod tests {
             let mut requests = BufReader::new(reader).lines();
             let responses = [
                 ObserverResponse::Snapshot(super::super::ObserverSnapshot::fixture("en")),
-                ObserverResponse::Task(Some(super::super::ObservedTask::fixture("task-7"))),
-                ObserverResponse::Task(None),
+                ObserverResponse::Task(TaskObservation::Observed(
+                    super::super::ObservedTask::fixture("task-7"),
+                )),
+                ObserverResponse::Task(TaskObservation::Missing),
                 ObserverResponse::Error("coordinator unavailable".into()),
             ];
             for response in responses {
@@ -341,12 +353,8 @@ mod tests {
             client.observer_snapshot_view("en").await?.active_task_count,
             2
         );
-        assert_eq!(
-            client
-                .observer_task_view("task-7", "ru")
-                .await?
-                .map(|task| task.id),
-            Some("task-7".to_owned())
+        assert!(
+            matches!(client.observer_task_view("task-7", "ru").await?, TaskObservation::Observed(task) if task.id == "task-7")
         );
         let Err(mismatch) = client.observer_snapshot_view("en").await else {
             return Err(crate::HiveError::message(

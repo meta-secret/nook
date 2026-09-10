@@ -1,8 +1,13 @@
+#[derive(Debug)]
+pub(super) enum WorkspaceOrigin<'a> {
+    Fresh,
+    ResumeBranch(&'a str),
+}
 pub struct TaskWorkspace<'scan> {
     pub workspace: &'scan Path,
     pub repository_url: &'scan str,
     pub source_commit: &'scan str,
-    pub resume_branch: Option<&'scan str>,
+    pub resume_branch: WorkspaceOrigin<'scan>,
     pub dependency_artifacts: &'scan [Artifact],
 }
 use super::*;
@@ -98,7 +103,7 @@ impl TaskWorkspace<'_> {
         )
         .await?;
         let mut did_resume = false;
-        if let Some(branch) = resume_branch {
+        if let WorkspaceOrigin::ResumeBranch(branch) = resume_branch {
             let resumed = Command::new("git")
                 .args([
                     "fetch",
@@ -153,7 +158,7 @@ impl TaskWorkspace<'_> {
             child
                 .stdin
                 .take()
-                .hive_context("dependency patch stdin was unavailable")?
+                .ok_or_else(|| crate::HiveError::message("dependency patch stdin was unavailable"))?
                 .write_all(artifact.content.as_bytes())
                 .await
                 .hive_context("failed to stream a dependency patch")?;
@@ -258,7 +263,9 @@ impl TaskWorkspace<'_> {
         child
             .stdin
             .take()
-            .hive_context("dependency reverse-check stdin was unavailable")?
+            .ok_or_else(|| {
+                crate::HiveError::message("dependency reverse-check stdin was unavailable")
+            })?
             .write_all(artifact.content.as_bytes())
             .await
             .hive_context("failed to stream a dependency reverse check")?;
@@ -693,7 +700,7 @@ mod tests {
                 .to_str()
                 .ok_or_else(|| io::Error::other("source path must be UTF-8"))?,
             source_commit: &source_commit,
-            resume_branch: None,
+            resume_branch: super::WorkspaceOrigin::Fresh,
             dependency_artifacts: slice::from_ref(&dependency),
         })
         .prepare_workspace()
@@ -716,7 +723,7 @@ mod tests {
                 .to_str()
                 .ok_or_else(|| io::Error::other("source path must be UTF-8"))?,
             source_commit: &source_commit,
-            resume_branch: Some(resume_branch),
+            resume_branch: super::WorkspaceOrigin::ResumeBranch(resume_branch),
             dependency_artifacts: slice::from_ref(&dependency),
         })
         .prepare_workspace()

@@ -1,3 +1,22 @@
+#[derive(Default, serde::Deserialize)]
+#[serde(untagged)]
+enum ReviewCursor {
+    After(String),
+    #[default]
+    FirstPage,
+}
+enum DeploymentObservation {
+    NoStatus,
+    Status(String),
+}
+impl std::fmt::Debug for DeploymentObservation {
+    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoStatus => output.write_str("None"),
+            Self::Status(status) => output.debug_tuple("Some").field(status).finish(),
+        }
+    }
+}
 pub struct DeliveryReadiness<'scan> {
     pub repository: &'scan Path,
     pub pull_request: &'scan DeliveryPullRequest,
@@ -28,9 +47,9 @@ impl DeliveryReadiness<'_> {
         let name_with_owner = repository_state.name_with_owner;
         let (owner, name) = name_with_owner
             .split_once('/')
-            .hive_context("GitHub repository identity is malformed")?;
+            .ok_or_else(|| crate::HiveError::message("GitHub repository identity is malformed"))?;
         let mut unresolved = 0;
-        let mut cursor: Option<String> = None;
+        let mut cursor = ReviewCursor::FirstPage;
         loop {
             let review_query = format!(
                 "query($number:Int!,$cursor:String){{repository(owner:\"{owner}\",name:\"{name}\"){{pullRequest(number:$number){{reviewThreads(first:100,after:$cursor){{nodes{{isResolved}} pageInfo{{hasNextPage endCursor}}}}}}}}}}"
@@ -43,7 +62,7 @@ impl DeliveryReadiness<'_> {
                 "-f".to_owned(),
                 format!("query={review_query}"),
             ];
-            if let Some(value) = cursor.as_deref() {
+            if let ReviewCursor::After(value) = &cursor {
                 arguments.extend(["-F".to_owned(), format!("cursor={value}")]);
             }
             let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
@@ -66,7 +85,7 @@ impl DeliveryReadiness<'_> {
                 break;
             }
             cursor = threads.page_info.end_cursor;
-            if cursor.is_none() {
+            if matches!(cursor, ReviewCursor::FirstPage) {
                 return Err(crate::HiveError::message(
                     "GitHub review pagination omitted its cursor",
                 ));
@@ -100,7 +119,7 @@ impl DeliveryReadiness<'_> {
             .await?,
         )
         .hive_context("GitHub returned invalid deployment state")?;
-        let mut state = None;
+        let mut state = DeploymentObservation::NoStatus;
         for deployment_id in deployments.iter().map(|deployment| deployment.id) {
             let statuses: Vec<GithubDeploymentStatus> = serde_json::from_str(
                 &(DeliveryCommand {
@@ -118,16 +137,18 @@ impl DeliveryReadiness<'_> {
                 .await?,
             )
             .hive_context("GitHub returned invalid deployment status")?;
-            state = statuses.into_iter().next().map(|status| status.state);
-            if state.is_some() {
+            state = match statuses.into_iter().next() {
+                Some(status) => DeploymentObservation::Status(status.state),
+                None => DeploymentObservation::NoStatus,
+            };
+            if matches!(state, DeploymentObservation::Status(_)) {
                 break;
             }
         }
-        if state.as_deref() != Some("success") {
+        if !matches!(&state, DeploymentObservation::Status(status) if status == "success") {
             return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: PR #{} exact-head github-pages deployment is {:?}",
-                pull_request.number,
-                state.as_deref()
+                pull_request.number, state
             )));
         }
         Ok(())
@@ -254,7 +275,8 @@ struct GithubReviewThread {
 #[serde(rename_all = "camelCase")]
 struct GithubReviewPage {
     has_next_page: bool,
-    end_cursor: Option<String>,
+    #[serde(default)]
+    end_cursor: ReviewCursor,
 }
 #[derive(serde::Deserialize)]
 struct GithubDeployment {

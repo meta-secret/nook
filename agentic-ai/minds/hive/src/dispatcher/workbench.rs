@@ -33,9 +33,9 @@ impl WorkbenchCheckout<'_> {
                     checkout.display()
                 )));
             }
-            let parent = checkout
-                .parent()
-                .hive_context("Workbench checkout has no parent directory")?;
+            let parent = checkout.parent().ok_or_else(|| {
+                crate::HiveError::message("Workbench checkout has no parent directory")
+            })?;
             async_fs::create_dir_all(parent).await?;
             let mut command = Command::new("git");
             command

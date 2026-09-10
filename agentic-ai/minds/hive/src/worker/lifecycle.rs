@@ -340,7 +340,7 @@ mod tests {
         async fn active_delivery(
             &self,
             request: crate::model::ActiveDeliveryQuery<'_>,
-        ) -> crate::HiveResult<Option<TaskId>> {
+        ) -> crate::HiveResult<crate::model::ActiveDelivery> {
             let crate::model::ActiveDeliveryQuery {
                 source_commit: _source_commit,
                 kind: _kind,

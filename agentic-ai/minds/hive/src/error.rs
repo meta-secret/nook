@@ -280,19 +280,6 @@ where
     }
 }
 
-impl<T> HiveContext<T> for Option<T> {
-    fn hive_context(self, context: impl Into<String>) -> HiveResult<T> {
-        self.ok_or_else(|| HiveError::message(context))
-    }
-
-    fn with_hive_context<F>(self, context: F) -> HiveResult<T>
-    where
-        F: FnOnce() -> String,
-    {
-        self.ok_or_else(|| HiveError::message(context()))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{HiveContext, HiveError};
@@ -368,8 +355,11 @@ mod tests {
                 .starts_with("join:")
         );
 
-        let missing: Option<()> = None;
-        let Err(missing) = missing.hive_context("required state") else {
+        let missing = []
+            .first()
+            .copied()
+            .ok_or_else(|| HiveError::message("required state"));
+        let Err(missing): Result<(), _> = missing else {
             return Err(HiveError::message("missing option produced a value"));
         };
         assert_eq!(missing.to_string(), "required state");

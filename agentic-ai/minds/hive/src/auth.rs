@@ -1,3 +1,7 @@
+enum ProjectedCredentialReplacement {
+    Unchanged,
+    Replaced(Vec<u8>),
+}
 pub struct AuthBroker {
     pub socket_path: PathBuf,
     pub auth_source: PathBuf,
@@ -216,22 +220,26 @@ impl AuthBroker {
                             // Another warm broker may have won a rotating refresh-token race.
                             // Wait for its Secret update to reach this projected volume and retry
                             // from the durable replacement instead of failing the active task.
-                            let mut replacement = None;
+                            let mut replacement = ProjectedCredentialReplacement::Unchanged;
                             for _ in 0..AUTH_CONNECT_ATTEMPTS {
                                 async_time::sleep(AUTH_CONNECT_DELAY).await;
                                 let candidate = async_fs::read(&auth_source).await.hive_context(
                                     "failed to reload projected Codex authentication",
                                 )?;
                                 if candidate != private_auth_bytes {
-                                    replacement = Some(candidate);
+                                    replacement =
+                                        ProjectedCredentialReplacement::Replaced(candidate);
                                     break;
                                 }
                             }
-                            let replacement = replacement.ok_or_else(|| {
-                                crate::HiveError::message(format!(
-                                    "Codex authentication refresh failed: {refresh_error}"
-                                ))
-                            })?;
+                            let replacement = match replacement {
+                                ProjectedCredentialReplacement::Replaced(bytes) => bytes,
+                                ProjectedCredentialReplacement::Unchanged => {
+                                    return Err(crate::HiveError::message(format!(
+                                        "Codex authentication refresh failed: {refresh_error}"
+                                    )));
+                                }
+                            };
                             async_fs::write(&private_auth, replacement).await?;
                             auth_manager = AuthManager::shared(
                                 auth_home.clone(),

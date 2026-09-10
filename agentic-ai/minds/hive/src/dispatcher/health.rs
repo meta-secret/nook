@@ -181,9 +181,11 @@ impl DispatcherHealth<'_> {
             .parse::<u64>()
             .hive_context("parse Workbench dispatcher health heartbeat")?;
         let now = DispatcherHealth::unix_timestamp_seconds(now)?;
-        let age = now.checked_sub(heartbeat).hive_context(
-            "Workbench dispatcher health heartbeat is later than the current system time",
-        )?;
+        let age = now.checked_sub(heartbeat).ok_or_else(|| {
+            crate::HiveError::message(
+                "Workbench dispatcher health heartbeat is later than the current system time",
+            )
+        })?;
         if age > max_age.as_secs() {
             return Err(crate::HiveError::message(format!(
                 "Workbench dispatcher health heartbeat is {age} seconds old"

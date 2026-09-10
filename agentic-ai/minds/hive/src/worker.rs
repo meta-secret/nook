@@ -211,13 +211,17 @@ impl<S: TaskStore> Worker<S> {
                     .persist_activity(),
                 );
                 let task_result = async {
-                    let repair_branch =
-                        (task.kind.is_main_repair()).then(|| (task.id).repair_branch_name());
+                    let repair_branch = task.id.repair_branch_name();
+                    let origin = if task.kind.is_main_repair() {
+                        workspace::WorkspaceOrigin::ResumeBranch(&repair_branch)
+                    } else {
+                        workspace::WorkspaceOrigin::Fresh
+                    };
                     let preparation = (TaskWorkspace {
                         workspace: &self.config.workspace,
                         repository_url: &self.config.repository_url,
                         source_commit: &task.source_commit,
-                        resume_branch: repair_branch.as_deref(),
+                        resume_branch: origin,
                         dependency_artifacts: &task.dependency_artifacts,
                     })
                     .prepare_workspace()

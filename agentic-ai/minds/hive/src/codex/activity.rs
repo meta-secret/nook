@@ -9,8 +9,26 @@ use tokio::io::AsyncWriteExt;
 
 use crate::model::{ActivityKind, TaskActivity};
 
+pub(super) enum ActivityDisposition {
+    Ignore,
+    Record(TaskActivity),
+}
+#[derive(Debug, PartialEq, Eq)]
+enum ExecutionCategory {
+    Action,
+    Validation(&'static str),
+}
+impl ExecutionCategory {
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Action => "action",
+            Self::Validation(label) => label,
+        }
+    }
+}
+
 impl TaskActivity {
-    pub(super) fn task_activity_from_event(event: &EventMsg) -> Option<TaskActivity> {
+    pub(super) fn task_activity_from_event(event: &EventMsg) -> ActivityDisposition {
         let activity = match event {
             EventMsg::TurnStarted(_) => TaskActivity {
                 kind: ActivityKind::Started,
@@ -23,8 +41,8 @@ impl TaskActivity {
                 detail: String::new(),
             },
             EventMsg::ExecCommandEnd(event) => {
-                let category = LocalExecutionRecord::local_execution_category(&event.command)
-                    .unwrap_or("action");
+                let category =
+                    LocalExecutionRecord::local_execution_category(&event.command).label();
                 let command =
                     LocalExecutionRecord::sanitized_execution_command(&event.command, category);
                 TaskActivity {
@@ -84,9 +102,9 @@ impl TaskActivity {
                 message: "activity.execution_stopped".to_owned(),
                 detail: String::new(),
             },
-            _ => return None,
+            _ => return ActivityDisposition::Ignore,
         };
-        Some(activity)
+        ActivityDisposition::Record(activity)
     }
 }
 
@@ -108,7 +126,9 @@ impl LocalExecutionRecord {
         exit_code: i32,
         duration: std_time::Duration,
     ) -> crate::HiveResult<()> {
-        let Some(category) = LocalExecutionRecord::local_execution_category(command) else {
+        let ExecutionCategory::Validation(category) =
+            LocalExecutionRecord::local_execution_category(command)
+        else {
             return Ok(());
         };
         let finished = OffsetDateTime::now_utc();
@@ -137,7 +157,7 @@ impl LocalExecutionRecord {
 }
 
 impl LocalExecutionRecord {
-    fn local_execution_category(command: &[String]) -> Option<&'static str> {
+    fn local_execution_category(command: &[String]) -> ExecutionCategory {
         let command = command.join(" ").to_ascii_lowercase();
         let tests = [
             " test",
@@ -165,10 +185,10 @@ impl LocalExecutionRecord {
         .iter()
         .any(|marker| command.contains(marker));
         match (checks, tests) {
-            (true, true) => Some("combined"),
-            (true, false) => Some("check"),
-            (false, true) => Some("test"),
-            (false, false) => None,
+            (true, true) => ExecutionCategory::Validation("combined"),
+            (true, false) => ExecutionCategory::Validation("check"),
+            (false, true) => ExecutionCategory::Validation("test"),
+            (false, false) => ExecutionCategory::Action,
         }
     }
 }
@@ -207,7 +227,7 @@ impl LocalExecutionRecord {
 
 #[cfg(test)]
 mod tests {
-    use super::LocalExecutionRecord;
+    use super::{ExecutionCategory, LocalExecutionRecord};
 
     #[test]
     fn classifies_and_sanitizes_local_validation_executions() {
@@ -221,15 +241,15 @@ mod tests {
 
         assert_eq!(
             LocalExecutionRecord::local_execution_category(&check),
-            Some("check")
+            ExecutionCategory::Validation("check")
         );
         assert_eq!(
             LocalExecutionRecord::local_execution_category(&combined),
-            Some("combined")
+            ExecutionCategory::Validation("combined")
         );
         assert_eq!(
             LocalExecutionRecord::local_execution_category(&unrelated),
-            None
+            ExecutionCategory::Action
         );
         assert_eq!(
             LocalExecutionRecord::sanitized_execution_command(&check, "check"),

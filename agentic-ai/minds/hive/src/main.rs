@@ -1,3 +1,7 @@
+mod cli_authentication;
+mod cli_sandbox;
+use cli_authentication::Neo4jAuthentication;
+use cli_sandbox::SandboxExecutable;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time;
@@ -28,8 +32,8 @@ struct Cli {
     neo4j_uri: String,
     #[arg(long, env = "NEO4J_USERNAME", default_value = "neo4j")]
     neo4j_username: String,
-    #[arg(long, env = "NEO4J_PASSWORD", hide_env_values = true)]
-    neo4j_password: Option<String>,
+    #[command(flatten)]
+    neo4j_password: Neo4jAuthentication,
     #[command(subcommand)]
     command: Command,
 }
@@ -83,8 +87,8 @@ enum Command {
             default_value = "/run/hive-coordinator/coordinator.sock"
         )]
         coordinator_socket: PathBuf,
-        #[arg(long, env = "HIVE_CODEX_LINUX_SANDBOX_EXE")]
-        codex_linux_sandbox_exe: Option<PathBuf>,
+        #[command(flatten)]
+        codex_linux_sandbox_exe: SandboxExecutable,
     },
     Coordinator {
         #[arg(
@@ -242,8 +246,7 @@ impl Cli {
             Command::Queue { action } => {
                 let neo4j_password = cli
                     .neo4j_password
-                    .as_deref()
-                    .hive_context("NEO4J_PASSWORD is required for queue operations")?;
+                    .require_password("NEO4J_PASSWORD is required for queue operations")?;
                 let store =
                     Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                         .await?;
@@ -300,8 +303,7 @@ impl Cli {
             Command::ObserverCoordinator { socket } => {
                 let neo4j_password = cli
                     .neo4j_password
-                    .as_deref()
-                    .hive_context("NEO4J_PASSWORD is required for the observer coordinator")?;
+                    .require_password("NEO4J_PASSWORD is required for the observer coordinator")?;
                 let store =
                     Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                         .await?;
@@ -312,8 +314,7 @@ impl Cli {
             Command::Coordinator { socket } => {
                 let neo4j_password = cli
                     .neo4j_password
-                    .as_deref()
-                    .hive_context("NEO4J_PASSWORD is required for the coordinator")?;
+                    .require_password("NEO4J_PASSWORD is required for the coordinator")?;
                 let store =
                     Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                         .await?;
@@ -334,8 +335,7 @@ impl Cli {
                 .await?;
                 let neo4j_password = cli
                     .neo4j_password
-                    .as_deref()
-                    .hive_context("NEO4J_PASSWORD is required for the Workbench dispatcher")?;
+                    .require_password("NEO4J_PASSWORD is required for the Workbench dispatcher")?;
                 let store = async_time::timeout(
                     time::Duration::from_secs(300),
                     Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password),
@@ -421,8 +421,7 @@ impl Cli {
             Command::Migrate => {
                 let neo4j_password = cli
                     .neo4j_password
-                    .as_deref()
-                    .hive_context("NEO4J_PASSWORD is required for migration")?;
+                    .require_password("NEO4J_PASSWORD is required for migration")?;
                 Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                     .await?
                     .migrate()
@@ -439,8 +438,7 @@ impl Cli {
             } => {
                 let neo4j_password = cli
                     .neo4j_password
-                    .as_deref()
-                    .hive_context("NEO4J_PASSWORD is required for enqueue")?;
+                    .require_password("NEO4J_PASSWORD is required for enqueue")?;
                 let store =
                     Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                         .await?;
@@ -470,9 +468,9 @@ impl Cli {
 impl Cli {
     fn with_linux_sandbox_override(
         mut arg0_paths: Arg0DispatchPaths,
-        override_path: Option<PathBuf>,
+        override_path: SandboxExecutable,
     ) -> Arg0DispatchPaths {
-        if let Some(path) = override_path {
+        if let SandboxExecutable::Override(path) = override_path {
             arg0_paths.codex_linux_sandbox_exe = Some(path);
         }
         arg0_paths
@@ -506,12 +504,12 @@ mod tests {
     fn worker_can_override_the_embedded_codex_linux_sandbox() {
         let original = PathBuf::from("/tmp/codex-linux-sandbox");
         let replacement = PathBuf::from("/usr/local/bin/hive-codex-linux-sandbox");
-        let paths = super::with_linux_sandbox_override(
+        let paths = Cli::with_linux_sandbox_override(
             Arg0DispatchPaths {
                 codex_linux_sandbox_exe: Some(original),
                 ..Arg0DispatchPaths::default()
             },
-            Some(replacement.clone()),
+            super::SandboxExecutable::Override(replacement.clone()),
         );
 
         assert_eq!(paths.codex_linux_sandbox_exe, Some(replacement));
@@ -563,7 +561,10 @@ mod tests {
         assert_eq!(workspace, PathBuf::from("/tmp/worker"));
         assert_eq!((lease_seconds, heartbeat_seconds), (90, 30));
         assert_eq!((poll_min_seconds, poll_max_seconds), (2, 4));
-        assert_eq!(codex_linux_sandbox_exe, Some(PathBuf::from("/bin/sandbox")));
+        assert_eq!(
+            codex_linux_sandbox_exe,
+            super::SandboxExecutable::Override(PathBuf::from("/bin/sandbox"))
+        );
 
         let coordinator = parse(&["hive", "coordinator", "--socket", "/tmp/coordinator"])?;
         assert!(matches!(

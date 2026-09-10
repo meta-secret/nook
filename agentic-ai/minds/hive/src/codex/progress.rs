@@ -1,3 +1,12 @@
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum InspectionHints {
+    NoHints,
+    Files(String),
+}
+pub(super) enum ProgressDetail<'a> {
+    Summary,
+    Detail(&'a str),
+}
 use super::progress_output::ProgressPlan;
 use super::*;
 
@@ -223,7 +232,7 @@ impl<W: Write> ProgressReporter<W> {
             EventMsg::TurnStarted(_) => plan.phase(
                 "●",
                 "Planning started",
-                Some("Loading repository instructions and project context"),
+                ProgressDetail::Detail("Loading repository instructions and project context"),
             ),
             EventMsg::ReasoningContentDelta(event) => plan.reasoning_delta(&event.delta),
             EventMsg::AgentReasoning(event)
@@ -246,12 +255,12 @@ impl<W: Write> ProgressReporter<W> {
             EventMsg::ModelReroute(event) => plan.phase(
                 "↪",
                 "Model rerouted",
-                Some(&format!("{} → {}", event.from_model, event.to_model)),
+                ProgressDetail::Detail(&format!("{} → {}", event.from_model, event.to_model)),
             ),
             EventMsg::TurnComplete(_) => plan.phase(
                 "✓",
                 "Plan ready",
-                Some("Validating tasks and DAG dependencies"),
+                ProgressDetail::Detail("Validating tasks and DAG dependencies"),
             ),
             _ => plan,
         };
@@ -277,7 +286,7 @@ impl<W: Write> ProgressReporter<W> {
         self,
         symbol: &str,
         title: &str,
-        detail: Option<&str>,
+        detail: ProgressDetail<'_>,
     ) -> (Self, io::Result<()>) {
         let plan = ProgressPlan::new(self.state).phase(symbol, title, detail);
         self.output(plan)
@@ -352,7 +361,7 @@ impl ProgressPlan<PlanningProgressState> {
         self.checkpoint(state).phase(
             "◆",
             "Building feature plan",
-            Some("Writing structured tasks and dependencies"),
+            ProgressDetail::Detail("Writing structured tasks and dependencies"),
         )
     }
     fn inspection(self, command: &[String]) -> Self {
@@ -368,7 +377,7 @@ impl ProgressPlan<PlanningProgressState> {
             .paint("36", &format!("{:02}", state.inspection_step));
         let title = state.decorate.paint("1", summary.title);
         let mut plan = plan.write(format!("  {number}  {title}\n"));
-        if let Some(detail) = summary.detail {
+        if let InspectionHints::Files(detail) = summary.detail {
             plan = plan.write(format!(
                 "{}\n",
                 state.decorate.paint("2", &format!("      {detail}"))
@@ -386,13 +395,13 @@ impl ProgressPlan<PlanningProgressState> {
             .write(format!("{command}\n"))
             .flush()
     }
-    fn phase(self, symbol: &str, title: &str, detail: Option<&str>) -> Self {
+    fn phase(self, symbol: &str, title: &str, detail: ProgressDetail<'_>) -> Self {
         let plan = self.finish_reasoning();
         let decoration = plan.state.decorate;
         let symbol = decoration.paint(if symbol == "✓" { "32" } else { "36" }, symbol);
         let title = decoration.paint("1", title);
         let mut plan = plan.write(format!("  {symbol}  {title}\n"));
-        if let Some(detail) = detail {
+        if let ProgressDetail::Detail(detail) = detail {
             plan = plan.write(format!(
                 "{}\n",
                 decoration.paint("2", &format!("     {detail}"))
@@ -492,7 +501,7 @@ impl InspectionSummary {
 
 pub(super) struct InspectionSummary {
     title: &'static str,
-    detail: Option<String>,
+    detail: InspectionHints,
 }
 
 impl InspectionSummary {
@@ -522,7 +531,7 @@ impl InspectionSummary {
 }
 
 impl InspectionSummary {
-    pub(super) fn inspection_file_hints(command: &str) -> Option<String> {
+    pub(super) fn inspection_file_hints(command: &str) -> InspectionHints {
         let mut files = Vec::new();
         for token in command.split_whitespace() {
             let token = token.trim_matches(|character: char| {
@@ -543,7 +552,11 @@ impl InspectionSummary {
             }
         }
 
-        (!files.is_empty()).then(|| files.join(" · "))
+        if files.is_empty() {
+            InspectionHints::NoHints
+        } else {
+            InspectionHints::Files(files.join(" · "))
+        }
     }
 }
 

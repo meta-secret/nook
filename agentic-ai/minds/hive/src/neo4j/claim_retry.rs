@@ -6,6 +6,12 @@ use rand::RngExt;
 
 pub(super) const CLAIM_RETRY_LIMIT: usize = 5;
 
+#[derive(Debug)]
+pub(super) enum ClaimRetry {
+    Stop,
+    RetryAfter(Duration),
+}
+
 impl Neo4jTaskStore {
     fn is_transient_driver_error(error: &Neo4jDriverError) -> bool {
         match error {
@@ -33,9 +39,12 @@ impl Neo4jTaskStore {
     pub(super) fn transient_claim_retry_delay(
         retry: usize,
         error: &crate::HiveError,
-    ) -> Option<Duration> {
-        (retry + 1 < CLAIM_RETRY_LIMIT && Neo4jTaskStore::is_transient_claim_error(error))
-            .then(|| Duration::from_millis(rand::rng().random_range(20..=80)))
+    ) -> ClaimRetry {
+        if retry + 1 < CLAIM_RETRY_LIMIT && Neo4jTaskStore::is_transient_claim_error(error) {
+            ClaimRetry::RetryAfter(Duration::from_millis(rand::rng().random_range(20..=80)))
+        } else {
+            ClaimRetry::Stop
+        }
     }
 }
 
@@ -57,15 +66,21 @@ mod tests {
 
         assert!(Neo4jTaskStore::is_transient_claim_error(&transient));
         assert!(!Neo4jTaskStore::is_transient_claim_error(&permanent));
-        assert!(Neo4jTaskStore::transient_claim_retry_delay(0, &transient).is_some());
-        assert!(
-            Neo4jTaskStore::transient_claim_retry_delay(CLAIM_RETRY_LIMIT - 2, &transient)
-                .is_some()
-        );
-        assert!(
-            Neo4jTaskStore::transient_claim_retry_delay(CLAIM_RETRY_LIMIT - 1, &transient)
-                .is_none()
-        );
-        assert!(Neo4jTaskStore::transient_claim_retry_delay(0, &permanent).is_none());
+        assert!(matches!(
+            Neo4jTaskStore::transient_claim_retry_delay(0, &transient),
+            super::ClaimRetry::RetryAfter(_)
+        ));
+        assert!(matches!(
+            Neo4jTaskStore::transient_claim_retry_delay(CLAIM_RETRY_LIMIT - 2, &transient),
+            super::ClaimRetry::RetryAfter(_)
+        ));
+        assert!(matches!(
+            Neo4jTaskStore::transient_claim_retry_delay(CLAIM_RETRY_LIMIT - 1, &transient),
+            super::ClaimRetry::Stop
+        ));
+        assert!(matches!(
+            Neo4jTaskStore::transient_claim_retry_delay(0, &permanent),
+            super::ClaimRetry::Stop
+        ));
     }
 }

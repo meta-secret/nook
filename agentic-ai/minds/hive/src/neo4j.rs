@@ -68,7 +68,7 @@ impl TaskStore for Neo4jTaskStore {
     async fn active_delivery(
         &self,
         request: crate::model::ActiveDeliveryQuery<'_>,
-    ) -> crate::HiveResult<Option<TaskId>> {
+    ) -> crate::HiveResult<crate::model::ActiveDelivery> {
         let crate::model::ActiveDeliveryQuery {
             source_commit: source_commit,
             kind: kind,
@@ -421,8 +421,8 @@ impl TaskStore for Neo4jTaskStore {
             match result {
                 Ok(claimed) => return Ok(claimed),
                 Err(error) => match Neo4jTaskStore::transient_claim_retry_delay(retry, &error) {
-                    Some(delay) => async_time::sleep(delay).await,
-                    None => return Err(error),
+                    claim_retry::ClaimRetry::RetryAfter(delay) => async_time::sleep(delay).await,
+                    claim_retry::ClaimRetry::Stop => return Err(error),
                 },
             }
         }

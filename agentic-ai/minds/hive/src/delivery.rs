@@ -21,9 +21,29 @@ use self::readiness::DeliveryReadiness;
 use self::workbench::WorkbenchCompletionCheck;
 
 mod command;
+mod generation;
 mod main_run;
 mod readiness;
 mod wire;
+use generation::DeliveryGenerationSelection;
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(untagged)]
+enum DeliveryMerge {
+    Merged(DeliveryCommit),
+    #[default]
+    Unmerged,
+}
+impl DeliveryMerge {
+    fn require_commit(&self) -> crate::HiveResult<&DeliveryCommit> {
+        match self {
+            Self::Merged(commit) => Ok(commit),
+            Self::Unmerged => Err(crate::HiveError::message(
+                "merged Hive pull request has no merge commit",
+            )),
+        }
+    }
+}
+
 mod workbench;
 use wire::WireDeliveryPullRequest;
 
@@ -37,7 +57,7 @@ struct DeliveryPullRequest {
     head_ref_oid: String,
     is_cross_repository: bool,
     labels: Vec<DeliveryLabel>,
-    merge_commit: Option<DeliveryCommit>,
+    merge_commit: DeliveryMerge,
     status_check_rollup: Vec<DeliveryCheck>,
 }
 
@@ -136,15 +156,12 @@ impl MainRepairDelivery<'_> {
             branch: branch,
         })
         .latest_delivery_generation()?
-        .hive_context("Hive repair delivery is incomplete: no pull request generation exists")?
+        .require_delivery("Hive repair delivery is incomplete: no pull request generation exists")?
         .clone();
 
         (&pull_request).validate_hive_marker()?;
         (&pull_request).validate_merged_hive_pull_request()?;
-        let merge_commit = pull_request
-            .merge_commit
-            .as_ref()
-            .hive_context("merged Hive pull request has no merge commit")?;
+        let merge_commit = pull_request.merge_commit.require_commit()?;
 
         DeliveryCommand::run_git_status(
             repository,
@@ -217,57 +234,6 @@ impl MainRepairDelivery<'_> {
     }
 }
 
-struct DeliveryGenerationSelection<'a> {
-    pull_requests: &'a [DeliveryPullRequest],
-    branch: &'a str,
-}
-impl<'a> DeliveryGenerationSelection<'a> {
-    fn latest_delivery_generation(self) -> crate::HiveResult<Option<&'a DeliveryPullRequest>> {
-        let Self {
-            pull_requests,
-            branch,
-        } = self;
-        let mut generations = pull_requests
-            .iter()
-            .filter(|pull_request| !pull_request.is_cross_repository)
-            .filter_map(|pull_request| {
-                DeliveryGenerationSelection::delivery_generation(
-                    branch,
-                    &pull_request.head_ref_name,
-                )
-                .map(|generation| (generation, pull_request))
-            })
-            .collect::<Vec<_>>();
-        generations.sort_by_key(|(generation, _)| *generation);
-        let Some((latest_generation, latest)) = generations.last().copied() else {
-            return Ok(None);
-        };
-        if generations
-            .iter()
-            .rev()
-            .skip(1)
-            .any(|(generation, _)| *generation == latest_generation)
-        {
-            return Err(crate::HiveError::message(format!(
-                "Hive repair delivery is ambiguous: multiple PRs use generation {latest_generation}"
-            )));
-        }
-        Ok(Some(latest))
-    }
-}
-
-impl DeliveryGenerationSelection<'_> {
-    fn delivery_generation(base: &str, candidate: &str) -> Option<u64> {
-        if candidate == base {
-            return Some(1);
-        }
-        candidate
-            .strip_prefix(&format!("{base}-g"))
-            .and_then(|generation| generation.parse::<u64>().ok())
-            .filter(|generation| *generation >= 2)
-    }
-}
-
 impl DeliveryPullRequest {
     fn validate_hive_marker(&self) -> crate::HiveResult<()> {
         let pull_request = self;
@@ -290,10 +256,7 @@ impl DeliveryPullRequest {
 impl DeliveryPullRequest {
     async fn validate_squash_merge(&self, repository: &Path) -> crate::HiveResult<()> {
         let pull_request = self;
-        let merge_commit = pull_request
-            .merge_commit
-            .as_ref()
-            .hive_context("merged Hive pull request has no merge commit")?;
+        let merge_commit = pull_request.merge_commit.require_commit()?;
         let parents = DeliveryCommand::git_output(
             repository,
             &["show", "-s", "--format=%P", merge_commit.oid.as_str()],
@@ -330,7 +293,7 @@ impl DeliveryPullRequest {
                 pull_request.number, pull_request.state
             )));
         }
-        if pull_request.merge_commit.is_none() {
+        if matches!(pull_request.merge_commit, DeliveryMerge::Unmerged) {
             return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: PR #{} has no squash merge",
                 pull_request.number
@@ -428,62 +391,60 @@ impl DeliveryPullRequest {
 
 #[cfg(test)]
 mod tests {
-    use super::DeliveryGenerationSelection;
     use super::{CheckConclusion, MainMergeEvidence};
-    use crate::HiveContext;
     use std::fs;
     use std::path;
     use std::process;
 
     use super::{DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest};
 
-    fn pull_request(
-        number: u64,
-        branch: &str,
-        state: &str,
-        merge_commit: Option<&str>,
-    ) -> DeliveryPullRequest {
-        DeliveryPullRequest {
-            number,
-            title: "[Hive] repair".to_owned(),
-            state: state.to_owned(),
-            head_ref_name: branch.to_owned(),
-            head_ref_oid: format!("head-{number}"),
-            is_cross_repository: false,
-            labels: vec![
-                DeliveryLabel {
-                    name: "hive".to_owned(),
-                },
-                DeliveryLabel {
-                    name: "ci:full-e2e".to_owned(),
-                },
-            ],
-            merge_commit: merge_commit.map(|oid| DeliveryCommit {
-                oid: oid.to_owned(),
-            }),
-            status_check_rollup: vec![
-                DeliveryCheck {
-                    name: "Full browser e2e (main fix)".to_owned(),
-                    status: "COMPLETED".into(),
-                    conclusion: "SUCCESS".into(),
-                    started_at: "2026-07-28T01:00:00Z".to_owned(),
-                    workflow_name: "PR".to_owned(),
-                },
-                DeliveryCheck {
-                    name: "Full extension e2e (main fix)".to_owned(),
-                    status: "COMPLETED".into(),
-                    conclusion: "SUCCESS".into(),
-                    started_at: "2026-07-28T01:00:00Z".to_owned(),
-                    workflow_name: "PR".to_owned(),
-                },
-                DeliveryCheck {
-                    name: "Verify and preview".to_owned(),
-                    status: "COMPLETED".into(),
-                    conclusion: "SUCCESS".into(),
-                    started_at: "2026-07-28T01:00:00Z".to_owned(),
-                    workflow_name: "PR".to_owned(),
-                },
-            ],
+    impl DeliveryPullRequest {
+        pub(in crate::delivery) fn fixture(
+            number: u64,
+            branch: &str,
+            state: &str,
+            merge_commit: super::DeliveryMerge,
+        ) -> DeliveryPullRequest {
+            DeliveryPullRequest {
+                number,
+                title: "[Hive] repair".to_owned(),
+                state: state.to_owned(),
+                head_ref_name: branch.to_owned(),
+                head_ref_oid: format!("head-{number}"),
+                is_cross_repository: false,
+                labels: vec![
+                    DeliveryLabel {
+                        name: "hive".to_owned(),
+                    },
+                    DeliveryLabel {
+                        name: "ci:full-e2e".to_owned(),
+                    },
+                ],
+                merge_commit,
+                status_check_rollup: vec![
+                    DeliveryCheck {
+                        name: "Full browser e2e (main fix)".to_owned(),
+                        status: "COMPLETED".into(),
+                        conclusion: "SUCCESS".into(),
+                        started_at: "2026-07-28T01:00:00Z".to_owned(),
+                        workflow_name: "PR".to_owned(),
+                    },
+                    DeliveryCheck {
+                        name: "Full extension e2e (main fix)".to_owned(),
+                        status: "COMPLETED".into(),
+                        conclusion: "SUCCESS".into(),
+                        started_at: "2026-07-28T01:00:00Z".to_owned(),
+                        workflow_name: "PR".to_owned(),
+                    },
+                    DeliveryCheck {
+                        name: "Verify and preview".to_owned(),
+                        status: "COMPLETED".into(),
+                        conclusion: "SUCCESS".into(),
+                        started_at: "2026-07-28T01:00:00Z".to_owned(),
+                        workflow_name: "PR".to_owned(),
+                    },
+                ],
+            }
         }
     }
 
@@ -504,7 +465,14 @@ mod tests {
     #[tokio::test]
     async fn delivery_metadata_history_and_repository_checks_enforce_completion_contracts()
     -> crate::HiveResult<()> {
-        let mut marked = pull_request(42, "repair", "MERGED", Some("pending"));
+        let mut marked = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: "pending".to_owned(),
+            }),
+        );
         (&marked).validate_hive_marker()?;
         marked.title = "repair without marker".to_owned();
         let title_error = (&marked)
@@ -521,7 +489,8 @@ mod tests {
         assert!(label_error.to_string().contains("lacks the `hive` label"));
 
         let repository = tempfile::tempdir()?;
-        let missing_commit = pull_request(42, "repair", "MERGED", None);
+        let missing_commit =
+            DeliveryPullRequest::fixture(42, "repair", "MERGED", super::DeliveryMerge::Unmerged);
         let commit_error = (&missing_commit)
             .validate_squash_merge(repository.path())
             .await
@@ -539,7 +508,14 @@ mod tests {
         git(repository.path(), &["add", "repair.txt"])?;
         git(repository.path(), &["commit", "--quiet", "-m", "base"])?;
         let root_commit = git(repository.path(), &["rev-parse", "HEAD"])?;
-        let root_delivery = pull_request(42, "repair", "MERGED", Some(&root_commit));
+        let root_delivery = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: root_commit.clone(),
+            }),
+        );
         let history_error = (&root_delivery)
             .validate_squash_merge(repository.path())
             .await
@@ -554,7 +530,14 @@ mod tests {
             &["commit", "--quiet", "-m", "repair invariant (#42)"],
         )?;
         let valid_commit = git(repository.path(), &["rev-parse", "HEAD"])?;
-        let valid = pull_request(42, "repair", "MERGED", Some(&valid_commit));
+        let valid = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: valid_commit.clone(),
+            }),
+        );
         (&valid).validate_squash_merge(repository.path()).await?;
 
         fs::write(
@@ -567,7 +550,14 @@ mod tests {
             &["commit", "--quiet", "-m", "missing pull request suffix"],
         )?;
         let invalid_commit = git(repository.path(), &["rev-parse", "HEAD"])?;
-        let invalid = pull_request(42, "repair", "MERGED", Some(&invalid_commit));
+        let invalid = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: invalid_commit.clone(),
+            }),
+        );
         let subject_error = (&invalid)
             .validate_squash_merge(repository.path())
             .await
@@ -577,7 +567,14 @@ mod tests {
             })?;
         assert!(subject_error.to_string().contains("lacks PR suffix (#42)"));
 
-        let mut checks = pull_request(42, "repair", "MERGED", Some(&valid_commit));
+        let mut checks = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: valid_commit.clone(),
+            }),
+        );
         checks.status_check_rollup.push(DeliveryCheck {
             name: "Security audit".to_owned(),
             status: "IN_PROGRESS".into(),
@@ -675,12 +672,13 @@ mod tests {
 
     #[test]
     fn delivery_requires_a_merged_pull_request() -> anyhow::Result<()> {
-        let error = (&pull_request(42, "repair", "OPEN", None))
-            .validate_merged_hive_pull_request()
-            .err()
-            .ok_or_else(|| {
-                crate::HiveError::message("an open pull request cannot complete a Hive task")
-            })?;
+        let error =
+            (&DeliveryPullRequest::fixture(42, "repair", "OPEN", super::DeliveryMerge::Unmerged))
+                .validate_merged_hive_pull_request()
+                .err()
+                .ok_or_else(|| {
+                    crate::HiveError::message("an open pull request cannot complete a Hive task")
+                })?;
 
         assert!(error.to_string().contains("PR #42 is OPEN"));
         Ok(())
@@ -688,12 +686,15 @@ mod tests {
 
     #[test]
     fn delivery_requires_the_squash_merge_commit() -> anyhow::Result<()> {
-        let error = (&pull_request(42, "repair", "MERGED", None))
-            .validate_merged_hive_pull_request()
-            .err()
-            .ok_or_else(|| {
-                crate::HiveError::message("a merge without its commit cannot prove Main delivery")
-            })?;
+        let error =
+            (&DeliveryPullRequest::fixture(42, "repair", "MERGED", super::DeliveryMerge::Unmerged))
+                .validate_merged_hive_pull_request()
+                .err()
+                .ok_or_else(|| {
+                    crate::HiveError::message(
+                        "a merge without its commit cannot prove Main delivery",
+                    )
+                })?;
 
         assert!(error.to_string().contains("no squash merge"));
         Ok(())
@@ -701,82 +702,28 @@ mod tests {
 
     #[test]
     fn delivery_accepts_a_merged_pull_request_with_its_commit() -> crate::HiveResult<()> {
-        (&pull_request(42, "repair", "MERGED", Some("abc123")))
+        (&DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: "abc123".to_owned(),
+            }),
+        ))
             .validate_merged_hive_pull_request()?;
         Ok(())
     }
 
     #[test]
-    fn latest_follow_up_generation_is_selected() -> crate::HiveResult<()> {
-        let pull_requests = vec![
-            pull_request(40, "codex/hive-task", "CLOSED", None),
-            pull_request(42, "codex/hive-task-g3", "MERGED", Some("abc123")),
-            pull_request(41, "codex/hive-task-g2", "CLOSED", None),
-            pull_request(99, "codex/hive-other", "MERGED", Some("unrelated")),
-        ];
-
-        let latest = (DeliveryGenerationSelection {
-            pull_requests: &pull_requests,
-            branch: "codex/hive-task",
-        })
-        .latest_delivery_generation()?
-        .hive_context("latest delivery generation must be present")?;
-
-        assert_eq!(latest.number, 42);
-        assert_eq!(
-            DeliveryGenerationSelection::delivery_generation(
-                "codex/hive-task",
-                "codex/hive-task-g1"
-            ),
-            None
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn duplicate_delivery_generations_are_rejected() -> anyhow::Result<()> {
-        let pull_requests = vec![
-            pull_request(41, "codex/hive-task-g2", "CLOSED", None),
-            pull_request(42, "codex/hive-task-g2", "MERGED", Some("abc123")),
-        ];
-
-        let error = (DeliveryGenerationSelection {
-            pull_requests: &pull_requests,
-            branch: "codex/hive-task",
-        })
-        .latest_delivery_generation()
-        .err()
-        .ok_or_else(|| {
-            crate::HiveError::message("duplicate generations cannot identify one delivery")
-        })?;
-
-        assert!(error.to_string().contains("multiple PRs use generation 2"));
-        Ok(())
-    }
-
-    #[test]
-    fn cross_repository_generation_is_ignored() -> crate::HiveResult<()> {
-        let mut fork = pull_request(99, "codex/hive-task-g99", "OPEN", None);
-        fork.is_cross_repository = true;
-        let pull_requests = vec![
-            pull_request(42, "codex/hive-task-g2", "MERGED", Some("abc123")),
-            fork,
-        ];
-
-        let latest = (DeliveryGenerationSelection {
-            pull_requests: &pull_requests,
-            branch: "codex/hive-task",
-        })
-        .latest_delivery_generation()?
-        .hive_context("same-repository delivery generation must be present")?;
-
-        assert_eq!(latest.number, 42);
-        Ok(())
-    }
-
-    #[test]
     fn delivery_requires_the_full_e2e_label() -> crate::HiveResult<()> {
-        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        let mut pull_request = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: "abc123".to_owned(),
+            }),
+        );
         pull_request
             .labels
             .retain(|label| label.name != "ci:full-e2e");
@@ -794,7 +741,14 @@ mod tests {
 
     #[test]
     fn merge_triggered_skipped_e2e_does_not_hide_pre_merge_success() -> crate::HiveResult<()> {
-        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        let mut pull_request = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: "abc123".to_owned(),
+            }),
+        );
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Full extension e2e (main fix)".to_owned(),
             status: "COMPLETED".into(),
@@ -809,7 +763,14 @@ mod tests {
 
     #[test]
     fn repository_workflow_failure_without_success_is_rejected() -> crate::HiveResult<()> {
-        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        let mut pull_request = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: "abc123".to_owned(),
+            }),
+        );
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Hive Rust and infrastructure verification".to_owned(),
             status: "COMPLETED".into(),
@@ -832,7 +793,14 @@ mod tests {
 
     #[test]
     fn successful_main_accepts_checks_cancelled_by_the_squash_merge() -> crate::HiveResult<()> {
-        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        let mut pull_request = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: "abc123".to_owned(),
+            }),
+        );
         for check in &mut pull_request.status_check_rollup {
             check.conclusion = "CANCELLED".into();
         }
@@ -844,7 +812,14 @@ mod tests {
 
     #[test]
     fn successful_main_does_not_hide_a_failed_pr_check() -> crate::HiveResult<()> {
-        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        let mut pull_request = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: "abc123".to_owned(),
+            }),
+        );
         pull_request.status_check_rollup[0].conclusion = "FAILURE".into();
         pull_request.status_check_rollup[1].conclusion = "CANCELLED".into();
 
@@ -860,7 +835,14 @@ mod tests {
 
     #[test]
     fn successful_main_does_not_replace_cancelled_hive_verification() -> crate::HiveResult<()> {
-        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        let mut pull_request = DeliveryPullRequest::fixture(
+            42,
+            "repair",
+            "MERGED",
+            super::DeliveryMerge::Merged(DeliveryCommit {
+                oid: "abc123".to_owned(),
+            }),
+        );
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Hive Rust and infrastructure verification".to_owned(),
             status: "COMPLETED".into(),

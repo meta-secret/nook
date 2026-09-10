@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::env;
 use std::future::Future;
 use std::io::{self, IsTerminal, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use codex::{
@@ -27,6 +27,9 @@ pub use output::{
 };
 
 mod activity;
+mod configuration;
+pub use configuration::{ActivityReporting, GitHubCredential};
+use configuration::{Authentication, ExecutionLogging};
 mod progress;
 mod progress_output;
 
@@ -52,8 +55,8 @@ pub struct CodexOptions {
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub access: CodexAccess,
-    pub github_token: Option<String>,
-    pub activity_sender: Option<mpsc::UnboundedSender<TaskActivity>>,
+    pub github_token: GitHubCredential,
+    pub activity_sender: ActivityReporting,
 }
 
 impl CodexOptions {
@@ -64,8 +67,8 @@ impl CodexOptions {
             reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
-            github_token: env::var("GH_TOKEN").ok(),
-            activity_sender: None,
+            github_token: GitHubCredential::from_environment(),
+            activity_sender: ActivityReporting::Disabled,
         }
     }
 
@@ -75,7 +78,7 @@ impl CodexOptions {
     }
 
     pub fn with_activity_sender(mut self, sender: mpsc::UnboundedSender<TaskActivity>) -> Self {
-        self.activity_sender = Some(sender);
+        self.activity_sender = ActivityReporting::Enabled(sender);
         self
     }
 }
@@ -90,21 +93,21 @@ pub trait CodexRunner {
 #[derive(Clone)]
 pub struct InProcessCodexRunner {
     options: CodexOptions,
-    external_auth: Option<Arc<dyn ExternalAuth>>,
+    external_auth: Authentication,
 }
 
 impl InProcessCodexRunner {
     pub fn new(options: CodexOptions) -> Self {
         Self {
             options,
-            external_auth: None,
+            external_auth: Authentication::Local,
         }
     }
 
     pub fn with_external_auth(options: CodexOptions, external_auth: Arc<dyn ExternalAuth>) -> Self {
         Self {
             options,
-            external_auth: Some(external_auth),
+            external_auth: Authentication::External(external_auth),
         }
     }
 
@@ -146,7 +149,7 @@ impl InProcessCodexRunner {
             AuthManager::shared_from_config(&config, /* enable_codex_api_key_env */ false)
                 .await
                 .map_err(|error| CodexError::Run(error.to_string()))?;
-        if let Some(external_auth) = &self.external_auth {
+        if let Authentication::External(external_auth) = &self.external_auth {
             auth_manager
                 .set_external_auth(Arc::clone(external_auth))
                 .await
@@ -196,19 +199,23 @@ impl InProcessCodexRunner {
             .await
             .map_err(|error| CodexError::Run(error.to_string()))?;
 
-        let execution_log = matches!(&kind, TurnKind::Task(_)).then(|| {
-            options
-                .repo_root
-                .parent()
-                .unwrap_or(&options.repo_root)
-                .join(".hive-local-executions.jsonl")
-        });
+        let execution_log = if matches!(&kind, TurnKind::Task(_)) {
+            ExecutionLogging::File(
+                options
+                    .repo_root
+                    .parent()
+                    .unwrap_or(&options.repo_root)
+                    .join(".hive-local-executions.jsonl"),
+            )
+        } else {
+            ExecutionLogging::Disabled
+        };
         let turn_result = (CodexTurn {
             thread: &thread,
             prompt,
             kind,
-            execution_log: execution_log.as_deref(),
-            activity_sender: options.activity_sender.as_ref(),
+            execution_log: &execution_log,
+            activity_sender: &options.activity_sender,
         })
         .submit_and_wait()
         .await;
@@ -319,100 +326,12 @@ impl CodexRunner for InProcessCodexRunner {
     }
 }
 
-impl CodexOptions {
-    async fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
-        let codex_home =
-            find_codex_home().map_err(|error| CodexError::Configuration(error.to_string()))?;
-        let cwd = AbsolutePathBuf::from_absolute_path_checked(&options.repo_root)
-            .map_err(|error| CodexError::Configuration(error.to_string()))?;
-        let model_provider_id = OPENAI_PROVIDER_ID.to_string();
-        let model_providers = built_in_model_providers(/* openai_base_url */ None);
-        let model_provider = model_providers
-            .get(&model_provider_id)
-            .cloned()
-            .ok_or_else(|| {
-                CodexError::Configuration("OpenAI model provider is unavailable".into())
-            })?;
-        let permission_profile = match options.access {
-            CodexAccess::ReadOnly => PermissionProfile::read_only(),
-            CodexAccess::WorkspaceWrite => PermissionProfile::Disabled,
-        };
-        let mut permissions = Permissions::from_approval_and_profile(
-            Constrained::allow_any(AskForApproval::Never),
-            Constrained::allow_any(permission_profile),
-        )
-        .map_err(|error| CodexError::Configuration(error.to_string()))?;
-        if let Some(github_token) = &options.github_token {
-            permissions
-                .shell_environment_policy
-                .r#set
-                .insert("GH_TOKEN".to_owned(), github_token.clone());
-            permissions
-                .shell_environment_policy
-                .r#set
-                .insert("GITHUB_TOKEN".to_owned(), github_token.clone());
-        }
-        let model_reasoning_effort =
-            serde::Deserialize::deserialize(serde::de::value::StringDeserializer::<
-                serde_json::Error,
-            >::new(options.reasoning_effort.clone()))
-            .map_err(|error| {
-                CodexError::Configuration(format!(
-                    "invalid reasoning effort `{}`: {error}",
-                    options.reasoning_effort
-                ))
-            })?;
-
-        let mut config = Config::load_default_with_cli_overrides_for_codex_home(
-            codex_home.to_path_buf(),
-            Vec::new(),
-        )
-        .await
-        .map_err(|error| CodexError::Configuration(error.to_string()))?;
-        config.model = Some(options.model.clone());
-        config.model_provider_id = model_provider_id;
-        config.model_provider = model_provider;
-        config.model_providers = model_providers;
-        config.model_reasoning_effort = Some(model_reasoning_effort);
-        config.permissions = permissions;
-        config.cwd = cwd.clone();
-        config.workspace_roots = vec![cwd];
-        config.workspace_roots_explicit = true;
-        config.mcp_servers = Constrained::allow_any(HashMap::new());
-        config.non_prefixed_mcp_tool_servers = None;
-        config.agents_enabled = false;
-        config.agent_max_threads = Some(1);
-        config.ephemeral = true;
-        config.codex_self_exe = options.arg0_paths.codex_self_exe.clone();
-        config.codex_linux_sandbox_exe = options.arg0_paths.codex_linux_sandbox_exe.clone();
-        config.main_execve_wrapper_exe = options.arg0_paths.main_execve_wrapper_exe.clone();
-        config.web_search_mode = Constrained::allow_any(WebSearchMode::Disabled);
-        config.web_search_config = None;
-        config.orchestrator_skills_enabled = false;
-        config.orchestrator_mcp_enabled = false;
-        config.include_permissions_instructions = false;
-        config.include_apps_instructions = false;
-        config.include_collaboration_mode_instructions = false;
-        config.include_skill_instructions = false;
-        config.include_environment_context = false;
-        config.active_project = ProjectConfig { trust_level: None };
-        config.check_for_update_on_startup = false;
-        config.analytics_enabled = Some(false);
-        config.feedback_enabled = false;
-        config
-            .features
-            .set(Features::with_defaults())
-            .map_err(|error| CodexError::Configuration(error.to_string()))?;
-        Ok(config)
-    }
-}
-
 struct CodexTurn<'a> {
     thread: &'a CodexThread,
     prompt: &'a str,
     kind: TurnKind,
-    execution_log: Option<&'a Path>,
-    activity_sender: Option<&'a mpsc::UnboundedSender<TaskActivity>>,
+    execution_log: &'a ExecutionLogging,
+    activity_sender: &'a ActivityReporting,
 }
 impl CodexTurn<'_> {
     async fn submit_and_wait(self) -> Result<CodexTurnOutput, CodexError> {
@@ -477,13 +396,18 @@ impl CodexTurn<'_> {
             (progress, observed) = progress.observe(&event.msg);
             observed
                 .map_err(|error| CodexError::Run(format!("failed to write progress: {error}")))?;
-            if let (Some(sender), Some(activity)) = (
+            if let (
+                ActivityReporting::Enabled(sender),
+                activity::ActivityDisposition::Record(activity),
+            ) = (
                 activity_sender,
                 TaskActivity::task_activity_from_event(&event.msg),
             ) {
                 let _ = sender.send(activity);
             }
-            if let (Some(path), EventMsg::ExecCommandEnd(execution)) = (execution_log, &event.msg) {
+            if let (ExecutionLogging::File(path), EventMsg::ExecCommandEnd(execution)) =
+                (execution_log, &event.msg)
+            {
                 LocalExecutionRecord::record_local_execution(
                     path,
                     &execution.command,
@@ -534,7 +458,6 @@ impl CodexTurn<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::HiveContext;
     use std::time;
     use tokio::fs as async_fs;
 
@@ -562,8 +485,8 @@ mod tests {
                 main_execve_wrapper_exe: Some(PathBuf::from("/bin/codex-execve-wrapper")),
             },
             access: CodexAccess::ReadOnly,
-            github_token: None,
-            activity_sender: None,
+            github_token: GitHubCredential::InheritEnvironment,
+            activity_sender: ActivityReporting::Disabled,
         };
         let config = CodexOptions::new_config(&options).await?;
 
@@ -622,7 +545,7 @@ mod tests {
         let repository = tempfile::tempdir()?;
         let github_token = "test-token".to_owned();
         let mut options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
-        options.github_token = Some(github_token.clone());
+        options.github_token = GitHubCredential::Token(github_token.clone());
         let config = CodexOptions::new_config(&options).await?;
 
         assert_eq!(
@@ -670,7 +593,7 @@ mod tests {
         }
         let blocker = schema
             .pointer("/properties/blocker")
-            .hive_context("task output schema must define blocker")?;
+            .ok_or_else(|| crate::HiveError::message("task output schema must define blocker"))?;
         assert_eq!(
             blocker.get("type").and_then(serde_json::Value::as_str),
             Some("object")
@@ -908,10 +831,13 @@ mod tests {
             "sed -n 1,20p src/lib.rs README.md config.toml",
         );
         assert_eq!(
-            files.as_deref(),
-            Some("src/lib.rs · README.md · config.toml")
+            files,
+            InspectionHints::Files("src/lib.rs · README.md · config.toml".to_owned())
         );
-        assert!(InspectionSummary::inspection_file_hints("git status").is_none());
+        assert_eq!(
+            InspectionSummary::inspection_file_hints("git status"),
+            InspectionHints::NoHints
+        );
     }
 
     #[test]
@@ -925,7 +851,8 @@ mod tests {
         (progress, outcome) = progress.reasoning_delta("unfinished");
         outcome?;
         let outcome;
-        (progress, outcome) = progress.phase("✓", "Complete", Some("all checks passed"));
+        (progress, outcome) =
+            progress.phase("✓", "Complete", ProgressDetail::Detail("all checks passed"));
         outcome?;
         let outcome;
         (progress, outcome) = progress.note("first\n\n second ");

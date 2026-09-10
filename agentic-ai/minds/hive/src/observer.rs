@@ -182,12 +182,14 @@ async fn task_detail<S: ObserverStore>(
     Path(task_id): Path<String>,
     Query(locale): Query<LocaleQuery>,
 ) -> Result<Json<ObservedTask>, ObserverError> {
-    state
+    match state
         .store
         .observer_task_view(&task_id, &locale.locale)
         .await?
-        .map(Json)
-        .ok_or_else(|| ObserverError::not_found("task was not found"))
+    {
+        TaskObservation::Observed(task) => Ok(Json(task)),
+        TaskObservation::Missing => Err(ObserverError::not_found("task was not found")),
+    }
 }
 
 struct ObserverError {
@@ -274,7 +276,7 @@ impl Neo4jTaskStore {
         &self,
         task_id: &str,
         locale: &str,
-    ) -> crate::HiveResult<Option<ObservedTask>> {
+    ) -> crate::HiveResult<TaskObservation> {
         let mut tasks = self
             .observer_tasks(ObserverTaskQuery {
                 task_id,
@@ -286,7 +288,10 @@ impl Neo4jTaskStore {
         self.attach_dependencies(&mut tasks).await?;
         self.attach_triggers(&mut tasks, locale).await?;
         self.attach_activity(&mut tasks, locale).await?;
-        Ok(tasks.pop())
+        Ok(match tasks.pop() {
+            Some(task) => TaskObservation::Observed(task),
+            None => TaskObservation::Missing,
+        })
     }
 
     async fn observer_agents(&self) -> crate::HiveResult<Vec<ObservedAgent>> {
@@ -332,7 +337,7 @@ impl Neo4jTaskStore {
         let row = rows
             .next()
             .await?
-            .hive_context("active task count query returned no row")?;
+            .ok_or_else(|| crate::HiveError::message("active task count query returned no row"))?;
         Ok(row.get("count")?)
     }
 
@@ -641,7 +646,7 @@ impl ObserverStore for Neo4jTaskStore {
         &self,
         task_id: &str,
         locale: &str,
-    ) -> crate::HiveResult<Option<ObservedTask>> {
+    ) -> crate::HiveResult<TaskObservation> {
         self.observer_task(task_id, locale).await
     }
 }
@@ -687,10 +692,12 @@ mod tests {
             &self,
             task_id: &str,
             locale: &str,
-        ) -> crate::HiveResult<Option<ObservedTask>> {
+        ) -> crate::HiveResult<super::TaskObservation> {
             match self {
-                Self::Ready if task_id == "task-1" => Ok(Some(ObservedTask::fixture(task_id))),
-                Self::Ready => Ok(None),
+                Self::Ready if task_id == "task-1" => Ok(super::TaskObservation::Observed(
+                    ObservedTask::fixture(task_id),
+                )),
+                Self::Ready => Ok(super::TaskObservation::Missing),
                 Self::Failed => Err(crate::HiveError::message("database unavailable")),
             }
         }

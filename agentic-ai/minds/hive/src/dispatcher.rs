@@ -1,3 +1,27 @@
+#[derive(Debug, PartialEq, Eq)]
+enum MainFailureCommit {
+    NotMainFailure,
+    Commit(String),
+}
+#[derive(Debug, PartialEq, Eq)]
+enum MainFailureRun {
+    NoMarker,
+    Run { id: u64, attempt: u64 },
+}
+impl MainFailureRun {
+    fn require_run(self) -> crate::HiveResult<(u64, u64)> {
+        match self {
+            Self::Run { id, attempt } => Ok((id, attempt)),
+            Self::NoMarker => Err(crate::HiveError::message(
+                "ready Main failure issue has no workflow-run marker",
+            )),
+        }
+    }
+}
+enum ReconciledRevision {
+    Unreconciled,
+    Reconciled(String),
+}
 struct WorkbenchIncidentText<'a> {
     value: &'a str,
 }
@@ -53,7 +77,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             ));
         }
         DispatcherHealth::while_recording_dispatcher_progress(health_path, store.migrate()).await?;
-        let mut reconciled_revision = None;
+        let mut reconciled_revision = ReconciledRevision::Unreconciled;
         let mut reconciled_incidents = HashMap::new();
         loop {
             let reconciled =
@@ -66,7 +90,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                     .await
                     {
                         Ok(revision)
-                            if reconciled_revision.as_deref() == Some(revision.as_str()) =>
+                            if matches!(&reconciled_revision, ReconciledRevision::Reconciled(previous) if previous == &revision) =>
                         {
                             Ok(true)
                         }
@@ -83,7 +107,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                                 );
                                 Ok(false)
                             } else {
-                                reconciled_revision = Some(revision);
+                                reconciled_revision = ReconciledRevision::Reconciled(revision);
                                 Ok(true)
                             }
                         }
@@ -122,7 +146,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             .with_hive_context(|| format!("read Workbench incidents at {}", incidents.display()))?;
         while let Some(entry) = entries.next_entry().await? {
             let name = entry.file_name().to_string_lossy().into_owned();
-            let Some(source_commit) =
+            let MainFailureCommit::Commit(source_commit) =
                 (WorkbenchIncidentText { value: &name }).main_failure_commit()
             else {
                 continue;
@@ -143,7 +167,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             }
             let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
             if body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER) {
-                if let Some(task_id) = store
+                if let crate::model::ActiveDelivery::Active(task_id) = store
                     .active_delivery(crate::model::ActiveDeliveryQuery {
                         source_commit: &source_commit,
                         kind: &crate::model::TaskKind::from("main-repair"),
@@ -186,7 +210,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             }
             let (run_id, run_attempt) = (WorkbenchIncidentText { value: &body })
                 .main_failure_run()
-                .hive_context("ready Main failure issue has no workflow-run marker")?;
+                .require_run()?;
             let run = RunEvidence::fetch_run(run_id).await?;
             if !run.requires_repair(&source_commit) {
                 reconciled_incidents.insert(name, body);
@@ -217,7 +241,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
         run_attempt: u64,
     ) -> crate::HiveResult<()> {
         let task_id = TaskId::main_failure_task_id(task_base, run_id, run_attempt)?;
-        if let Some(active_id) = store
+        if let crate::model::ActiveDelivery::Active(active_id) = store
             .active_delivery(crate::model::ActiveDeliveryQuery {
                 source_commit: source_commit,
                 kind: &crate::model::TaskKind::from("main-repair"),
@@ -321,7 +345,7 @@ impl WorkerPod<'_> {
         child
             .stdin
             .take()
-            .hive_context("open Kubernetes request configuration")?
+            .ok_or_else(|| crate::HiveError::message("open Kubernetes request configuration"))?
             .write_all(format!("header = \"Authorization: Bearer {}\"\n", token.trim()).as_bytes())
             .await
             .hive_context("write Hive lifecycle-controller request configuration")?;
@@ -361,13 +385,19 @@ impl IncidentHistory<'_> {
 }
 
 impl WorkbenchIncidentText<'_> {
-    fn main_failure_commit(&self) -> Option<String> {
-        let name = self.value;
-        let value = name
-            .strip_prefix(MAIN_FAILURE_PREFIX)?
-            .strip_suffix(MAIN_FAILURE_SUFFIX)?;
-        (value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
-            .then(|| value.to_ascii_lowercase())
+    fn main_failure_commit(&self) -> MainFailureCommit {
+        let Some(value) = self
+            .value
+            .strip_prefix(MAIN_FAILURE_PREFIX)
+            .and_then(|value| value.strip_suffix(MAIN_FAILURE_SUFFIX))
+        else {
+            return MainFailureCommit::NotMainFailure;
+        };
+        if value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            MainFailureCommit::Commit(value.to_ascii_lowercase())
+        } else {
+            MainFailureCommit::NotMainFailure
+        }
     }
 }
 
@@ -394,12 +424,11 @@ impl WorkbenchIncidentText<'_> {
 }
 
 impl WorkbenchIncidentText<'_> {
-    fn main_failure_run(&self) -> Option<(u64, u64)> {
-        let body = self.value;
-        (WorkbenchIncidentText { value: body })
-            .main_failure_runs()
-            .into_iter()
-            .last()
+    fn main_failure_run(&self) -> MainFailureRun {
+        match self.main_failure_runs().into_iter().last() {
+            Some((id, attempt)) => MainFailureRun::Run { id, attempt },
+            None => MainFailureRun::NoMarker,
+        }
     }
 }
 
@@ -450,7 +479,7 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct RecordingStore {
-        active: Arc<Mutex<Option<TaskId>>>,
+        active: Arc<Mutex<crate::model::ActiveDelivery>>,
         cancelled: Arc<Mutex<Vec<TaskId>>>,
         enqueued: Arc<Mutex<Vec<TaskId>>>,
     }
@@ -473,7 +502,7 @@ mod tests {
         async fn active_delivery(
             &self,
             request: crate::model::ActiveDeliveryQuery<'_>,
-        ) -> crate::HiveResult<Option<TaskId>> {
+        ) -> crate::HiveResult<crate::model::ActiveDelivery> {
             let crate::model::ActiveDeliveryQuery {
                 source_commit: _,
                 kind: _,
@@ -556,9 +585,8 @@ mod tests {
             (WorkbenchIncidentText {
                 value: &format!("main-failure-{sha}.md")
             })
-            .main_failure_commit()
-            .as_deref(),
-            Some(sha)
+            .main_failure_commit(),
+            super::MainFailureCommit::Commit(sha.to_owned())
         );
         assert!(
             (WorkbenchIncidentText {
@@ -576,19 +604,22 @@ mod tests {
             "---\nstatus: done\nautomation: hive\n---\n<!-- hive-retired:deferred-e2e -->"
                 .contains(DEFERRED_E2E_RETIREMENT_MARKER)
         );
-        assert!(
+        assert_eq!(
             (WorkbenchIncidentText {
                 value: "unrelated.md"
             })
-            .main_failure_commit()
-            .is_none()
+            .main_failure_commit(),
+            super::MainFailureCommit::NotMainFailure
         );
         assert_eq!(
             (WorkbenchIncidentText {
                 value: "<!-- main-run:123456:attempt:2 -->\n<!-- main-run:789012:attempt:3 -->"
             })
             .main_failure_run(),
-            Some((789012, 3))
+            super::MainFailureRun::Run {
+                id: 789012,
+                attempt: 3
+            }
         );
         assert_eq!(
             (WorkbenchIncidentText {
@@ -670,7 +701,7 @@ mod tests {
             .active
             .lock()
             .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))? =
-            Some(current);
+            crate::model::ActiveDelivery::Active(current);
 
         WorkbenchDispatcher::reconcile_delivery(
             &store,
@@ -730,7 +761,7 @@ mod tests {
             .active
             .lock()
             .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))? =
-            Some(old.clone());
+            crate::model::ActiveDelivery::Active(old.clone());
 
         assert!(
             WorkbenchDispatcher::reconcile_delivery(
@@ -763,7 +794,8 @@ mod tests {
         *store
             .active
             .lock()
-            .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))? = None;
+            .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))? =
+            crate::model::ActiveDelivery::Idle;
         WorkbenchDispatcher::reconcile_delivery(
             &store,
             "abcdef",
