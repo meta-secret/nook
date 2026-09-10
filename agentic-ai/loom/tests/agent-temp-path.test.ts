@@ -9,7 +9,10 @@ import {
   AgentTemporaryPath,
 } from '../src/lib/agent-temp-path.ts';
 import { RepositoryRoot } from '../src/lib/repo.ts';
-import { RepositoryCommand } from '../src/lib/run.ts';
+import {
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from '../src/lib/run.ts';
 
 import type {
   AgentTempDirectoryParts,
@@ -143,7 +146,7 @@ describe('agent temporary paths', () => {
     assert(discovery1.isOk());
     const repoRoot = discovery1.value;
     const gitHeadRequest: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['rev-parse', 'HEAD'],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,
@@ -152,13 +155,13 @@ describe('agent temporary paths', () => {
     assert(hostLaunch1.isOk());
     const gitCommit = hostLaunch1.value.stdout.trim();
     const branchRequest: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['branch', '--show-current'],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,
     };
     const reflogRequest: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['reflog', '--format=%H%x09%gs', 'HEAD'],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,

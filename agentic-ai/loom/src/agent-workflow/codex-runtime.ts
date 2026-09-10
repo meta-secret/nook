@@ -23,7 +23,7 @@ import type {
 import { WorkflowResultSchema } from './structured-result-codec.ts';
 import { WorkflowRuntimeActivityKind } from './events.ts';
 import type { RuntimeActivityObservation } from './events.ts';
-import { RepositoryCommand } from '../lib/run.ts';
+import { RepositoryCommand, RepositoryCommandExecutable } from '../lib/run.ts';
 import type { RepositoryCommandRequest } from '../lib/run.ts';
 import {
   MODULE_EXPERT_CONTEXT_MCP,
@@ -287,18 +287,27 @@ type TurnText =
   | { readonly presence: TurnValuePresence.Missing }
   | { readonly presence: TurnValuePresence.Present; readonly text: string };
 type CodexTurnStateRequest = {
-  readonly termination?: TurnTermination;
-  readonly thread?: TurnText;
-  readonly output?: TurnText;
+  readonly termination: TurnTermination;
+  readonly thread: TurnText;
+  readonly output: TurnText;
 };
 class CodexTurnState {
   readonly termination: TurnTermination;
   readonly thread: TurnText;
   readonly output: TurnText;
-  constructor(request: CodexTurnStateRequest = {}) {
-    this.termination = request.termination ?? TurnTermination.Pending;
-    this.thread = request.thread ?? { presence: TurnValuePresence.Missing };
-    this.output = request.output ?? { presence: TurnValuePresence.Missing };
+  constructor(request: CodexTurnStateRequest) {
+    this.termination = request.termination;
+    this.thread = request.thread;
+    this.output = request.output;
+  }
+
+  static pending(): CodexTurnState {
+    const missing: TurnText = { presence: TurnValuePresence.Missing };
+    return new CodexTurnState({
+      termination: TurnTermination.Pending,
+      thread: missing,
+      output: missing,
+    });
   }
 
   advance(event: ThreadEvent): CodexTurnState {
@@ -352,7 +361,7 @@ class CodexEventStream {
         message: 'Codex event stream could not be opened.',
       });
     }
-    let state = new CodexTurnState();
+    let state = CodexTurnState.pending();
     let lifecycle = CodexStreamLifecycle.Open;
     let outcome: Result<CodexTurnState, AgentExecutionFailure> | false = false;
     let closeFailure: AgentExecutionFailure | false = false;
@@ -440,7 +449,7 @@ export class AgentSourceSnapshot {
   assertStable(): Result<void, AgentExecutionFailure> {
     const check = this.check;
     const headCommand: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['rev-parse', 'HEAD'],
       rootDirectory: check.workingDirectory,
       workingDirectory: check.workingDirectory,
@@ -458,7 +467,7 @@ export class AgentSourceSnapshot {
       );
     }
     const statusCommand: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['status', '--porcelain', '--untracked-files=normal'],
       rootDirectory: check.workingDirectory,
       workingDirectory: check.workingDirectory,

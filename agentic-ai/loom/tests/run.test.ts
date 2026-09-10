@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   CommandOutputPolicy,
   RepositoryCommand,
+  RepositoryCommandExecutable,
   RepositoryNodeScript,
 } from '../src/lib/run.ts';
 
@@ -14,7 +15,7 @@ const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
 describe('run command', () => {
   test('captures output larger than the platform default within an explicit bound', () => {
     const launch = new RepositoryCommand({
-      command: 'node',
+      command: RepositoryCommandExecutable.Node,
       script: RepositoryNodeScript.TestFixture,
       args: ['output', String(LARGE_OUTPUT_BYTES)],
       rootDirectory: REPOSITORY_ROOT,
@@ -32,7 +33,7 @@ describe('run command', () => {
 
   test('fails closed when output exceeds the explicit bound', () => {
     const launch = new RepositoryCommand({
-      command: 'node',
+      command: RepositoryCommandExecutable.Node,
       script: RepositoryNodeScript.TestFixture,
       args: ['output', String(EXCESSIVE_OUTPUT_BYTES)],
       rootDirectory: REPOSITORY_ROOT,
@@ -45,7 +46,7 @@ describe('run command', () => {
 
   test('preserves subprocess signal termination', () => {
     const launch = new RepositoryCommand({
-      command: 'node',
+      command: RepositoryCommandExecutable.Node,
       script: RepositoryNodeScript.TestFixture,
       args: ['signal'],
       rootDirectory: REPOSITORY_ROOT,
@@ -60,7 +61,7 @@ describe('run command', () => {
 
   test('rejects a working directory outside the repository root', () => {
     const launch = new RepositoryCommand({
-      command: 'node',
+      command: RepositoryCommandExecutable.Node,
       script: RepositoryNodeScript.TestFixture,
       args: ['exit'],
       rootDirectory: REPOSITORY_ROOT,

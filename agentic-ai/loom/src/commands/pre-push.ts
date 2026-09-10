@@ -4,7 +4,11 @@ import type { PrePushRequest } from '../codec/args/pre-push.ts';
 
 import { ChangedCortexDensity } from '../lib/changed-cortex-density.ts';
 
-import { RepositoryBashScript, RepositoryCommand } from '../lib/run.ts';
+import {
+  RepositoryBashScript,
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from '../lib/run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
@@ -22,7 +26,7 @@ export class PrePushCommand {
     const messages: string[] = [];
 
     const formatArgs: RepositoryCommandRequest = {
-      command: 'task',
+      command: RepositoryCommandExecutable.Task,
       args: ['format'],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,
@@ -40,7 +44,7 @@ export class PrePushCommand {
 
     if (request.fetchOriginMain) {
       const fetchArgs: RepositoryCommandRequest = {
-        command: 'git',
+        command: RepositoryCommandExecutable.Git,
         args: ['fetch', 'origin', 'main'],
         rootDirectory: repoRoot,
         workingDirectory: repoRoot,
@@ -57,7 +61,7 @@ export class PrePushCommand {
     }
 
     const baseArgs: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['rev-parse', 'origin/main'],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,
@@ -103,7 +107,7 @@ export class PrePushCommand {
     );
 
     const contractArgs: RepositoryCommandRequest = {
-      command: 'bash',
+      command: RepositoryCommandExecutable.Bash,
       script: RepositoryBashScript.UiDemoContract,
       args: [baseSha],
       rootDirectory: repoRoot,
@@ -123,7 +127,7 @@ export class PrePushCommand {
     let staged = false;
     if (request.stageHostUpdates) {
       const stageArgs: RepositoryCommandRequest = {
-        command: 'git',
+        command: RepositoryCommandExecutable.Git,
         args: ['add', '-u'],
         rootDirectory: repoRoot,
         workingDirectory: repoRoot,

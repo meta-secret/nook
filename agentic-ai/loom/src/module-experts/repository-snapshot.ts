@@ -20,7 +20,7 @@ export type RepositorySnapshotRequest = {
 
 type IsolatedCommandRequest = {
   readonly args: readonly string[];
-  readonly command: 'git' | 'tar';
+  readonly command: SnapshotExecutable;
   readonly cwd: string;
 };
 
@@ -62,6 +62,11 @@ class SnapshotCommand {
   }
 }
 
+enum SnapshotExecutable {
+  Git = 'git',
+  Tar = 'tar',
+}
+
 export class RepositorySnapshot {
   constructor(private readonly request: RepositorySnapshotRequest) {}
   materialize(): Result<string, ExpertIsolationFailure> {
@@ -80,7 +85,7 @@ export class RepositorySnapshot {
     const optionalPaths = this.trackedOptionalPaths();
     if (optionalPaths.isErr()) return err(optionalPaths.error);
     const archived = new SnapshotCommand({
-      command: 'git',
+      command: SnapshotExecutable.Git,
       cwd: request.workingDirectory,
       args: [
         'archive',
@@ -94,7 +99,7 @@ export class RepositorySnapshot {
     }).execute();
     if (archived.isErr()) return err(archived.error);
     const extracted = new SnapshotCommand({
-      command: 'tar',
+      command: SnapshotExecutable.Tar,
       cwd: request.codexHome,
       args: [
         '--extract',
@@ -144,7 +149,7 @@ export class RepositorySnapshot {
     const request = this.request;
     if (request.optionalScopePaths.length === 0) return ok([]);
     const listed = new SnapshotCommand({
-      command: 'git',
+      command: SnapshotExecutable.Git,
       cwd: request.workingDirectory,
       args: [
         'ls-tree',

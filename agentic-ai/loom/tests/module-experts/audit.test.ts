@@ -94,9 +94,15 @@ export class ModuleExpertsAuditFixture {
     );
 
   static readonly internalApiProfile: ModuleExpertProfile =
-    MODULE_EXPERT_CATALOG.find(
+    ModuleExpertsAuditFixture.internalApiProfileValue();
+  private static internalApiProfileValue(): ModuleExpertProfile {
+    const profile = MODULE_EXPERT_CATALOG.find(
       (candidate) => candidate.name === 'internal_api_expert',
-    ) ?? ModuleExpertsAuditFixture.missingInternalApiProfile();
+    );
+    return profile
+      ? profile
+      : ModuleExpertsAuditFixture.missingInternalApiProfile();
+  }
   private static missingInternalApiProfile(): never {
     throw new Error('internal_api_expert test fixture is missing.');
   }

@@ -9,7 +9,11 @@ import { RemoteTaskPresence } from '../codec/args/pr-land.ts';
 
 import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
 
-import { RepositoryBunScript, RepositoryCommand } from '../lib/run.ts';
+import {
+  RepositoryBunScript,
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from '../lib/run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
@@ -62,7 +66,7 @@ export class PullRequestDeliveryCommand {
     const { repoRoot, prNumber } = this.request;
 
     const viewArgs: RepositoryCommandRequest = {
-      command: 'gh',
+      command: RepositoryCommandExecutable.GitHub,
       args: [
         'pr',
         'view',
@@ -96,7 +100,7 @@ export class PullRequestDeliveryCommand {
     const { repoRoot, prNumber } = this.request;
 
     const resultArgs: RepositoryCommandRequest = {
-      command: 'task',
+      command: RepositoryCommandExecutable.Task,
       args: ['pr:ready', `PR=${prNumber}`],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,
@@ -147,7 +151,7 @@ export class PullRequestValidationCommand {
     const { repoRoot, request } = this.request;
 
     const prePushArgs: RepositoryCommandRequest = {
-      command: 'bun',
+      command: RepositoryCommandExecutable.Bun,
       script: RepositoryBunScript.Loom,
       args: ['--default', 'prePush'],
       rootDirectory: repoRoot,
@@ -165,7 +169,7 @@ export class PullRequestValidationCommand {
 
     if (request.remoteTask.presence === RemoteTaskPresence.Specified) {
       const remoteArgs: RepositoryCommandRequest = {
-        command: 'task',
+        command: RepositoryCommandExecutable.Task,
         args: ['remote', `TASK_NAME=${request.remoteTask.task}`],
         rootDirectory: repoRoot,
         workingDirectory: repoRoot,
@@ -190,7 +194,7 @@ export class PullRequestValidationCommand {
       validateArgs.push('FULL_E2E=1');
     }
     const validatedArgs: RepositoryCommandRequest = {
-      command: 'task',
+      command: RepositoryCommandExecutable.Task,
       args: validateArgs,
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,

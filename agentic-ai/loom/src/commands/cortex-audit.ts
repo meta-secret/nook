@@ -22,6 +22,7 @@ import {
 import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
 import {
   UntrustedYamlBoundary,
+  UntrustedYamlPropertyPresence,
   type UntrustedYamlMap,
   type UntrustedYamlNode,
 } from '../lib/guards.ts';
@@ -433,15 +434,27 @@ export class CortexAuditCommand {
       throw new Error('Invalid GitHub policy event.');
     const before =
       typeof value.before === 'string' ? { before: value.before } : {};
+    const pullRequest = UntrustedYamlBoundary.property({
+      record: value,
+      key: 'pull_request',
+    });
     if (
-      CortexAuditCommand.isEventRecord(value.pull_request) &&
-      CortexAuditCommand.isEventRecord(value.pull_request.base) &&
-      typeof value.pull_request.base.sha === 'string'
+      pullRequest.presence === UntrustedYamlPropertyPresence.Present &&
+      CortexAuditCommand.isEventRecord(pullRequest.value)
     ) {
-      return {
-        ...before,
-        pull_request: { base: { sha: value.pull_request.base.sha } },
-      };
+      const base = UntrustedYamlBoundary.property({
+        record: pullRequest.value,
+        key: 'base',
+      });
+      if (
+        base.presence === UntrustedYamlPropertyPresence.Present &&
+        CortexAuditCommand.isEventRecord(base.value) &&
+        typeof base.value.sha === 'string'
+      )
+        return {
+          ...before,
+          pull_request: { base: { sha: base.value.sha } },
+        };
     }
     return before;
   }
@@ -519,7 +532,7 @@ export class CortexAuditCommand {
   }
 }
 
-type RepositoryPolicyEventTransportValue = UntrustedYamlNode | void;
+type RepositoryPolicyEventTransportValue = UntrustedYamlNode;
 
 type IsPersistentCortexMarkdownFileArgs = {
   readonly cortexRoot: string;

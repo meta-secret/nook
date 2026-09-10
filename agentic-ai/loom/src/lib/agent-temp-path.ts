@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { RepositoryCommand } from './run.ts';
+import { RepositoryCommand, RepositoryCommandExecutable } from './run.ts';
 import { LoomFailureCode } from '../loom-failure.ts';
 
 import type { RepositoryCommandRequest } from './run.ts';
@@ -70,7 +70,7 @@ export class AgentTemporaryPath {
     }
 
     const gitHeadRequest: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['rev-parse', 'HEAD'],
       rootDirectory: request.repoRoot,
       workingDirectory: request.repoRoot,
@@ -88,13 +88,13 @@ export class AgentTemporaryPath {
     }
 
     const branchRequest: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['branch', '--show-current'],
       rootDirectory: request.repoRoot,
       workingDirectory: request.repoRoot,
     };
     const reflogRequest: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['reflog', '--format=%H%x09%gs', 'HEAD'],
       rootDirectory: request.repoRoot,
       workingDirectory: request.repoRoot,

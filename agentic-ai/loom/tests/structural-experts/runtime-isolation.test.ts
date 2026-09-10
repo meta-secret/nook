@@ -6,7 +6,10 @@ import { join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
 import { ModuleExpertIsolation } from '../../src/module-experts/runtime-contract.ts';
 import type { ReadOnlyExpertRuntimeIsolationRequest } from '../../src/module-experts/runtime-contract.ts';
-import { RepositoryCommand } from '../../src/lib/run.ts';
+import {
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from '../../src/lib/run.ts';
 import type { RepositoryCommandRequest } from '../../src/lib/run.ts';
 import { StructuralExpertCatalog } from '../../src/structural-experts/catalog.ts';
 
@@ -125,7 +128,7 @@ test('materializes only exact shared formatter and lint tooling', async () => {
   const removeOptions: RmOptions = { recursive: true, force: true };
   const revisionRequest: RepositoryCommandRequest = {
     args: ['write-tree'],
-    command: 'git',
+    command: RepositoryCommandExecutable.Git,
     rootDirectory: REPO_ROOT,
     workingDirectory: REPO_ROOT,
   };

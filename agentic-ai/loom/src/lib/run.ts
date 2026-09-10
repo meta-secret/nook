@@ -43,7 +43,7 @@ export class RepositoryCommand {
     let result;
     try {
       switch (command) {
-        case 'bash':
+        case RepositoryCommandExecutable.Bash:
           switch (request.script) {
             case RepositoryBashScript.UiDemoContract:
               result = spawnSync(
@@ -54,7 +54,7 @@ export class RepositoryCommand {
               break;
           }
           break;
-        case 'bun':
+        case RepositoryCommandExecutable.Bun:
           switch (request.script) {
             case RepositoryBunScript.Loom:
               result = spawnSync(
@@ -72,7 +72,7 @@ export class RepositoryCommand {
               break;
           }
           break;
-        case 'bunx':
+        case RepositoryCommandExecutable.Bunx:
           switch (request.executable) {
             case RepositoryBunxExecutable.Playwright:
               result = spawnSync(
@@ -86,16 +86,16 @@ export class RepositoryCommand {
               break;
           }
           break;
-        case 'cargo':
+        case RepositoryCommandExecutable.Cargo:
           result = spawnSync('cargo', [...request.args], options);
           break;
-        case 'gh':
+        case RepositoryCommandExecutable.GitHub:
           result = spawnSync('gh', [...request.args], options);
           break;
-        case 'git':
+        case RepositoryCommandExecutable.Git:
           result = spawnSync('git', [...request.args], options);
           break;
-        case 'node':
+        case RepositoryCommandExecutable.Node:
           switch (request.script) {
             case RepositoryNodeScript.TestFixture:
               result = spawnSync(
@@ -116,10 +116,10 @@ export class RepositoryCommand {
               break;
           }
           break;
-        case 'task':
+        case RepositoryCommandExecutable.Task:
           result = spawnSync('task', [...request.args], options);
           break;
-        case 'vale':
+        case RepositoryCommandExecutable.Vale:
           result = spawnSync('vale', [...request.args], options);
           break;
       }
@@ -162,25 +162,25 @@ type RepositoryCommandLocation = {
 };
 
 type RepositoryBunCommandRequest = RepositoryCommandLocation & {
-  readonly command: 'bun';
+  readonly command: RepositoryCommandExecutable.Bun;
   readonly script: RepositoryBunScript;
   readonly args: readonly string[];
 };
 
 type RepositoryBashCommandRequest = RepositoryCommandLocation & {
-  readonly command: 'bash';
+  readonly command: RepositoryCommandExecutable.Bash;
   readonly script: RepositoryBashScript;
   readonly args: readonly string[];
 };
 
 type RepositoryBunxCommandRequest = RepositoryCommandLocation & {
-  readonly command: 'bunx';
+  readonly command: RepositoryCommandExecutable.Bunx;
   readonly executable: RepositoryBunxExecutable;
   readonly args: readonly string[];
 };
 
 type RepositoryNodeCommandRequest = RepositoryCommandLocation & {
-  readonly command: 'node';
+  readonly command: RepositoryCommandExecutable.Node;
   readonly script: RepositoryNodeScript;
   readonly args: readonly string[];
 };
@@ -188,7 +188,10 @@ type RepositoryNodeCommandRequest = RepositoryCommandLocation & {
 type RepositoryHostCommandRequest = RepositoryCommandLocation & {
   readonly command: Exclude<
     RepositoryCommandExecutable,
-    'bash' | 'bun' | 'bunx' | 'node'
+    | RepositoryCommandExecutable.Bash
+    | RepositoryCommandExecutable.Bun
+    | RepositoryCommandExecutable.Bunx
+    | RepositoryCommandExecutable.Node
   >;
   readonly args: readonly string[];
 };
@@ -218,8 +221,17 @@ export enum RepositoryNodeScript {
   WorkbenchPublish = 'workbenchPublish',
 }
 
-export type RepositoryCommandExecutable =
-  'bash' | 'bun' | 'bunx' | 'cargo' | 'gh' | 'git' | 'node' | 'task' | 'vale';
+export enum RepositoryCommandExecutable {
+  Bash = 'bash',
+  Bun = 'bun',
+  Bunx = 'bunx',
+  Cargo = 'cargo',
+  GitHub = 'gh',
+  Git = 'git',
+  Node = 'node',
+  Task = 'task',
+  Vale = 'vale',
+}
 
 export type RepositoryCommandFailure = {
   readonly code: LoomFailureCode.CommandFailedToStart;

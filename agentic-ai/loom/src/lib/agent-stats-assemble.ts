@@ -11,7 +11,11 @@ import {
   UntrustedYamlBoundary,
 } from './guards.ts';
 
-import { RepositoryBunxExecutable, RepositoryCommand } from './run.ts';
+import {
+  RepositoryBunxExecutable,
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from './run.ts';
 
 import {
   type AgentStatsGitHubEvidenceRequest,
@@ -38,7 +42,7 @@ export class AgentStatisticsAssembly {
     const scratch = scratchResult.value;
 
     const prJsonArgs: RepositoryCommandRequest = {
-      command: 'gh',
+      command: RepositoryCommandExecutable.GitHub,
       args: [
         'pr',
         'view',
@@ -380,7 +384,7 @@ export class AgentStatisticsAssembly {
     const { repoRoot, filter } = args;
 
     const listedArgs3: RepositoryCommandRequest = {
-      command: 'cargo',
+      command: RepositoryCommandExecutable.Cargo,
       args: ['nextest', 'list', '-E', filter, '--lib', '--tests'],
       rootDirectory: repoRoot,
       workingDirectory: path.join(repoRoot, 'nook-app'),
@@ -403,7 +407,7 @@ export class AgentStatisticsAssembly {
   ): Result<number, StatisticsAssemblyFailure> {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
     const listedArgs2: RepositoryCommandRequest = {
-      command: 'bunx',
+      command: RepositoryCommandExecutable.Bunx,
       executable: RepositoryBunxExecutable.Vitest,
       args: ['list'],
       rootDirectory: repoRoot,
@@ -427,7 +431,7 @@ export class AgentStatisticsAssembly {
   ): Result<number, StatisticsAssemblyFailure> {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
     const listedArgs: RepositoryCommandRequest = {
-      command: 'bunx',
+      command: RepositoryCommandExecutable.Bunx,
       executable: RepositoryBunxExecutable.Playwright,
       args: ['test', '--list'],
       rootDirectory: repoRoot,

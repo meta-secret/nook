@@ -3,7 +3,11 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { LoomFailureCode } from '../loom-failure.ts';
 import { CortexMarkdownInventory } from './cortex-markdown-files.ts';
-import { type RepositoryCommandRequest, RepositoryCommand } from './run.ts';
+import {
+  type RepositoryCommandRequest,
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from './run.ts';
 
 export type RunCortexValeArgs = {
   readonly cortexRoot: string;
@@ -23,7 +27,7 @@ export class CortexValeInvocation {
       });
     }
     const versionArgs: RepositoryCommandRequest = {
-      command: 'vale',
+      command: RepositoryCommandExecutable.Vale,
       args: ['--version'],
       rootDirectory: args.repoRoot,
       workingDirectory: args.repoRoot,
@@ -55,7 +59,7 @@ export class CortexValeInvocation {
       });
     if (markdownFiles.length === 0) return ok();
     const lintArgs: RepositoryCommandRequest = {
-      command: 'vale',
+      command: RepositoryCommandExecutable.Vale,
       args: [
         '--no-global',
         `--config=${path.join(args.repoRoot, '.vale.ini')}`,

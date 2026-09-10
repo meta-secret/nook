@@ -49,7 +49,10 @@ import type {
   AgentTaskRuntime,
 } from '../../src/agent-workflow/runtime.ts';
 
-import { RepositoryCommand } from '../../src/lib/run.ts';
+import {
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from '../../src/lib/run.ts';
 
 import type { RepositoryCommandRequest } from '../../src/lib/run.ts';
 
@@ -227,14 +230,14 @@ describe('Codex agent source stability', () => {
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
       const initCommand: RepositoryCommandRequest = {
-        command: 'git',
+        command: RepositoryCommandExecutable.Git,
         args: ['init'],
         rootDirectory: workingDirectory,
         workingDirectory,
       };
       AgentWorkflowCodexRuntimeScenario.runGit(initCommand);
       const identityCommand: RepositoryCommandRequest = {
-        command: 'git',
+        command: RepositoryCommandExecutable.Git,
         args: [
           '-c',
           'user.name=Loom Test',
@@ -247,7 +250,7 @@ describe('Codex agent source stability', () => {
       const trackedPath = join(workingDirectory, 'tracked.txt');
       await writeFile(trackedPath, 'stable\n');
       const addCommand: RepositoryCommandRequest = {
-        command: 'git',
+        command: RepositoryCommandExecutable.Git,
         args: ['add', 'tracked.txt'],
         rootDirectory: workingDirectory,
         workingDirectory,
@@ -267,7 +270,7 @@ describe('Codex agent source stability', () => {
       };
       AgentWorkflowCodexRuntimeScenario.runGit(commitCommand);
       const headCommand: RepositoryCommandRequest = {
-        command: 'git',
+        command: RepositoryCommandExecutable.Git,
         args: ['rev-parse', 'HEAD'],
         rootDirectory: workingDirectory,
         workingDirectory,

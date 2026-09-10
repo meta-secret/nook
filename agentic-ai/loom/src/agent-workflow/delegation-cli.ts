@@ -403,8 +403,14 @@ export class DelegationJournalCli {
       agent: value.agent,
       attempt: value.attempt,
       depth: value.depth,
-      parent: AgentAttemptTransport.decodeParent(value.parent),
-      terminal: AgentAttemptTransport.decodeTerminalValue(value.terminal),
+      parent: AgentAttemptTransport.decodeParentField({
+        node: value,
+        key: 'parent',
+      }),
+      terminal: AgentAttemptTransport.decodeTerminalField({
+        node: value,
+        key: 'terminal',
+      }),
     };
   }
 

@@ -31,7 +31,10 @@ import { ModuleExpertIsolation } from '../../src/module-experts/runtime-contract
 
 import type { ModuleExpertRuntimeIsolationRequest } from '../../src/module-experts/runtime-contract.ts';
 
-import { RepositoryCommand } from '../../src/lib/run.ts';
+import {
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from '../../src/lib/run.ts';
 
 import type { RepositoryCommandRequest } from '../../src/lib/run.ts';
 
@@ -76,7 +79,7 @@ export class ModuleExpertsWebExpertSnapshotScenario {
     ModuleExpertsWebExpertSnapshotScenario.commitFixture(root);
     const revisionCommand: RepositoryCommandRequest = {
       args: ['rev-parse', 'HEAD'],
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       rootDirectory: root,
       workingDirectory: root,
     };
@@ -91,14 +94,14 @@ export class ModuleExpertsWebExpertSnapshotScenario {
   static commitFixture(root: string): void {
     const initCommand: RepositoryCommandRequest = {
       args: ['init'],
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       rootDirectory: root,
       workingDirectory: root,
     };
     ModuleExpertsWebExpertSnapshotScenario.gitOutput(initCommand);
     const addCommand: RepositoryCommandRequest = {
       args: ['add', '.'],
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       rootDirectory: root,
       workingDirectory: root,
     };
@@ -113,7 +116,7 @@ export class ModuleExpertsWebExpertSnapshotScenario {
         '-m',
         'fixture',
       ],
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       rootDirectory: root,
       workingDirectory: root,
     };

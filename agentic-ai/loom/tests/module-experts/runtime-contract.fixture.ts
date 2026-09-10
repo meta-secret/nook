@@ -18,7 +18,10 @@ import type {
   ModuleExpertRuntimeIsolationRequest,
 } from '../../src/module-experts/runtime-contract.ts';
 
-import { RepositoryCommand } from '../../src/lib/run.ts';
+import {
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from '../../src/lib/run.ts';
 
 import type { RepositoryCommandRequest } from '../../src/lib/run.ts';
 export class ModuleExpertsRuntimeContractScenario {
@@ -184,7 +187,7 @@ export class ModuleExpertsRuntimeContractScenario {
       'utf8',
     );
     const gitInit: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['init'],
       rootDirectory: root,
       workingDirectory: root,
@@ -193,7 +196,7 @@ export class ModuleExpertsRuntimeContractScenario {
     assert(hostLaunch1.isOk());
     expect(hostLaunch1.value.exitCode).toBe(0);
     const gitAdd: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['add', '.'],
       rootDirectory: root,
       workingDirectory: root,
@@ -202,7 +205,7 @@ export class ModuleExpertsRuntimeContractScenario {
     assert(hostLaunch2.isOk());
     expect(hostLaunch2.value.exitCode).toBe(0);
     const gitCommit: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: [
         '-c',
         'user.name=Nook Test',
@@ -219,7 +222,7 @@ export class ModuleExpertsRuntimeContractScenario {
     assert(hostLaunch3.isOk());
     expect(hostLaunch3.value.exitCode).toBe(0);
     const gitRevision: RepositoryCommandRequest = {
-      command: 'git',
+      command: RepositoryCommandExecutable.Git,
       args: ['rev-parse', 'HEAD'],
       rootDirectory: root,
       workingDirectory: root,

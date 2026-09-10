@@ -75,7 +75,7 @@ export const structuralPaths = (minimum = 1) =>
 
 export type ParseStructuralRequest<T> = {
   readonly schema: z.ZodType<T>;
-  readonly input: UntrustedYamlNode | void;
+  readonly input: UntrustedYamlNode;
 };
 
 export function parseStructural<T>(request: ParseStructuralRequest<T>): T {

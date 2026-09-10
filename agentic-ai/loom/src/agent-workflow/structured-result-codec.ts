@@ -256,7 +256,7 @@ export class WorkflowResultSchema {
     return this.decodeWorkflowTaskOutputNode(node);
   }
   static decodeWorkflowTaskOutputNode(
-    input: UntrustedYamlNode | void,
+    input: UntrustedYamlNode,
   ): DecodedWorkflowTaskOutput {
     const serialized = JSON.stringify(input);
     if (

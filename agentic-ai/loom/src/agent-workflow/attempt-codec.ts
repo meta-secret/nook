@@ -18,6 +18,7 @@ import {
 import { WorkflowResultSchema } from './structured-result-codec.ts';
 import {
   UntrustedYamlBoundary,
+  UntrustedYamlPropertyPresence,
   type UntrustedYamlMap,
   type UntrustedYamlNode,
 } from '../lib/guards.ts';
@@ -38,32 +39,56 @@ export class AgentAttemptTransport {
     const node = AgentAttemptTransport.record(value);
     const metadata: AgentAttemptEventMetadata = {
       adapter: AgentAttemptTransport.enumeration({
-        value: node.adapter,
+        value: AgentAttemptTransport.field(node, 'adapter'),
         values: Object.values(AgentAttemptAdapterKind),
       }),
-      runId: AgentAttemptTransport.string(node.runId),
+      runId: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'runId'),
+      ),
       workflow: AgentAttemptTransport.enumeration({
-        value: node.workflow,
+        value: AgentAttemptTransport.field(node, 'workflow'),
         values: Object.values(DelegatedAgentWorkflowName),
       }),
-      workflowVersion: AgentAttemptTransport.string(node.workflowVersion),
-      sourceCommit: AgentAttemptTransport.string(node.sourceCommit),
-      task: AgentAttemptTransport.string(node.task),
-      agent: AgentAttemptTransport.string(node.agent),
-      attempt: AgentAttemptTransport.integer(node.attempt),
-      depth: AgentAttemptTransport.integer(node.depth),
-      parent: AgentAttemptTransport.decodeParent(node.parent),
-      sequence: AgentAttemptTransport.integer(node.sequence),
-      actionId: AgentAttemptTransport.string(node.actionId),
-      occurredAt: AgentAttemptTransport.string(node.occurredAt),
+      workflowVersion: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'workflowVersion'),
+      ),
+      sourceCommit: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'sourceCommit'),
+      ),
+      task: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'task'),
+      ),
+      agent: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'agent'),
+      ),
+      attempt: AgentAttemptTransport.integer(
+        AgentAttemptTransport.field(node, 'attempt'),
+      ),
+      depth: AgentAttemptTransport.integer(
+        AgentAttemptTransport.field(node, 'depth'),
+      ),
+      parent: AgentAttemptTransport.decodeParentField({ node, key: 'parent' }),
+      sequence: AgentAttemptTransport.integer(
+        AgentAttemptTransport.field(node, 'sequence'),
+      ),
+      actionId: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'actionId'),
+      ),
+      occurredAt: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'occurredAt'),
+      ),
     };
     const fields = Object.keys(metadata);
-    switch (node.kind) {
+    const kind = AgentAttemptTransport.enumeration({
+      value: AgentAttemptTransport.field(node, 'kind'),
+      values: Object.values(AgentAttemptEventKind),
+    });
+    switch (kind) {
       case AgentAttemptEventKind.AttemptStarted: {
         const optional = Object.hasOwn(node, 'invocationContextSha256')
           ? {
               invocationContextSha256: AgentAttemptTransport.string(
-                node.invocationContextSha256,
+                AgentAttemptTransport.field(node, 'invocationContextSha256'),
               ),
             }
           : {};
@@ -71,7 +96,7 @@ export class AgentAttemptTransport {
           node,
           fields: [...fields, 'kind', ...Object.keys(optional)],
         });
-        return { ...metadata, kind: node.kind, ...optional };
+        return { ...metadata, kind, ...optional };
       }
       case AgentAttemptEventKind.ResultProjected:
         AgentAttemptTransport.exactKeys({
@@ -80,8 +105,10 @@ export class AgentAttemptTransport {
         });
         return {
           ...metadata,
-          kind: node.kind,
-          result: AgentAttemptTransport.projection(node.result),
+          kind,
+          result: AgentAttemptTransport.projection(
+            AgentAttemptTransport.field(node, 'result'),
+          ),
         };
       case AgentAttemptEventKind.ViewProjected:
         AgentAttemptTransport.exactKeys({
@@ -90,8 +117,10 @@ export class AgentAttemptTransport {
         });
         return {
           ...metadata,
-          kind: node.kind,
-          view: AgentAttemptTransport.view(node.view),
+          kind,
+          view: AgentAttemptTransport.view(
+            AgentAttemptTransport.field(node, 'view'),
+          ),
         };
       case AgentAttemptEventKind.AttemptTerminalRecorded:
         AgentAttemptTransport.exactKeys({
@@ -100,13 +129,17 @@ export class AgentAttemptTransport {
         });
         return {
           ...metadata,
-          kind: node.kind,
+          kind,
           terminalKind: AgentAttemptTransport.enumeration({
-            value: node.terminalKind,
+            value: AgentAttemptTransport.field(node, 'terminalKind'),
             values: Object.values(TaskTerminalKind),
           }),
-          result: AgentAttemptTransport.projection(node.result),
-          view: AgentAttemptTransport.view(node.view),
+          result: AgentAttemptTransport.projection(
+            AgentAttemptTransport.field(node, 'result'),
+          ),
+          view: AgentAttemptTransport.view(
+            AgentAttemptTransport.field(node, 'view'),
+          ),
         };
       default:
         throw new AgentAttemptDecodeError();
@@ -123,11 +156,15 @@ export class AgentAttemptTransport {
   ): TaskTerminal<string> {
     const node = AgentAttemptTransport.record(value);
     const identity = {
-      task: AgentAttemptTransport.string(node.task),
-      attempt: AgentAttemptTransport.integer(node.attempt),
+      task: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'task'),
+      ),
+      attempt: AgentAttemptTransport.integer(
+        AgentAttemptTransport.field(node, 'attempt'),
+      ),
     };
     const kind = AgentAttemptTransport.enumeration({
-      value: node.kind,
+      value: AgentAttemptTransport.field(node, 'kind'),
       values: Object.values(TaskTerminalKind),
     });
     if (kind === TaskTerminalKind.Completed) {
@@ -138,8 +175,12 @@ export class AgentAttemptTransport {
       return {
         ...identity,
         kind,
-        threadId: AgentAttemptTransport.string(node.threadId),
-        output: WorkflowResultSchema.decodeWorkflowTaskOutputNode(node.output),
+        threadId: AgentAttemptTransport.string(
+          AgentAttemptTransport.field(node, 'threadId'),
+        ),
+        output: WorkflowResultSchema.decodeWorkflowTaskOutputNode(
+          AgentAttemptTransport.field(node, 'output'),
+        ),
       };
     }
     AgentAttemptTransport.exactKeys({
@@ -149,26 +190,35 @@ export class AgentAttemptTransport {
     return {
       ...identity,
       kind,
-      summary: AgentAttemptTransport.string(node.summary),
+      summary: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'summary'),
+      ),
     };
   }
 
   static decodeParent(value: AttemptTransportValue): AgentAttemptParent {
     const node = AgentAttemptTransport.record(value);
-    if (node.kind === AgentAttemptParentKind.WorkflowRoot) {
+    const kind = AgentAttemptTransport.field(node, 'kind');
+    if (kind === AgentAttemptParentKind.WorkflowRoot) {
       AgentAttemptTransport.exactKeys({ node, fields: ['kind'] });
-      return { kind: node.kind };
+      return { kind };
     }
-    if (node.kind === AgentAttemptParentKind.AgentAttempt) {
+    if (kind === AgentAttemptParentKind.AgentAttempt) {
       AgentAttemptTransport.exactKeys({
         node,
         fields: ['kind', 'task', 'agent', 'attempt'],
       });
       return {
-        kind: node.kind,
-        task: AgentAttemptTransport.string(node.task),
-        agent: AgentAttemptTransport.string(node.agent),
-        attempt: AgentAttemptTransport.integer(node.attempt),
+        kind,
+        task: AgentAttemptTransport.string(
+          AgentAttemptTransport.field(node, 'task'),
+        ),
+        agent: AgentAttemptTransport.string(
+          AgentAttemptTransport.field(node, 'agent'),
+        ),
+        attempt: AgentAttemptTransport.integer(
+          AgentAttemptTransport.field(node, 'attempt'),
+        ),
       };
     }
     throw new AgentAttemptDecodeError();
@@ -178,34 +228,43 @@ export class AgentAttemptTransport {
     const node = AgentAttemptTransport.record(value);
     AgentAttemptTransport.exactKeys({ node, fields: ['path', 'sha256'] });
     return {
-      path: AgentAttemptTransport.string(node.path),
-      sha256: AgentAttemptTransport.string(node.sha256),
+      path: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'path'),
+      ),
+      sha256: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'sha256'),
+      ),
     };
   }
 
   private static view(value: AttemptTransportValue): MaterializedViewReference {
     const node = AgentAttemptTransport.record(value);
-    if (node.presence === MaterializedViewPresence.Unavailable) {
+    const presence = AgentAttemptTransport.field(node, 'presence');
+    if (presence === MaterializedViewPresence.Unavailable) {
       AgentAttemptTransport.exactKeys({ node, fields: ['presence', 'reason'] });
       return {
-        presence: node.presence,
-        reason: AgentAttemptTransport.string(node.reason),
+        presence,
+        reason: AgentAttemptTransport.string(
+          AgentAttemptTransport.field(node, 'reason'),
+        ),
       };
     }
-    if (node.presence === MaterializedViewPresence.Recorded) {
+    if (presence === MaterializedViewPresence.Recorded) {
       AgentAttemptTransport.exactKeys({
         node,
         fields: ['presence', 'authorKind', 'projection', 'eventHighWaterMark'],
       });
       return {
-        presence: node.presence,
+        presence,
         authorKind: AgentAttemptTransport.enumeration({
-          value: node.authorKind,
+          value: AgentAttemptTransport.field(node, 'authorKind'),
           values: Object.values(MaterializedViewAuthorKind),
         }),
-        projection: AgentAttemptTransport.projection(node.projection),
+        projection: AgentAttemptTransport.projection(
+          AgentAttemptTransport.field(node, 'projection'),
+        ),
         eventHighWaterMark: AgentAttemptTransport.integer(
-          node.eventHighWaterMark,
+          AgentAttemptTransport.field(node, 'eventHighWaterMark'),
         ),
       };
     }
@@ -216,6 +275,27 @@ export class AgentAttemptTransport {
     if (!AgentAttemptTransport.isRecord(value))
       throw new AgentAttemptDecodeError();
     return value;
+  }
+  static decodeParentField(request: AttemptFieldDecode): AgentAttemptParent {
+    return AgentAttemptTransport.decodeParent(
+      AgentAttemptTransport.field(request.node, request.key),
+    );
+  }
+  static decodeTerminalField(
+    request: AttemptFieldDecode,
+  ): TaskTerminal<string> {
+    return AgentAttemptTransport.decodeTerminalValue(
+      AgentAttemptTransport.field(request.node, request.key),
+    );
+  }
+  private static field(
+    ...request: readonly [AttemptTransportRecord, string]
+  ): AttemptTransportValue {
+    const [node, key] = request;
+    const property = UntrustedYamlBoundary.property({ record: node, key });
+    if (property.presence === UntrustedYamlPropertyPresence.Absent)
+      throw new AgentAttemptDecodeError();
+    return property.value;
   }
   private static isRecord(
     value: AttemptTransportValue,
@@ -250,7 +330,7 @@ export class AgentAttemptTransport {
 }
 
 type AttemptTransportRecord = UntrustedYamlMap;
-type AttemptTransportValue = UntrustedYamlNode | void;
+type AttemptTransportValue = UntrustedYamlNode;
 type AttemptEnumDecode<T extends string> = {
   readonly value: AttemptTransportValue;
   readonly values: readonly T[];
@@ -258,6 +338,10 @@ type AttemptEnumDecode<T extends string> = {
 type AttemptFieldsDecode = {
   readonly node: AttemptTransportRecord;
   readonly fields: readonly string[];
+};
+type AttemptFieldDecode = {
+  readonly node: AttemptTransportRecord;
+  readonly key: string;
 };
 
 export class AgentAttemptDecodeError extends Error {

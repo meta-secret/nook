@@ -10,6 +10,7 @@ import {
   type CommandOutput,
   type RepositoryCommandRequest,
   RepositoryCommand,
+  RepositoryCommandExecutable,
 } from './run.ts';
 
 export enum ValeAlertSeverity {
@@ -68,7 +69,7 @@ export class ValeFileDiagnostics {
     const admission = new ValeFileRequest(args).admit();
     if (admission.isErr()) return err(admission.error);
     const versionArgs: RepositoryCommandRequest = {
-      command: 'vale',
+      command: RepositoryCommandExecutable.Vale,
       args: ['--version'],
       rootDirectory: args.repoRoot,
       workingDirectory: args.repoRoot,
@@ -86,7 +87,7 @@ export class ValeFileDiagnostics {
       });
     }
     const commandArgs: RepositoryCommandRequest = {
-      command: 'vale',
+      command: RepositoryCommandExecutable.Vale,
       args: [
         '--no-global',
         `--config=${args.configPath}`,
@@ -320,9 +321,9 @@ export class ValeAlertDocument {
     const decoded = VALE_ALERT_SCHEMA.safeParse(this.request.value);
     if (!decoded.success) {
       const [issue] = decoded.error.issues;
-      const issuePath = issue?.path ?? [];
+      const issuePath = issue ? issue.path : [];
       const fieldPresent = issuePath.length > 0;
-      const field = issuePath[0] ?? false;
+      const [field = false] = issuePath;
       const label =
         field === 'Description' || field === 'Link' || field === 'Match'
           ? 'text fields'

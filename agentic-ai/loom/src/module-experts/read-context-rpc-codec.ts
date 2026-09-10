@@ -1,4 +1,9 @@
-import type { UntrustedYamlMap, UntrustedYamlNode } from '../lib/guards.ts';
+import {
+  UntrustedYamlBoundary,
+  UntrustedYamlPropertyPresence,
+  type UntrustedYamlMap,
+  type UntrustedYamlNode,
+} from '../lib/guards.ts';
 
 /** Owns admission of the external repository-context JSON-RPC envelope. */
 export class RepositoryContextRpcSchema {
@@ -11,10 +16,18 @@ export class RepositoryContextRpcSchema {
         : {}),
       ...(typeof value.jsonrpc === 'string' ? { jsonrpc: value.jsonrpc } : {}),
       ...(typeof value.method === 'string' ? { method: value.method } : {}),
-      ...(Object.hasOwn(value, 'params')
-        ? { params: RepositoryContextRpcSchema.decodeToolParams(value.params) }
-        : {}),
+      ...RepositoryContextRpcSchema.decodedParams(value),
     };
+  }
+
+  private static decodedParams(value: UntrustedYamlMap): DecodedParams {
+    const params = UntrustedYamlBoundary.property({
+      record: value,
+      key: 'params',
+    });
+    return params.presence === UntrustedYamlPropertyPresence.Present
+      ? { params: RepositoryContextRpcSchema.decodeToolParams(params.value) }
+      : {};
   }
 
   private static decodeToolParams(
@@ -23,7 +36,7 @@ export class RepositoryContextRpcSchema {
     if (
       !RepositoryContextRpcSchema.isTransportRecord(value) ||
       typeof value.name !== 'string' ||
-      !RepositoryContextRpcSchema.isTransportRecord(value.arguments)
+      !RepositoryContextRpcSchema.hasArgumentRecord(value)
     )
       return {
         kind: ToolCallDecodeKind.Invalid,
@@ -37,7 +50,21 @@ export class RepositoryContextRpcSchema {
         kind: ToolCallDecodeKind.Invalid,
         message: 'Unsupported MCP tool.',
       };
-    const args = value.arguments;
+    const argumentsProperty = UntrustedYamlBoundary.property({
+      record: value,
+      key: 'arguments',
+    });
+    if (argumentsProperty.presence === UntrustedYamlPropertyPresence.Absent)
+      return {
+        kind: ToolCallDecodeKind.Invalid,
+        message: 'Invalid MCP tool call.',
+      };
+    const args = argumentsProperty.value;
+    if (!RepositoryContextRpcSchema.isTransportRecord(args))
+      return {
+        kind: ToolCallDecodeKind.Invalid,
+        message: 'Invalid MCP tool call.',
+      };
     const allowed =
       name === 'list_files'
         ? ['depth', 'path']
@@ -68,9 +95,23 @@ export class RepositoryContextRpcSchema {
   ): value is UntrustedYamlMap {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
+
+  private static hasArgumentRecord(value: UntrustedYamlMap): boolean {
+    const property = UntrustedYamlBoundary.property({
+      record: value,
+      key: 'arguments',
+    });
+    return (
+      property.presence === UntrustedYamlPropertyPresence.Present &&
+      RepositoryContextRpcSchema.isTransportRecord(property.value)
+    );
+  }
 }
 
-type RepositoryContextTransportValue = UntrustedYamlNode | void;
+type RepositoryContextTransportValue = UntrustedYamlNode;
+
+type DecodedParams =
+  { readonly params: ToolCallParams } | Record<string, never>;
 
 export type JsonRpcId = number | string;
 

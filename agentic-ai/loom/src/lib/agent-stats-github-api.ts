@@ -11,7 +11,11 @@ import {
   UntrustedYamlBoundary,
 } from './guards.ts';
 
-import { CommandOutputPolicy, RepositoryCommand } from './run.ts';
+import {
+  CommandOutputPolicy,
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from './run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
@@ -32,7 +36,7 @@ export class GithubActionEvidenceApi {
     const [defaulted1 = []] = [request.fields];
     for (const field of defaulted1) args.push('-f', field);
     const commandRequest: RepositoryCommandRequest = {
-      command: 'gh',
+      command: RepositoryCommandExecutable.GitHub,
       args,
       rootDirectory: request.repoRoot,
       workingDirectory: request.repoRoot,
