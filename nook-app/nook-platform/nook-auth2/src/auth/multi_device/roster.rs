@@ -482,7 +482,7 @@ mod tests {
                 .find(|member| member.auth_id == joiner.auth_id())
                 .ok_or_else(|| io::Error::other("renamed member must exist"))?
                 .label,
-            None
+            MemberLabelState::Unnamed
         );
         Ok(())
     }

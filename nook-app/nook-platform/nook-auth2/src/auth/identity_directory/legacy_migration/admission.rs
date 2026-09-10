@@ -57,10 +57,7 @@ impl LegacyDirectoryAdmission<'_> {
                     .collect(),
             })
             .collect::<Vec<_>>();
-        let mut selection = match &self.directory.selection {
-            IdentitySelection::Empty => None,
-            IdentitySelection::Selected(identity) => Some(identity),
-        };
+        let mut selection = self.directory.selection.clone();
         let mut merges = Vec::new();
         loop {
             let mut owners = HashMap::<&AppId, usize>::new();
@@ -88,7 +85,8 @@ impl LegacyDirectoryAdmission<'_> {
                 right
             } else if self.scope.preserves(identities[left].identity_id) {
                 left
-            } else if selection == Some(identities[right].identity_id) {
+            } else if matches!(&selection, IdentitySelection::Selected(identity) if identity == identities[right].identity_id)
+            {
                 right
             } else {
                 left
@@ -102,8 +100,9 @@ impl LegacyDirectoryAdmission<'_> {
                 survivor
             };
             let record = identities.remove(index);
-            if selection == Some(incoming.identity_id) {
-                selection = Some(record.identity_id);
+            if matches!(&selection, IdentitySelection::Selected(identity) if identity == incoming.identity_id)
+            {
+                selection = IdentitySelection::Selected(record.identity_id.clone());
             }
             identities.insert(index, record.merge(incoming)?);
         }
@@ -144,7 +143,7 @@ impl LegacyDirectoryAdmission<'_> {
                 }
             }
         }
-        if selection.is_some_and(|identity| !ids.contains(identity)) {
+        if matches!(&selection, IdentitySelection::Selected(identity) if !ids.contains(identity)) {
             return Err(MultiDeviceError::InvalidIdentitySelection);
         }
         Ok(merges)

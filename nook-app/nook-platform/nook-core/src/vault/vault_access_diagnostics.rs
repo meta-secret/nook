@@ -217,6 +217,11 @@ impl VaultAccessDiagnosticRequest<'_> {
     }
 }
 
+enum DiagnosticCrypto {
+    Unavailable,
+    Ready(VaultCrypto),
+}
+
 impl EvaluatedVaultAccess<'_> {
     fn secret_records(&self) -> VaultResult<Vec<VaultSecretAccessDiagnostic>> {
         let records = self.request.records;
@@ -225,8 +230,11 @@ impl EvaluatedVaultAccess<'_> {
         let epoch_index = &self.epoch_index;
 
         let crypto = match secrets_key {
-            ResolvedSecretsKey::Unavailable => None,
-            ResolvedSecretsKey::Available(key) => VaultCrypto::new(key).ok(),
+            ResolvedSecretsKey::Unavailable => DiagnosticCrypto::Unavailable,
+            ResolvedSecretsKey::Available(key) => match VaultCrypto::new(key) {
+                Ok(crypto) => DiagnosticCrypto::Ready(crypto),
+                Err(_) => DiagnosticCrypto::Unavailable,
+            },
         };
         let mut secrets = Vec::new();
         for record in records {
@@ -240,11 +248,10 @@ impl EvaluatedVaultAccess<'_> {
             };
             let mut status = key_status.record_status();
             if status == VaultRecordDecryptabilityStatus::Decryptable {
-                status = match (
-                    AgeArmoredCiphertext::parse(payload.as_str()),
-                    crypto.as_ref(),
-                ) {
-                    (Ok(armored), Some(crypto)) if crypto.decrypt_value(&armored).is_ok() => {
+                status = match (AgeArmoredCiphertext::parse(payload.as_str()), &crypto) {
+                    (Ok(armored), DiagnosticCrypto::Ready(crypto))
+                        if crypto.decrypt_value(&armored).is_ok() =>
+                    {
                         VaultRecordDecryptabilityStatus::Decryptable
                     }
                     _ => VaultRecordDecryptabilityStatus::CorruptCiphertext,

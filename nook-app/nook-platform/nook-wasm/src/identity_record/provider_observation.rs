@@ -6,9 +6,7 @@ use crate::{
     NookIdentityDirectorySnapshot,
 };
 use nook_core::MemberLabelState;
-use nook_core::{
-    AppId, DeviceAccessProtectionKind, IdentityVaultAppGrant, IdentityVaultAppGrantKind,
-};
+use nook_core::{DeviceAccessProtectionKind, IdentityVaultAppGrant, IdentityVaultAppGrantKind};
 impl NookIdentityDirectorySnapshot {
     pub(crate) async fn provider_vault_identity_observations(
         request: BrowserProviderVaultIdentityObservations<'_>,
@@ -39,7 +37,7 @@ impl NookIdentityDirectorySnapshot {
             projection,
         } = request;
         let local_protections = LocalAppProtection::local_app_protections(&projection.keyring);
-        let current_app_id = AppId::parse(session_app_id).ok();
+        let current_app = CurrentAppIdentity::observe(session_app_id);
 
         projection
             .directory
@@ -60,7 +58,7 @@ impl NookIdentityDirectorySnapshot {
                     .iter()
                     .copied()
                     .find(|member| {
-                        current_app_id.as_ref() == Some(&member.app_id)
+                        matches!(&current_app, CurrentAppIdentity::Identified(app_id) if app_id == &member.app_id)
                             && IdentityVaultAppGrant {
                                 identity,
                                 store_id,
@@ -84,7 +82,7 @@ impl NookIdentityDirectorySnapshot {
                         protected_members
                             .iter()
                             .copied()
-                            .find(|member| current_app_id.as_ref() == Some(&member.app_id))
+                            .find(|member| matches!(&current_app, CurrentAppIdentity::Identified(app_id) if app_id == &member.app_id))
                     })
                     .or_else(|| protected_members.first().copied());
 
@@ -94,7 +92,7 @@ impl NookIdentityDirectorySnapshot {
                     linked_to_provider_vault: identity.owns_vault(store_id),
                     protected_local_app_available: candidate.is_some(),
                     is_current_app: candidate
-                        .is_some_and(|member| current_app_id.as_ref() == Some(&member.app_id)),
+                        .is_some_and(|member| matches!(&current_app, CurrentAppIdentity::Identified(app_id) if app_id == &member.app_id)),
                     app_grant: candidate.map_or(IdentityVaultAppGrantKind::NotGranted, |member| {
                         IdentityVaultAppGrant {
                             identity,
@@ -144,7 +142,7 @@ mod tests {
                 IdentitySelection::Selected(selected),
             )?,
             keyring: LocalIdentityKeyring::from_entries(entries)?,
-            protected: None,
+            protected: ProtectedIdentityLookup::Unconfigured,
         })
     }
 

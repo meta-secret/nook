@@ -140,14 +140,14 @@ impl RecoveryPlanning<'_> {
         })
         .await?;
         let target_entry = if keyring.entries().is_empty() {
-            None
+            IdentitySelection::Empty
         } else {
             let RecoveryTarget::App(expected) = target else {
                 return Err(NookError::Database(
                     "Recovery requires the initiating app identity".to_owned(),
                 ));
             };
-            Some(
+            IdentitySelection::Selected(
                 keyring
                     .entries()
                     .iter()
@@ -160,7 +160,9 @@ impl RecoveryPlanning<'_> {
                     })?,
             )
         };
-        let (scope, access_profile_keys) = if let Some(identity_id) = target_entry {
+        let (scope, access_profile_keys) = if let IdentitySelection::Selected(identity_id) =
+            target_entry
+        {
             let prior_selection = directory.selection().clone();
             let removed = keyring
                 .remove(&identity_id)
@@ -181,11 +183,13 @@ impl RecoveryPlanning<'_> {
                         LocalIdentityProtection::Protected(_)
                     ) =>
                 {
-                    Some(identity_id)
+                    IdentitySelection::Selected(identity_id)
                 }
-                IdentitySelection::Empty | IdentitySelection::Selected(_) => None,
+                IdentitySelection::Empty | IdentitySelection::Selected(_) => {
+                    IdentitySelection::Empty
+                }
             };
-            if let Some(identity_id) = surviving_selection {
+            if let IdentitySelection::Selected(identity_id) = surviving_selection {
                 directory = directory
                     .select(&identity_id)
                     .map_err(|error| NookError::Database(error.to_string()))?;

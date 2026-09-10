@@ -180,7 +180,9 @@ impl PreparedSimpleGenesisEvent {
             proposed_signing_seed_envelope,
             proposed_member_signing_seed_envelopes,
         } = self;
-        let selected = Rc::new(RefCell::new(None));
+        let selected = Rc::new(RefCell::new(Err(NookError::IndexedDb(
+            "Pending Simple genesis event produced no result.".to_owned(),
+        ))));
         let captured = Rc::clone(&selected);
         let disposition = NookDatabase::idb_update_string(IndexedDbUpdate {
             key: PENDING_SIMPLE_GENESIS_KEY,
@@ -254,7 +256,7 @@ impl PreparedSimpleGenesisEvent {
                         ));
                     }
                 };
-                *captured.borrow_mut() = Some(pinned);
+                *captured.borrow_mut() = Ok(pinned);
                 current.encode()
             },
         })
@@ -264,9 +266,9 @@ impl PreparedSimpleGenesisEvent {
                 "Pending Simple genesis event update was rejected.".to_owned(),
             ));
         }
-        selected.borrow_mut().take().ok_or_else(|| {
-            NookError::IndexedDb("Pending Simple genesis event produced no result.".to_owned())
-        })
+        selected.replace(Err(NookError::IndexedDb(
+            "Pending Simple genesis event produced no result.".to_owned(),
+        )))
     }
 }
 #[cfg(test)]

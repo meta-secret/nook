@@ -7,6 +7,15 @@ use crate::storage::identity_record::{
 };
 use crate::storage::identity_record::{IdentityHandoffOperation, PairedVaultEnrollment};
 
+struct AuthenticatedHandoffAuthorizer {
+    app_key: nook_core::AppKey,
+    signing_public_key: DeviceSigningPublicKey,
+}
+enum HandoffAuthorizer {
+    Unauthenticated,
+    Authenticated(AuthenticatedHandoffAuthorizer),
+}
+
 impl NookVaultManager {
     pub(in crate::manager) async fn finish_extension_identity_handoff(
         &mut self,
@@ -34,15 +43,20 @@ impl NookVaultManager {
         .open()?;
         let (identity, handoff_signing_seed) = material.into_parts();
         let authorizer = if self.device.identity_private_key.is_empty() {
-            None
+            HandoffAuthorizer::Unauthenticated
         } else {
             let app_key = self.device_identity()?;
             let signing_public_key = self.ensure_signing_identity().await?.public_key();
-            Some((app_key, signing_public_key))
+            HandoffAuthorizer::Authenticated(AuthenticatedHandoffAuthorizer {
+                app_key,
+                signing_public_key,
+            })
         };
         let enrollment = (context).pending_extension_enrollment(match &authorizer {
-            Some((app_key, _)) => HandoffAuthorization::Authenticated(app_key),
-            None => HandoffAuthorization::Unauthenticated,
+            HandoffAuthorizer::Authenticated(authorizer) => {
+                HandoffAuthorization::Authenticated(&authorizer.app_key)
+            }
+            HandoffAuthorizer::Unauthenticated => HandoffAuthorization::Unauthenticated,
         })?;
 
         // Age identity may come from a reinstalled extension. Keep any durable
@@ -96,13 +110,14 @@ impl NookVaultManager {
             ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
                 enrollment,
                 authorizer_signing: match authorizer {
-                    Some((app_key, signing_public_key)) => {
-                        AuthorizerSigningUpdate::Verified(AuthorizerMemberSigning {
-                            app_id: app_key.app_id().clone(),
-                            signing_public_key,
-                        })
-                    }
-                    None => AuthorizerSigningUpdate::RetainMembership,
+                    HandoffAuthorizer::Authenticated(AuthenticatedHandoffAuthorizer {
+                        app_key,
+                        signing_public_key,
+                    }) => AuthorizerSigningUpdate::Verified(AuthorizerMemberSigning {
+                        app_id: app_key.app_id().clone(),
+                        signing_public_key,
+                    }),
+                    HandoffAuthorizer::Unauthenticated => AuthorizerSigningUpdate::RetainMembership,
                 },
                 signing_public_key: expected_signing_public_key,
                 handoff_signing_seed: pending_handoff_signing_seed,

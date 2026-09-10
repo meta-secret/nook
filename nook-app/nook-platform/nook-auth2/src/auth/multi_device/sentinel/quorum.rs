@@ -147,9 +147,15 @@ impl AdmittedSentinelQuorum {
         opened: &[OpenedSentinelShare],
     ) -> MultiDeviceResult<Self> {
         let mut legacy_shares = Vec::new();
-        let mut expected_threshold = None;
-        let mut expected_required = None;
-        let mut expected_version = None;
+        let first = opened
+            .first()
+            .ok_or(MultiDeviceError::NotEnoughSentinelShares {
+                threshold: 1.into(),
+                available: 0.into(),
+            })?;
+        let threshold = first.threshold;
+        let required_participants = first.required_participants;
+        let version = first.version;
         let mut seen_indexes = BTreeSet::new();
         let mut slip39_mnemonics = Vec::new();
         for contribution in opened {
@@ -170,26 +176,13 @@ impl AdmittedSentinelQuorum {
             {
                 return Err(MultiDeviceError::InvalidSentinelShareEncoding);
             }
-            if let Some(threshold) = expected_threshold {
-                if threshold != contribution.threshold {
-                    return Err(MultiDeviceError::InvalidSentinelThreshold);
-                }
-            } else {
-                expected_threshold = Some(contribution.threshold);
+            if threshold != contribution.threshold
+                || required_participants != contribution.required_participants
+            {
+                return Err(MultiDeviceError::InvalidSentinelThreshold);
             }
-            if let Some(required) = expected_required {
-                if required != contribution.required_participants {
-                    return Err(MultiDeviceError::InvalidSentinelThreshold);
-                }
-            } else {
-                expected_required = Some(contribution.required_participants);
-            }
-            if let Some(version) = expected_version {
-                if version != contribution.version {
-                    return Err(MultiDeviceError::InvalidSentinelShareEncoding);
-                }
-            } else {
-                expected_version = Some(contribution.version);
+            if version != contribution.version {
+                return Err(MultiDeviceError::InvalidSentinelShareEncoding);
             }
             if !seen_indexes.insert(contribution.share_index) {
                 return Err(MultiDeviceError::InvalidSentinelShareEncoding);
@@ -209,10 +202,6 @@ impl AdmittedSentinelQuorum {
                 });
             }
         }
-        let threshold = expected_threshold.ok_or(MultiDeviceError::NotEnoughSentinelShares {
-            threshold: 1.into(),
-            available: 0.into(),
-        })?;
         if opened.len() < usize::from(u8::from(threshold)) {
             return Err(MultiDeviceError::NotEnoughSentinelShares {
                 threshold,
@@ -221,7 +210,7 @@ impl AdmittedSentinelQuorum {
         }
         Ok(Self {
             threshold,
-            version: expected_version.ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?,
+            version,
             legacy_shares,
             slip39_mnemonics,
         })

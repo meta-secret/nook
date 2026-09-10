@@ -13,7 +13,7 @@ use rustc_ast::attr::AttributeExt;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::intravisit::{self, FnKind, Visitor, VisitorExt};
 use rustc_hir::{
-    AmbigArg, Attribute, CRATE_HIR_ID, FieldDef, FnDecl, ForeignItem, ForeignItemKind, HirId, Impl,
+    AmbigArg, Attribute, CRATE_HIR_ID, FieldDef, FnDecl, ForeignItem, ForeignItemKind, HirId,
     ImplItem, ImplItemKind, Item, ItemKind, Node, PrimTy, QPath, TraitFn, TraitItem, TraitItemKind,
     Ty as HirTy, TyKind as HirTyKind, Variant,
 };
@@ -26,7 +26,11 @@ use rustc_span::{
     sym,
 };
 
+mod boundary_reason;
 mod function_ownership;
+mod implementation_surface;
+use boundary_reason::BoundaryReason;
+use implementation_surface::{ImplementationSurface, NumericNewtype, NumericNewtypePrimitive};
 
 dylint_linting::dylint_library!();
 
@@ -120,7 +124,12 @@ pub fn register_lints(session: &Session, lint_store: &mut LintStore) {
 
 impl<'tcx> LateLintPass<'tcx> for DomainApi {
     fn check_crate(&mut self, cx: &LateContext<'tcx>) {
-        check_suppression_attributes(cx, cx.tcx.hir_krate_attrs(), SuppressionScope::Broad);
+        BoundarySuppression {
+            cx,
+            attributes: cx.tcx.hir_krate_attrs(),
+            scope: SuppressionScope::Broad,
+        }
+        .check();
     }
 
     fn check_mod(
@@ -130,7 +139,12 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         hir_id: HirId,
     ) {
         if hir_id != CRATE_HIR_ID {
-            check_suppressions(cx, hir_id, SuppressionScope::Broad);
+            BoundarySuppression {
+                cx,
+                attributes: cx.tcx.hir_attrs(hir_id),
+                scope: SuppressionScope::Broad,
+            }
+            .check();
         }
     }
 
@@ -138,9 +152,19 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         match item.kind {
             ItemKind::Fn { .. } | ItemKind::Mod(..) => {}
             ItemKind::Use(..) => {
-                check_suppressions(cx, item.hir_id(), SuppressionScope::BoundaryItem);
+                BoundarySuppression {
+                    cx,
+                    attributes: cx.tcx.hir_attrs(item.hir_id()),
+                    scope: SuppressionScope::BoundaryItem,
+                }
+                .check();
             }
-            _ => check_suppressions(cx, item.hir_id(), SuppressionScope::Broad),
+            _ => BoundarySuppression {
+                cx,
+                attributes: cx.tcx.hir_attrs(item.hir_id()),
+                scope: SuppressionScope::Broad,
+            }
+            .check(),
         }
         if item.span.from_expansion() {
             return;
@@ -183,19 +207,30 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         {
             emit_api_diagnostic(cx, item.span, "reachable external crate reexport");
         }
-        if let ItemKind::Impl(Impl { of_trait, .. }) = item.kind
+        if let ItemKind::Impl(implementation) = item.kind
             && (local_type_is_reachable(cx, cx.tcx.type_of(item.owner_id).instantiate_identity())
-                || is_canonical_numeric_newtype_from_impl(cx, item.owner_id.def_id.to_def_id()))
-            && impl_exposes_reachable_surface(cx, item.owner_id.def_id, of_trait)
+                || (CanonicalNumericConversion {
+                    cx,
+                    impl_id: item.owner_id.def_id.to_def_id(),
+                })
+                .is_canonical())
+            && (ImplementationSurface {
+                cx,
+                impl_id: item.owner_id.def_id,
+                implementation,
+            })
+            .exposes_reachable_surface()
         {
             let impl_id = item.owner_id.def_id.to_def_id();
             if definition_surface_contains_raw(cx, impl_id, &mut Vec::new()) {
                 emit_api_diagnostic(cx, item.span, "reachable impl generic declaration");
-            } else if inherited_surface_contains_raw(
+            } else if (ImplementationSurface {
                 cx,
-                impl_id,
-                of_trait.and_then(|trait_ref| trait_ref.trait_ref.trait_def_id()),
-            ) {
+                impl_id: item.owner_id.def_id,
+                implementation,
+            })
+            .inherited_surface_contains_raw()
+            {
                 emit_api_diagnostic(cx, item.span, "reachable inherited trait method");
             }
         }
@@ -211,34 +246,82 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         local_def_id: LocalDefId,
     ) {
         let hir_id = cx.tcx.local_def_id_to_hir_id(local_def_id);
-        check_suppressions(cx, hir_id, SuppressionScope::BoundaryItem);
-        check_callable(cx, local_def_id, span, declaration);
+        BoundarySuppression {
+            cx,
+            attributes: cx.tcx.hir_attrs(hir_id),
+            scope: SuppressionScope::BoundaryItem,
+        }
+        .check();
+        CallableSurface {
+            cx,
+            local_def_id,
+            span,
+            declaration,
+        }
+        .check();
     }
 
     fn check_trait_item(&mut self, cx: &LateContext<'tcx>, item: &'tcx TraitItem<'tcx>) {
         match item.kind {
             TraitItemKind::Fn(signature, TraitFn::Required(_)) => {
-                check_suppressions(cx, item.hir_id(), SuppressionScope::BoundaryItem);
-                check_callable(cx, item.owner_id.def_id, item.ident.span, signature.decl);
+                BoundarySuppression {
+                    cx,
+                    attributes: cx.tcx.hir_attrs(item.hir_id()),
+                    scope: SuppressionScope::BoundaryItem,
+                }
+                .check();
+                CallableSurface {
+                    cx,
+                    local_def_id: item.owner_id.def_id,
+                    span: item.ident.span,
+                    declaration: signature.decl,
+                }
+                .check();
             }
             TraitItemKind::Fn(_, TraitFn::Provided(_)) => {}
-            _ => check_suppressions(cx, item.hir_id(), SuppressionScope::Broad),
+            _ => BoundarySuppression {
+                cx,
+                attributes: cx.tcx.hir_attrs(item.hir_id()),
+                scope: SuppressionScope::Broad,
+            }
+            .check(),
         }
     }
 
     fn check_impl_item(&mut self, cx: &LateContext<'tcx>, item: &'tcx ImplItem<'tcx>) {
         if !matches!(item.kind, ImplItemKind::Fn(..)) {
-            check_suppressions(cx, item.hir_id(), SuppressionScope::Broad);
+            BoundarySuppression {
+                cx,
+                attributes: cx.tcx.hir_attrs(item.hir_id()),
+                scope: SuppressionScope::Broad,
+            }
+            .check();
         }
     }
 
     fn check_foreign_item(&mut self, cx: &LateContext<'tcx>, item: &'tcx ForeignItem<'tcx>) {
         match item.kind {
             ForeignItemKind::Fn(signature, ..) => {
-                check_suppressions(cx, item.hir_id(), SuppressionScope::BoundaryItem);
-                check_callable(cx, item.owner_id.def_id, item.ident.span, signature.decl);
+                BoundarySuppression {
+                    cx,
+                    attributes: cx.tcx.hir_attrs(item.hir_id()),
+                    scope: SuppressionScope::BoundaryItem,
+                }
+                .check();
+                CallableSurface {
+                    cx,
+                    local_def_id: item.owner_id.def_id,
+                    span: item.ident.span,
+                    declaration: signature.decl,
+                }
+                .check();
             }
-            _ => check_suppressions(cx, item.hir_id(), SuppressionScope::Broad),
+            _ => BoundarySuppression {
+                cx,
+                attributes: cx.tcx.hir_attrs(item.hir_id()),
+                scope: SuppressionScope::Broad,
+            }
+            .check(),
         }
     }
 
@@ -246,7 +329,12 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         if !is_struct_or_enum_field(cx, field.hir_id) {
             return;
         }
-        check_suppressions(cx, field.hir_id, SuppressionScope::BoundaryItem);
+        BoundarySuppression {
+            cx,
+            attributes: cx.tcx.hir_attrs(field.hir_id),
+            scope: SuppressionScope::BoundaryItem,
+        }
+        .check();
         if field.span.from_expansion() || !cx.effective_visibilities.is_reachable(field.def_id) {
             return;
         }
@@ -260,7 +348,12 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
     }
 
     fn check_variant(&mut self, cx: &LateContext<'tcx>, variant: &'tcx Variant<'tcx>) {
-        check_suppressions(cx, variant.hir_id, SuppressionScope::Broad);
+        BoundarySuppression {
+            cx,
+            attributes: cx.tcx.hir_attrs(variant.hir_id),
+            scope: SuppressionScope::Broad,
+        }
+        .check();
     }
 }
 
@@ -598,48 +691,6 @@ fn local_type_is_reachable(cx: &LateContext<'_>, ty: Ty<'_>) -> bool {
     }
 }
 
-fn impl_exposes_reachable_surface(
-    cx: &LateContext<'_>,
-    impl_id: LocalDefId,
-    of_trait: Option<&rustc_hir::TraitImplHeader<'_>>,
-) -> bool {
-    of_trait
-        .and_then(|header| header.trait_ref.trait_def_id())
-        .is_some_and(|trait_id| {
-            trait_id
-                .as_local()
-                .is_none_or(|local_id| cx.effective_visibilities.is_reachable(local_id))
-        })
-        || cx
-            .tcx
-            .associated_items(impl_id)
-            .in_definition_order()
-            .filter_map(|item| item.def_id.as_local())
-            .any(|item_id| cx.effective_visibilities.is_reachable(item_id))
-}
-
-fn inherited_surface_contains_raw(
-    cx: &LateContext<'_>,
-    impl_id: DefId,
-    trait_id: Option<DefId>,
-) -> bool {
-    trait_id.is_some_and(|trait_id| {
-        let implemented = cx.tcx.impl_item_implementor_ids(impl_id);
-        let trait_ref = cx.tcx.impl_trait_ref(impl_id).instantiate_identity();
-        cx.tcx
-            .provided_trait_methods(trait_id)
-            .filter(|method| !implemented.contains_key(&method.def_id))
-            .any(|method| {
-                let args = ty::GenericArgs::identity_for_item(cx.tcx, method.def_id).rebase_onto(
-                    cx.tcx,
-                    trait_id,
-                    trait_ref.args,
-                );
-                instantiated_callable_surface_contains_raw(cx, method.def_id, args)
-            })
-    })
-}
-
 struct RawNumericHirVisitor<'a, 'tcx>(&'a LateContext<'tcx>, bool);
 
 impl<'tcx> Visitor<'tcx> for RawNumericHirVisitor<'_, 'tcx> {
@@ -671,76 +722,69 @@ fn declaration_contains_raw_numeric<'tcx>(
     visitor.1
 }
 
-fn check_callable<'tcx>(
-    cx: &LateContext<'tcx>,
+struct CallableSurface<'cx, 'tcx> {
+    cx: &'cx LateContext<'tcx>,
     local_def_id: LocalDefId,
     span: Span,
     declaration: &'tcx FnDecl<'tcx>,
-) {
-    if span.from_expansion() || !cx.effective_visibilities.is_reachable(local_def_id) {
-        return;
-    }
-    if cx
-        .tcx
-        .impl_of_assoc(local_def_id.to_def_id())
-        .is_some_and(|impl_id| is_canonical_numeric_newtype_from_impl(cx, impl_id))
-    {
-        return;
-    }
+}
+impl CallableSurface<'_, '_> {
+    fn check(self) {
+        let Self {
+            cx,
+            local_def_id,
+            span,
+            declaration,
+        } = self;
+        if span.from_expansion() || !cx.effective_visibilities.is_reachable(local_def_id) {
+            return;
+        }
+        if cx
+            .tcx
+            .impl_of_assoc(local_def_id.to_def_id())
+            .is_some_and(|impl_id| (CanonicalNumericConversion { cx, impl_id }).is_canonical())
+        {
+            return;
+        }
 
-    let signature = cx.tcx.fn_sig(local_def_id).instantiate_identity();
-    let signature = signature.skip_binder();
-    let def_id = local_def_id.to_def_id();
-    if signature
-        .inputs_and_output
-        .iter()
-        .any(|ty| contains_raw_numeric(cx, ty))
-        || declaration_contains_raw_numeric(cx, declaration)
-        || definition_surface_contains_raw(cx, def_id, &mut Vec::new())
-    {
-        let diagnostic_span = cx.tcx.def_ident_span(local_def_id).unwrap_or(span);
-        emit_api_diagnostic(cx, diagnostic_span, "reachable function signature");
+        let signature = cx.tcx.fn_sig(local_def_id).instantiate_identity();
+        let signature = signature.skip_binder();
+        let def_id = local_def_id.to_def_id();
+        if signature
+            .inputs_and_output
+            .iter()
+            .any(|ty| contains_raw_numeric(cx, ty))
+            || declaration_contains_raw_numeric(cx, declaration)
+            || definition_surface_contains_raw(cx, def_id, &mut Vec::new())
+        {
+            let diagnostic_span = cx.tcx.def_ident_span(local_def_id).unwrap_or(span);
+            emit_api_diagnostic(cx, diagnostic_span, "reachable function signature");
+        }
     }
 }
 
-fn is_canonical_numeric_newtype_from_impl(cx: &LateContext<'_>, impl_id: DefId) -> bool {
-    let Some(trait_ref) = cx.tcx.impl_opt_trait_ref(impl_id) else {
-        return false;
-    };
-    let trait_ref = trait_ref.instantiate_identity();
-    if !cx.tcx.is_diagnostic_item(sym::From, trait_ref.def_id) {
-        return false;
-    }
-
-    let mut types = trait_ref.args.types();
-    let (Some(target), Some(source), None) = (types.next(), types.next(), types.next()) else {
-        return false;
-    };
-    local_numeric_newtype_primitive(cx, target).is_some_and(|primitive| primitive == source)
-        || local_numeric_newtype_primitive(cx, source).is_some_and(|primitive| primitive == target)
+struct CanonicalNumericConversion<'cx, 'tcx> {
+    cx: &'cx LateContext<'tcx>,
+    impl_id: DefId,
 }
+impl CanonicalNumericConversion<'_, '_> {
+    fn is_canonical(self) -> bool {
+        let Self { cx, impl_id } = self;
+        let Some(trait_ref) = cx.tcx.impl_opt_trait_ref(impl_id) else {
+            return false;
+        };
+        let trait_ref = trait_ref.instantiate_identity();
+        if !cx.tcx.is_diagnostic_item(sym::From, trait_ref.def_id) {
+            return false;
+        }
 
-fn local_numeric_newtype_primitive<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
-    let ty::Adt(definition, arguments) = ty.kind() else {
-        return None;
-    };
-    let definition_id = definition.did().as_local()?;
-    if !cx.effective_visibilities.is_reachable(definition_id)
-        || !definition.is_struct()
-        || !arguments.is_empty()
-    {
-        return None;
+        let mut types = trait_ref.args.types();
+        let (Some(target), Some(source), None) = (types.next(), types.next(), types.next()) else {
+            return false;
+        };
+        matches!((NumericNewtype { cx, ty: target }).primitive(), NumericNewtypePrimitive::Numeric(primitive) if primitive == source)
+            || matches!((NumericNewtype { cx, ty: source }).primitive(), NumericNewtypePrimitive::Numeric(primitive) if primitive == target)
     }
-
-    let mut fields = definition.non_enum_variant().fields.iter();
-    let (Some(field), None) = (fields.next(), fields.next()) else {
-        return None;
-    };
-    if field.vis.is_public() {
-        return None;
-    }
-    let field_ty = field.ty(cx.tcx, arguments);
-    matches!(field_ty.kind(), ty::Int(_) | ty::Uint(_) | ty::Float(_)).then_some(field_ty)
 }
 
 #[derive(Clone, Copy)]
@@ -749,44 +793,48 @@ enum SuppressionScope {
     Broad,
 }
 
-fn check_suppressions(cx: &LateContext<'_>, hir_id: HirId, scope: SuppressionScope) {
-    check_suppression_attributes(cx, cx.tcx.hir_attrs(hir_id), scope);
-}
-
-fn check_suppression_attributes(
-    cx: &LateContext<'_>,
-    attributes: &[Attribute],
+struct BoundarySuppression<'cx, 'tcx> {
+    cx: &'cx LateContext<'tcx>,
+    attributes: &'cx [Attribute],
     scope: SuppressionScope,
-) {
-    for attribute in attributes {
-        if !attribute_mentions_api_lint(attribute) || attribute.span().from_expansion() {
-            continue;
-        }
-
-        let problem = if attribute.has_name(sym::allow) {
-            "use `expect`, not `allow`, for a reviewed boundary exception"
-        } else if !attribute.has_name(sym::expect) {
-            continue;
-        } else if matches!(scope, SuppressionScope::Broad) {
-            "crate, module, type, variant, and other blanket expectations are forbidden"
-        } else if let Some(reason) = suppression_reason(attribute) {
-            if valid_boundary_reason(reason.as_str()) {
+}
+impl BoundarySuppression<'_, '_> {
+    fn check(self) {
+        let Self {
+            cx,
+            attributes,
+            scope,
+        } = self;
+        for attribute in attributes {
+            if !attribute_mentions_api_lint(attribute) || attribute.span().from_expansion() {
                 continue;
             }
-            "reason must identify exactly a serialization, database, or FFI boundary"
-        } else {
-            "a nonempty boundary reason must be present"
-        };
 
-        let diagnostic_span = attribute.path_span().unwrap_or_else(|| attribute.span());
-        span_lint_and_help(
-            cx,
-            INVALID_RAW_NUMERIC_API_SUPPRESSION,
-            diagnostic_span,
-            "invalid suppression of `raw_numeric_public_api`",
-            None,
-            problem,
-        );
+            let problem = if attribute.has_name(sym::allow) {
+                "use `expect`, not `allow`, for a reviewed boundary exception"
+            } else if !attribute.has_name(sym::expect) {
+                continue;
+            } else if matches!(scope, SuppressionScope::Broad) {
+                "crate, module, type, variant, and other blanket expectations are forbidden"
+            } else if let BoundaryReason::Declared(reason) = BoundaryReason::from(attribute) {
+                if valid_boundary_reason(reason.as_str()) {
+                    continue;
+                }
+                "reason must identify exactly a serialization, database, or FFI boundary"
+            } else {
+                "a nonempty boundary reason must be present"
+            };
+
+            let diagnostic_span = attribute.path_span().unwrap_or_else(|| attribute.span());
+            span_lint_and_help(
+                cx,
+                INVALID_RAW_NUMERIC_API_SUPPRESSION,
+                diagnostic_span,
+                "invalid suppression of `raw_numeric_public_api`",
+                None,
+                problem,
+            );
+        }
     }
 }
 
@@ -800,15 +848,6 @@ fn attribute_mentions_api_lint(attribute: &Attribute) -> bool {
                     .is_some_and(|segment| segment.ident.name.as_str() == "raw_numeric_public_api")
             })
         })
-    })
-}
-
-fn suppression_reason(attribute: &Attribute) -> Option<rustc_span::Symbol> {
-    attribute.meta_item_list()?.iter().find_map(|item| {
-        let meta = item.meta_item()?;
-        meta.has_name(sym::reason)
-            .then(|| meta.value_str())
-            .flatten()
     })
 }
 

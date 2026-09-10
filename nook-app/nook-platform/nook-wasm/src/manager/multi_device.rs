@@ -26,6 +26,11 @@ use nook_core::{CreateSentinelShareRecordsForRecipientsRequest, SentinelShareEnv
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+enum SentinelShareIssuance {
+    Unchanged,
+    Issued(VaultOperation),
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Verify that passkey authorization loaded this browser's device identity.
@@ -283,7 +288,9 @@ impl NookVaultManager {
                     signing_public_key: event_signing_public_key,
                     label: MemberLabel::from_trusted(String::new()),
                 });
-                if let Some(share_op) = self.apply_sentinel_share_records(share_records)? {
+                if let SentinelShareIssuance::Issued(share_op) =
+                    self.apply_sentinel_share_records(share_records)?
+                {
                     operations.push(share_op);
                 }
             }
@@ -296,7 +303,7 @@ impl NookVaultManager {
     fn maybe_issue_sentinel_shares(
         &mut self,
         roster: &[nook_core::VaultMember],
-    ) -> Result<Option<nook_core::VaultOperation>, NookError> {
+    ) -> Result<SentinelShareIssuance, NookError> {
         let records = self.prepare_sentinel_shares(roster)?;
         self.apply_sentinel_share_records(records)
     }
@@ -336,9 +343,9 @@ impl NookVaultManager {
     fn apply_sentinel_share_records(
         &mut self,
         share_records: Vec<nook_core::StoredSecretRecord>,
-    ) -> Result<Option<nook_core::VaultOperation>, NookError> {
+    ) -> Result<SentinelShareIssuance, NookError> {
         if share_records.is_empty() {
-            return Ok(None);
+            return Ok(SentinelShareIssuance::Unchanged);
         }
         let policy = self.vault.architecture.sentinel.policy_or_default();
         let mut shares = Vec::with_capacity(share_records.len());
@@ -367,7 +374,9 @@ impl NookVaultManager {
                 ready_participants: u8::try_from(shares.len()).unwrap_or(u8::MAX).into(),
                 ..policy
             });
-        Ok(Some(VaultOperation::SentinelSharesIssued { shares }))
+        Ok(SentinelShareIssuance::Issued(
+            VaultOperation::SentinelSharesIssued { shares },
+        ))
     }
 }
 
@@ -401,7 +410,10 @@ mod tests {
                 enrolled_at: "2026-09-06T00:00:00Z",
             },
         )];
-        assert!(manager.maybe_issue_sentinel_shares(&one)?.is_none());
+        assert!(matches!(
+            manager.maybe_issue_sentinel_shares(&one)?,
+            SentinelShareIssuance::Unchanged
+        ));
 
         let roster = vec![
             VaultMember::member_from_identity(MemberFromIdentityRequest {
@@ -413,9 +425,11 @@ mod tests {
                 enrolled_at: "2026-09-06T00:00:00Z",
             }),
         ];
-        let operation = manager
-            .maybe_issue_sentinel_shares(&roster)?
-            .ok_or_else(|| anyhow::anyhow!("quorum should issue shares"))?;
+        let SentinelShareIssuance::Issued(operation) =
+            manager.maybe_issue_sentinel_shares(&roster)?
+        else {
+            anyhow::bail!("quorum should issue shares");
+        };
         assert!(matches!(
             operation,
             VaultOperation::SentinelSharesIssued { ref shares } if shares.len() == 2
@@ -479,16 +493,14 @@ mod tests {
         ));
 
         let quorum_roster = roster[..2].to_vec();
-        assert!(
-            manager
-                .maybe_issue_sentinel_shares(&quorum_roster)?
-                .is_some()
-        );
-        assert!(
-            manager
-                .maybe_issue_sentinel_shares(&quorum_roster)?
-                .is_none()
-        );
+        assert!(matches!(
+            manager.maybe_issue_sentinel_shares(&quorum_roster)?,
+            SentinelShareIssuance::Issued(_)
+        ));
+        assert!(matches!(
+            manager.maybe_issue_sentinel_shares(&quorum_roster)?,
+            SentinelShareIssuance::Unchanged
+        ));
         Ok(())
     }
 }
@@ -607,7 +619,10 @@ mod browser_tests {
                 enrolled_at: "2026-09-06T00:00:00Z",
             },
         )];
-        assert!(manager.maybe_issue_sentinel_shares(&one)?.is_none());
+        assert!(matches!(
+            manager.maybe_issue_sentinel_shares(&one)?,
+            SentinelShareIssuance::Unchanged
+        ));
 
         let quorum = vec![
             VaultMember::member_from_identity(MemberFromIdentityRequest {
@@ -619,8 +634,14 @@ mod browser_tests {
                 enrolled_at: "2026-09-06T00:00:00Z",
             }),
         ];
-        assert!(manager.maybe_issue_sentinel_shares(&quorum)?.is_some());
-        assert!(manager.maybe_issue_sentinel_shares(&quorum)?.is_none());
+        assert!(matches!(
+            manager.maybe_issue_sentinel_shares(&quorum)?,
+            SentinelShareIssuance::Issued(_)
+        ));
+        assert!(matches!(
+            manager.maybe_issue_sentinel_shares(&quorum)?,
+            SentinelShareIssuance::Unchanged
+        ));
 
         let overflow = vec![
             quorum[0].clone(),

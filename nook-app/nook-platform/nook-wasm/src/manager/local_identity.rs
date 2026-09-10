@@ -1,6 +1,10 @@
 //! Local identity creation, selection, and session adoption.
 
 use super::session::LocalIdentityCreation;
+enum PriorLocalAuthorizer {
+    Unavailable,
+    Authorized(nook_core::AppKey),
+}
 use crate::AuthProviderDatabase;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::IdentityDbSaveProtectedLocalIdentity;
@@ -403,9 +407,9 @@ impl NookVaultManager {
         let saved = match &pending_label {
             LocalIdentityCreation::Creating(label) => {
                 let prior_app_key = if self.device.identity_private_key.is_empty() {
-                    None
+                    PriorLocalAuthorizer::Unavailable
                 } else {
-                    Some(self.device_identity()?)
+                    PriorLocalAuthorizer::Authorized(self.device_identity()?)
                 };
                 AuthProviderDatabase::migrate_legacy_auth_providers_for_selected_identity().await?;
                 DeviceAccessProfileKey::selected().await?.migrate().await?;
@@ -413,9 +417,11 @@ impl NookVaultManager {
                     IdentityDbSaveNewProtectedLocalIdentity {
                         app_key: &app_key,
                         record: record,
-                        prior_app_key: match prior_app_key.as_ref() {
-                            Some(key) => PriorAppAuthorization::Authorized(key),
-                            None => PriorAppAuthorization::Unavailable,
+                        prior_app_key: match &prior_app_key {
+                            PriorLocalAuthorizer::Authorized(key) => {
+                                PriorAppAuthorization::Authorized(key)
+                            }
+                            PriorLocalAuthorizer::Unavailable => PriorAppAuthorization::Unavailable,
                         },
                         label: label,
                     },

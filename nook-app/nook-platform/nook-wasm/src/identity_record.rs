@@ -449,16 +449,15 @@ impl NookIdentityDirectorySnapshot {
             .await
             .map_err(|error| JsError::new(&error.to_string()))?;
         let protected = projection.protected;
-        let protected_app_id = match &protected {
-            ProtectedIdentityLookup::Configured(identity) => {
-                Some(identity.app_id.as_str().to_owned())
+        let current_app = if session_app_id.is_empty() {
+            match &protected {
+                ProtectedIdentityLookup::Configured(identity) => {
+                    CurrentAppIdentity::Identified(identity.app_id.clone())
+                }
+                ProtectedIdentityLookup::Unconfigured => CurrentAppIdentity::Unidentified,
             }
-            ProtectedIdentityLookup::Unconfigured => None,
-        };
-        let current_app_id = if session_app_id.is_empty() {
-            protected_app_id
         } else {
-            Some(session_app_id.to_owned())
+            CurrentAppIdentity::observe(session_app_id)
         };
         let directory = projection.directory;
         let keyring = projection.keyring;
@@ -471,24 +470,21 @@ impl NookIdentityDirectorySnapshot {
             },
         )
         .await?;
-        let current_identity_id = current_app_id.as_deref().and_then(|app_id| {
-            directory.identities().iter().find_map(|record| {
-                record
-                    .members
-                    .iter()
-                    .any(|member| member.app_id.as_str() == app_id)
-                    .then(|| record.identity_id.as_str().to_owned())
-            })
-        });
+        let current_identity = match &current_app {
+            CurrentAppIdentity::Unidentified => IdentitySelection::Empty,
+            CurrentAppIdentity::Identified(app_id) => match directory
+                .identities()
+                .iter()
+                .find(|record| record.members.iter().any(|member| &member.app_id == app_id))
+            {
+                Some(record) => IdentitySelection::Selected(record.identity_id.clone()),
+                None => IdentitySelection::Empty,
+            },
+        };
         let selection = NookIdentityDirectorySelection::directory_selection_for_session(
             BrowserDirectorySelectionForSession {
                 persisted_selection: directory.selection(),
-                current_identity_id: match current_identity_id {
-                    Some(id) => IdentitySelection::Selected(
-                        IdentityId::parse(&id).map_err(|error| JsError::new(&error.to_string()))?,
-                    ),
-                    None => IdentitySelection::Empty,
-                },
+                current_identity_id: current_identity,
                 allow_persisted_fallback: session_app_id.is_empty(),
             },
         );
@@ -506,10 +502,6 @@ impl NookIdentityDirectorySnapshot {
                 .collect()
             }
         };
-        let current_app = match current_app_id.as_deref() {
-            Some(app_id) => CurrentAppIdentity::observe(app_id),
-            None => CurrentAppIdentity::Unidentified,
-        };
         let selected_vault_current_app_granted =
             NookIdentityDirectorySnapshot::selected_vault_current_app_granted(
                 BrowserSelectedVaultCurrentAppGranted {
@@ -520,14 +512,8 @@ impl NookIdentityDirectorySnapshot {
             );
         let mut identities = Vec::new();
         for record in selected_identities {
-            let mut snapshot = NookIdentitySnapshot::from_record(
-                record,
-                &match current_app_id.as_deref() {
-                    Some(app_id) => CurrentAppIdentity::observe(app_id),
-                    None => CurrentAppIdentity::Unidentified,
-                },
-                &local_protections,
-            );
+            let mut snapshot =
+                NookIdentitySnapshot::from_record(record, &current_app, &local_protections);
             snapshot.vaults = NookDeviceVaultAccess::device_vault_access_for_identity(
                 BrowserDeviceVaultAccessForIdentity {
                     identity: record,
@@ -639,12 +625,14 @@ pub async fn select_identity(identity_id: String) -> Result<(), wasm_bindgen::Js
 
 #[wasm_bindgen]
 pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_bindgen::JsError> {
-    let current_app_id = match NookDatabase::load_wrapped_device_identity()
+    let current_app = match NookDatabase::load_wrapped_device_identity()
         .await
         .map_err(|error| JsError::new(&error.to_string()))?
     {
-        ProtectedIdentityLookup::Configured(identity) => Some(identity.app_id.as_str().to_owned()),
-        ProtectedIdentityLookup::Unconfigured => None,
+        ProtectedIdentityLookup::Configured(identity) => {
+            CurrentAppIdentity::Identified(identity.app_id)
+        }
+        ProtectedIdentityLookup::Unconfigured => CurrentAppIdentity::Unidentified,
     };
     let SelectedIdentityRecord::Selected(record) = NookDatabase::load_selected_identity()
         .await
@@ -661,10 +649,7 @@ pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_b
     Ok(NookIdentitySnapshotLoad(
         NookIdentitySnapshotLoadValue::Present(NookIdentitySnapshot::from_record(
             &record,
-            &match current_app_id.as_deref() {
-                Some(app_id) => CurrentAppIdentity::observe(app_id),
-                None => CurrentAppIdentity::Unidentified,
-            },
+            &current_app,
             &local_protections,
         )),
     ))

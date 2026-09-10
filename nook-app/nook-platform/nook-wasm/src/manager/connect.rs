@@ -671,15 +671,15 @@ impl NookVaultManager {
         };
 
         let completed_genesis = if use_genesis {
-            Some(self.bootstrap_genesis_connect(&identity).await?)
+            SimpleGenesisProgress::Pending(self.bootstrap_genesis_connect(&identity).await?)
         } else if event_log_only_remote {
             self.connect_event_log_only_remote(&identity).await?;
-            None
+            SimpleGenesisProgress::NotPending
         } else if !content.trim().is_empty() {
             self.connect_existing_content(&identity, &content).await?;
-            None
+            SimpleGenesisProgress::NotPending
         } else {
-            None
+            SimpleGenesisProgress::NotPending
         };
 
         if use_genesis || remote_content_missing {
@@ -700,8 +700,12 @@ impl NookVaultManager {
             )
             .await?;
         let pending_cleanup = match match completed_genesis {
-            Some(completed) => Ok(SimpleGenesisProgress::Pending(completed)),
-            None => PendingSimpleGenesis::load_for_store(&self.vault.store_id).await,
+            SimpleGenesisProgress::Pending(completed) => {
+                Ok(SimpleGenesisProgress::Pending(completed))
+            }
+            SimpleGenesisProgress::NotPending => {
+                PendingSimpleGenesis::load_for_store(&self.vault.store_id).await
+            }
         } {
             Ok(pending) => pending,
             Err(error) => {

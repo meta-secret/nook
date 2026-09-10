@@ -1,10 +1,15 @@
 //! Durable outbox publication states.
 use super::*;
+
+pub(super) enum OutboxIndexScope {
+    Unrestricted,
+    CurrentVault(BTreeSet<EventId>),
+}
 pub(super) struct PendingOutboxEvent<'a> {
     pub(super) provider_id: &'a str,
     pub(super) event_id: EventId,
     pub(super) bytes: EventStorageBytes,
-    pub(super) local_ids: Option<&'a BTreeSet<EventId>>,
+    pub(super) local_ids: &'a OutboxIndexScope,
 }
 
 pub(super) struct PublishedOutboxEvent<'a> {
@@ -14,8 +19,10 @@ pub(super) struct PublishedOutboxEvent<'a> {
 
 impl PendingOutboxEvent<'_> {
     pub(super) fn is_current(&self) -> bool {
-        self.local_ids
-            .is_none_or(|ids| ids.contains(&self.event_id))
+        match self.local_ids {
+            OutboxIndexScope::Unrestricted => true,
+            OutboxIndexScope::CurrentVault(ids) => ids.contains(&self.event_id),
+        }
     }
 
     pub(super) async fn discard(self) -> Result<(), NookError> {
@@ -76,7 +83,7 @@ mod tests {
                 provider_id: &self.provider_id,
                 event_id: self.event_id.clone(),
                 bytes: self.bytes.clone().into(),
-                local_ids: None,
+                local_ids: &OutboxIndexScope::Unrestricted,
             })
         }
     }
@@ -109,9 +116,9 @@ mod tests {
             NookDatabase::load_outbox(&fixture.provider_id).await?,
             vec![(fixture.event_id.to_string(), fixture.bytes.clone())]
         );
-        let excluded = BTreeSet::new();
+        let excluded = OutboxIndexScope::CurrentVault(BTreeSet::new());
         let mut pending = fixture.queue().await?;
-        pending.local_ids = Some(&excluded);
+        pending.local_ids = &excluded;
         assert!(!pending.is_current());
         pending.discard().await?;
         assert!(
@@ -143,12 +150,13 @@ mod tests {
     fn durable_outbox_rejects_an_event_removed_from_the_active_index() -> anyhow::Result<()> {
         let retained = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let quarantined = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
-        let local_ids = BTreeSet::from([retained.clone()]);
+        let local_ids = OutboxIndexScope::CurrentVault(BTreeSet::from([retained.clone()]));
+        let empty = OutboxIndexScope::CurrentVault(BTreeSet::new());
         for (index, event_id, expected) in [
-            (None, retained.clone(), true),
-            (Some(&local_ids), retained, true),
-            (Some(&local_ids), quarantined.clone(), false),
-            (Some(&BTreeSet::new()), quarantined, false),
+            (&OutboxIndexScope::Unrestricted, retained.clone(), true),
+            (&local_ids, retained, true),
+            (&local_ids, quarantined.clone(), false),
+            (&empty, quarantined, false),
         ] {
             let pending = PendingOutboxEvent {
                 provider_id: "index-fixture",

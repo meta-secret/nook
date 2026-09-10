@@ -166,7 +166,9 @@ impl StagedSimpleGenesisInput<'_> {
                 directory: staged_directory,
             }),
         };
-        let selected = Rc::new(RefCell::new(None));
+        let selected = Rc::new(RefCell::new(Err(NookError::IndexedDb(
+            "Staged Simple genesis produced no result.".to_owned(),
+        ))));
         let captured = Rc::clone(&selected);
         NookDatabase::idb_update_string(IndexedDbUpdate {
             key: PENDING_SIMPLE_GENESIS_KEY,
@@ -182,14 +184,14 @@ impl StagedSimpleGenesisInput<'_> {
                     ));
                 }
                 let encoded = pending.encode()?;
-                *captured.borrow_mut() = Some(pending);
+                *captured.borrow_mut() = Ok(pending);
                 Ok(encoded)
             },
         })
         .await?;
-        let pending = selected.borrow_mut().take().ok_or_else(|| {
-            NookError::IndexedDb("Staged Simple genesis produced no result.".to_owned())
-        })?;
+        let pending = selected.replace(Err(NookError::IndexedDb(
+            "Staged Simple genesis produced no result.".to_owned(),
+        )))?;
         let staged = pending.require_staged_identity().map_err(|_| {
             NookError::IndexedDb("Staged Simple genesis lost its identity state.".to_owned())
         })?;

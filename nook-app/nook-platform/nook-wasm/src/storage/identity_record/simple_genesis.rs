@@ -161,7 +161,9 @@ impl OrdinarySimpleGenesisRequest<'_> {
             NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?,
             StoredStringRecord::Stored(_)
         ) {
-            let selected = Rc::new(RefCell::new(None));
+            let selected = Rc::new(RefCell::new(Err(NookError::IndexedDb(
+                "Pending Simple genesis produced no result.".to_owned(),
+            ))));
             let captured = Rc::clone(&selected);
             NookDatabase::idb_update_string(IndexedDbUpdate {
                 key: PENDING_SIMPLE_GENESIS_KEY,
@@ -178,14 +180,14 @@ impl OrdinarySimpleGenesisRequest<'_> {
                     let mut pending = PendingSimpleGenesis::decode(&raw)?;
                     pending.seal_legacy_signing_seed(app_key)?;
                     let encoded = pending.encode()?;
-                    *captured.borrow_mut() = Some(pending);
+                    *captured.borrow_mut() = Ok(pending);
                     Ok(encoded)
                 },
             })
             .await?;
-            return selected.borrow_mut().take().ok_or_else(|| {
-                NookError::IndexedDb("Pending Simple genesis produced no result.".to_owned())
-            });
+            return selected.replace(Err(NookError::IndexedDb(
+                "Pending Simple genesis produced no result.".to_owned(),
+            )));
         }
         let identity = NookDatabase::ensure_local_identity_for_app_key(
             IdentityDbEnsureLocalIdentityForAppKey {
@@ -203,7 +205,9 @@ impl OrdinarySimpleGenesisRequest<'_> {
             event_state: PendingSimpleGenesisEvent::AwaitingEvent,
             flow: PendingSimpleGenesisFlow::Ordinary,
         };
-        let selected = Rc::new(RefCell::new(None));
+        let selected = Rc::new(RefCell::new(Err(NookError::IndexedDb(
+            "Pending Simple genesis produced no result.".to_owned(),
+        ))));
         let captured = Rc::clone(&selected);
         NookDatabase::idb_update_string(IndexedDbUpdate {
             key: PENDING_SIMPLE_GENESIS_KEY,
@@ -214,14 +218,14 @@ impl OrdinarySimpleGenesisRequest<'_> {
                     StoredStringRecord::Stored(raw) => PendingSimpleGenesis::decode(&raw)?,
                 };
                 let encoded = pending.encode()?;
-                *captured.borrow_mut() = Some(pending);
+                *captured.borrow_mut() = Ok(pending);
                 Ok(encoded)
             },
         })
         .await?;
-        selected.borrow_mut().take().ok_or_else(|| {
-            NookError::IndexedDb("Pending Simple genesis produced no result.".to_owned())
-        })
+        selected.replace(Err(NookError::IndexedDb(
+            "Pending Simple genesis produced no result.".to_owned(),
+        )))
     }
 }
 #[cfg(test)]

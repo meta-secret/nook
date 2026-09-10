@@ -170,27 +170,27 @@ impl VaultProjection {
                 continue;
             }
 
-            let mut security_reason = None;
             for operation in &event.body.operations {
                 if let EpochTransition::Rotated(reason) =
                     VaultOperation::operation_starts_epoch(operation)
                 {
                     epoch_events.insert(event_id.clone(), reason);
-                    security_reason = Some(reason);
+                    security_events.insert(event_id.clone(), reason);
                 }
                 if matches!(operation, crate::VaultOperation::JoinApproved { .. }) {
-                    security_reason.get_or_insert(EpochRotationReason::AccessGrant);
+                    security_events
+                        .entry(event_id.clone())
+                        .or_insert(EpochRotationReason::AccessGrant);
                 } else if !matches!(
                     operation,
                     crate::VaultOperation::EpochCheckpoint { .. }
                         | crate::VaultOperation::JoinRequested { .. }
                 ) {
-                    security_reason.get_or_insert(EpochRotationReason::ConcurrentVaultMutation);
+                    security_events
+                        .entry(event_id.clone())
+                        .or_insert(EpochRotationReason::ConcurrentVaultMutation);
                 }
                 projection.apply_operation(&event_id, operation, &mut replacements_by_old);
-            }
-            if let Some(reason) = security_reason {
-                security_events.insert(event_id.clone(), reason);
             }
 
             if let Ok(epoch_id) = EventId::parse(event.body.key_epoch.as_str()) {

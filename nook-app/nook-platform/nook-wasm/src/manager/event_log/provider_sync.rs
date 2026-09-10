@@ -26,7 +26,7 @@ use super::{
 };
 
 mod outbox;
-use outbox::PendingOutboxEvent;
+use outbox::{OutboxIndexScope, PendingOutboxEvent};
 impl NookVaultManager {
     async fn persist_projected_key_epoch(
         &mut self,
@@ -265,9 +265,9 @@ impl NookVaultManager {
         self.guard_current_provider_writable_for_active_store(&remote_ids)
             .await?;
         let local_ids = if self.vault.store_id.is_empty() {
-            None
+            OutboxIndexScope::Unrestricted
         } else {
-            Some(
+            OutboxIndexScope::CurrentVault(
                 NookDatabase::load_local_event_store(&self.vault.store_id)
                     .await?
                     .event_ids()
@@ -286,7 +286,7 @@ impl NookVaultManager {
                 provider_id: &provider_id,
                 event_id,
                 bytes,
-                local_ids: local_ids.as_ref(),
+                local_ids: &local_ids,
             };
             if !pending.is_current() {
                 pending.discard().await?;

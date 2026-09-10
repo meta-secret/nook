@@ -496,12 +496,8 @@ mod tests {
             let text = format!("{character}a{character}b{character}");
             let expected = format!("a{character}b");
             assert_eq!(EcmascriptProviderText(&text).trimmed(), expected);
-            assert_eq!(
-                EcmascriptProviderText(&text).non_empty(),
-                Some(expected.as_str())
-            );
             let blank = character.to_string();
-            assert_eq!(EcmascriptProviderText(&blank).non_empty(), None);
+            assert_eq!(EcmascriptProviderText(&blank).trimmed(), "");
         }
         for text in [
             "\u{0085}value\u{0085}",
@@ -510,8 +506,7 @@ mod tests {
             "\u{2060}",
         ] {
             assert_eq!(EcmascriptProviderText(text).trimmed(), text);
-            assert_eq!(EcmascriptProviderText(text).non_empty(), Some(text));
         }
-        assert_eq!(EcmascriptProviderText("").non_empty(), None);
+        assert_eq!(EcmascriptProviderText("").trimmed(), "");
     }
 }

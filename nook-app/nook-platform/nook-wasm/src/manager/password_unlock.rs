@@ -18,6 +18,11 @@ use nook_core::{
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
+enum PasswordUnlockMembership {
+    ProtectedIdentity,
+    AvailableIdentity(nook_core::DeviceIdentity),
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     #[wasm_bindgen]
@@ -46,9 +51,9 @@ impl NookVaultManager {
         // authorizing that identity. When the identity is already available
         // (for example during QR enrolment), refresh membership as before.
         let identity = if self.device.identity_private_key.is_empty() {
-            None
+            PasswordUnlockMembership::ProtectedIdentity
         } else {
-            Some(self.ensure_device_identity()?)
+            PasswordUnlockMembership::AvailableIdentity(self.ensure_device_identity()?)
         };
 
         let mut vault_missing = false;
@@ -90,7 +95,7 @@ impl NookVaultManager {
         self.vault.unlock = VaultUnlock::Keys;
         self.vault.meta = meta;
         self.ensure_event_log_ready().await?;
-        if let Some(identity) = identity.as_ref() {
+        if let PasswordUnlockMembership::AvailableIdentity(identity) = &identity {
             let store_id = StoreId::parse(&self.vault.store_id)
                 .map_err(|error| NookError::Database(error.to_string()))?;
             if let Err(error) = NookDatabase::validate_vault_identity_enrollment(

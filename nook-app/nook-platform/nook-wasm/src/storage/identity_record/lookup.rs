@@ -2,6 +2,11 @@
 use super::*;
 use nook_core::{IdentityRecord, LocalIdentityKeyringEntry};
 
+enum ProjectionAppSelection {
+    Persisted,
+    Requested(AppId),
+}
+
 pub(crate) enum StoredIdentityProtection {
     Unprotected,
     Protected(LocalIdentityKeyringEntry),
@@ -40,9 +45,9 @@ impl NookDatabase {
         session_app_id: &str,
     ) -> Result<LocalIdentityProjection, NookError> {
         let requested_app_id = if session_app_id.is_empty() {
-            None
+            ProjectionAppSelection::Persisted
         } else {
-            Some(
+            ProjectionAppSelection::Requested(
                 AppId::parse(session_app_id)
                     .map_err(|error| NookError::Database(error.to_string()))?,
             )
@@ -62,38 +67,45 @@ impl NookDatabase {
             directory: &directory,
         })
         .await?;
-        let entry = match requested_app_id.as_ref() {
-            Some(app_id) => keyring
+        let entry = match &requested_app_id {
+            ProjectionAppSelection::Requested(app_id) => match keyring
                 .entries()
                 .iter()
-                .find(|entry| entry.app_id() == app_id),
-            None => match directory.selection() {
-                IdentitySelection::Empty => None,
-                IdentitySelection::Selected(identity_id) => match keyring.entry(identity_id) {
-                    LocalIdentityProtection::Protected(entry) => Some(entry),
-                    LocalIdentityProtection::Unprotected => None,
-                },
+                .find(|entry| entry.app_id() == app_id)
+            {
+                Some(entry) => LocalIdentityProtection::Protected(entry),
+                None => LocalIdentityProtection::Unprotected,
+            },
+            ProjectionAppSelection::Persisted => match directory.selection() {
+                IdentitySelection::Empty => LocalIdentityProtection::Unprotected,
+                IdentitySelection::Selected(identity_id) => keyring.entry(identity_id),
             },
         };
         let protected = match entry {
-            Some(entry) => ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
-                app_id: entry.app_id().clone(),
-                wrapped_identity: entry.wrapped_app_key().clone(),
-            }),
-            None => match NookDatabase::load_legacy_wrapped_device_identity_from_store(&store)
-                .await?
-            {
-                ProtectedIdentityLookup::Configured(identity)
-                    if requested_app_id
-                        .as_ref()
-                        .is_none_or(|requested| requested == &identity.app_id) =>
-                {
+            LocalIdentityProtection::Protected(entry) => {
+                ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
+                    app_id: entry.app_id().clone(),
+                    wrapped_identity: entry.wrapped_app_key().clone(),
+                })
+            }
+            LocalIdentityProtection::Unprotected => {
+                match NookDatabase::load_legacy_wrapped_device_identity_from_store(&store).await? {
                     ProtectedIdentityLookup::Configured(identity)
+                        if match &requested_app_id {
+                            ProjectionAppSelection::Persisted => true,
+                            ProjectionAppSelection::Requested(requested) => {
+                                requested == &identity.app_id
+                            }
+                        } =>
+                    {
+                        ProtectedIdentityLookup::Configured(identity)
+                    }
+                    ProtectedIdentityLookup::Configured(_)
+                    | ProtectedIdentityLookup::Unconfigured => {
+                        ProtectedIdentityLookup::Unconfigured
+                    }
                 }
-                ProtectedIdentityLookup::Configured(_) | ProtectedIdentityLookup::Unconfigured => {
-                    ProtectedIdentityLookup::Unconfigured
-                }
-            },
+            }
         };
         transaction.done().await.map_err(|error| {
             NookError::IndexedDb(format!("Identity projection completion error: {error:?}"))
