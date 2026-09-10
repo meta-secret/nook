@@ -12,7 +12,51 @@ use serde::{Deserialize, Serialize, de::IgnoredAny};
 use std::str;
 
 use super::checked_event_write::CheckedEventWrite;
+use super::drive::wire::{FileIdentity, FileName, PageCompletion};
+use super::remote_event::RemoteEventRead;
 use crate::NookError;
+
+#[derive(Default, Deserialize)]
+#[serde(untagged)]
+enum EventAttestation {
+    Declared(DriveEventProperties),
+    #[default]
+    Unattested,
+}
+#[derive(Debug, PartialEq, Eq)]
+enum ListedEvent {
+    Unrelated,
+    Event(String),
+}
+struct DriveEventCandidates<'a, I: IntoIterator<Item = Vec<u8>>> {
+    event_id: &'a EventId,
+    candidates: I,
+}
+struct AcceptedDriveEvent {
+    event: VaultEvent,
+    bytes: Vec<u8>,
+}
+enum DriveCandidateSelection {
+    NoMatchingEvent,
+    Accepted(AcceptedDriveEvent),
+}
+struct DriveEventQuery<'a> {
+    url: &'a str,
+    parent: &'a DriveEventParent,
+}
+impl DriveEventQuery<'_> {
+    fn scoped_url(self) -> String {
+        match self.parent {
+            DriveEventParent::AppDataFolder => format!("{}&spaces=appDataFolder", self.url),
+            DriveEventParent::SharedFolder { .. } => self.url.to_owned(),
+        }
+    }
+}
+enum DrivePageRequest {
+    FirstPage,
+    Continuation(String),
+}
+
 use nook_core::{DriveEventParent, EventId, VaultEvent};
 
 pub(crate) struct DriveEventStore<'a> {
@@ -25,14 +69,18 @@ pub(crate) struct DriveEventStore<'a> {
 struct DriveEventListResponse {
     #[serde(default)]
     files: Vec<DriveEventListRow>,
-    next_page_token: Option<String>,
+    #[serde(default)]
+    next_page_token: PageCompletion,
 }
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DriveEventFile {
-    id: Option<String>,
-    name: Option<String>,
-    app_properties: Option<DriveEventProperties>,
+    #[serde(default)]
+    id: FileIdentity,
+    #[serde(default)]
+    name: FileName,
+    #[serde(default)]
+    app_properties: EventAttestation,
 }
 /// Drive listings can contain unrelated or malformed files. Only admitted rows
 /// participate; strict write metadata below remains a separate contract.
@@ -41,20 +89,6 @@ struct DriveEventFile {
 enum DriveEventListRow {
     File(DriveEventFile),
     Unrelated(IgnoredAny),
-}
-impl DriveEventListRow {
-    fn file(&self) -> Option<&DriveEventFile> {
-        match self {
-            Self::File(file) => Some(file),
-            Self::Unrelated(_) => None,
-        }
-    }
-    fn file_id(self) -> Option<String> {
-        match self {
-            Self::File(file) => file.id,
-            Self::Unrelated(_) => None,
-        }
-    }
 }
 #[derive(Deserialize, Serialize)]
 
@@ -85,33 +119,37 @@ impl DriveEventStore<'_> {
 /// `appProperties.event_id`. Name-only `{digest}.yaml` junk is ignored so assess
 /// / sync do not download leftover non-event files.
 impl DriveEventStore<'_> {
-    fn drive_listed_event_id(name: &str, app_event_id: Option<&str>) -> Option<String> {
-        let digest = name.strip_suffix(".yaml")?;
+    fn drive_listed_event_id(file: &DriveEventFile) -> ListedEvent {
+        let (FileName::Reported(name), EventAttestation::Declared(properties)) =
+            (&file.name, &file.app_properties)
+        else {
+            return ListedEvent::Unrelated;
+        };
+        let Some(digest) = name.strip_suffix(".yaml") else {
+            return ListedEvent::Unrelated;
+        };
         if !Self::is_sha256_base64url_digest(digest) {
-            return None;
+            return ListedEvent::Unrelated;
         }
         let expected = format!("sha256u:{digest}");
-        match app_event_id {
-            Some(id) if id == expected => Some(expected),
-            Some(_) | None => None,
+        if properties.event_id == expected {
+            ListedEvent::Event(expected)
+        } else {
+            ListedEvent::Unrelated
         }
     }
-
     fn list_event_ids_from_response(body: &DriveEventListResponse) -> Vec<String> {
-        body.files
-            .iter()
-            .filter_map(|row| {
-                let file = row.file()?;
-                Self::drive_listed_event_id(
-                    file.name.as_deref()?,
-                    file.app_properties
-                        .as_ref()
-                        .map(|properties| properties.event_id.as_str()),
-                )
-            })
-            .collect()
+        let mut ids = Vec::new();
+        for row in &body.files {
+            if let DriveEventListRow::File(file) = row {
+                if let ListedEvent::Event(id) = Self::drive_listed_event_id(file) {
+                    ids.push(id);
+                }
+            }
+        }
+        ids
     }
-    fn list_page_token(body: &DriveEventListResponse) -> Option<String> {
+    fn list_page_token(body: &DriveEventListResponse) -> PageCompletion {
         body.next_page_token.clone()
     }
 }
@@ -122,10 +160,13 @@ impl DriveEventStore<'_> {
 /// block a valid event file. Divergent valid events for one id are corruption.
 impl DriveEventStore<'_> {
     fn select_matching_drive_event_bytes(
-        event_id: &EventId,
-        candidates: impl IntoIterator<Item = Vec<u8>>,
-    ) -> Result<Option<Vec<u8>>, NookError> {
-        let mut accepted: Option<(VaultEvent, Vec<u8>)> = None;
+        request: DriveEventCandidates<'_, impl IntoIterator<Item = Vec<u8>>>,
+    ) -> Result<RemoteEventRead, NookError> {
+        let DriveEventCandidates {
+            event_id,
+            candidates,
+        } = request;
+        let mut accepted = DriveCandidateSelection::NoMatchingEvent;
         for bytes in candidates {
             let storage_bytes = bytes.clone().into();
             let Ok(event) = VaultEvent::parse_remote_event_storage_bytes(&storage_bytes) else {
@@ -137,17 +178,22 @@ impl DriveEventStore<'_> {
             if parsed_id != *event_id {
                 continue;
             }
-            if let Some((existing_event, _)) = &accepted {
-                if existing_event == &event {
+            if let DriveCandidateSelection::Accepted(existing) = &accepted {
+                if existing.event == event {
                     continue;
                 }
                 return Err(NookError::Drive(
                     "Drive duplicate event files contain different events.".to_owned(),
                 ));
             }
-            accepted = Some((event, bytes));
+            accepted = DriveCandidateSelection::Accepted(AcceptedDriveEvent { event, bytes });
         }
-        Ok(accepted.map(|(_, bytes)| bytes))
+        Ok(match accepted {
+            DriveCandidateSelection::NoMatchingEvent => RemoteEventRead::Unavailable,
+            DriveCandidateSelection::Accepted(event) => {
+                RemoteEventRead::Retrieved(event.bytes.into())
+            }
+        })
     }
 
     fn parent_query_fragment(parent: &DriveEventParent) -> String {
@@ -156,13 +202,6 @@ impl DriveEventStore<'_> {
             DriveEventParent::SharedFolder { folder_id } => {
                 format!("'{}' in parents", folder_id.replace('\'', "\\'"))
             }
-        }
-    }
-
-    fn list_spaces_query(parent: &DriveEventParent) -> Option<&'static str> {
-        match parent {
-            DriveEventParent::AppDataFolder => Some("appDataFolder"),
-            DriveEventParent::SharedFolder { .. } => None,
         }
     }
 
@@ -181,21 +220,18 @@ impl DriveEventStore<'_> {
             "name contains '.yaml' and {} and trashed=false",
             Self::parent_query_fragment(parent)
         );
-        let mut url = format!(
+        let url = format!(
             "https://www.googleapis.com/drive/v3/files?q={}&fields=nextPageToken,files(id,name,appProperties)&pageSize=1000",
             urlencoding::encode(&query)
         );
-        if let Some(spaces) = Self::list_spaces_query(parent) {
-            url.push_str("&spaces=");
-            url.push_str(spaces);
-        }
+        let url = DriveEventQuery { url: &url, parent }.scoped_url();
         let client = Client::new();
         let mut event_ids = Vec::new();
-        let mut page_token: Option<String> = None;
+        let mut page_token = DrivePageRequest::FirstPage;
 
         loop {
             let mut request_url = url.clone();
-            if let Some(page) = &page_token {
+            if let DrivePageRequest::Continuation(page) = &page_token {
                 request_url.push_str("&pageToken=");
                 request_url.push_str(&urlencoding::encode(page));
             }
@@ -215,24 +251,25 @@ impl DriveEventStore<'_> {
                 .await
                 .map_err(|e| NookError::Serialization(e.to_string()))?;
             event_ids.extend(Self::list_event_ids_from_response(&body));
-            page_token = Self::list_page_token(&body);
-            if page_token.is_none() {
-                break;
-            }
+            page_token = match Self::list_page_token(&body) {
+                PageCompletion::Complete => break,
+                PageCompletion::Continue(token) => DrivePageRequest::Continuation(token),
+            };
         }
         Ok(event_ids)
     }
 
     pub(crate) async fn fetch_drive_event(&self, event_id: &EventId) -> Result<Vec<u8>, NookError> {
-        self.fetch_drive_event_optional(event_id)
-            .await?
-            .ok_or_else(|| NookError::Drive(DRIVE_EVENT_MISSING.to_owned()))
+        match self.read_drive_event(event_id).await? {
+            RemoteEventRead::Retrieved(bytes) => Ok(bytes.into()),
+            RemoteEventRead::Unavailable => Err(NookError::Drive(DRIVE_EVENT_MISSING.to_owned())),
+        }
     }
 
-    pub(crate) async fn fetch_drive_event_optional(
+    pub(crate) async fn read_drive_event(
         &self,
         event_id: &EventId,
-    ) -> Result<Option<Vec<u8>>, NookError> {
+    ) -> Result<RemoteEventRead, NookError> {
         let token = self.token;
         let parent = self.parent;
         let token = token.trim();
@@ -243,7 +280,7 @@ impl DriveEventStore<'_> {
         )
         .await?;
         if file_ids.is_empty() {
-            return Ok(None);
+            return Ok(RemoteEventRead::Unavailable);
         }
 
         let client = Client::new();
@@ -254,7 +291,10 @@ impl DriveEventStore<'_> {
         // Same-name junk/empty files are skipped; only content-addressed matches count.
         // When every candidate is unreadable, treat the event as absent so put-if-absent
         // can publish good local bytes beside the leftover name.
-        Self::select_matching_drive_event_bytes(event_id, candidates)
+        Self::select_matching_drive_event_bytes(DriveEventCandidates {
+            event_id: event_id,
+            candidates: candidates,
+        })
     }
 
     async fn lookup_drive_event_file_ids(
@@ -267,14 +307,15 @@ impl DriveEventStore<'_> {
             file_name.replace('\'', "\\'"),
             Self::parent_query_fragment(parent)
         );
-        let mut list_url = format!(
+        let list_url = format!(
             "https://www.googleapis.com/drive/v3/files?q={}&fields=files(id)",
             urlencoding::encode(&query)
         );
-        if let Some(spaces) = Self::list_spaces_query(parent) {
-            list_url.push_str("&spaces=");
-            list_url.push_str(spaces);
+        let list_url = DriveEventQuery {
+            url: &list_url,
+            parent,
         }
+        .scoped_url();
         let client = Client::new();
         let response = client
             .get(&list_url)
@@ -291,11 +332,17 @@ impl DriveEventStore<'_> {
             .json()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        Ok(body
-            .files
-            .into_iter()
-            .filter_map(DriveEventListRow::file_id)
-            .collect())
+        let mut ids = Vec::new();
+        for row in body.files {
+            if let DriveEventListRow::File(DriveEventFile {
+                id: FileIdentity::Reported(id),
+                ..
+            }) = row
+            {
+                ids.push(id);
+            }
+        }
+        Ok(ids)
     }
 
     async fn download_drive_event_file(
@@ -376,9 +423,12 @@ impl DriveEventStore<'_> {
             .json()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        parsed.id.ok_or_else(|| {
-            NookError::Drive("Drive event create response missing file id.".to_owned())
-        })
+        match parsed.id {
+            FileIdentity::Reported(id) => Ok(id),
+            FileIdentity::Unreported => Err(NookError::Drive(
+                "Drive event create response missing file id.".to_owned(),
+            )),
+        }
     }
 
     fn event_upload_body(
@@ -450,11 +500,11 @@ mod tests {
     )]
     fn select_matching_skips_unreadable_duplicate_and_keeps_valid_event() -> anyhow::Result<()> {
         let EventFixture(event_id, _, bytes) = EventFixture::new()?;
-        let selected = DriveEventStore::select_matching_drive_event_bytes(
-            &event_id,
-            [b"not yaml".to_vec(), Vec::new(), bytes.clone()],
-        )?;
-        assert_eq!(selected, Some(bytes));
+        let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            event_id: &event_id,
+            candidates: [b"not yaml".to_vec(), Vec::new(), bytes.clone()],
+        })?;
+        assert_eq!(selected, RemoteEventRead::Retrieved(bytes.into()));
         Ok(())
     }
 
@@ -465,11 +515,11 @@ mod tests {
     )]
     fn select_matching_treats_all_unreadable_candidates_as_absent() -> anyhow::Result<()> {
         let EventFixture(event_id, _, _) = EventFixture::new()?;
-        let selected = DriveEventStore::select_matching_drive_event_bytes(
-            &event_id,
-            [b"not yaml".to_vec(), b"{bad:".to_vec()],
-        )?;
-        assert_eq!(selected, None);
+        let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            event_id: &event_id,
+            candidates: [b"not yaml".to_vec(), b"{bad:".to_vec()],
+        })?;
+        assert_eq!(selected, RemoteEventRead::Unavailable);
         Ok(())
     }
 
@@ -480,11 +530,11 @@ mod tests {
     )]
     fn select_matching_accepts_identical_duplicates() -> anyhow::Result<()> {
         let EventFixture(event_id, _, bytes) = EventFixture::new()?;
-        let selected = DriveEventStore::select_matching_drive_event_bytes(
-            &event_id,
-            [bytes.clone(), bytes.clone()],
-        )?;
-        assert_eq!(selected, Some(bytes));
+        let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            event_id: &event_id,
+            candidates: [bytes.clone(), bytes.clone()],
+        })?;
+        assert_eq!(selected, RemoteEventRead::Retrieved(bytes.into()));
         Ok(())
     }
 
@@ -497,9 +547,12 @@ mod tests {
         let EventFixture(event_id, mut event, bytes) = EventFixture::new()?;
         event.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
         let divergent = VaultEvent::serialize_event_storage_yaml(&event)?.into();
-        let err = DriveEventStore::select_matching_drive_event_bytes(&event_id, [bytes, divergent])
-            .err()
-            .ok_or_else(|| anyhow::anyhow!("expected divergent duplicate corruption"))?;
+        let err = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            event_id: &event_id,
+            candidates: [bytes, divergent],
+        })
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("expected divergent duplicate corruption"))?;
         assert!(
             matches!(err, NookError::Drive(ref message) if message.contains("different events")),
             "unexpected error: {err}"
@@ -516,9 +569,11 @@ mod tests {
         let EventFixture(event_id, _, _) = EventFixture::new()?;
         let EventFixture(other_id, _, other_bytes) = EventFixture::new()?;
         assert_ne!(event_id, other_id);
-        let selected =
-            DriveEventStore::select_matching_drive_event_bytes(&event_id, [other_bytes])?;
-        assert_eq!(selected, None);
+        let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            event_id: &event_id,
+            candidates: [other_bytes],
+        })?;
+        assert_eq!(selected, RemoteEventRead::Unavailable);
         Ok(())
     }
 
@@ -581,8 +636,12 @@ mod tests {
             "'appDataFolder' in parents"
         );
         assert_eq!(
-            DriveEventStore::list_spaces_query(&private),
-            Some("appDataFolder")
+            DriveEventQuery {
+                url: "files?q=events",
+                parent: &private
+            }
+            .scoped_url(),
+            "files?q=events&spaces=appDataFolder"
         );
         assert_eq!(
             DriveEventStore::parent_id_for_create(&private),
@@ -592,7 +651,14 @@ mod tests {
             DriveEventStore::parent_query_fragment(&shared),
             "'owner\\'s-folder' in parents"
         );
-        assert_eq!(DriveEventStore::list_spaces_query(&shared), None);
+        assert_eq!(
+            DriveEventQuery {
+                url: "files?q=events",
+                parent: &shared
+            }
+            .scoped_url(),
+            "files?q=events"
+        );
         assert_eq!(
             DriveEventStore::parent_id_for_create(&shared),
             "owner's-folder"
@@ -606,23 +672,33 @@ mod tests {
     )]
     fn listed_event_id_requires_matching_app_property() {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
-        let name = format!("{digest}.yaml");
-        let expected = format!("sha256u:{digest}");
+        let mut file = DriveEventFile {
+            id: FileIdentity::Unreported,
+            name: FileName::Reported(format!("{digest}.yaml")),
+            app_properties: EventAttestation::Declared(DriveEventProperties {
+                event_id: format!("sha256u:{digest}"),
+            }),
+        };
         assert_eq!(
-            DriveEventStore::drive_listed_event_id(&name, Some(expected.as_str())),
-            Some(expected.clone())
+            DriveEventStore::drive_listed_event_id(&file),
+            ListedEvent::Event(format!("sha256u:{digest}"))
         );
-        assert_eq!(DriveEventStore::drive_listed_event_id(&name, None), None);
+        file.app_properties = EventAttestation::Unattested;
         assert_eq!(
-            DriveEventStore::drive_listed_event_id(
-                &name,
-                Some("sha256u:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-            ),
-            None
+            DriveEventStore::drive_listed_event_id(&file),
+            ListedEvent::Unrelated
         );
+        file.app_properties = EventAttestation::Declared(DriveEventProperties {
+            event_id: "wrong".to_owned(),
+        });
         assert_eq!(
-            DriveEventStore::drive_listed_event_id("notes.yaml", Some("sha256u:notes")),
-            None
+            DriveEventStore::drive_listed_event_id(&file),
+            ListedEvent::Unrelated
+        );
+        file.name = FileName::Reported("notes.yaml".to_owned());
+        assert_eq!(
+            DriveEventStore::drive_listed_event_id(&file),
+            ListedEvent::Unrelated
         );
     }
 
@@ -661,8 +737,8 @@ mod tests {
     fn list_response_projection_preserves_page_token_only_when_string() -> anyhow::Result<()> {
         let body: DriveEventListResponse = serde_json::from_str(r#"{"nextPageToken":"page-2"}"#)?;
         assert_eq!(
-            DriveEventStore::list_page_token(&body).as_deref(),
-            Some("page-2")
+            DriveEventStore::list_page_token(&body),
+            PageCompletion::Continue("page-2".to_owned())
         );
         assert!(serde_json::from_str::<DriveEventListResponse>(r#"{"nextPageToken":2}"#).is_err());
         Ok(())
@@ -682,8 +758,14 @@ mod tests {
             &digest[..42]
         )));
         assert_eq!(
-            DriveEventStore::drive_listed_event_id(&format!("{digest}.json"), Some("ignored")),
-            None
+            DriveEventStore::drive_listed_event_id(&DriveEventFile {
+                name: FileName::Reported(format!("{digest}.json")),
+                app_properties: EventAttestation::Declared(DriveEventProperties {
+                    event_id: "ignored".to_owned()
+                }),
+                ..DriveEventFile::default()
+            }),
+            ListedEvent::Unrelated
         );
     }
     #[wasm_bindgen_test]
@@ -703,8 +785,8 @@ mod tests {
             vec![event_id.clone()]
         );
         assert_eq!(
-            DriveEventStore::list_page_token(&response).as_deref(),
-            Some("next")
+            DriveEventStore::list_page_token(&response),
+            PageCompletion::Continue("next".to_owned())
         );
         let properties = DriveEventProperties { event_id };
         assert_eq!(

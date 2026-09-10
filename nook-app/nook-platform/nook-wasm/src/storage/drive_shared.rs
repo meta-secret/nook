@@ -10,6 +10,10 @@ use crate::DriveStorageClientDriveError;
 use nook_core::i18n_keys;
 use reqwest::Client;
 
+use super::drive::wire::{
+    AppendPermission, CapabilityReport, FileIdentity, FileName,
+    FolderCapabilities as DriveFolderCapabilities, MediaType,
+};
 use crate::NookError;
 use serde::{Deserialize, Serialize};
 
@@ -30,23 +34,23 @@ struct DriveFolderPermissionRequest<'a> {
 
 #[derive(Deserialize)]
 struct DriveFileCreateResponse {
-    id: Option<String>,
-    name: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DriveFolderCapabilities {
-    can_add_children: Option<bool>,
+    #[serde(default)]
+    id: FileIdentity,
+    #[serde(default)]
+    name: FileName,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DriveFolderMetadataResponse {
-    id: Option<String>,
-    name: Option<String>,
-    mime_type: Option<String>,
-    capabilities: Option<DriveFolderCapabilities>,
+    #[serde(default)]
+    id: FileIdentity,
+    #[serde(default)]
+    name: FileName,
+    #[serde(default)]
+    mime_type: MediaType,
+    #[serde(default)]
+    capabilities: CapabilityReport,
 }
 
 pub(crate) struct DriveStorageClientShareFolderWithEmail<'a> {
@@ -86,16 +90,18 @@ impl DriveStorageClient<'_> {
             parsed,
             fallback_name,
         } = request;
-        let folder_id = parsed
-            .id
-            .filter(|id| !id.trim().is_empty())
-            .ok_or_else(|| {
-                NookError::Drive("Drive folder create response missing id.".to_owned())
-            })?;
-        let folder_name = parsed
-            .name
-            .filter(|name| !name.trim().is_empty())
-            .unwrap_or_else(|| fallback_name.to_owned());
+        let folder_id = match parsed.id {
+            FileIdentity::Reported(id) if !id.trim().is_empty() => id,
+            _ => {
+                return Err(NookError::Drive(
+                    "Drive folder create response missing id.".to_owned(),
+                ));
+            }
+        };
+        let folder_name = match parsed.name {
+            FileName::Reported(name) if !name.trim().is_empty() => name,
+            _ => fallback_name.to_owned(),
+        };
         Ok((folder_id, folder_name))
     }
 }
@@ -108,29 +114,31 @@ impl DriveStorageClient<'_> {
             parsed,
             fallback_id,
         } = request;
-        if parsed.mime_type.as_deref() != Some("application/vnd.google-apps.folder") {
+        if !matches!(&parsed.mime_type, MediaType::Declared(value) if value == "application/vnd.google-apps.folder")
+        {
             return Err(NookError::Drive(
                 i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER.to_owned(),
             ));
         }
-        if parsed
-            .capabilities
-            .and_then(|capabilities| capabilities.can_add_children)
-            != Some(true)
-        {
+        if !matches!(
+            parsed.capabilities,
+            CapabilityReport::Reported(DriveFolderCapabilities {
+                can_add_children: AppendPermission::Reported(true)
+            })
+        ) {
             return Err(NookError::Drive(
                 i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE.to_owned(),
             ));
         }
         Ok((
-            parsed
-                .id
-                .filter(|id| !id.trim().is_empty())
-                .unwrap_or(fallback_id),
-            parsed
-                .name
-                .filter(|name| !name.trim().is_empty())
-                .unwrap_or_else(|| "Nook shared vault".to_owned()),
+            match parsed.id {
+                FileIdentity::Reported(id) if !id.trim().is_empty() => id,
+                _ => fallback_id,
+            },
+            match parsed.name {
+                FileName::Reported(name) if !name.trim().is_empty() => name,
+                _ => "Nook shared vault".to_owned(),
+            },
         ))
     }
 }
@@ -298,28 +306,28 @@ mod tests {
     fn shared_drive_response_shapes_accept_optional_fields() -> anyhow::Result<()> {
         let created: DriveFileCreateResponse =
             serde_json::from_str(r#"{"id":"folder-1","name":"Shared"}"#)?;
-        assert_eq!(created.id.as_deref(), Some("folder-1"));
-        assert_eq!(created.name.as_deref(), Some("Shared"));
+        assert_eq!(created.id, FileIdentity::Reported("folder-1".to_owned()));
+        assert_eq!(created.name, FileName::Reported("Shared".to_owned()));
 
         let metadata: DriveFolderMetadataResponse = serde_json::from_str(
             r#"{"id":"folder-1","name":"Shared","mimeType":"application/vnd.google-apps.folder","capabilities":{"canAddChildren":true}}"#,
         )?;
-        assert_eq!(metadata.id.as_deref(), Some("folder-1"));
-        assert_eq!(metadata.name.as_deref(), Some("Shared"));
+        assert_eq!(metadata.id, FileIdentity::Reported("folder-1".to_owned()));
+        assert_eq!(metadata.name, FileName::Reported("Shared".to_owned()));
         assert_eq!(
-            metadata.mime_type.as_deref(),
-            Some("application/vnd.google-apps.folder")
+            metadata.mime_type,
+            MediaType::Declared("application/vnd.google-apps.folder".to_owned())
         );
-        assert_eq!(
-            metadata
-                .capabilities
-                .and_then(|capabilities| capabilities.can_add_children),
-            Some(true)
-        );
+        assert!(matches!(
+            metadata.capabilities,
+            CapabilityReport::Reported(DriveFolderCapabilities {
+                can_add_children: AppendPermission::Reported(true)
+            })
+        ));
 
         let missing: DriveFolderMetadataResponse = serde_json::from_str("{}")?;
-        assert!(missing.id.is_none());
-        assert!(missing.capabilities.is_none());
+        assert!(matches!(missing.id, FileIdentity::Unreported));
+        assert!(matches!(missing.capabilities, CapabilityReport::Unreported));
         Ok(())
     }
 
@@ -340,8 +348,8 @@ mod tests {
         let missing_id = DriveStorageClient::create_folder_projection(
             DriveStorageClientCreateFolderProjection {
                 parsed: DriveFileCreateResponse {
-                    id: Some("  ".to_owned()),
-                    name: Some("Shared".to_owned()),
+                    id: FileIdentity::Reported("  ".to_owned()),
+                    name: FileName::Reported("Shared".to_owned()),
                 },
                 fallback_name: "Fallback",
             },
@@ -352,8 +360,8 @@ mod tests {
         let projected = DriveStorageClient::create_folder_projection(
             DriveStorageClientCreateFolderProjection {
                 parsed: DriveFileCreateResponse {
-                    id: Some("folder-1".to_owned()),
-                    name: Some("  ".to_owned()),
+                    id: FileIdentity::Reported("folder-1".to_owned()),
+                    name: FileName::Reported("  ".to_owned()),
                 },
                 fallback_name: "Fallback",
             },
@@ -367,11 +375,11 @@ mod tests {
         let not_folder = DriveStorageClient::verify_folder_projection(
             DriveStorageClientVerifyFolderProjection {
                 parsed: DriveFolderMetadataResponse {
-                    id: Some("folder-1".to_owned()),
-                    name: Some("Shared".to_owned()),
-                    mime_type: Some("text/plain".to_owned()),
-                    capabilities: Some(DriveFolderCapabilities {
-                        can_add_children: Some(true),
+                    id: FileIdentity::Reported("folder-1".to_owned()),
+                    name: FileName::Reported("Shared".to_owned()),
+                    mime_type: MediaType::Declared("text/plain".to_owned()),
+                    capabilities: CapabilityReport::Reported(DriveFolderCapabilities {
+                        can_add_children: AppendPermission::Reported(true),
                     }),
                 },
                 fallback_id: "fallback".to_owned(),
@@ -385,11 +393,11 @@ mod tests {
         let not_writable = DriveStorageClient::verify_folder_projection(
             DriveStorageClientVerifyFolderProjection {
                 parsed: DriveFolderMetadataResponse {
-                    id: Some("folder-1".to_owned()),
-                    name: Some("Shared".to_owned()),
-                    mime_type: Some("application/vnd.google-apps.folder".to_owned()),
-                    capabilities: Some(DriveFolderCapabilities {
-                        can_add_children: Some(false),
+                    id: FileIdentity::Reported("folder-1".to_owned()),
+                    name: FileName::Reported("Shared".to_owned()),
+                    mime_type: MediaType::Declared("application/vnd.google-apps.folder".to_owned()),
+                    capabilities: CapabilityReport::Reported(DriveFolderCapabilities {
+                        can_add_children: AppendPermission::Reported(false),
                     }),
                 },
                 fallback_id: "fallback".to_owned(),
@@ -403,11 +411,11 @@ mod tests {
         let projected = DriveStorageClient::verify_folder_projection(
             DriveStorageClientVerifyFolderProjection {
                 parsed: DriveFolderMetadataResponse {
-                    id: None,
-                    name: None,
-                    mime_type: Some("application/vnd.google-apps.folder".to_owned()),
-                    capabilities: Some(DriveFolderCapabilities {
-                        can_add_children: Some(true),
+                    id: FileIdentity::Unreported,
+                    name: FileName::Unreported,
+                    mime_type: MediaType::Declared("application/vnd.google-apps.folder".to_owned()),
+                    capabilities: CapabilityReport::Reported(DriveFolderCapabilities {
+                        can_add_children: AppendPermission::Reported(true),
                     }),
                 },
                 fallback_id: "fallback".to_owned(),

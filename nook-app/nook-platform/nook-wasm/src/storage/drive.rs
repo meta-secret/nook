@@ -1,4 +1,5 @@
 //! Google Drive account verification for event-log sync.
+pub(crate) mod wire;
 
 use reqwest::{Client, StatusCode};
 
@@ -25,13 +26,15 @@ use serde::Deserialize;
 #[allow(dead_code)]
 struct DriveAboutUser {
     #[serde(rename = "emailAddress")]
-    email_address: Option<String>,
+    #[serde(default)]
+    email_address: DriveEmailDisclosure,
 }
 
 #[derive(Deserialize)]
 #[allow(dead_code)]
 struct DriveAboutResponse {
-    user: Option<DriveAboutUser>,
+    #[serde(default)]
+    user: DriveAccountObservation,
 }
 
 impl DriveStorageClient<'_> {
@@ -127,12 +130,14 @@ mod tests {
     fn about_response_accepts_optional_user_payloads() -> anyhow::Result<()> {
         let with_user: DriveAboutResponse =
             serde_json::from_str(r#"{"user":{"emailAddress":"person@example.test"}}"#)?;
-        assert_eq!(
-            with_user.user.and_then(|user| user.email_address),
-            Some("person@example.test".to_owned())
+        assert!(
+            matches!(with_user.user, DriveAccountObservation::Account(DriveAboutUser { email_address: DriveEmailDisclosure::Address(email) }) if email == "person@example.test")
         );
         let without_user: DriveAboutResponse = serde_json::from_str(r#"{}"#)?;
-        assert!(without_user.user.is_none());
+        assert!(matches!(
+            without_user.user,
+            DriveAccountObservation::Unreported
+        ));
         Ok(())
     }
 
@@ -157,4 +162,19 @@ mod tests {
 pub(crate) struct DriveStorageClientDriveError<'a> {
     pub(crate) status: reqwest::StatusCode,
     pub(crate) body: &'a str,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(untagged)]
+enum DriveEmailDisclosure {
+    Address(String),
+    #[default]
+    Undisclosed,
+}
+#[derive(Default, Deserialize)]
+#[serde(untagged)]
+enum DriveAccountObservation {
+    Account(DriveAboutUser),
+    #[default]
+    Unreported,
 }

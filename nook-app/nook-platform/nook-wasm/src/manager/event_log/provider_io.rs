@@ -11,6 +11,7 @@ use crate::NookDatabase;
 use crate::storage::identity_record::PendingSimpleGenesisFlow;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::identity_record::StoredIdentityRecord;
+use crate::storage::remote_event::RemoteEventRead;
 use nook_core::StoredSigningSeed;
 
 use crate::storage::identity_record;
@@ -199,10 +200,10 @@ impl NookVaultManager {
             .collect()
     }
 
-    pub(super) async fn fetch_current_provider_event_optional(
+    pub(super) async fn read_current_provider_event(
         &self,
         event_id: &EventId,
-    ) -> Result<Option<Vec<u8>>, NookError> {
+    ) -> Result<RemoteEventRead, NookError> {
         match self.storage.mode {
             StorageMode::Github => {
                 match (GitHubEventStore {
@@ -212,8 +213,10 @@ impl NookVaultManager {
                 .fetch_github_event(event_id)
                 .await
                 {
-                    Ok(bytes) => Ok(Some(bytes)),
-                    Err(error) if error.is_github_event_missing() => Ok(None),
+                    Ok(bytes) => Ok(RemoteEventRead::Retrieved(bytes.into())),
+                    Err(error) if error.is_github_event_missing() => {
+                        Ok(RemoteEventRead::Unavailable)
+                    }
                     Err(err) => Err(err),
                 }
             }
@@ -222,7 +225,7 @@ impl NookVaultManager {
                     token: &self.storage.access_token,
                     parent: &self.storage.drive_event_parent,
                 })
-                .fetch_drive_event_optional(event_id)
+                .read_drive_event(event_id)
                 .await
             }
             StorageMode::ICloud => {
@@ -233,12 +236,14 @@ impl NookVaultManager {
                 .fetch_icloud_event(event_id)
                 .await
                 {
-                    Ok(bytes) => Ok(Some(bytes)),
-                    Err(error) if error.is_icloud_event_missing() => Ok(None),
+                    Ok(bytes) => Ok(RemoteEventRead::Retrieved(bytes.into())),
+                    Err(error) if error.is_icloud_event_missing() => {
+                        Ok(RemoteEventRead::Unavailable)
+                    }
                     Err(err) => Err(err),
                 }
             }
-            StorageMode::Local => Ok(None),
+            StorageMode::Local => Ok(RemoteEventRead::Unavailable),
         }
     }
 
@@ -566,10 +571,8 @@ mod tests {
 
         assert!(manager.list_current_provider_event_ids().await?.is_empty());
         assert_eq!(
-            manager
-                .fetch_current_provider_event_optional(&event_id)
-                .await?,
-            None
+            manager.read_current_provider_event(&event_id).await?,
+            RemoteEventRead::Unavailable
         );
         manager
             .put_current_provider_event_if_absent(&event_id, b"ignored")

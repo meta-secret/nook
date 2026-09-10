@@ -23,6 +23,7 @@ pub(crate) mod icloud;
 pub(crate) mod identity_record;
 pub(crate) mod indexed_db;
 pub(crate) mod local_folder;
+pub(crate) mod remote_event;
 pub(crate) mod session;
 
 thread_local! {

@@ -71,7 +71,7 @@ pub async fn choose_local_folder_backup_directory()
 #[wasm_bindgen]
 pub async fn remove_local_folder_handle(handle_id: String) -> Result<(), wasm_bindgen::JsError> {
     LocalFolderHandles::current()
-        .remove(Some(handle_id))
+        .remove(handle_id)
         .await
         .map_err(Into::into)
 }

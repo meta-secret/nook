@@ -37,17 +37,12 @@ pub(crate) struct GitHubStorageClientFetchGithubFileAtPath<'a> {
     pub(crate) repo: &'a str,
     pub(crate) path: &'a str,
 }
-pub(crate) struct GitHubStorageClientFetchGithubVault<'a> {
-    pub(crate) repo: &'a str,
-    pub(crate) path: &'a str,
-    pub(crate) root_empty: Option<&'a mut bool>,
-}
-pub(crate) struct GitHubStorageClientWriteGithubTextFile<'a> {
-    pub(crate) repo: &'a str,
-    pub(crate) path: &'a str,
-    pub(crate) content: &'a str,
-    pub(crate) sha: Option<&'a str>,
-}
+mod discovery;
+use discovery::GitHubDirectoryListing;
+pub(crate) use discovery::{
+    GitHubFileWrite, GitHubRootDiscovery, GitHubStorageClientFetchGithubVault,
+    GitHubStorageClientWriteGithubTextFile, GitHubVaultDiscovery, GitHubVaultFile,
+};
 impl GitHubStorageClient<'_> {
     fn log_github_api_failure(request: GitHubStorageClientLogGithubApiFailure<'_>) {
         let GitHubStorageClientLogGithubApiFailure {
@@ -65,11 +60,6 @@ impl GitHubStorageClient<'_> {
             "GitHub API request failed"
         );
     }
-}
-
-/// A YAML event file fetched from GitHub.
-pub(crate) struct GitHubVaultFile {
-    pub(crate) content: String,
 }
 
 // -------------------------------------------------------------
@@ -92,8 +82,8 @@ struct GitHubDirEntry {
 struct GitHubPutBody {
     message: String,
     content: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    sha: Option<String>,
+    #[serde(skip_serializing_if = "GitHubFileWrite::is_create")]
+    sha: GitHubFileWrite,
 }
 
 #[derive(Deserialize)]
@@ -198,7 +188,7 @@ impl GitHubStorageClient<'_> {
 impl GitHubStorageClient<'_> {
     fn github_directory_listing(
         request: GitHubStorageClientGithubDirectoryListing<'_>,
-    ) -> Result<Option<bool>, NookError> {
+    ) -> Result<GitHubDirectoryListing, NookError> {
         let GitHubStorageClientGithubDirectoryListing {
             status,
             text,
@@ -206,7 +196,7 @@ impl GitHubStorageClient<'_> {
             path,
         } = request;
         if status == StatusCode::NOT_FOUND {
-            return Ok(None);
+            return Ok(GitHubDirectoryListing::DirectoryUnavailable);
         }
 
         if !status.is_success() {
@@ -225,16 +215,23 @@ impl GitHubStorageClient<'_> {
             NookError::Serialization(format!("Failed to parse GitHub directory listing: {e}"))
         })?;
 
-        Ok(Some(entries.iter().any(|item| {
-            item.name == path && item.entry_type == "file"
-        })))
+        Ok(
+            if entries
+                .iter()
+                .any(|item| item.name == path && item.entry_type == "file")
+            {
+                GitHubDirectoryListing::FileListed
+            } else {
+                GitHubDirectoryListing::FileUnlisted
+            },
+        )
     }
 }
 
 impl GitHubStorageClient<'_> {
     fn github_file_response(
         request: GitHubStorageClientGithubFileResponse<'_>,
-    ) -> Result<Option<GitHubVaultFile>, NookError> {
+    ) -> Result<GitHubVaultDiscovery, NookError> {
         let GitHubStorageClientGithubFileResponse {
             status,
             text,
@@ -242,7 +239,7 @@ impl GitHubStorageClient<'_> {
             path,
         } = request;
         if status == StatusCode::NOT_FOUND {
-            return Ok(None);
+            return Ok(GitHubVaultDiscovery::FileMissing);
         }
 
         if !status.is_success() {
@@ -269,7 +266,7 @@ impl GitHubStorageClient<'_> {
         let vault_content = String::from_utf8(decoded_bytes)
             .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {e}")))?;
 
-        Ok(Some(GitHubVaultFile {
+        Ok(GitHubVaultDiscovery::FileLoaded(GitHubVaultFile {
             content: vault_content,
         }))
     }
@@ -408,7 +405,7 @@ impl GitHubStorageClient<'_> {
     async fn fetch_github_file_at_path(
         &self,
         request: GitHubStorageClientFetchGithubFileAtPath<'_>,
-    ) -> Result<Option<GitHubVaultFile>, NookError> {
+    ) -> Result<GitHubVaultDiscovery, NookError> {
         let GitHubStorageClientFetchGithubFileAtPath { repo, path } = request;
         let pat = self.as_str();
         let client = &self.client;
@@ -435,15 +432,11 @@ impl GitHubStorageClient<'_> {
     pub(crate) async fn fetch_github_vault(
         &self,
         request: GitHubStorageClientFetchGithubVault<'_>,
-    ) -> Result<Option<GitHubVaultFile>, NookError> {
-        let GitHubStorageClientFetchGithubVault {
-            repo,
-            path,
-            root_empty,
-        } = request;
+    ) -> Result<GitHubVaultDiscovery, NookError> {
+        let GitHubStorageClientFetchGithubVault { repo, path, root } = request;
         let pat = self.as_str();
-        if root_empty.as_ref().is_some_and(|flag| **flag) {
-            return Ok(None);
+        if matches!(root, GitHubRootDiscovery::KnownUnavailable) {
+            return Ok(GitHubVaultDiscovery::DirectoryUnavailable);
         }
 
         let pat = pat.trim();
@@ -476,23 +469,20 @@ impl GitHubStorageClient<'_> {
 
         let list_status = list_response.status();
         let list_text = list_response.text().await?;
-        let Some(has_file) = GitHubStorageClient::github_directory_listing(
+        let listing = GitHubStorageClient::github_directory_listing(
             GitHubStorageClientGithubDirectoryListing {
                 status: list_status,
                 text: &list_text,
                 repo: repo,
                 path: path,
             },
-        )?
-        else {
-            if let Some(flag) = root_empty {
-                *flag = true;
+        )?;
+        match listing {
+            GitHubDirectoryListing::DirectoryUnavailable => {
+                return Ok(GitHubVaultDiscovery::DirectoryUnavailable);
             }
-            return Ok(None);
-        };
-
-        if !has_file {
-            return Ok(None);
+            GitHubDirectoryListing::FileUnlisted => return Ok(GitHubVaultDiscovery::FileMissing),
+            GitHubDirectoryListing::FileListed => {}
         }
 
         GitHubStorageClient::new(pat)
@@ -513,7 +503,7 @@ impl GitHubStorageClient<'_> {
             repo,
             path,
             content,
-            sha,
+            write,
         } = request;
         let pat = self.as_str();
         use base64::{Engine as _, engine::general_purpose};
@@ -523,7 +513,7 @@ impl GitHubStorageClient<'_> {
         let body = GitHubPutBody {
             message: "Update secrets store via Nook WASM".to_owned(),
             content: base64_content,
-            sha: sha.map(String::from),
+            sha: write,
         };
 
         let body_str = serde_json::to_string(&body)
@@ -571,7 +561,8 @@ mod tests {
     struct SerializedPutBody {
         message: String,
         content: String,
-        sha: Option<String>,
+        #[serde(default)]
+        sha: GitHubFileWrite,
     }
 
     #[wasm_bindgen_test]
@@ -634,19 +625,19 @@ mod tests {
         let without_sha = serde_json::to_value(GitHubPutBody {
             message: "Update".to_owned(),
             content: "bm9vaw==".to_owned(),
-            sha: None,
+            sha: GitHubFileWrite::Create,
         })?;
         let without_sha: SerializedPutBody = serde_json::from_value(without_sha)?;
         assert_eq!(without_sha.message, "Update");
         assert_eq!(without_sha.content, "bm9vaw==");
-        assert!(without_sha.sha.is_none());
+        assert!(matches!(without_sha.sha, GitHubFileWrite::Create));
         let with_sha = serde_json::to_value(GitHubPutBody {
             message: "Update".to_owned(),
             content: "bm9vaw==".to_owned(),
-            sha: Some("sha-1".to_owned()),
+            sha: GitHubFileWrite::Update("sha-1".to_owned()),
         })?;
         let with_sha: SerializedPutBody = serde_json::from_value(with_sha)?;
-        assert_eq!(with_sha.sha.as_deref(), Some("sha-1"));
+        assert_eq!(with_sha.sha, GitHubFileWrite::Update("sha-1".to_owned()));
         Ok(())
     }
 
@@ -734,7 +725,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn github_directory_listing_covers_missing_errors_and_file_matching() {
-        assert!(
+        assert_eq!(
             GitHubStorageClient::github_directory_listing(
                 GitHubStorageClientGithubDirectoryListing {
                     status: StatusCode::NOT_FOUND,
@@ -743,8 +734,8 @@ mod tests {
                     path: "vault.yaml"
                 }
             )
-            .unwrap()
-            .is_none()
+            .unwrap(),
+            GitHubDirectoryListing::DirectoryUnavailable
         );
 
         let unavailable = GitHubStorageClient::github_directory_listing(
@@ -789,7 +780,7 @@ mod tests {
                 }
             )
             .unwrap(),
-            Some(true)
+            GitHubDirectoryListing::FileListed
         );
         assert_eq!(
             GitHubStorageClient::github_directory_listing(
@@ -801,22 +792,22 @@ mod tests {
                 }
             )
             .unwrap(),
-            Some(false)
+            GitHubDirectoryListing::FileUnlisted
         );
     }
 
     #[wasm_bindgen_test]
     fn github_file_response_covers_missing_protocol_decode_and_utf8_errors() {
-        assert!(
+        assert!(matches!(
             GitHubStorageClient::github_file_response(GitHubStorageClientGithubFileResponse {
                 status: StatusCode::NOT_FOUND,
                 text: "",
                 repo: "owner/repo",
                 path: "vault.yaml"
             })
-            .unwrap()
-            .is_none()
-        );
+            .unwrap(),
+            GitHubVaultDiscovery::FileMissing
+        ));
 
         let unavailable =
             GitHubStorageClient::github_file_response(GitHubStorageClientGithubFileResponse {
@@ -854,7 +845,7 @@ mod tests {
             Err(NookError::Serialization(message)) if message.contains("not valid UTF-8")
         ));
 
-        let file =
+        let GitHubVaultDiscovery::FileLoaded(file) =
             GitHubStorageClient::github_file_response(GitHubStorageClientGithubFileResponse {
                 status: StatusCode::OK,
                 text: r#"{"content":" b m 9 v a w = =\n"}"#,
@@ -862,7 +853,9 @@ mod tests {
                 path: "vault.yaml",
             })
             .unwrap()
-            .expect("valid file payload must decode");
+        else {
+            panic!("valid file payload must decode")
+        };
         assert_eq!(file.content, "nook");
     }
 
@@ -941,16 +934,15 @@ mod tests {
         reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
     )]
     async fn root_empty_short_circuits_vault_lookup() -> anyhow::Result<()> {
-        let mut root_empty = true;
         let result = GitHubStorageClient::new("token")
             .fetch_github_vault(GitHubStorageClientFetchGithubVault {
                 repo: "owner/repo",
                 path: "vault.yaml",
-                root_empty: Some(&mut root_empty),
+                root: GitHubRootDiscovery::KnownUnavailable,
             })
             .await?;
-        assert!(result.is_none());
-        assert!(root_empty);
+        assert!(matches!(result, GitHubVaultDiscovery::DirectoryUnavailable));
+
         Ok(())
     }
 }

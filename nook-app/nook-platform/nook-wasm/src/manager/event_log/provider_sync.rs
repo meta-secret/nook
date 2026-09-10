@@ -10,6 +10,7 @@ use crate::EventDbRemoveOutboxEntry;
 use crate::EventDbSaveKeyEpoch;
 use crate::VaultSnapshotLookup;
 use crate::storage::event_db::{RemoteEventUnion, VaultEventPersistence};
+use crate::storage::remote_event::RemoteEventRead;
 use nook_core::LocalEventBytes;
 use nook_core::{
     CheckedRemoteEvent, EventStorageBytes, MultiDeviceError, ProjectionEpoch, RemoteEventBatch,
@@ -195,9 +196,8 @@ impl NookVaultManager {
         for event_id in event_ids {
             // Listed names can outlive readable content (Drive junk duplicates).
             // Skip absent ids so sync/assess can recover by publishing local bytes.
-            if let Some(bytes) = self
-                .fetch_current_provider_event_optional(&event_id)
-                .await?
+            if let RemoteEventRead::Retrieved(bytes) =
+                self.read_current_provider_event(&event_id).await?
             {
                 events.push((event_id, bytes.into()));
             }
