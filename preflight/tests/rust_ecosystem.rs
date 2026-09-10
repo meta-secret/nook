@@ -80,7 +80,7 @@ impl DependencyPolicyCacheContract {
             "policy must consume the owning toolchain declaration, not duplicate its pin"
         );
         let cleanup = policy
-            .find("trap 'rm -rf /tmp/nook-policy-cargo' EXIT")
+            .find("trap 'rm -rf /tmp/nook-policy-cargo /tmp/nook-policy-repository' EXIT")
             .ok_or_else(|| {
                 anyhow::anyhow!("fresh policy downloads must be cleaned on shell exit")
             })?;
@@ -620,7 +620,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
     assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
-    assert!(readiness.contains("paths.every(isMainPrIgnoredPath)"));
+    assert!(readiness.contains("new PullRequestChangedPath(path).isMainPrIgnoredPath()"));
     Ok(())
 }
 

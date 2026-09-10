@@ -278,6 +278,7 @@ mod tests {
         SimpleGenesisEventInput,
     };
     use crate::storage::{identity_record, indexed_db};
+    use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use identity_record::{OrdinarySimpleGenesisRequest, genesis_flow::PendingSimpleGenesisFlow};
     use nook_core::{
         AppKey, EventId, IdentityId, IsoTimestamp, SigningIdentity, VaultEvent,

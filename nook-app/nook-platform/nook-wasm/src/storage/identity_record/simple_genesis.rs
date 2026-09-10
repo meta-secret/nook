@@ -231,6 +231,10 @@ impl OrdinarySimpleGenesisRequest<'_> {
 #[cfg(test)]
 mod tests {
     use crate::storage::identity_record::IdentityDirectoryWrite;
+    use crate::{
+        IdbPutStringRequest, IdentityDbEnsureLocalIdentityForAppKey, NookDatabase,
+        StoredStringRecord,
+    };
 
     use nook_core::IdentityCreation;
 
@@ -243,6 +247,7 @@ mod tests {
     use crate::storage::identity_record;
     use crate::{NookError, storage::indexed_db};
     use identity_record::SimpleGenesisCompletion;
+    use nook_core::MemberLabelState;
 
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 

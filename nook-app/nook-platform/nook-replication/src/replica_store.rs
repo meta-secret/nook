@@ -181,7 +181,7 @@ where
     }
 
     #[must_use]
-    pub fn dequeue_outbox(mut self, request: ReplicaOutboxRemoval<'_, Id>) -> ReplicaDequeue<Id> {
+    pub fn dequeue_outbox(mut self, request: &ReplicaOutboxRemoval<'_, Id>) -> ReplicaDequeue<Id> {
         let ReplicaOutboxRemoval {
             provider_id,
             event_id,
@@ -417,7 +417,7 @@ mod tests {
         assert_eq!(store.pending_outbox("drive"), vec![(1, vec![1])]);
         assert_eq!(
             {
-                let outcome = store.dequeue_outbox(ReplicaOutboxRemoval {
+                let outcome = store.dequeue_outbox(&ReplicaOutboxRemoval {
                     provider_id: "drive",
                     event_id: &1,
                 });

@@ -322,12 +322,10 @@ mod wasm_tests {
             access_granted: true,
         });
         let object = status.to_object()?;
-        assert_eq!(get_string(&object, "vaultStoreId")?, "store-fixture");
-        assert_eq!(get_number(&object, "eventCount")?, 3.0);
-        assert!(get_bool(&object, "accessGranted")?);
-        let heads = get_array(&object, "heads")?;
-        assert_eq!(heads.length(), 2);
-        assert_eq!(heads.get(0).as_string().as_deref(), Some("head-a"));
+        assert_eq!(object.vault_store_id, "store-fixture");
+        assert_eq!(u32::from(object.event_count), 3);
+        assert!(object.access_granted);
+        assert_eq!(object.heads, ["head-a", "head-b"]);
         Ok(())
     }
 

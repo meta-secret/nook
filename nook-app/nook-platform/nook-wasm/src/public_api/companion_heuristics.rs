@@ -337,7 +337,7 @@ mod tests {
         .join("\n");
         assert!(BackupCodePageText::new(&text).page_has_backup_code_hint());
         assert_eq!(
-            BackupCodePageText::new(text).extract_backup_code_candidates(),
+            BackupCodePageText::new(&text).extract_backup_code_candidates(),
             vec!["A1B2-C3D4-E5F6".to_owned()]
         );
     }
@@ -417,7 +417,7 @@ mod tests {
 
         let login =
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
-        assert_eq!((&login).authentication_form_observation_priority(), 4);
+        assert_eq!(authentication_form_observation_priority(&login), 4);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&login);
         assert!(authentication_page_observations_are_valid(&observations));

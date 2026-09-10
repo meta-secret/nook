@@ -705,8 +705,8 @@ mod projection_tests {
         );
 
         NookDatabase::set_local_vault_label(SetLocalVaultLabelRequest {
-            store_id: store_id.clone(),
-            label: "  Browser vault  ".to_owned(),
+            store_id: &store_id,
+            label: "  Browser vault  ",
         })
         .await?;
         let renamed = list_local_vaults().await?;

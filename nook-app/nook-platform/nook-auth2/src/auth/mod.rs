@@ -551,6 +551,13 @@ pub mod mock_passkey {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture validation helper"
+        )
+    )]
     fn validate_rp_id(rp_id: &str) -> MockPasskeyResult<()> {
         if rp_id.trim().is_empty() {
             Err(MockPasskeyError::RpIdEmpty)
@@ -559,6 +566,13 @@ pub mod mock_passkey {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture validation helper"
+        )
+    )]
     fn validate_user_handle(user_handle: &[u8]) -> MockPasskeyResult<()> {
         if user_handle.is_empty() || user_handle.len() > 64 {
             Err(DeviceKeyProtectionError::UserHandleInvalid.into())
@@ -567,6 +581,13 @@ pub mod mock_passkey {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture validation helper"
+        )
+    )]
     fn validate_prf_input(prf_input: &[u8]) -> MockPasskeyResult<()> {
         if prf_input.len() == 32 {
             Ok(())
@@ -575,6 +596,13 @@ pub mod mock_passkey {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture cryptographic helper"
+        )
+    )]
     fn evaluate_mock_prf(secret: &[u8; MOCK_PASSKEY_SECRET_LEN], prf_input: &[u8]) -> [u8; 32] {
         let mut digest = Sha256::new();
         digest.update(MOCK_PASSKEY_PRF_CONTEXT);
@@ -583,6 +611,13 @@ pub mod mock_passkey {
         digest.finalize().into()
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture hash helper"
+        )
+    )]
     fn append_hash_field(digest: &mut Sha256, value: &[u8]) {
         digest.update(u32::try_from(value.len()).unwrap_or(u32::MAX).to_be_bytes());
         digest.update(value);

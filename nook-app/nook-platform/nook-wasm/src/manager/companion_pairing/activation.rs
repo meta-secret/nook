@@ -209,16 +209,16 @@ mod tests {
         NookCompanionPairingExtensionEndpoint, NookVaultManager, VaultNameState,
         event_log::ExternalEventLogRecord,
     };
-    use nook_core::{
-        ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, EpochMetadataState,
-        EpochPasswordState, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
-        VaultApplication, VaultKeys, VaultOperation, create_sentinel_share_records,
-    };
-    use nook_core::{
+    use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingApprovalAttempt,
         CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
         CompanionPairingProviderManifestDigest, CompanionPairingRequest, ExtensionConnectScope,
         ExtensionPairingVaultType,
+    };
+    use nook_core::{
+        ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, EpochMetadataState,
+        EpochPasswordState, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
+        VaultApplication, VaultKeys, VaultOperation,
     };
 
     pub(super) struct ActivationFixture {

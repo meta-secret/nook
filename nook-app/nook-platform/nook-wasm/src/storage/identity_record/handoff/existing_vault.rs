@@ -12,7 +12,7 @@ use crate::storage::{event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::EventLookup;
 use nook_core::MemberLabelState;
-use nook_core::StoredSigningSeed;
+pub(crate) use nook_core::StoredSigningSeed;
 use nook_core::{DeviceAuthorization, EpochCheckpoint};
 use nook_core::{
     DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
@@ -183,7 +183,10 @@ impl CheckedExistingVaultHandoff<'_> {
 }
 #[cfg(test)]
 mod tests {
-    use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
+    use nook_core::{
+        DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening, MemberLabelState,
+        StoredSigningSeed,
+    };
 
     use super::super::{
         ExistingVaultEnrollment, IdentityHandoffCommit, IdentityHandoffCommitResult,
@@ -195,6 +198,9 @@ mod tests {
     use crate::storage::identity_record;
     use crate::storage::identity_record::{AuthorizerSigningUpdate, HandoffSignerPublication};
     use crate::storage::indexed_db;
+    use crate::{
+        EventDbSaveEventBytes, EventDbSaveEventBytesToStore, IdbPutStringRequest, NookDatabase,
+    };
     use futures_util::future;
     use identity_record::{IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis};
     use nook_core::{

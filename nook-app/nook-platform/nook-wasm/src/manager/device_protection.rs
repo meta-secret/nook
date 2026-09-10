@@ -109,6 +109,7 @@ pub(in crate::manager) struct PendingExtensionIdentityHandoff {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::identity_record::VaultCreationAuthorityRef;
     use nook_core::{AppKey, SigningIdentity};
     use wasm_bindgen_test::wasm_bindgen_test;
 

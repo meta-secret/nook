@@ -1,12 +1,13 @@
 //! Local identity-directory persistence, independent of vault `store_id`.
-use crate::storage::indexed_db::StoredStringRecord;
-use nook_core::AppKeyIdentityMembership;
-use nook_core::LocalIdentityProtection;
-use nook_core::MemberLabelState;
+pub(crate) use crate::storage::indexed_db::StoredStringRecord;
+pub(crate) use nook_core::AppKeyIdentityMembership;
+pub(crate) use nook_core::LocalIdentityProtection;
+pub(crate) use nook_core::MemberLabelState;
 use nook_core::MigratedIdentityDirectory;
 
+use crate::NookError;
 use crate::storage::indexed_db;
-use crate::{IdbPutStringRequest, NookDatabase, NookError};
+pub(crate) use crate::{IdbPutStringRequest, NookDatabase};
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, MultiDeviceError};
 use nook_core::{
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, IdentityCreation,
@@ -148,7 +149,7 @@ pub(super) const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
 const RETIRED_APP_IDS_KEY: &str = "retired_app_ids_v1";
 
 impl NookDatabase {
-    fn map_domain_error(error: MultiDeviceError) -> NookError {
+    pub(crate) fn map_domain_error(error: MultiDeviceError) -> NookError {
         let message = error.to_string();
         drop(error);
         NookError::Database(message)
@@ -733,7 +734,7 @@ mod tests {
                 store_id: store_id.clone(),
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
-        legacy = opened_identity.identity;
+        legacy = opened_identity.directory;
         let expected = opened_identity.keys;
         let resolved_identity = legacy
             .create_identity(IdentityCreation {

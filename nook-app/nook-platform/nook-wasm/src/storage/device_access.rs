@@ -234,13 +234,17 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use crate::storage::identity_record;
     use crate::storage::identity_record::PriorAppAuthorization;
+    use crate::{
+        IdbPutStringRequest, NookDatabase, SaveWrappedDeviceIdentityRequest, StoredStringRecord,
+    };
     use futures_util::future;
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use nook_core::AppKey;
     use nook_core::{
-        DeviceId, DeviceIdentity, DeviceKeyProtectionSetup, IsoTimestamp,
-        PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyObservedBrowser,
-        PasskeyObservedPlatform, PasskeyTransport, StoreId,
+        AuthenticatorGuidEvidence, DeviceId, DeviceIdentity, DeviceKeyProtectionSetup,
+        DiscardedClientEnvironment, IsoTimestamp, PasskeyAuthenticatorAttachment,
+        PasskeyBackupState, PasskeyObservedBrowser, PasskeyObservedPlatform, PasskeyTransport,
+        StoreId,
     };
     use rexie::Rexie;
 

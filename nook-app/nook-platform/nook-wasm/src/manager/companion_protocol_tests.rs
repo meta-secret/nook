@@ -18,7 +18,8 @@ use wasm_bindgen_test::wasm_bindgen_test;
 fn epoch_milliseconds(
     serialized: &str,
 ) -> Result<CompanionEpochMilliseconds, CompanionOperationError> {
-    Ok(serde_json::from_str(serialized)?)
+    serde_json::from_str(serialized)
+        .map_err(|error| NookError::Serialization(error.to_string()).into())
 }
 
 struct DirectHandoffScenario {

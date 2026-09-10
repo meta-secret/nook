@@ -279,6 +279,7 @@ mod browser_tests {
     use crate::storage::identity_record::IDENTITY_DIRECTORY_KEY;
     use crate::storage::identity_record::reconciliation::IdentityReconciliationStore;
     use crate::storage::indexed_db;
+    use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use nook_core::{AppKey, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 

@@ -299,6 +299,7 @@ mod tests {
     use super::{RecoveryDeletion, RecoveryMarkerPolicy};
     use crate::storage::identity_record::SimpleGenesisProgress;
     use crate::storage::{device_access, event_db, identity_record, indexed_db};
+    use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use identity_record::simple_genesis;
     use wasm_bindgen_test::wasm_bindgen_test;
 

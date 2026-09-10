@@ -198,7 +198,7 @@ mod wasm_idb_tests {
     use std::slice;
 
     use super::*;
-    use nook_core::{
+    use nook_companion_core::{
         EXTENSION_GRANT_KEY_PREFIX as GRANT_KEY_PREFIX, ExtensionConnectScope,
         ExtensionPairingVaultType, StoredExtensionPairingGrant,
     };

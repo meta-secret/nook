@@ -65,7 +65,7 @@ impl NookVaultManager {
 
 #[cfg(test)]
 mod tests {
-    use super::{NookVaultManager, passkey_error_code};
+    use super::NookVaultManager;
     use crate::manager::VaultCryptoState;
     use nook_core::{
         PasskeyAuthenticatorError, SecretType, StoredRecordPayload, VaultArchitecture,

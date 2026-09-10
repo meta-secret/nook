@@ -12,10 +12,10 @@ use crate::StoredStringRecord;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
-use nook_core::AppKeyIdentityMembership;
+pub(crate) use nook_core::AppKeyIdentityMembership;
 use nook_core::IsoTimestamp;
 use nook_core::MemberLabelState;
-use nook_core::StoredSigningSeed;
+pub(crate) use nook_core::StoredSigningSeed;
 use nook_core::{
     DirectoryCreationEnrollment, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
     IdentityCreation, IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
@@ -223,6 +223,7 @@ mod tests {
     use super::{AuthorizerMemberSigning, AuthorizerSigningUpdate, VaultCreationAuthorityRef};
     use crate::storage::identity_record::IdentityDirectoryWrite;
     use crate::storage::identity_record::SimpleGenesisProgress;
+    use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
 
     use nook_core::{
         DirectoryCreationEnrollment, DirectoryOwnedVaultOpening, IdentityCreation,
@@ -232,7 +233,10 @@ mod tests {
     use super::super::{SimpleGenesisCompletion, SimpleGenesisEventInput, recovery};
     use crate::storage::identity_record;
     use crate::storage::{event_db, indexed_db};
-    use nook_core::{AppKey, IdentityDirectory, IsoTimestamp, SigningIdentity};
+    use nook_core::{
+        AppKey, AppKeyIdentityMembership, IdentityDirectory, IsoTimestamp, MemberLabelState,
+        SigningIdentity, StoredSigningSeed,
+    };
 
     use super::{
         NookError, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,

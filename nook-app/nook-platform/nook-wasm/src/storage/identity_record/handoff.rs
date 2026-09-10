@@ -12,7 +12,7 @@ use crate::storage::indexed_db::StoredStringRecord;
 use crate::{IdbPutStringRequest, NookDatabase, manager};
 use existing_vault::ExistingVaultHandoff;
 use nook_core::MemberLabelState;
-use nook_core::StoredSigningSeed;
+pub(crate) use nook_core::StoredSigningSeed;
 use nook_core::{
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
     IdentityCreation, IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
@@ -196,16 +196,19 @@ impl IdentityHandoffCommit<'_> {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
-    use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
+    use nook_core::{
+        DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening, MemberLabelState,
+        StoredSigningSeed,
+    };
 
     use super::{
         AuthorizerSigningUpdate, HandoffSignerPublication, IdentityHandoffCommit,
         IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
         PendingExtensionIdentityEnrollment,
     };
-    use crate::NookError;
     use crate::storage::identity_record::VaultCreationAuthority;
     use crate::storage::{event_db, identity_record, indexed_db};
+    use crate::{IdbPutStringRequest, NookDatabase, NookError, StoredStringRecord};
     use nook_core::{AppKey, DeviceSigningPublicKey, IdentityDirectory, SigningIdentity, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 

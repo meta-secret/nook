@@ -261,6 +261,13 @@ impl SentinelShareIndex {
 }
 impl TryFrom<usize> for SentinelParticipantCount {
     type Error = TryFromIntError;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: converts a collection length into a participant count"
+        )
+    )]
     fn try_from(count: usize) -> Result<Self, Self::Error> {
         u8::try_from(count).map(Self)
     }

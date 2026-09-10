@@ -18,7 +18,7 @@ impl LocalEventStore {
     pub fn dequeue_outbox(mut self, request: LocalOutboxRemoval<'_>) -> LocalOutboxRemoved {
         let removed = self
             .replica
-            .dequeue_outbox(nook_replication::ReplicaOutboxRemoval {
+            .dequeue_outbox(&nook_replication::ReplicaOutboxRemoval {
                 provider_id: request.provider_id,
                 event_id: request.event_id,
             });

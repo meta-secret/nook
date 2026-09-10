@@ -258,6 +258,7 @@ impl EpochCommittedReconciliation<'_> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_tests {
     use super::super::super::indexed_db;
+    use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use nook_core::{
         AppKey, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultEventId, StoreId,
     };

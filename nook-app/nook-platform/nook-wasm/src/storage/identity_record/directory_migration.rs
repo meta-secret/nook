@@ -274,11 +274,12 @@ impl NookDatabase {
 }
 #[cfg(test)]
 mod tests {
+    use crate::storage::event_db;
     use crate::storage::identity_record::SimpleGenesisProgress;
     use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
     use super::*;
-    use nook_core::AppKey;
+    use nook_core::{AppKey, IsoTimestamp};
     use wasm_bindgen_test::wasm_bindgen_test;
     #[wasm_bindgen_test]
     async fn migration_preserves_identity_referenced_by_pending_genesis() -> Result<(), NookError> {

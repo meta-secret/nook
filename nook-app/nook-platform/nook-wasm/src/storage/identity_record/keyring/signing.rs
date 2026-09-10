@@ -357,6 +357,7 @@ mod tests {
     use crate::storage;
     use crate::storage::identity_record::PriorAppAuthorization;
     use crate::storage::{event_db, indexed_db};
+    use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use nook_core::{
         AppKey, DeviceSigningPublicKey, IdentityRecord, LocalIdentityKeyringEntry, SigningIdentity,
     };
@@ -367,7 +368,7 @@ mod tests {
         SigningSeedOrigin,
     };
     use crate::NookError;
-    use nook_core::DeviceIdentityProtection;
+    use nook_core::{DeviceIdentityProtection, LocalIdentityProtection, MemberLabelState};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
