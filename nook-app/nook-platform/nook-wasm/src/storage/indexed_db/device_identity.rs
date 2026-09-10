@@ -220,7 +220,6 @@ impl NookDatabase {
     }
 }
 
-#[cfg(test)]
 impl NookDatabase {
     pub(crate) async fn put_wrapped_device_identity(
         request: PutWrappedDeviceIdentityRequest<'_>,

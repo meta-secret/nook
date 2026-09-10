@@ -160,7 +160,7 @@ impl DeviceAccessProfileKey {
         NookDatabase::idb_migrate_string_if(IndexedDbMigration {
             source_key: DEVICE_ACCESS_PROFILE_KEY,
             target_key: &self.value,
-            can_migrate: move |legacy| match nook_core::DeviceAccessProfile::decode(legacy) {
+            can_migrate: move |legacy: &str| match nook_core::DeviceAccessProfile::decode(legacy) {
                 DeviceAccessProfileDecodeResult::Current(profile) => {
                     migration::LegacyProfileMembership {
                         profile: &profile,
@@ -192,7 +192,7 @@ impl DeviceAccessProfileKey {
             key: &self.value,
             fallback_key: fallback_key,
             guard: mutation.guard,
-            can_adopt_fallback: move |raw| match &legacy_owner {
+            can_adopt_fallback: move |raw: &str| match &legacy_owner {
                 LegacyProfileOwner::SoleProtectedIdentity(owner) => {
                     LegacyProfileAdmission { owner }.accepts(raw)
                 }
@@ -357,7 +357,9 @@ mod browser_tests {
             key: TARGET_KEY,
             fallback_key: StringRecordFallback::AdoptFrom(SOURCE_KEY),
             guard: StringUpdateGuard::Unconditional,
-            can_adopt_fallback: move |raw| LegacyProfileAdmission { owner: &owner }.accepts(raw),
+            can_adopt_fallback: move |raw: &str| {
+                LegacyProfileAdmission { owner: &owner }.accepts(raw)
+            },
             update: |current| {
                 assert!(matches!(current, StoredStringRecord::MissingKey));
                 serde_json::to_string(&DeviceAccessProfile::default()).map_err(|error| {

@@ -210,7 +210,7 @@ impl VaultAppendGraph<'_> {
                 ));
             }
         }
-        match match graph.insert(nook_core::EventGraphInsert {
+        match match graph.clone().insert(nook_core::EventGraphInsert {
             event: event.clone(),
             expected_store_id: store_id,
         }) {
@@ -272,7 +272,7 @@ impl VaultAppendGraph<'_> {
             ));
         }
         for event in [trigger, checkpoint] {
-            match match graph.insert(nook_core::EventGraphInsert {
+            match match graph.clone().insert(nook_core::EventGraphInsert {
                 event: event.clone(),
                 expected_store_id: store_id,
             }) {
@@ -390,7 +390,7 @@ impl PreparedRemoteUnion<'_> {
                     ));
                 }
             };
-            let value = String::from_utf8(bytes.to_vec())
+            let value = String::from_utf8(Vec::<u8>::from(bytes))
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             EventString {
                 store: events,

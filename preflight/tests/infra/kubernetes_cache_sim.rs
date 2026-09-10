@@ -156,8 +156,8 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         "cache-isolated-b-publish",
         "cache-isolated-a-restore",
         "cache-isolated-b-restore",
-        "restartBuildkitPod",
-        "restartZot",
+        "BuildkitPodRestart",
+        "RegistryRestart",
         "kubernetes cache runtime proof passed",
     ] {
         assert!(
