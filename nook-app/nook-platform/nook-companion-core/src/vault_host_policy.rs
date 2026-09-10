@@ -8,6 +8,7 @@ pub struct VaultHostPolicy<'a> {
     base_url: &'a str,
 }
 impl<'a> VaultHostPolicy<'a> {
+    #[must_use]
     pub fn new(base_url: &'a str) -> Self {
         Self { base_url }
     }
@@ -20,6 +21,7 @@ pub struct VaultHostObservation<'a> {
     value: &'a str,
 }
 impl<'a> VaultHostObservation<'a> {
+    #[must_use]
     pub fn new(value: &'a str) -> Self {
         Self { value }
     }
@@ -106,6 +108,7 @@ pub enum SentinelVaultMatch {
     UnsupportedHost,
     MatchingBaseUrl(String),
 }
+#[derive(Clone, Copy)]
 pub enum VaultAppBaseSelection<'a> {
     KnownNookHosts,
     Configured(&'a str),

@@ -6,29 +6,29 @@ use nook_core::{
 
 #[wasm_bindgen]
 #[must_use]
-pub fn default_github_repo() -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_github_repo() -> String {
     nook_core::DEFAULT_GITHUB_REPO_NAME.to_owned()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn default_drive_backup_name() -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_drive_backup_name() -> String {
     nook_core::DEFAULT_DRIVE_BACKUP_NAME.to_owned()
 }
 
 #[wasm_bindgen]
-pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
     nook_core::DriveBackupName::format_storage_ref_raw(file_id, file_name)
 }
 
 #[wasm_bindgen]
-pub fn format_new_drive_storage_ref(file_name: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn format_new_drive_storage_ref(file_name: &str) -> String {
     nook_core::DriveBackupName::format_storage_ref_raw("", file_name)
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn wasm_storage_mode_for_provider(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn wasm_storage_mode_for_provider(
     provider_type: nook_core::StorageProviderType,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -40,7 +40,7 @@ pub fn wasm_storage_mode_for_provider(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn provider_default_label(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_default_label(
     provider_type: nook_core::StorageProviderType,
     detail: &str,
     oauth_preset: nook_core::OauthFilePreset,
@@ -64,7 +64,7 @@ pub fn provider_default_label(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn provider_default_label_without_detail(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_default_label_without_detail(
     provider_type: nook_core::StorageProviderType,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -85,7 +85,7 @@ pub fn provider_default_label_without_detail(
 }
 
 #[wasm_bindgen]
-pub fn staged_local_provider_label(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_local_provider_label(
     provider_type: nook_core::StorageProviderType,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok(match provider_type {
@@ -105,12 +105,12 @@ pub fn staged_local_provider_label(
 }
 
 #[wasm_bindgen]
-pub fn staged_github_provider_label(github_repo: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_github_provider_label(github_repo: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(ProviderLabel::Github(&StoredGithubRepository::Repository(github_repo.to_owned())).render())
 }
 
 #[wasm_bindgen]
-pub fn staged_configured_oauth_provider_label(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_configured_oauth_provider_label(
     oauth_file_name: &str,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -122,7 +122,7 @@ pub fn staged_configured_oauth_provider_label(
 }
 
 #[wasm_bindgen]
-pub fn staged_unconfigured_oauth_provider_label() -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_unconfigured_oauth_provider_label() -> Result<String, wasm_bindgen::JsError> {
     Ok(ProviderLabel::OAuth(OAuthProviderLabel {
         preset: OauthFilePreset::GoogleDrive,
         file_name: &StoredOAuthRemoteFileName::Unresolved,

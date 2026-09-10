@@ -1,5 +1,9 @@
 //! Semantic workflow evidence admitted from the fixed browser observation contract.
-use super::*;
+use super::{
+    AuthenticationAuthenticatorSetupObservation, AuthenticationBackupCodesObservation,
+    AuthenticationFieldCount, AuthenticationManualCheckpoint, AuthenticationPageObservation,
+    AuthenticationPasskeyAccountCount, AuthenticationPasskeyControlObservation,
+};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct AuthenticationWorkflowEvidence {

@@ -7,7 +7,7 @@ use super::wasm_bindgen;
 /// normalized by serde defaults before returning to TypeScript.
 #[wasm_bindgen]
 #[must_use]
-pub fn decode_storage_providers(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_storage_providers(
     snapshot: nook_core::AuthProvidersSnapshotData,
 ) -> nook_core::AuthProvidersSnapshotData {
     snapshot

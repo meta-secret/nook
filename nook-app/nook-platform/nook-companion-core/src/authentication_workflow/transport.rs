@@ -31,6 +31,7 @@ pub enum AuthenticationWorkflowTransportAdmission {
     },
 }
 impl AuthenticationWorkflowSnapshotTransport {
+    #[must_use]
     pub fn admit(self) -> AuthenticationWorkflowTransportAdmission {
         // Transport batches precede candidate classification (whose independent cap is 20).
         if self.payload.observations.is_empty()
@@ -60,6 +61,7 @@ pub struct AuthenticationRecoveryCopyEvidence {
     pub hint: AuthenticationBackupCodesObservation,
 }
 impl AuthenticationRecoveryCopyRequest {
+    #[must_use]
     pub fn project(self) -> AuthenticationRecoveryCopyEvidence {
         let candidate_presence = if self
             .texts

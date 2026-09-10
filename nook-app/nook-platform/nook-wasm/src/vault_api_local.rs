@@ -20,19 +20,19 @@ impl ConfiguredVaultApplication {
 
 /// Configure the immutable application capability for this browser realm.
 #[wasm_bindgen]
-pub fn configure_vault_application(application: nook_core::VaultApplication) {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn configure_vault_application(application: nook_core::VaultApplication) {
     ConfiguredVaultApplication::configure_vault_application(application);
 }
 
 /// Return the immutable capability configured by the current web app.
 #[wasm_bindgen]
-pub fn configured_vault_application() -> nook_core::VaultApplication {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn configured_vault_application() -> nook_core::VaultApplication {
     ConfiguredVaultApplication::configured_vault_application()
 }
 
 /// Return the stable semantic application name used by browser debug hooks.
 #[wasm_bindgen]
-pub fn configured_vault_application_name() -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn configured_vault_application_name() -> String {
     ConfiguredVaultApplication::configured_vault_application()
         .as_str()
         .to_owned()
@@ -40,25 +40,25 @@ pub fn configured_vault_application_name() -> String {
 
 /// Return whether the configured application is the Simple Vault artifact.
 #[wasm_bindgen]
-pub fn configured_vault_application_is_simple() -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn configured_vault_application_is_simple() -> bool {
     ConfiguredVaultApplication::configured_vault_application().is_simple()
 }
 
 /// Return whether the configured application is the Sentinel Vault artifact.
 #[wasm_bindgen]
-pub fn configured_vault_application_is_sentinel() -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn configured_vault_application_is_sentinel() -> bool {
     ConfiguredVaultApplication::configured_vault_application().is_sentinel()
 }
 
 /// Return whether the configured application may offer extension integration.
 #[wasm_bindgen]
-pub fn configured_vault_application_supports_extension() -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn configured_vault_application_supports_extension() -> bool {
     ConfiguredVaultApplication::configured_vault_application().supports_extension()
 }
 
 /// Return the configured deployment-channel Simple Vault root URL.
 #[wasm_bindgen]
-pub fn simple_vault_app_url(configured_url: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn simple_vault_app_url(configured_url: &str) -> String {
     const DEFAULT_SIMPLE_VAULT_APP_URL: &str = "https://simple.nokey.sh";
 
     let configured_url = configured_url.trim();
@@ -90,7 +90,7 @@ mod application_url_tests {
 
 /// Return the Rust-owned empty-provider policy for a first-connect intent.
 #[wasm_bindgen]
-pub fn vault_connect_intent_permits_empty_remote_genesis(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_connect_intent_permits_empty_remote_genesis(
     intent_name: &str,
 ) -> Result<bool, JsError> {
     let intent = VaultConnectIntent::parse(intent_name).map_err(|error| JsError::new(&error))?;
@@ -100,14 +100,14 @@ pub fn vault_connect_intent_permits_empty_remote_genesis(
 /// Fail before persistence/session creation when encrypted vault content does
 /// not belong to this artifact's compile-time application capability.
 #[wasm_bindgen]
-pub fn validate_vault_content_for_application(content: &str) -> Result<(), JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn validate_vault_content_for_application(content: &str) -> Result<(), JsError> {
     ConfiguredVaultApplication::validate_configured_application_for_content(content)
         .map_err(Into::into)
 }
 
 /// Validate extension pairing metadata through the Rust capability matrix.
 #[wasm_bindgen]
-pub fn validate_extension_pairing_vault_type(vault_type: &str) -> Result<(), JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn validate_extension_pairing_vault_type(vault_type: &str) -> Result<(), JsError> {
     let vault_type = VaultType::parse(vault_type)?;
     let application = ConfiguredVaultApplication::configured_vault_application();
     if application == VaultApplication::Extension {
@@ -133,7 +133,7 @@ impl ConfiguredVaultApplication {
 }
 
 #[wasm_bindgen]
-pub async fn has_local_vault() -> Result<bool, JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn has_local_vault() -> Result<bool, JsError> {
     for entry in NookDatabase::list_vault_registry_entries().await? {
         if ConfiguredVaultApplication::local_vault_matches_compiled_application(&entry.store_id)
             .await?
@@ -145,7 +145,7 @@ pub async fn has_local_vault() -> Result<bool, JsError> {
 }
 
 #[wasm_bindgen]
-pub async fn has_active_local_vault() -> Result<bool, JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn has_active_local_vault() -> Result<bool, JsError> {
     let ActiveVaultScope::StoreId(store_id) = NookDatabase::get_active_vault_id().await? else {
         return Ok(false);
     };
@@ -210,7 +210,7 @@ impl NookLocalVaultEntry {
 }
 
 #[wasm_bindgen]
-pub async fn list_local_vaults() -> Result<Vec<NookLocalVaultEntry>, JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn list_local_vaults() -> Result<Vec<NookLocalVaultEntry>, JsError> {
     let mut matching = Vec::new();
     for entry in NookDatabase::list_vault_registry_entries().await? {
         if ConfiguredVaultApplication::local_vault_matches_compiled_application(&entry.store_id)
@@ -257,7 +257,7 @@ impl NookActiveVaultSelection {
 }
 
 #[wasm_bindgen]
-pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, JsError> {
     let ActiveVaultScope::StoreId(store_id) = NookDatabase::get_active_vault_id().await? else {
         return Ok(NookActiveVaultSelection(ActiveVaultScope::Unselected));
     };
@@ -271,7 +271,7 @@ pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, Js
 }
 
 #[wasm_bindgen]
-pub async fn set_active_vault(store_id: String) -> Result<(), JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn set_active_vault(store_id: String) -> Result<(), JsError> {
     let content = match NookDatabase::load_vault_blob(&store_id).await? {
         VaultSnapshotLookup::Stored(content) => content,
         VaultSnapshotLookup::NotStored => {
@@ -285,7 +285,7 @@ pub async fn set_active_vault(store_id: String) -> Result<(), JsError> {
 }
 
 #[wasm_bindgen]
-pub async fn set_local_vault_label(store_id: String, label: String) -> Result<(), JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn set_local_vault_label(store_id: String, label: String) -> Result<(), JsError> {
     NookDatabase::set_local_vault_label(SetLocalVaultLabelRequest {
         store_id: &store_id,
         label: &label,
@@ -295,14 +295,14 @@ pub async fn set_local_vault_label(store_id: String, label: String) -> Result<()
 }
 
 #[wasm_bindgen]
-pub async fn prepare_new_local_vault_slot() -> Result<(), JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn prepare_new_local_vault_slot() -> Result<(), JsError> {
     NookDatabase::prepare_new_local_vault_slot()
         .await
         .map_err(Into::into)
 }
 
 #[wasm_bindgen]
-pub async fn import_local_vault_blob(content: String) -> Result<String, JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn import_local_vault_blob(content: String) -> Result<String, JsError> {
     ConfiguredVaultApplication::validate_configured_application_for_content(&content)?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: &content,
@@ -313,7 +313,7 @@ pub async fn import_local_vault_blob(content: String) -> Result<String, JsError>
 }
 
 #[wasm_bindgen]
-pub async fn import_named_local_vault_blob(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn import_named_local_vault_blob(
     content: String,
     label: String,
 ) -> Result<String, JsError> {

@@ -36,7 +36,7 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn translate_key(locale: &str, key: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn translate_key(locale: &str, key: &str) -> String {
     TranslationCatalog::translate(TranslateRequest {
         locale: locale,
         key: key,
@@ -45,13 +45,13 @@ pub fn translate_key(locale: &str, key: &str) -> String {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn classify_vault_recovery_error(message: &str) -> nook_core::VaultRecoveryErrorKind {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_vault_recovery_error(message: &str) -> nook_core::VaultRecoveryErrorKind {
     VaultRecoveryErrorKind::classify_vault_recovery_error(message)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn device_protection_status_name(status: nook_core::DeviceProtectionStatus) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn device_protection_status_name(status: nook_core::DeviceProtectionStatus) -> String {
     status.as_str().to_owned()
 }
 
@@ -64,7 +64,7 @@ pub fn device_protection_status_name(status: nook_core::DeviceProtectionStatus) 
         reason = "FFI boundary: projects the `assess_vault_security` count through a JavaScript Number scalar"
     )
 )]
-pub fn assess_vault_security(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn assess_vault_security(
     sync_provider_count: u32,
     enrolled_device_count: u32,
 ) -> NookVaultSecurityRecommendations {
@@ -78,7 +78,7 @@ pub fn assess_vault_security(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn authentication_workflow_snapshot(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_workflow_snapshot(
     observations: &NookAuthenticationPageObservations,
 ) -> NookAuthenticationWorkflowMatch {
     NookAuthenticationWorkflowMatch::from_core(
@@ -97,7 +97,7 @@ pub fn authentication_workflow_snapshot(
         reason = "FFI boundary: projects the `classify_authentication_outcome` timestamp or duration through a JavaScript Number scalar"
     )
 )]
-pub fn classify_authentication_outcome(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_authentication_outcome(
     observation: &NookAuthenticationOutcomeObservation,
     timeout_ms: u32,
 ) -> NookAuthenticationOutcomeVerdict {
@@ -108,7 +108,7 @@ pub fn classify_authentication_outcome(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn classify_authentication_outcome_with_default_timeout(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_authentication_outcome_with_default_timeout(
     observation: &NookAuthenticationOutcomeObservation,
 ) -> NookAuthenticationOutcomeVerdict {
     NookAuthenticationOutcomeVerdict::from_core(
@@ -119,25 +119,25 @@ pub fn classify_authentication_outcome_with_default_timeout(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn parse_app_locale(value: &str) -> NookAppLocaleParse {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_app_locale(value: &str) -> NookAppLocaleParse {
     AppLocale::parse_app_locale(value).into()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn resolve_app_locale_from_tag(tag: &str) -> NookAppLocaleParse {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_app_locale_from_tag(tag: &str) -> NookAppLocaleParse {
     AppLocale::resolve_app_locale_from_tag(tag).into()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> crate::types::NookAppLocale {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> crate::types::NookAppLocale {
     nook_core::SupportedAppLocale::resolve(tags.iter().map(String::as_str))
 }
 
 #[wasm_bindgen]
-pub fn supported_app_locale_code(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn supported_app_locale_code(
     locale: NookAppLocaleParse,
 ) -> Result<crate::types::NookAppLocale, wasm_bindgen::JsError> {
     match locale {
@@ -151,12 +151,12 @@ pub fn supported_app_locale_code(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn get_translation_catalog(locale: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn get_translation_catalog(locale: &str) -> String {
     AppLocale::get_translation_catalog(locale).to_owned()
 }
 
 #[wasm_bindgen]
-pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
     match TranslationCatalog::lookup_translation(LookupTranslationRequest {
         catalog_json: catalog_json,
         key: key,
@@ -170,7 +170,7 @@ pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_
 
 #[wasm_bindgen]
 #[must_use]
-pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> String {
     TranslationCatalog::translate_from_catalog(TranslateFromCatalogRequest {
         catalog_json: catalog_json,
         locale: locale,
@@ -180,7 +180,7 @@ pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> St
 
 #[wasm_bindgen]
 #[must_use]
-pub fn translate_with_replacements(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn translate_with_replacements(
     catalog_json: &str,
     locale: &str,
     key: &str,
@@ -201,7 +201,7 @@ pub fn translate_with_replacements(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) -> String {
     TranslationCatalog::resolve_error_message(ResolveErrorMessageRequest {
         catalog_json: catalog_json,
         locale: locale,
@@ -210,7 +210,7 @@ pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) ->
 }
 
 #[wasm_bindgen]
-pub fn merge_translation_catalogs(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn merge_translation_catalogs(
     base_json: &str,
     overlay_json: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -223,7 +223,7 @@ pub fn merge_translation_catalogs(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> String {
     TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
         locale: locale,
         wasm_catalog_json: TranslationCatalogSource::Supplied(wasm_catalog_json),
@@ -232,7 +232,7 @@ pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> Str
 
 #[wasm_bindgen]
 #[must_use]
-pub fn default_translation_catalog(locale: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_translation_catalog(locale: &str) -> String {
     TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
         locale: locale,
         wasm_catalog_json: TranslationCatalogSource::Bundled,

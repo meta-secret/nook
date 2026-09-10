@@ -14,6 +14,7 @@ impl PasskeyByteMaterial {
             reason = "FFI boundary: WebAuthn structured-clone byte material uses octets"
         )
     )]
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }

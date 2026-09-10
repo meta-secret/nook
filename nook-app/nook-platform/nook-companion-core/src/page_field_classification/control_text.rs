@@ -6,11 +6,13 @@ impl<'a> AuthenticationControlText<'a> {
     pub(super) fn as_str(&self) -> &'a str {
         self.value
     }
+    #[must_use]
     pub fn new(value: &'a str) -> Self {
         Self { value }
     }
 }
 impl AuthenticationControlText<'_> {
+    #[must_use]
     pub fn expand_identity_text(&self) -> String {
         let value = self.value;
         let mut with_breaks = String::with_capacity(value.len() * 2);

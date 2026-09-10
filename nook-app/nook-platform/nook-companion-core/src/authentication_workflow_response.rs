@@ -495,6 +495,7 @@ impl TryFrom<WebsiteLoginMatchAvailabilityWire> for WebsiteLoginMatchAvailabilit
     }
 }
 impl WebsiteLoginMatchAvailability {
+    #[must_use]
     pub fn supports_alternative_saved_login(self, action: AuthenticationWorkflowAction) -> bool {
         matches!(
             action,
@@ -514,6 +515,7 @@ pub struct SavedLoginActionPresentationRequest {
     pub login_matches: WebsiteLoginMatchAvailabilityWire,
 }
 impl SavedLoginActionPresentationRequest {
+    #[must_use]
     pub fn is_available(self) -> bool {
         WebsiteLoginMatchAvailability::try_from(self.login_matches)
             .is_ok_and(|availability| availability.supports_alternative_saved_login(self.action))

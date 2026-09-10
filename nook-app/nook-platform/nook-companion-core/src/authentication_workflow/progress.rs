@@ -1,5 +1,8 @@
 //! Workflow progress owns its stable numeric presentation encoding.
-use super::*;
+use super::{
+    AuthenticationWorkflowAction, AuthenticationWorkflowCurrentStep, AuthenticationWorkflowKind,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, AuthenticationWorkflowTotalSteps,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticatorEnrollmentProgress {
@@ -20,6 +23,7 @@ pub enum AuthenticationWorkflowProgress {
 pub(super) struct InvalidWorkflowProgress;
 
 impl AuthenticationWorkflowProgress {
+    #[must_use]
     pub const fn current_step(self) -> AuthenticationWorkflowCurrentStep {
         AuthenticationWorkflowCurrentStep(match self {
             Self::LoginCredentials | Self::Manual => 1,
@@ -31,6 +35,7 @@ impl AuthenticationWorkflowProgress {
             Self::Enrollment(AuthenticatorEnrollmentProgress::Recovery) => 4,
         })
     }
+    #[must_use]
     pub const fn total_steps(self) -> AuthenticationWorkflowTotalSteps {
         AuthenticationWorkflowTotalSteps(match self {
             Self::LoginCredentials | Self::Challenge => 3,
@@ -85,6 +90,7 @@ impl AuthenticationWorkflowProgress {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct AuthenticationWorkflowSnapshotDraft {
     pub kind: AuthenticationWorkflowKind,
     pub stage: AuthenticationWorkflowStage,

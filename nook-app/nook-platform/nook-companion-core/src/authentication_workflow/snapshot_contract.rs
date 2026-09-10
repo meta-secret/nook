@@ -52,35 +52,19 @@ impl AuthenticationWorkflowSnapshot {
                     | AuthenticationWorkflowAction::UsePasskey
                     | AuthenticationWorkflowAction::CreatePasskey,
             ) | (
-                AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-            ) | (
                 AuthenticationWorkflowKind::Signup,
                 AuthenticationWorkflowStage::Credentials,
                 AuthenticationWorkflowAction::GeneratePassword
                     | AuthenticationWorkflowAction::UsePasskey
                     | AuthenticationWorkflowAction::CreatePasskey,
             ) | (
-                AuthenticationWorkflowKind::Signup,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-            ) | (
                 AuthenticationWorkflowKind::PasswordChange,
                 AuthenticationWorkflowStage::Credentials,
                 AuthenticationWorkflowAction::GeneratePassword,
             ) | (
-                AuthenticationWorkflowKind::PasswordChange,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-            ) | (
                 AuthenticationWorkflowKind::TotpChallenge,
                 AuthenticationWorkflowStage::SecondFactor,
                 AuthenticationWorkflowAction::FillTotp | AuthenticationWorkflowAction::TakeOver,
-            ) | (
-                AuthenticationWorkflowKind::TotpChallenge,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
             ) | (
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Setup,
@@ -94,11 +78,12 @@ impl AuthenticationWorkflowSnapshot {
                 AuthenticationWorkflowStage::Recovery,
                 AuthenticationWorkflowAction::SaveBackupCodes,
             ) | (
-                AuthenticationWorkflowKind::TotpEnrollment,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-            ) | (
-                AuthenticationWorkflowKind::Manual,
+                AuthenticationWorkflowKind::Login
+                    | AuthenticationWorkflowKind::Signup
+                    | AuthenticationWorkflowKind::PasswordChange
+                    | AuthenticationWorkflowKind::TotpChallenge
+                    | AuthenticationWorkflowKind::TotpEnrollment
+                    | AuthenticationWorkflowKind::Manual,
                 AuthenticationWorkflowStage::Manual,
                 AuthenticationWorkflowAction::TakeOver,
             )

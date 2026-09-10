@@ -453,7 +453,7 @@ impl ReplayEndpoint {
     ) -> Result<CompanionIdentityStatus, CompanionProtocolError> {
         let ready = match mem::replace(&mut self.phase, ReplayEndpointPhase::Consumed) {
             ReplayEndpointPhase::Awaiting(endpoint) => endpoint.discover(discovery)?,
-            ReplayEndpointPhase::Discovered(endpoint) => endpoint.observe(discovery)?,
+            ReplayEndpointPhase::Discovered(endpoint) => endpoint.observe(&discovery)?,
             ReplayEndpointPhase::Consumed => return Err(CompanionProtocolError::NonceUnavailable),
         };
         let status = ready.status();

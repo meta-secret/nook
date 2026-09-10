@@ -159,7 +159,7 @@ impl NookDiscoveredCompanionExtensionEndpoint {
     ) -> Result<Self, JsError> {
         let inner = self
             .inner
-            .observe(discovery)
+            .observe(&discovery)
             .map_err(|error| JsError::new(&error.to_string()))?;
         Ok(Self { inner })
     }

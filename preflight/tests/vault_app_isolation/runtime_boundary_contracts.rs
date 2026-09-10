@@ -117,7 +117,7 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
     );
     assert!(
         shared_entry
-            .find("mount(App, mountArgs)")
+            .find("mount(App, { target })")
             .unwrap_or(usize::MAX)
             < shared_entry.find("startupShell.remove()").unwrap_or(0),
         "the startup shell must remain connected until Svelte mounts"

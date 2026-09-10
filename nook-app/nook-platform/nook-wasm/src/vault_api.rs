@@ -31,13 +31,13 @@ pub enum NookProviderSaveOutcomeState {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn existing_provider_save_setup() -> nook_core::ProviderSaveSetup {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn existing_provider_save_setup() -> nook_core::ProviderSaveSetup {
     ProviderSaveSetup::Existing
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn new_provider_save_setup(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn new_provider_save_setup(
     provider_type: nook_core::StorageProviderType,
 ) -> nook_core::ProviderSaveSetup {
     ProviderSaveSetup::New(provider_type)
@@ -45,13 +45,13 @@ pub fn new_provider_save_setup(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn inactive_provider_login_setup() -> nook_core::ActiveProviderLoginSetup {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn inactive_provider_login_setup() -> nook_core::ActiveProviderLoginSetup {
     ActiveProviderLoginSetup::Inactive
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn active_provider_login_setup(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_login_setup(
     provider_type: nook_core::StorageProviderType,
 ) -> nook_core::ActiveProviderLoginSetup {
     ActiveProviderLoginSetup::Active(provider_type)
@@ -102,7 +102,7 @@ impl NookProviderSaveOutcome {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn apply_provider_save_policy(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn apply_provider_save_policy(
     request: nook_core::ProviderSaveRequest,
 ) -> NookProviderSaveOutcome {
     NookProviderSaveOutcome(request.apply())
@@ -113,7 +113,7 @@ pub fn apply_provider_save_policy(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn active_provider_credentials_projection(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_credentials_projection(
     request: nook_core::ActiveProviderCredentialsRequest,
 ) -> nook_core::ActiveProviderCredentialsProjection {
     request.project()
@@ -267,7 +267,7 @@ impl NookVaultManager {
 /// persisting. Used by extension pairing before handing granted provider rows
 /// to the extension's own storage.
 #[wasm_bindgen]
-pub fn seal_auth_providers_for_device_public_key(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn seal_auth_providers_for_device_public_key(
     device_public_key: &str,
     mut snapshot: nook_core::AuthProvidersSnapshotData,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
@@ -280,21 +280,21 @@ pub fn seal_auth_providers_for_device_public_key(
 
 /// Delete the `nook_auth` `IndexedDB` database (used on full sign-out / reset).
 #[wasm_bindgen]
-pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
     AuthProviderDatabase::delete_auth_providers_db().await?;
     Ok(())
 }
 
 /// Read all extension pairing metadata from extension-origin Rexie storage.
 #[wasm_bindgen]
-pub async fn read_extension_pairing_state()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn read_extension_pairing_state()
 -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
     Ok(ExtensionPairingDatabase::read_all().await?)
 }
 
 /// Persist extension pairing metadata in extension-origin Rexie storage.
 #[wasm_bindgen]
-pub async fn write_extension_pairing_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn write_extension_pairing_state(
     state: nook_companion_core::ExtensionPairingState,
 ) -> Result<(), wasm_bindgen::JsError> {
     ExtensionPairingDatabase::write_all(&state).await?;
@@ -303,7 +303,7 @@ pub async fn write_extension_pairing_state(
 
 /// Remove extension pairing metadata from extension-origin Rexie storage.
 #[wasm_bindgen]
-pub async fn remove_extension_pairing_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn remove_extension_pairing_state(
     keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
     ExtensionPairingDatabase::remove(&keys).await?;
@@ -312,7 +312,7 @@ pub async fn remove_extension_pairing_state(
 
 /// Atomically remove and persist extension pairing metadata in Rexie storage.
 #[wasm_bindgen]
-pub async fn reconcile_extension_pairing_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn reconcile_extension_pairing_state(
     state: nook_companion_core::ExtensionPairingState,
     removed_keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
@@ -328,7 +328,7 @@ pub async fn reconcile_extension_pairing_state(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn find_duplicate_sync_provider(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn find_duplicate_sync_provider(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
 ) -> nook_core::DuplicateSyncProvider {
@@ -344,7 +344,7 @@ pub fn find_duplicate_sync_provider(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn find_duplicate_sync_provider_excluding(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn find_duplicate_sync_provider_excluding(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
     exclude_id: &str,
@@ -361,7 +361,7 @@ pub fn find_duplicate_sync_provider_excluding(
 /// (with a fresh id/timestamp) when missing. Returns the updated snapshot.
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn ensure_local_provider_row(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn ensure_local_provider_row(
     snapshot: nook_core::AuthProvidersSnapshotData,
     active_store_id: &str,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
@@ -379,7 +379,7 @@ pub fn ensure_local_provider_row(
 /// Approve an extension join through a manager whose Rust-owned application
 /// capability permits extension approval.
 #[wasm_bindgen]
-pub async fn approve_extension_device(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn approve_extension_device(
     manager: &mut NookVaultManager,
     join_device_id: String,
     join_public_key: String,
@@ -399,7 +399,7 @@ pub async fn approve_extension_device(
 /// Compare local vs remote vault YAML and return a sync action label:
 /// `unchanged`, `adopt_remote`, `push_local`, or `conflict`.
 #[wasm_bindgen]
-pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bindgen::JsError> {
     match nook_core::VaultSyncComparison::new(local, remote).decide() {
         Ok(action) => Ok(match action {
             VaultSyncAction::Unchanged => "unchanged".to_owned(),
@@ -420,7 +420,7 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bind
         reason = "FFI boundary: projects the parsed vault version to JavaScript as a bigint"
     )
 )]
-pub fn read_vault_version(yaml: &str) -> u64 {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn read_vault_version(yaml: &str) -> u64 {
     nook_core::VaultFormatDocument::new(yaml)
         .version()
         .map_or(0, Into::into)

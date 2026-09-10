@@ -33,33 +33,35 @@ pub use authentication_advance_control::{
 pub use destination_identity::{
     CanonicalControlDestination, ControlDestinationEvidence, InvalidControlDestination,
 };
-
 pub(super) use passkey::PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS;
 
-/// Validate one bounded advance-control observation for exact browser actuation.
-/// Named values required by AuthenticationAdvanceControlObservation::one_time_code_ceremony_context_is_authenticated.
+/// Named values required by `AuthenticationAdvanceControlObservation::one_time_code_ceremony_context_is_authenticated`.
+#[derive(Clone, Copy)]
 pub struct OneTimeCodeRouteEvidence<'a> {
-    pub _authentication_username: AuthenticationUsernameEvidence,
+    pub authentication_username: AuthenticationUsernameEvidence,
     pub source_origin: &'a str,
     pub form_identity: &'a str,
     pub destination_identity: &'a str,
 }
 
-/// Named values required by AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity.
+/// Named values required by `AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity`.
+#[derive(Clone, Copy)]
 pub struct AuthenticationRouteEvidence<'a> {
     pub source_origin: &'a str,
     pub form_identity: &'a str,
     pub destination_identity: &'a str,
 }
 
-/// Named values required by AuthenticationAdvanceControlObservation::has_safe_credential_update_route_identity.
+/// Named values required by `AuthenticationAdvanceControlObservation::has_safe_credential_update_route_identity`.
+#[derive(Clone, Copy)]
 pub struct CredentialUpdateRouteEvidence<'a> {
     pub source_origin: &'a str,
     pub form_identity: &'a str,
     pub destination_identity: &'a str,
 }
 
-/// Named values required by AuthenticationAdvanceControlObservation::can_activate_authentication_route_control.
+/// Named values required by `AuthenticationAdvanceControlObservation::can_activate_authentication_route_control`.
+#[derive(Clone, Copy)]
 pub struct AuthenticationRouteActuation<'a> {
     pub source_origin: &'a str,
     pub form_identity: &'a str,
@@ -126,8 +128,6 @@ pub struct PageInputFieldObservation {
     pub login_context: PageLoginContext,
 }
 
-/// Expand camelCase / separators into lowercase identity tokens for matching.
-
 /// Browser-collected login-surface identity text without DOM handles.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -189,7 +189,8 @@ impl LoginContextObservation {
 }
 
 /// Classify whether an input should count as a username/email identity field.
-/// Named values required by PageInputFieldObservation::has_autocomplete_token.
+/// Named values required by `PageInputFieldObservation::has_autocomplete_token`.
+#[derive(Clone, Copy)]
 pub struct AutocompleteTokenQuery<'a> {
     pub tokens: &'a [String],
     pub expected: &'a str,
@@ -239,7 +240,7 @@ pub(crate) enum OneTimeCodeRouteDecision {
 impl OneTimeCodeRouteEvidence<'_> {
     pub(crate) fn classify(self) -> OneTimeCodeRouteDecision {
         let OneTimeCodeRouteEvidence {
-            _authentication_username,
+            authentication_username: _,
             source_origin,
             form_identity,
             destination_identity,
@@ -252,8 +253,8 @@ impl OneTimeCodeRouteEvidence<'_> {
         }
         let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
-                source_origin: source_origin,
-                destination_identity: destination_identity,
+                source_origin,
+                destination_identity,
             },
         ) else {
             return OneTimeCodeRouteDecision::Rejected;
@@ -426,8 +427,8 @@ impl AuthenticationAdvanceControlObservation {
         }
         let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
-                source_origin: source_origin,
-                destination_identity: destination_identity,
+                source_origin,
+                destination_identity,
             },
         ) else {
             return false;
@@ -477,8 +478,8 @@ impl AuthenticationAdvanceControlObservation {
         }
         let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
-                source_origin: source_origin,
-                destination_identity: destination_identity,
+                source_origin,
+                destination_identity,
             },
         ) else {
             return false;
@@ -621,9 +622,9 @@ impl AuthenticationAdvanceControlObservation {
         } = request;
         if !AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity(
             AuthenticationRouteEvidence {
-                source_origin: source_origin,
-                form_identity: form_identity,
-                destination_identity: destination_identity,
+                source_origin,
+                form_identity,
+                destination_identity,
             },
         ) || control_label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             || control_machine_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
@@ -634,8 +635,8 @@ impl AuthenticationAdvanceControlObservation {
         let has_matching_microsoft_authority =
             CanonicalControlDestination::canonicalize_control_destination(
                 ControlDestinationEvidence {
-                    source_origin: source_origin,
-                    destination_identity: destination_identity,
+                    source_origin,
+                    destination_identity,
                 },
             )
             .is_ok_and(|destination| destination.has_microsoft_provider_authority)
@@ -930,24 +931,25 @@ mod tests {
 
     #[test]
     fn activation_accepts_only_bounded_semantic_username_scope_evidence() {
-        let decide = |form: &str, label: &str, concrete: bool, user: bool, local: bool, pass: bool| {
-            let (machine, visible_label) = label
-                .strip_prefix("machine:")
-                .map_or(("", label), |machine| (machine, "Continue"));
-            AuthenticationAdvanceControlObservation::can_activate_authentication_route_control(
-                AuthenticationRouteActuation {
-                    source_origin: "https://login.microsoftonline.com",
-                    form_identity: form,
-                    destination_identity: "https://login.microsoftonline.com/common/login",
-                    control_label: visible_label,
-                    control_machine_identity: machine,
-                    has_concrete_control: concrete.into(),
-                    has_authentication_username: user.into(),
-                    has_local_authentication_scope: local.into(),
-                    has_authentication_password: pass.into(),
-                },
-            )
-        };
+        let decide =
+            |form: &str, label: &str, concrete: bool, user: bool, local: bool, pass: bool| {
+                let (machine, visible_label) = label
+                    .strip_prefix("machine:")
+                    .map_or(("", label), |machine| (machine, "Continue"));
+                AuthenticationAdvanceControlObservation::can_activate_authentication_route_control(
+                    AuthenticationRouteActuation {
+                        source_origin: "https://login.microsoftonline.com",
+                        form_identity: form,
+                        destination_identity: "https://login.microsoftonline.com/common/login",
+                        control_label: visible_label,
+                        control_machine_identity: machine,
+                        has_concrete_control: concrete.into(),
+                        has_authentication_username: user.into(),
+                        has_local_authentication_scope: local.into(),
+                        has_authentication_password: pass.into(),
+                    },
+                )
+            };
         assert!(decide("", "", false, true, true, false));
         assert!(!decide("", "", true, true, true, false));
         for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Continue with your email address|Use your password to sign in|Se connecter|Anmelden".split('|') {

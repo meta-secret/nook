@@ -78,6 +78,7 @@ pub struct AuthenticationControlTransportability {
     pub username_field_count: crate::AuthenticationFieldCount,
 }
 impl AuthenticationControlTransportability {
+    #[must_use]
     pub fn is_transportable(self) -> bool {
         match self.submission_method {
             crate::PageControlSubmissionMethod::Dialog => false,

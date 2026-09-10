@@ -46,6 +46,7 @@ impl<'a> From<&'a str> for AuthenticationNavigationPath<'a> {
     }
 }
 impl AuthenticationNavigationPath<'_> {
+    #[must_use]
     pub fn has_authentication_segment(self) -> bool {
         self.pathname.split('/').any(|segment| {
             let normalized = segment.to_ascii_lowercase();

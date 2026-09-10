@@ -87,37 +87,37 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
     ExtensionConnectScope::VaultAccess
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
     ExtensionConnectScope::PasswordFilling
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
     ExtensionConnectScope::PasskeyManagement
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
     ExtensionConnectScope::SyncProviderCredentials
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn is_extension_connect_scope(value: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_extension_connect_scope(value: &str) -> bool {
     ExtensionConnectScope::parse(value).is_ok()
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn companion_pairing_provider_manifest_digest(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn companion_pairing_provider_manifest_digest(
     snapshot: nook_core::AuthProvidersSnapshotData,
 ) -> Result<String, JsError> {
     Ok(snapshot
@@ -129,7 +129,7 @@ pub fn companion_pairing_provider_manifest_digest(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn sentinel_genesis_phase_translation_key(phase: nook_core::SentinelGenesisPhase) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn sentinel_genesis_phase_translation_key(phase: nook_core::SentinelGenesisPhase) -> String {
     phase.translation_key().to_owned()
 }
 
@@ -269,10 +269,11 @@ pub(crate) use storage::indexed_db::{
     SentinelDbSentinelGenesisShareKey,
 };
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) use storage::auth_providers::ProviderDbWriteSnapshotAt;
 pub(crate) use storage::auth_providers::{
     AuthProviderDatabase, ProviderDbLegacySnapshotBelongsToIdentity, ProviderDbProjectionsMatch,
     ProviderDbReadRawSnapshotFromStore, ProviderDbRequireCompatibleLegacySnapshot,
-    ProviderDbWriteSnapshotAt,
 };
 
 pub(crate) use passkey_browser::{

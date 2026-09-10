@@ -34,6 +34,7 @@ pub(super) enum ApprovedObservationCompatibility {
 impl ApprovedAuthenticationWorkflowRevalidation {
     /// Reclassify in the original observation order. Browser scope identity remains
     /// a host check on the selected index; this result grants no execution authority.
+    #[must_use]
     pub fn revalidate(mut self) -> ApprovedAuthenticationWorkflowDecision {
         use ApprovedAuthenticationWorkflowDecision::{Matched, Rejected};
         let approved_passkey = self

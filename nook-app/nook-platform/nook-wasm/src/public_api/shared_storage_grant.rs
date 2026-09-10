@@ -134,7 +134,7 @@ impl SharedDriveGrantPolicy {
 }
 
 #[wasm_bindgen]
-pub async fn prepare_shared_storage_grant(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn prepare_shared_storage_grant(
     request: nook_core::SharedStorageGrantRequest,
 ) -> Result<nook_core::SharedStorageGrantOutcome, wasm_bindgen::JsError> {
     let validated = request.prepare()?;
@@ -196,7 +196,7 @@ pub async fn prepare_shared_storage_grant(
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn should_flush_shared_storage_grant(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn should_flush_shared_storage_grant(
     outcome: nook_core::SharedStorageGrantOutcome,
     credential: nook_core::SharedStorageGrantCredential,
 ) -> bool {
@@ -206,7 +206,7 @@ pub fn should_flush_shared_storage_grant(
 /// Resolve a shared Drive folder id/URL and verify write access for the current
 /// account before persisting the provider row.
 #[wasm_bindgen]
-pub async fn verify_shared_google_drive_folder(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn verify_shared_google_drive_folder(
     access_token: &str,
     folder_ref: &str,
 ) -> Result<NookGoogleDriveFolder, wasm_bindgen::JsError> {

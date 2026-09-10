@@ -46,6 +46,7 @@ pub(crate) struct ProviderDbReadRawSnapshotFromStore<'a> {
 }
 
 /// Named values required by AuthProviderDatabase::write_snapshot_at.
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) struct ProviderDbWriteSnapshotAt<'a> {
     pub(crate) state_key: &'a str,
     pub(crate) schema_key: &'a str,

@@ -20,7 +20,7 @@ pub enum NookActiveProviderCredentialsProjectionState {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn active_provider_credentials_projection_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_credentials_projection_state(
     projection: nook_core::ActiveProviderCredentialsProjection,
 ) -> NookActiveProviderCredentialsProjectionState {
     match projection {
@@ -35,7 +35,7 @@ pub fn active_provider_credentials_projection_state(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn active_provider_credentials_projection_draft(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_credentials_projection_draft(
     projection: nook_core::ActiveProviderCredentialsProjection,
 ) -> Result<nook_core::ActiveProviderCredentialDraft, wasm_bindgen::JsError> {
     match projection {
@@ -56,7 +56,7 @@ pub enum NookStoredOAuthFileConfigurationState {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn stored_oauth_file_configuration_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn stored_oauth_file_configuration_state(
     configuration: nook_core::StoredOAuthFileConfiguration,
 ) -> NookStoredOAuthFileConfigurationState {
     match configuration {
@@ -79,7 +79,7 @@ pub enum NookStoredLocalFolderConfigurationState {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn stored_local_folder_configuration_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn stored_local_folder_configuration_state(
     configuration: nook_core::StoredLocalFolderConfiguration,
 ) -> NookStoredLocalFolderConfigurationState {
     match configuration {
@@ -112,7 +112,7 @@ impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProvid
 
 #[wasm_bindgen]
 #[must_use]
-pub fn existing_vault_provider_readiness(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn existing_vault_provider_readiness(
     provider_type: nook_core::StorageProviderType,
     oauth_file_configured: bool,
     local_folder_configured: bool,
@@ -124,12 +124,12 @@ pub fn existing_vault_provider_readiness(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> nook_core::OAuthAccessToken {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> nook_core::OAuthAccessToken {
     config.usable_access_token().into()
 }
 #[wasm_bindgen]
 #[must_use]
-pub fn missing_oauth_access_token() -> nook_core::OAuthAccessToken {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn missing_oauth_access_token() -> nook_core::OAuthAccessToken {
     nook_core::OAuthAccessToken::Missing
 }
 
@@ -318,13 +318,13 @@ impl NookGithubPatHint {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn local_vault_storage_args() -> NookStorageConnectArgs {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn local_vault_storage_args() -> NookStorageConnectArgs {
     StorageConnectArgs::local().into()
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn authenticated_vault_storage_args(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authenticated_vault_storage_args(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
     Ok(provider.connection_args()?.into())
@@ -332,7 +332,7 @@ pub fn authenticated_vault_storage_args(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookStorageConnectArgs {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookStorageConnectArgs {
     DraftStorageConnection::Github(GithubStorageDraft {
         credential: &nook_core::StoredGithubPat::Token(github_pat.to_owned()),
         repository: &nook_core::StoredGithubRepository::Repository(github_repo.to_owned()),
@@ -344,7 +344,7 @@ pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookSto
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
     DraftStorageConnection::OAuth(OAuthStorageDraft {
         preset: config.preset,
         credential: &config.access_token,
@@ -358,7 +358,7 @@ pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookS
 
 #[wasm_bindgen]
 #[must_use]
-pub fn draft_local_storage_args() -> NookStorageConnectArgs {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_local_storage_args() -> NookStorageConnectArgs {
     DraftStorageConnection::Local.project().into()
 }
 
@@ -366,7 +366,7 @@ pub fn draft_local_storage_args() -> NookStorageConnectArgs {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHint {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHint {
     NookGithubPatHint::new(match pat {
         nook_core::StoredGithubPat::Missing => GithubPatMask::NoToken,
         nook_core::StoredGithubPat::Token(pat) => nook_core::GithubPat::mask(&pat),

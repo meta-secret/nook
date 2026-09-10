@@ -9,7 +9,7 @@ use crate::authentication_workflow::{
 use crate::page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     AuthenticationUsernameEvidence, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    PageControlSubmissionMethod,
+    OneTimeCodeRouteDecision, PageControlSubmissionMethod,
 };
 use crate::{AuthenticationRouteEvidence, CredentialUpdateRouteEvidence, OneTimeCodeRouteEvidence};
 use serde::{Deserialize, Serialize};
@@ -120,13 +120,13 @@ impl AuthenticationCeremonyContextObservation {
             && self.is_bounded()
             && matches!(
                 (OneTimeCodeRouteEvidence {
-                    _authentication_username: self.authentication_username,
+                    authentication_username: self.authentication_username,
                     source_origin: &self.source_origin,
                     form_identity: &self.form_identity,
                     destination_identity: &self.destination_identity
                 })
                 .classify(),
-                crate::page_field_classification::OneTimeCodeRouteDecision::Authentication
+                OneTimeCodeRouteDecision::Authentication
             )
     }
 }

@@ -32,6 +32,7 @@ pub enum AuthenticationWorkflowActivity {
     SaveOffer,
 }
 impl AuthenticationWorkflowActivity {
+    #[must_use]
     pub fn progress(self) -> AuthenticationDisplayProgress {
         AuthenticationDisplayProgress {
             current_step: match self {
@@ -106,6 +107,7 @@ impl From<PasswordActivityWorkflow> for PasswordWorkflowActivityPresentation {
     }
 }
 impl PasswordWorkflowActivityEvidence {
+    #[must_use]
     pub fn project(self) -> PasswordWorkflowActivityPresentation {
         PasswordActivityWorkflow::from(self).into()
     }

@@ -6,7 +6,7 @@ use crate::VaultSnapshotLookup;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-pub async fn read_local_vault_yaml() -> Result<String, JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn read_local_vault_yaml() -> Result<String, JsError> {
     Ok(
         match NookDatabase::load_from_indexed_db()
             .await
@@ -19,14 +19,14 @@ pub async fn read_local_vault_yaml() -> Result<String, JsError> {
 }
 
 #[wasm_bindgen]
-pub async fn write_local_vault_yaml(content: String) -> Result<(), JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn write_local_vault_yaml(content: String) -> Result<(), JsError> {
     NookDatabase::save_to_indexed_db(&content)
         .await
         .map_err(|e| JsError::new(&e.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn vault_content_hash(content: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_content_hash(content: &str) -> String {
     nook_core::VaultRevision::content_hash(content)
 }
 

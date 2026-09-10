@@ -39,7 +39,8 @@ pub enum AuthenticationPasskeyAccountAvailability {
 
 /// Classify non-secret recovery copy before consent. Candidate extraction is deferred
 /// until the user approves the save action.
-/// Named values required by AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation.
+/// Named values required by `AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation`.
+#[derive(Clone, Copy)]
 pub struct AuthenticationBackupCodesEvidence<'a> {
     pub text: &'a str,
     pub candidate_presence: BackupCodeCandidatePresence,

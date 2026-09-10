@@ -44,7 +44,6 @@ impl ExtensionConnectScope {
         }
     }
 
-    #[must_use]
     pub fn parse(value: &str) -> Result<Self, UnknownExtensionConnectScope> {
         match value {
             "vault-access" => Ok(Self::VaultAccess),

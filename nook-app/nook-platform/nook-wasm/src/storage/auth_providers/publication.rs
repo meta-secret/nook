@@ -12,6 +12,7 @@ use super::{self as auth_providers, SCHEMA_KEY, STATE_KEY, STORAGE_SCHEMA_VERSIO
 use crate::AuthProviderDatabase;
 use crate::ProviderDbLegacySnapshotBelongsToIdentity;
 use crate::ProviderDbReadRawSnapshotFromStore;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::ProviderDbWriteSnapshotAt;
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::NormalizedAuthSnapshot;

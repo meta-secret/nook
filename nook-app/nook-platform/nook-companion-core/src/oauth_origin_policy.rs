@@ -90,10 +90,12 @@ impl OAuthOriginUnsupportedReason {
 }
 
 /// Browser location evidence is usable only when both origin and hostname were observed.
+#[derive(Clone, Copy)]
 pub enum BrowserOAuthLocation<'a> {
     Unavailable,
     Observed(BrowserOAuthLocationEvidence<'a>),
 }
+#[derive(Clone, Copy)]
 pub struct BrowserOAuthLocationEvidence<'a> {
     pub origin: &'a str,
     pub hostname: &'a str,

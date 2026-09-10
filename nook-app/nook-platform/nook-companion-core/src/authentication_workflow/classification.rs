@@ -123,8 +123,8 @@ impl AuthenticationWorkflowEvidence {
             return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
                 super::AuthenticationWorkflowSnapshotDraft {
                     kind: AuthenticationWorkflowKind::TotpChallenge,
-                    stage: stage,
-                    action: action,
+                    stage,
+                    action,
                     progress: super::AuthenticationWorkflowProgress::Challenge,
                 },
             ));
@@ -215,6 +215,7 @@ impl AuthenticationWorkflowEvidence {
 }
 
 impl AuthenticationPageObservation {
+    #[must_use]
     pub fn classify_authentication_workflow(self) -> AuthenticationWorkflowMatch {
         AuthenticationWorkflowEvidence::from(self).classify_authentication_workflow()
     }

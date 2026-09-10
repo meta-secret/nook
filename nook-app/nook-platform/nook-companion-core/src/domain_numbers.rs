@@ -197,15 +197,19 @@ mod tests {
 }
 
 impl AuthenticationFieldCount {
+    #[must_use]
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
+    #[must_use]
     pub const fn is_nonzero(self) -> bool {
         !self.is_zero()
     }
+    #[must_use]
     pub const fn is_single(self) -> bool {
         self.0 == 1
     }
+    #[must_use]
     pub const fn is_multiple(self) -> bool {
         self.0 > 1
     }
@@ -215,9 +219,11 @@ impl AuthenticationFieldCount {
 }
 
 impl AuthenticationSemanticSubmitControlCount {
+    #[must_use]
     pub const fn is_single(self) -> bool {
         self.0 == 1
     }
+    #[must_use]
     pub const fn is_multiple(self) -> bool {
         self.0 > 1
     }
@@ -227,9 +233,11 @@ impl AuthenticationSemanticSubmitControlCount {
 }
 
 impl AuthenticationPasskeyAccountCount {
+    #[must_use]
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
+    #[must_use]
     pub const fn is_nonzero(self) -> bool {
         !self.is_zero()
     }
@@ -239,15 +247,18 @@ impl AuthenticationPasskeyAccountCount {
 }
 
 impl AuthenticationSavedLoginAccountCount {
+    #[must_use]
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
+    #[must_use]
     pub const fn is_nonzero(self) -> bool {
         !self.is_zero()
     }
 }
 
 impl ExtensionEventCount {
+    #[must_use]
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
@@ -259,11 +270,16 @@ impl AuthenticationFieldCount {
     }
 }
 impl AuthenticationOutcomeElapsedMilliseconds {
+    #[must_use]
     pub const fn has_reached(self, timeout: AuthenticationOutcomeTimeoutMilliseconds) -> bool {
         self.0 >= timeout.0
     }
 }
 impl AuthenticationWorkflowObservationIndex {
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the classifier observation limit is a compile-time value of 20"
+    )]
     pub(crate) const fn is_within_classifier_batch(self) -> bool {
         self.0 < crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS as u32
     }

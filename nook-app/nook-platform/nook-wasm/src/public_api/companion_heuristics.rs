@@ -17,14 +17,14 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[must_use]
-pub fn page_has_backup_code_hint(text: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn page_has_backup_code_hint(text: &str) -> bool {
     BackupCodePageText::new(text).page_has_backup_code_hint()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
     BackupCodePageText::new(&text).extract_backup_code_candidates()
 }
 
@@ -61,7 +61,7 @@ impl NookPageInputFieldObservation {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn expand_identity_text(value: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn expand_identity_text(value: &str) -> String {
     AuthenticationControlText::new(value).expand_identity_text()
 }
 
@@ -94,43 +94,43 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
     (&observation.inner).has_login_context()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
     (&field.inner).looks_like_username_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
     (&field.inner).looks_like_one_time_code_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_passkey_control_label(label: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_passkey_control_label(label: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(label)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_manual_checkpoint_label(label)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_email_verification_body(body: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_email_verification_body(body: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_email_verification_body(body)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_login_advance_control_label(label: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_login_advance_control_label(label: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(label)
 }
 
@@ -143,7 +143,7 @@ pub fn looks_like_login_advance_control_label(label: &str) -> bool {
         reason = "FFI boundary: projects the authentication-form ranking as a JavaScript Number scalar"
     )
 )]
-pub fn authentication_form_observation_priority(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_form_observation_priority(
     observation: &NookAuthenticationPageObservation,
 ) -> u8 {
     (observation.to_core())
@@ -153,7 +153,7 @@ pub fn authentication_form_observation_priority(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn authentication_page_observations_are_valid(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_page_observations_are_valid(
     observations: &NookAuthenticationPageObservations,
 ) -> bool {
     AuthenticationPageObservation::authentication_page_observations_are_valid(
@@ -163,13 +163,13 @@ pub fn authentication_page_observations_are_valid(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn parse_page_input_type(value: &str) -> nook_core::PageInputType {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_page_input_type(value: &str) -> nook_core::PageInputType {
     PageInputType::parse(value)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn is_cloudflare_pr_preview_host(hostname: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_cloudflare_pr_preview_host(hostname: &str) -> bool {
     OAuthOriginUnsupportedReason::for_unregistered_hostname(hostname)
         == OAuthOriginUnsupportedReason::CloudflarePrPreview
 }
@@ -220,7 +220,7 @@ impl NookOAuthOriginSupport {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn resolve_oauth_origin_support(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_oauth_origin_support(
     provider: nook_core::BrowserOAuthProvider,
     origin: &str,
     hostname: &str,
@@ -237,28 +237,28 @@ pub fn resolve_oauth_origin_support(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn default_simple_vault_url() -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_simple_vault_url() -> String {
     nook_core::DEFAULT_SIMPLE_VAULT_URL.to_owned()
 }
 
 #[wasm_bindgen]
-pub fn normalize_simple_vault_base_url(value: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn normalize_simple_vault_base_url(value: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(VaultHostPolicy::new(value).normalize_simple_vault_base_url()?)
 }
 
 #[wasm_bindgen]
-pub fn simple_vault_url(base_url: &str, path: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn simple_vault_url(base_url: &str, path: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(VaultHostPolicy::new(base_url).simple_vault_url(path)?)
 }
 
 #[wasm_bindgen]
-pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(VaultHostPolicy::new(base_url).simple_vault_match_pattern()?)
 }
 
 /// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
 #[wasm_bindgen]
-pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(
         match VaultHostPolicy::new(base_url).matching_sentinel_vault_base_url()? {
             SentinelVaultMatch::UnsupportedHost => String::new(),
@@ -268,24 +268,24 @@ pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_b
 }
 
 #[wasm_bindgen]
-pub fn sentinel_vault_match_patterns(base_url: &str) -> Result<Vec<String>, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn sentinel_vault_match_patterns(base_url: &str) -> Result<Vec<String>, wasm_bindgen::JsError> {
     Ok(VaultHostPolicy::new(base_url).sentinel_vault_match_patterns()?)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn is_simple_vault_hostname(hostname: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_simple_vault_hostname(hostname: &str) -> bool {
     VaultHostObservation::new(hostname).is_simple_vault_hostname()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn is_sentinel_vault_hostname(hostname: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_sentinel_vault_hostname(hostname: &str) -> bool {
     VaultHostObservation::new(hostname).is_sentinel_vault_hostname()
 }
 
 #[wasm_bindgen]
-pub fn nook_vault_app_exclude_match_patterns(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn nook_vault_app_exclude_match_patterns(
     base_url: &str,
 ) -> Result<Vec<String>, wasm_bindgen::JsError> {
     Ok(VaultHostPolicy::new(base_url).nook_vault_app_exclude_match_patterns()?)
@@ -293,7 +293,7 @@ pub fn nook_vault_app_exclude_match_patterns(
 
 /// `base_url` may be empty when no configured vault base is available.
 #[wasm_bindgen]
-pub fn is_nook_vault_app_url(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_nook_vault_app_url(
     candidate_url: &str,
     base_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
@@ -306,7 +306,7 @@ pub fn is_nook_vault_app_url(
 }
 
 #[wasm_bindgen]
-pub fn belongs_to_simple_vault(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn belongs_to_simple_vault(
     base_url: &str,
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
@@ -314,7 +314,7 @@ pub fn belongs_to_simple_vault(
 }
 
 #[wasm_bindgen]
-pub fn belongs_to_sentinel_vault(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn belongs_to_sentinel_vault(
     base_url: &str,
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {

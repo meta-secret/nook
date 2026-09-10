@@ -11,6 +11,7 @@ pub struct BackupCodePageText<'a> {
     value: &'a str,
 }
 impl<'a> BackupCodePageText<'a> {
+    #[must_use]
     pub fn new(value: &'a str) -> Self {
         Self { value }
     }

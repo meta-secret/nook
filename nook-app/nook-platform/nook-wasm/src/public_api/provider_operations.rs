@@ -4,7 +4,7 @@ use nook_core::{ActiveVaultScope, LocalProviderSelection, ManagerStoreScopeRef, 
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn provider_wasm_args(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_wasm_args(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
     Ok(provider.connection_args()?.into())
@@ -12,7 +12,7 @@ pub fn provider_wasm_args(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn active_vault_providers(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_vault_providers(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
     scope: &NookManagerStoreScope,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
@@ -30,7 +30,7 @@ pub fn active_vault_providers(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn sync_providers_for_active_vault(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn sync_providers_for_active_vault(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
     scope: &NookManagerStoreScope,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
@@ -48,7 +48,7 @@ pub fn sync_providers_for_active_vault(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn local_provider_for_active_vault(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn local_provider_for_active_vault(
     snapshot: nook_core::AuthProvidersSnapshotData,
     scope: &NookManagerStoreScope,
 ) -> Result<NookProviderSelection, wasm_bindgen::JsError> {
@@ -73,7 +73,7 @@ pub fn local_provider_for_active_vault(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn provider_label_by_id(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_label_by_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
     provider_id: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -85,7 +85,7 @@ pub fn provider_label_by_id(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn providers_visible_while_device_locked(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn providers_visible_while_device_locked(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
 ) -> nook_core::AuthProvidersSnapshotData {
     snapshot.providers = ProviderRows {
@@ -96,7 +96,7 @@ pub fn providers_visible_while_device_locked(
 }
 
 #[wasm_bindgen]
-pub fn select_remote_event_flush_providers(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn select_remote_event_flush_providers(
     request: nook_core::RemoteEventFlushProviderRequest,
 ) -> Vec<nook_core::StorageProviderData> {
     request.select()

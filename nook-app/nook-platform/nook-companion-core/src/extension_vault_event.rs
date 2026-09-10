@@ -7,5 +7,4 @@ use tsify::Tsify;
 /// Rust deserializes the existing event-log domain type. The TypeScript declaration follows the canonical event schema directly.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(transparent)]
-
 pub struct ExtensionVaultEventPayload(nook_event_log::VaultEvent);

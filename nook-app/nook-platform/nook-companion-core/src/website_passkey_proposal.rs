@@ -22,7 +22,8 @@ pub enum WebsitePasskeyProposal {
     CreatePasskey,
 }
 
-/// Named values required by WebsitePasskeyProposal::propose_website_passkey.
+/// Named values required by `WebsitePasskeyProposal::propose_website_passkey`.
+#[derive(Clone, Copy)]
 pub struct WebsitePasskeyEvidence {
     pub workflow_kind: AuthenticationWorkflowKind,
     pub manual_checkpoint_present: AuthenticationManualCheckpoint,

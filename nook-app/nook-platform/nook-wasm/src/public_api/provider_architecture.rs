@@ -13,7 +13,7 @@ use nook_core::{ProviderSelectionPolicy, ProviderSelectionRequest};
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn bind_google_drive_shared_folder(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn bind_google_drive_shared_folder(
     config: nook_core::OAuthFileConfigData,
     folder_ref: &str,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
@@ -22,7 +22,7 @@ pub fn bind_google_drive_shared_folder(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn google_oauth_tokens_to_config(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn google_oauth_tokens_to_config(
     access_token: &str,
     expires_at: &str,
     existing: nook_core::StoredOAuthFileConfiguration,
@@ -38,7 +38,7 @@ pub fn google_oauth_tokens_to_config(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn icloud_oauth_tokens_to_config(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn icloud_oauth_tokens_to_config(
     access_token: &str,
     account_identity: nook_core::StoredOAuthAccountIdentity,
     existing: nook_core::StoredOAuthFileConfiguration,
@@ -53,7 +53,7 @@ pub fn icloud_oauth_tokens_to_config(
 }
 
 #[wasm_bindgen]
-pub fn create_icloud_shared_storage_target(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn create_icloud_shared_storage_target(
     role: &str,
     zone_name: &str,
     owner_record_name: &str,
@@ -80,7 +80,7 @@ pub fn create_icloud_shared_storage_target(
 }
 
 #[wasm_bindgen]
-pub fn parse_icloud_shared_storage_target(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_icloud_shared_storage_target(
     storage_target_id: &str,
 ) -> Result<nook_core::ICloudSharedTarget, wasm_bindgen::JsError> {
     Ok(ICloudSharedTarget::from_storage_id(storage_target_id)?)
@@ -88,7 +88,7 @@ pub fn parse_icloud_shared_storage_target(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn set_google_drive_provider_mode(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn set_google_drive_provider_mode(
     config: nook_core::OAuthFileConfigData,
     mode: nook_core::GoogleDriveMode,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
@@ -97,7 +97,7 @@ pub fn set_google_drive_provider_mode(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn set_icloud_provider_mode(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn set_icloud_provider_mode(
     config: nook_core::OAuthFileConfigData,
     mode: nook_core::ICloudMode,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
@@ -105,12 +105,12 @@ pub fn set_icloud_provider_mode(
 }
 
 #[wasm_bindgen]
-pub fn default_vault_architecture() -> NookVaultArchitecture {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_vault_architecture() -> NookVaultArchitecture {
     NookVaultArchitecture::from_core(VaultArchitecture::default())
 }
 
 #[wasm_bindgen]
-pub fn validate_vault_architecture(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn validate_vault_architecture(
     architecture: &NookVaultArchitecture,
 ) -> Result<NookVaultArchitecture, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
@@ -119,7 +119,7 @@ pub fn validate_vault_architecture(
 }
 
 #[wasm_bindgen]
-pub fn vault_architecture_onboarding_type(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_architecture_onboarding_type(
     architecture: &NookVaultArchitecture,
 ) -> Result<nook_core::OnboardingType, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
@@ -129,7 +129,7 @@ pub fn vault_architecture_onboarding_type(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn provider_onboarding_type(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_onboarding_type(
     provider: nook_core::StorageProviderData,
     architecture: &NookVaultArchitecture,
 ) -> Result<nook_core::OnboardingType, wasm_bindgen::JsError> {
@@ -138,7 +138,7 @@ pub fn provider_onboarding_type(
 }
 
 #[wasm_bindgen]
-pub fn vault_architecture_can_create_secret(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_architecture_can_create_secret(
     architecture: &NookVaultArchitecture,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
@@ -148,7 +148,7 @@ pub fn vault_architecture_can_create_secret(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn provider_replication_capability(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_replication_capability(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
     Ok(NookProviderReplicationCapability::from_core(
@@ -159,7 +159,7 @@ pub fn provider_replication_capability(
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn provider_oauth_preset_for_provider(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_oauth_preset_for_provider(
     provider: nook_core::StorageProviderData,
 ) -> nook_core::ProviderOauthPreset {
     match provider.oauth_file {
@@ -173,7 +173,7 @@ pub fn provider_oauth_preset_for_provider(
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn provider_oauth_preset_for_config(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_oauth_preset_for_config(
     config: nook_core::OAuthFileConfigData,
 ) -> nook_core::ProviderOauthPreset {
     ProviderOauthPreset::Preset(config.preset)
@@ -181,7 +181,7 @@ pub fn provider_oauth_preset_for_config(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn validate_provider_replication(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn validate_provider_replication(
     provider: nook_core::StorageProviderData,
     replication_type: nook_core::ReplicationType,
 ) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
@@ -192,7 +192,7 @@ pub fn validate_provider_replication(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn provider_supports_replication(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_supports_replication(
     provider: nook_core::StorageProviderData,
     replication_type: nook_core::ReplicationType,
 ) -> Result<bool, wasm_bindgen::JsError> {
@@ -201,7 +201,7 @@ pub fn provider_supports_replication(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn first_compatible_provider_id(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn first_compatible_provider_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
     replication_type: nook_core::ReplicationType,
 ) -> NookProviderSelection {
@@ -217,7 +217,7 @@ pub fn first_compatible_provider_id(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn first_compatible_provider_id_preferred(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn first_compatible_provider_id_preferred(
     snapshot: nook_core::AuthProvidersSnapshotData,
     replication_type: nook_core::ReplicationType,
     preferred_id: &str,
@@ -234,7 +234,7 @@ pub fn first_compatible_provider_id_preferred(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn enrollment_provider_for_architecture(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn enrollment_provider_for_architecture(
     provider: nook_core::StorageProviderData,
     architecture: &NookVaultArchitecture,
 ) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
@@ -251,7 +251,7 @@ pub fn enrollment_provider_for_architecture(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn enrollment_shared_provider_for_architecture(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn enrollment_shared_provider_for_architecture(
     provider: nook_core::StorageProviderData,
     architecture: &NookVaultArchitecture,
     shared_joiner_identity: &str,
@@ -273,7 +273,7 @@ pub fn enrollment_shared_provider_for_architecture(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn enrollment_icloud_shared_provider_for_architecture(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn enrollment_icloud_shared_provider_for_architecture(
     provider: nook_core::StorageProviderData,
     architecture: &NookVaultArchitecture,
     shared_storage_target_id: &str,
@@ -292,14 +292,14 @@ pub fn enrollment_icloud_shared_provider_for_architecture(
 }
 
 #[wasm_bindgen]
-pub fn select_shared_grant_provider(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn select_shared_grant_provider(
     request: nook_core::SharedGrantProviderRequest,
 ) -> nook_core::SharedGrantProviderOutcome {
     request.select()
 }
 
 #[wasm_bindgen]
-pub fn evaluate_sentinel_policy_draft(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn evaluate_sentinel_policy_draft(
     draft: nook_core::SentinelPolicyDraft,
 ) -> nook_core::SentinelPolicyDraftEvaluation {
     draft.evaluate()

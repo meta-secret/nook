@@ -1,6 +1,7 @@
 //! Exact-key classification of untrusted browser pairing storage.
 
 use super::{ExtensionPairingRecord, StoredExtensionPairingGrant};
+use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -9,7 +10,7 @@ use std::collections::BTreeMap;
 #[serde(untagged)]
 enum StoredGrantEntry {
     Grant(StoredExtensionPairingGrant),
-    Invalid(serde::de::IgnoredAny),
+    Invalid(IgnoredAny),
 }
 use tsify::Tsify;
 

@@ -46,7 +46,7 @@ impl NookSecretTypeFilter {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn secret_type_name(secret_type: nook_core::SecretType) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn secret_type_name(secret_type: nook_core::SecretType) -> String {
     secret_type.as_str().to_owned()
 }
 
@@ -304,12 +304,12 @@ impl NookSecretFormFields {
 }
 
 #[wasm_bindgen]
-pub fn build_secret_yaml(fields: &NookSecretFormFields) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_secret_yaml(fields: &NookSecretFormFields) -> Result<String, wasm_bindgen::JsError> {
     (fields).build_secret_yaml_inner().map_err(Into::into)
 }
 
 #[wasm_bindgen]
-pub fn authenticator_setup_key_changed(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authenticator_setup_key_changed(
     stored_key: &str,
     candidate_key: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
@@ -320,7 +320,7 @@ pub fn authenticator_setup_key_changed(
 }
 
 #[wasm_bindgen]
-pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_bindgen::JsError> {
     AuthenticatorSecret::preview_otpauth_uri(uri)
         .map(NookOtpauthPreview::from_core)
         .map_err(NookError::from)
@@ -328,7 +328,7 @@ pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_
 }
 
 #[wasm_bindgen]
-pub fn current_code_from_otpauth_uri(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn current_code_from_otpauth_uri(
     uri: &str,
 ) -> Result<types::NookTotpCode, wasm_bindgen::JsError> {
     let millis = Date::now();
@@ -345,7 +345,7 @@ pub fn current_code_from_otpauth_uri(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bindgen::JsError> {
     // Owned `Vec<String>` is required by the wasm-bindgen JS array boundary.
     nook_core::BackupCodeInput::new(&codes)
         .normalize()
@@ -355,7 +355,7 @@ pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bi
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn apply_backup_codes(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn apply_backup_codes(
     existing: Vec<String>,
     incoming: Vec<String>,
     mode: &str,

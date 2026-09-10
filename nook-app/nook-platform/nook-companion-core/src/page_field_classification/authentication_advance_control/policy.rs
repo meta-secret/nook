@@ -53,7 +53,7 @@ impl AuthenticationAdvanceControlObservation {
         }
         let mut actionable = self.clone();
         actionable.actionability = PageControlActionability::Actionable;
-        (&actionable).authentication_advance_control_is_safe()
+        actionable.authentication_advance_control_is_safe()
     }
 
     pub(super) fn is_identifier_only_get_advance(&self) -> bool {

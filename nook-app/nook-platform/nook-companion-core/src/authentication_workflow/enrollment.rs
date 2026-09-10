@@ -89,7 +89,8 @@ impl AuthenticationWorkflowEvidence {
     }
 }
 
-/// Named values required by AuthenticationWorkflowMatch::authentication_enrollment_workflow_match.
+/// Named values required by `AuthenticationWorkflowMatch::authentication_enrollment_workflow_match`.
+#[derive(Clone, Copy)]
 pub struct AuthenticationEnrollmentObservation<'a> {
     pub authenticator_setup_hint: AuthenticationAuthenticatorSetupObservation,
     pub backup_codes_copy: &'a str,

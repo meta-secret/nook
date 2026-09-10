@@ -6,7 +6,9 @@ pub(super) enum PasskeyFieldContext {
 }
 use crate::PasskeyControlMarking;
 
-use crate::page_field_classification::AuthenticationAdvanceControlObservation;
+use crate::page_field_classification::{
+    AuthenticationAdvanceControlObservation, PasskeyControlDecision,
+};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -42,7 +44,7 @@ impl AuthenticationDetailedPasskeyControlCandidateObservation {
             } else {
                 PasskeyControlMarking::Implicit
             },
-        ) == crate::page_field_classification::PasskeyControlDecision::Assertion
+        ) == PasskeyControlDecision::Assertion
     }
 }
 
@@ -106,12 +108,12 @@ impl AuthenticationDetailedPasskeyControlObservation {
             self,
             Self::Observed(observation)
                 if compatible(observation)
-                    && (observation).classify_authentication_passkey_control(PasskeyControlMarking::Implicit) == crate::page_field_classification::PasskeyControlDecision::Assertion
+                    && (observation).classify_authentication_passkey_control(PasskeyControlMarking::Implicit) == PasskeyControlDecision::Assertion
         ) || matches!(
             self,
             Self::ExplicitlyMarked(observation)
                 if compatible(observation)
-                    && (observation).classify_authentication_passkey_control(PasskeyControlMarking::Explicit) == crate::page_field_classification::PasskeyControlDecision::Assertion
+                    && (observation).classify_authentication_passkey_control(PasskeyControlMarking::Explicit) == PasskeyControlDecision::Assertion
         ) || matches!(
             self,
             Self::Candidates(candidates)

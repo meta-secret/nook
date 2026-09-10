@@ -640,15 +640,16 @@ pub struct DiscoveredCompanionHandoffEndpoint {
     issued: CompanionIssuedIdentityDiscovery,
 }
 impl DiscoveredCompanionHandoffEndpoint {
+    #[must_use]
     pub fn status(&self) -> CompanionIdentityStatus {
         self.issued.status.clone()
     }
     /// Idempotent observation retains ownership; a different observation consumes it.
     pub fn observe(
         self,
-        discovery: CompanionIdentityDiscoveryObservation,
+        discovery: &CompanionIdentityDiscoveryObservation,
     ) -> Result<Self, CompanionProtocolError> {
-        if self.issued.discovery != discovery {
+        if !self.issued.discovery.eq(discovery) {
             return Err(CompanionProtocolError::RequestMismatch);
         }
         Ok(self)

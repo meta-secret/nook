@@ -20,7 +20,8 @@ pub struct CanonicalControlDestination {
     pub is_microsoft_consumer_login_root: bool,
 }
 
-/// Named values required by CanonicalControlDestination::canonicalize_control_destination.
+/// Named values required by `CanonicalControlDestination::canonicalize_control_destination`.
+#[derive(Clone, Copy)]
 pub struct ControlDestinationEvidence<'a> {
     pub source_origin: &'a str,
     pub destination_identity: &'a str,
@@ -126,7 +127,6 @@ impl CanonicalControlDestination {
 /// that exact origin. Encoded control characters, malformed escapes, and
 /// recursive percent escapes fail closed before authentication policy.
 impl CanonicalControlDestination {
-    #[must_use]
     pub fn canonicalize_control_destination(
         request: ControlDestinationEvidence<'_>,
     ) -> Result<CanonicalControlDestination, InvalidControlDestination> {
