@@ -95,7 +95,8 @@ export class ModuleExpertCodexSdkAgentRuntime<
       workingDirectory: invocation.workingDirectory,
     };
     const isolationUse: ModuleExpertRuntimeIsolationUse<
-      Result<AgentExecutionCompletion, AgentExecutionFailure>
+      AgentExecutionCompletion,
+      AgentExecutionFailure
     > = {
       isolationRequest,
       run: async (isolation) => {
@@ -133,15 +134,16 @@ export class ReadOnlyExpertCodexRuntime<
       await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
         request.isolationRequest,
       );
+    if (isolation.isErr()) return err(isolation.error);
     try {
       const execution: GuardedAgentExecution<TTask, TAgent> = {
-        codex: new Codex(isolation.codexOptions),
+        codex: new Codex(isolation.value.codexOptions),
         invocation: request.invocation,
-        threadOptions: isolation.threadOptions,
+        threadOptions: isolation.value.threadOptions,
       };
       return await new GuardedCodexExecution(execution).execute();
     } finally {
-      await isolation.dispose();
+      await isolation.value.dispose();
     }
   }
 }

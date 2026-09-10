@@ -40,10 +40,12 @@ test('materializes synthesis context without repository paths or credentials', a
       temporaryRoot,
       workingDirectory: REPO_ROOT,
     };
-    const isolation =
+    const isolationResult =
       await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
         isolationRequest,
       );
+    assert(isolationResult.isOk());
+    const isolation = isolationResult.value;
     try {
       const verifiedView = join(
         isolation.repositorySnapshot,
@@ -94,9 +96,12 @@ test('rejects traversal and oversized synthetic context before agent execution',
       temporaryRoot,
       workingDirectory: REPO_ROOT,
     };
-    await expect(
-      ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(unsafeRequest),
-    ).rejects.toThrow('context file is unsafe');
+    const isolationFailure1 =
+      await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
+        unsafeRequest,
+      );
+    assert(isolationFailure1.isErr());
+    expect(isolationFailure1.error.message).toContain('context file is unsafe');
     expect(await readdir(temporaryRoot)).toEqual([]);
   } finally {
     await rm(temporaryRoot, removeOptions);
@@ -144,10 +149,12 @@ test('materializes only exact shared formatter and lint tooling', async () => {
       temporaryRoot,
       workingDirectory: REPO_ROOT,
     };
-    const isolation =
+    const isolationResult =
       await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
         isolationRequest,
       );
+    assert(isolationResult.isOk());
+    const isolation = isolationResult.value;
     try {
       for (const relativePath of exactRefactoringFiles) {
         await access(join(isolation.repositorySnapshot, relativePath));

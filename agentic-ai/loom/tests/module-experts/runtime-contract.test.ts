@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {
   ModuleExpertsRuntimeContractScenario,
   EXPERT_NAME,
@@ -79,10 +80,12 @@ describe('module expert runtime isolation', () => {
         temporaryRoot: isolationRoot,
         workingDirectory: repository.root,
       };
-      const isolation =
+      const isolationResult =
         await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           isolationRequest,
         );
+      assert(isolationResult.isOk());
+      const isolation = isolationResult.value;
       try {
         expect(Object.keys(isolation.codexOptions.env).sort()).toEqual([
           'CODEX_HOME',
@@ -187,10 +190,12 @@ describe('module expert runtime isolation', () => {
         ModuleExpertsRuntimeContractScenario.runtimeIsolationRequest(
           fixtureRequest,
         );
-      const isolation =
+      const isolationResult =
         await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           isolationRequest,
         );
+      assert(isolationResult.isOk());
+      const isolation = isolationResult.value;
       try {
         const command =
           ModuleExpertsRuntimeContractScenario.authenticationCommand(isolation);
@@ -234,12 +239,14 @@ describe('module expert runtime isolation', () => {
         isolationRoot,
         repository,
       };
-      const isolation =
+      const isolationResult =
         await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           ModuleExpertsRuntimeContractScenario.runtimeIsolationRequest(
             fixtureRequest,
           ),
         );
+      assert(isolationResult.isOk());
+      const isolation = isolationResult.value;
       try {
         const command =
           ModuleExpertsRuntimeContractScenario.authenticationCommand(isolation);
@@ -299,14 +306,18 @@ describe('module expert runtime isolation', () => {
         ModuleExpertsRuntimeContractScenario.runtimeIsolationRequest(
           fixtureRequest,
         );
-      const first =
+      const firstResult =
         await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           isolationRequest,
         );
-      const second =
+      assert(firstResult.isOk());
+      const first = firstResult.value;
+      const secondResult =
         await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           isolationRequest,
         );
+      assert(secondResult.isOk());
+      const second = secondResult.value;
       try {
         expect(first.codexHome).not.toBe(second.codexHome);
         expect(first.repositorySnapshot).not.toBe(second.repositorySnapshot);
@@ -383,10 +394,12 @@ describe('module expert runtime isolation', () => {
           '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md',
         ],
       };
-      const isolation =
+      const isolationResult =
         await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           isolationRequest,
         );
+      assert(isolationResult.isOk());
+      const isolation = isolationResult.value;
       try {
         const webProfile =
           ModuleExpertsRuntimeContractScenario.profile('web_expert');
@@ -454,10 +467,12 @@ describe('module expert runtime isolation', () => {
         ),
         expertName: 'internal_api_expert',
       };
-      const isolation =
+      const isolationResult =
         await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           isolationRequest,
         );
+      assert(isolationResult.isOk());
+      const isolation = isolationResult.value;
       try {
         const selected = ModuleExpertsRuntimeContractScenario.profile(
           'internal_api_expert',
@@ -504,10 +519,12 @@ describe('module expert runtime isolation', () => {
         ),
         expertName: 'internal_api_expert',
       };
-      const isolation =
+      const isolationResult =
         await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           isolationRequest,
         );
+      assert(isolationResult.isOk());
+      const isolation = isolationResult.value;
       try {
         const selected = ModuleExpertsRuntimeContractScenario.profile(
           'internal_api_expert',
@@ -581,29 +598,38 @@ describe('module expert runtime isolation', () => {
           PATH: defaulted8,
         },
       };
-      await expect(
-        ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
+      const isolationFailure1 =
+        await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           unsupportedAuthRequest,
-        ),
-      ).rejects.toThrow('requires CODEX_API_KEY authentication');
+        );
+      assert(isolationFailure1.isErr());
+      expect(isolationFailure1.error.message).toContain(
+        'requires CODEX_API_KEY authentication',
+      );
       const unsupportedExpertRequest: ModuleExpertRuntimeIsolationRequest = {
         ...baseRequest,
         expertName: 'unregistered_expert',
       };
-      await expect(
-        ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
+      const isolationFailure2 =
+        await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           unsupportedExpertRequest,
-        ),
-      ).rejects.toThrow('requires a registered expert');
+        );
+      assert(isolationFailure2.isErr());
+      expect(isolationFailure2.error.message).toContain(
+        'requires a registered expert',
+      );
       const invalidCommitRequest: ModuleExpertRuntimeIsolationRequest = {
         ...baseRequest,
         sourceCommit: 'HEAD',
       };
-      await expect(
-        ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
+      const isolationFailure3 =
+        await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           invalidCommitRequest,
-        ),
-      ).rejects.toThrow('must be a full Git SHA');
+        );
+      assert(isolationFailure3.isErr());
+      expect(isolationFailure3.error.message).toContain(
+        'must be a full Git SHA',
+      );
 
       const isolationUse: ModuleExpertRuntimeIsolationUse<never> = {
         isolationRequest: baseRequest,
@@ -667,12 +693,14 @@ describe('module expert runtime isolation', () => {
         isolationRoot,
         repository,
       };
-      const isolation =
+      const isolationResult =
         await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
           ModuleExpertsRuntimeContractScenario.runtimeIsolationRequest(
             fixtureRequest,
           ),
         );
+      assert(isolationResult.isOk());
+      const isolation = isolationResult.value;
       try {
         const provider =
           isolation.codexOptions.config.model_providers[

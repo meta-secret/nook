@@ -181,10 +181,12 @@ test('materializes exact committed web product and release authorities', async (
       temporaryRoot,
       workingDirectory: fixture.root,
     };
-    const isolation =
+    const isolationResult =
       await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
         isolationRequest,
       );
+    assert(isolationResult.isOk());
+    const isolation = isolationResult.value;
     try {
       const profile = ModuleExpertsWebExpertSnapshotScenario.webExpertProfile();
       expect(isolation.selectedContextPaths).toEqual(SELECTED_CONTEXT_PATHS);
@@ -242,10 +244,12 @@ test('keeps ordinary web analysis free of design and extension release context',
       temporaryRoot,
       workingDirectory: fixture.root,
     };
-    const isolation =
+    const isolationResult =
       await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
         isolationRequest,
       );
+    assert(isolationResult.isOk());
+    const isolation = isolationResult.value;
     try {
       expect(isolation.selectedContextPaths).toEqual([]);
       for (const excludedTaskContext of [

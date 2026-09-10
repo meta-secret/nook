@@ -1,3 +1,4 @@
+import type { ExpertIsolationFailure } from '../module-experts/isolation-failure.ts';
 import type { Result } from 'neverthrow';
 import type { HostCommandFailure } from '../lib/run.ts';
 import type {
@@ -71,6 +72,7 @@ export enum AgentExecutionFailureKind {
   RuntimeBoundary = 'runtimeBoundary',
 }
 export type AgentExecutionFailure =
+  | ExpertIsolationFailure
   | HostCommandFailure
   | {
       readonly kind: AgentExecutionFailureKind;
