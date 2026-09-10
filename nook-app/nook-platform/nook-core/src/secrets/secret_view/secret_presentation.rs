@@ -7,21 +7,26 @@
 use super::{SecretListItem, SecretListItemData, SecretType, Url};
 use crate::secrets::{
     authenticator_issuer_hosts::{
-        AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
+        AuthenticatorHostResolution, AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError,
+        AuthenticatorWebsiteHostRequest,
     },
     login_site_hosts::{LoginFamilyMatchRequest, LoginSiteHosts, LoginSiteHostsError},
 };
 use crate::vault_session::SecretPage;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct WebsiteHost(String);
+pub struct WebsiteHost(pub(crate) String);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("website value has no valid host")]
+pub struct WebsiteHostError;
 
 impl WebsiteHost {
     #[must_use]
-    pub fn normalize(raw: &str) -> Option<Self> {
+    pub fn normalize(raw: &str) -> Result<Self, WebsiteHostError> {
         let value = raw.trim();
         if value.is_empty() {
-            return None;
+            return Err(WebsiteHostError);
         }
 
         let host = Url::parse(value)
@@ -37,7 +42,11 @@ impl WebsiteHost {
             .unwrap_or_default()
             .trim_start_matches("www.")
             .to_owned();
-        (!host.is_empty()).then_some(Self(host))
+        if host.is_empty() {
+            Err(WebsiteHostError)
+        } else {
+            Ok(Self(host))
+        }
     }
 
     #[must_use]
@@ -112,10 +121,10 @@ pub struct LoginHostMatchRequest<'a> {
 
 impl LoginHostMatchRequest<'_> {
     pub fn matches(&self) -> Result<bool, LoginSiteHostsError> {
-        let Some(secret_host) = WebsiteHost::normalize(self.website_url) else {
+        let Ok(secret_host) = WebsiteHost::normalize(self.website_url) else {
             return Ok(false);
         };
-        let Some(origin_host) = WebsiteHost::normalize(self.origin) else {
+        let Ok(origin_host) = WebsiteHost::normalize(self.origin) else {
             return Ok(false);
         };
         if secret_host
@@ -141,21 +150,24 @@ pub struct AuthenticatorGroupKeyRequest<'a> {
 }
 
 impl AuthenticatorGroupKeyRequest<'_> {
-    pub fn website_host(&self) -> Result<Option<String>, AuthenticatorIssuerHostsError> {
+    pub fn website_host(
+        &self,
+    ) -> Result<AuthenticatorHostResolution, AuthenticatorIssuerHostsError> {
         let request = AuthenticatorWebsiteHostRequest {
             website_url: self.website_url,
             issuer: self.issuer,
         };
-        if let Some(host) = request.explicit_or_domain_host() {
-            return Ok(Some(host));
+        if let AuthenticatorHostResolution::Resolved(host) = request.explicit_or_domain_host() {
+            return Ok(AuthenticatorHostResolution::Resolved(host));
         }
         Ok(AuthenticatorIssuerHosts::require_bundled()?.resolve_website_host(request))
     }
 
     pub fn resolve(&self) -> Result<String, AuthenticatorIssuerHostsError> {
-        Ok(self
-            .website_host()?
-            .unwrap_or_else(|| self.issuer.trim().to_owned()))
+        Ok(match self.website_host()? {
+            AuthenticatorHostResolution::Resolved(host) => host.into_string(),
+            AuthenticatorHostResolution::UnmappedIssuer => self.issuer.trim().to_owned(),
+        })
     }
 }
 
@@ -259,7 +271,7 @@ impl SecretListItem {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => {
                 Ok(WebsiteHost::normalize(website_url)
-                    .map_or_else(String::new, WebsiteHost::into_string))
+                    .map_or_else(|_| String::new(), WebsiteHost::into_string))
             }
             SecretListItemData::Authenticator {
                 website_url,
@@ -270,7 +282,10 @@ impl SecretListItem {
                 issuer,
             }
             .website_host()
-            .map(Option::unwrap_or_default),
+            .map(|resolution| match resolution {
+                AuthenticatorHostResolution::Resolved(host) => host.into_string(),
+                AuthenticatorHostResolution::UnmappedIssuer => String::new(),
+            }),
             _ => Ok(String::new()),
         }
     }
@@ -299,7 +314,7 @@ impl SecretListItem {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => WebsiteHost::normalize(website_url)
-                .map_or_else(|| "No Website".to_owned(), WebsiteHost::into_string),
+                .map_or_else(|_| "No Website".to_owned(), WebsiteHost::into_string),
             SecretListItemData::SeedPhrase { name, .. } => {
                 let name = name.trim();
                 if name.is_empty() {
@@ -466,32 +481,32 @@ impl SecretPage {
 
                 let brand = AuthenticatorIssuerHosts::normalize_lookup_key(key);
                 let account = account.trim();
-                let mut best: Option<(bool, usize, String)> = None;
-                for (anchor_index, host) in &anchors {
-                    if !Self::brand_matches_host(BrandHostMatchRequest {
-                        brand: &brand,
-                        host,
-                    }) {
-                        continue;
-                    }
-                    let account_match = !account.is_empty()
-                        && self.records[*anchor_index]
-                            .site_anchor_account()
-                            .eq_ignore_ascii_case(account);
-                    let candidate = (account_match, host.len(), host.clone());
-                    best = Some(match best {
-                        None => candidate,
-                        Some(current) => {
-                            let better = (candidate.0 && !current.0)
-                                || (candidate.0 == current.0 && candidate.1 < current.1)
-                                || (candidate.0 == current.0
-                                    && candidate.1 == current.1
-                                    && candidate.2 < current.2);
-                            if better { candidate } else { current }
-                        }
+                let best = anchors
+                    .iter()
+                    .filter(|(_, host)| {
+                        Self::brand_matches_host(BrandHostMatchRequest {
+                            brand: &brand,
+                            host,
+                        })
+                    })
+                    .map(|(anchor_index, host)| {
+                        let account_match = !account.is_empty()
+                            && self.records[*anchor_index]
+                                .site_anchor_account()
+                                .eq_ignore_ascii_case(account);
+                        (account_match, host)
+                    })
+                    .min_by(|left, right| {
+                        right
+                            .0
+                            .cmp(&left.0)
+                            .then_with(|| left.1.len().cmp(&right.1.len()))
+                            .then_with(|| left.1.cmp(right.1))
                     });
+                match best {
+                    Some((_, host)) => host.clone(),
+                    None => key.clone(),
                 }
-                best.map_or_else(|| key.clone(), |(_, _, host)| host)
             })
             .map(SecretGroupKey::from_string)
             .collect())
@@ -646,8 +661,8 @@ mod tests {
 
     #[test]
     fn website_host_normalization_rejects_empty_and_malformed_values() {
-        assert!(WebsiteHost::normalize("").is_none());
-        assert!(WebsiteHost::normalize("https://").is_none());
+        assert!(WebsiteHost::normalize("").is_err());
+        assert!(WebsiteHost::normalize("https://").is_err());
     }
 
     #[test]

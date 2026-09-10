@@ -4,9 +4,15 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Decoded Proton Pass vaults and ordered item metadata conversion.
+#[derive(Debug, PartialEq, Eq)]
+enum ExportFieldExclusion {
+    EmptyText,
+    UnsupportedValue,
+}
 use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{ProtonPassImportError, ProtonPassImportPlan};
 use crate::CreditCardFields;
+use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
 use serde::de::IgnoredAny;
@@ -133,24 +139,25 @@ impl Default for ProtonPassFieldScalar {
     }
 }
 impl ProtonPassFieldScalar {
-    fn text(&self) -> Option<String> {
+    fn text(&self) -> Result<String, ExportFieldExclusion> {
         match self {
-            Self::Text(value) if !value.trim().is_empty() => Some(value.clone()),
-            Self::Number(value) => Some(value.to_string()),
-            Self::Text(_) | Self::Unsupported(_) => None,
+            Self::Text(value) if !value.trim().is_empty() => Ok(value.clone()),
+            Self::Number(value) => Ok(value.to_string()),
+            Self::Text(_) => Err(ExportFieldExclusion::EmptyText),
+            Self::Unsupported(_) => Err(ExportFieldExclusion::UnsupportedValue),
         }
     }
 }
 impl ProtonPassField {
-    fn value(&self) -> Option<String> {
+    fn value(&self) -> Result<String, ExportFieldExclusion> {
         let ProtonPassFieldContent::Object(data) = &self.data else {
-            return None;
+            return Err(ExportFieldExclusion::UnsupportedValue);
         };
         match self.field_type.as_str() {
             "totp" => data.totp_uri.text(),
             "timestamp" => data.timestamp.text(),
             "text" | "hidden" => data.content.text(),
-            _ => None,
+            _ => Err(ExportFieldExclusion::UnsupportedValue),
         }
     }
 }
@@ -211,7 +218,7 @@ impl ProtonPassVaultItem<'_> {
                 .iter()
                 .enumerate()
                 .filter_map(|(index, field)| {
-                    let value = field.value()?;
+                    let value = field.value().ok()?;
                     let name = if field.field_name.trim().is_empty() {
                         format!("field[{}]", index + 1)
                     } else {
@@ -260,7 +267,7 @@ impl ProtonPassVaultItem<'_> {
             primary_url: website_url.as_str(),
             username,
         });
-        if let Some(name) = (SourceLabelMetadata {
+        if let Ok(name) = (SourceLabelMetadata {
             key: "name",
             label: &item.data.metadata.name,
             website_url: website_url.as_str(),
@@ -302,7 +309,7 @@ impl ProtonPassVaultItem<'_> {
     }
 }
 impl ProtonPassVaultItem<'_> {
-    fn credit_card(self) -> Option<SecretValue> {
+    fn credit_card(self) -> ImportItemDisposition {
         let item = &self.item;
 
         let content = &item.data.content;
@@ -329,8 +336,10 @@ impl ProtonPassVaultItem<'_> {
             cvv: content.verification_number.trim(),
             notes: &notes,
         })
-        .ok()
-        .map(SecretValue::CreditCard)
+        .map_or(
+            ImportItemDisposition::Skipped(ImportSkipReason::InvalidCard),
+            |card| ImportItemDisposition::Imported(SecretValue::CreditCard(card)),
+        )
     }
 }
 struct ProtonPassExpiration<'a> {
@@ -375,7 +384,7 @@ impl ProtonPassExport {
                         .note(),
                     ),
                     "creditCard" => {
-                        if let Some(card) = (ProtonPassVaultItem {
+                        if let ImportItemDisposition::Imported(card) = (ProtonPassVaultItem {
                             item,
                             vault_name: &vault.name,
                         })
@@ -427,7 +436,7 @@ mod tests {
             (r#"{"type":"text","data":{"content":" "}}"#, None),
         ] {
             let field: ProtonPassField = serde_json::from_str(json)?;
-            assert_eq!(field.value().as_deref(), expected);
+            assert_eq!(field.value().ok().as_deref(), expected);
         }
         Ok(())
     }

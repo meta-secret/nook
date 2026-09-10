@@ -36,18 +36,26 @@ pub struct AuthenticatorWebsiteHostRequest<'a> {
     pub issuer: &'a str,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthenticatorHostResolution {
+    Resolved(WebsiteHost),
+    UnmappedIssuer,
+}
 impl AuthenticatorWebsiteHostRequest<'_> {
     #[must_use]
-    pub(crate) fn explicit_or_domain_host(&self) -> Option<String> {
-        if let Some(from_url) = WebsiteHost::normalize(self.website_url) {
-            return Some(from_url.into_string());
+    pub(crate) fn explicit_or_domain_host(&self) -> AuthenticatorHostResolution {
+        if let Ok(from_url) = WebsiteHost::normalize(self.website_url) {
+            return AuthenticatorHostResolution::Resolved(from_url);
         }
 
         let issuer = self.issuer.trim();
         if issuer.is_empty() || !(issuer.contains("://") || issuer.contains('.')) {
-            return None;
+            return AuthenticatorHostResolution::UnmappedIssuer;
         }
-        WebsiteHost::normalize(issuer).map(WebsiteHost::into_string)
+        match WebsiteHost::normalize(issuer) {
+            Ok(host) => AuthenticatorHostResolution::Resolved(host),
+            Err(_) => AuthenticatorHostResolution::UnmappedIssuer,
+        }
     }
 }
 
@@ -101,17 +109,13 @@ static ISSUER_HOSTS: LazyLock<AuthenticatorIssuerHostsState> = LazyLock::new(|| 
 });
 
 impl AuthenticatorIssuerHosts {
-    /// Select the bundled catalog when it is valid.
-    #[must_use]
-    pub fn bundled() -> Option<&'static Self> {
-        match &*ISSUER_HOSTS {
-            AuthenticatorIssuerHostsState::Ready(hosts) => Some(hosts),
-            AuthenticatorIssuerHostsState::InvalidBundledCatalog => None,
-        }
-    }
-
     pub fn require_bundled() -> Result<&'static Self, AuthenticatorIssuerHostsError> {
-        Self::bundled().ok_or(AuthenticatorIssuerHostsError::InvalidBundledCatalog)
+        match &*ISSUER_HOSTS {
+            AuthenticatorIssuerHostsState::Ready(hosts) => Ok(hosts),
+            AuthenticatorIssuerHostsState::InvalidBundledCatalog => {
+                Err(AuthenticatorIssuerHostsError::InvalidBundledCatalog)
+            }
+        }
     }
 
     /// Normalize an authenticator issuer for table lookup (`OpenAI` → `openai`).
@@ -125,12 +129,15 @@ impl AuthenticatorIssuerHosts {
 
     /// Look up a popular-service host for a brand issuer label.
     #[must_use]
-    pub fn mapped_host(&self, issuer: &str) -> Option<&str> {
+    pub fn mapped_host(&self, issuer: &str) -> AuthenticatorHostResolution {
         let key = Self::normalize_lookup_key(issuer);
         if key.is_empty() {
-            return None;
+            return AuthenticatorHostResolution::UnmappedIssuer;
         }
-        self.by_issuer.get(&key).map(String::as_str)
+        match self.by_issuer.get(&key) {
+            Some(host) => AuthenticatorHostResolution::Resolved(WebsiteHost(host.clone())),
+            None => AuthenticatorHostResolution::UnmappedIssuer,
+        }
     }
 
     /// Resolve a website host for authenticator clustering / optional URL inference.
@@ -140,12 +147,12 @@ impl AuthenticatorIssuerHosts {
     pub fn resolve_website_host(
         &self,
         request: AuthenticatorWebsiteHostRequest<'_>,
-    ) -> Option<String> {
-        if let Some(host) = request.explicit_or_domain_host() {
-            return Some(host);
+    ) -> AuthenticatorHostResolution {
+        if let AuthenticatorHostResolution::Resolved(host) = request.explicit_or_domain_host() {
+            return AuthenticatorHostResolution::Resolved(host);
         }
 
-        self.mapped_host(request.issuer).map(str::to_owned)
+        self.mapped_host(request.issuer)
     }
 }
 
@@ -154,7 +161,7 @@ mod tests {
     use super::*;
 
     fn bundled() -> anyhow::Result<&'static AuthenticatorIssuerHosts> {
-        AuthenticatorIssuerHosts::bundled().ok_or_else(|| anyhow::anyhow!("bundled issuer catalog"))
+        Ok(AuthenticatorIssuerHosts::require_bundled()?)
     }
 
     #[test]
@@ -180,16 +187,31 @@ mod tests {
     #[test]
     fn maps_popular_brand_issuers() -> anyhow::Result<()> {
         let bundled = bundled()?;
-        assert_eq!(bundled.mapped_host("OpenAI"), Some("openai.com"));
-        assert_eq!(bundled.mapped_host("GitHub"), Some("github.com"));
-        assert_eq!(bundled.mapped_host("Namecheap"), Some("namecheap.com"));
-        assert_eq!(bundled.mapped_host("Epic Games"), Some("epicgames.com"));
+        assert_eq!(
+            bundled.mapped_host("OpenAI"),
+            AuthenticatorHostResolution::Resolved(WebsiteHost("openai.com".to_owned()))
+        );
+        assert_eq!(
+            bundled.mapped_host("GitHub"),
+            AuthenticatorHostResolution::Resolved(WebsiteHost("github.com".to_owned()))
+        );
+        assert_eq!(
+            bundled.mapped_host("Namecheap"),
+            AuthenticatorHostResolution::Resolved(WebsiteHost("namecheap.com".to_owned()))
+        );
+        assert_eq!(
+            bundled.mapped_host("Epic Games"),
+            AuthenticatorHostResolution::Resolved(WebsiteHost("epicgames.com".to_owned()))
+        );
         Ok(())
     }
 
     #[test]
     fn unknown_issuer_has_no_mapping() -> anyhow::Result<()> {
-        assert_eq!(bundled()?.mapped_host("Totally Unknown Service"), None);
+        assert_eq!(
+            bundled()?.mapped_host("Totally Unknown Service"),
+            AuthenticatorHostResolution::UnmappedIssuer
+        );
         Ok(())
     }
 
@@ -201,7 +223,7 @@ mod tests {
                 website_url: "https://www.openai.com/account",
                 issuer: "GitHub",
             }),
-            Some("openai.com".to_owned())
+            AuthenticatorHostResolution::Resolved(WebsiteHost("openai.com".to_owned()))
         );
         Ok(())
     }
@@ -214,14 +236,14 @@ mod tests {
                 website_url: "",
                 issuer: "https://github.com",
             }),
-            Some("github.com".to_owned())
+            AuthenticatorHostResolution::Resolved(WebsiteHost("github.com".to_owned()))
         );
         assert_eq!(
             bundled.resolve_website_host(AuthenticatorWebsiteHostRequest {
                 website_url: "",
                 issuer: "OpenAI",
             }),
-            Some("openai.com".to_owned())
+            AuthenticatorHostResolution::Resolved(WebsiteHost("openai.com".to_owned()))
         );
         Ok(())
     }

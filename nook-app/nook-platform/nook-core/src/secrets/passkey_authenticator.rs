@@ -137,7 +137,7 @@ pub struct PasskeyAssertionResult {
 }
 
 mod assertion;
-mod encoding;
+pub(crate) mod encoding;
 mod registration;
 pub use assertion::CheckedPasskeyAssertion;
 use encoding::{

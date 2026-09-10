@@ -8,6 +8,7 @@ mod columns;
 mod records;
 use super::import_support::{CsvImportConversion, CsvImportReader, MAX_CSV_BYTES};
 use crate::SecretValue;
+use crate::secrets::import_support::ImportItemDisposition;
 use columns::{KeeperColumns, KeeperHeaders};
 use csv::StringRecord;
 use records::KeeperRecord;
@@ -96,8 +97,8 @@ impl CheckedKeeperCsv<'_> {
             })
             .convert()
             {
-                Some(item) => (vec![item], 0),
-                None => (Vec::new(), 1),
+                ImportItemDisposition::Imported(item) => (vec![item], 0),
+                ImportItemDisposition::Skipped(_) => (Vec::new(), 1),
             },
         })?;
         Ok(KeeperImportPlan {

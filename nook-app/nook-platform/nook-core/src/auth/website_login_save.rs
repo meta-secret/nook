@@ -84,11 +84,11 @@ impl WebsiteLoginSavePolicy {
         if username.is_empty() || password.is_empty() {
             return Ok(WebsiteLoginSaveDecision::Invalid);
         }
-        if WebsiteHost::normalize(origin).is_none() {
+        if WebsiteHost::normalize(origin).is_err() {
             return Ok(WebsiteLoginSaveDecision::Invalid);
         }
 
-        let mut matching_username: Option<&WebsiteLoginSaveCandidate<'_>> = None;
+        let mut decision = WebsiteLoginSaveDecision::Create;
         for candidate in candidates {
             if !(LoginHostMatchRequest {
                 website_url: &candidate.login.website_url,
@@ -101,7 +101,9 @@ impl WebsiteLoginSavePolicy {
             if candidate.login.username.trim() != username {
                 continue;
             }
-            matching_username = Some(candidate);
+            decision = WebsiteLoginSaveDecision::Update {
+                secret_id: candidate.secret_id.clone(),
+            };
             if candidate.login.password == password {
                 return Ok(WebsiteLoginSaveDecision::AlreadySaved {
                     secret_id: candidate.secret_id.clone(),
@@ -109,12 +111,7 @@ impl WebsiteLoginSavePolicy {
             }
         }
 
-        if let Some(candidate) = matching_username {
-            return Ok(WebsiteLoginSaveDecision::Update {
-                secret_id: candidate.secret_id.clone(),
-            });
-        }
-        Ok(WebsiteLoginSaveDecision::Create)
+        Ok(decision)
     }
 }
 

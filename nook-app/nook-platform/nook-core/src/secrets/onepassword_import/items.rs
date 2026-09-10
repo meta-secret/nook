@@ -4,9 +4,15 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Ordered vault item conversion and dynamic field interpretation.
+#[derive(Debug, PartialEq, Eq)]
+enum ExportFieldExclusion {
+    EmptyText,
+    UnsupportedValue,
+}
 use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{OnePasswordImportError, OnePasswordImportPlan};
 use crate::CreditCardFields;
+use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
 use serde_json::Value;
@@ -138,18 +144,28 @@ struct OnePasswordFieldValue<'a> {
     value: &'a Value,
 }
 impl OnePasswordFieldValue<'_> {
-    fn text(&self) -> Option<String> {
+    fn text(&self) -> Result<String, ExportFieldExclusion> {
         match self.value {
-            Value::Null => None,
-            Value::String(value) => (!value.trim().is_empty()).then(|| value.clone()),
-            Value::Bool(value) => Some(value.to_string()),
-            Value::Number(value) => Some(value.to_string()),
+            Value::Null => Err(ExportFieldExclusion::UnsupportedValue),
+            Value::String(value) => {
+                if value.trim().is_empty() {
+                    Err(ExportFieldExclusion::EmptyText)
+                } else {
+                    Ok(value.clone())
+                }
+            }
+            Value::Bool(value) => Ok(value.to_string()),
+            Value::Number(value) => Ok(value.to_string()),
             Value::Array(values) => {
                 let values = values
                     .iter()
-                    .filter_map(|value| OnePasswordFieldValue { value }.text())
+                    .filter_map(|value| OnePasswordFieldValue { value }.text().ok())
                     .collect::<Vec<_>>();
-                (!values.is_empty()).then(|| values.join(", "))
+                if values.is_empty() {
+                    Err(ExportFieldExclusion::EmptyText)
+                } else {
+                    Ok(values.join(", "))
+                }
             }
             Value::Object(values) => {
                 const WRAPPED_VALUE_KEYS: [&str; 13] = [
@@ -172,9 +188,10 @@ impl OnePasswordFieldValue<'_> {
                     .find_map(|key| {
                         values
                             .get(*key)
-                            .and_then(|value| OnePasswordFieldValue { value }.text())
+                            .and_then(|value| OnePasswordFieldValue { value }.text().ok())
                     })
                     .or_else(|| serde_json::to_string(self.value).ok())
+                    .ok_or(ExportFieldExclusion::UnsupportedValue)
             }
         }
     }
@@ -253,7 +270,8 @@ impl OnePasswordSections<'_> {
                         let value = OnePasswordFieldValue {
                             value: &field.value,
                         }
-                        .text()?;
+                        .text()
+                        .ok()?;
                         let field_name = if field.title.trim().is_empty() {
                             if field.id.trim().is_empty() {
                                 format!("field[{}]", index + 1)
@@ -283,6 +301,7 @@ impl OnePasswordSections<'_> {
                     value: &field.value,
                 }
                 .text()
+                .ok()
             })
             .unwrap_or_default()
     }
@@ -347,10 +366,17 @@ impl OnePasswordCredential {
         }
     }
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OnePasswordCredentialSource {
+    LoginField(usize),
+    SectionFields,
+    ItemPassword,
+}
 impl OnePasswordItem {
-    fn login_field_index(&self, kind: OnePasswordCredential) -> Option<usize> {
+    fn credential_source(&self, kind: OnePasswordCredential) -> OnePasswordCredentialSource {
         let (designation, fallback_names) = kind.lookup();
-        self.details
+        let index = self
+            .details
             .login_fields
             .iter()
             .position(|field| field.designation.eq_ignore_ascii_case(designation))
@@ -360,7 +386,11 @@ impl OnePasswordItem {
                         || (designation == "password" && field.field_type.eq_ignore_ascii_case("P"))
                 })
             })
-            .filter(|index| !self.details.login_fields[*index].value.is_empty())
+            .filter(|index| !self.details.login_fields[*index].value.is_empty());
+        match index {
+            Some(index) => OnePasswordCredentialSource::LoginField(index),
+            None => OnePasswordCredentialSource::SectionFields,
+        }
     }
     fn primary_url(&self) -> String {
         if !self.overview.url.trim().is_empty() {
@@ -381,13 +411,13 @@ impl OnePasswordVaultItem<'_> {
         let item = &self.item;
 
         let website_url = item.primary_url();
-        let username_index = item.login_field_index(OnePasswordCredential::Username);
+        let username_index = item.credential_source(OnePasswordCredential::Username);
         let password_index = if item.details.password.is_empty() {
-            item.login_field_index(OnePasswordCredential::Password)
+            item.credential_source(OnePasswordCredential::Password)
         } else {
-            None
+            OnePasswordCredentialSource::ItemPassword
         };
-        let mut username = if username_index.is_none() {
+        let mut username = if username_index == OnePasswordCredentialSource::SectionFields {
             OnePasswordSections {
                 sections: &item.details.sections,
             }
@@ -395,7 +425,9 @@ impl OnePasswordVaultItem<'_> {
         } else {
             String::new()
         };
-        let section_password = if item.details.password.is_empty() && password_index.is_none() {
+        let section_password = if item.details.password.is_empty()
+            && password_index == OnePasswordCredentialSource::SectionFields
+        {
             OnePasswordSections {
                 sections: &item.details.sections,
             }
@@ -407,7 +439,7 @@ impl OnePasswordVaultItem<'_> {
             primary_url: website_url.as_str(),
             policy: OnePasswordMetadataPolicy::OmitCredentials,
         });
-        if let Some(title) = (SourceLabelMetadata {
+        if let Ok(title) = (SourceLabelMetadata {
             key: "title",
             label: &item.overview.title,
             website_url: website_url.as_str(),
@@ -423,13 +455,13 @@ impl OnePasswordVaultItem<'_> {
             self.item.details.password
         };
         for (index, field) in self.item.details.login_fields.into_iter().enumerate() {
-            if username_index == Some(index) {
+            if username_index == OnePasswordCredentialSource::LoginField(index) {
                 // A single field may intentionally be both designated username and password fallback.
-                if password_index == Some(index) {
+                if password_index == OnePasswordCredentialSource::LoginField(index) {
                     password = field.value.clone();
                 }
                 username = field.value;
-            } else if password_index == Some(index) {
+            } else if password_index == OnePasswordCredentialSource::LoginField(index) {
                 password = field.value;
             }
         }
@@ -457,7 +489,7 @@ impl OnePasswordVaultItem<'_> {
     }
 }
 impl OnePasswordVaultItem<'_> {
-    fn credit_card(self) -> Option<SecretValue> {
+    fn credit_card(self) -> ImportItemDisposition {
         let item = &self.item;
 
         let cardholder = OnePasswordSections {
@@ -498,19 +530,23 @@ impl OnePasswordVaultItem<'_> {
             cvv: cvv.trim(),
             notes: &notes,
         })
-        .ok()
-        .map(SecretValue::CreditCard)
+        .map_or(
+            ImportItemDisposition::Skipped(ImportSkipReason::InvalidCard),
+            |card| ImportItemDisposition::Imported(SecretValue::CreditCard(card)),
+        )
     }
 }
 impl OnePasswordVaultItem<'_> {
-    fn item(self) -> Option<SecretValue> {
+    fn item(self) -> ImportItemDisposition {
         let item = &self.item;
 
         match item.category_uuid.as_str() {
-            LOGIN_CATEGORY_UUID | PASSWORD_CATEGORY_UUID => Some(self.login()),
-            SECURE_NOTE_CATEGORY_UUID => Some(self.secure_note()),
+            LOGIN_CATEGORY_UUID | PASSWORD_CATEGORY_UUID => {
+                ImportItemDisposition::Imported(self.login())
+            }
+            SECURE_NOTE_CATEGORY_UUID => ImportItemDisposition::Imported(self.secure_note()),
             CREDIT_CARD_CATEGORY_UUID => self.credit_card(),
-            _ => None,
+            _ => ImportItemDisposition::Skipped(ImportSkipReason::UnsupportedKind),
         }
     }
 }
@@ -541,14 +577,15 @@ impl ExportData {
             for vault in account.vaults {
                 let vault_name = vault.attrs.name;
                 source_count += vault.items.len();
-                items.extend(vault.items.into_iter().filter_map(|item| {
+                for item in vault.items {
                     let item = OnePasswordItem::from(item);
                     OnePasswordVaultItem {
                         item,
                         vault_name: &vault_name,
                     }
                     .item()
-                }));
+                    .append(&mut items);
+                }
             }
         }
         let skipped_unsupported = source_count.saturating_sub(items.len());
@@ -583,7 +620,10 @@ mod tests {
         ] {
             let value = serde_json::from_str(json)?;
             assert_eq!(
-                OnePasswordFieldValue { value: &value }.text().as_deref(),
+                OnePasswordFieldValue { value: &value }
+                    .text()
+                    .ok()
+                    .as_deref(),
                 expected
             );
         }

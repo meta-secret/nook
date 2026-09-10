@@ -93,9 +93,9 @@ impl SecretRecord {
     pub fn group_key(&self) -> String {
         match &self.data {
             SecretValue::Login(value) => WebsiteHost::normalize(&value.website_url)
-                .map_or_else(|| "No Website".to_owned(), WebsiteHost::into_string),
+                .map_or_else(|_| "No Website".to_owned(), WebsiteHost::into_string),
             SecretValue::ApiKey(value) => WebsiteHost::normalize(&value.website_url)
-                .map_or_else(|| "No Website".to_owned(), WebsiteHost::into_string),
+                .map_or_else(|_| "No Website".to_owned(), WebsiteHost::into_string),
             SecretValue::SeedPhrase(value) => {
                 let name = value.name.trim();
                 if name.is_empty() {

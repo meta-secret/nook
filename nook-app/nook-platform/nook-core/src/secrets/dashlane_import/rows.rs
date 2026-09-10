@@ -10,6 +10,7 @@ use super::super::import_support::{
 };
 use super::{DashlaneImportError, DashlaneImportPlan};
 use crate::CreditCardFields;
+use crate::secrets::import_support::CsvExportColumn;
 use crate::{
     AuthenticatorIssuerHostsError, AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue,
     SecureNoteSecret, ValidationError,
@@ -121,11 +122,15 @@ impl NormalizedDashlaneHeaders {
             .position(|header| header == &expected)
             .ok_or(DashlaneImportError::MissingColumn(name))
     }
-    fn optional(&self, names: &[&str]) -> Option<usize> {
-        names.iter().find_map(|name| {
+    fn optional(&self, names: &[&str]) -> CsvExportColumn {
+        let column = names.iter().find_map(|name| {
             let expected = CsvHeader::new(name).normalized();
             self.values.iter().position(|header| header == &expected)
-        })
+        });
+        match column {
+            Some(index) => CsvExportColumn::Exported(index),
+            None => CsvExportColumn::NotExported,
+        }
     }
     fn detect(&self) -> Result<DashlaneCsvKind, DashlaneImportError> {
         if self.values.iter().any(|header| header == "username")
@@ -153,15 +158,15 @@ impl NormalizedDashlaneHeaders {
 #[derive(Clone, Copy)]
 struct CredentialColumns {
     username: usize,
-    username2: Option<usize>,
-    username3: Option<usize>,
-    title: Option<usize>,
+    username2: CsvExportColumn,
+    username3: CsvExportColumn,
+    title: CsvExportColumn,
     password: usize,
-    note: Option<usize>,
-    url: Option<usize>,
-    category: Option<usize>,
-    otp_secret: Option<usize>,
-    otp_url: Option<usize>,
+    note: CsvExportColumn,
+    url: CsvExportColumn,
+    category: CsvExportColumn,
+    otp_secret: CsvExportColumn,
+    otp_url: CsvExportColumn,
 }
 
 #[derive(Clone, Copy)]
@@ -173,12 +178,12 @@ struct SecureNoteColumns {
 #[derive(Clone, Copy)]
 struct PaymentColumns {
     kind: usize,
-    account_name: Option<usize>,
-    account_holder: Option<usize>,
-    cc_number: Option<usize>,
-    code: Option<usize>,
-    expiration_month: Option<usize>,
-    expiration_year: Option<usize>,
+    account_name: CsvExportColumn,
+    account_holder: CsvExportColumn,
+    cc_number: CsvExportColumn,
+    code: CsvExportColumn,
+    expiration_month: CsvExportColumn,
+    expiration_year: CsvExportColumn,
 }
 
 impl CredentialColumns {
@@ -226,7 +231,7 @@ impl CredentialColumns {
         let website_url = if url.is_empty() { title.clone() } else { url };
 
         let mut metadata = Vec::new();
-        if let Some(entry) = (SourceLabelMetadata {
+        if let Ok(entry) = (SourceLabelMetadata {
             key: "title",
             label: &title,
             website_url: &website_url,

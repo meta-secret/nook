@@ -51,7 +51,7 @@ impl<'a> SafariArchive<'a> {
             mut archive,
             candidates,
         } = self.candidates()?;
-        let mut last_missing_column = None;
+        let mut failure = ApplePasswordsImportError::MissingPasswordsFile;
         for candidate in candidates {
             let read = archive.read(candidate)?;
             archive = read.archive;
@@ -59,15 +59,12 @@ impl<'a> SafariArchive<'a> {
             match ApplePasswordsCsvInput::new(&csv).plan() {
                 Ok(plan) => return Ok(plan),
                 Err(ApplePasswordsImportError::MissingColumn(column)) => {
-                    last_missing_column = Some(column);
+                    failure = ApplePasswordsImportError::MissingColumn(column);
                 }
                 Err(error) => return Err(error),
             }
         }
-        if let Some(column) = last_missing_column {
-            return Err(ApplePasswordsImportError::MissingColumn(column));
-        }
-        Err(ApplePasswordsImportError::MissingPasswordsFile)
+        Err(failure)
     }
     fn read(
         mut self,

@@ -9,6 +9,7 @@ use super::super::import_support::{
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{ApplePasswordsImportError, ApplePasswordsImportPlan};
+use crate::secrets::import_support::CsvExportColumn;
 use crate::{
     AuthenticatorIssuerHostsError, AuthenticatorSecret, LoginSecret, SecretValue, ValidationError,
 };
@@ -19,8 +20,8 @@ struct ApplePasswordColumns {
     url: usize,
     username: usize,
     password: usize,
-    notes: Option<usize>,
-    otp_auth: Option<usize>,
+    notes: CsvExportColumn,
+    otp_auth: CsvExportColumn,
 }
 
 /// A CSV input retains its source bytes until the admitted reader is consumed.
@@ -117,11 +118,16 @@ impl ApplePasswordHeaders {
             .position(|header| header == &CsvHeader::new(name).normalized())
             .ok_or(ApplePasswordsImportError::MissingColumn(name))
     }
-    fn optional(&self, name: &str) -> Option<usize> {
+    fn optional(&self, name: &str) -> CsvExportColumn {
         let expected = CsvHeader::new(name).normalized();
-        self.normalized
+        let column = self
+            .normalized
             .iter()
-            .position(|header| header == &expected)
+            .position(|header| header == &expected);
+        match column {
+            Some(index) => CsvExportColumn::Exported(index),
+            None => CsvExportColumn::NotExported,
+        }
     }
     fn admit(self) -> Result<ApplePasswordColumns, ApplePasswordsImportError> {
         Ok(ApplePasswordColumns {
@@ -140,7 +146,7 @@ struct ApplePasswordTitle<'a> {
 }
 impl ApplePasswordTitle<'_> {
     fn append_to(&self, notes: &mut String) {
-        if let Some(entry) = (SourceLabelMetadata {
+        if let Ok(entry) = (SourceLabelMetadata {
             key: "title",
             label: self.title,
             website_url: self.website_url,

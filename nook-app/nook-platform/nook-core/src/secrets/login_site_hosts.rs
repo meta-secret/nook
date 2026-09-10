@@ -92,17 +92,13 @@ static LOGIN_SITE_HOSTS: LazyLock<LoginSiteHostsState> = LazyLock::new(|| {
 });
 
 impl LoginSiteHosts {
-    /// Select the bundled catalog when it is valid.
-    #[must_use]
-    pub(crate) fn bundled() -> Option<&'static Self> {
-        match &*LOGIN_SITE_HOSTS {
-            LoginSiteHostsState::Ready(hosts) => Some(hosts),
-            LoginSiteHostsState::InvalidBundledCatalog => None,
-        }
-    }
-
     pub(crate) fn require_bundled() -> Result<&'static Self, LoginSiteHostsError> {
-        Self::bundled().ok_or(LoginSiteHostsError::InvalidBundledCatalog)
+        match &*LOGIN_SITE_HOSTS {
+            LoginSiteHostsState::Ready(hosts) => Ok(hosts),
+            LoginSiteHostsState::InvalidBundledCatalog => {
+                Err(LoginSiteHostsError::InvalidBundledCatalog)
+            }
+        }
     }
 
     /// Normalize a hostname the same way login matching strips `www.`.
@@ -111,20 +107,13 @@ impl LoginSiteHosts {
         raw.trim().trim_start_matches("www.").to_ascii_lowercase()
     }
 
-    /// Look up the bundled login family id for a normalized host, if any.
-    #[must_use]
-    pub(crate) fn family(&self, host: &str) -> Option<&str> {
-        let host = Self::normalize_host(host);
-        if host.is_empty() {
-            return None;
-        }
-        self.by_host.get(&host).map(String::as_str)
-    }
-
     /// True when two hosts share an explicit login family allowlist entry.
     #[must_use]
     pub(crate) fn share_family(&self, request: LoginFamilyMatchRequest<'_>) -> bool {
-        match (self.family(request.left), self.family(request.right)) {
+        match (
+            self.by_host.get(&Self::normalize_host(request.left)),
+            self.by_host.get(&Self::normalize_host(request.right)),
+        ) {
             (Some(left_family), Some(right_family)) => left_family == right_family,
             _ => false,
         }
@@ -136,7 +125,7 @@ mod tests {
     use super::*;
 
     fn bundled() -> anyhow::Result<&'static LoginSiteHosts> {
-        LoginSiteHosts::bundled().ok_or_else(|| anyhow::anyhow!("bundled login-host catalog"))
+        Ok(LoginSiteHosts::require_bundled()?)
     }
 
     #[test]
@@ -159,16 +148,61 @@ mod tests {
     fn maps_popular_sso_shells_to_brand_families() -> anyhow::Result<()> {
         let bundled = bundled()?;
         assert_eq!(
-            bundled.family("login.microsoftonline.com"),
+            bundled
+                .by_host
+                .get(&LoginSiteHosts::normalize_host("login.microsoftonline.com"))
+                .map(String::as_str),
             Some("microsoft")
         );
-        assert_eq!(bundled.family("login.live.com"), Some("microsoft"));
-        assert_eq!(bundled.family("www.microsoft.com"), Some("microsoft"));
-        assert_eq!(bundled.family("app.slack.com"), Some("slack"));
-        assert_eq!(bundled.family("accounts.google.com"), Some("google"));
-        assert_eq!(bundled.family("github.com"), Some("github"));
-        assert_eq!(bundled.family("m.facebook.com"), Some("facebook"));
-        assert_eq!(bundled.family("amazon.com"), Some("amazon"));
+        assert_eq!(
+            bundled
+                .by_host
+                .get(&LoginSiteHosts::normalize_host("login.live.com"))
+                .map(String::as_str),
+            Some("microsoft")
+        );
+        assert_eq!(
+            bundled
+                .by_host
+                .get(&LoginSiteHosts::normalize_host("www.microsoft.com"))
+                .map(String::as_str),
+            Some("microsoft")
+        );
+        assert_eq!(
+            bundled
+                .by_host
+                .get(&LoginSiteHosts::normalize_host("app.slack.com"))
+                .map(String::as_str),
+            Some("slack")
+        );
+        assert_eq!(
+            bundled
+                .by_host
+                .get(&LoginSiteHosts::normalize_host("accounts.google.com"))
+                .map(String::as_str),
+            Some("google")
+        );
+        assert_eq!(
+            bundled
+                .by_host
+                .get(&LoginSiteHosts::normalize_host("github.com"))
+                .map(String::as_str),
+            Some("github")
+        );
+        assert_eq!(
+            bundled
+                .by_host
+                .get(&LoginSiteHosts::normalize_host("m.facebook.com"))
+                .map(String::as_str),
+            Some("facebook")
+        );
+        assert_eq!(
+            bundled
+                .by_host
+                .get(&LoginSiteHosts::normalize_host("amazon.com"))
+                .map(String::as_str),
+            Some("amazon")
+        );
         Ok(())
     }
 

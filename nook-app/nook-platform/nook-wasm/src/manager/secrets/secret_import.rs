@@ -5,6 +5,7 @@
 )]
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
+use nook_core::BitwardenExportAccess;
 use nook_core::RecordTypeDeclaration;
 use nook_core::{
     AgeArmoredCiphertext, SecretImportUnsupportedRecordCount, SecretValue, SymmetricKey,
@@ -349,7 +350,7 @@ impl NookVaultManager {
         let password = Zeroizing::new(password);
         let plan = nook_core::BitwardenExport {
             json: json.as_str(),
-            password: (!password.is_empty()).then_some(password.as_str()),
+            password: BitwardenExportAccess::PasswordProvided(password.as_str()),
         }
         .plan()
         .map_err(|error| NookError::Database(error.to_string()))?;

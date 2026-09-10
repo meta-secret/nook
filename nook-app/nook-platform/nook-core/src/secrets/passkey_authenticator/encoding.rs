@@ -86,29 +86,12 @@ impl CoseKeyBytes<'_> {
         let Value::Map(entries) = value else {
             return Err(PasskeyAuthenticatorError::InvalidKeyMaterial);
         };
-        let mut x = None;
-        let mut y = None;
-        let mut key_type = None;
-        let mut algorithm = None;
-        let mut curve = None;
-        for (key, value) in entries {
-            let Value::Integer(key) = key else { continue };
-            let key = i128::from(key);
-            match (key, value) {
-                (1, Value::Integer(value)) => key_type = Some(i128::from(value)),
-                (3, Value::Integer(value)) => algorithm = Some(i128::from(value)),
-                (-1, Value::Integer(value)) => curve = Some(i128::from(value)),
-                (-2, Value::Bytes(value)) => x = Some(value),
-                (-3, Value::Bytes(value)) => y = Some(value),
-                _ => {}
-            }
-        }
-        let (Some(x), Some(y)) = (x, y) else {
-            return Err(PasskeyAuthenticatorError::InvalidKeyMaterial);
-        };
-        if key_type != Some(2)
-            || algorithm != Some(i128::from(ES256_ALGORITHM))
-            || curve != Some(1)
+        let entries = CoseKeyEntries(entries);
+        let x = entries.coordinate(-2)?;
+        let y = entries.coordinate(-3)?;
+        if entries.integer(1)? != 2
+            || entries.integer(3)? != i128::from(ES256_ALGORITHM)
+            || entries.integer(-1)? != 1
             || x.len() != 32
             || y.len() != 32
         {
@@ -117,10 +100,42 @@ impl CoseKeyBytes<'_> {
         Ok((x, y))
     }
 }
+// Reverse typed lookup preserves the decoder's last valid occurrence rule.
+struct CoseKeyEntries(Vec<(Value, Value)>);
+impl CoseKeyEntries {
+    fn integer(&self, label: i128) -> PasskeyAuthenticatorResult<i128> {
+        self.0
+            .iter()
+            .rev()
+            .find_map(|(key, value)| match (key, value) {
+                (Value::Integer(key), Value::Integer(value)) if i128::from(*key) == label => {
+                    Some(i128::from(*value))
+                }
+                _ => None,
+            })
+            .ok_or(PasskeyAuthenticatorError::InvalidKeyMaterial)
+    }
+    fn coordinate(&self, label: i128) -> PasskeyAuthenticatorResult<Vec<u8>> {
+        self.0
+            .iter()
+            .rev()
+            .find_map(|(key, value)| match (key, value) {
+                (Value::Integer(key), Value::Bytes(value)) if i128::from(*key) == label => {
+                    Some(value.clone())
+                }
+                _ => None,
+            })
+            .ok_or(PasskeyAuthenticatorError::InvalidKeyMaterial)
+    }
+}
+pub(crate) enum Es256KeyValidation<'a> {
+    PrivateKey,
+    CredentialPair(&'a PasskeyPublicKeyCose),
+}
 impl PasskeyPrivateKeyPkcs8 {
     pub(crate) fn validate_es256(
         &self,
-        public_key: Option<&PasskeyPublicKeyCose>,
+        validation: Es256KeyValidation<'_>,
     ) -> PasskeyAuthenticatorResult<()> {
         let private_key = self;
         let private_bytes = Zeroizing::new(
@@ -129,7 +144,7 @@ impl PasskeyPrivateKeyPkcs8 {
         );
         let secret = SecretKey::from_pkcs8_der(&private_bytes)
             .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
-        if let Some(public_key) = public_key {
+        if let Es256KeyValidation::CredentialPair(public_key) = validation {
             let public_bytes = Engine::decode(&URL_SAFE_NO_PAD, public_key.encoded())
                 .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
             let (x, y) = CoseKeyBytes(&public_bytes).coordinates()?;
@@ -314,7 +329,7 @@ mod tests {
             public_key_cose, ..
         } = &second.key;
         assert_eq!(
-            private_key_pkcs8.validate_es256(Some(public_key_cose)),
+            private_key_pkcs8.validate_es256(Es256KeyValidation::CredentialPair(public_key_cose)),
             Err(PasskeyAuthenticatorError::InvalidKeyMaterial)
         );
         Ok(())

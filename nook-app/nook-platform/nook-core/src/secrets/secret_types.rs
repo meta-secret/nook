@@ -4,6 +4,8 @@
 //! metadata shares the same YAML row boundary. `nook-core` owns the plaintext
 //! password-manager payloads and session records.
 
+use super::passkey_authenticator::encoding::Es256KeyValidation;
+use super::passkey_authenticator::{PasskeyAuthenticatorError, PasskeyAuthenticatorResult};
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{AuthenticatorSecret, CreditCardSecret, SecretId};
@@ -90,8 +92,11 @@ pub struct PasskeySignatureCount(u32);
 impl PasskeySignatureCount {
     pub const ZERO: Self = Self(0);
 
-    pub(crate) fn checked_increment(self) -> Option<Self> {
-        self.0.checked_add(1).map(Self)
+    pub(crate) fn checked_increment(self) -> PasskeyAuthenticatorResult<Self> {
+        self.0
+            .checked_add(1)
+            .map(Self)
+            .ok_or(PasskeyAuthenticatorError::SignatureCounterExhausted)
     }
 }
 
@@ -147,7 +152,7 @@ impl PasskeyPrivateKeyPkcs8 {
             minimum: 1,
             maximum: PASSKEY_PRIVATE_KEY_MAX_LEN,
         })?;
-        self.validate_es256(None)
+        self.validate_es256(Es256KeyValidation::PrivateKey)
             .map_err(|error| SecretPayloadError::InvalidPasskey {
                 reason: error.to_string(),
             })
@@ -239,7 +244,7 @@ impl PasskeyCredentialKey {
                 private_key_pkcs8.validate()?;
                 public_key_cose.validate()?;
                 private_key_pkcs8
-                    .validate_es256(Some(public_key_cose))
+                    .validate_es256(Es256KeyValidation::CredentialPair(public_key_cose))
                     .map_err(|error| SecretPayloadError::InvalidPasskey {
                         reason: error.to_string(),
                     })

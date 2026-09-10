@@ -106,10 +106,10 @@ impl ImportMetadataMarker {
                 .iter()
                 .any(|prefix| bullet.starts_with(prefix))
     }
-    fn section_index(&self, normalized: &str) -> Option<usize> {
+    fn section_indices<'a>(&'a self, normalized: &'a str) -> impl Iterator<Item = usize> + 'a {
         normalized
             .match_indices(self.heading)
-            .find_map(|(index, _)| {
+            .filter_map(move |(index, _)| {
                 if index != 0 && !normalized[..index].ends_with("\n\n") {
                     return None;
                 }
@@ -130,7 +130,7 @@ impl ProviderNotes<'_> {
             .policy
             .markers()
             .iter()
-            .filter_map(|marker| marker.section_index(&normalized))
+            .flat_map(|marker| marker.section_indices(&normalized))
             .min();
         match marker_index {
             Some(index) => Zeroizing::new(normalized[..index].trim_end().to_owned()),

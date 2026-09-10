@@ -7,6 +7,7 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::ValidationError;
+use crate::authenticator_issuer_hosts::AuthenticatorHostResolution;
 use crate::secrets::authenticator_issuer_hosts::{
     AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
 };
@@ -115,13 +116,15 @@ impl AuthenticatorSecret {
             website_url: "",
             issuer: &self.issuer,
         };
-        let host = if let Some(host) = request.explicit_or_domain_host() {
-            Some(host)
+        let host = if let AuthenticatorHostResolution::Resolved(host) =
+            request.explicit_or_domain_host()
+        {
+            AuthenticatorHostResolution::Resolved(host)
         } else {
             AuthenticatorIssuerHosts::require_bundled()?.resolve_website_host(request)
         };
-        if let Some(host) = host {
-            self.website_url = format!("https://{host}");
+        if let AuthenticatorHostResolution::Resolved(host) = host {
+            self.website_url = format!("https://{}", host.as_str());
         }
         Ok(self)
     }

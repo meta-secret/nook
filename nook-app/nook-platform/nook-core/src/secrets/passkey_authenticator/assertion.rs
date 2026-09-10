@@ -111,10 +111,7 @@ impl PasskeyAssertionRequest {
         credential
             .validate()
             .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
-        let next_count = credential
-            .signature_count
-            .checked_increment()
-            .ok_or(PasskeyAuthenticatorError::SignatureCounterExhausted)?;
+        let next_count = credential.signature_count.checked_increment()?;
 
         Ok(CheckedPasskeyAssertion {
             request,

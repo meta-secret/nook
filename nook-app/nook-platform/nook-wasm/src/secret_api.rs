@@ -587,19 +587,25 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    fn issuer_host_map_loads_under_wasm() {
+    fn issuer_host_map_loads_under_wasm() -> anyhow::Result<()> {
+        use nook_core::{AuthenticatorHostResolution, WebsiteHost};
         assert_eq!(
-            AuthenticatorIssuerHosts::bundled().and_then(|catalog| catalog.mapped_host("OpenAI")),
-            Some("openai.com")
+            AuthenticatorIssuerHosts::require_bundled()
+                .map(|catalog| catalog.mapped_host("OpenAI")),
+            Ok(AuthenticatorHostResolution::Resolved(
+                WebsiteHost::normalize("openai.com")?
+            ))
         );
         assert_eq!(
-            AuthenticatorIssuerHosts::bundled().and_then(|catalog| {
+            AuthenticatorIssuerHosts::require_bundled().map(|catalog| {
                 catalog.resolve_website_host(nook_core::AuthenticatorWebsiteHostRequest {
                     website_url: "",
                     issuer: "GitHub",
                 })
             }),
-            Some("github.com".to_owned())
+            Ok(AuthenticatorHostResolution::Resolved(
+                WebsiteHost::normalize("github.com")?
+            ))
         );
         assert_eq!(
             nook_core::AuthenticatorGroupKeyRequest {
@@ -610,6 +616,7 @@ mod wasm_tests {
             .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "namecheap.com"
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]

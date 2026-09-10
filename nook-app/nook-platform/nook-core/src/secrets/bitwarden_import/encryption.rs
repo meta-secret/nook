@@ -5,7 +5,7 @@
 )]
 //! Password-bound encrypted export admission and authenticated payload decryption.
 use super::items::BitwardenItems;
-use super::{BitwardenImportError, BitwardenImportPlan};
+use super::{BitwardenExportAccess, BitwardenImportError, BitwardenImportPlan};
 use aes::cipher::{BlockModeDecrypt, KeyIvInit, block_padding::Pkcs7};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
@@ -24,6 +24,28 @@ const MIN_ARGON2_ITERATIONS: u32 = 2;
 const MAX_ARGON2_ITERATIONS: u32 = 20;
 const MAX_ARGON2_PARALLELISM: u32 = 16;
 
+// Raw Argon2-only declarations are admitted after export restriction and password checks.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum BitwardenArgonParameter {
+    Declared(u32),
+    NotExported(()),
+}
+impl Default for BitwardenArgonParameter {
+    fn default() -> Self {
+        Self::NotExported(())
+    }
+}
+impl BitwardenArgonParameter {
+    fn required(&self, name: &str) -> Result<u32, BitwardenImportError> {
+        match self {
+            Self::Declared(value) => Ok(*value),
+            Self::NotExported(()) => Err(BitwardenImportError::encrypted(format!(
+                "{name} is missing."
+            ))),
+        }
+    }
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct EncryptedBitwardenExport {
@@ -31,11 +53,18 @@ pub(super) struct EncryptedBitwardenExport {
     salt: String,
     kdf_type: u32,
     kdf_iterations: u32,
-    kdf_memory: Option<u32>,
-    kdf_parallelism: Option<u32>,
+    #[serde(default)]
+    kdf_memory: BitwardenArgonParameter,
+    #[serde(default)]
+    kdf_parallelism: BitwardenArgonParameter,
     #[serde(rename = "encKeyValidation_DO_NOT_EDIT")]
     enc_key_validation: String,
     data: String,
+}
+
+enum CheckedBitwardenKdf {
+    Pbkdf2(u32),
+    Argon2(Params),
 }
 
 struct BitwardenEncryptionKey {
@@ -57,20 +86,22 @@ impl EncryptedBitwardenExport {
     }
     pub(super) fn check(
         self,
-        password: Option<&str>,
+        password: BitwardenExportAccess<'_>,
     ) -> Result<CheckedBitwardenDecryption, BitwardenImportError> {
         if !self.password_protected {
             return Err(BitwardenImportError::AccountRestrictedExport);
         }
-        let password = password
-            .filter(|password| !password.is_empty())
-            .ok_or(BitwardenImportError::PasswordRequired)?;
+        let password = match password {
+            BitwardenExportAccess::PasswordProvided(password) if !password.is_empty() => password,
+            BitwardenExportAccess::PasswordProvided(_) | BitwardenExportAccess::WithoutPassword => {
+                return Err(BitwardenImportError::PasswordRequired);
+            }
+        };
         let key = self.derive_key(password)?;
         key.decrypt(&self.enc_key_validation)?;
         Ok(CheckedBitwardenDecryption { export: self, key })
     }
-    fn derive_key(&self, password: &str) -> Result<BitwardenEncryptionKey, BitwardenImportError> {
-        let mut derived = Zeroizing::new([0_u8; 32]);
+    fn checked_kdf(&self) -> Result<CheckedBitwardenKdf, BitwardenImportError> {
         match self.kdf_type {
             0 => {
                 let iterations = BitwardenKdfRange {
@@ -79,12 +110,7 @@ impl EncryptedBitwardenExport {
                     maximum: MAX_PBKDF2_ITERATIONS,
                 }
                 .validate(self.kdf_iterations)?;
-                pbkdf2_hmac::<Pbkdf2Sha256>(
-                    password.as_bytes(),
-                    self.salt.as_bytes(),
-                    iterations,
-                    derived.as_mut(),
-                );
+                Ok(CheckedBitwardenKdf::Pbkdf2(iterations))
             }
             1 => {
                 let memory_mib = BitwardenKdfRange {
@@ -92,9 +118,7 @@ impl EncryptedBitwardenExport {
                     minimum: MIN_ARGON2_MEMORY_MIB,
                     maximum: MAX_ARGON2_MEMORY_MIB,
                 }
-                .validate(self.kdf_memory.ok_or_else(|| {
-                    BitwardenImportError::encrypted("Argon2 memory is missing.")
-                })?)?;
+                .validate(self.kdf_memory.required("Argon2 memory")?)?;
                 let iterations = BitwardenKdfRange {
                     name: "Argon2 iterations",
                     minimum: MIN_ARGON2_ITERATIONS,
@@ -106,9 +130,7 @@ impl EncryptedBitwardenExport {
                     minimum: 1,
                     maximum: MAX_ARGON2_PARALLELISM,
                 }
-                .validate(self.kdf_parallelism.ok_or_else(|| {
-                    BitwardenImportError::encrypted("Argon2 parallelism is missing.")
-                })?)?;
+                .validate(self.kdf_parallelism.required("Argon2 parallelism")?)?;
                 let memory_cost_kib = memory_mib.checked_mul(1_024).ok_or_else(|| {
                     BitwardenImportError::encrypted("Argon2 memory is too large.")
                 })?;
@@ -116,17 +138,33 @@ impl EncryptedBitwardenExport {
                     .map_err(|error| {
                         BitwardenImportError::encrypted(format!("invalid Argon2 settings: {error}"))
                     })?;
+                Ok(CheckedBitwardenKdf::Argon2(params))
+            }
+            other => {
+                return Err(BitwardenImportError::encrypted(format!(
+                    "unsupported KDF type {other}."
+                )));
+            }
+        }
+    }
+    fn derive_key(&self, password: &str) -> Result<BitwardenEncryptionKey, BitwardenImportError> {
+        let mut derived = Zeroizing::new([0_u8; 32]);
+        match self.checked_kdf()? {
+            CheckedBitwardenKdf::Pbkdf2(iterations) => {
+                pbkdf2_hmac::<Pbkdf2Sha256>(
+                    password.as_bytes(),
+                    self.salt.as_bytes(),
+                    iterations,
+                    derived.as_mut(),
+                );
+            }
+            CheckedBitwardenKdf::Argon2(params) => {
                 let salt_hash = Sha256::digest(self.salt.as_bytes());
                 Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
                     .hash_password_into(password.as_bytes(), &salt_hash, derived.as_mut())
                     .map_err(|error| {
                         BitwardenImportError::encrypted(format!("Argon2 failed: {error}"))
                     })?;
-            }
-            other => {
-                return Err(BitwardenImportError::encrypted(format!(
-                    "unsupported KDF type {other}."
-                )));
             }
         }
 
@@ -246,7 +284,8 @@ impl BitwardenEncryptionKey {
 #[cfg(test)]
 mod tests {
     use super::{
-        BitwardenImportError, BitwardenKdfRange, EncStringParts, EncryptedBitwardenExport,
+        BitwardenArgonParameter, BitwardenExportAccess, BitwardenImportError, BitwardenKdfRange,
+        EncStringParts, EncryptedBitwardenExport,
     };
     use base64::Engine;
 
@@ -269,7 +308,9 @@ mod tests {
             Engine::encode(&super::BASE64, parts.ciphertext.as_slice()),
             Engine::encode(&super::BASE64, parts.mac)
         );
-        let checked = export.check(Some("correct horse battery staple"))?;
+        let checked = export.check(BitwardenExportAccess::PasswordProvided(
+            "correct horse battery staple",
+        ))?;
         assert!(matches!(
             checked.plan(),
             Err(BitwardenImportError::InvalidPassword)
@@ -282,7 +323,9 @@ mod tests {
         let mut export = EncryptedBitwardenExport::fixture()?;
         export.enc_key_validation = "1.invalid".to_owned();
         export.data = "2.invalid".to_owned();
-        match export.check(Some("correct horse battery staple")) {
+        match export.check(BitwardenExportAccess::PasswordProvided(
+            "correct horse battery staple",
+        )) {
             Err(BitwardenImportError::InvalidEncryptedExport(message)) => {
                 assert_eq!(message, "encrypted data must use Bitwarden type 2.");
             }
@@ -362,21 +405,31 @@ mod tests {
     fn argon_metadata_errors_keep_memory_then_iterations_then_parallelism_order()
     -> anyhow::Result<()> {
         for (memory, iterations, parallelism, expected) in [
-            (None, 0, None, "Argon2 memory is missing."),
             (
-                Some(16),
+                BitwardenArgonParameter::NotExported(()),
                 0,
-                None,
+                BitwardenArgonParameter::NotExported(()),
+                "Argon2 memory is missing.",
+            ),
+            (
+                BitwardenArgonParameter::Declared(16),
+                0,
+                BitwardenArgonParameter::NotExported(()),
                 "Argon2 iterations must be between 2 and 20.",
             ),
-            (Some(16), 2, None, "Argon2 parallelism is missing."),
+            (
+                BitwardenArgonParameter::Declared(16),
+                2,
+                BitwardenArgonParameter::NotExported(()),
+                "Argon2 parallelism is missing.",
+            ),
         ] {
             let mut export = EncryptedBitwardenExport::fixture()?;
             export.kdf_type = 1;
             export.kdf_memory = memory;
             export.kdf_iterations = iterations;
             export.kdf_parallelism = parallelism;
-            match export.check(Some("password")) {
+            match export.check(BitwardenExportAccess::PasswordProvided("password")) {
                 Err(BitwardenImportError::InvalidEncryptedExport(message)) => {
                     assert_eq!(message, expected);
                 }
@@ -394,8 +447,8 @@ mod tests {
             salt: "test_key".to_owned(),
             kdf_type: 1,
             kdf_iterations: 4,
-            kdf_memory: Some(32),
-            kdf_parallelism: Some(2),
+            kdf_memory: BitwardenArgonParameter::Declared(32),
+            kdf_parallelism: BitwardenArgonParameter::Declared(2),
             enc_key_validation: String::new(),
             data: String::new(),
         };

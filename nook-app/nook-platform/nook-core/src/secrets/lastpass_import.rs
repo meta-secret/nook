@@ -7,6 +7,7 @@
 )]
 
 use super::import_support::{ImportMetadata, SourceLabelMetadata};
+use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 
 use std::collections::HashMap;
 
@@ -99,7 +100,7 @@ struct LastPassMetadata<'a> {
 impl LastPassMetadata<'_> {
     fn append_to(&self, notes: &mut String) {
         let mut metadata = Vec::new();
-        if let Some((key, value)) = (SourceLabelMetadata {
+        if let Ok((key, value)) = (SourceLabelMetadata {
             key: "name",
             label: self.name,
             website_url: self.website_url,
@@ -141,9 +142,9 @@ impl LastPassUrl<'_> {
 }
 
 impl LastPassRecord<'_> {
-    fn convert(&self) -> Option<SecretValue> {
+    fn convert(&self) -> ImportItemDisposition {
         if self.record.iter().all(|value| value.trim().is_empty()) {
-            return None;
+            return ImportItemDisposition::Skipped(ImportSkipReason::EmptyRecord);
         }
         let url = self.field("url").trim();
         let name = self.field("name").trim();
@@ -158,7 +159,7 @@ impl LastPassRecord<'_> {
                 totp: self.field("totp"),
             }
             .append_to(&mut notes);
-            return Some(SecretValue::SecureNote(SecureNoteSecret {
+            return ImportItemDisposition::Imported(SecretValue::SecureNote(SecureNoteSecret {
                 title: name.to_owned(),
                 note: notes,
             }));
@@ -174,7 +175,7 @@ impl LastPassRecord<'_> {
         }
         .append_to(&mut notes);
 
-        Some(SecretValue::Login(LoginSecret {
+        ImportItemDisposition::Imported(SecretValue::Login(LoginSecret {
             website_url,
             username: self.field("username").to_owned(),
             password: self.field("password").to_owned(),
@@ -259,7 +260,7 @@ impl CheckedLastPassCsv<'_> {
     fn collect(mut self) -> Result<LastPassImportPlan, LastPassImportError> {
         let mut items = Vec::new();
         for record in self.reader.records() {
-            if let Some(item) = (LastPassRecord {
+            if let ImportItemDisposition::Imported(item) = (LastPassRecord {
                 record: &record?,
                 columns: &self.columns,
             })

@@ -81,9 +81,9 @@ pub fn join_bip39_words(words: Vec<String>) -> String {
 #[must_use]
 pub fn infer_bip39_mnemonic_length(text: &str) -> NookBip39MnemonicLength {
     match SeedPhraseSecret::infer_bip39_mnemonic_length(text) {
-        Some(Bip39MnemonicWordCount::WORDS_12) => NookBip39MnemonicLength::Words12,
-        Some(Bip39MnemonicWordCount::WORDS_24) => NookBip39MnemonicLength::Words24,
-        Some(_) | None => NookBip39MnemonicLength::Unsupported,
+        Ok(Bip39MnemonicWordCount::WORDS_12) => NookBip39MnemonicLength::Words12,
+        Ok(Bip39MnemonicWordCount::WORDS_24) => NookBip39MnemonicLength::Words24,
+        Ok(_) | Err(_) => NookBip39MnemonicLength::Unsupported,
     }
 }
 

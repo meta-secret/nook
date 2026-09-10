@@ -37,15 +37,19 @@ impl ProtocolParameters {
 
     fn from_uri(input: &DecodedOtpauthInput) -> Result<Self, ValidationError> {
         Ok(Self {
-            algorithm: Self::algorithm(input.parameter("algorithm").unwrap_or("SHA1"))?,
+            algorithm: Self::algorithm(
+                input.parameters_named("algorithm").next().unwrap_or("SHA1"),
+            )?,
             digits: Self::digits(
                 input
-                    .parameter("digits")
+                    .parameters_named("digits")
+                    .next()
                     .map_or(Ok(DEFAULT_DIGITS), |value| ParameterText(value).digits())?,
             )?,
             period: Self::period(
                 input
-                    .parameter("period")
+                    .parameters_named("period")
+                    .next()
                     .map_or(Ok(DEFAULT_PERIOD), |value| ParameterText(value).period())?,
             )?,
         })
@@ -165,16 +169,17 @@ struct DecodedOtpauthInput {
 }
 
 impl DecodedOtpauthInput {
-    fn parameter(&self, name: &str) -> Option<&str> {
+    fn parameters_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a str> + 'a {
         self.parameters
             .iter()
-            .find(|(key, _)| key.as_str() == name)
+            .filter(move |(key, _)| key.as_str() == name)
             .map(|(_, value)| value.as_str())
     }
 
     fn check(self) -> Result<CheckedOtpauthInput, ValidationError> {
         let secret = self
-            .parameter("secret")
+            .parameters_named("secret")
+            .next()
             .ok_or(ValidationError::AuthenticatorSecretInvalid)?;
         let protocol = ProtocolParameters::from_uri(&self)?;
         let secret = TotpSecret::parse(secret)?;
@@ -205,7 +210,11 @@ impl CheckedOtpauthInput {
             .map_or(("", self.decoded.label.as_str()), |(issuer, account)| {
                 (issuer, account)
             });
-        let issuer = self.decoded.parameter("issuer").unwrap_or(label_issuer);
+        let issuer = self
+            .decoded
+            .parameters_named("issuer")
+            .next()
+            .unwrap_or(label_issuer);
         let item = AuthenticatorSecret {
             issuer: issuer.to_owned(),
             account: account.to_owned(),
@@ -253,7 +262,7 @@ mod tests {
         );
         let decoded = fixture.input().decode()?;
         assert_eq!(decoded.parameters.len(), 3);
-        assert_eq!(decoded.parameter("issuer"), Some("Query"));
+        assert_eq!(decoded.parameters_named("issuer").next(), Some("Query"));
         let item = decoded.check()?.finish()?;
         assert_eq!(item.issuer, "Query");
         assert_eq!(item.account, "account");
