@@ -70,7 +70,9 @@ export class PrePushCommand {
     }
 
     const densityArgs = { baseSha, repoRoot };
-    const density = ChangedCortexDensity.lint(densityArgs);
+    const densityResult = new ChangedCortexDensity(densityArgs).execute();
+    if (densityResult.isErr()) return err(densityResult.error);
+    const density = densityResult.value;
     if (density.findings.length > 0 || density.valeAlerts.length > 0) {
       const typedDetail = density.findings.map(
         (finding) =>

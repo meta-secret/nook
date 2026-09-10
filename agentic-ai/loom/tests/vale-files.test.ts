@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { expect, test } from 'bun:test';
 
 import {
@@ -110,19 +111,21 @@ type ValeReportJsonArgs = {
 };
 
 test('lints only the explicit ordered Markdown files and parses native alerts', () => {
-  expect(
-    ValeFileDiagnostics.runValeFiles({
-      configPath: CONFIG_PATH,
-      files: [VALID_FIXTURE],
-      repoRoot: REPOSITORY_ROOT,
-    }),
-  ).toEqual({ alerts: [] });
+  const valeResult1 = ValeFileDiagnostics.runValeFiles({
+    configPath: CONFIG_PATH,
+    files: [VALID_FIXTURE],
+    repoRoot: REPOSITORY_ROOT,
+  });
+  assert(valeResult1.isOk());
+  expect(valeResult1.value).toEqual({ alerts: [] });
 
-  const result = ValeFileDiagnostics.runValeFiles({
+  const valeResult2 = ValeFileDiagnostics.runValeFiles({
     configPath: CONFIG_PATH,
     files: [INVALID_FIXTURE],
     repoRoot: REPOSITORY_ROOT,
   });
+  assert(valeResult2.isOk());
+  const result = valeResult2.value;
   expect(result.alerts).toEqual([
     {
       check: 'Nook.CortexNavigation',
@@ -146,11 +149,13 @@ test('lints only the explicit ordered Markdown files and parses native alerts', 
 });
 
 test('uses Vale-native sentence and Markdown scopes for semicolon density', () => {
-  const result = ValeFileDiagnostics.runValeFiles({
+  const valeResult3 = ValeFileDiagnostics.runValeFiles({
     configPath: DENSITY_CONFIG_PATH,
     files: [VALID_DENSITY_FIXTURE, INVALID_DENSITY_FIXTURE],
     repoRoot: REPOSITORY_ROOT,
   });
+  assert(valeResult3.isOk());
+  const result = valeResult3.value;
   expect(
     result.alerts.filter((alert) => alert.file === VALID_DENSITY_FIXTURE),
   ).toEqual([]);
@@ -174,7 +179,7 @@ test('uses Vale-native sentence and Markdown scopes for semicolon density', () =
 });
 
 test('uses Vale-native character counting and cardinality for sentence length', () => {
-  const result = ValeFileDiagnostics.runValeFiles({
+  const valeResult4 = ValeFileDiagnostics.runValeFiles({
     configPath: DENSITY_CONFIG_PATH,
     files: [
       ...VALID_LENGTH_FIXTURES,
@@ -184,6 +189,8 @@ test('uses Vale-native character counting and cardinality for sentence length', 
     ],
     repoRoot: REPOSITORY_ROOT,
   });
+  assert(valeResult4.isOk());
+  const result = valeResult4.value;
   expect(
     result.alerts.filter((alert) =>
       VALID_LENGTH_FIXTURES.some((file) => file === alert.file),
@@ -223,11 +230,13 @@ test('uses Vale-native character counting and cardinality for sentence length', 
 });
 
 test('pins Vale 3.19 structural boundaries for residual Markdown checks', () => {
-  const tableResult = ValeFileDiagnostics.runValeFiles({
+  const valeResult5 = ValeFileDiagnostics.runValeFiles({
     configPath: CAPABILITIES_CONFIG_PATH,
     files: [TABLE_CAPABILITIES_FIXTURE],
     repoRoot: REPOSITORY_ROOT,
   });
+  assert(valeResult5.isOk());
+  const tableResult = valeResult5.value;
   expect(
     tableResult.alerts.map((alert) => ({
       check: alert.check,
@@ -256,11 +265,13 @@ test('pins Vale 3.19 structural boundaries for residual Markdown checks', () => 
     })),
   );
 
-  const andJoinResult = ValeFileDiagnostics.runValeFiles({
+  const valeResult6 = ValeFileDiagnostics.runValeFiles({
     configPath: CAPABILITIES_CONFIG_PATH,
     files: [DENSITY_CAPABILITIES_FIXTURE],
     repoRoot: REPOSITORY_ROOT,
   });
+  assert(valeResult6.isOk());
+  const andJoinResult = valeResult6.value;
   expect(andJoinResult.alerts).toEqual([
     {
       check: 'NookCapabilities.AndJoins',
@@ -273,11 +284,13 @@ test('pins Vale 3.19 structural boundaries for residual Markdown checks', () => 
     },
   ]);
 
-  const densityResult = ValeFileDiagnostics.runValeFiles({
+  const valeResult7 = ValeFileDiagnostics.runValeFiles({
     configPath: DENSITY_CONFIG_PATH,
     files: [DENSITY_CAPABILITIES_FIXTURE],
     repoRoot: REPOSITORY_ROOT,
   });
+  assert(valeResult7.isOk());
+  const densityResult = valeResult7.value;
   expect(densityResult.alerts).toEqual(
     [4, 8].map((line) => ({
       check: 'NookDensity.Semicolons',
@@ -292,13 +305,13 @@ test('pins Vale 3.19 structural boundaries for residual Markdown checks', () => 
 
 test('rejects empty, duplicate, and non-Markdown file lists', () => {
   for (const files of [[], [VALID_FIXTURE, VALID_FIXTURE], [CONFIG_PATH]]) {
-    expect(() =>
+    expect(
       ValeFileDiagnostics.runValeFiles({
         configPath: CONFIG_PATH,
         files,
         repoRoot: REPOSITORY_ROOT,
-      }),
-    ).toThrow();
+      }).isErr(),
+    ).toBe(true);
   }
 });
 
@@ -311,13 +324,13 @@ test('fails closed on command errors', () => {
     const markdown = path.join(repoRoot, 'article.md');
     writeFileSync(configPath, 'StylesPath = [\n');
     writeFileSync(markdown, '# Article\n');
-    expect(() =>
+    expect(
       ValeFileDiagnostics.runValeFiles({
         configPath,
         files: [markdown],
         repoRoot,
-      }),
-    ).toThrow();
+      }).isErr(),
+    ).toBe(true);
   } finally {
     rmSync(repoRoot, { force: true, recursive: true });
   }
@@ -337,13 +350,13 @@ test('rejects an in-repository path through a symlinked ancestor', () => {
     writeFileSync(configPath, 'StylesPath = .vale/styles\n');
     writeFileSync(outsideMarkdown, '# Outside\n');
     symlinkSync(outside, linkedDirectory);
-    expect(() =>
+    expect(
       ValeFileDiagnostics.runValeFiles({
         configPath,
         files: [path.join(linkedDirectory, 'article.md')],
         repoRoot,
-      }),
-    ).toThrow();
+      }).isErr(),
+    ).toBe(true);
   } finally {
     rmSync(repoRoot, { force: true, recursive: true });
     rmSync(outside, { force: true, recursive: true });
@@ -416,11 +429,11 @@ test('fails closed on invalid JSON and native alert schema', () => {
       ],
     }),
   ]) {
-    expect(() =>
+    expect(
       ValeFileDiagnostics.parseValeFilesOutput({
         files: [INVALID_FIXTURE],
         stdout,
-      }),
-    ).toThrow();
+      }).isErr(),
+    ).toBe(true);
   }
 });

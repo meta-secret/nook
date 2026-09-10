@@ -1,3 +1,4 @@
+import type { ValeFailure } from '../lib/vale-files.ts';
 import type { RepositoryDiscoveryFailure } from '../lib/repo.ts';
 import type { ExecutableRepositoryFailure } from '../executable-skills/repository.ts';
 import { CortexMarkdownSource } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
@@ -118,7 +119,11 @@ export class CortexAuditCommand {
 
     const allMarkdownFiles =
       CortexMarkdownInventory.listCortexMarkdownFiles(cortexRoot);
-    CortexValeInvocation.runCortexVale({ cortexRoot, repoRoot });
+    const proseLint = CortexValeInvocation.runCortexVale({
+      cortexRoot,
+      repoRoot,
+    });
+    if (proseLint.isErr()) return err(proseLint.error);
     const brokenLinks: BrokenLink[] = [];
     const densityFindings: DensityFinding[] = [];
     let densityValeAlerts: readonly ValeNativeAlert[] = [];
@@ -187,11 +192,13 @@ export class CortexAuditCommand {
     );
 
     if (args.request.includeDensityLint && documents.length > 0) {
-      densityValeAlerts = ValeFileDiagnostics.runValeFiles({
+      const densityLint = ValeFileDiagnostics.runValeFiles({
         configPath: path.join(repoRoot, '.vale', 'density.ini'),
         files: documents.map((document) => document.absolutePath),
         repoRoot,
-      }).alerts;
+      });
+      if (densityLint.isErr()) return err(densityLint.error);
+      densityValeAlerts = densityLint.value.alerts;
     }
 
     for (const documentSource of documents) {
@@ -513,6 +520,7 @@ type IsPersistentCortexMarkdownFileArgs = {
 };
 
 export type CortexAuditFailure =
+  | ValeFailure
   | RepositoryDiscoveryFailure
   | CortexArticleRequestDecodeError
   | CortexDocumentMapFailure

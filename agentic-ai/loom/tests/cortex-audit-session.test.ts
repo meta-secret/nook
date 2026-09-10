@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {
   copyFileSync,
   cpSync,
@@ -215,7 +216,9 @@ test('enforces Vale through the common Cortex audit execution path', async () =>
       request: { includeDensityLint: false },
       startDirectory: repoRoot,
     });
-    await expect(audit).rejects.toThrow('Vale Cortex lint failed');
+    const failure = await audit;
+    assert(failure.isErr());
+    expect(failure.error.message).toContain('Vale Cortex lint failed');
   } finally {
     rmSync(repoRoot, { recursive: true, force: true });
   }

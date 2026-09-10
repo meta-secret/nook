@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
@@ -93,7 +94,9 @@ export class ChangedCortexDensityScenario {
   }
 
   static lintFixture(args: LintFixtureArgs) {
-    return ChangedCortexDensity.lint(args);
+    const result = new ChangedCortexDensity(args).execute();
+    assert(result.isOk());
+    return result.value;
   }
 
   static git(args: GitArgs): string {
