@@ -26,6 +26,10 @@ pub struct ControlDestinationEvidence<'a> {
     pub destination_identity: &'a str,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("invalid or untrusted authentication control destination")]
+pub struct InvalidControlDestination;
+
 impl CanonicalControlDestination {
     fn is_http_url(url: &Url) -> bool {
         matches!(url.scheme(), "http" | "https")
@@ -63,20 +67,22 @@ impl CanonicalControlDestination {
 }
 
 impl CanonicalControlDestination {
-    fn decode_component(value: &str) -> Option<String> {
+    fn decode_component(value: &str) -> Result<String, InvalidControlDestination> {
         if !CanonicalControlDestination::has_valid_percent_encoding(value) {
-            return None;
+            return Err(InvalidControlDestination);
         }
-        let decoded = percent_decode_str(value).decode_utf8().ok()?;
+        let decoded = percent_decode_str(value)
+            .decode_utf8()
+            .map_err(|_| InvalidControlDestination)?;
         if decoded.chars().any(char::is_control) || decoded.contains('%') {
-            return None;
+            return Err(InvalidControlDestination);
         }
-        Some(decoded.into_owned())
+        Ok(decoded.into_owned())
     }
 }
 
 impl CanonicalControlDestination {
-    fn decode_query_component(value: &str) -> Option<String> {
+    fn decode_query_component(value: &str) -> Result<String, InvalidControlDestination> {
         CanonicalControlDestination::decode_component(&value.replace('+', " "))
     }
 }
@@ -123,7 +129,7 @@ impl CanonicalControlDestination {
     #[must_use]
     pub fn canonicalize_control_destination(
         request: ControlDestinationEvidence<'_>,
-    ) -> Option<CanonicalControlDestination> {
+    ) -> Result<CanonicalControlDestination, InvalidControlDestination> {
         let ControlDestinationEvidence {
             source_origin,
             destination_identity,
@@ -131,20 +137,21 @@ impl CanonicalControlDestination {
         if source_origin.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             || destination_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
         {
-            return None;
+            return Err(InvalidControlDestination);
         }
-        let source = Url::parse(source_origin.trim()).ok()?;
+        let source = Url::parse(source_origin.trim()).map_err(|_| InvalidControlDestination)?;
         if !CanonicalControlDestination::is_http_url(&source)
             || !CanonicalControlDestination::is_origin_only(&source)
         {
-            return None;
+            return Err(InvalidControlDestination);
         }
         let destination_identity = destination_identity.trim();
-        let destination = Url::parse(destination_identity).ok()?;
+        let destination =
+            Url::parse(destination_identity).map_err(|_| InvalidControlDestination)?;
         if !CanonicalControlDestination::is_http_url(&destination)
             || destination.origin() != source.origin()
         {
-            return None;
+            return Err(InvalidControlDestination);
         }
 
         let decoded_path = CanonicalControlDestination::decode_component(destination.path())?;
@@ -175,10 +182,10 @@ impl CanonicalControlDestination {
             route_identity.push_str(&fragment);
         }
         if route_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES {
-            return None;
+            return Err(InvalidControlDestination);
         }
 
-        Some(CanonicalControlDestination {
+        Ok(CanonicalControlDestination {
             path_identity,
             route_identity,
             has_provider_authority: destination.scheme() == "https"
@@ -231,7 +238,7 @@ mod tests {
                     }
                 )
                 .map(|canonical| canonical.path_identity),
-                Some(expected_path.to_owned())
+                Ok(expected_path.to_owned())
             );
         }
     }
@@ -255,7 +262,7 @@ mod tests {
                         destination_identity: destination
                     }
                 )
-                .is_none(),
+                .is_err(),
                 "{destination}"
             );
         }
@@ -266,7 +273,7 @@ mod tests {
         assert_eq!(
             CanonicalControlDestination::canonicalize_control_destination(ControlDestinationEvidence { source_origin: "https://example.test", destination_identity: "https://example.test/auth/%64elete-account?action=close+account" })
             .map(|canonical| (canonical.path_identity, canonical.route_identity)),
-            Some((
+            Ok((
                 "/auth/delete-account".to_owned(),
                 "/auth/delete-account?action=close account".to_owned(),
             ))
@@ -284,7 +291,7 @@ mod tests {
                         destination_identity: destination
                     }
                 )
-                .is_none(),
+                .is_err(),
                 "{destination}"
             );
         }
@@ -306,7 +313,7 @@ mod tests {
                         destination_identity: "https://example.test/login"
                     }
                 )
-                .is_none(),
+                .is_err(),
                 "{source}"
             );
         }
@@ -321,7 +328,7 @@ mod tests {
                     destination_identity: "https://accounts.google.com/signin"
                 }
             )
-            .is_some_and(|canonical| canonical.has_provider_authority)
+            .is_ok_and(|canonical| canonical.has_provider_authority)
         );
         assert!(
             CanonicalControlDestination::canonicalize_control_destination(
@@ -330,7 +337,7 @@ mod tests {
                     destination_identity: "https://example.test/signin/google"
                 }
             )
-            .is_some_and(|canonical| !canonical.has_provider_authority)
+            .is_ok_and(|canonical| !canonical.has_provider_authority)
         );
         assert!(
             CanonicalControlDestination::canonicalize_control_destination(
@@ -339,7 +346,7 @@ mod tests {
                     destination_identity: "https://google.attacker.com/signin"
                 }
             )
-            .is_some_and(|canonical| !canonical.has_provider_authority)
+            .is_ok_and(|canonical| !canonical.has_provider_authority)
         );
         assert!(
             CanonicalControlDestination::canonicalize_control_destination(
@@ -348,7 +355,7 @@ mod tests {
                     destination_identity: "http://accounts.google.com/signin"
                 }
             )
-            .is_some_and(|canonical| !canonical.has_provider_authority)
+            .is_ok_and(|canonical| !canonical.has_provider_authority)
         );
     }
 
@@ -362,7 +369,7 @@ mod tests {
                 }
             )
             .map(|canonical| (canonical.path_identity, canonical.route_identity)),
-            Some((
+            Ok((
                 "/#/delete-account".to_owned(),
                 "/#/delete-account".to_owned(),
             ))
@@ -382,7 +389,7 @@ mod tests {
                     destination_identity: &destination
                 }
             )
-            .is_none()
+            .is_err()
         );
         let fragment = format!(
             "https://example.test/login#{}",
@@ -395,7 +402,7 @@ mod tests {
                     destination_identity: &fragment
                 }
             )
-            .is_none()
+            .is_err()
         );
     }
 }

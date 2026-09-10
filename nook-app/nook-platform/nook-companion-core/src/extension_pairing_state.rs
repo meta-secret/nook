@@ -29,6 +29,10 @@ pub enum ExtensionConnectScope {
     SyncProviderCredentials,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("unsupported extension connection scope")]
+pub struct UnknownExtensionConnectScope;
+
 impl ExtensionConnectScope {
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -41,13 +45,13 @@ impl ExtensionConnectScope {
     }
 
     #[must_use]
-    pub fn parse(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Result<Self, UnknownExtensionConnectScope> {
         match value {
-            "vault-access" => Some(Self::VaultAccess),
-            "password-filling" => Some(Self::PasswordFilling),
-            "passkey-management" => Some(Self::PasskeyManagement),
-            "sync-provider-credentials" => Some(Self::SyncProviderCredentials),
-            _ => None,
+            "vault-access" => Ok(Self::VaultAccess),
+            "password-filling" => Ok(Self::PasswordFilling),
+            "passkey-management" => Ok(Self::PasskeyManagement),
+            "sync-provider-credentials" => Ok(Self::SyncProviderCredentials),
+            _ => Err(UnknownExtensionConnectScope),
         }
     }
 }
@@ -321,9 +325,7 @@ impl ExtensionPairingState {
 
     #[must_use]
     pub fn ordered_grants(&self) -> Vec<StoredExtensionPairingGrant> {
-        let selected = self
-            .ready_setup()
-            .map(|setup| setup.selected_vault_store_id.as_str());
+        let selected = self.ready_setup();
         let mut grants: Vec<_> = self
             .entries
             .iter()
@@ -333,8 +335,8 @@ impl ExtensionPairingState {
             })
             .collect();
         grants.sort_by(|left, right| {
-            let left_selected = Some(left.vault_store_id.as_str()) == selected;
-            let right_selected = Some(right.vault_store_id.as_str()) == selected;
+            let left_selected = matches!(&selected, PairingSetupObservation::Ready(setup) if setup.selected_vault_store_id == left.vault_store_id);
+            let right_selected = matches!(&selected, PairingSetupObservation::Ready(setup) if setup.selected_vault_store_id == right.vault_store_id);
             right_selected
                 .cmp(&left_selected)
                 .then_with(|| right.approved_at.cmp(&left.approved_at))
@@ -343,43 +345,84 @@ impl ExtensionPairingState {
     }
 
     #[must_use]
-    pub fn selected_grant(&self) -> Option<StoredExtensionPairingGrant> {
-        let selected = &self.ready_setup()?.selected_vault_store_id;
-        self.grant(selected).cloned()
+    pub fn selected_grant(&self) -> SelectedExtensionPairingGrant {
+        match self.ready_setup() {
+            PairingSetupObservation::NotConfigured => SelectedExtensionPairingGrant::NotSelected,
+            PairingSetupObservation::Ready(setup) => match self
+                .grant(&setup.selected_vault_store_id)
+            {
+                PairingGrantObservation::NotStored => SelectedExtensionPairingGrant::NotSelected,
+                PairingGrantObservation::Stored(grant) => SelectedExtensionPairingGrant::Selected {
+                    grant: Box::new(grant.clone()),
+                },
+            },
+        }
     }
 
     #[must_use]
-    pub fn first_grant(&self) -> Option<StoredExtensionPairingGrant> {
-        self.ordered_grants().into_iter().next()
+    pub fn first_grant(&self) -> SelectedExtensionPairingGrant {
+        match self.ordered_grants().into_iter().next() {
+            Some(grant) => SelectedExtensionPairingGrant::Selected {
+                grant: Box::new(grant),
+            },
+            None => SelectedExtensionPairingGrant::NotSelected,
+        }
     }
 
     #[must_use]
-    pub fn setup_after_removal(&self, removed_vault_store_id: &str) -> Option<ExtensionReadySetup> {
-        if let Some(setup) = self.ready_setup()
+    pub fn setup_after_removal(&self, removed_vault_store_id: &str) -> ExtensionSetupAfterRemoval {
+        if let PairingSetupObservation::Ready(setup) = self.ready_setup()
             && setup.selected_vault_store_id != removed_vault_store_id
         {
-            return Some(setup.clone());
+            return ExtensionSetupAfterRemoval::Ready {
+                setup: setup.clone(),
+            };
         }
-        self.ordered_grants()
+        match self
+            .ordered_grants()
             .into_iter()
             .find(|grant| grant.vault_store_id != removed_vault_store_id)
-            .map(|grant| ExtensionReadySetup::from_grant(&grant))
+        {
+            Some(grant) => ExtensionSetupAfterRemoval::Ready {
+                setup: ExtensionReadySetup::from_grant(&grant),
+            },
+            None => ExtensionSetupAfterRemoval::NoPairedVault,
+        }
     }
 
-    fn ready_setup(&self) -> Option<&ExtensionReadySetup> {
-        self.entries.iter().find_map(|entry| match &entry.record {
-            ExtensionPairingRecord::Setup(setup) if entry.key == EXTENSION_SETUP_KEY => Some(setup),
-            ExtensionPairingRecord::Grant(_) | ExtensionPairingRecord::Setup(_) => None,
-        })
+    fn ready_setup(&self) -> PairingSetupObservation<'_> {
+        for entry in &self.entries {
+            if let ExtensionPairingRecord::Setup(setup) = &entry.record
+                && entry.key == EXTENSION_SETUP_KEY
+            {
+                return PairingSetupObservation::Ready(setup);
+            }
+        }
+        PairingSetupObservation::NotConfigured
     }
 
-    fn grant(&self, vault_store_id: &str) -> Option<&StoredExtensionPairingGrant> {
+    fn grant(&self, vault_store_id: &str) -> PairingGrantObservation<'_> {
         let key = StoredExtensionPairingGrant::storage_key_for(vault_store_id);
-        self.entries.iter().find_map(|entry| match &entry.record {
-            ExtensionPairingRecord::Grant(grant) if entry.key == key => Some(grant),
-            ExtensionPairingRecord::Grant(_) | ExtensionPairingRecord::Setup(_) => None,
-        })
+        for entry in &self.entries {
+            if let ExtensionPairingRecord::Grant(grant) = &entry.record
+                && entry.key == key
+            {
+                return PairingGrantObservation::Stored(grant);
+            }
+        }
+        PairingGrantObservation::NotStored
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum PairingSetupObservation<'a> {
+    NotConfigured,
+    Ready(&'a ExtensionReadySetup),
+}
+#[derive(Debug, PartialEq, Eq)]
+enum PairingGrantObservation<'a> {
+    NotStored,
+    Stored(&'a StoredExtensionPairingGrant),
 }
 
 #[derive(Clone, Copy)]
@@ -523,9 +566,12 @@ mod tests {
         ];
 
         for scope in scopes {
-            assert_eq!(ExtensionConnectScope::parse(scope.as_str()), Some(scope));
+            assert_eq!(ExtensionConnectScope::parse(scope.as_str()), Ok(scope));
         }
-        assert_eq!(ExtensionConnectScope::parse("external-value"), None);
+        assert_eq!(
+            ExtensionConnectScope::parse("external-value"),
+            Err(UnknownExtensionConnectScope)
+        );
     }
 
     #[test]
@@ -646,14 +692,18 @@ mod tests {
     fn selected_pairing_grant_refresh_rebuilds_grant_and_setup_metadata() -> anyhow::Result<()> {
         let state =
             ExtensionPairingState::refresh_grant(Fixture::refresh_input(PairingSelection::Select))?;
-        let refreshed = state
-            .selected_grant()
-            .ok_or_else(|| anyhow::anyhow!("selected refresh must include setup state"))?;
+        let SelectedExtensionPairingGrant::Selected { grant: refreshed } = state.selected_grant()
+        else {
+            anyhow::bail!("selected refresh must include setup state");
+        };
 
         assert_eq!(refreshed.event_count, ExtensionEventCount::from(4));
         assert_eq!(refreshed.event_log_heads, vec!["event-4"]);
         assert_eq!(refreshed.last_local_sync_at, "2026-07-25T00:00:04.000Z");
-        assert_eq!(state.first_grant(), Some(refreshed));
+        assert_eq!(
+            state.first_grant(),
+            SelectedExtensionPairingGrant::Selected { grant: refreshed }
+        );
         state.validate()?;
         Ok(())
     }
@@ -663,14 +713,18 @@ mod tests {
         let state = ExtensionPairingState::refresh_grant(Fixture::refresh_input(
             PairingSelection::KeepCurrent,
         ))?;
-        let refreshed = state
-            .first_grant()
-            .ok_or_else(|| anyhow::anyhow!("refresh must include the updated grant"))?;
+        let SelectedExtensionPairingGrant::Selected { grant: refreshed } = state.first_grant()
+        else {
+            anyhow::bail!("refresh must include the updated grant");
+        };
 
         assert_eq!(refreshed.event_count, ExtensionEventCount::from(4));
         assert_eq!(refreshed.event_log_heads, vec!["event-4"]);
         assert_eq!(refreshed.last_local_sync_at, "2026-07-25T00:00:04.000Z");
-        assert_eq!(state.selected_grant(), None);
+        assert_eq!(
+            state.selected_grant(),
+            SelectedExtensionPairingGrant::NotSelected
+        );
         assert_eq!(state.entries.len(), 1);
         state.validate()?;
         Ok(())
@@ -701,7 +755,10 @@ mod tests {
             ],
         };
 
-        assert_eq!(state.setup_after_removal("store-removed"), Some(expected));
+        assert_eq!(
+            state.setup_after_removal("store-removed"),
+            ExtensionSetupAfterRemoval::Ready { setup: expected }
+        );
     }
 
     #[test]
@@ -740,7 +797,9 @@ mod tests {
 
         assert_eq!(
             state.setup_after_removal("store-test"),
-            Some(ExtensionReadySetup::from_grant(&newer))
+            ExtensionSetupAfterRemoval::Ready {
+                setup: ExtensionReadySetup::from_grant(&newer)
+            }
         );
     }
 
@@ -749,7 +808,10 @@ mod tests {
         let selected = Fixture::grant();
         let state = ExtensionPairingState::for_grant(&selected, PairingSelection::Select);
 
-        assert_eq!(state.setup_after_removal("store-test"), None);
+        assert_eq!(
+            state.setup_after_removal("store-test"),
+            ExtensionSetupAfterRemoval::NoPairedVault
+        );
     }
     #[test]
     fn grant_json_validation_reports_invalid_input() -> anyhow::Result<()> {

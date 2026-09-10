@@ -231,22 +231,22 @@ impl CompanionPairingRequest {
         Ok(())
     }
 
-    fn binding_error(&self, actual: &Self) -> Option<CompanionPairingError> {
+    fn validate_binding(&self, actual: &Self) -> Result<(), CompanionPairingError> {
         if self.request_id != actual.request_id
             || self.nonce != actual.nonce
             || self.issued_at != actual.issued_at
             || self.expires_at != actual.expires_at
             || self.vault_type != actual.vault_type
         {
-            return Some(CompanionPairingError::RequestMismatch);
+            return Err(CompanionPairingError::RequestMismatch);
         }
         if self.installation != actual.installation {
-            return Some(CompanionPairingError::InstallationMismatch);
+            return Err(CompanionPairingError::InstallationMismatch);
         }
         if self.scopes != actual.scopes {
-            return Some(CompanionPairingError::ScopeMismatch);
+            return Err(CompanionPairingError::ScopeMismatch);
         }
-        None
+        Ok(())
     }
 }
 
@@ -281,9 +281,7 @@ impl CompanionPairingWebsiteAuthorization {
         expected: &CompanionPairingRequest,
     ) -> Result<(), CompanionPairingError> {
         self.request.validate_at(self.observed_at)?;
-        if let Some(error) = expected.binding_error(&self.request) {
-            return Err(error);
-        }
+        expected.validate_binding(&self.request)?;
         if self.vault_store_id.trim().is_empty()
             || self.vault_name.trim().is_empty()
             || self.approved_at.trim().is_empty()
@@ -469,9 +467,7 @@ impl ConsumedCompanionPairingAuthority {
         if let Err(error) = attempt.approval.validate_at(attempt.observed_at) {
             return Err(error.into());
         }
-        if let Some(error) = expected.binding_error(&attempt.approval.request) {
-            return Err(error.into());
-        }
+        expected.validate_binding(&attempt.approval.request)?;
         Ok(AuthorizedCompanionPairingApproval(attempt.approval))
     }
 }

@@ -25,7 +25,12 @@ pub(super) struct StoredPairingActivationCandidate {
 
 pub(super) struct PairingActivationStore;
 
-struct StoredStringRead<'a> {
+enum ActivationGatePresence {
+    Uncommitted,
+    Committed,
+}
+
+struct ActivationGateRead<'a> {
     store: &'a rexie::Store,
     key: &'a str,
 }
@@ -83,19 +88,24 @@ impl WritableActivationTransaction {
 }
 
 impl PairingActivationStore {
-    async fn get_string(
-        request: StoredStringRead<'_>,
-    ) -> Result<Option<String>, CompanionPairingCandidateFailure> {
+    async fn observe_gate(
+        request: ActivationGateRead<'_>,
+    ) -> Result<ActivationGatePresence, CompanionPairingCandidateFailure> {
         let key =
             serde_wasm_bindgen::to_value(request.key).map_err(|_| CandidateSchema::integrity())?;
-        request
+        match request
             .store
             .get(key)
             .await
             .map_err(|_| CompanionPairingCandidateFailure::Storage)?
-            .map(serde_wasm_bindgen::from_value)
-            .transpose()
-            .map_err(|_| CandidateSchema::integrity())
+        {
+            None => Ok(ActivationGatePresence::Uncommitted),
+            Some(value) => {
+                let _: String = serde_wasm_bindgen::from_value(value)
+                    .map_err(|_| CandidateSchema::integrity())?;
+                Ok(ActivationGatePresence::Committed)
+            }
+        }
     }
 
     async fn put_string(
@@ -128,12 +138,11 @@ impl PairingActivationStore {
         let vault = transaction
             .store(VAULT_STORE)
             .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
-        if Self::get_string(StoredStringRead {
+        if let ActivationGatePresence::Committed = Self::observe_gate(ActivationGateRead {
             store: &vault,
             key: &encoded.gate_key,
         })
         .await?
-        .is_some()
         {
             return Err(CompanionPairingCandidateFailure::Replay);
         }

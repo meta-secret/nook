@@ -207,7 +207,7 @@ impl AuthenticationCeremonyObservationFacts {
         if !context.form_identity.is_empty() {
             return false;
         }
-        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
                 source_origin: &context.source_origin,
                 destination_identity: &context.destination_identity,

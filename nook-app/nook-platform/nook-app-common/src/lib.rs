@@ -23,5 +23,6 @@ pub use i18n::{AppLocale, SupportedAppLocale};
 pub use i18n::{
     LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
     ResolveTranslationCatalogRequest, TranslateFromCatalogRequest, TranslateRequest,
-    TranslateWithReplacementsRequest, TranslationCatalog,
+    TranslateWithReplacementsRequest, TranslationCatalog, TranslationCatalogSource,
+    TranslationLookup,
 };

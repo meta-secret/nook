@@ -32,13 +32,29 @@ pub struct PasskeyUnlockMaterial {
     pub credential_id: PasskeyByteMaterial,
     pub prf_input: PasskeyByteMaterial,
 }
+#[derive(Debug, Default, Deserialize)]
+#[serde(untagged)]
+pub enum PasskeySetupAvailability {
+    Available(PasskeySetupMaterial),
+    #[default]
+    Unavailable,
+}
+#[derive(Debug, Default, Deserialize)]
+#[serde(untagged)]
+pub enum PasskeyUnlockAvailability {
+    Available(PasskeyUnlockMaterial),
+    #[default]
+    Unavailable,
+}
 #[derive(Debug, Deserialize)]
 pub struct PasskeySetupMaterialResponse {
-    pub setup: Option<PasskeySetupMaterial>,
+    #[serde(default)]
+    pub setup: PasskeySetupAvailability,
 }
 #[derive(Debug, Deserialize)]
 pub struct PasskeyUnlockMaterialResponse {
-    pub material: Option<PasskeyUnlockMaterial>,
+    #[serde(default)]
+    pub material: PasskeyUnlockAvailability,
 }
 
 #[cfg(test)]
@@ -62,17 +78,17 @@ mod tests {
     fn setup_and_unlock_preserve_distinct_envelopes() -> anyhow::Result<()> {
         let setup: PasskeySetupMaterialResponse =
             serde_json::from_str(r#"{"setup":{"userHandle":[1],"prfInput":[2]}}"#)?;
-        let setup = setup
-            .setup
-            .ok_or_else(|| anyhow::anyhow!("missing setup"))?;
+        let PasskeySetupAvailability::Available(setup) = setup.setup else {
+            anyhow::bail!("missing setup");
+        };
         assert_eq!(setup.user_handle.as_bytes(), &[1]);
-        assert!(
+        assert!(matches!(
             serde_json::from_str::<PasskeyUnlockMaterialResponse>(
                 r#"{"setup":{"userHandle":[1],"prfInput":[2]}}"#
             )?
-            .material
-            .is_none()
-        );
+            .material,
+            PasskeyUnlockAvailability::Unavailable
+        ));
         Ok(())
     }
 }

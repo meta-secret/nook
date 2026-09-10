@@ -1,4 +1,5 @@
 use super::DEFAULT_PASSKEY_LABEL;
+use super::{BrowserArrayProperty, BrowserObjectProperty};
 use crate::BrowserPasskeyClient;
 use crate::BrowserPasskeyGetOptionalArray;
 use crate::BrowserPasskeyGetOptionalObject;
@@ -81,10 +82,18 @@ pub(crate) struct BrowserPasskeyRecoveryOptionsStruct<'a> {
     pub(crate) prf_input: &'a [u8],
 }
 
+pub(crate) enum PrfCredentialSelection<'a> {
+    Discoverable,
+    Identified(&'a [u8]),
+}
+enum RelyingPartySelection {
+    BrowserOrigin,
+    Explicit(String),
+}
 /// Named values required by BrowserPasskeyClient::prf_extension.
 pub(crate) struct BrowserPasskeyPrfExtension<'a> {
     pub(crate) prf_input: &'a [u8],
-    pub(crate) credential_id: Option<&'a [u8]>,
+    pub(crate) credential_id: PrfCredentialSelection<'a>,
 }
 
 impl BrowserPasskeyClient {
@@ -205,7 +214,7 @@ impl BrowserPasskeyClient {
 
 impl BrowserPasskeyClient {
     fn normalize_creation_binary_fields(public_key: &js_sys::Object) -> Result<(), JsError> {
-        if let Some(user) =
+        if let BrowserObjectProperty::Reported(user) =
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: public_key,
                 field: "user",
@@ -222,7 +231,7 @@ impl BrowserPasskeyClient {
 
 impl BrowserPasskeyClient {
     fn normalize_request_binary_fields(public_key: &js_sys::Object) -> Result<(), JsError> {
-        let Some(allow_credentials) =
+        let BrowserArrayProperty::Reported(allow_credentials) =
             BrowserPasskeyClient::get_optional_array(BrowserPasskeyGetOptionalArray {
                 target: public_key,
                 field: "allowCredentials",
@@ -244,7 +253,7 @@ impl BrowserPasskeyClient {
 
 impl BrowserPasskeyClient {
     fn normalize_prf_binary_fields(public_key: &js_sys::Object) -> Result<(), JsError> {
-        let Some(extensions) =
+        let BrowserObjectProperty::Reported(extensions) =
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: public_key,
                 field: "extensions",
@@ -252,7 +261,7 @@ impl BrowserPasskeyClient {
         else {
             return Ok(());
         };
-        let Some(prf) =
+        let BrowserObjectProperty::Reported(prf) =
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: &extensions,
                 field: "prf",
@@ -261,7 +270,7 @@ impl BrowserPasskeyClient {
             return Ok(());
         };
 
-        if let Some(values) =
+        if let BrowserObjectProperty::Reported(values) =
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: &prf,
                 field: "eval",
@@ -270,7 +279,7 @@ impl BrowserPasskeyClient {
             BrowserPasskeyClient::set_prf_value_fields(&values)?;
         }
 
-        if let Some(eval_by_credential) =
+        if let BrowserObjectProperty::Reported(eval_by_credential) =
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: &prf,
                 field: "evalByCredential",
@@ -307,7 +316,7 @@ impl BrowserPasskeyClient {
 impl BrowserPasskeyClient {
     fn set_uint8_array_field(request: BrowserPasskeySetUint8ArrayField<'_>) -> Result<(), JsError> {
         let BrowserPasskeySetUint8ArrayField { target, field } = request;
-        let Some(bytes) =
+        let BrowserObjectProperty::Reported(bytes) =
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: target,
                 field: field,
@@ -338,7 +347,10 @@ impl BrowserPasskeyClient {
         Ok(PasskeyCreationOptions {
             public_key: PublicKeyCredentialCreationOptions {
                 rp: PublicKeyCredentialRpEntity {
-                    id: BrowserPasskeyClient::optional_rp_id(rp_id),
+                    id: match BrowserPasskeyClient::relying_party(rp_id) {
+                        RelyingPartySelection::BrowserOrigin => None,
+                        RelyingPartySelection::Explicit(id) => Some(id),
+                    },
                     name: rp_name.to_owned(),
                 },
                 user: PublicKeyCredentialUserEntity {
@@ -371,7 +383,7 @@ impl BrowserPasskeyClient {
                 extensions: Some(BrowserPasskeyClient::prf_extension(
                     BrowserPasskeyPrfExtension {
                         prf_input: prf_input,
-                        credential_id: None,
+                        credential_id: PrfCredentialSelection::Discoverable,
                     },
                 )),
             },
@@ -380,9 +392,13 @@ impl BrowserPasskeyClient {
 }
 
 impl BrowserPasskeyClient {
-    fn optional_rp_id(rp_id: &str) -> Option<String> {
+    fn relying_party(rp_id: &str) -> RelyingPartySelection {
         let rp_id = rp_id.trim();
-        (!rp_id.is_empty()).then(|| rp_id.to_owned())
+        if rp_id.is_empty() {
+            RelyingPartySelection::BrowserOrigin
+        } else {
+            RelyingPartySelection::Explicit(rp_id.to_owned())
+        }
     }
 }
 
@@ -456,7 +472,10 @@ impl BrowserPasskeyClient {
             public_key: PublicKeyCredentialRequestOptions {
                 challenge: BrowserPasskeyClient::random_challenge()?.to_vec().into(),
                 timeout: None,
-                rp_id: BrowserPasskeyClient::optional_rp_id(rp_id),
+                rp_id: match BrowserPasskeyClient::relying_party(rp_id) {
+                    RelyingPartySelection::BrowserOrigin => None,
+                    RelyingPartySelection::Explicit(id) => Some(id),
+                },
                 allow_credentials: Some(vec![allow_credential]),
                 user_verification: UserVerificationRequirement::Required,
                 hints: None,
@@ -465,7 +484,7 @@ impl BrowserPasskeyClient {
                 extensions: Some(BrowserPasskeyClient::prf_extension(
                     BrowserPasskeyPrfExtension {
                         prf_input: prf_input,
-                        credential_id: Some(credential_id),
+                        credential_id: PrfCredentialSelection::Identified(credential_id),
                     },
                 )),
             },
@@ -482,7 +501,10 @@ impl BrowserPasskeyClient {
             public_key: PublicKeyCredentialRequestOptions {
                 challenge: BrowserPasskeyClient::random_challenge()?.to_vec().into(),
                 timeout: None,
-                rp_id: BrowserPasskeyClient::optional_rp_id(rp_id),
+                rp_id: match BrowserPasskeyClient::relying_party(rp_id) {
+                    RelyingPartySelection::BrowserOrigin => None,
+                    RelyingPartySelection::Explicit(id) => Some(id),
+                },
                 allow_credentials: None,
                 user_verification: UserVerificationRequirement::Required,
                 hints: None,
@@ -491,7 +513,7 @@ impl BrowserPasskeyClient {
                 extensions: Some(BrowserPasskeyClient::prf_extension(
                     BrowserPasskeyPrfExtension {
                         prf_input: prf_input,
-                        credential_id: None,
+                        credential_id: PrfCredentialSelection::Discoverable,
                     },
                 )),
             },
@@ -512,14 +534,14 @@ impl BrowserPasskeyClient {
             second: None,
         };
         let prf = match credential_id {
-            Some(id) => AuthenticationExtensionsPrfInputs {
+            PrfCredentialSelection::Identified(id) => AuthenticationExtensionsPrfInputs {
                 eval: None,
                 eval_by_credential: Some(HashMap::from([(
                     BrowserPasskeyClient::base64_url(id),
                     values,
                 )])),
             },
-            None => AuthenticationExtensionsPrfInputs {
+            PrfCredentialSelection::Discoverable => AuthenticationExtensionsPrfInputs {
                 eval: Some(values),
                 eval_by_credential: None,
             },

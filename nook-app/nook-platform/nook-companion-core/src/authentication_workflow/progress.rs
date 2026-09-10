@@ -16,6 +16,9 @@ pub enum AuthenticationWorkflowProgress {
     Enrollment(AuthenticatorEnrollmentProgress),
     Manual,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct InvalidWorkflowProgress;
+
 impl AuthenticationWorkflowProgress {
     pub const fn current_step(self) -> AuthenticationWorkflowCurrentStep {
         AuthenticationWorkflowCurrentStep(match self {
@@ -37,7 +40,9 @@ impl AuthenticationWorkflowProgress {
         })
     }
     // Admission requires workflow context: several different activities encode 2/5.
-    pub(super) const fn admit(snapshot: AuthenticationWorkflowSnapshot) -> Option<Self> {
+    pub(super) const fn admit(
+        snapshot: AuthenticationWorkflowSnapshot,
+    ) -> Result<Self, InvalidWorkflowProgress> {
         let progress = match snapshot.kind {
             AuthenticationWorkflowKind::Login => Self::LoginCredentials,
             AuthenticationWorkflowKind::Signup => Self::SignupCredentials,
@@ -63,9 +68,9 @@ impl AuthenticationWorkflowProgress {
                         AuthenticationWorkflowCurrentStep(4) => {
                             AuthenticatorEnrollmentProgress::Recovery
                         }
-                        _ => return None,
+                        _ => return Err(InvalidWorkflowProgress),
                     },
-                    _ => return None,
+                    _ => return Err(InvalidWorkflowProgress),
                 };
                 Self::Enrollment(enrollment)
             }
@@ -73,9 +78,9 @@ impl AuthenticationWorkflowProgress {
         if snapshot.current_step.raw() == progress.current_step().raw()
             && snapshot.total_steps.raw() == progress.total_steps().raw()
         {
-            Some(progress)
+            Ok(progress)
         } else {
-            None
+            Err(InvalidWorkflowProgress)
         }
     }
 }

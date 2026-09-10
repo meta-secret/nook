@@ -37,7 +37,6 @@ use tracing_subscriber::fmt::format::DefaultFields;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::Registry;
 use tracing_subscriber::reload::Layer as ReloadLayer;
-use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 const LOG_DB_NAME: &str = "nook_logs";
@@ -57,7 +56,7 @@ extern "C" {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum LogLevel {
+pub(crate) enum LogLevel {
     Error,
     Warn,
     Info,
@@ -86,14 +85,14 @@ impl LogLevel {
         }
     }
 
-    fn parse(raw: &str) -> Option<Self> {
+    fn parse(raw: &str) -> Result<Self, UnrecognizedLogLevel> {
         match raw.trim().to_ascii_lowercase().as_str() {
-            "error" => Some(LogLevel::Error),
-            "warn" => Some(LogLevel::Warn),
-            "info" => Some(LogLevel::Info),
-            "debug" => Some(LogLevel::Debug),
-            "trace" => Some(LogLevel::Trace),
-            _ => None,
+            "error" => Ok(LogLevel::Error),
+            "warn" => Ok(LogLevel::Warn),
+            "info" => Ok(LogLevel::Info),
+            "debug" => Ok(LogLevel::Debug),
+            "trace" => Ok(LogLevel::Trace),
+            _ => Err(UnrecognizedLogLevel),
         }
     }
 
@@ -119,6 +118,41 @@ impl LogLevel {
     }
 }
 
+#[derive(Debug)]
+struct UnrecognizedLogLevel;
+
+/// Metadata retains the existing omitted-property/string wire representation.
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub(crate) enum LogMetadata {
+    Json(String),
+    #[default]
+    NoFields,
+}
+impl LogMetadata {
+    fn omitted(&self) -> bool {
+        matches!(self, Self::NoFields)
+    }
+}
+enum LogFilterInstallation {
+    NotInstalled,
+    Installed(Box<dyn Fn(LevelFilter)>),
+}
+#[derive(Default)]
+enum LogScope {
+    #[default]
+    EventTarget,
+    Explicit(String),
+}
+pub(crate) enum LogThreshold {
+    AllLevels,
+    Minimum(LogLevel),
+}
+pub(crate) enum LogPageLimit {
+    AllEntries,
+    Limited(u32),
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize, tsify::Tsify)]
 #[tsify(into_wasm_abi)]
 pub struct LogEntry {
@@ -126,8 +160,9 @@ pub struct LogEntry {
     level: String,
     scope: String,
     message: String,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    data: Option<String>,
+    #[serde(skip_serializing_if = "LogMetadata::omitted", default)]
+    #[tsify(optional, type = "string")]
+    data: LogMetadata,
 }
 
 #[wasm_bindgen]
@@ -147,14 +182,14 @@ pub(crate) struct LoggerState {
     pending: Vec<LogEntry>,
     /// Setter that moves the reloadable global `tracing` level filter. Boxed to
     /// avoid naming the reload handle's generic type.
-    set_filter: Option<Box<dyn Fn(LevelFilter)>>,
+    set_filter: LogFilterInstallation,
 }
 
 thread_local! {
     static LOGGER: RefCell<LoggerState> = RefCell::new(LoggerState {
         level: LogLevel::Info,
         pending: Vec::new(),
-        set_filter: None,
+        set_filter: LogFilterInstallation::NotInstalled,
     });
 
     /// Guards one-time subscriber installation across HMR / repeated init.
@@ -173,14 +208,14 @@ pub(crate) struct LoggerConsoleEcho<'a> {
     pub(crate) level: &'a str,
     pub(crate) scope: &'a str,
     pub(crate) message: &'a str,
-    pub(crate) data: Option<&'a str>,
+    pub(crate) data: &'a LogMetadata,
 }
 
 /// Named values required by LoggerState::dump_entries.
 pub(crate) struct LoggerDumpEntries {
-    pub(crate) min_level: Option<String>,
-    pub(crate) limit: Option<u32>,
-    pub(crate) offset: Option<u32>,
+    pub(crate) min_level: LogThreshold,
+    pub(crate) limit: LogPageLimit,
+    pub(crate) offset: u32,
 }
 
 /// Named values required by LoggerState::log_record_entry.
@@ -188,7 +223,7 @@ pub(crate) struct LoggerLogRecordEntry<'a> {
     pub(crate) level: &'a str,
     pub(crate) scope: &'a str,
     pub(crate) message: &'a str,
-    pub(crate) data: Option<String>,
+    pub(crate) data: LogMetadata,
 }
 
 /// Named values required by LoggerState::log_dump_page.
@@ -214,8 +249,8 @@ impl LoggerState {
             data,
         } = request;
         let text = match data {
-            Some(data) => format!("[{scope}] {message} {data}"),
-            None => format!("[{scope}] {message}"),
+            LogMetadata::Json(data) => format!("[{scope}] {message} {data}"),
+            LogMetadata::NoFields => format!("[{scope}] {message}"),
         };
         let _ = console_echo_js(level, &text);
     }
@@ -226,7 +261,7 @@ impl LoggerState {
 #[derive(Default)]
 struct FieldVisitor {
     message: String,
-    scope: Option<String>,
+    scope: LogScope,
     fields: Vec<(String, String)>,
 }
 
@@ -234,21 +269,21 @@ impl FieldVisitor {
     fn push(&mut self, name: &str, value: String) {
         match name {
             "message" => self.message = value,
-            "scope" => self.scope = Some(value),
+            "scope" => self.scope = LogScope::Explicit(value),
             _ => self.fields.push((name.to_owned(), value)),
         }
     }
 
-    fn data_json(&self) -> Option<String> {
+    fn data_json(&self) -> Result<LogMetadata, serde_json::Error> {
         if self.fields.is_empty() {
-            return None;
+            return Ok(LogMetadata::NoFields);
         }
         let map: BTreeMap<&str, &str> = self
             .fields
             .iter()
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
-        serde_json::to_string(&map).ok()
+        serde_json::to_string(&map).map(LogMetadata::Json)
     }
 }
 
@@ -274,17 +309,22 @@ impl<S: tracing::Subscriber> Layer<S> for IndexedDbLayer {
         event.record(&mut visitor);
 
         let level = LogLevel::from_tracing(*meta.level()).as_str();
-        let scope = visitor
-            .scope
-            .clone()
-            .unwrap_or_else(|| meta.target().to_owned());
-        let data = visitor.data_json();
+        let scope = match &visitor.scope {
+            LogScope::EventTarget => meta.target().to_owned(),
+            LogScope::Explicit(scope) => scope.clone(),
+        };
+        // String-map serialization failure has historically omitted metadata only.
+        // Classify that boundary failure explicitly without exposing event data.
+        let data = match visitor.data_json() {
+            Ok(data) => data,
+            Err(_) => LogMetadata::NoFields,
+        };
 
         LoggerState::console_echo(LoggerConsoleEcho {
             level: level,
             scope: &scope,
             message: &visitor.message,
-            data: data.as_deref(),
+            data: &data,
         });
         LoggerState::queue(LogEntry {
             ts: LogEntry::now_iso(),
@@ -383,28 +423,28 @@ impl LoggerState {
             .await
             .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
 
-        let max_rank = min_level
-            .as_deref()
-            .and_then(LogLevel::parse)
-            .unwrap_or(LogLevel::Trace)
-            .rank();
+        let max_rank = match min_level {
+            LogThreshold::AllLevels => LogLevel::Trace.rank(),
+            LogThreshold::Minimum(level) => level.rank(),
+        };
 
         let filtered: Vec<LogEntry> = values
             .into_iter()
             .filter_map(|value| from_value::<LogEntry>(value).ok())
-            .filter(|entry| {
-                LogLevel::parse(&entry.level).is_none_or(|level| level.rank() <= max_rank)
+            .filter(|entry| match LogLevel::parse(&entry.level) {
+                Ok(level) => level.rank() <= max_rank,
+                Err(_) => true,
             })
             .collect();
 
         // Paginate from the newest end: `offset` skips the most recent entries,
         // `limit` caps how many older ones follow.
-        let offset = offset.unwrap_or(0) as usize;
+        let offset = offset as usize;
         let len = filtered.len();
         let end = len.saturating_sub(offset);
         let start = match limit {
-            Some(limit) => end.saturating_sub(limit as usize),
-            None => 0,
+            LogPageLimit::Limited(limit) => end.saturating_sub(limit as usize),
+            LogPageLimit::AllEntries => 0,
         };
         Ok(filtered[start..end].to_vec())
     }
@@ -440,7 +480,9 @@ impl LoggerState {
             let setter = Box::new(move |level: LevelFilter| {
                 let _ = handle.modify(|current| *current = level);
             });
-            LOGGER.with(|logger| logger.borrow_mut().set_filter = Some(setter));
+            LOGGER.with(|logger| {
+                logger.borrow_mut().set_filter = LogFilterInstallation::Installed(setter)
+            });
         }
     }
 }
@@ -454,11 +496,11 @@ pub fn log_set_level(level: &str) {
 }
 impl LoggerState {
     fn log_set_level(level: &str) {
-        if let Some(level) = LogLevel::parse(level) {
+        if let Ok(level) = LogLevel::parse(level) {
             LOGGER.with(|logger| {
                 let mut state = logger.borrow_mut();
                 state.level = level;
-                if let Some(set_filter) = state.set_filter.as_ref() {
+                if let LogFilterInstallation::Installed(set_filter) = &state.set_filter {
                     set_filter(level.to_filter());
                 }
             });
@@ -487,7 +529,7 @@ pub fn log_record(level: &str, scope: &str, message: &str) {
         level: level,
         scope: scope,
         message: message,
-        data: None,
+        data: LogMetadata::NoFields,
     });
 }
 
@@ -497,7 +539,7 @@ pub fn log_record_with_data(level: &str, scope: &str, message: &str, data: Strin
         level: level,
         scope: scope,
         message: message,
-        data: Some(data),
+        data: LogMetadata::Json(data),
     });
 }
 
@@ -547,9 +589,9 @@ pub async fn log_dump() -> Result<NookLogEntries, wasm_bindgen::JsError> {
 impl LoggerState {
     async fn log_dump() -> Result<NookLogEntries, wasm_bindgen::JsError> {
         let entries = LoggerState::dump_entries(LoggerDumpEntries {
-            min_level: None,
-            limit: None,
-            offset: None,
+            min_level: LogThreshold::AllLevels,
+            limit: LogPageLimit::AllEntries,
+            offset: 0,
         })
         .await?;
         Ok(NookLogEntries(entries))
@@ -584,9 +626,12 @@ impl LoggerState {
             offset,
         } = request;
         let entries = LoggerState::dump_entries(LoggerDumpEntries {
-            min_level: Some(min_level),
-            limit: Some(limit),
-            offset: Some(offset),
+            min_level: match LogLevel::parse(&min_level) {
+                Ok(level) => LogThreshold::Minimum(level),
+                Err(_) => LogThreshold::AllLevels,
+            },
+            limit: LogPageLimit::Limited(limit),
+            offset,
         })
         .await?;
         Ok(NookLogEntries(entries))

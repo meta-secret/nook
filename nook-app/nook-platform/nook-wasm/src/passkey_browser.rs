@@ -9,10 +9,53 @@
 use js_sys::{JsString, Object, Promise, Reflect, Uint8Array};
 use nook_core::DeviceId;
 mod options;
+mod prf;
+pub(crate) use prf::*;
 
 use wasm_bindgen::{JsCast, JsError};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{CredentialCreationOptions, CredentialRequestOptions, PublicKeyCredential};
+
+/// Browser property reports retain undefined versus explicit null at the JS edge.
+pub(crate) enum BrowserObjectProperty {
+    Undefined,
+    Null,
+    Reported(Object),
+}
+pub(crate) enum BrowserArrayProperty {
+    Undefined,
+    Null,
+    Reported(js_sys::Array),
+}
+pub(crate) enum BrowserBufferProperty {
+    Undefined,
+    Null,
+    Reported(js_sys::ArrayBuffer),
+}
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum BrowserBooleanProperty {
+    Unreported,
+    Enabled,
+    Disabled,
+}
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum BrowserErrorText {
+    Unreported,
+    Reported(String),
+}
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum BrowserErrorDetail<'a> {
+    Unreported,
+    Reported(&'a str),
+}
+impl BrowserErrorText {
+    fn detail(&self) -> BrowserErrorDetail<'_> {
+        match self {
+            Self::Unreported => BrowserErrorDetail::Unreported,
+            Self::Reported(value) => BrowserErrorDetail::Reported(value),
+        }
+    }
+}
 
 /// Browser capability admitted by secure-context and WebAuthn support checks.
 pub(crate) struct BrowserPasskeyClient {
@@ -36,18 +79,6 @@ pub(crate) struct BrowserPasskeyPasskeyLabelWithDeviceId<'a> {
     pub(crate) device_id: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::prf_output.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum PasskeyPrfRequirement {
-    Enabled,
-    OutputOnly,
-}
-
-pub(crate) struct BrowserPasskeyPrfOutput<'a> {
-    pub(crate) credential: &'a PublicKeyCredential,
-    pub(crate) requirement: PasskeyPrfRequirement,
-}
-
 /// Named values required by BrowserPasskeyClient::credential_from_promise.
 pub(crate) struct BrowserPasskeyCredentialFromPromise<'a> {
     pub(crate) method: &'a str,
@@ -63,8 +94,8 @@ pub(crate) struct BrowserPasskeyCredentialCeremonyError<'a> {
 /// Named values required by BrowserPasskeyClient::credential_ceremony_error_message.
 pub(crate) struct BrowserPasskeyCredentialCeremonyErrorMessage<'a> {
     pub(crate) method: &'a str,
-    pub(crate) name: Option<&'a str>,
-    pub(crate) message: Option<&'a str>,
+    pub(crate) name: BrowserErrorDetail<'a>,
+    pub(crate) message: BrowserErrorDetail<'a>,
 }
 
 /// Named values required by BrowserPasskeyClient::js_error_text.
@@ -240,84 +271,6 @@ impl BrowserPasskeyClient {
 }
 
 impl BrowserPasskeyClient {
-    pub(crate) fn prf_output(
-        request: BrowserPasskeyPrfOutput<'_>,
-    ) -> Result<Option<Vec<u8>>, JsError> {
-        let BrowserPasskeyPrfOutput {
-            credential,
-            requirement,
-        } = request;
-        let extension_results: js_sys::Object = credential.get_client_extension_results().into();
-        let Some(prf) =
-            BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
-                target: &extension_results,
-                field: "prf",
-            })?
-        else {
-            if requirement == PasskeyPrfRequirement::Enabled {
-                return Err(BrowserPasskeyClient::prf_unavailable(
-                    "This authenticator does not support the WebAuthn PRF extension required to protect device keys.",
-                ));
-            }
-            return Ok(None);
-        };
-        if require_enabled
-            && BrowserPasskeyClient::get_optional_bool(BrowserPasskeyGetOptionalBool {
-                target: &prf,
-                field: "enabled",
-            })? != Some(true)
-        {
-            return Err(BrowserPasskeyClient::prf_unavailable(
-                "This authenticator does not support the WebAuthn PRF extension required to protect device keys.",
-            ));
-        }
-
-        let Some(results) =
-            BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
-                target: &prf,
-                field: "results",
-            })?
-        else {
-            return Ok(None);
-        };
-        let Some(first) =
-            BrowserPasskeyClient::get_optional_buffer(BrowserPasskeyGetOptionalBuffer {
-                target: &results,
-                field: "first",
-            })?
-        else {
-            return Ok(None);
-        };
-        Ok(Some(BrowserPasskeyClient::bytes_from_buffer(
-            BrowserPasskeyBytesFromBuffer {
-                value: &first,
-                name: "passkey PRF output",
-            },
-        )?))
-    }
-}
-
-impl BrowserPasskeyClient {
-    pub(crate) fn require_prf_output(credential: &PublicKeyCredential) -> Result<Vec<u8>, JsError> {
-        BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
-            credential: credential,
-            requirement: crate::PasskeyPrfRequirement::OutputOnly,
-        })?
-        .ok_or_else(|| {
-            BrowserPasskeyClient::prf_unavailable(
-                "The passkey did not return the required PRF output.",
-            )
-        })
-    }
-}
-
-impl BrowserPasskeyClient {
-    pub(crate) fn prf_unavailable(message: &str) -> JsError {
-        JsError::new(&format!("{PASSKEY_PRF_UNAVAILABLE}: {message}"))
-    }
-}
-
-impl BrowserPasskeyClient {
     fn require_passkey_support() -> Result<BrowserPasskeyClient, JsError> {
         let window = gloo_utils::window();
         if !window.is_secure_context() {
@@ -326,24 +279,26 @@ impl BrowserPasskeyClient {
             ));
         }
 
-        if BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
-            target: &js_sys::global().unchecked_into(),
-            field: "PublicKeyCredential",
-        })?
-        .is_none()
-        {
+        if !matches!(
+            BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
+                target: &js_sys::global().unchecked_into(),
+                field: "PublicKeyCredential",
+            })?,
+            BrowserObjectProperty::Reported(_)
+        ) {
             return Err(BrowserPasskeyClient::passkey_unavailable(
                 "Passkeys are not available in this browser.",
             ));
         }
 
         let navigator: js_sys::Object = window.navigator().into();
-        if BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
-            target: &navigator,
-            field: "credentials",
-        })?
-        .is_none()
-        {
+        if !matches!(
+            BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
+                target: &navigator,
+                field: "credentials",
+            })?,
+            BrowserObjectProperty::Reported(_)
+        ) {
             return Err(BrowserPasskeyClient::passkey_unavailable(
                 "Passkeys are not available in this browser profile.",
             ));
@@ -383,8 +338,8 @@ impl BrowserPasskeyClient {
         JsError::new(&BrowserPasskeyClient::credential_ceremony_error_message(
             BrowserPasskeyCredentialCeremonyErrorMessage {
                 method: method,
-                name: name.as_deref(),
-                message: message.as_deref(),
+                name: name.detail(),
+                message: message.detail(),
             },
         ))
     }
@@ -403,17 +358,23 @@ impl BrowserPasskeyClient {
         // privacy-sensitive outcomes, including cancellation, timeout, policy
         // refusal, and an unavailable credential. Preserve that ambiguity as a
         // typed result so presentation layers can explain it without guessing.
-        if name == Some("NotAllowedError") {
+        if name == BrowserErrorDetail::Reported("NotAllowedError") {
             return format!(
                 "{PASSKEY_CEREMONY_NOT_ALLOWED}: Passkey {method} request did not finish."
             );
         }
 
         let detail = match (name, message) {
-            (Some(name), Some(message)) => format!("{name}: {message}"),
-            (Some(name), None) => name.to_owned(),
-            (None, Some(message)) => message.to_owned(),
-            (None, None) => "unknown browser error".to_owned(),
+            (BrowserErrorDetail::Reported(name), BrowserErrorDetail::Reported(message)) => {
+                format!("{name}: {message}")
+            }
+            (BrowserErrorDetail::Reported(name), BrowserErrorDetail::Unreported) => name.to_owned(),
+            (BrowserErrorDetail::Unreported, BrowserErrorDetail::Reported(message)) => {
+                message.to_owned()
+            }
+            (BrowserErrorDetail::Unreported, BrowserErrorDetail::Unreported) => {
+                "unknown browser error".to_owned()
+            }
         };
 
         format!("Passkey {method} ceremony failed ({detail}).")
@@ -421,12 +382,15 @@ impl BrowserPasskeyClient {
 }
 
 impl BrowserPasskeyClient {
-    fn js_error_text(request: BrowserPasskeyJsErrorText<'_>) -> Option<String> {
+    fn js_error_text(request: BrowserPasskeyJsErrorText<'_>) -> BrowserErrorText {
         let BrowserPasskeyJsErrorText { error, property } = request;
-        Reflect::get(error, &JsString::from(property))
+        match Reflect::get(error, &JsString::from(property))
             .ok()
             .and_then(|value| value.as_string())
-            .filter(|value| !value.trim().is_empty())
+        {
+            Some(value) if !value.trim().is_empty() => BrowserErrorText::Reported(value),
+            _ => BrowserErrorText::Unreported,
+        }
     }
 }
 
@@ -446,7 +410,7 @@ impl BrowserPasskeyClient {
             passkey_label,
         } = request;
         let global: js_sys::Object = js_sys::global().unchecked_into();
-        let Some(public_key_credential) =
+        let BrowserObjectProperty::Reported(public_key_credential) =
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: &global,
                 field: "PublicKeyCredential",
@@ -455,7 +419,7 @@ impl BrowserPasskeyClient {
             return Ok(());
         };
 
-        let Some(method_value) =
+        let BrowserObjectProperty::Reported(method_value) =
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: &public_key_credential,
                 field: "signalCurrentUserDetails",
@@ -518,69 +482,85 @@ impl BrowserPasskeyClient {
 impl BrowserPasskeyClient {
     fn get_required_object(
         request: BrowserPasskeyGetRequiredObject<'_>,
-    ) -> Result<js_sys::Object, JsError> {
+    ) -> Result<Object, JsError> {
         let BrowserPasskeyGetRequiredObject { target, field } = request;
-        BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
-            target: target,
-            field: field,
-        })?
-        .ok_or_else(|| JsError::new(&format!("Missing required passkey option field {field}")))
-    }
-}
-
-impl BrowserPasskeyClient {
-    fn get_optional_object(
-        request: BrowserPasskeyGetOptionalObject<'_>,
-    ) -> Result<Option<js_sys::Object>, JsError> {
-        let BrowserPasskeyGetOptionalObject { target, field } = request;
-        let value = Reflect::get(target, &JsString::from(field))
-            .map_err(|_| JsError::new(&format!("Failed to read passkey option field {field}")))?;
-        if value.is_undefined() || value.is_null() {
-            Ok(None)
-        } else {
-            Ok(Some(value.unchecked_into()))
+        match BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
+            target,
+            field,
+        })? {
+            BrowserObjectProperty::Reported(value) => Ok(value),
+            BrowserObjectProperty::Undefined | BrowserObjectProperty::Null => Err(JsError::new(
+                &format!("Missing required passkey option field {field}"),
+            )),
         }
     }
 }
-
+impl BrowserPasskeyClient {
+    fn get_optional_object(
+        request: BrowserPasskeyGetOptionalObject<'_>,
+    ) -> Result<BrowserObjectProperty, JsError> {
+        let BrowserPasskeyGetOptionalObject { target, field } = request;
+        let value = Reflect::get(target, &JsString::from(field))
+            .map_err(|_| JsError::new(&format!("Failed to read passkey option field {field}")))?;
+        if value.is_undefined() {
+            Ok(BrowserObjectProperty::Undefined)
+        } else if value.is_null() {
+            Ok(BrowserObjectProperty::Null)
+        } else {
+            Ok(BrowserObjectProperty::Reported(value.unchecked_into()))
+        }
+    }
+}
 impl BrowserPasskeyClient {
     fn get_optional_array(
         request: BrowserPasskeyGetOptionalArray<'_>,
-    ) -> Result<Option<js_sys::Array>, JsError> {
+    ) -> Result<BrowserArrayProperty, JsError> {
         let BrowserPasskeyGetOptionalArray { target, field } = request;
         Ok(
-            BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
-                target: target,
-                field: field,
-            })?
-            .map(JsCast::unchecked_into),
+            match BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
+                target,
+                field,
+            })? {
+                BrowserObjectProperty::Undefined => BrowserArrayProperty::Undefined,
+                BrowserObjectProperty::Null => BrowserArrayProperty::Null,
+                BrowserObjectProperty::Reported(value) => {
+                    BrowserArrayProperty::Reported(value.unchecked_into())
+                }
+            },
         )
     }
 }
-
 impl BrowserPasskeyClient {
     fn get_optional_buffer(
         request: BrowserPasskeyGetOptionalBuffer<'_>,
-    ) -> Result<Option<js_sys::ArrayBuffer>, JsError> {
+    ) -> Result<BrowserBufferProperty, JsError> {
         let BrowserPasskeyGetOptionalBuffer { target, field } = request;
         Ok(
-            BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
-                target: target,
-                field: field,
-            })?
-            .map(JsCast::unchecked_into),
+            match BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
+                target,
+                field,
+            })? {
+                BrowserObjectProperty::Undefined => BrowserBufferProperty::Undefined,
+                BrowserObjectProperty::Null => BrowserBufferProperty::Null,
+                BrowserObjectProperty::Reported(value) => {
+                    BrowserBufferProperty::Reported(value.unchecked_into())
+                }
+            },
         )
     }
 }
-
 impl BrowserPasskeyClient {
     fn get_optional_bool(
         request: BrowserPasskeyGetOptionalBool<'_>,
-    ) -> Result<Option<bool>, JsError> {
+    ) -> Result<BrowserBooleanProperty, JsError> {
         let BrowserPasskeyGetOptionalBool { target, field } = request;
         let value = Reflect::get(target, &JsString::from(field))
             .map_err(|_| JsError::new(&format!("Failed to read passkey option field {field}")))?;
-        Ok(value.as_bool())
+        Ok(match value.as_bool() {
+            Some(true) => BrowserBooleanProperty::Enabled,
+            Some(false) => BrowserBooleanProperty::Disabled,
+            None => BrowserBooleanProperty::Unreported,
+        })
     }
 }
 
@@ -595,8 +575,10 @@ mod tests {
             BrowserPasskeyClient::credential_ceremony_error_message(
                 BrowserPasskeyCredentialCeremonyErrorMessage {
                     method: "get",
-                    name: Some("NotAllowedError"),
-                    message: Some("The operation either timed out or was not allowed.")
+                    name: BrowserErrorDetail::Reported("NotAllowedError"),
+                    message: BrowserErrorDetail::Reported(
+                        "The operation either timed out or was not allowed."
+                    )
                 }
             ),
             format!("{PASSKEY_CEREMONY_NOT_ALLOWED}: Passkey get request did not finish.")
@@ -609,8 +591,8 @@ mod tests {
             BrowserPasskeyClient::credential_ceremony_error_message(
                 BrowserPasskeyCredentialCeremonyErrorMessage {
                     method: "create",
-                    name: Some("SecurityError"),
-                    message: Some("This is an invalid domain.")
+                    name: BrowserErrorDetail::Reported("SecurityError"),
+                    message: BrowserErrorDetail::Reported("This is an invalid domain.")
                 }
             ),
             "Passkey create ceremony failed (SecurityError: This is an invalid domain.)."
@@ -623,8 +605,8 @@ mod tests {
             BrowserPasskeyClient::credential_ceremony_error_message(
                 BrowserPasskeyCredentialCeremonyErrorMessage {
                     method: "get",
-                    name: Some("AbortError"),
-                    message: None
+                    name: BrowserErrorDetail::Reported("AbortError"),
+                    message: BrowserErrorDetail::Unreported
                 }
             ),
             "Passkey get ceremony failed (AbortError)."
@@ -633,8 +615,8 @@ mod tests {
             BrowserPasskeyClient::credential_ceremony_error_message(
                 BrowserPasskeyCredentialCeremonyErrorMessage {
                     method: "create",
-                    name: None,
-                    message: Some("cancelled")
+                    name: BrowserErrorDetail::Unreported,
+                    message: BrowserErrorDetail::Reported("cancelled")
                 }
             ),
             "Passkey create ceremony failed (cancelled)."
@@ -643,8 +625,8 @@ mod tests {
             BrowserPasskeyClient::credential_ceremony_error_message(
                 BrowserPasskeyCredentialCeremonyErrorMessage {
                     method: "get",
-                    name: None,
-                    message: None
+                    name: BrowserErrorDetail::Unreported,
+                    message: BrowserErrorDetail::Unreported
                 }
             ),
             "Passkey get ceremony failed (unknown browser error)."
@@ -656,7 +638,6 @@ mod tests {
 mod browser_tests {
     use super::*;
     use js_sys::{ArrayBuffer, Reflect, Uint8Array};
-    use wasm_bindgen::closure::Closure;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -690,24 +671,24 @@ mod browser_tests {
         );
 
         let target = Object::new();
-        assert!(
+        assert!(!matches!(
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: &target,
                 field: "missing"
-            })?
-            .is_none()
-        );
+            })?,
+            BrowserObjectProperty::Reported(_)
+        ));
         let null = js_sys::JSON::parse("null")
             .map_err(|_| JsError::new("failed to create null fixture"))?;
         Reflect::set(&target, &JsString::from("nullable"), &null)
             .map_err(|_| JsError::new("failed to set nullable fixture"))?;
-        assert!(
+        assert!(!matches!(
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
                 target: &target,
                 field: "nullable"
-            })?
-            .is_none()
-        );
+            })?,
+            BrowserObjectProperty::Reported(_)
+        ));
         assert!(
             BrowserPasskeyClient::get_required_object(BrowserPasskeyGetRequiredObject {
                 target: &target,
@@ -718,22 +699,22 @@ mod browser_tests {
 
         Reflect::set(&target, &JsString::from("array"), &js_sys::Array::new())
             .map_err(|_| JsError::new("failed to set array fixture"))?;
-        assert!(
+        assert!(matches!(
             BrowserPasskeyClient::get_optional_array(BrowserPasskeyGetOptionalArray {
                 target: &target,
                 field: "array"
-            })?
-            .is_some()
-        );
+            })?,
+            BrowserArrayProperty::Reported(_)
+        ));
         Reflect::set(&target, &JsString::from("buffer"), &buffer)
             .map_err(|_| JsError::new("failed to set buffer fixture"))?;
-        assert!(
+        assert!(matches!(
             BrowserPasskeyClient::get_optional_buffer(BrowserPasskeyGetOptionalBuffer {
                 target: &target,
                 field: "buffer"
-            })?
-            .is_some()
-        );
+            })?,
+            BrowserBufferProperty::Reported(_)
+        ));
 
         Reflect::set(
             &target,
@@ -746,7 +727,7 @@ mod browser_tests {
                 target: &target,
                 field: "enabled"
             })?,
-            Some(true)
+            BrowserBooleanProperty::Enabled
         );
         Reflect::set(
             &target,
@@ -759,7 +740,7 @@ mod browser_tests {
                 target: &target,
                 field: "enabled"
             })?,
-            Some(false)
+            BrowserBooleanProperty::Disabled
         );
         Reflect::set(&target, &JsString::from("enabled"), &JsString::from("true"))
             .map_err(|_| JsError::new("failed to set string fixture"))?;
@@ -768,7 +749,7 @@ mod browser_tests {
                 target: &target,
                 field: "enabled"
             })?,
-            None
+            BrowserBooleanProperty::Unreported
         );
         Ok(())
     }
@@ -827,7 +808,7 @@ mod browser_tests {
                 error: &error,
                 property: "message"
             }),
-            None
+            BrowserErrorText::Unreported
         );
         Reflect::set(
             &error,
@@ -844,98 +825,6 @@ mod browser_tests {
             )),
             format!("{PASSKEY_CEREMONY_NOT_ALLOWED}: Passkey create request did not finish.")
         );
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn prf_projection_distinguishes_absent_disabled_empty_and_present_results()
-    -> Result<(), JsError> {
-        let extension_results = Object::new();
-        let credential_object = Object::new();
-        let callback = Closure::<dyn FnMut() -> Object>::new({
-            let extension_results = extension_results.clone();
-            move || extension_results.clone()
-        });
-        Reflect::set(
-            &credential_object,
-            &JsString::from("getClientExtensionResults"),
-            callback.as_ref(),
-        )
-        .map_err(|_| JsError::new("failed to set extension result callback"))?;
-        let credential: PublicKeyCredential = credential_object.unchecked_into();
-
-        assert_eq!(
-            BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
-                credential: &credential,
-                requirement: crate::PasskeyPrfRequirement::OutputOnly
-            })?,
-            None
-        );
-        assert!(
-            BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
-                credential: &credential,
-                requirement: crate::PasskeyPrfRequirement::Enabled
-            })
-            .is_err()
-        );
-
-        let prf = Object::new();
-        Reflect::set(&extension_results, &JsString::from("prf"), &prf)
-            .map_err(|_| JsError::new("failed to set PRF object"))?;
-        assert_eq!(
-            BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
-                credential: &credential,
-                requirement: crate::PasskeyPrfRequirement::OutputOnly
-            })?,
-            None
-        );
-        Reflect::set(
-            &prf,
-            &JsString::from("enabled"),
-            &js_sys::Boolean::from(false),
-        )
-        .map_err(|_| JsError::new("failed to set disabled PRF"))?;
-        assert!(
-            BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
-                credential: &credential,
-                requirement: crate::PasskeyPrfRequirement::Enabled
-            })
-            .is_err()
-        );
-
-        let results = Object::new();
-        Reflect::set(
-            &prf,
-            &JsString::from("enabled"),
-            &js_sys::Boolean::from(true),
-        )
-        .map_err(|_| JsError::new("failed to set enabled PRF"))?;
-        Reflect::set(&prf, &JsString::from("results"), &results)
-            .map_err(|_| JsError::new("failed to set PRF results"))?;
-        assert_eq!(
-            BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
-                credential: &credential,
-                requirement: crate::PasskeyPrfRequirement::Enabled
-            })?,
-            None
-        );
-
-        let buffer = ArrayBuffer::new(2);
-        Uint8Array::new(&buffer).copy_from(&[3, 5]);
-        Reflect::set(&results, &JsString::from("first"), &buffer)
-            .map_err(|_| JsError::new("failed to set PRF output"))?;
-        assert_eq!(
-            BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
-                credential: &credential,
-                requirement: crate::PasskeyPrfRequirement::Enabled
-            })?,
-            Some(vec![3, 5])
-        );
-        assert_eq!(
-            BrowserPasskeyClient::require_prf_output(&credential)?,
-            vec![3, 5]
-        );
-        drop(callback);
         Ok(())
     }
 

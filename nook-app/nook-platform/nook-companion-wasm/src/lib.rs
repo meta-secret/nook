@@ -28,10 +28,12 @@ use nook_companion_core::BackupCodePageText;
 use nook_companion_core::PageInputFieldObservation;
 use nook_companion_core::VaultHostObservation;
 use nook_companion_core::VaultHostPolicy;
+use nook_companion_core::{BrowserOAuthLocation, BrowserOAuthLocationEvidence};
 use nook_companion_core::{
     ExtensionPairingState, ExtensionReadySetup, OAuthOriginSupport, OAuthOriginUnsupportedReason,
     StoredExtensionPairingGrant,
 };
+use nook_companion_core::{SentinelVaultMatch, VaultAppBaseSelection};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod account_picker_authorization;
@@ -163,7 +165,7 @@ pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::Exten
 #[wasm_bindgen]
 #[must_use]
 pub fn is_extension_connect_scope(value: &str) -> bool {
-    nook_companion_core::ExtensionConnectScope::parse(value).is_some()
+    nook_companion_core::ExtensionConnectScope::parse(value).is_ok()
 }
 
 #[wasm_bindgen]
@@ -199,12 +201,7 @@ pub fn ordered_extension_pairing_grants(
 pub fn selected_extension_pairing_grant(
     state: nook_companion_core::ExtensionPairingState,
 ) -> nook_companion_core::SelectedExtensionPairingGrant {
-    state.selected_grant().map_or(
-        nook_companion_core::SelectedExtensionPairingGrant::NotSelected,
-        |grant| nook_companion_core::SelectedExtensionPairingGrant::Selected {
-            grant: Box::new(grant),
-        },
-    )
+    state.selected_grant()
 }
 
 #[wasm_bindgen]
@@ -213,12 +210,7 @@ pub fn selected_extension_pairing_grant(
 pub fn first_extension_pairing_grant(
     state: nook_companion_core::ExtensionPairingState,
 ) -> nook_companion_core::SelectedExtensionPairingGrant {
-    state.first_grant().map_or(
-        nook_companion_core::SelectedExtensionPairingGrant::NotSelected,
-        |grant| nook_companion_core::SelectedExtensionPairingGrant::Selected {
-            grant: Box::new(grant),
-        },
-    )
+    state.first_grant()
 }
 
 #[wasm_bindgen]
@@ -230,10 +222,6 @@ pub fn extension_setup_after_pairing_grant_removal(
     input
         .state
         .setup_after_removal(&input.removed_vault_store_id)
-        .map_or(
-            nook_companion_core::ExtensionSetupAfterRemoval::NoPairedVault,
-            |setup| nook_companion_core::ExtensionSetupAfterRemoval::Ready { setup },
-        )
 }
 
 #[wasm_bindgen]
@@ -316,13 +304,13 @@ pub fn resolve_oauth_origin_support(
     origin: &str,
     hostname: &str,
 ) -> NookOAuthOriginSupport {
-    let (origin, hostname) = if origin.is_empty() || hostname.is_empty() {
-        (None, None)
+    let location = if origin.is_empty() || hostname.is_empty() {
+        BrowserOAuthLocation::Unavailable
     } else {
-        (Some(origin), Some(hostname))
+        BrowserOAuthLocation::Observed(BrowserOAuthLocationEvidence { origin, hostname })
     };
     NookOAuthOriginSupport {
-        inner: provider.origin_support(origin, hostname),
+        inner: provider.origin_support(location),
     }
 }
 
@@ -350,9 +338,12 @@ pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen
 /// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
 #[wasm_bindgen]
 pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(VaultHostPolicy::new(base_url)
-        .matching_sentinel_vault_base_url()?
-        .unwrap_or_default())
+    Ok(
+        match VaultHostPolicy::new(base_url).matching_sentinel_vault_base_url()? {
+            SentinelVaultMatch::UnsupportedHost => String::new(),
+            SentinelVaultMatch::MatchingBaseUrl(url) => url,
+        },
+    )
 }
 
 #[wasm_bindgen]
@@ -386,9 +377,9 @@ pub fn is_nook_vault_app_url(
     base_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let base_url = if base_url.is_empty() {
-        None
+        VaultAppBaseSelection::KnownNookHosts
     } else {
-        Some(base_url)
+        VaultAppBaseSelection::Configured(base_url)
     };
     Ok(VaultHostObservation::new(candidate_url).is_nook_vault_app_url(base_url)?)
 }
@@ -724,7 +715,7 @@ mod tests {
             VaultHostPolicy::new("https://simple.nokey.sh/")
                 .matching_sentinel_vault_base_url()
                 .map_err(|error| format!("match failed: {error:?}"))?,
-            "https://sentinel.nokey.sh/"
+            SentinelVaultMatch::MatchingBaseUrl("https://sentinel.nokey.sh/".to_owned())
         );
         assert!(
             VaultHostPolicy::new("https://vault.example.test/simple/")
@@ -775,11 +766,22 @@ mod wasm_tests {
     }
 
     #[derive(Serialize)]
+    #[serde(untagged)]
+    enum SessionFixtureDevice {
+        Omitted,
+        Identity(SessionDeviceFixture),
+    }
+    impl SessionFixtureDevice {
+        fn omitted(&self) -> bool {
+            matches!(self, Self::Omitted)
+        }
+    }
+    #[derive(Serialize)]
     struct SessionStatusFixture {
         ok: bool,
         status: u8,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        device: Option<SessionDeviceFixture>,
+        #[serde(skip_serializing_if = "SessionFixtureDevice::omitted")]
+        device: SessionFixtureDevice,
     }
 
     #[derive(Serialize)]
@@ -880,7 +882,7 @@ mod wasm_tests {
             let fixture = SessionStatusFixture {
                 ok: true,
                 status,
-                device: None,
+                device: SessionFixtureDevice::Omitted,
             };
             let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
             let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
@@ -892,7 +894,7 @@ mod wasm_tests {
         let unlocked = SessionStatusFixture {
             ok: true,
             status: 6,
-            device: Some(SessionDeviceFixture {
+            device: SessionFixtureDevice::Identity(SessionDeviceFixture {
                 device_id: "device",
                 device_public_key: "public",
                 device_signing_public_key: "signing",

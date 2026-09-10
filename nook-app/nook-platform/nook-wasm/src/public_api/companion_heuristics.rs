@@ -1,6 +1,8 @@
 //! Thin WASM exports for portable auth-companion heuristics and host policy.
 
 use crate::{NookAuthenticationPageObservation, NookAuthenticationPageObservations};
+use nook_companion_core::{BrowserOAuthLocation, BrowserOAuthLocationEvidence};
+use nook_companion_core::{SentinelVaultMatch, VaultAppBaseSelection};
 use nook_core::AuthenticationAdvanceControlObservation;
 use nook_core::AuthenticationControlText;
 use nook_core::AuthenticationPageObservation;
@@ -220,13 +222,13 @@ pub fn resolve_oauth_origin_support(
     origin: &str,
     hostname: &str,
 ) -> NookOAuthOriginSupport {
-    let (origin, hostname) = if origin.is_empty() || hostname.is_empty() {
-        (None, None)
+    let location = if origin.is_empty() || hostname.is_empty() {
+        BrowserOAuthLocation::Unavailable
     } else {
-        (Some(origin), Some(hostname))
+        BrowserOAuthLocation::Observed(BrowserOAuthLocationEvidence { origin, hostname })
     };
     NookOAuthOriginSupport {
-        inner: provider.origin_support(origin, hostname),
+        inner: provider.origin_support(location),
     }
 }
 
@@ -254,9 +256,12 @@ pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen
 /// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
 #[wasm_bindgen]
 pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(VaultHostPolicy::new(base_url)
-        .matching_sentinel_vault_base_url()?
-        .unwrap_or_default())
+    Ok(
+        match VaultHostPolicy::new(base_url).matching_sentinel_vault_base_url()? {
+            SentinelVaultMatch::UnsupportedHost => String::new(),
+            SentinelVaultMatch::MatchingBaseUrl(url) => url,
+        },
+    )
 }
 
 #[wasm_bindgen]
@@ -290,9 +295,9 @@ pub fn is_nook_vault_app_url(
     base_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let base_url = if base_url.is_empty() {
-        None
+        VaultAppBaseSelection::KnownNookHosts
     } else {
-        Some(base_url)
+        VaultAppBaseSelection::Configured(base_url)
     };
     Ok(VaultHostObservation::new(candidate_url).is_nook_vault_app_url(base_url)?)
 }
@@ -531,7 +536,7 @@ mod browser_tests {
             .nook_vault_app_exclude_match_patterns()
             .unwrap();
         let _ = VaultHostObservation::new("https://simple.nokey.sh/")
-            .is_nook_vault_app_url(base)
+            .is_nook_vault_app_url(VaultAppBaseSelection::Configured(base))
             .unwrap();
         let _ = VaultHostPolicy::new(base)
             .belongs_to_simple_vault("https://simple.nokey.sh/events.json")

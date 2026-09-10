@@ -117,9 +117,24 @@ pub struct MergeTranslationCatalogsRequest<'a> {
 }
 
 /// Named values required by TranslationCatalog::resolve_translation_catalog.
+pub enum TranslationCatalogSource<'a> {
+    Bundled,
+    Supplied(&'a str),
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TranslationLookup {
+    Found(String),
+    Missing,
+    InvalidCatalog,
+}
+enum TranslationPrefixMatch<'a> {
+    Unmatched,
+    Remainder(&'a str),
+}
+
 pub struct ResolveTranslationCatalogRequest<'a> {
     pub locale: &'a str,
-    pub wasm_catalog_json: Option<&'a str>,
+    pub wasm_catalog_json: TranslationCatalogSource<'a>,
 }
 
 /// Named values required by TranslationCatalog::translate.
@@ -143,21 +158,24 @@ impl TranslationCatalog {
     pub fn parse(catalog_json: &str) -> serde_json::Result<Self> {
         serde_json::from_str(catalog_json).map(|document| Self { document })
     }
-    pub fn lookup(&self, key: &str) -> Option<String> {
+    pub fn lookup(&self, key: &str) -> TranslationLookup {
         let mut current = &self.document;
         for part in key.split('.') {
             let TranslationNode::Group(group) = current else {
-                return None;
+                return TranslationLookup::Missing;
             };
-            current = group.get(part)?;
+            let Some(next) = group.get(part) else {
+                return TranslationLookup::Missing;
+            };
+            current = next;
         }
         match current {
-            TranslationNode::Text(text) => Some(text.clone()),
+            TranslationNode::Text(text) => TranslationLookup::Found(text.clone()),
             TranslationNode::Group(_)
             | TranslationNode::Number(_)
             | TranslationNode::Boolean(_)
             | TranslationNode::Array(_)
-            | TranslationNode::Null => None,
+            | TranslationNode::Null => TranslationLookup::Missing,
         }
     }
 }
@@ -230,7 +248,7 @@ impl AppLocale {
 /// Looks up a string key in a JSON translation catalog.
 impl TranslationCatalog {
     #[must_use]
-    pub fn lookup_translation(request: LookupTranslationRequest<'_>) -> Option<String> {
+    pub fn lookup_translation(request: LookupTranslationRequest<'_>) -> TranslationLookup {
         let LookupTranslationRequest { catalog_json, key } = request;
         TranslationCatalog::lookup_key(LookupKeyRequest {
             json_str: catalog_json,
@@ -248,20 +266,24 @@ impl TranslationCatalog {
             locale,
             key,
         } = request;
-        if let Some(val) = TranslationCatalog::lookup_translation(LookupTranslationRequest {
-            catalog_json: catalog_json,
-            key: key,
-        }) {
+        if let TranslationLookup::Found(val) =
+            TranslationCatalog::lookup_translation(LookupTranslationRequest {
+                catalog_json: catalog_json,
+                key: key,
+            })
+        {
             return val;
         }
         if locale == "en" {
             key.to_string()
         } else {
-            TranslationCatalog::lookup_translation(LookupTranslationRequest {
+            match TranslationCatalog::lookup_translation(LookupTranslationRequest {
                 catalog_json: EN_JSON,
                 key: key,
-            })
-            .unwrap_or_else(|| key.to_string())
+            }) {
+                TranslationLookup::Found(value) => value,
+                TranslationLookup::Missing | TranslationLookup::InvalidCatalog => key.to_owned(),
+            }
         }
     }
 }
@@ -300,11 +322,13 @@ impl TranslationCatalog {
         let stripped = ["GitHub error:", "Drive error:", "Database error:"]
             .into_iter()
             .fold(message, |current, prefix| {
-                TranslationCatalog::strip_prefix_ignore_ascii_case(TranslationPrefix {
+                match TranslationCatalog::strip_prefix_ignore_ascii_case(TranslationPrefix {
                     value: current,
                     prefix: prefix,
-                })
-                .map_or(current, str::trim_start)
+                }) {
+                    TranslationPrefixMatch::Unmatched => current,
+                    TranslationPrefixMatch::Remainder(tail) => tail.trim_start(),
+                }
             })
             .trim();
         if stripped.starts_with("errors.") {
@@ -362,14 +386,14 @@ impl TranslationCatalog {
         } = request;
         let bundled = AppLocale::get_translation_catalog(locale);
         match wasm_catalog_json {
-            Some(wasm_catalog) => {
+            TranslationCatalogSource::Supplied(wasm_catalog) => {
                 TranslationCatalog::merge_translation_catalogs(MergeTranslationCatalogsRequest {
                     base_json: wasm_catalog,
                     overlay_json: bundled,
                 })
                 .unwrap_or_else(|_| bundled.to_owned())
             }
-            None => bundled.to_owned(),
+            TranslationCatalogSource::Bundled => bundled.to_owned(),
         }
     }
 }
@@ -388,19 +412,29 @@ impl TranslationCatalog {
 }
 
 impl TranslationCatalog {
-    fn lookup_key(request: LookupKeyRequest<'_>) -> Option<String> {
+    fn lookup_key(request: LookupKeyRequest<'_>) -> TranslationLookup {
         let LookupKeyRequest { json_str, key } = request;
-        Self::parse(json_str).ok()?.lookup(key)
+        match Self::parse(json_str) {
+            Ok(catalog) => catalog.lookup(key),
+            Err(_) => TranslationLookup::InvalidCatalog,
+        }
     }
 }
 
 impl TranslationCatalog {
-    fn strip_prefix_ignore_ascii_case<'a>(request: TranslationPrefix<'a>) -> Option<&'a str> {
+    fn strip_prefix_ignore_ascii_case<'a>(
+        request: TranslationPrefix<'a>,
+    ) -> TranslationPrefixMatch<'a> {
         let TranslationPrefix { value, prefix } = request;
-        value
-            .get(..prefix.len())
-            .filter(|candidate| candidate.eq_ignore_ascii_case(prefix))
-            .and_then(|_| value.get(prefix.len()..))
+        match value.get(..prefix.len()) {
+            Some(candidate) if candidate.eq_ignore_ascii_case(prefix) => {
+                match value.get(prefix.len()..) {
+                    Some(tail) => TranslationPrefixMatch::Remainder(tail),
+                    None => TranslationPrefixMatch::Unmatched,
+                }
+            }
+            _ => TranslationPrefixMatch::Unmatched,
+        }
     }
 }
 
@@ -485,9 +519,8 @@ mod tests {
             TranslationCatalog::lookup_translation(LookupTranslationRequest {
                 catalog_json: AppLocale::get_translation_catalog("en"),
                 key: i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
-            })
-            .as_deref(),
-            Some("Google Drive")
+            }),
+            TranslationLookup::Found("Google Drive".to_owned())
         );
     }
 
@@ -564,25 +597,22 @@ mod tests {
             TranslationCatalog::lookup_translation(LookupTranslationRequest {
                 catalog_json: &merged,
                 key: i18n_keys::PROVIDER_PICKER_THIS_DEVICE
-            })
-            .as_deref(),
-            Some("Это устройство")
+            }),
+            TranslationLookup::Found("Это устройство".to_owned())
         );
         assert_eq!(
             TranslationCatalog::lookup_translation(LookupTranslationRequest {
                 catalog_json: &merged,
                 key: i18n_keys::PROVIDER_PICKER_GITHUB
-            })
-            .as_deref(),
-            Some("GitHub updated")
+            }),
+            TranslationLookup::Found("GitHub updated".to_owned())
         );
         assert_eq!(
             TranslationCatalog::lookup_translation(LookupTranslationRequest {
                 catalog_json: &merged,
                 key: i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
-            })
-            .as_deref(),
-            Some("Google Drive")
+            }),
+            TranslationLookup::Found("Google Drive".to_owned())
         );
         Ok(())
     }
@@ -593,23 +623,21 @@ mod tests {
         let resolved =
             TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
                 locale: "ru",
-                wasm_catalog_json: Some(stale_ru),
+                wasm_catalog_json: TranslationCatalogSource::Supplied(stale_ru),
             });
         assert_eq!(
             TranslationCatalog::lookup_translation(LookupTranslationRequest {
                 catalog_json: &resolved,
                 key: i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
-            })
-            .as_deref(),
-            Some("Google Drive")
+            }),
+            TranslationLookup::Found("Google Drive".to_owned())
         );
         assert_eq!(
             TranslationCatalog::lookup_translation(LookupTranslationRequest {
                 catalog_json: &resolved,
                 key: i18n_keys::PROVIDER_PICKER_THIS_DEVICE
-            })
-            .as_deref(),
-            Some("Это устройство")
+            }),
+            TranslationLookup::Found("Это устройство".to_owned())
         );
     }
 
@@ -750,10 +778,16 @@ mod tests {
             },
         )?;
         let catalog = TranslationCatalog::parse(&merged)?;
-        assert_eq!(catalog.lookup("custom.text").as_deref(), Some("kept"));
-        assert_eq!(catalog.lookup("custom.added").as_deref(), Some("new"));
+        assert_eq!(
+            catalog.lookup("custom.text"),
+            TranslationLookup::Found("kept".to_owned())
+        );
+        assert_eq!(
+            catalog.lookup("custom.added"),
+            TranslationLookup::Found("new".to_owned())
+        );
         for key in ["number", "flag", "empty", "replace", "custom.array"] {
-            assert_eq!(catalog.lookup(key), None);
+            assert_eq!(catalog.lookup(key), TranslationLookup::Missing);
         }
         // The exact wire round trip proves non-text nodes were preserved,
         // rather than merely ignored by lookup.

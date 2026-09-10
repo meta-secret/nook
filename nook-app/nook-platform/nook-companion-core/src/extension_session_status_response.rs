@@ -140,31 +140,57 @@ pub enum ExtensionSessionStatus {
     },
 }
 
+#[derive(Default, Deserialize)]
+#[serde(untagged)]
+enum SessionDeviceReport {
+    Identity(ExtensionSessionDeviceWire),
+    #[default]
+    Unreported,
+}
+#[derive(Default, Deserialize)]
+#[serde(untagged)]
+enum SessionProtectionReport {
+    Reported(ExtensionSessionDeviceProtectionStatusWire),
+    #[default]
+    Unreported,
+}
+#[derive(Default, Deserialize)]
+#[serde(untagged)]
+enum SessionFailureDiagnostic {
+    Reported(String),
+    #[default]
+    Unreported,
+}
 /// Unknown browser responses are admitted before any success value is projected.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtensionSessionOperationResponseWire {
     ok: bool,
     #[serde(default)]
-    device: Option<ExtensionSessionDeviceWire>,
+    device: SessionDeviceReport,
     #[serde(default)]
-    status: Option<ExtensionSessionDeviceProtectionStatusWire>,
+    status: SessionProtectionReport,
     #[serde(default)]
-    error: Option<String>,
+    error: SessionFailureDiagnostic,
     #[serde(default)]
-    reason: Option<String>,
+    reason: SessionFailureDiagnostic,
 }
 impl ExtensionSessionOperationResponseWire {
     pub fn into_device(self) -> Result<ExtensionSessionDeviceResponse, String> {
         if !self.ok {
-            return Err(self
-                .error
-                .or(self.reason)
-                .unwrap_or_else(|| "Extension session operation failed.".to_owned()));
+            return Err(match self.error {
+                SessionFailureDiagnostic::Reported(error) => error,
+                SessionFailureDiagnostic::Unreported => match self.reason {
+                    SessionFailureDiagnostic::Reported(reason) => reason,
+                    SessionFailureDiagnostic::Unreported => {
+                        "Extension session operation failed.".to_owned()
+                    }
+                },
+            });
         }
-        let device = self
-            .device
-            .ok_or_else(|| "Extension session did not return device identity.".to_owned())?;
+        let SessionDeviceReport::Identity(device) = self.device else {
+            return Err("Extension session did not return device identity.".to_owned());
+        };
         if device.id.is_empty()
             || device.public_key.is_empty()
             || device.signing_public_key.is_empty()
@@ -175,14 +201,20 @@ impl ExtensionSessionOperationResponseWire {
     }
     pub fn into_status(self) -> Result<ExtensionSessionStatus, String> {
         if !self.ok {
-            return Err(self
-                .error
-                .or(self.reason)
-                .unwrap_or_else(|| "Extension session operation failed.".to_owned()));
+            return Err(match self.error {
+                SessionFailureDiagnostic::Reported(error) => error,
+                SessionFailureDiagnostic::Unreported => match self.reason {
+                    SessionFailureDiagnostic::Reported(reason) => reason,
+                    SessionFailureDiagnostic::Unreported => {
+                        "Extension session operation failed.".to_owned()
+                    }
+                },
+            });
         }
-        let status = self
-            .status
-            .ok_or_else(|| "Unsupported extension device protection status.".to_owned())?;
+        let SessionProtectionReport::Reported(status) = &self.status else {
+            return Err("Unsupported extension device protection status.".to_owned());
+        };
+        let status = *status;
         if status == ExtensionSessionDeviceProtectionStatusWire::Unlocked {
             let response = self.into_device()?;
             Ok(ExtensionSessionStatus::Active {

@@ -2,37 +2,43 @@
 
 const INPUT_EVENT_ATTRIBUTES: &[&str] = &["oninput", "onchange"];
 
+#[derive(Debug)]
+struct SubmitTokenMismatch;
+
 impl<'a> AuthenticationControlText<'a> {
-    fn strip_token(&self, token: &str) -> Option<&'a str> {
-        self.as_str().trim_start().strip_prefix(token)
+    fn strip_token(&self, token: &str) -> Result<&'a str, SubmitTokenMismatch> {
+        self.as_str()
+            .trim_start()
+            .strip_prefix(token)
+            .ok_or(SubmitTokenMismatch)
     }
 }
 
 impl AuthenticationControlText<'_> {
     fn handler_submits_form(&self) -> bool {
         let value = self.as_str();
-        let Some(value) = AuthenticationControlText::new(value).strip_token("this") else {
+        let Ok(value) = AuthenticationControlText::new(value).strip_token("this") else {
             return false;
         };
-        let Some(value) = AuthenticationControlText::new(value).strip_token(".") else {
+        let Ok(value) = AuthenticationControlText::new(value).strip_token(".") else {
             return false;
         };
-        let Some(value) = AuthenticationControlText::new(value).strip_token("form") else {
+        let Ok(value) = AuthenticationControlText::new(value).strip_token("form") else {
             return false;
         };
-        let Some(value) = AuthenticationControlText::new(value).strip_token(".") else {
+        let Ok(value) = AuthenticationControlText::new(value).strip_token(".") else {
             return false;
         };
-        let Some(value) = AuthenticationControlText::new(value)
+        let Ok(value) = AuthenticationControlText::new(value)
             .strip_token("requestSubmit")
-            .or_else(|| AuthenticationControlText::new(value).strip_token("submit"))
+            .or_else(|_| AuthenticationControlText::new(value).strip_token("submit"))
         else {
             return false;
         };
-        let Some(value) = AuthenticationControlText::new(value).strip_token("(") else {
+        let Ok(value) = AuthenticationControlText::new(value).strip_token("(") else {
             return false;
         };
-        let Some(value) = AuthenticationControlText::new(value).strip_token(")") else {
+        let Ok(value) = AuthenticationControlText::new(value).strip_token(")") else {
             return false;
         };
         let value = value.trim();

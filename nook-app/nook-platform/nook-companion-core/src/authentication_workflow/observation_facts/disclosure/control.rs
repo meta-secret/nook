@@ -273,7 +273,7 @@ impl VersionedAuthenticationDisclosureControlObservation {
             source_origin: &control.source_origin,
             destination_identity: &control.destination_identity,
         })
-        .is_some_and(|destination| {
+        .is_ok_and(|destination| {
             destination.path_identity == "/login" && destination.route_identity == "/login"
         })
     }

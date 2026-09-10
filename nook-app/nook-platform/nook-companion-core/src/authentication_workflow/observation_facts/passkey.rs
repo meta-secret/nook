@@ -1,4 +1,9 @@
 use super::AuthenticationFieldObservationFacts;
+#[derive(Clone, Copy)]
+pub(super) enum PasskeyFieldContext {
+    Unobserved,
+    Observed(AuthenticationFieldObservationFacts),
+}
 use crate::PasskeyControlMarking;
 
 use crate::page_field_classification::AuthenticationAdvanceControlObservation;
@@ -84,18 +89,18 @@ impl AuthenticationDetailedPasskeyControlObservation {
     }
 
     pub(super) fn is_safe(&self) -> bool {
-        self.is_safe_for_fields(None)
+        self.is_safe_for_fields(PasskeyFieldContext::Unobserved)
     }
 
-    pub(super) fn is_safe_for_fields(
-        &self,
-        fields: Option<AuthenticationFieldObservationFacts>,
-    ) -> bool {
+    pub(super) fn is_safe_for_fields(&self, fields: PasskeyFieldContext) -> bool {
         if !self.is_bounded() {
             return false;
         }
-        let compatible = |observation: &AuthenticationAdvanceControlObservation| {
-            fields.is_none_or(|fields| fields.is_compatible_with_detailed_control(observation))
+        let compatible = |observation: &AuthenticationAdvanceControlObservation| match fields {
+            PasskeyFieldContext::Unobserved => true,
+            PasskeyFieldContext::Observed(fields) => {
+                fields.is_compatible_with_detailed_control(observation)
+            }
         };
         matches!(
             self,

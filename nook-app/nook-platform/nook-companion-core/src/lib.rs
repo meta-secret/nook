@@ -158,6 +158,7 @@ pub use extension_pairing_state::{
     ExtensionSetupAfterRemoval, GrantAuthorityResponseError, GrantAuthorityResponseJson,
     ImportedExtensionEventLog, PairingStorageJson, PairingVaultId,
     RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionPairingGrant,
+    UnknownExtensionConnectScope,
 };
 pub use extension_persistence::{
     ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceObservation,
@@ -178,7 +179,8 @@ pub use generated_password_response::{
     GeneratedPasswordResponseWire,
 };
 pub use oauth_origin_policy::{
-    BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,
+    BrowserOAuthLocation, BrowserOAuthLocationEvidence, BrowserOAuthProvider, OAuthOriginSupport,
+    OAuthOriginUnsupportedReason,
 };
 pub use outcome_evidence::{
     AuthenticationOutcomeClassification, AuthenticationOutcomeDecision,
@@ -191,8 +193,9 @@ pub use page_field_classification::{
     PageControlSemantics, PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
 pub use page_field_classification::{
-    CanonicalControlDestination, ControlDestinationEvidence, LoginContextObservation,
-    MAX_AUTHENTICATION_CONTROL_TEXT_BYTES, PageInputFieldObservation, PageInputType,
+    CanonicalControlDestination, ControlDestinationEvidence, InvalidControlDestination,
+    LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES, PageInputFieldObservation,
+    PageInputType,
 };
 pub use vault_host_policy::{DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError};
 pub use website_login_options_response::{
@@ -224,7 +227,9 @@ pub use authentication_workflow::{
 
 pub use backup_code_candidates::BackupCodePageText;
 
-pub use vault_host_policy::{VaultHostObservation, VaultHostPolicy};
+pub use vault_host_policy::{
+    SentinelVaultMatch, VaultAppBaseSelection, VaultHostObservation, VaultHostPolicy,
+};
 
 pub use authentication_workflow::{
     AuthenticationRecoveryCopyEvidence, AuthenticationRecoveryCopyRequest,

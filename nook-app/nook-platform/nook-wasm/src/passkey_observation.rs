@@ -26,6 +26,7 @@ extern "C" {
     #[wasm_bindgen(extends = PublicKeyCredential, typescript_type = "PublicKeyCredential")]
     type ObservedPublicKeyCredential;
 
+    // Native nullable browser getter: wasm-bindgen owns this ABI; attachment() classifies immediately.
     #[wasm_bindgen(method, getter, structural, js_name = authenticatorAttachment)]
     fn authenticator_attachment(credential: &ObservedPublicKeyCredential) -> Option<String>;
 
@@ -35,29 +36,50 @@ extern "C" {
     )]
     type ObservedAuthenticatorAttestationResponse;
 
+    // Native optional browser method: wasm-bindgen owns this ABI; registration_transports() admits immediately.
     #[wasm_bindgen(method, getter, structural, js_name = getTransports)]
     fn get_transports_method(
         response: &ObservedAuthenticatorAttestationResponse,
     ) -> Option<Function>;
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum AuthenticatorDataObservation {
+    Unavailable,
+    Observed(Vec<u8>),
+}
+impl AuthenticatorDataObservation {
+    fn backup_state(&self) -> PasskeyBackupState {
+        match self {
+            Self::Unavailable => PasskeyBackupState::Unknown,
+            Self::Observed(data) => BrowserPasskeyObservation::backup_state(data),
+        }
+    }
+    fn aaguid(&self) -> AuthenticatorGuidEvidence {
+        match self {
+            Self::Unavailable => AuthenticatorGuidEvidence::NotReported,
+            Self::Observed(data) => BrowserPasskeyObservation::aaguid(data),
+        }
+    }
+}
+enum RegistrationTransportMethod {
+    Unsupported,
+    Callable(Function),
+}
+
 impl BrowserPasskeyObservation<'_> {
     pub(crate) fn observe_registration(&self) -> PasskeyBrowserObservation {
         let credential = self.credential;
         let response: AuthenticatorAttestationResponse = credential.response().unchecked_into();
-        let authenticator_data = response
-            .get_authenticator_data()
-            .ok()
-            .and_then(|buffer| BrowserPasskeyObservation::authenticator_data(&buffer));
+        let authenticator_data = match response.get_authenticator_data() {
+            Ok(buffer) => BrowserPasskeyObservation::authenticator_data(&buffer),
+            Err(_) => AuthenticatorDataObservation::Unavailable,
+        };
         PasskeyBrowserObservation {
             attachment: BrowserPasskeyObservation::new(credential).attachment(),
             transports: BrowserPasskeyObservation::registration_transports(&response),
-            backup_state: authenticator_data
-                .as_deref()
-                .map_or(PasskeyBackupState::Unknown, Self::backup_state),
-            aaguid: authenticator_data
-                .as_deref()
-                .map_or(AuthenticatorGuidEvidence::NotReported, Self::aaguid),
+            backup_state: authenticator_data.backup_state(),
+            aaguid: authenticator_data.aaguid(),
             ..client_environment()
         }
     }
@@ -68,7 +90,11 @@ impl BrowserPasskeyObservation<'_> {
         response: &AuthenticatorAttestationResponse,
     ) -> Vec<nook_core::PasskeyTransport> {
         let observed_response: &ObservedAuthenticatorAttestationResponse = response.unchecked_ref();
-        let Some(method) = observed_response.get_transports_method() else {
+        let transport_method = match observed_response.get_transports_method() {
+            Some(method) => RegistrationTransportMethod::Callable(method),
+            None => RegistrationTransportMethod::Unsupported,
+        };
+        let RegistrationTransportMethod::Callable(method) = transport_method else {
             return Vec::new();
         };
         let Ok(value) = method.call0(response.as_ref()) else {
@@ -90,9 +116,7 @@ impl BrowserPasskeyObservation<'_> {
         PasskeyBrowserObservation {
             attachment: BrowserPasskeyObservation::new(credential).attachment(),
             transports: Vec::new(),
-            backup_state: authenticator_data
-                .as_deref()
-                .map_or(PasskeyBackupState::Unknown, Self::backup_state),
+            backup_state: authenticator_data.backup_state(),
             aaguid: AuthenticatorGuidEvidence::NotReported,
             ..client_environment()
         }
@@ -136,9 +160,13 @@ impl BrowserPasskeyObservation<'_> {
 }
 
 impl BrowserPasskeyObservation<'_> {
-    fn authenticator_data(buffer: &ArrayBuffer) -> Option<Vec<u8>> {
+    fn authenticator_data(buffer: &ArrayBuffer) -> AuthenticatorDataObservation {
         let array = Uint8Array::new(buffer);
-        (array.length() > 0).then(|| array.to_vec())
+        if array.length() == 0 {
+            AuthenticatorDataObservation::Unavailable
+        } else {
+            AuthenticatorDataObservation::Observed(array.to_vec())
+        }
     }
 }
 
@@ -372,13 +400,13 @@ mod tests {
     fn authenticator_data_and_aaguid_fail_closed_for_short_or_unattested_data() {
         assert_eq!(
             BrowserPasskeyObservation::authenticator_data(&ArrayBuffer::new(0)),
-            None
+            AuthenticatorDataObservation::Unavailable
         );
         let buffer = ArrayBuffer::new(2);
         Uint8Array::new(&buffer).copy_from(&[1, 2]);
         assert_eq!(
             BrowserPasskeyObservation::authenticator_data(&buffer),
-            Some(vec![1, 2])
+            AuthenticatorDataObservation::Observed(vec![1, 2])
         );
 
         assert_eq!(

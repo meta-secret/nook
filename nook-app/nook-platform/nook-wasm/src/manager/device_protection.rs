@@ -10,6 +10,7 @@ use crate::BrowserPasskeyRequestOptions;
 use crate::BrowserPasskeySignalCurrentUserDetails;
 use crate::NookDatabase;
 use crate::manager::session::ExtensionHandoffState;
+use crate::passkey_browser::PasskeyPrfEvaluation;
 use crate::storage::identity_record::HandoffAuthorization;
 use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::identity_record::ProtectedLocalIdentity;
@@ -548,25 +549,26 @@ impl NookVaultManager {
             let credential_id = WebAuthnCredentialId::try_from(credential_id)?;
             let user_handle = WebAuthnUserHandle::try_from(user_handle)?;
             let prf_input = WebAuthnPrfInput::try_from(prf_input)?;
-            let create_prf_output = BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
-                credential: &credential,
-                requirement: crate::PasskeyPrfRequirement::Enabled,
-            })?
-            .map(Zeroizing::new);
-            let create_prf_output = create_prf_output
-                .as_deref()
-                .map(|output| WebAuthnPrfOutput::try_from(output.clone()))
-                .transpose()?;
+            let create_prf_output =
+                match BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
+                    credential: &credential,
+                    requirement: crate::PasskeyPrfRequirement::Enabled,
+                })? {
+                    PasskeyPrfEvaluation::NotEvaluated => PasskeyRegistrationPrfOutput::Unavailable,
+                    PasskeyPrfEvaluation::Evaluated(output) => {
+                        let output = Zeroizing::new(output);
+                        PasskeyRegistrationPrfOutput::Available(WebAuthnPrfOutput::try_from(
+                            output.to_vec(),
+                        )?)
+                    }
+                };
             let resolution = PasskeyRegistration::new(PasskeyRegistrationInput {
                 credential_id: &credential_id,
                 user_handle: &user_handle,
                 prf_input: &prf_input,
                 mode,
             })
-            .resolve(match create_prf_output {
-                Some(output) => PasskeyRegistrationPrfOutput::Available(output),
-                None => PasskeyRegistrationPrfOutput::Unavailable,
-            })?;
+            .resolve(create_prf_output)?;
             let (material, ceremony) = match resolution {
                 PasskeyRegistrationOutcome::Complete(material) => {
                     (*material, PasskeyCreationCeremony::RegistrationOnly)

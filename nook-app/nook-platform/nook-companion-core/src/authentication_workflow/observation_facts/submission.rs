@@ -27,7 +27,7 @@ impl AuthenticationCredentialSubmissionFacts {
                     destination_identity: &self.destination_identity,
                 },
             )
-            .is_some()
+            .is_ok()
     }
 }
 

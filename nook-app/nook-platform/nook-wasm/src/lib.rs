@@ -112,7 +112,7 @@ pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::Exten
 #[wasm_bindgen]
 #[must_use]
 pub fn is_extension_connect_scope(value: &str) -> bool {
-    ExtensionConnectScope::parse(value).is_some()
+    ExtensionConnectScope::parse(value).is_ok()
 }
 
 #[wasm_bindgen]

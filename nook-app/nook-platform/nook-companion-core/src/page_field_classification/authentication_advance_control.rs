@@ -134,11 +134,11 @@ impl AuthenticationAdvanceControlObservation {
                     destination_identity: &self.destination_identity,
                 },
             )
-            .is_some_and(|destination| destination.is_microsoft_consumer_login_root)
+            .is_ok_and(|destination| destination.is_microsoft_consumer_login_root)
     }
 
     pub(crate) fn is_microsoft_consumer_root_identifier_advance(&self) -> bool {
-        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
                 source_origin: &self.source_origin,
                 destination_identity: &self.destination_identity,
@@ -193,26 +193,27 @@ impl AuthenticationAdvanceControlObservation {
     #[must_use]
     pub fn classify(&self) -> AuthenticationAdvanceControlDecision {
         match self.check() {
-            Some(checked) => checked.classify(),
-            None => AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication,
+            Ok(checked) => checked.classify(),
+            Err(_) => AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication,
         }
     }
 
-    fn check(&self) -> Option<CheckedAuthenticationControl<'_>> {
+    fn check(&self) -> Result<CheckedAuthenticationControl<'_>, InvalidAuthenticationControl> {
         if !self.is_bounded()
             || matches!(self.submission_method, PageControlSubmissionMethod::Dialog)
             || self.has_ambiguous_identifier_only_submit()
             || (matches!(self.submission_method, PageControlSubmissionMethod::Get)
                 && !self.is_identifier_only_get_advance())
         {
-            return None;
+            return Err(InvalidAuthenticationControl);
         }
         let destination = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
                 source_origin: &self.source_origin,
                 destination_identity: &self.destination_identity,
             },
-        )?;
+        )
+        .map_err(|_| InvalidAuthenticationControl)?;
         if destination.has_provider_authority
             && matches!(
                 self.authentication_username,
@@ -222,9 +223,9 @@ impl AuthenticationAdvanceControlObservation {
                     | AuthenticationUsernameEvidence::WebAuthnEmail
             )
         {
-            return None;
+            return Err(InvalidAuthenticationControl);
         }
-        Some(CheckedAuthenticationControl {
+        Ok(CheckedAuthenticationControl {
             observation: self,
             destination,
         })
@@ -233,6 +234,9 @@ impl AuthenticationAdvanceControlObservation {
 
 /// Classification admission binds canonical evidence to the unchanged browser report.
 /// It deliberately carries no browser-freshness or actuation authority.
+#[derive(Debug)]
+struct InvalidAuthenticationControl;
+
 struct CheckedAuthenticationControl<'a> {
     observation: &'a AuthenticationAdvanceControlObservation,
     destination: CanonicalControlDestination,
@@ -353,7 +357,7 @@ mod tests {
             report.destination_identity =
                 format!("https://login.example.test/auth/%6cogin?next=%2F{next}");
             let original = report.clone();
-            let checked = report.check().ok_or_else(|| {
+            let checked = report.check().map_err(|_| {
                 anyhow::anyhow!("same-origin login must enter checked classification")
             })?;
             assert_eq!(checked.destination.path_identity, "/auth/login");
@@ -381,7 +385,7 @@ mod tests {
         ] {
             let mut report = AuthenticationAdvanceControlObservation::login_control();
             report.destination_identity = destination.to_owned();
-            assert!(report.check().is_none(), "{destination}");
+            assert!(report.check().is_err(), "{destination}");
             assert_eq!(
                 report.classify(),
                 AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
@@ -389,7 +393,7 @@ mod tests {
         }
         let mut report = AuthenticationAdvanceControlObservation::login_control();
         report.label = "a".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
-        assert!(report.check().is_none());
+        assert!(report.check().is_err());
     }
 
     #[test]
@@ -404,9 +408,9 @@ mod tests {
             report.source_origin = "https://accounts.google.com".to_owned();
             report.destination_identity = "https://accounts.google.com/auth/login".to_owned();
             report.authentication_username = evidence;
-            assert!(report.check().is_none());
+            assert!(report.check().is_err());
             report.authentication_username = AuthenticationUsernameEvidence::Explicit;
-            assert!(report.check().is_some());
+            assert!(report.check().is_ok());
         }
     }
 
@@ -418,7 +422,7 @@ mod tests {
             if destination == "/auth/login" {
                 report.actionability = PageControlActionability::Inert;
             }
-            let checked = report.check().ok_or_else(|| {
+            let checked = report.check().map_err(|_| {
                 anyhow::anyhow!("canonical route must be admitted before action policy")
             })?;
             assert_eq!(

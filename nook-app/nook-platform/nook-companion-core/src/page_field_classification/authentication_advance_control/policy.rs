@@ -38,7 +38,7 @@ impl AuthenticationAdvanceControlObservation {
         {
             return false;
         }
-        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
                 source_origin: &self.source_origin,
                 destination_identity: &self.destination_identity,
@@ -114,7 +114,7 @@ impl AuthenticationAdvanceControlObservation {
             source_origin: &self.source_origin,
             destination_identity: &self.destination_identity,
         })
-        .is_some_and(|destination| {
+        .is_ok_and(|destination| {
             destination.path_identity == "/login" && destination.route_identity == "/login"
         })
     }

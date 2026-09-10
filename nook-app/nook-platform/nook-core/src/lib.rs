@@ -485,7 +485,8 @@ pub use nook_auth2::{
 pub use nook_app_common::{
     LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
     ResolveTranslationCatalogRequest, TranslateFromCatalogRequest, TranslateRequest,
-    TranslateWithReplacementsRequest, TranslationCatalog,
+    TranslateWithReplacementsRequest, TranslationCatalog, TranslationCatalogSource,
+    TranslationLookup,
 };
 
 pub use nook_companion_core::AuthenticationControlText;

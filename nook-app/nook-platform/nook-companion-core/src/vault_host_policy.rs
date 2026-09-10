@@ -101,31 +101,50 @@ impl VaultHostPolicy<'_> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SentinelVaultMatch {
+    UnsupportedHost,
+    MatchingBaseUrl(String),
+}
+pub enum VaultAppBaseSelection<'a> {
+    KnownNookHosts,
+    Configured(&'a str),
+}
 /// Matching Sentinel base URL for a Simple Vault URL, when one can be derived.
 impl VaultHostPolicy<'_> {
-    pub fn matching_sentinel_vault_base_url(&self) -> Result<Option<String>, VaultHostPolicyError> {
+    pub fn matching_sentinel_vault_base_url(
+        &self,
+    ) -> Result<SentinelVaultMatch, VaultHostPolicyError> {
         let base_url = self.as_str();
         let normalized = VaultHostPolicy::new(base_url).normalize_simple_vault_base_url()?;
         let url = Url::parse(&normalized)
             .map_err(|error| VaultHostPolicyError::InvalidUrl(error.to_string()))?;
         let host = url.host_str().unwrap_or_default();
         if let Some(rest) = host.strip_prefix("simple.") {
-            return Ok(Some(format!("{}://sentinel.{}/", url.scheme(), rest)));
+            return Ok(SentinelVaultMatch::MatchingBaseUrl(format!(
+                "{}://sentinel.{}/",
+                url.scheme(),
+                rest
+            )));
         }
         if host.contains(".nokey-simple.pages.dev") {
             let sentinel_host =
                 host.replace(".nokey-simple.pages.dev", ".nokey-sentinel.pages.dev");
-            return Ok(Some(format!("{}://{}/", url.scheme(), sentinel_host)));
+            return Ok(SentinelVaultMatch::MatchingBaseUrl(format!(
+                "{}://{}/",
+                url.scheme(),
+                sentinel_host
+            )));
         }
         if let Some(prefix) = url.path().strip_suffix("/simple/") {
             let sentinel_path = format!("{prefix}/sentinel/");
-            return Ok(Some(format!(
+            return Ok(SentinelVaultMatch::MatchingBaseUrl(format!(
                 "{}{}",
                 url.origin().ascii_serialization(),
                 sentinel_path
             )));
         }
-        Ok(None)
+        Ok(SentinelVaultMatch::UnsupportedHost)
     }
 }
 
@@ -134,7 +153,9 @@ impl VaultHostPolicy<'_> {
     pub fn sentinel_vault_match_patterns(&self) -> Result<Vec<String>, VaultHostPolicyError> {
         let base_url = self.as_str();
         let mut matches = vec!["https://sentinel.nokey.sh/*".to_owned()];
-        if let Some(matching) = VaultHostPolicy::new(base_url).matching_sentinel_vault_base_url()? {
+        if let SentinelVaultMatch::MatchingBaseUrl(matching) =
+            VaultHostPolicy::new(base_url).matching_sentinel_vault_base_url()?
+        {
             matches.push(format!("{matching}*"));
         }
         matches.sort();
@@ -197,7 +218,7 @@ impl VaultHostPolicy<'_> {
 impl VaultHostObservation<'_> {
     pub fn is_nook_vault_app_url(
         &self,
-        base_url: Option<&str>,
+        base_url: VaultAppBaseSelection<'_>,
     ) -> Result<bool, VaultHostPolicyError> {
         let candidate_url = self.as_str();
         let url = Url::parse(candidate_url)
@@ -208,7 +229,7 @@ impl VaultHostObservation<'_> {
         {
             return Ok(true);
         }
-        let Some(base_url) = base_url else {
+        let VaultAppBaseSelection::Configured(base_url) = base_url else {
             return Ok(false);
         };
         Ok(
@@ -264,15 +285,16 @@ mod tests {
         assert!(VaultHostObservation::new("sentinel.nokey.sh").is_sentinel_vault_hostname());
         assert_eq!(
             VaultHostPolicy::new("https://simple.nokey.sh/").matching_sentinel_vault_base_url()?,
-            Some("https://sentinel.nokey.sh/".to_owned())
+            SentinelVaultMatch::MatchingBaseUrl("https://sentinel.nokey.sh/".to_owned())
         );
         assert!(
             VaultHostPolicy::new("https://simple.nokey.sh/")
                 .belongs_to_simple_vault("https://simple.nokey.sh/app")?
         );
         assert!(
-            VaultHostObservation::new("https://sentinel.dev.nokey.sh/")
-                .is_nook_vault_app_url(Some("https://simple.dev.nokey.sh/"))?
+            VaultHostObservation::new("https://sentinel.dev.nokey.sh/").is_nook_vault_app_url(
+                VaultAppBaseSelection::Configured("https://simple.dev.nokey.sh/")
+            )?
         );
         assert!(matches!(
             VaultHostPolicy::new("http://example.com/").normalize_simple_vault_base_url(),

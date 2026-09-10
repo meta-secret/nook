@@ -31,7 +31,7 @@ pub use authentication_advance_control::{
     PageControlActionability, PageControlOwnership, PageControlSemantics,
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
-pub use destination_identity::CanonicalControlDestination;
+pub use destination_identity::{CanonicalControlDestination, InvalidControlDestination};
 
 pub(super) use passkey::PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS;
 
@@ -249,7 +249,7 @@ impl OneTimeCodeRouteEvidence<'_> {
         {
             return OneTimeCodeRouteDecision::Rejected;
         }
-        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
                 source_origin: source_origin,
                 destination_identity: destination_identity,
@@ -360,7 +360,7 @@ impl AuthenticationAdvanceControlObservation {
         {
             return PasskeyControlDecision::ControlVeto;
         }
-        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
                 source_origin: &observation.source_origin,
                 destination_identity: &observation.destination_identity,
@@ -423,7 +423,7 @@ impl AuthenticationAdvanceControlObservation {
         if RouteIdentity::new(form_identity).has_control_veto() {
             return false;
         }
-        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
                 source_origin: source_origin,
                 destination_identity: destination_identity,
@@ -474,7 +474,7 @@ impl AuthenticationAdvanceControlObservation {
         {
             return false;
         }
-        let Some(destination) = CanonicalControlDestination::canonicalize_control_destination(
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
                 source_origin: source_origin,
                 destination_identity: destination_identity,
@@ -637,7 +637,7 @@ impl AuthenticationAdvanceControlObservation {
                     destination_identity: destination_identity,
                 },
             )
-            .is_some_and(|destination| destination.has_microsoft_provider_authority)
+            .is_ok_and(|destination| destination.has_microsoft_provider_authority)
                 && ControlIdentity::new(control_label).is_microsoft_primary_sign_in();
         if ControlIdentity::new(control_label).label_names_provider()
             && !has_matching_microsoft_authority

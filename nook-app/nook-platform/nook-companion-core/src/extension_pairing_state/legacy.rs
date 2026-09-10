@@ -165,6 +165,9 @@ impl ExtensionPairingState {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{
+        PairingGrantObservation, PairingSetupObservation, SelectedExtensionPairingGrant,
+    };
     use super::*;
 
     #[test]
@@ -176,9 +179,10 @@ mod tests {
         let serialized = serde_json::to_string(&records)?;
 
         let migrated = ExtensionPairingState::migrate_legacy_json(&serialized)?;
-        let selected = migrated
-            .selected_grant()
-            .ok_or_else(|| anyhow::anyhow!("migrated state must select its grant"))?;
+        let SelectedExtensionPairingGrant::Selected { grant: selected } = migrated.selected_grant()
+        else {
+            anyhow::bail!("migrated state must select its grant");
+        };
 
         assert_eq!(selected.vault_store_id, "store-test");
         assert_eq!(selected.event_count, crate::ExtensionEventCount::from(2));
@@ -207,16 +211,24 @@ mod tests {
         let migrated = ExtensionPairingState::migrate_legacy_json(&serialized)?;
 
         assert_eq!(migrated.ordered_grants().len(), 2);
-        assert_eq!(migrated.grant("store-team"), Some(&team));
         assert_eq!(
-            migrated
-                .ready_setup()
-                .map(|setup| setup.paired_vaults.clone()),
-            Some(vec!["Personal".to_owned(), "Team".to_owned()])
+            migrated.grant("store-team"),
+            PairingGrantObservation::Stored(&team)
         );
         assert_eq!(
-            migrated.selected_grant().map(|grant| grant.vault_store_id),
-            Some("store-test".to_owned())
+            match migrated.ready_setup() {
+                PairingSetupObservation::Ready(setup) => setup.paired_vaults.clone(),
+                PairingSetupObservation::NotConfigured => anyhow::bail!("expected ready setup"),
+            },
+            vec!["Personal".to_owned(), "Team".to_owned()]
+        );
+        assert_eq!(
+            match migrated.selected_grant() {
+                SelectedExtensionPairingGrant::Selected { grant } => grant.vault_store_id,
+                SelectedExtensionPairingGrant::NotSelected =>
+                    anyhow::bail!("expected selected grant"),
+            },
+            "store-test".to_owned()
         );
         Ok(())
     }
@@ -237,12 +249,16 @@ mod tests {
         let migrated = ExtensionPairingState::migrate_legacy_json(&serialized)?;
 
         assert_eq!(migrated.ordered_grants().len(), 1);
-        assert_eq!(migrated.grant("store-team"), None);
         assert_eq!(
-            migrated
-                .ready_setup()
-                .map(|setup| setup.paired_vaults.clone()),
-            Some(vec!["Personal".to_owned()])
+            migrated.grant("store-team"),
+            PairingGrantObservation::NotStored
+        );
+        assert_eq!(
+            match migrated.ready_setup() {
+                PairingSetupObservation::Ready(setup) => setup.paired_vaults.clone(),
+                PairingSetupObservation::NotConfigured => anyhow::bail!("expected ready setup"),
+            },
+            vec!["Personal".to_owned()]
         );
         migrated.validate()?;
         Ok(())

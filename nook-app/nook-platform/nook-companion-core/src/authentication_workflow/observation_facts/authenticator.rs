@@ -1,3 +1,4 @@
+use super::passkey::PasskeyFieldContext;
 use super::{
     AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
     AuthenticationPasskeyControlObservation,
@@ -106,7 +107,7 @@ impl AuthenticationAuthenticatorObservationFacts {
             AuthenticationPasskeyAccountAvailability::Ready
         ) && self
             .detailed_passkey_control
-            .is_safe_for_fields(Some(fields))
+            .is_safe_for_fields(PasskeyFieldContext::Observed(fields))
     }
 
     pub(super) const fn matching_passkey_account_count(&self) -> AuthenticationPasskeyAccountCount {

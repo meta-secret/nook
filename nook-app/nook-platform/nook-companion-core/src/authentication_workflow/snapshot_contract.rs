@@ -113,7 +113,7 @@ impl AuthenticationWorkflowSnapshot {
         if !self.approval_requirement_matches_action()
             || !self.saved_login_capability_matches_contract()
             || !self.observation_index.is_within_classifier_batch()
-            || super::AuthenticationWorkflowProgress::admit(self).is_none()
+            || super::AuthenticationWorkflowProgress::admit(self).is_err()
         {
             return false;
         }

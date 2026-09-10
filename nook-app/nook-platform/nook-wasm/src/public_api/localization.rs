@@ -12,6 +12,7 @@ use nook_core::{
     ResolveTranslationCatalogRequest, TranslateFromCatalogRequest, TranslateRequest,
     TranslateWithReplacementsRequest, TranslationCatalog,
 };
+use nook_core::{TranslationCatalogSource, TranslationLookup};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -156,11 +157,15 @@ pub fn get_translation_catalog(locale: &str) -> String {
 
 #[wasm_bindgen]
 pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
-    TranslationCatalog::lookup_translation(LookupTranslationRequest {
+    match TranslationCatalog::lookup_translation(LookupTranslationRequest {
         catalog_json: catalog_json,
         key: key,
-    })
-    .ok_or_else(|| JsError::new(&format!("missing translation key: {key}")))
+    }) {
+        TranslationLookup::Found(value) => Ok(value),
+        TranslationLookup::Missing | TranslationLookup::InvalidCatalog => {
+            Err(JsError::new(&format!("missing translation key: {key}")))
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -221,7 +226,7 @@ pub fn merge_translation_catalogs(
 pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> String {
     TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
         locale: locale,
-        wasm_catalog_json: Some(wasm_catalog_json),
+        wasm_catalog_json: TranslationCatalogSource::Supplied(wasm_catalog_json),
     })
 }
 
@@ -230,7 +235,7 @@ pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> Str
 pub fn default_translation_catalog(locale: &str) -> String {
     TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
         locale: locale,
-        wasm_catalog_json: None,
+        wasm_catalog_json: TranslationCatalogSource::Bundled,
     })
 }
 
