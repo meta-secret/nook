@@ -158,7 +158,9 @@ export class OperationalCommandProbe {
         kind: OperationalContractFailureKind.Command,
         message: "Unable to execute empty operational contract command",
       });
-    const originalEnvironment = { ...process.env };
+    const originalEnvironment = new Map<string, string>();
+    for (const [key, value] of Object.entries(process.env))
+      if (typeof value === "string") originalEnvironment.set(key, value);
     try {
       if (this.request.env) Object.assign(process.env, this.request.env);
       const outcome = this.spawn({ executable, args });
@@ -174,7 +176,7 @@ export class OperationalCommandProbe {
       });
     } finally {
       for (const key of Object.keys(process.env)) delete process.env[key];
-      Object.assign(process.env, originalEnvironment);
+      for (const [key, value] of originalEnvironment) process.env[key] = value;
     }
   }
 }
