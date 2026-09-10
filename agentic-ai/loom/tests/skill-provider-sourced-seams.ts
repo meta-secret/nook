@@ -140,7 +140,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/k0s-firewall-rollback-test.ts',
-    '2a208f1de16db92077e93cf77c16a131d5c23bb174c1ffb624a8c3ec4cba71b2',
+    '29a99be57360e1471993627d63f0d4064ae0b76e11f0d8a9e6f540e71c3ba7b8',
   ],
   [
     '.github/scripts/remote-task-batch.sh',

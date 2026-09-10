@@ -111,8 +111,9 @@ export class OperationalCommandProbe {
         : OperationalProbeStream.Ignore;
     switch (this.request.cmd[0]) {
       case OperationalProbeExecutable.Awk:
+        const [, program = ""] = this.request.cmd;
         return Bun.spawnSync({
-          cmd: ["awk", this.request.cmd[1] ?? ""],
+          cmd: ["awk", program],
           stdin,
           stdout: this.request.stdout,
           stderr: this.request.stderr,
@@ -125,34 +126,32 @@ export class OperationalCommandProbe {
           stderr: this.request.stderr,
         });
       case OperationalProbeExecutable.Jq:
+        const [
+          ,
+          mode = "",
+          argumentKind = "",
+          argumentName = "",
+          argumentValue = "",
+          filter = "",
+        ] = this.request.cmd;
         return Bun.spawnSync({
-          cmd: [
-            "jq",
-            this.request.cmd[1] ?? "",
-            this.request.cmd[2] ?? "",
-            this.request.cmd[3] ?? "",
-            this.request.cmd[4] ?? "",
-            this.request.cmd[5] ?? "",
-          ],
+          cmd: ["jq", mode, argumentKind, argumentName, argumentValue, filter],
           stdin,
           stdout: this.request.stdout,
           stderr: this.request.stderr,
         });
       default:
-        return this.request.cmd[0]?.endsWith(".rb")
+        const [script = "", firstArgument = "", secondArgument = ""] =
+          this.request.cmd;
+        return script.endsWith(".rb")
           ? Bun.spawnSync({
-              cmd: [
-                "ruby",
-                this.request.cmd[0],
-                this.request.cmd[1] ?? "",
-                this.request.cmd[2] ?? "",
-              ],
+              cmd: ["ruby", script, firstArgument, secondArgument],
               stdin,
               stdout: this.request.stdout,
               stderr: this.request.stderr,
             })
           : Bun.spawnSync({
-              cmd: ["bash", this.request.cmd[0] ?? ""],
+              cmd: ["bash", script],
               stdin,
               stdout: this.request.stdout,
               stderr: this.request.stderr,
