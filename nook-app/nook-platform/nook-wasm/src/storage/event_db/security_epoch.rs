@@ -60,13 +60,12 @@ struct PreparedEventAppend<'a, 'b> {
 /// ```compile_fail,E0603
 /// use nook_wasm::storage::event_db::security_epoch::PreparedRemoteUnion;
 /// ```
-struct PreparedRemoteUnion<'a, 'b> {
+struct PreparedRemoteUnion<'a> {
     vault: VaultEventPersistence<'a>,
     transaction: EventTransaction,
     persisted_ids: Vec<String>,
     local: LocalEventStore,
     heads: Vec<String>,
-    remote_events: &'b [(EventId, Vec<u8>)],
 }
 impl<'a> VaultEventPersistence<'a> {
     #[must_use]
@@ -160,7 +159,7 @@ impl<'a> VaultEventPersistence<'a> {
     async fn prepare_union<'b>(
         &self,
         request: RemoteEventUnion<'b>,
-    ) -> Result<PreparedRemoteUnion<'a, 'b>, NookError> {
+    ) -> Result<PreparedRemoteUnion<'a>, NookError> {
         let store_id = self.store_id;
         let remote_events = request.events;
         let transaction = EventTransaction::begin(AppendKind::Remote).await?;
@@ -202,7 +201,6 @@ impl<'a> VaultEventPersistence<'a> {
             persisted_ids,
             local,
             heads,
-            remote_events,
         })
     }
 }
@@ -378,7 +376,7 @@ impl PreparedEventAppend<'_, '_> {
         Ok(heads)
     }
 }
-impl PreparedRemoteUnion<'_, '_> {
+impl PreparedRemoteUnion<'_> {
     async fn commit(self) -> Result<(Vec<String>, LocalEventStore), NookError> {
         let Self {
             vault,
@@ -386,18 +384,18 @@ impl PreparedRemoteUnion<'_, '_> {
             persisted_ids,
             local,
             heads,
-            remote_events,
         } = self;
         let store_id = vault.store_id;
         let events = &transaction.events;
         let projections = &transaction.projections;
-        for (event_id, bytes) in remote_events {
-            if local.get_bytes(event_id).is_none()
-                || persisted_ids.iter().any(|id| id == event_id.as_str())
-            {
+        for event_id in local.event_ids() {
+            if persisted_ids.iter().any(|id| id == event_id.as_str()) {
                 continue;
             }
-            let value = String::from_utf8(bytes.clone())
+            let bytes = local.get_bytes(&event_id).ok_or_else(|| {
+                NookError::Database("Admitted remote event bytes are missing.".to_owned())
+            })?;
+            let value = String::from_utf8(bytes.to_vec())
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             EventString {
                 store: events,

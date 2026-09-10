@@ -136,6 +136,16 @@ impl PreparedRemoteUnion {
             store_id,
         } = request;
         let prepared: EventResult<_> = (|| {
+            let expected_store = StoreId::parse(store_id)?;
+            for (event_id, bytes) in remote_events {
+                let event = VaultEvent::parse_remote_event_storage_bytes(bytes)?;
+                if event.id()? != *event_id {
+                    return Err(EventError::RemoteEventIdMismatch {
+                        event_id: event_id.as_str().to_owned(),
+                    });
+                }
+                event.validate_envelope(&expected_store)?;
+            }
             let visible = local.visibility_gated_remote_events(remote_events, store_id)?;
             let mut additions = Vec::new();
             let mut addition_ids = BTreeSet::new();
@@ -143,13 +153,6 @@ impl PreparedRemoteUnion {
                 if local.get_bytes(&event_id).is_some() || addition_ids.contains(&event_id) {
                     continue;
                 }
-                let event = VaultEvent::parse_remote_event_storage_bytes(&bytes)?;
-                if event.id()? != event_id {
-                    return Err(EventError::RemoteEventIdMismatch {
-                        event_id: event_id.as_str().to_owned(),
-                    });
-                }
-                event.validate_envelope(&StoreId::parse(store_id)?)?;
                 addition_ids.insert(event_id.clone());
                 additions.push((event_id, bytes));
             }
@@ -337,6 +340,75 @@ mod tests {
             local.load_graph(STORE)?.heads(),
             expected.load_graph(STORE)?.heads()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn conflicting_duplicate_ids_reject_without_changing_store_or_outbox() -> anyhow::Result<()> {
+        let fixture = RemoteFixture::new()?;
+        let (id, bytes) = &fixture.records[0];
+        let mut different_event = fixture.event.clone();
+        different_event.body.created_at =
+            IsoTimestamp::from_trusted("2026-06-29T00:00:00Z".to_owned());
+        let different_bytes = VaultEvent::serialize_event_storage_yaml(&different_event)?;
+        assert_ne!(different_event.id()?, *id);
+        for existing in [false, true] {
+            let mut local = LocalEventStore::new();
+            if existing {
+                local = local.put_event(crate::LocalEventWrite {
+                    event_id: id.clone(),
+                    bytes: bytes.clone(),
+                });
+            }
+            local = local.queue_outbox(crate::LocalOutboxWrite {
+                provider_id: "provider",
+                event: crate::LocalEventWrite {
+                    event_id: id.clone(),
+                    bytes: bytes.clone(),
+                },
+            });
+            let original_ids = local.event_ids();
+            let original_bytes = local.get_bytes(id);
+            let original_outbox = local.pending_outbox("provider");
+            let records = if existing {
+                vec![(id.clone(), different_bytes.clone())]
+            } else {
+                vec![
+                    (id.clone(), bytes.clone()),
+                    (id.clone(), different_bytes.clone()),
+                ]
+            };
+            let rejected = match local.union_remote(LocalRemoteUnion {
+                remote_events: &records,
+                store_id: STORE,
+            }) {
+                Err(rejected) => rejected,
+                Ok(_) => anyhow::bail!("conflicting duplicate ID was accepted"),
+            };
+            assert!(matches!(
+                rejected.cause,
+                EventError::RemoteEventIdMismatch { .. }
+            ));
+            assert_eq!(rejected.store.event_ids(), original_ids);
+            assert_eq!(rejected.store.get_bytes(id), original_bytes);
+            assert_eq!(rejected.store.pending_outbox("provider"), original_outbox);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn identical_remote_duplicates_are_admitted_once() -> anyhow::Result<()> {
+        let fixture = RemoteFixture::new()?;
+        let record = fixture.records[0].clone();
+        let records = vec![record.clone(), record.clone()];
+        let admitted = LocalEventStore::new()
+            .union_remote(LocalRemoteUnion {
+                remote_events: &records,
+                store_id: STORE,
+            })
+            .map_err(|rejected| rejected.into_cause())?;
+        assert_eq!(admitted.imported, vec![record.0.clone()]);
+        assert_eq!(admitted.store.get_bytes(&record.0), Some(record.1));
         Ok(())
     }
 
