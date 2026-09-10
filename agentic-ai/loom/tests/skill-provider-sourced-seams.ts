@@ -103,6 +103,10 @@ export type AuditedRuntimeSourceRequest = {
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
+    'agentic-ai/loom/tests/repository-command.fixture.cjs',
+    '054562f3874994116b179f4b99ae3760a4b63e1f2c6bc443c19f7aa215dca7a2',
+  ],
+  [
     '.github/scripts/arc-hive-render-contract.ts',
     '6e3f9ec99a5f65a720e8af6e9c9331d76750148c58d3cecdc9569352a9b93ad1',
   ],
