@@ -35,7 +35,10 @@ function lifecycleHarness(authenticated = false) {
     sentinelCeremonyPrompt: false,
     t: (key: string) => key,
     clearUnlockedSession: vi.fn(),
-    selectVaultForUnlock: vi.fn(async (_storeId: string) => ok()),
+    selectVaultForUnlock: vi.fn(async (storeId: string) => {
+      void storeId
+      return ok()
+    }),
     prepareExistingVaultImportSlot: vi.fn(async () => ok()),
     activateLoginSetup: vi.fn(),
     configureOauthFile: vi.fn(),

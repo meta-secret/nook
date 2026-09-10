@@ -46,7 +46,11 @@ export type SiteUrlEnvironment =
   DefaultSiteUrlEnvironment | ConfiguredSiteUrlEnvironment;
 
 export class SiteUrlConfiguration {
-  constructor(private readonly request: SiteUrlEnvironment) {}
+  private readonly request: SiteUrlEnvironment;
+
+  constructor(request: SiteUrlEnvironment) {
+    this.request = request;
+  }
   get url(): string {
     const environment = this.request;
 
@@ -64,7 +68,11 @@ type AbsoluteSiteUrlRequest = {
 };
 
 export class PublicSiteLocation {
-  constructor(private readonly request: AbsoluteSiteUrlRequest) {}
+  private readonly request: AbsoluteSiteUrlRequest;
+
+  constructor(request: AbsoluteSiteUrlRequest) {
+    this.request = request;
+  }
   get url(): string {
     const { siteUrl, path } = this.request;
 
@@ -82,6 +90,12 @@ type SitemapXmlDocument = {
 };
 
 export class SitemapDocument {
+  private readonly request: SitemapXmlDocument;
+
+  constructor(request: SitemapXmlDocument) {
+    this.request = request;
+  }
+
   private locationXml(entry: SitemapEntry): string {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const location = new PublicSiteLocation({
@@ -95,7 +109,6 @@ export class SitemapDocument {
       .replace(/"/g, "&quot;");
   }
 
-  constructor(private readonly request: SitemapXmlDocument) {}
   get xml(): string {
     const { lastmod } = this.request;
 
@@ -118,7 +131,11 @@ ${body}
 }
 
 export class RobotsDocument {
-  constructor(private readonly request: string) {}
+  private readonly request: string;
+
+  constructor(request: string) {
+    this.request = request;
+  }
   get text(): string {
     const siteUrl = this.request;
 

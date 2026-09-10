@@ -489,7 +489,7 @@ mod browser_tests {
 
         let observation =
             NookAuthenticationPageObservation::new(1, 1, 1, 0, 0, true, false, false, false, 0);
-        assert!((&observation).authentication_form_observation_priority() > 0);
+        assert!(authentication_form_observation_priority(&observation) > 0);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
         let _ = authentication_page_observations_are_valid(&observations);

@@ -7,7 +7,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
 -->
 <script lang="ts">
   import { err, ok } from "neverthrow";
-  import { SelectedIdentityVault } from "./devices-access/selected-identity-vault";
+  import { SelectedIdentityVault, type SelectedIdentityVaultRequest } from "./devices-access/selected-identity-vault";
   import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
   import { I18N_KEYS } from "../../../generated/i18n-keys";
   import { onDestroy, untrack } from "svelte";
@@ -27,7 +27,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     DashboardTextKind,
     type DashboardView,
     DevicesAccessRepresentationKind,
-  } from "./devices-access-dashboard-state";
+  } from './devices-access-dashboard-state';
   import IdentityDirectoryRail from "./devices-access/IdentityDirectoryRail.svelte";
   import IdentityKeyInventory from "./devices-access/IdentityKeyInventory.svelte";
   import IdentityRepresentationSwitch from "./devices-access/IdentityRepresentationSwitch.svelte";
@@ -665,11 +665,11 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
               {@const verifiedVaultCount = view.vaults.filter(
                 (entry) => entry.verified,
               ).length}
-              {@const selectedVaultRequest = {
+              {@const selectedVaultRequest: SelectedIdentityVaultRequest = {
                 selection: selectedVault,
                 vaults: identity.vaults,
                 fallbackLabel: vault.t(I18N_KEYS.DevicesAccessBridgeVault),
-              } satisfies ConstructorParameters<typeof SelectedIdentityVault>[0]}
+              }}
               {@const selectedVaultView = new SelectedIdentityVault(selectedVaultRequest)}
               {@const selectedVaultIsVerified = selectedVaultView.verified}
               {@const selectedVaultName = selectedVaultView.label}

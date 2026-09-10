@@ -65,7 +65,9 @@ class IdentityHandoffFixture {
       })
     }
     this.lifecycle = new VaultInitializationActions(this.state)
-    this.clearUnlockedSession = vi.spyOn(this.state, 'clearUnlockedSession')
+    this.clearUnlockedSession = vi
+      .spyOn(this.state, 'clearUnlockedSession')
+      .mockImplementation(() => {})
     this.state.openManager(this.manager)
     this.state.deviceProtectionStatus = DeviceProtectionStatus.Passkey
     this.state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey

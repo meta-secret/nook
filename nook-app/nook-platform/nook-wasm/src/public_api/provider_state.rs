@@ -598,7 +598,9 @@ mod browser_tests {
             NookOAuthRemoteConfigurationUpdateState::Rejected
         );
         assert!(rejected.config().is_err());
-        let updated = NookOAuthRemoteConfigurationUpdate::new(Some(configured.clone()));
+        let updated = NookOAuthRemoteConfigurationUpdate::new(
+            OAuthRemoteConfigurationUpdate::Updated(Box::new(configured.clone())),
+        );
         assert_eq!(
             updated.state(),
             NookOAuthRemoteConfigurationUpdateState::Updated

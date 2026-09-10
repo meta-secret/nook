@@ -23,9 +23,8 @@ fn device_protection_contexts_and_manager_state_project_in_wasm() -> Result<(), 
     ));
     let authorizer = AppKey::generate()?;
     assert!(matches!(
-        (&creation).pending_extension_enrollment(VaultCreationAuthorityRef::ExistingIdentity(
-            &authorizer
-        ))?,
+        (&creation)
+            .pending_extension_enrollment(HandoffAuthorization::Authenticated(&authorizer))?,
         PendingExtensionIdentityEnrollment::VaultCreation {
             authorizer: VaultCreationAuthority::ExistingIdentity(_)
         }
@@ -36,9 +35,7 @@ fn device_protection_contexts_and_manager_state_project_in_wasm() -> Result<(), 
         PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
     ));
     assert!(matches!(
-        (&paired).pending_extension_enrollment(VaultCreationAuthorityRef::ExistingIdentity(
-            &authorizer
-        ))?,
+        (&paired).pending_extension_enrollment(HandoffAuthorization::Authenticated(&authorizer))?,
         PendingExtensionIdentityEnrollment::PairedVault { .. }
     ));
     let imported = NookExtensionIdentityHandoffContext::existing_vault_import(store_id.as_str())?;

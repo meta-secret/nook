@@ -298,8 +298,11 @@ mod tests {
     use super::{
         PresealedProviderSnapshotPublication, ProviderSnapshotPublication, auth_providers,
     };
-    use crate::NookError;
     use crate::storage::{identity_record, indexed_db};
+    use crate::{
+        AuthProviderDatabase, IdbPutStringRequest, NookDatabase, NookError,
+        ProviderDbWriteSnapshotAt,
+    };
     use nook_core::ProviderVaultScope;
     use nook_core::StoredGithubPat;
     use nook_core::{

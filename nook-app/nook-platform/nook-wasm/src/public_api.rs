@@ -412,8 +412,8 @@ mod browser_tests {
         GoogleDriveMode, ICloudMode, OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope,
         ReplicationType, StorageProviderData, StorageProviderType, StoredGithubPat,
         StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
-        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-        StoredOAuthRemoteFileName,
+        StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
+        StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
     };
     use wasm_bindgen_test::*;
 
@@ -534,10 +534,7 @@ mod browser_tests {
             ),
             "GitHub"
         );
-        assert_eq!(
-            provider_wasm_args(provider.clone()).unwrap().mode(),
-            "github"
-        );
+        assert_eq!(provider_wasm_args(provider.clone()).unwrap().mode, "github");
 
         let empty = nook_core::AuthProvidersSnapshotData::default();
         let unscoped = NookManagerStoreScope::unscoped();

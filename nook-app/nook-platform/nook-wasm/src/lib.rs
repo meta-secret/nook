@@ -222,7 +222,7 @@ pub(crate) use storage::NookDatabase;
 
 pub(crate) use storage::indexed_db::{SecretSearchBucketKeyRequest, VaultSnapshotLookup};
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use storage::indexed_db::SaveVaultBlobRequest;
 #[cfg(test)]
 pub(crate) use storage::indexed_db::SaveWrappedDeviceIdentityRequest;

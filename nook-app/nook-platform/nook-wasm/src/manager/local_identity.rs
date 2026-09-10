@@ -268,8 +268,8 @@ mod browser_tests {
                 Err(anyhow::anyhow!("selected identity is missing"))
             }
         }?;
-        let mut keyring = NookDatabase::load_keyring().await?;
-        keyring
+        let keyring = NookDatabase::load_keyring().await?;
+        let keyring = keyring
             .replace(LocalIdentityKeyringEntry::legacy(
                 protected.identity_id().clone(),
                 app_key.app_id().clone(),

@@ -353,7 +353,7 @@ mod tests {
         let result = NookDatabase::idb_migrate_string_if(IndexedDbMigration {
             source_key: SOURCE_KEY,
             target_key: TARGET_KEY,
-            can_migrate: |_| true,
+            can_migrate: (|_: &str| true) as fn(&str) -> bool,
         })
         .await;
 
@@ -385,7 +385,7 @@ mod tests {
             key: TARGET_KEY,
             fallback_key: StringRecordFallback::AdoptFrom(SOURCE_KEY),
             guard: StringUpdateGuard::Unconditional,
-            can_adopt_fallback: |_| true,
+            can_adopt_fallback: (|_: &str| true) as fn(&str) -> bool,
             update: |current| match current {
                 StoredStringRecord::Stored(raw) => Ok(format!("{raw}-updated")),
                 StoredStringRecord::MissingKey => {
@@ -504,7 +504,7 @@ mod tests {
                 label: "legacy"
             })
             .await?,
-            Some("legacy".to_owned())
+            StoredStringRecord::Stored("legacy".to_owned())
         );
         transaction
             .done()

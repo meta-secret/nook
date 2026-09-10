@@ -465,15 +465,19 @@ mod wasm_idb_tests {
                 .github_pat,
             StoredGithubPat::Token("github_pat_first_remote".to_owned())
         );
-        assert!(AuthProviderDatabase::projections_match(
-            ProviderDbProjectionsMatch {
-                scoped: &AuthProviderDatabase::read_raw_snapshot_at(
-                    &AuthProviderDatabase::state_key_for_app_id(identity.app_id())
-                )
-                .await?,
-                legacy: &AuthProviderDatabase::read_raw_snapshot().await?
-            }
-        ));
+        let scoped = AuthProviderDatabase::read_raw_snapshot_at(
+            &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
+        )
+        .await?
+        .into();
+        let legacy = AuthProviderDatabase::read_raw_snapshot().await?.into();
+        assert_eq!(
+            AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch {
+                scoped: &scoped,
+                legacy: &legacy,
+            }),
+            rollback_projection::ProviderProjectionRelation::Equal
+        );
         AuthProviderDatabase::clear_auth_providers_db().await?;
         NookDatabase::clear_keyring_for_test().await?;
         NookDatabase::clear_identity_directory_for_test().await?;

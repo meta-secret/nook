@@ -4,7 +4,7 @@ import {
 } from "./identity-bridge-elements";
 import type { VaultAccessView } from "./access-chain";
 
-type SelectedIdentityVaultRequest = {
+export type SelectedIdentityVaultRequest = {
   readonly selection: IdentityBridgeVaultSelection;
   readonly vaults: readonly VaultAccessView[];
   readonly fallbackLabel: string;

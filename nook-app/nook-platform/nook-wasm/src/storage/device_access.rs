@@ -236,6 +236,8 @@ impl AppPasskeyNameUpdate<'_> {
 #[cfg(test)]
 mod tests {
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
+    use crate::IdentityDbSaveNewProtectedLocalIdentity;
+    #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use crate::storage::identity_record;
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use crate::storage::identity_record::PriorAppAuthorization;

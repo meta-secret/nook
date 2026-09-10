@@ -308,14 +308,17 @@ impl DeviceAccessProfileUpdate {
 mod browser_tests {
     use super::DEVICE_ACCESS_PROFILE_VERSION_ERROR;
     use crate::storage::indexed_db;
-    use crate::{StoredStringRecord, StringRecordFallback};
+    use crate::{
+        IdbPutStringRequest, IndexedDbFallbackUpdate, NookDatabase, StoredStringRecord,
+        StringRecordFallback,
+    };
     use nook_core::{AppKey, DeviceId, IdentityId, IsoTimestamp, LocalIdentityKeyringEntry};
     use std::cell::Cell;
 
     use super::{
         DeviceAccessProfile, DeviceAccessProfileKey, DeviceAccessProfileMutation,
-        DeviceAccessProfileUpdateIntent, LegacyProfileAdmission, NookError, StringUpdateGuard,
-        StringUpdateResult,
+        DeviceAccessProfileUpdateIntent, LegacyProfileAdmission, LegacyProfileOwner, NookError,
+        StringUpdateGuard, StringUpdateResult,
     };
     use nook_core::DeviceIdentityProtection;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -509,9 +512,9 @@ mod browser_tests {
             .update(DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::BestEffort,
                 guard: StringUpdateGuard::Unconditional,
-                update: |_: &mut DeviceAccessProfile| {
+                update: |profile: DeviceAccessProfile| {
                     called.set(true);
-                    Ok(())
+                    Ok(profile)
                 },
             })
             .await?;
@@ -526,9 +529,9 @@ mod browser_tests {
             .update(DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::Interactive,
                 guard: StringUpdateGuard::Unconditional,
-                update: |_: &mut DeviceAccessProfile| {
+                update: |profile: DeviceAccessProfile| {
                     called.set(true);
-                    Ok(())
+                    Ok(profile)
                 },
             })
             .await;
@@ -570,9 +573,9 @@ mod browser_tests {
                     app_id: app.app_id().as_str(),
                     expected: "passkey:absent",
                 },
-                update: |_: &mut DeviceAccessProfile| {
+                update: |profile: DeviceAccessProfile| {
                     called.set(true);
-                    Ok(())
+                    Ok(profile)
                 },
             })
             .await?;
