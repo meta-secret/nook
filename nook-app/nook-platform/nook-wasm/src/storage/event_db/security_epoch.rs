@@ -953,7 +953,7 @@ mod browser {
             .await
         {
             Err(NookError::Database(message)) => {
-                assert!(message.starts_with("failed to parse stored event:"));
+                assert!(message.starts_with("failed to parse remote event:"));
             }
             _ => anyhow::bail!("expected malformed remote event rejection"),
         }

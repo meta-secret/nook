@@ -143,6 +143,7 @@ impl NookVaultManager {
 mod wasm_tests {
     use super::*;
     use js_sys::{Array, JsString, Object, Reflect};
+    use serde_wasm_bindgen::Serializer;
     use wasm_bindgen_test::*;
 
     #[derive(Serialize)]
@@ -232,13 +233,14 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn event_log_export_serializes_flattened_signed_events_as_plain_objects()
     -> Result<(), wasm_bindgen::JsError> {
-        let value = serde_wasm_bindgen::to_value(&vec![ExportedRecord {
+        let value = vec![ExportedRecord {
             event_id: "event-1".to_owned(),
             event: SignedEvent {
                 body: SignedEventBody { schema_version: 1 },
                 signature: "ed25519:test-signature".to_owned(),
             },
-        }])
+        }]
+        .serialize(&Serializer::new().serialize_maps_as_objects(true))
         .map_err(|error| JsError::new(&error.to_string()))?;
         let value: Array = value.unchecked_into();
         let record: js_sys::Object = value.get(0).unchecked_into();
@@ -257,7 +259,10 @@ mod wasm_tests {
             path: "events/fixture.yaml".to_owned(),
             event: event.clone(),
         }]);
-        let array: Array = serde_wasm_bindgen::to_value(&records.to_array())?.unchecked_into();
+        let array: Array = records
+            .to_array()
+            .serialize(&Serializer::new().serialize_maps_as_objects(true))?
+            .unchecked_into();
         assert_eq!(array.length(), 1);
         let record: Object = array.get(0).unchecked_into();
         assert_eq!(get_string(&record, "eventId")?, event_id);
