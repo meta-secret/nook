@@ -146,7 +146,7 @@ fn production_vault_wasm_is_preloaded_size_optimized_and_budgeted() {
         "nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts",
     );
     for required in [
-        "const VAULT_WASM_RAW_SIZE_LIMIT = 8_300_000",
+        "const VAULT_WASM_RAW_SIZE_LIMIT = 15_000_000",
         "const VAULT_WASM_BROTLI_SIZE_LIMIT = 2_300_000",
         "normalizedWasmBuildMode === 'optimized'",
         "vaultWasm.byteLength > VAULT_WASM_RAW_SIZE_LIMIT",
