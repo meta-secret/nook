@@ -4,7 +4,7 @@ use nook_core::{
     StorageConnectArgs, StorageProviderType, StoredLocalFolderConfiguration,
     StoredOAuthFileConfiguration,
 };
-use nook_core::{DraftStorageConnection, ProviderSelection};
+use nook_core::{DraftStorageConnection, ProviderSelection, StagedStorageConnection};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -239,31 +239,31 @@ pub enum NookStagedStorageArgsState {
 }
 
 #[wasm_bindgen]
-pub struct NookStagedStorageArgs(Option<nook_core::StorageConnectArgs>);
+pub struct NookStagedStorageArgs(StagedStorageConnection);
 
 #[wasm_bindgen]
 impl NookStagedStorageArgs {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookStagedStorageArgsState {
-        if self.0.is_some() {
-            NookStagedStorageArgsState::Ready
-        } else {
-            NookStagedStorageArgsState::Incomplete
+        match self.0 {
+            StagedStorageConnection::Ready(_) => NookStagedStorageArgsState::Ready,
+            StagedStorageConnection::Incomplete => NookStagedStorageArgsState::Incomplete,
         }
     }
-
     #[wasm_bindgen(getter)]
     pub fn args(&self) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .map(Into::into)
-            .ok_or_else(|| JsError::new("staged storage is incomplete"))
+        match &self.0 {
+            StagedStorageConnection::Ready(args) => Ok(args.clone().into()),
+            StagedStorageConnection::Incomplete => {
+                Err(JsError::new("staged storage is incomplete"))
+            }
+        }
     }
 }
 
 impl NookStagedStorageArgs {
-    pub(super) const fn new(value: Option<nook_core::StorageConnectArgs>) -> Self {
+    pub(super) const fn new(value: StagedStorageConnection) -> Self {
         Self(value)
     }
 }
@@ -506,10 +506,12 @@ mod tests {
         );
         assert_eq!(updated.config().unwrap(), config);
 
-        let incomplete = NookStagedStorageArgs::new(None);
+        let incomplete = NookStagedStorageArgs::new(StagedStorageConnection::Incomplete);
         assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
         assert!(incomplete.args().is_err());
-        let ready = NookStagedStorageArgs::new(Some(nook_core::StorageConnectArgs::local()));
+        let ready = NookStagedStorageArgs::new(StagedStorageConnection::Ready(
+            nook_core::StorageConnectArgs::local(),
+        ));
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
         assert!(ready.args().is_ok());
 
@@ -598,10 +600,12 @@ mod browser_tests {
         );
         assert_eq!(updated.config().unwrap().file_name, configured.file_name);
 
-        let incomplete = NookStagedStorageArgs::new(None);
+        let incomplete = NookStagedStorageArgs::new(StagedStorageConnection::Incomplete);
         assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
         assert!(incomplete.args().is_err());
-        let ready = NookStagedStorageArgs::new(Some(nook_core::StorageConnectArgs::local()));
+        let ready = NookStagedStorageArgs::new(StagedStorageConnection::Ready(
+            nook_core::StorageConnectArgs::local(),
+        ));
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
         assert_eq!(ready.args().unwrap().mode, "local");
 

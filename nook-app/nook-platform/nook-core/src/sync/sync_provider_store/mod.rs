@@ -30,6 +30,10 @@ mod selection;
 pub use selection::{
     ProviderId, ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest,
 };
+mod staged_connection;
+pub use staged_connection::{
+    StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
+};
 mod state;
 mod state_storage;
 mod storage_args;
@@ -52,8 +56,8 @@ pub use scope::{
 };
 pub use state::*;
 pub use storage_args::{
-    DraftStorageConnection, ProviderLabelLabels, ProviderStorageDetailLabels,
-    StagedRemoteConnection, StorageConnectArgs, VaultStorageConnection,
+    DraftStorageConnection, ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs,
+    VaultStorageConnection,
 };
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.

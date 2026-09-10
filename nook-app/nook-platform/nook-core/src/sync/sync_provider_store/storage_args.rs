@@ -29,14 +29,6 @@ pub struct DraftStorageConnection<'a> {
     pub oauth_file_name: Option<&'a str>,
 }
 
-/// Borrowed staged configuration with the existing incomplete-draft outcome.
-pub struct StagedRemoteConnection<'a> {
-    pub provider_type: StorageProviderType,
-    pub github_pat: Option<&'a str>,
-    pub github_repo: Option<&'a str>,
-    pub oauth_file: Option<&'a OAuthFileConfigData>,
-}
-
 /// Connection observations used to choose local, persisted, or draft arguments.
 pub struct VaultStorageConnection<'a> {
     pub local_vault_present: bool,
@@ -270,77 +262,6 @@ impl DraftStorageConnection<'_> {
     }
 }
 
-/// Resolve a usable staged remote-provider draft. Empty/incomplete drafts do
-/// not cross the manager boundary; configured drafts reuse the same typed
-/// provider conversion as persisted rows.
-impl StagedRemoteConnection<'_> {
-    pub fn project(self) -> ValidationResult<Option<StorageConnectArgs>> {
-        let Self {
-            provider_type,
-            github_pat,
-            github_repo,
-            oauth_file,
-        } = self;
-
-        match provider_type {
-            StorageProviderType::Local | StorageProviderType::LocalFolder => Ok(None),
-            StorageProviderType::Github => {
-                let Some(pat) = ConnectionField(github_pat).non_empty() else {
-                    return Ok(None);
-                };
-                Ok(Some(StorageConnectArgs {
-                    mode: StorageMode::Github.as_str().to_owned(),
-                    pat,
-                    repo: ConnectionField(github_repo)
-                        .non_empty()
-                        .unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned()),
-                }))
-            }
-            StorageProviderType::OauthFile => {
-                let Some(oauth_file) = oauth_file else {
-                    return Ok(None);
-                };
-                let Some(access_token) =
-                    ConnectionField(oauth_file.access_token.as_deref()).non_empty()
-                else {
-                    return Ok(None);
-                };
-                let preset = oauth_file.preset;
-                let shared_google_drive = preset == OauthFilePreset::GoogleDrive
-                    && (oauth_file.resolved_google_drive_mode() == GoogleDriveMode::Shared
-                        || ConnectionField(oauth_file.folder_id.as_deref())
-                            .non_empty()
-                            .is_some());
-                let mut oauth_file = oauth_file.clone();
-                oauth_file.access_token = StoredOAuthAccessCredential::AccessToken(access_token);
-                oauth_file.file_name = StoredOAuthRemoteFileName::FileName(
-                    if shared_google_drive {
-                        ConnectionField(oauth_file.file_name.as_deref()).non_empty()
-                    } else {
-                        ConnectionField(github_repo).non_empty().or_else(|| {
-                            ConnectionField(oauth_file.file_name.as_deref()).non_empty()
-                        })
-                    }
-                    .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned()),
-                );
-                let provider = StorageProviderData {
-                    id: "staged-oauth-file".to_owned(),
-                    provider_type: StorageProviderType::OauthFile,
-                    label: String::new(),
-                    github_pat: StoredGithubPat::Missing,
-                    github_repo: StoredGithubRepository::DefaultRepository,
-                    oauth_file: StoredOAuthFileConfiguration::Configured(oauth_file),
-                    local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                    store_id: ProviderVaultScope::Unscoped,
-                    sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                    created_at: String::new(),
-                };
-                provider.connection_args().map(Some)
-            }
-        }
-    }
-}
-
 impl VaultStorageConnection<'_> {
     pub fn project(self) -> ValidationResult<StorageConnectArgs> {
         let Self {
@@ -373,9 +294,7 @@ mod tests {
 
     use std::io;
 
-    use super::{
-        DraftStorageConnection, StagedRemoteConnection, StorageConnectArgs, VaultStorageConnection,
-    };
+    use super::{DraftStorageConnection, StorageConnectArgs, VaultStorageConnection};
     use crate::{
         DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode, OAuthFileConfigData,
         OauthFilePreset, ReplicationType, StorageProviderData, StorageProviderType,
@@ -385,7 +304,11 @@ mod tests {
         EnrollmentProvider, LocalFolderConfigData, ProviderEnrollmentRequest,
         ProviderSyncCheckpoint, SharedEnrollmentProvider, VaultArchitecture,
     };
-    use crate::{ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest};
+    use crate::{
+        ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest,
+        StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection,
+        StagedStorageConnection,
+    };
 
     impl StorageProviderData {
         fn github_provider(id: &str, repo: &str, pat: &str) -> StorageProviderData {
@@ -727,34 +650,24 @@ mod tests {
     #[test]
     fn staged_remote_args_reject_incomplete_drafts_and_normalize_targets() -> anyhow::Result<()> {
         assert_eq!(
-            StagedRemoteConnection {
-                provider_type: StorageProviderType::Local,
-                github_pat: None,
-                github_repo: None,
-                oauth_file: None
-            }
-            .project()?,
-            None
+            StagedRemoteConnection::Local.project()?,
+            StagedStorageConnection::Incomplete
         );
         assert_eq!(
-            StagedRemoteConnection {
-                provider_type: StorageProviderType::Github,
-                github_pat: Some("  "),
-                github_repo: None,
-                oauth_file: None
-            }
+            StagedRemoteConnection::Github(StagedGithubConnection {
+                credential: &crate::StoredGithubPat::Token(("  ").to_owned()),
+                repository: &crate::StoredGithubRepository::DefaultRepository
+            })
             .project()?,
-            None
+            StagedStorageConnection::Incomplete
         );
         assert_eq!(
-            StagedRemoteConnection {
-                provider_type: StorageProviderType::Github,
-                github_pat: Some(" pat "),
-                github_repo: Some(" owner/repo "),
-                oauth_file: None
-            }
+            StagedRemoteConnection::Github(StagedGithubConnection {
+                credential: &crate::StoredGithubPat::Token((" pat ").to_owned()),
+                repository: &crate::StoredGithubRepository::Repository((" owner/repo ").to_owned())
+            })
             .project()?
-            .ok_or_else(|| io::Error::other("GitHub args must exist"))?
+            .ready()?
             .repo,
             "owner/repo"
         );
@@ -767,28 +680,26 @@ mod tests {
             ..OAuthFileConfigData::default()
         };
         assert_eq!(
-            StagedRemoteConnection {
-                provider_type: StorageProviderType::OauthFile,
-                github_pat: None,
-                github_repo: Some("draft-name"),
-                oauth_file: Some(&oauth)
-            }
+            StagedRemoteConnection::OAuth(StagedOAuthConnection {
+                configuration: &crate::StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                file_name: &crate::StoredOAuthRemoteFileName::FileName(("draft-name").to_owned())
+            })
             .project()?
-            .ok_or_else(|| io::Error::other("OAuth args must exist"))?
+            .ready()?
             .repo,
             "file-id\tdraft-name"
         );
         oauth.drive_mode = GoogleDriveMode::Shared;
         oauth.folder_id = StoredGoogleDriveFolder::FolderId("shared-folder".to_owned());
         assert_eq!(
-            StagedRemoteConnection {
-                provider_type: StorageProviderType::OauthFile,
-                github_pat: None,
-                github_repo: Some("ignored-draft-name"),
-                oauth_file: Some(&oauth)
-            }
+            StagedRemoteConnection::OAuth(StagedOAuthConnection {
+                configuration: &crate::StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                file_name: &crate::StoredOAuthRemoteFileName::FileName(
+                    ("ignored-draft-name").to_owned()
+                )
+            })
             .project()?
-            .ok_or_else(|| io::Error::other("shared OAuth args must exist"))?
+            .ready()?
             .repo,
             "shared:shared-folder\tstored-name"
         );
@@ -810,30 +721,25 @@ mod tests {
             .project();
             assert_eq!(draft.pat, pat);
             assert_eq!(draft.repo, repo);
-            let staged = StagedRemoteConnection {
-                provider_type: StorageProviderType::Github,
-                github_pat: Some(pat),
-                github_repo: Some(repo),
-                oauth_file: None,
-            }
+            let staged = StagedRemoteConnection::Github(StagedGithubConnection {
+                credential: &crate::StoredGithubPat::Token((pat).to_owned()),
+                repository: &crate::StoredGithubRepository::Repository((repo).to_owned()),
+            })
             .project()?;
             if pat.trim().is_empty() {
-                assert_eq!(staged, None);
+                assert_eq!(staged, StagedStorageConnection::Incomplete);
             } else {
-                let staged =
-                    staged.ok_or_else(|| io::Error::other("nonempty staged credential"))?;
+                let staged = staged.ready()?;
                 assert_eq!(staged.pat, pat.trim());
                 assert_eq!(staged.repo, repo.trim());
             }
         }
-        let staged = StagedRemoteConnection {
-            provider_type: StorageProviderType::Github,
-            github_pat: Some("pat"),
-            github_repo: None,
-            oauth_file: None,
-        }
+        let staged = StagedRemoteConnection::Github(StagedGithubConnection {
+            credential: &crate::StoredGithubPat::Token(("pat").to_owned()),
+            repository: &crate::StoredGithubRepository::DefaultRepository,
+        })
         .project()?
-        .ok_or_else(|| io::Error::other("staged credential"))?;
+        .ready()?;
         assert_eq!(staged.repo, DEFAULT_GITHUB_REPO_NAME);
         Ok(())
     }
@@ -849,25 +755,21 @@ mod tests {
         };
         let before = oauth.clone();
         assert_eq!(
-            StagedRemoteConnection {
-                provider_type: StorageProviderType::OauthFile,
-                github_pat: None,
-                github_repo: None,
-                oauth_file: Some(&oauth),
-            }
+            StagedRemoteConnection::OAuth(StagedOAuthConnection {
+                configuration: &crate::StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                file_name: &crate::StoredOAuthRemoteFileName::Unresolved
+            })
             .project()?,
-            None
+            StagedStorageConnection::Incomplete
         );
         assert_eq!(oauth, before);
         oauth.access_token = StoredOAuthAccessCredential::AccessToken("token".to_owned());
         let before = oauth.clone();
         assert_eq!(
-            StagedRemoteConnection {
-                provider_type: StorageProviderType::OauthFile,
-                github_pat: None,
-                github_repo: None,
-                oauth_file: Some(&oauth),
-            }
+            StagedRemoteConnection::OAuth(StagedOAuthConnection {
+                configuration: &crate::StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                file_name: &crate::StoredOAuthRemoteFileName::Unresolved
+            })
             .project(),
             Err(ValidationError::SharedStorageTargetRequired)
         );
@@ -916,5 +818,13 @@ mod tests {
         );
         assert_eq!(providers[0].id, "first");
         assert_eq!(providers[1].id, "second");
+    }
+    impl StagedStorageConnection {
+        fn ready(self) -> anyhow::Result<StorageConnectArgs> {
+            match self {
+                Self::Ready(args) => Ok(args),
+                Self::Incomplete => anyhow::bail!("staged connection is incomplete"),
+            }
+        }
     }
 }

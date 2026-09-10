@@ -8,11 +8,11 @@ use crate::{
     BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookOAuthRemoteConfigurationUpdate,
     NookOAuthRemoteStorageReference, NookStagedStorageArgs, NookTotpCode,
 };
-use nook_core::StagedRemoteConnection;
 use nook_core::{
     PasswordGenerationOptions, StorageProviderType, TotpAlgorithm, TotpDigits, TotpPeriod,
     TotpSecret,
 };
+use nook_core::{StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection};
 use wasm_bindgen::JsError;
 
 mod localization;
@@ -348,12 +348,10 @@ pub fn staged_github_remote_storage_args(
     github_repo: &str,
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection {
-            provider_type: StorageProviderType::Github,
-            github_pat: Some(github_pat),
-            github_repo: Some(github_repo),
-            oauth_file: None,
-        }
+        StagedRemoteConnection::Github(StagedGithubConnection {
+            credential: &nook_core::StoredGithubPat::Token((github_pat).to_owned()),
+            repository: &nook_core::StoredGithubRepository::Repository((github_repo).to_owned()),
+        })
         .project()?,
     ))
 }
@@ -364,12 +362,12 @@ pub fn staged_oauth_remote_storage_args(
     oauth_file: nook_core::OAuthFileConfigData,
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection {
-            provider_type: StorageProviderType::OauthFile,
-            github_pat: None,
-            github_repo: None,
-            oauth_file: Some(&oauth_file),
-        }
+        StagedRemoteConnection::OAuth(StagedOAuthConnection {
+            configuration: &nook_core::StoredOAuthFileConfiguration::Configured(
+                (&oauth_file).clone(),
+            ),
+            file_name: &nook_core::StoredOAuthRemoteFileName::Unresolved,
+        })
         .project()?,
     ))
 }
@@ -377,13 +375,7 @@ pub fn staged_oauth_remote_storage_args(
 #[wasm_bindgen]
 pub fn staged_local_remote_storage_args() -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection {
-            provider_type: StorageProviderType::Local,
-            github_pat: None,
-            github_repo: None,
-            oauth_file: None,
-        }
-        .project()?,
+        StagedRemoteConnection::Local.project()?,
     ))
 }
 
