@@ -256,7 +256,7 @@ impl AuthProvidersSnapshotData {
         let local = StorageProviderData {
             id: new_id.to_owned(),
             provider_type: StorageProviderType::Local,
-            label: StorageProviderType::Local.default_label(None, None),
+            label: crate::ProviderLabel::Local.render(),
             github_pat: StoredGithubPat::Missing,
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,

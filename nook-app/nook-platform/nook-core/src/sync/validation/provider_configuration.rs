@@ -4,6 +4,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
+use crate::ProviderOauthPreset;
 use std::fmt;
 
 use super::{
@@ -232,117 +233,25 @@ impl DriveBackupName {
 
 impl StorageProviderType {
     #[must_use]
-    pub fn storage_mode(self, oauth_preset: Option<OauthFilePreset>) -> StorageMode {
+    pub fn storage_mode(self, oauth_preset: ProviderOauthPreset) -> StorageMode {
         match self {
             Self::Local | Self::LocalFolder => StorageMode::Local,
             Self::Github => StorageMode::Github,
-            Self::OauthFile => match oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive) {
+            Self::OauthFile => match match oauth_preset {
+                ProviderOauthPreset::NotApplicable => OauthFilePreset::GoogleDrive,
+                ProviderOauthPreset::Preset(preset) => preset,
+            } {
                 OauthFilePreset::GoogleDrive => StorageMode::GoogleDrive,
                 OauthFilePreset::ICloud => StorageMode::ICloud,
             },
         }
     }
-
-    #[must_use]
-    pub fn default_label(
-        self,
-        detail: Option<&str>,
-        oauth_preset: Option<OauthFilePreset>,
-    ) -> String {
-        match self {
-            Self::Local => "This device".to_owned(),
-            Self::LocalFolder => {
-                let directory = detail.map(str::trim).filter(|value| !value.is_empty());
-                directory.map_or_else(
-                    || "Local backup".to_owned(),
-                    |directory| format!("Local backup · {directory}"),
-                )
-            }
-            Self::Github => {
-                let repo = detail
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
-                if repo == DEFAULT_GITHUB_REPO_NAME {
-                    "GitHub".to_owned()
-                } else {
-                    format!("GitHub · {repo}")
-                }
-            }
-            Self::OauthFile => {
-                let file = detail
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
-                let prefix = match oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive) {
-                    OauthFilePreset::GoogleDrive => "Google Drive",
-                    OauthFilePreset::ICloud => "iCloud",
-                };
-                if file == DEFAULT_DRIVE_BACKUP_NAME {
-                    prefix.to_owned()
-                } else {
-                    format!("{prefix} · {file}")
-                }
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn staged_default_label(
-        self,
-        github_repo: Option<&str>,
-        oauth_file_name: Option<&str>,
-        oauth_file_preset: Option<OauthFilePreset>,
-        oauth_setup_preset: Option<OauthFilePreset>,
-    ) -> String {
-        match self {
-            Self::Github => {
-                let detail = github_repo
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
-                Self::Github.default_label(Some(detail), None)
-            }
-            Self::OauthFile => {
-                let detail = github_repo
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .or_else(|| {
-                        oauth_file_name
-                            .map(str::trim)
-                            .filter(|value| !value.is_empty())
-                    })
-                    .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
-                let preset = oauth_file_preset
-                    .or(oauth_setup_preset)
-                    .unwrap_or(OauthFilePreset::GoogleDrive);
-                Self::OauthFile.default_label(Some(detail), Some(preset))
-            }
-            other => other.default_label(None, None),
-        }
-    }
-
-    #[must_use]
-    pub fn has_credentials(
-        self,
-        github_pat: Option<&str>,
-        oauth_access_token: Option<&str>,
-        local_folder_handle_id: Option<&str>,
-    ) -> bool {
-        match self {
-            Self::Github => github_pat
-                .map(str::trim)
-                .is_some_and(|value| !value.is_empty()),
-            Self::OauthFile => oauth_access_token
-                .map(str::trim)
-                .is_some_and(|value| !value.is_empty()),
-            Self::LocalFolder => local_folder_handle_id
-                .map(str::trim)
-                .is_some_and(|value| !value.is_empty()),
-            Self::Local => true,
-        }
-    }
 }
+
+mod label;
+pub use label::{
+    OAuthProviderLabel, ProviderCredentialEvidence, ProviderCredentialReadiness, ProviderLabel,
+};
 
 mod target;
 pub use target::{ProviderTargetKey, SyncProviderTargetIdentity};
@@ -353,117 +262,113 @@ mod tests {
     use super::super::{GithubSyncTarget, LocalFolderSyncTarget, OauthFileSyncTarget};
     use super::*;
     use crate::{
-        StoredGoogleDriveFolder, StoredLocalFolderDirectory, StoredLocalFolderHandle,
-        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthRemoteFileId,
-        StoredOAuthRemoteFileName,
+        StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+        StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
+        StoredOAuthAccountIdentity, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
     };
 
     #[test]
     fn storage_mode_for_provider_maps_oauth_presets() -> anyhow::Result<()> {
         assert_eq!(
-            StorageProviderType::Local.storage_mode(None),
+            StorageProviderType::Local.storage_mode(ProviderOauthPreset::NotApplicable),
             StorageMode::Local
         );
         assert_eq!(
-            StorageProviderType::LocalFolder.storage_mode(None),
+            StorageProviderType::LocalFolder.storage_mode(ProviderOauthPreset::NotApplicable),
             StorageMode::Local
         );
         assert_eq!(
-            StorageProviderType::Github.storage_mode(None),
+            StorageProviderType::Github.storage_mode(ProviderOauthPreset::NotApplicable),
             StorageMode::Github
         );
         assert_eq!(
-            StorageProviderType::OauthFile.storage_mode(None),
+            StorageProviderType::OauthFile.storage_mode(ProviderOauthPreset::NotApplicable),
             StorageMode::GoogleDrive
         );
         assert_eq!(
-            StorageProviderType::OauthFile.storage_mode(Some(OauthFilePreset::ICloud)),
+            StorageProviderType::OauthFile
+                .storage_mode(ProviderOauthPreset::Preset(OauthFilePreset::ICloud)),
             StorageMode::ICloud
         );
         Ok(())
     }
 
     #[test]
-    fn provider_default_labels_match_sync_provider_ui() -> anyhow::Result<()> {
+    fn provider_default_labels_match_sync_provider_ui() {
+        assert_eq!(ProviderLabel::Local.render(), "This device");
         assert_eq!(
-            StorageProviderType::Local.default_label(None, None),
-            "This device"
-        );
-        assert_eq!(
-            StorageProviderType::LocalFolder.default_label(Some("Nook Backup"), None),
+            ProviderLabel::LocalFolder(&StoredLocalFolderDirectory::DirectoryName(
+                "Nook Backup".to_owned()
+            ))
+            .render(),
             "Local backup · Nook Backup"
         );
         assert_eq!(
-            StorageProviderType::Github.default_label(Some("team-vault"), None),
+            ProviderLabel::Github(&StoredGithubRepository::Repository(
+                " team-vault ".to_owned()
+            ))
+            .render(),
             "GitHub · team-vault"
         );
         assert_eq!(
-            StorageProviderType::OauthFile.default_label(None, None),
-            "Google Drive"
-        );
-        assert_eq!(
-            StorageProviderType::OauthFile
-                .default_label(Some("work.yaml"), Some(OauthFilePreset::ICloud),),
-            "iCloud · work.yaml"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn staged_provider_labels_match_login_setup_draft_fields() -> anyhow::Result<()> {
-        assert_eq!(
-            StorageProviderType::Github.staged_default_label(
-                Some("  team-vault  "),
-                None,
-                None,
-                None,
-            ),
-            "GitHub · team-vault"
-        );
-        assert_eq!(
-            StorageProviderType::Github.staged_default_label(Some("  "), None, None, None),
+            ProviderLabel::Github(&StoredGithubRepository::Repository("  ".to_owned())).render(),
             "GitHub"
         );
         assert_eq!(
-            StorageProviderType::OauthFile.staged_default_label(
-                Some("drive-vault"),
-                Some("ignored-file"),
-                None,
-                Some(OauthFilePreset::ICloud),
-            ),
-            "iCloud · drive-vault"
+            ProviderLabel::OAuth(OAuthProviderLabel {
+                preset: OauthFilePreset::GoogleDrive,
+                file_name: &StoredOAuthRemoteFileName::Unresolved
+            })
+            .render(),
+            "Google Drive"
         );
         assert_eq!(
-            StorageProviderType::OauthFile.staged_default_label(
-                Some("  "),
-                Some(" personal-events "),
-                Some(OauthFilePreset::GoogleDrive),
-                Some(OauthFilePreset::ICloud),
-            ),
-            "Google Drive · personal-events"
+            ProviderLabel::OAuth(OAuthProviderLabel {
+                preset: OauthFilePreset::ICloud,
+                file_name: &StoredOAuthRemoteFileName::FileName("work.yaml".to_owned())
+            })
+            .render(),
+            "iCloud · work.yaml"
         );
         assert_eq!(
-            StorageProviderType::LocalFolder.staged_default_label(
-                Some("ignored"),
-                Some("ignored"),
-                None,
-                None,
-            ),
+            ProviderLabel::LocalFolder(&StoredLocalFolderDirectory::Unnamed).render(),
             "Local backup"
         );
-        Ok(())
     }
-
     #[test]
-    fn provider_credentials_match_provider_requirements() -> anyhow::Result<()> {
-        assert!(StorageProviderType::Local.has_credentials(None, None, None,));
-        assert!(StorageProviderType::Github.has_credentials(Some(" ghp_test "), None, None,));
-        assert!(!StorageProviderType::Github.has_credentials(Some(" "), None, None,));
-        assert!(StorageProviderType::OauthFile.has_credentials(None, Some(" token "), None,));
-        assert!(!StorageProviderType::OauthFile.has_credentials(None, None, None,));
-        assert!(StorageProviderType::LocalFolder.has_credentials(None, None, Some(" folder-1 "),));
-        assert!(!StorageProviderType::LocalFolder.has_credentials(None, None, Some(" "),));
-        Ok(())
+    fn provider_credentials_are_classified_by_their_owning_provider() {
+        assert_eq!(
+            ProviderCredentialEvidence::Local.readiness(),
+            ProviderCredentialReadiness::Ready
+        );
+        for (value, expected) in [
+            (" token ", ProviderCredentialReadiness::Ready),
+            (" ", ProviderCredentialReadiness::Required),
+        ] {
+            assert_eq!(
+                ProviderCredentialEvidence::Github(&StoredGithubPat::Token(value.to_owned()))
+                    .readiness(),
+                expected
+            );
+            assert_eq!(
+                ProviderCredentialEvidence::OAuth(&StoredOAuthAccessCredential::AccessToken(
+                    value.to_owned()
+                ))
+                .readiness(),
+                expected
+            );
+            assert_eq!(
+                ProviderCredentialEvidence::LocalFolder(&StoredLocalFolderHandle::HandleId(
+                    value.to_owned()
+                ))
+                .readiness(),
+                expected
+            );
+        }
+        assert_eq!(
+            ProviderCredentialEvidence::OAuth(&StoredOAuthAccessCredential::SignedOut).readiness(),
+            ProviderCredentialReadiness::Required
+        );
     }
 
     #[test]

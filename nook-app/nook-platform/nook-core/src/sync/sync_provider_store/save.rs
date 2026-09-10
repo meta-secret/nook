@@ -131,7 +131,7 @@ impl ProviderSaveRequest {
         match provider_type {
             StorageProviderType::Local => Ok(request.provider_defaults(ProviderRowDefaults {
                 provider_type,
-                label: provider_type.default_label(None, None),
+                label: crate::ProviderLabel::Local.render(),
             })),
             StorageProviderType::Github => {
                 let repo = ConfigurationText(&request.github_repo)
@@ -139,7 +139,10 @@ impl ProviderSaveRequest {
                     .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
-                    label: provider_type.default_label(Some(repo), None),
+                    label: crate::ProviderLabel::Github(&StoredGithubRepository::Repository(
+                        repo.to_owned(),
+                    ))
+                    .render(),
                 });
                 provider.github_pat = StoredGithubPat::Token(request.github_pat.trim().to_owned());
                 provider.github_repo = StoredGithubRepository::Repository(repo.to_owned());
@@ -161,8 +164,11 @@ impl ProviderSaveRequest {
                 oauth.file_name = StoredOAuthRemoteFileName::FileName(drive_file.clone());
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
-                    label: provider_type
-                        .default_label(Some(&drive_file), Some(request.oauth_preset)),
+                    label: crate::ProviderLabel::OAuth(crate::OAuthProviderLabel {
+                        preset: request.oauth_preset,
+                        file_name: &StoredOAuthRemoteFileName::FileName(drive_file.clone()),
+                    })
+                    .render(),
                 });
                 provider.oauth_file = StoredOAuthFileConfiguration::Configured(oauth);
                 Ok(provider)
@@ -172,13 +178,9 @@ impl ProviderSaveRequest {
                     .local_folder
                     .as_ref()
                     .ok_or(ProviderConstructionError::LocalFolderRequired)?;
-                let detail = folder
-                    .directory_name
-                    .as_deref()
-                    .and_then(|value| ConfigurationText(value).non_empty());
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
-                    label: provider_type.default_label(detail, None),
+                    label: crate::ProviderLabel::LocalFolder(&folder.directory_name).render(),
                 });
                 provider.local_folder = request.local_folder.clone();
                 Ok(provider)
@@ -339,7 +341,7 @@ impl ProviderSaveRequest {
         {
             providers.push(request.provider_defaults(ProviderRowDefaults {
                 provider_type: StorageProviderType::Local,
-                label: StorageProviderType::Local.default_label(None, None),
+                label: crate::ProviderLabel::Local.render(),
             }));
         } else if let Some(local_provider) = local_provider {
             for provider in &mut providers {

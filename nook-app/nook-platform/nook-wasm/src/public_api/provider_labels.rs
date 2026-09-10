@@ -1,5 +1,8 @@
 use super::wasm_bindgen;
-use nook_core::StorageProviderType;
+use nook_core::{
+    OAuthProviderLabel, OauthFilePreset, ProviderLabel, ProviderOauthPreset, StorageProviderType,
+    StoredGithubRepository, StoredLocalFolderDirectory, StoredOAuthRemoteFileName,
+};
 
 #[wasm_bindgen]
 #[must_use]
@@ -30,7 +33,7 @@ pub fn wasm_storage_mode_for_provider(
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok(provider_type
-        .storage_mode(Some(oauth_preset))
+        .storage_mode(ProviderOauthPreset::Preset(oauth_preset))
         .as_str()
         .to_owned())
 }
@@ -42,7 +45,21 @@ pub fn provider_default_label(
     detail: &str,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(provider_type.default_label(Some(detail), Some(oauth_preset)))
+    Ok(match provider_type {
+        StorageProviderType::Local => ProviderLabel::Local.render(),
+        StorageProviderType::LocalFolder => ProviderLabel::LocalFolder(
+            &StoredLocalFolderDirectory::DirectoryName(detail.to_owned()),
+        )
+        .render(),
+        StorageProviderType::Github => {
+            ProviderLabel::Github(&StoredGithubRepository::Repository(detail.to_owned())).render()
+        }
+        StorageProviderType::OauthFile => ProviderLabel::OAuth(OAuthProviderLabel {
+            preset: oauth_preset,
+            file_name: &StoredOAuthRemoteFileName::FileName(detail.to_owned()),
+        })
+        .render(),
+    })
 }
 
 #[wasm_bindgen]
@@ -51,19 +68,45 @@ pub fn provider_default_label_without_detail(
     provider_type: nook_core::StorageProviderType,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(provider_type.default_label(None, Some(oauth_preset)))
+    Ok(match provider_type {
+        StorageProviderType::Local => ProviderLabel::Local.render(),
+        StorageProviderType::LocalFolder => {
+            ProviderLabel::LocalFolder(&StoredLocalFolderDirectory::Unnamed).render()
+        }
+        StorageProviderType::Github => {
+            ProviderLabel::Github(&StoredGithubRepository::DefaultRepository).render()
+        }
+        StorageProviderType::OauthFile => ProviderLabel::OAuth(OAuthProviderLabel {
+            preset: oauth_preset,
+            file_name: &StoredOAuthRemoteFileName::Unresolved,
+        })
+        .render(),
+    })
 }
 
 #[wasm_bindgen]
 pub fn staged_local_provider_label(
     provider_type: nook_core::StorageProviderType,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(provider_type.default_label(None, None))
+    Ok(match provider_type {
+        StorageProviderType::Local => ProviderLabel::Local.render(),
+        StorageProviderType::LocalFolder => {
+            ProviderLabel::LocalFolder(&StoredLocalFolderDirectory::Unnamed).render()
+        }
+        StorageProviderType::Github => {
+            ProviderLabel::Github(&StoredGithubRepository::DefaultRepository).render()
+        }
+        StorageProviderType::OauthFile => ProviderLabel::OAuth(OAuthProviderLabel {
+            preset: OauthFilePreset::GoogleDrive,
+            file_name: &StoredOAuthRemoteFileName::Unresolved,
+        })
+        .render(),
+    })
 }
 
 #[wasm_bindgen]
 pub fn staged_github_provider_label(github_repo: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(StorageProviderType::Github.default_label(Some(github_repo), None))
+    Ok(ProviderLabel::Github(&StoredGithubRepository::Repository(github_repo.to_owned())).render())
 }
 
 #[wasm_bindgen]
@@ -71,12 +114,20 @@ pub fn staged_configured_oauth_provider_label(
     oauth_file_name: &str,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(StorageProviderType::OauthFile.default_label(Some(oauth_file_name), Some(oauth_preset)))
+    Ok(ProviderLabel::OAuth(OAuthProviderLabel {
+        preset: oauth_preset,
+        file_name: &StoredOAuthRemoteFileName::FileName(oauth_file_name.to_owned()),
+    })
+    .render())
 }
 
 #[wasm_bindgen]
 pub fn staged_unconfigured_oauth_provider_label() -> Result<String, wasm_bindgen::JsError> {
-    Ok(StorageProviderType::OauthFile.default_label(None, None))
+    Ok(ProviderLabel::OAuth(OAuthProviderLabel {
+        preset: OauthFilePreset::GoogleDrive,
+        file_name: &StoredOAuthRemoteFileName::Unresolved,
+    })
+    .render())
 }
 
 #[cfg(test)]
