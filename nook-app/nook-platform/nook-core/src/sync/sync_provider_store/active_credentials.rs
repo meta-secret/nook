@@ -7,7 +7,10 @@
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use super::{StorageProviderData, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration};
+use super::{
+    StorageProviderData, StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
+    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
+};
 use crate::{DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, StorageProviderType};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -90,9 +93,9 @@ impl<'a> EcmascriptProviderText<'a> {
         self.0.trim_matches(Self::is_whitespace)
     }
 
-    fn non_empty(self) -> Option<&'a str> {
+    fn with_default(self, default: &'a str) -> &'a str {
         let value = self.trimmed();
-        (!value.is_empty()).then_some(value)
+        if value.is_empty() { default } else { value }
     }
 }
 
@@ -129,26 +132,27 @@ impl ActiveProviderCredentialsRequest {
             return ActiveProviderCredentialsProjection::Unchanged;
         };
         draft.storage_mode = provider.provider_type;
-        provider
-            .github_pat
-            .as_deref()
-            .map(EcmascriptProviderText)
-            .map(EcmascriptProviderText::trimmed)
-            .unwrap_or_default()
-            .clone_into(&mut draft.github_pat);
+        match &provider.github_pat {
+            StoredGithubPat::Missing => draft.github_pat.clear(),
+            StoredGithubPat::Token(pat) => EcmascriptProviderText(pat)
+                .trimmed()
+                .clone_into(&mut draft.github_pat),
+        }
 
         match provider.provider_type {
             StorageProviderType::OauthFile => {
                 draft.oauth_file = provider.oauth_file.clone();
                 draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
-                provider
-                    .oauth_file
-                    .as_ref()
-                    .and_then(|config| config.file_name.as_deref())
-                    .map(EcmascriptProviderText)
-                    .and_then(EcmascriptProviderText::non_empty)
-                    .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME)
-                    .clone_into(&mut draft.github_repo);
+                let name = match &provider.oauth_file {
+                    StoredOAuthFileConfiguration::Configured(config) => match &config.file_name {
+                        StoredOAuthRemoteFileName::FileName(name) => {
+                            EcmascriptProviderText(name).with_default(DEFAULT_DRIVE_BACKUP_NAME)
+                        }
+                        StoredOAuthRemoteFileName::Unresolved => DEFAULT_DRIVE_BACKUP_NAME,
+                    },
+                    StoredOAuthFileConfiguration::NotApplicable => DEFAULT_DRIVE_BACKUP_NAME,
+                };
+                name.clone_into(&mut draft.github_repo);
             }
             StorageProviderType::LocalFolder => {
                 DEFAULT_GITHUB_REPO_NAME.clone_into(&mut draft.github_repo);
@@ -156,13 +160,13 @@ impl ActiveProviderCredentialsRequest {
                 draft.local_folder = provider.local_folder.clone();
             }
             StorageProviderType::Local | StorageProviderType::Github => {
-                provider
-                    .github_repo
-                    .as_deref()
-                    .map(EcmascriptProviderText)
-                    .and_then(EcmascriptProviderText::non_empty)
-                    .unwrap_or(DEFAULT_GITHUB_REPO_NAME)
-                    .clone_into(&mut draft.github_repo);
+                let repository = match &provider.github_repo {
+                    StoredGithubRepository::Repository(repo) => {
+                        EcmascriptProviderText(repo).with_default(DEFAULT_GITHUB_REPO_NAME)
+                    }
+                    StoredGithubRepository::DefaultRepository => DEFAULT_GITHUB_REPO_NAME,
+                };
+                repository.clone_into(&mut draft.github_repo);
                 draft.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
                 draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
             }

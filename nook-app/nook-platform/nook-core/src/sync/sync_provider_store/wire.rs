@@ -28,9 +28,13 @@ struct SemanticProviderField<'a> {
     missing_state: &'a str,
     present_state: &'a str,
 }
+struct ProviderFieldRead<'a> {
+    fields: &'a mut Map<String, Value>,
+    name: &'a str,
+}
 impl SemanticProviderField<'_> {
-    fn normalize(self, value: Option<Value>) -> ProviderWireValue {
-        match value {
+    fn normalize(self, field: ProviderFieldRead<'_>) -> ProviderWireValue {
+        match field.fields.remove(field.name) {
             Some(Value::Object(object)) if object.contains_key("state") => ProviderWireValue {
                 value: Value::Object(object),
                 migration: ProviderWireMigration::Unchanged,
@@ -60,7 +64,10 @@ impl From<Map<String, Value>> for ProviderFields {
 }
 impl ProviderFields {
     fn field(mut self, field: ProviderFieldMigration<'_>) -> Self {
-        let normalized = field.semantic.normalize(self.fields.remove(field.name));
+        let normalized = field.semantic.normalize(ProviderFieldRead {
+            fields: &mut self.fields,
+            name: field.name,
+        });
         self.fields.insert(field.name.to_owned(), normalized.value);
         self.migration = self.migration.combine(normalized.migration);
         self
@@ -218,7 +225,10 @@ impl From<Value> for NormalizedAuthSnapshot {
             missing_state: "unselected",
             present_state: "storeId",
         }
-        .normalize(fields.remove("activeVaultStoreId"));
+        .normalize(ProviderFieldRead {
+            fields: &mut fields,
+            name: "activeVaultStoreId",
+        });
         Self {
             snapshot: AuthProvidersSnapshotData {
                 providers,
