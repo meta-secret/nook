@@ -33,6 +33,9 @@ const EXCLUDED_DIRECTORIES: &[&str] = &[
 ///
 /// Returns an error when authored Rust cannot be read or parsed.
 impl RustMacroInventory<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when authored Rust cannot be read or parsed.
     pub fn authored_rust_macro_definitions(self) -> io::Result<Vec<Violation>> {
         let Self { root } = self;
         let mut files = Vec::new();

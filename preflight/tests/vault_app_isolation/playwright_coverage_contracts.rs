@@ -1,5 +1,5 @@
 use super::RepositoryFixture;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -44,7 +44,7 @@ fn collect_behavior_specs(
 }
 
 fn manifest_specs(manifest_path: PathBuf) -> anyhow::Result<BTreeSet<String>> {
-    let gates: std::collections::BTreeMap<String, Vec<String>> =
+    let gates: BTreeMap<String, Vec<String>> =
         serde_json::from_str(&fs::read_to_string(manifest_path)?)?;
     let expected_gates = BTreeSet::from(["isolation", "manual", "stable", "unstable"]);
     let actual_gates = gates.keys().map(String::as_str).collect::<BTreeSet<_>>();
@@ -57,7 +57,7 @@ fn manifest_specs(manifest_path: PathBuf) -> anyhow::Result<BTreeSet<String>> {
     for entries in gates.into_values() {
         for spec in entries {
             anyhow::ensure!(
-                specs.insert(spec.to_owned()),
+                specs.insert(spec.clone()),
                 "Playwright behavior spec {spec} belongs to more than one gate"
             );
         }

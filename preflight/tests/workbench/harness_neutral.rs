@@ -1,6 +1,7 @@
 use anyhow::Context as _;
 use std::{
     env, fs, io,
+    ops::Deref,
     path::{Path, PathBuf},
     process,
     sync::atomic::{AtomicU64, Ordering},
@@ -64,14 +65,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -488,7 +489,10 @@ fn recursive_scan_excludes_only_validated_workspace_dependencies() -> anyhow::Re
     fs::write(cortex_root.join("package.json"), "{}")?;
     fs::write(cortex_root.join("bun.lock"), "{}")?;
     fs::write(cortex_root.join("bunfig.toml"), "linker = \"hoisted\"")?;
-    fs::write(scripts_root.parent().unwrap().join("SKILL.md"), "# Example")?;
+    let scripts_parent = scripts_root
+        .parent()
+        .unwrap_or_else(|| panic!("skill scripts must have a package directory"));
+    fs::write(scripts_parent.join("SKILL.md"), "# Example")?;
     for name in [
         ".gitignore",
         ".prettierrc",

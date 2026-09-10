@@ -151,6 +151,9 @@ const RUST_WASM_TYPED_DOMAIN_FUNCTION_MARKERS: &[&str] = &[
 ///
 /// Returns an error when a portable Rust source tree cannot be read.
 impl RustBoundarySources<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when a portable Rust source tree cannot be read.
     pub fn portable_core_browser_dependencies(self) -> io::Result<Vec<Violation>> {
         let Self { root } = self;
         let mut violations = RustBoundarySources::violations_in_tree(
@@ -187,6 +190,9 @@ impl RustBoundarySources<'_> {
 ///
 /// Returns an error when a source file cannot be read or parsed as Rust.
 impl RustBoundarySources<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when a source file cannot be read or parsed as Rust.
     pub fn wasm_js_values(&self) -> io::Result<Vec<Violation>> {
         let root = self.root;
         let directory = root.join("nook-app/nook-platform/nook-wasm/src");

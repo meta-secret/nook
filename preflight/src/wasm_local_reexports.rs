@@ -32,10 +32,10 @@ impl LocalWasmReexports<'_> {
         for child in node.children(&mut cursor) {
             lines = (LocalWasmReexports {
                 node: child,
-                source: source,
-                first_line: first_line,
-                imported_callable_bindings: imported_callable_bindings,
-                lines: lines,
+                source,
+                first_line,
+                imported_callable_bindings,
+                lines,
             })
             .collect_local_wasm_reexport_aliases();
         }
@@ -56,13 +56,13 @@ impl LocalWasmReexports<'_> {
             && let Some(alias) = node.child_by_field_name("alias")
             && let Ok(local_name_text) = (JavaScriptLiteral {
                 node: local_name,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
             && imported_callable_bindings.contains(&local_name_text)
             && (JavaScriptLiteral {
                 node: alias,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
             .is_ok_and(|alias_text| alias_text != local_name_text)

@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    Component, MODULE_EXTENSIONS, OsStr, Path, PathBuf, WASM_MODULE_PATHS, WasmModuleSources, fs,
+};
+use std::collections::BTreeMap;
+use std::io;
 
 impl WasmModuleSources<'_> {
     pub(super) fn resolve_module(
@@ -150,7 +154,12 @@ impl WasmModuleSources<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs, io, path::PathBuf, process};
+    use std::{
+        env, fs, io,
+        ops::Deref,
+        path::{Path, PathBuf},
+        process,
+    };
 
     use super::WasmModuleSources;
 
@@ -164,14 +173,14 @@ mod tests {
             }
         }
     }
-    impl std::ops::Deref for RepositoryFixture {
+    impl Deref for RepositoryFixture {
         type Target = PathBuf;
         fn deref(&self) -> &PathBuf {
             &self.path
         }
     }
-    impl AsRef<std::path::Path> for RepositoryFixture {
-        fn as_ref(&self) -> &std::path::Path {
+    impl AsRef<Path> for RepositoryFixture {
+        fn as_ref(&self) -> &Path {
             &self.path
         }
     }
@@ -262,14 +271,18 @@ struct TypeScriptAliasConfiguration {
 }
 #[derive(serde::Deserialize)]
 struct TypeScriptAliasOptions {
-    paths: std::collections::BTreeMap<String, Vec<String>>,
+    paths: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug)]
-pub(super) enum ModuleResolutionFailure {
+#[expect(
+    dead_code,
+    reason = "typed module resolution causes are retained for diagnostics"
+)]
+pub(crate) enum ModuleResolutionFailure {
     ParentlessSource,
     UnresolvedAlias,
     ModuleNotFound,
-    ConfigurationRead(std::io::Error),
+    ConfigurationRead(io::Error),
     ConfigurationSyntax(serde_json::Error),
 }

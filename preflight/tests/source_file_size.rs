@@ -1,8 +1,9 @@
-use std::path::PathBuf;
-use std::{env, fs};
+use std::path::{Path, PathBuf};
+use std::{env, fs, ops::Deref};
 
 use nook_preflight::source_size::{
-    AUTHORED_SOURCE_LINE_LIMIT, SOURCE_SIZE_REMEDIATION, UNIT_TEST_COLOCATION_REMEDIATION,
+    AUTHORED_SOURCE_LINE_LIMIT, SOURCE_SIZE_REMEDIATION, SourceRepository,
+    UNIT_TEST_COLOCATION_REMEDIATION,
 };
 
 struct RepositoryFixture {
@@ -18,14 +19,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }

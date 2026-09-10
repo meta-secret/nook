@@ -34,7 +34,7 @@ impl TypeScriptApplicationState<'_> {
             tree.root_node(),
             source,
             &mut lines,
-            typescript_code_null_token_lines,
+            TypeScriptApplicationState::typescript_code_null_token_lines,
         )?;
         TypeScriptApplicationState::collect_svelte_null_fragments(
             tree.root_node(),
@@ -82,7 +82,7 @@ impl TypeScriptApplicationState<'_> {
             tree.root_node(),
             source,
             &mut lines,
-            typescript_code_generic_optional_state_lines,
+            TypeScriptApplicationState::typescript_code_generic_optional_state_lines,
         )?;
         lines.sort_unstable();
         lines.dedup();
@@ -218,6 +218,7 @@ impl TypeScriptApplicationState<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::TypeScriptApplicationState;
 
     #[test]
     fn reports_script_and_template_nullish_operators() -> Result<(), tree_sitter::LanguageError> {

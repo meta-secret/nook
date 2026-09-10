@@ -32,14 +32,18 @@ fn read_sre_cortex(root: &Path) -> anyhow::Result<String> {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one lineage contract verifies the complete cache rotation"
+)]
 fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let rust_bake = (&root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let setup = (&root).read(".github/actions/nook-docker-setup/action.yml");
-    let verifier = (&root).read(".github/scripts/verify-wasm-gha-cache.sh");
-    let fingerprint = (&root).read(".github/scripts/rust-deps-cache-fingerprint.sh");
-    let promoter = (&root).read(".github/scripts/rust-deps-cache-promote.sh");
-    let root_tasks = (&root).read("Taskfile.yml");
+    let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let setup = root.read(".github/actions/nook-docker-setup/action.yml");
+    let verifier = root.read(".github/scripts/verify-wasm-gha-cache.sh");
+    let fingerprint = root.read(".github/scripts/rust-deps-cache-fingerprint.sh");
+    let promoter = root.read(".github/scripts/rust-deps-cache-promote.sh");
+    let root_tasks = root.read("Taskfile.yml");
     let sre_cortex = read_sre_cortex(&root)?;
     let contract = format!(
         "{rust_bake}\n{setup}\n{verifier}\n{fingerprint}\n{promoter}\n{root_tasks}\n{sre_cortex}"
@@ -141,6 +145,10 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() -> anyhow::Resul
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one hosted cache contract verifies the complete producer graph"
+)]
 fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     let app_bake = (root).read("nook-app/docker-bake.hcl");
     let rust_toolchain_bake = (root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
@@ -463,6 +471,10 @@ fn assert_rust_cache_export_hardening(bake: &str) {
     );
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one producer contract verifies the complete Main publish graph"
+)]
 fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let main = (root).read(".github/workflows/main.yml");
     let preflight = section(&main, "  preflight:\n", "\n  preflight-cache-publish:\n");
@@ -667,10 +679,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .unwrap_or("");
     let wasm_source_idx = wasm_publish
         .find("wasm-export")
-        .expect("wasm publish must bake wasm-export");
+        .unwrap_or_else(|| panic!("wasm publish must bake wasm-export"));
     let wasm_rust_base_idx = wasm_publish
         .find("task: docker:ci:cache:publish:rust-base")
-        .expect("wasm publish must still seed rust-base after deps/source");
+        .unwrap_or_else(|| panic!("wasm publish must still seed rust-base after deps/source"));
     assert!(
         wasm_source_idx < wasm_rust_base_idx && !wasm_publish.contains("builder-wasm-deps-publish"),
         "ARC WASM cache publish must stage source then rust-base and leave portable dependency publication to the dedicated proof job"
@@ -898,7 +910,7 @@ fn bake_callers_never_clear_cache_from_or_cache_to() {
         ".github/scripts/bake-with-frontend-flake-retry.sh",
     ];
     for path in paths {
-        let text = (&root).read(path);
+        let text = root.read(path);
         assert_no_empty_cache_overrides_in(path, &text);
     }
 }
@@ -920,7 +932,7 @@ impl MainRustEntrypointContract {
             .env("GIT_COMMIT_ID", "contract-head")
             .current_dir(root)
             .output()
-            .expect("task must render the Main Rust entrypoint");
+            .unwrap_or_else(|error| panic!("task must render the Main Rust entrypoint: {error}"));
         assert!(
             entrypoint.status.success(),
             "Main Rust entrypoint did not render: {}",
@@ -937,7 +949,9 @@ impl MainRustEntrypointContract {
             .env("GIT_COMMIT_ID", "contract-head")
             .current_dir(root)
             .output()
-            .expect("task must render the dynamic Main Rust host task");
+            .unwrap_or_else(|error| {
+                panic!("task must render the dynamic Main Rust host task: {error}")
+            });
         assert!(
             host.status.success(),
             "dynamic Main Rust host task was rejected: {}",
@@ -952,7 +966,7 @@ impl MainRustEntrypointContract {
 
 #[test]
 fn main_rust_entrypoint_reaches_its_dynamic_host_task() {
-    MainRustEntrypointContract::new(RepositoryFixture::repository_root()).assert();
+    MainRustEntrypointContract::new(RepositoryFixture::repository_root().to_path_buf()).assert();
 }
 
 fn assert_no_empty_cache_overrides(text: &str) {

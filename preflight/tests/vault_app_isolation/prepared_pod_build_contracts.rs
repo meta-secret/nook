@@ -2,9 +2,17 @@ use super::hosted_delivery_contracts;
 use super::*;
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one prepared-pod contract verifies the complete artifact reuse boundary"
+)]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "integration contracts share a fallible test signature"
+)]
 fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let release = (&root).read(".github/workflows/release.yml");
+    let release = root.read(".github/workflows/release.yml");
     assert_eq!(
         release.matches("WASM_BUILD_MODE: prod").count(),
         1,
@@ -15,7 +23,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
             && release.contains("task --taskfile \"$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml\"\n          preflight"),
         "release must run current repository preflight tooling against the immutable source before publishing its job image"
     );
-    let manual_e2e = (&root).read(".github/workflows/e2e-pr.yml");
+    let manual_e2e = root.read(".github/workflows/e2e-pr.yml");
     assert!(
         manual_e2e.contains("WASM_BUILD_MODE: prod"),
         "manual PR e2e images must preserve the production WASM build mode"
@@ -24,9 +32,9 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         !release.contains("Build stable Pages artifact") && !release.contains("run: task setup"),
         "release must extract the already-tested sealed image instead of running setup twice"
     );
-    let preflight_bake = (&root).read("preflight/docker-bake.hcl");
-    let preflight_dockerfile = (&root).read("preflight/Dockerfile");
-    let preflight_tasks = (&root).read("preflight/Taskfile.yml");
+    let preflight_bake = root.read("preflight/docker-bake.hcl");
+    let preflight_dockerfile = root.read("preflight/Dockerfile");
+    let preflight_tasks = root.read("preflight/Taskfile.yml");
     assert!(
         preflight_bake.contains("repository-source = PREFLIGHT_SOURCE_CONTEXT")
             && preflight_dockerfile.contains("COPY --from=repository-source / /meta-secret/nook")
@@ -44,7 +52,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         );
     }
 
-    let ci = (&root).read("nook-app/ci/Taskfile.yml");
+    let ci = root.read("nook-app/ci/Taskfile.yml");
     let web_host = section(&ci, "  _ci:pr:web:host:\n", "\n  ci:pr:ui-demo:");
     assert!(
         web_host.contains("task: docker:ci:web:build") && !web_host.contains("task: docker:task"),
@@ -57,7 +65,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     );
     hosted_delivery_contracts::assert_main_web_e2e_core_contract(&ci);
 
-    let web = (&root).read("nook-app/nook-web/Taskfile.yml");
+    let web = root.read("nook-app/nook-web/Taskfile.yml");
     let e2e = section(
         &web,
         "  _web:test:e2e:parallel:\n",
@@ -71,7 +79,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
 
     hosted_delivery_contracts::assert_e2e_build_if_needed_contract(&root);
 
-    let extension = (&root).read("nook-app/nook-web/nook-web-extension/Taskfile.yml");
+    let extension = root.read("nook-app/nook-web/nook-web-extension/Taskfile.yml");
     let extension_check = section(
         &extension,
         "  _extension:check:\n",
@@ -83,15 +91,15 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "extension setup already sealed a validated build"
     );
 
-    let web_base = (&root).read("nook-app/nook-web/docker/web.Dockerfile");
+    let web_base = root.read("nook-app/nook-web/docker/web.Dockerfile");
     assert!(web_base.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium"));
     assert!(web_base.contains("chromium ffmpeg xvfb"));
     assert!(
         !web_base.contains("playwright@${PLAYWRIGHT_VERSION} install"),
         "e2e must not download Playwright's duplicate Chromium and headless-shell bundle"
     );
-    let web_image = (&root).read("nook-app/nook-web/nook-web-app/Dockerfile");
-    let web_image_bake = (&root).read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
+    let web_image = root.read("nook-app/nook-web/nook-web-app/Dockerfile");
+    let web_image_bake = root.read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
     assert!(web_image.contains("FROM web-runtime AS nook-web-source"));
     assert!(web_image.contains("test -x \"$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH\""));
     assert!(web_image_bake.contains("web-runtime   = \"target:web-base\""));
@@ -114,7 +122,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "nook-app/nook-web/nook-web-research/playwright.config.ts",
         "agentic-ai/minds/hive-console/playwright.config.ts",
     ] {
-        let playwright_config = (&root).read(config);
+        let playwright_config = root.read(config);
         assert!(
             playwright_config.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
                 && playwright_config.contains("launchOptions"),
@@ -122,8 +130,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         );
     }
     assert!(
-        (&root)
-            .read("nook-app/nook-web/nook-web-extension/e2e/helpers/extension-smoke-runtime.ts")
+        root.read("nook-app/nook-web/nook-web-extension/e2e/helpers/extension-smoke-runtime.ts")
             .contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"),
         "extension browser helpers must launch the e2e image's system Chromium"
     );
@@ -137,13 +144,12 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         ".github/workflows/web-research.yml",
     ] {
         assert!(
-            (&root)
-                .read(workflow)
+            root.read(workflow)
                 .contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
             "{workflow} must explicitly pass system Chromium through the ARC container hook"
         );
     }
-    let hive_workflow = (&root).read(".github/workflows/hive.yml");
+    let hive_workflow = root.read(".github/workflows/hive.yml");
     let hive_global = section(&hive_workflow, "env:\n", "\njobs:\n");
     let hive_console = section(&hive_workflow, "  console:\n", "\n  console-untrusted:\n");
     assert!(
@@ -151,7 +157,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
             && hive_console.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
         "Hive must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
     );
-    let research_workflow = (&root).read(".github/workflows/web-research.yml");
+    let research_workflow = root.read(".github/workflows/web-research.yml");
     let research_global = section(&research_workflow, "env:\n", "\njobs:\n");
     let research_deploy = section(
         &research_workflow,
@@ -163,20 +169,20 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
             && research_deploy.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
         "research must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
     );
-    let pr_workflow = (&root).read(".github/workflows/pr.yml");
+    let pr_workflow = root.read(".github/workflows/pr.yml");
     let pr_ui_demo = section(&pr_workflow, "  ui-demo:\n", "\n  preview:\n");
     assert!(
         !pr_ui_demo.contains("context.payload") && !pr_ui_demo.contains("context.issue"),
         "ARC container actions must receive PR identity explicitly instead of reading a missing event file"
     );
     assert!(
-        !(&root)
+        !root
             .read(".github/workflows/web-research.yml")
             .contains("context.payload"),
         "ARC research actions must receive event identity explicitly"
     );
 
-    let main_workflow = (&root).read(".github/workflows/main.yml");
+    let main_workflow = root.read(".github/workflows/main.yml");
     let main_browser_image = section(
         &main_workflow,
         "      - name: Publish exact-source browser job image\n",

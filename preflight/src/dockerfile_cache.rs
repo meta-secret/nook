@@ -1,8 +1,9 @@
 pub struct DockerfileRepository<'a> {
-    root: &'a std::path::Path,
+    root: &'a Path,
 }
 impl<'a> DockerfileRepository<'a> {
-    pub fn new(root: &'a std::path::Path) -> Self {
+    #[must_use]
+    pub fn new(root: &'a Path) -> Self {
         Self { root }
     }
 }
@@ -21,6 +22,9 @@ const MOUNT_PREFIX: &str = "--mount=";
 /// Returns an error when the repository cannot be traversed or contains no
 /// Dockerfiles.
 impl DockerfileRepository<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository cannot be traversed or contains no Dockerfiles.
     pub fn dockerfile_cache_mounts(&self) -> io::Result<Vec<Violation>> {
         let root = self.root;
         let mut dockerfiles = Vec::new();

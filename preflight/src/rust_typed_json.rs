@@ -20,6 +20,9 @@ use syn::{Attribute, Expr, ExprIndex, ExprMethodCall, ItemFn, ItemMod, Local, Ma
 ///
 /// Returns an error when authored Rust cannot be read or parsed.
 impl RustTestSources<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when authored Rust cannot be read or parsed.
     pub fn rust_test_untyped_json_assertions(self) -> io::Result<Vec<Violation>> {
         let Self { root } = self;
         let mut files = Vec::new();
@@ -246,6 +249,11 @@ impl<'ast> Visit<'ast> for TypedJsonAssertionVisitor {
     }
 }
 
+enum IdentifierPattern<'ast> {
+    Binding(&'ast syn::Ident),
+    OtherPattern,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,9 +281,4 @@ mod tests {
         assert_eq!(visitor.lines, vec![7, 8]);
         Ok(())
     }
-}
-
-enum IdentifierPattern<'ast> {
-    Binding(&'ast syn::Ident),
-    OtherPattern,
 }

@@ -1,7 +1,8 @@
 use std::{
     env, fs, io,
+    ops::Deref,
     os::unix::fs::PermissionsExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{self, Command},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -21,14 +22,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -93,6 +94,10 @@ fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one validation contract verifies dispatch and review ordering"
+)]
 fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
@@ -410,6 +415,10 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one ARC contract verifies the full named-task workflow"
+)]
 fn arc_workflow_runs_named_task_targets() -> Result<()> {
     let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
     let workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
@@ -550,6 +559,10 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one remote-check contract verifies every narrow image route"
+)]
 fn frequent_remote_checks_use_narrow_source_sealed_images() -> Result<()> {
     let app_tasks = RepositoryFixture::repository_root().read("nook-app/Taskfile.yml");
     let core_tasks =

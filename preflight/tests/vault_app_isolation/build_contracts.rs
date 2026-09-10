@@ -48,7 +48,7 @@ fn docker_script_fixture(
 fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
 -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let wasm_tasks = (&root).read("nook-app/nook-platform/nook-wasm/Taskfile.yml");
+    let wasm_tasks = root.read("nook-app/nook-platform/nook-wasm/Taskfile.yml");
     assert!(
         wasm_tasks.contains("wasm:build:fast:")
             && wasm_tasks.contains("- setup:rust:fast")
@@ -62,16 +62,16 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
                 .contains("- setup:rust\n"),
         "the mounted fast path must not build the source-sealed Rust image"
     );
-    let app_tasks = (&root).read("nook-app/Taskfile.yml");
-    let platform_tasks = (&root).read("nook-app/nook-platform/Taskfile.yml");
+    let app_tasks = root.read("nook-app/Taskfile.yml");
+    let platform_tasks = root.read("nook-app/nook-platform/Taskfile.yml");
     assert!(
         (app_tasks.contains("setup:rust:fast:") || platform_tasks.contains("setup:rust:fast:"))
             && (app_tasks.contains("nook-rust-fast") || platform_tasks.contains("nook-rust-fast")),
         "the fast setup must load the manifest-keyed development image"
     );
-    let platform_docker_taskfile = (&root).read("nook-app/nook-platform/docker/Taskfile.yml");
-    let web_docker_taskfile = (&root).read("nook-app/nook-web/docker/Taskfile.yml");
-    let preflight_taskfile = (&root).read("preflight/Taskfile.yml");
+    let platform_docker_taskfile = root.read("nook-app/nook-platform/docker/Taskfile.yml");
+    let web_docker_taskfile = root.read("nook-app/nook-web/docker/Taskfile.yml");
+    let preflight_taskfile = root.read("preflight/Taskfile.yml");
     for (label, body) in [
         ("nook-app/Taskfile.yml", app_tasks.as_str()),
         (
@@ -91,13 +91,13 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
             "{label} must never pass buildx --builder or keep BUILDX_BUILDER/DOCKER_LOAD_BUILDER vars"
         );
     }
-    let docker_tasks = (&root).read("nook-app/nook-platform/docker/Taskfile.yml");
+    let docker_tasks = root.read("nook-app/nook-platform/docker/Taskfile.yml");
     assert!(
         docker_tasks.contains("CARGO_TARGET_DIR=/opt/nook/cargo-target")
             && docker_tasks.contains("{{.DOCKER_RUST_FAST_IMAGE}}"),
         "the mounted build must use the dependency image target directory outside the bind mount"
     );
-    let dockerfile = (&root).read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let dockerfile = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(
         dockerfile.contains("FROM builder-wasm-deps AS nook-rust-fast")
             && dockerfile.contains(
@@ -123,12 +123,12 @@ fn production_vault_wasm_is_preloaded_size_optimized_and_budgeted() {
         "nook-app/nook-platform/nook-wasm/Cargo.toml",
         "nook-app/nook-platform/nook-companion-wasm/Cargo.toml",
     ] {
-        let cargo = (&root).read(manifest);
+        let cargo = root.read(manifest);
         assert!(cargo.contains("[package.metadata.wasm-pack.profile.release]"));
         assert!(cargo.contains("wasm-opt = [\"-Oz\"]"));
     }
 
-    let vite = (&root).read("nook-app/nook-web/nook-web-shared/vite-config.ts");
+    let vite = root.read("nook-app/nook-web/nook-web-shared/vite-config.ts");
     for required in [
         "nook_wasm_bg",
         "rel: \"preload\"",
@@ -138,7 +138,7 @@ fn production_vault_wasm_is_preloaded_size_optimized_and_budgeted() {
         assert!(vite.contains(required));
     }
 
-    let verifier = (&root).read("nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts");
+    let verifier = root.read("nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts");
     for required in [
         "const VAULT_WASM_RAW_SIZE_LIMIT = 15_000_000",
         "const VAULT_WASM_BROTLI_SIZE_LIMIT = 2_300_000",
@@ -158,7 +158,7 @@ fn production_vault_wasm_is_preloaded_size_optimized_and_budgeted() {
     }
 
     let extension_scope =
-        (&root).read("nook-app/nook-web/nook-web-shared/src/extension/extension-connect-scope.ts");
+        root.read("nook-app/nook-web/nook-web-shared/src/extension/extension-connect-scope.ts");
     assert!(extension_scope.contains("configureExtensionConnectScopeRuntime"));
     assert!(extension_scope.contains("ExtensionConnectScope as RustExtensionConnectScope"));
     assert!(
@@ -166,7 +166,7 @@ fn production_vault_wasm_is_preloaded_size_optimized_and_budgeted() {
     );
     assert!(!extension_scope.contains("extensionConnectScopeBrand"));
 
-    let vault_wasm = (&root).read("nook-app/nook-platform/nook-wasm/src/lib.rs");
+    let vault_wasm = root.read("nook-app/nook-platform/nook-wasm/src/lib.rs");
     for required in [
         "extension_vault_access_scope",
         "extension_password_filling_scope",
@@ -267,7 +267,7 @@ fn assert_shared_wasm_build_contract(root: &Path) {
 #[test]
 fn focused_playwright_task_runs_only_matching_projects() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let web_tasks = (&root).read("nook-app/nook-web/Taskfile.yml");
+    let web_tasks = root.read("nook-app/nook-web/Taskfile.yml");
     let focused = section(
         &web_tasks,
         "  _web:test:e2e:file:",
@@ -287,7 +287,7 @@ fn focused_playwright_task_runs_only_matching_projects() -> anyhow::Result<()> {
 #[test]
 fn extension_e2e_waits_for_a_persistent_x_server() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let wrapper = (&root).read("nook-app/nook-web/nook-web-extension/scripts/run-with-xvfb.sh");
+    let wrapper = root.read("nook-app/nook-web/nook-web-extension/scripts/run-with-xvfb.sh");
     for required in [
         "Xvfb -displayfd 3 -screen 0 1280x720x24 -noreset",
         "if [ -s \"$display_file\" ]",
@@ -301,7 +301,7 @@ fn extension_e2e_waits_for_a_persistent_x_server() -> anyhow::Result<()> {
     }
 
     for script in ["test-e2e.sh", "test-hosted-smoke.sh"] {
-        let contents = (&root).read(&format!(
+        let contents = root.read(&format!(
             "nook-app/nook-web/nook-web-extension/scripts/{script}"
         ));
         assert!(
@@ -310,7 +310,7 @@ fn extension_e2e_waits_for_a_persistent_x_server() -> anyhow::Result<()> {
         );
     }
 
-    let playwright = (&root).read("nook-app/nook-web/nook-web-extension/playwright.config.ts");
+    let playwright = root.read("nook-app/nook-web/nook-web-extension/playwright.config.ts");
     assert!(
         playwright.contains("...(isCi ? { workers: 1 } : {})"),
         "hosted headed extension tests must not compete for Chromium/Xvfb resources"
@@ -321,7 +321,7 @@ fn extension_e2e_waits_for_a_persistent_x_server() -> anyhow::Result<()> {
 #[test]
 fn main_failures_do_not_trigger_an_ai_repair_agent() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let main = (&root).read(".github/workflows/main.yml");
+    let main = root.read(".github/workflows/main.yml");
     assert!(
         !main.contains("\n  ci-fix:") && !main.contains("task ci-agent:fix"),
         "main failures must remain visible for manual handling"
@@ -336,7 +336,7 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
         !root.join(".github/workflows/e2e-nightly.yml").exists(),
         "live-provider sync checks must not have a scheduled workflow"
     );
-    let manual_e2e = (&root).read(".github/workflows/e2e-pr.yml");
+    let manual_e2e = root.read(".github/workflows/e2e-pr.yml");
     assert!(
         manual_e2e.contains("- sync-live")
             && manual_e2e.contains("NOOK_E2E_SYNC_PROVIDER: github")
@@ -350,6 +350,10 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
     Ok(())
 }
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one delivery contract verifies the complete BuildKit ownership boundary"
+)]
 fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     for (path, invocation_count) in [
@@ -358,7 +362,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         (".github/scripts/with-remote-buildkit.sh", 5),
         ("infra/tasks/bake-cache.yml", 14),
     ] {
-        let source = (&root).read(path);
+        let source = root.read(path);
         let normalized = source.lines().map(str::trim).collect::<Vec<_>>().join("\n");
         assert_eq!(normalized.matches(TRUSTED_DOCKER_SELECTOR).count(), 1);
         let assignments: Vec<_> = source
@@ -424,12 +428,12 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
                     .any(|word| word.trim_matches(['\'', '"', ';', '&', '|', '(', ')']) == "docker")
         }));
     }
-    let pr = (&root).read(".github/workflows/pr.yml");
+    let pr = root.read(".github/workflows/pr.yml");
     assert!(
         !pr.contains("docker buildx prune") && !pr.contains("BUILDX_BUILDER"),
         "PR workflow must delegate builder health and selection to the wrapper"
     );
-    let ci = (&root).read("nook-app/ci/Taskfile.yml");
+    let ci = root.read("nook-app/ci/Taskfile.yml");
     for required in [
         "task: _buildx:healthy",
         "vars: { BUILD_TASK: _ci:pr:host }",
@@ -444,7 +448,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             "delivery CI must enter the health-checked BuildKit wrapper: {required}"
         );
     }
-    let wrapper = (&root).read(".github/scripts/with-healthy-buildkit.sh");
+    let wrapper = root.read(".github/scripts/with-healthy-buildkit.sh");
     for required in [
         "builder=\"${NOOK_PR_BUILDX_BUILDER:-}\"",
         "refusing shared BuildKit builder name 'nook-pr'",
@@ -479,7 +483,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             && !wrapper.contains("BUILDX_BUILDER="),
         "hosted/local recovery must not contain the ARC remote branch or shared builder defaults"
     );
-    let remote_wrapper = (&root).read(".github/scripts/with-remote-buildkit.sh");
+    let remote_wrapper = root.read(".github/scripts/with-remote-buildkit.sh");
     for required in [
         "ARC requires a valid job-scoped remote BuildKit builder",
         "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
@@ -497,7 +501,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             "ARC remote BuildKit wrapper missing client-only contract: {required}"
         );
     }
-    let verifier = (&root).read(".github/scripts/verify-wasm-gha-cache.sh");
+    let verifier = root.read(".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         verifier.find("if [ \"${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}\" = \"1\" ]; then")
             < verifier.find("  prepare_trusted_docker"),
@@ -520,6 +524,10 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     Ok(())
 }
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one recovery contract verifies every stuck BuildKit transition"
+)]
 fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
@@ -744,6 +752,10 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one ARC contract verifies the complete remote client boundary"
+)]
 fn arc_delivery_uses_only_remote_buildkit_client_operations() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
@@ -856,7 +868,7 @@ fi
 #[test]
 fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let workflow = (&root).read(".github/workflows/rust-dependency-updates.yml");
+    let workflow = root.read(".github/workflows/rust-dependency-updates.yml");
     for required in [
         "- cron: '0 9 * * 1'",
         "cargo install cargo-outdated --version 0.19.0 --locked",
@@ -871,7 +883,7 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
             "dependency update workflow missing required contract: {required}"
         );
     }
-    let audit_script = (&root).read(".github/scripts/ci-rust-deps-outdated.sh");
+    let audit_script = root.read(".github/scripts/ci-rust-deps-outdated.sh");
     for required in [
         "cargo outdated --workspace --root-deps-only --exit-code 1",
         "check_manifest nook-app/nook-platform",
@@ -885,7 +897,7 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
         );
     }
 
-    let prompt = (&root).read(".github/prompts/rust-dependency-update-agent.md");
+    let prompt = root.read(".github/prompts/rust-dependency-update-agent.md");
     for required in [
         "`nook-app/nook-platform/`",
         "`nook-app/nook-platform/fuzz/`",
@@ -908,13 +920,14 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
 #[test]
 fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let dependency_dockerfile =
-        (&root).read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let dependency_dockerfile = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     let source_dockerfile = dependency_dockerfile.as_str();
     let warmup = dependency_dockerfile
         .split_once("FROM builder-wasm-deps AS builder-core-deps")
-        .map(|(_, rest)| rest)
-        .expect("builder-core-deps stage must exist in product.Dockerfile");
+        .map_or_else(
+            || panic!("builder-core-deps stage must exist in product.Dockerfile"),
+            |(_, rest)| rest,
+        );
 
     assert_eq!(
         warmup
@@ -952,7 +965,7 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
     );
 
-    let wasm_task = (&root).read("nook-app/nook-platform/nook-wasm/Taskfile.yml");
+    let wasm_task = root.read("nook-app/nook-platform/nook-wasm/Taskfile.yml");
     for required in [
         "\"Cargo.toml\" \"Cargo.lock\"",
         "\"nook-wasm/Cargo.toml\" \"nook-wasm/src\"",

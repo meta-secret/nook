@@ -1,9 +1,10 @@
 use nook_preflight::RustBoundaryState;
 use nook_preflight::RustMacroInventory;
 use nook_preflight::RustWasmNames;
+use nook_preflight::TypeScriptApplicationState;
 use nook_preflight::TypeScriptDomainBoundary;
-use std::path::PathBuf;
-use std::{env, fs};
+use std::path::{Path, PathBuf};
+use std::{env, fs, ops::Deref};
 
 use nook_preflight::{RustBoundarySources, RustTestSources};
 
@@ -73,14 +74,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }

@@ -1,5 +1,5 @@
-use std::path::PathBuf;
-use std::{env, fs};
+use std::path::{Path, PathBuf};
+use std::{env, fs, ops::Deref};
 
 struct RepositoryFixture {
     path: PathBuf,
@@ -14,14 +14,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -127,7 +127,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
     ]
     .into_iter()
-    .map(read)
+    .map(|path| RepositoryFixture::repository_root().read(path))
     .collect::<anyhow::Result<Vec<_>>>()?
     .join("\n");
     let rust_bake = RepositoryFixture::repository_root()

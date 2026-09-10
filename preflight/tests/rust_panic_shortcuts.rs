@@ -1,7 +1,5 @@
-use nook_preflight::RustBoundaryState;
-use nook_preflight::RustMacroInventory;
 use std::path::{Path, PathBuf};
-use std::{env, fs};
+use std::{env, fs, ops::Deref};
 
 use anyhow::{Context, Result, bail};
 use syn::spanned::Spanned;
@@ -28,14 +26,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -50,7 +48,7 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> 
                 path.file_name().and_then(|name| name.to_str()),
                 Some(".git" | "target")
             ) {
-                RustBoundaryState::RustMacroInventory::collect_rust_files(&path, files)?;
+                collect_rust_files(&path, files)?;
             }
         } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
             files.push(path);
@@ -130,7 +128,7 @@ fn every_rust_workspace_keeps_panic_shortcuts_denied_in_tests() -> Result<()> {
 fn anyhow_is_available_only_to_rust_tests() -> Result<()> {
     let root = RepositoryFixture::repository_root();
     let mut files = Vec::new();
-    RustBoundaryState::RustMacroInventory::collect_rust_files(&root, &mut files)?;
+    collect_rust_files(&root, &mut files)?;
 
     let mut violations = Vec::new();
     for path in files {

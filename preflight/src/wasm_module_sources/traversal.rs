@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    ExportResolutionFailure, ForwardedExport, HashSet, Path, PathBuf, WASM_MODULE_ALIASES,
+    WasmModuleSources,
+};
 
 /// Each recursive branch returns its visited set before the next sibling starts.
 #[derive(Default)]
@@ -74,10 +77,10 @@ impl ModuleTraversal {
                     imported,
                     module,
                 } if exported == exported_name => {
-                    (self, found) = self.symbol(&module, &imported, &resolved)
+                    (self, found) = self.symbol(&module, &imported, &resolved);
                 }
                 ForwardedExport::All { module } if !explicit => {
-                    (self, found) = self.symbol(&module, exported_name, &resolved)
+                    (self, found) = self.symbol(&module, exported_name, &resolved);
                 }
                 _ => continue,
             }
@@ -139,10 +142,11 @@ impl ModuleTraversal {
                     imported,
                     module,
                 } if exported == exported_name => {
-                    (self, found) = self.callable(&module, &imported, &resolved, callable_names)
+                    (self, found) = self.callable(&module, &imported, &resolved, callable_names);
                 }
                 ForwardedExport::All { module } if !explicit => {
-                    (self, found) = self.callable(&module, exported_name, &resolved, callable_names)
+                    (self, found) =
+                        self.callable(&module, exported_name, &resolved, callable_names);
                 }
                 _ => continue,
             }
@@ -190,10 +194,10 @@ impl ModuleTraversal {
                     imported,
                     module,
                 } if exported == exported_name => {
-                    (self, found) = self.namespace(&module, &imported, &resolved)
+                    (self, found) = self.namespace(&module, &imported, &resolved);
                 }
                 ForwardedExport::All { module } => {
-                    (self, found) = self.namespace(&module, exported_name, &resolved)
+                    (self, found) = self.namespace(&module, exported_name, &resolved);
                 }
                 _ => continue,
             }

@@ -19,7 +19,7 @@ impl AuthoredSourceFiles<'_> {
             let path = entry?.path();
             if path.is_dir() {
                 if !Self::is_excluded_directory(&path) {
-                    files.extend(Self { directory: &path }.collect()?);
+                    files.extend(AuthoredSourceFiles { directory: &path }.collect()?);
                 }
                 continue;
             }

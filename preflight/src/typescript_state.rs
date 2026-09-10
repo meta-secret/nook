@@ -16,6 +16,17 @@ mod source_files;
 mod svelte_fragments;
 mod svelte_raw_discriminants;
 
+const DISCRIMINANT_NAMES: [&str; 8] = [
+    "action",
+    "kind",
+    "mode",
+    "operation",
+    "phase",
+    "stage",
+    "status",
+    "type",
+];
+
 /// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`,
 /// nullish coalescing, nullish assignment, or an assertion matcher that
 /// encodes the same implicit absence contract.
@@ -35,6 +46,9 @@ mod svelte_raw_discriminants;
 ///
 /// Returns an error when the repository source tree cannot be read.
 impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_implicit_application_state(self) -> io::Result<Vec<Violation>> {
         let Self { root } = self;
         let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
@@ -70,6 +84,9 @@ impl TypeScriptApplicationState<'_> {
 ///
 /// Returns an error when the repository source tree cannot be read.
 impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violation>> {
         let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
@@ -107,6 +124,9 @@ impl TypeScriptApplicationState<'_> {
 ///
 /// Returns an error when the repository source tree cannot be read.
 impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_mutable_void_state(root: &Path) -> io::Result<Vec<Violation>> {
         let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
@@ -138,6 +158,9 @@ impl TypeScriptApplicationState<'_> {
 ///
 /// Returns an error when the repository source tree cannot be read.
 impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_generic_optional_state(root: &Path) -> io::Result<Vec<Violation>> {
         let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
@@ -175,6 +198,9 @@ impl TypeScriptApplicationState<'_> {
 ///
 /// Returns an error when the repository source tree cannot be read.
 impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_raw_string_discriminants(root: &Path) -> io::Result<Vec<Violation>> {
         let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
@@ -333,6 +359,10 @@ impl TypeScriptApplicationState<'_> {
 }
 
 impl TypeScriptApplicationState<'_> {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one recursive AST traversal keeps discriminant rules together"
+    )]
     fn collect_raw_string_discriminant_nodes(request: DiscriminantTraversal<'_>) {
         let DiscriminantTraversal {
             node,
@@ -343,16 +373,6 @@ impl TypeScriptApplicationState<'_> {
             lines,
         } = request;
 
-        const DISCRIMINANT_NAMES: [&str; 8] = [
-            "action",
-            "kind",
-            "mode",
-            "operation",
-            "phase",
-            "stage",
-            "status",
-            "type",
-        ];
         if node.kind() == "property_signature" {
             let name = node
                 .child_by_field_name("name")
@@ -869,6 +889,7 @@ enum UnregisteredDiscriminantPolicy {
     Reject,
 }
 
+#[derive(Clone, Copy)]
 struct DiscriminantSource<'a> {
     source: &'a str,
     first_line: usize,

@@ -244,7 +244,11 @@ impl ScopedCallableInventory {
                     BindingProvenance::Callable,
                 )
             } else {
-                ScopedBinding::scoped_binding(binding, context.source, BindingProvenance::Callable)
+                ScopedBinding::from_declaration(
+                    binding,
+                    context.source,
+                    BindingProvenance::Callable,
+                )
             };
             if let Ok(scoped) = scoped {
                 self.bindings.push(scoped);

@@ -1,8 +1,9 @@
 pub struct SourceRepository<'a> {
-    root: &'a std::path::Path,
+    root: &'a Path,
 }
 impl<'a> SourceRepository<'a> {
-    pub fn new(root: &'a std::path::Path) -> Self {
+    #[must_use]
+    pub fn new(root: &'a Path) -> Self {
         Self { root }
     }
 }
@@ -58,6 +59,9 @@ pub struct ExternalUnitTestModuleViolation {
 /// Returns an error when the repository tree or a candidate source file cannot
 /// be read as UTF-8.
 impl SourceRepository<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository tree or a candidate source file cannot be read.
     pub fn source_size_violations(&self) -> io::Result<Vec<SourceSizeViolation>> {
         let root = self.root;
         let mut violations = Vec::new();
@@ -77,6 +81,9 @@ impl SourceRepository<'_> {
 /// Returns an error when an authored Rust source or referenced test module
 /// cannot be read or parsed.
 impl SourceRepository<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when authored Rust or a referenced test module cannot be read or parsed.
     pub fn external_rust_unit_test_modules(
         &self,
     ) -> io::Result<Vec<ExternalUnitTestModuleViolation>> {
@@ -418,7 +425,10 @@ impl SourceRepository<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{AUTHORED_SOURCE_LINE_LIMIT, ExternalUnitTestModuleViolation, SourceSizeViolation};
+    use super::{
+        AUTHORED_SOURCE_LINE_LIMIT, ExternalUnitTestModuleViolation, SourceRepository,
+        SourceSizeViolation,
+    };
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};

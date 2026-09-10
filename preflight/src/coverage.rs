@@ -61,16 +61,10 @@ impl CoverageInputChanges {
     }
 }
 
-/// Reads changed paths from Git and classifies native coverage inputs.
-///
-/// # Errors
-///
-/// Returns an error when Git cannot calculate the diff or emits non-UTF-8
-/// repository paths.
-impl CoverageInputChanges {
-    pub fn coverage_inputs_from_git(
-        request: CoverageRevisionComparison<'_>,
-    ) -> io::Result<CoverageInputChanges> {
+impl TryFrom<CoverageRevisionComparison<'_>> for CoverageInputChanges {
+    type Error = io::Error;
+
+    fn try_from(request: CoverageRevisionComparison<'_>) -> Result<Self, Self::Error> {
         let CoverageRevisionComparison {
             repository,
             base,
@@ -102,6 +96,7 @@ impl CoverageInputChanges {
 
 /// Validates the schema, commit, and required files in a coverage artifact.
 impl CoverageArtifact<'_> {
+    #[must_use]
     pub fn validate(&self) -> CoverageArtifactValidation {
         match self.validate_contents() {
             Ok(()) => CoverageArtifactValidation::Valid,
@@ -112,14 +107,10 @@ impl CoverageArtifact<'_> {
     }
 }
 
-/// Builds a typed current/base coverage report from cargo-llvm-cov JSON.
-///
-/// # Errors
-///
-/// Returns an error when a report is missing, malformed, or contains an
-/// invalid percentage.
-impl CoverageReport {
-    pub fn coverage_report(request: CoverageReportComparison<'_>) -> io::Result<CoverageReport> {
+impl TryFrom<CoverageReportComparison<'_>> for CoverageReport {
+    type Error = io::Error;
+
+    fn try_from(request: CoverageReportComparison<'_>) -> Result<Self, Self::Error> {
         let CoverageReportComparison {
             current_directory,
             base_directory,
@@ -312,7 +303,6 @@ impl CoverageArtifact<'_> {
 
 impl CoverageDocument<'_> {
     fn line_percent(&self) -> io::Result<f64> {
-        let path = self.path;
         let report: LlvmCoverageSummary = self.read_json()?;
         let entry = report
             .data
@@ -324,7 +314,6 @@ impl CoverageDocument<'_> {
 
 impl CoverageDocument<'_> {
     fn floor_percent(&self) -> io::Result<f64> {
-        let path = self.path;
         let floor: CoverageFloor = self.read_json()?;
         self.validate_percent(floor.lines_percent)
     }
@@ -336,7 +325,7 @@ impl CoverageDocument<'_> {
         if percent.is_finite() && (0.0..=100.0).contains(&percent) {
             Ok(percent)
         } else {
-            Err(CoverageDocument { path: path }
+            Err(CoverageDocument { path }
                 .invalid_data(&format!("invalid line percentage {percent}")))
         }
     }
@@ -347,7 +336,7 @@ impl CoverageDocument<'_> {
         let path = self.path;
         let contents = fs::read(path)?;
         serde_json::from_slice(&contents)
-            .map_err(|error| CoverageDocument { path: path }.invalid_data(&error.to_string()))
+            .map_err(|error| CoverageDocument { path }.invalid_data(&error.to_string()))
     }
 }
 
@@ -372,11 +361,13 @@ impl GithubOutput<'_> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct CoverageRevisionComparison<'a> {
     pub repository: &'a Path,
     pub base: &'a str,
     pub head: &'a str,
 }
+#[derive(Clone, Copy)]
 pub struct CoverageReportComparison<'a> {
     pub current_directory: &'a Path,
     pub base_directory: &'a Path,

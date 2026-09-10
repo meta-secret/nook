@@ -20,6 +20,10 @@ use crate::wasm_module_sources::WasmModuleSources;
 
 #[allow(clippy::too_many_arguments)]
 impl DirectWasmAliases<'_> {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one syntax-tree traversal owns direct alias classification"
+    )]
     pub fn collect_direct_wasm_aliases_and_bindings(self) -> DirectAliasInventory {
         let Self {
             node,
@@ -38,7 +42,7 @@ impl DirectWasmAliases<'_> {
                 DirectWasmAliases::import_equals_binding(node, source)
             && (WasmModuleSources {
                 module: &module,
-                source_path: source_path,
+                source_path,
             })
             .is_wasm_callable_source()
         {
@@ -55,16 +59,16 @@ impl DirectWasmAliases<'_> {
                 if node.kind() == "import_statement"
                     && (WasmModuleSources {
                         module: &module,
-                        source_path: source_path,
+                        source_path,
                     })
                     .is_wasm_callable_source()
                 {
                     wasm_namespace_bindings = (DynamicWasmAliases {
-                        node: node,
-                        source: source,
-                        source_path: source_path,
+                        node,
+                        source,
+                        source_path,
                         module: &module,
-                        wasm_namespace_bindings: wasm_namespace_bindings,
+                        wasm_namespace_bindings,
                     })
                     .collect_namespace_import_bindings();
                     (imported_callable_bindings, lines) =
@@ -116,15 +120,15 @@ impl DirectWasmAliases<'_> {
                 lines,
             } = (DirectWasmAliases {
                 node: child,
-                source: source,
-                source_path: source_path,
-                first_line: first_line,
-                callable_names: callable_names,
-                wasm_type_names: wasm_type_names,
-                wasm_namespace_bindings: wasm_namespace_bindings,
-                wasm_class_bindings: wasm_class_bindings,
-                imported_callable_bindings: imported_callable_bindings,
-                lines: lines,
+                source,
+                source_path,
+                first_line,
+                callable_names,
+                wasm_type_names,
+                wasm_namespace_bindings,
+                wasm_class_bindings,
+                imported_callable_bindings,
+                lines,
             })
             .collect_direct_wasm_aliases_and_bindings();
         }
@@ -220,7 +224,7 @@ impl DirectWasmAliases<'_> {
             .ok_or(ImportSyntaxFailure::MissingModule)?;
         (JavaScriptLiteral {
             node: source_node,
-            source: source,
+            source,
         })
         .static_javascript_string()
         .map_err(ImportSyntaxFailure::Literal)
@@ -243,7 +247,7 @@ impl DirectWasmAliases<'_> {
             && let Some(authored_name_node) = node.child_by_field_name("name")
             && let Ok(authored_name) = (JavaScriptLiteral {
                 node: authored_name_node,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
             && callable_names.contains(&authored_name)
@@ -254,7 +258,7 @@ impl DirectWasmAliases<'_> {
                 .and_then(|alias| {
                     (JavaScriptLiteral {
                         node: alias,
-                        source: source,
+                        source,
                     })
                     .semantic_javascript_name()
                     .ok()
@@ -304,6 +308,10 @@ struct ImportEqualsBinding {
     module: String,
 }
 #[derive(Debug)]
+#[expect(
+    dead_code,
+    reason = "typed parse source is retained for diagnostic evolution"
+)]
 enum ImportSyntaxFailure {
     InvalidSource,
     NotImport,

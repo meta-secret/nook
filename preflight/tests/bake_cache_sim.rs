@@ -1,5 +1,5 @@
-use std::path::PathBuf;
-use std::{env, fs};
+use std::path::{Path, PathBuf};
+use std::{env, fs, ops::Deref};
 
 struct RepositoryFixture {
     path: PathBuf,
@@ -14,14 +14,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -34,6 +34,10 @@ impl RepositoryFixture {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one cache simulation verifies the complete parent and leaf scope matrix"
+)]
 fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     let sim = "infra/sim/bake-cache";
     for path in [
@@ -241,10 +245,10 @@ fn assignment_mentions_cache_to(bake: &str, target: &str) -> bool {
 
 fn assignment_body<'a>(bake: &'a str, name: &str) -> &'a str {
     let marker = format!("{name} =");
-    let rest = bake
-        .split_once(marker.as_str())
-        .map(|(_, rest)| rest)
-        .unwrap_or_else(|| panic!("missing Bake assignment {name}"));
+    let rest = bake.split_once(marker.as_str()).map_or_else(
+        || panic!("missing Bake assignment {name}"),
+        |(_, rest)| rest,
+    );
     let mut end = rest.len();
     for (idx, _) in rest.match_indices('\n') {
         let line = rest[idx + 1..].lines().next().unwrap_or("");
@@ -267,8 +271,7 @@ fn target_body<'a>(bake: &'a str, name: &str) -> &'a str {
     let marker = format!("target \"{name}\"");
     let rest = bake
         .split_once(marker.as_str())
-        .map(|(_, rest)| rest)
-        .unwrap_or_else(|| panic!("missing Bake target {name}"));
+        .map_or_else(|| panic!("missing Bake target {name}"), |(_, rest)| rest);
     let start = rest
         .find('{')
         .unwrap_or_else(|| panic!("target {name} missing body"));

@@ -116,6 +116,10 @@ fn assert_workflow_runtime_contract(root: &Path) {
     );
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one setup contract verifies the complete hosted Docker boundary"
+)]
 fn assert_docker_setup_contract(root: &Path) {
     let setup = (root).read(".github/actions/nook-docker-setup/action.yml");
     let pr = (root).read(".github/workflows/pr.yml");
@@ -687,6 +691,10 @@ fn assert_preflight_reporter_contract(root: &Path) {
     );
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one E2E contract verifies the complete artifact-backed workflow"
+)]
 fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     let pr = (root).read(".github/workflows/pr.yml");
     let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
@@ -953,7 +961,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
 fn release_deploy_trusts_only_exact_actions_workspace_before_git_resolution() -> anyhow::Result<()>
 {
     let root = RepositoryFixture::repository_root();
-    let release = (&root).read(".github/workflows/release.yml");
+    let release = root.read(".github/workflows/release.yml");
     let deploy = release
         .split_once("\n  deploy:\n")
         .context("release workflow must define the deploy job")?

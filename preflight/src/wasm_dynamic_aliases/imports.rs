@@ -1,4 +1,4 @@
-use super::*;
+use super::{DynamicWasmAliases, HashMap, HashSet, JavaScriptLiteral, Path, WasmModuleSources};
 
 impl DynamicWasmAliases<'_> {
     pub fn collect_namespace_import_bindings(self) -> HashMap<String, String> {
@@ -27,7 +27,7 @@ impl DynamicWasmAliases<'_> {
             && let Some(imported) = node.child_by_field_name("name")
             && let Ok(imported_name) = (JavaScriptLiteral {
                 node: imported,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
             && let Ok(namespace_source) =
@@ -69,7 +69,7 @@ impl DynamicWasmAliases<'_> {
             if let Some(namespace) = node.named_children(&mut cursor).find_map(|child| {
                 (JavaScriptLiteral {
                     node: child,
-                    source: source,
+                    source,
                 })
                 .semantic_javascript_name()
                 .ok()
@@ -87,7 +87,7 @@ impl DynamicWasmAliases<'_> {
             && let Some(imported) = node.child_by_field_name("name")
             && let Ok(imported_name) = (JavaScriptLiteral {
                 node: imported,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
             && wasm_type_names.contains(&imported_name)

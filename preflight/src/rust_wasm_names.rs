@@ -8,9 +8,11 @@ use std::path::Path;
 
 use crate::Violation;
 use crate::rust_wasm_attributes::RustWasmAttributes;
-use crate::wasm_direct_aliases::DirectWasmAliases;
-use crate::wasm_dynamic_aliases::DynamicWasmAliases;
-use crate::wasm_inventory::{WasmImplContext, WasmTypeInventory};
+use crate::wasm_direct_aliases::{DirectAliasInventory, DirectWasmAliases};
+use crate::wasm_dynamic_aliases::{DynamicAliasInventory, DynamicWasmAliases};
+use crate::wasm_inventory::{
+    WasmImplContext, WasmInventory, WasmInventoryCollection, WasmTypeInventory,
+};
 use crate::wasm_local_reexports::LocalWasmReexports;
 use crate::wasm_svelte_sources::WasmSvelteSources;
 use crate::wasm_web_sources::WebSourceInventory;
@@ -23,6 +25,9 @@ use crate::wasm_web_sources::WebSourceInventory;
 ///
 /// Returns an error when an authored Rust source cannot be read or parsed.
 impl RustWasmNames<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when an authored Rust source cannot be read or parsed.
     pub fn rust_wasm_callable_name_overrides(self) -> io::Result<Vec<Violation>> {
         let Self { root } = self;
         let source_root = root.join("nook-app");
@@ -30,7 +35,7 @@ impl RustWasmNames<'_> {
         RustWasmAttributes::collect_rust_files(&source_root, &mut files)?;
 
         let mut violations = Vec::new();
-        let mut inventory = crate::wasm_inventory::WasmInventory::default();
+        let mut inventory = WasmInventory::default();
         for path in files {
             let source = fs::read_to_string(&path)?;
             let syntax = syn::parse_file(&source).map_err(io::Error::other)?;
@@ -46,7 +51,7 @@ impl RustWasmNames<'_> {
             if relative_path.starts_with("nook-app/nook-platform/nook-wasm/src")
                 || relative_path.starts_with("nook-app/nook-platform/nook-companion-wasm/src")
             {
-                inventory = inventory.collect(crate::wasm_inventory::WasmInventoryCollection {
+                inventory = inventory.collect(WasmInventoryCollection {
                     items: &syntax.items,
                     enclosing_wasm_impl: WasmImplContext::Outside,
                     inherited_aliases: &HashSet::new(),
@@ -54,7 +59,7 @@ impl RustWasmNames<'_> {
             }
         }
 
-        let crate::wasm_inventory::WasmInventory {
+        let WasmInventory {
             callable_names,
             type_names: wasm_type_names,
             types: wasm_types,
@@ -198,12 +203,7 @@ impl RustWasmNames<'_> {
         let Some(tree) = parser.parse(source, None) else {
             return Ok(Vec::new());
         };
-        let mut lines = Vec::new();
-        let mut imported_callable_bindings = HashSet::new();
-        let mut wasm_namespace_bindings = HashMap::new();
-        let mut wasm_class_bindings = HashMap::new();
-        let mut wasm_instance_bindings = HashMap::new();
-        crate::wasm_direct_aliases::DirectAliasInventory {
+        let DirectAliasInventory {
             wasm_namespace_bindings,
             wasm_class_bindings,
             imported_callable_bindings,
@@ -215,17 +215,15 @@ impl RustWasmNames<'_> {
             first_line,
             callable_names,
             wasm_type_names,
-            wasm_namespace_bindings,
-            wasm_class_bindings,
-            imported_callable_bindings,
-            lines,
+            wasm_namespace_bindings: HashMap::new(),
+            wasm_class_bindings: HashMap::new(),
+            imported_callable_bindings: HashSet::new(),
+            lines: Vec::new(),
         })
         .collect_direct_wasm_aliases_and_bindings();
-        crate::wasm_dynamic_aliases::DynamicAliasInventory {
-            wasm_namespace_bindings,
-            wasm_instance_bindings,
+        let DynamicAliasInventory {
             imported_callable_bindings,
-            lines,
+            mut lines,
         } = DynamicWasmAliases::collect_dynamic_wasm_aliases_and_bindings(
             tree.root_node(),
             source,
@@ -234,9 +232,9 @@ impl RustWasmNames<'_> {
             callable_names,
             wasm_type_names,
             wasm_types,
-            wasm_namespace_bindings,
+            &wasm_namespace_bindings,
             &wasm_class_bindings,
-            wasm_instance_bindings,
+            &HashMap::new(),
             imported_callable_bindings,
             lines,
         );

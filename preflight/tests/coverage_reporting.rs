@@ -87,7 +87,7 @@ fn reports_coverage_from_structured_json() -> anyhow::Result<()> {
     write_coverage_directory(&current, 92.625, 90.0)?;
     write_coverage_directory(&base, 91.125, 90.0)?;
 
-    let report = CoverageReport::coverage_report(CoverageReportComparison {
+    let report = CoverageReport::try_from(CoverageReportComparison {
         current_directory: &current,
         base_directory: &base,
     })?;
@@ -123,7 +123,7 @@ fn rejects_human_summary_text_in_place_of_llvm_cov_json() -> anyhow::Result<()> 
     write_coverage_directory(&base, 91.0, 90.0)?;
     fs::write(current.join("summary.json"), "TOTAL 123 120 92.00%\n")?;
 
-    let error = CoverageReport::coverage_report(CoverageReportComparison {
+    let error = CoverageReport::try_from(CoverageReportComparison {
         current_directory: &current,
         base_directory: &base,
     })

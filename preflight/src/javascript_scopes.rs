@@ -7,7 +7,7 @@ pub(super) struct ScopedBinding {
 }
 
 impl ScopedBinding {
-    pub(super) fn scoped_binding(
+    pub(super) fn from_declaration(
         binding: tree_sitter::Node<'_>,
         source: &str,
         provenance: BindingProvenance,
@@ -528,12 +528,9 @@ impl ScopedBinding {
                 && function
                     .child_by_field_name("name")
                     .and_then(|node| {
-                        (JavaScriptLiteral {
-                            node: node,
-                            source: source,
-                        })
-                        .semantic_javascript_name()
-                        .ok()
+                        (JavaScriptLiteral { node, source })
+                            .semantic_javascript_name()
+                            .ok()
                     })
                     .is_some()
             {
@@ -548,12 +545,9 @@ impl ScopedBinding {
 impl ScopedBinding {
     fn deferred_function_call_end(function: tree_sitter::Node<'_>, source: &str) -> Invocation {
         let Some(name) = function.child_by_field_name("name").and_then(|node| {
-            (JavaScriptLiteral {
-                node: node,
-                source: source,
-            })
-            .semantic_javascript_name()
-            .ok()
+            (JavaScriptLiteral { node, source })
+                .semantic_javascript_name()
+                .ok()
         }) else {
             return Invocation::NotObserved;
         };
@@ -577,7 +571,7 @@ impl ScopedBinding {
             && let Some(callee) = node.child_by_field_name("function")
             && (JavaScriptLiteral {
                 node: callee,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
             .ok()

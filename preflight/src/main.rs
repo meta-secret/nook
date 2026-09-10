@@ -39,7 +39,7 @@ impl PreflightCommand {
                 let base = PreflightCommand::required_utf8(&options, "--base")?;
                 let head = PreflightCommand::required_utf8(&options, "--head")?;
                 let github_output = PreflightCommand::required_path(&options, "--github-output")?;
-                CoverageInputChanges::coverage_inputs_from_git(CoverageRevisionComparison {
+                CoverageInputChanges::try_from(CoverageRevisionComparison {
                     repository: &repository,
                     base,
                     head,
@@ -68,7 +68,7 @@ impl PreflightCommand {
                 let github_output = PreflightCommand::required_path(&options, "--github-output")?;
                 let github_summary = PreflightCommand::required_path(&options, "--github-summary")?;
                 let markdown = PreflightCommand::required_path(&options, "--markdown")?;
-                let report = CoverageReport::coverage_report(CoverageReportComparison {
+                let report = CoverageReport::try_from(CoverageReportComparison {
                     current_directory: &current,
                     base_directory: &base,
                 })?;

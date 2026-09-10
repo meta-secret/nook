@@ -28,6 +28,9 @@ use crate::Violation;
 ///
 /// Returns an error when the Rust source tree cannot be read or parsed.
 impl RustBoundaryState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the Rust source tree cannot be read or parsed.
     pub fn rust_tsify_implicit_absence_overrides(self) -> io::Result<Vec<Violation>> {
         let Self { root } = self;
         let source_root = root.join("nook-app");
@@ -78,11 +81,15 @@ impl RustBoundaryState<'_> {
 }
 
 impl RustBoundaryState<'_> {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one recursive Rust item traversal keeps state decisions local"
+    )]
     fn collect_item_violations(items: &[syn::Item], path: &Path, violations: &mut Vec<Violation>) {
         for item in items {
             match item {
                 syn::Item::Const(item) => {
-                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations)
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
                 }
                 syn::Item::Enum(item) => {
                     RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
@@ -146,7 +153,7 @@ impl RustBoundaryState<'_> {
                     }
                 }
                 syn::Item::Static(item) => {
-                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations)
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
                 }
                 syn::Item::Struct(item) => {
                     RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
@@ -178,7 +185,7 @@ impl RustBoundaryState<'_> {
                     }
                 }
                 syn::Item::Type(item) => {
-                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations)
+                    RustBoundaryState::collect_attribute_violations(&item.attrs, path, violations);
                 }
                 _ => {}
             }
@@ -346,6 +353,12 @@ impl RustBoundaryState<'_> {
     }
 }
 
+enum TsifyOverride {
+    NotDeclared,
+    Explicit(String),
+    InvalidAttribute,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -423,10 +436,4 @@ value
         fs::remove_dir_all(root)?;
         Ok(())
     }
-}
-
-enum TsifyOverride {
-    NotDeclared,
-    Explicit(String),
-    InvalidAttribute,
 }

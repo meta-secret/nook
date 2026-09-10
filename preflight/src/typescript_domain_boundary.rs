@@ -13,13 +13,16 @@ use super::{
 ///
 /// Returns an error when the web source tree cannot be read.
 impl TypeScriptDomainBoundary<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the web source tree cannot be read.
     pub fn typescript_domain_boundary_boilerplate(self) -> io::Result<Vec<Violation>> {
         let Self { root } = self;
         TypeScriptDomainBoundary::source_violations(
             root,
             Path::new("nook-app/nook-web"),
             &["ts", "svelte"],
-            typescript_boundary_violation_lines,
+            TypeScriptDomainBoundary::typescript_boundary_violation_lines,
         )
     }
 }
@@ -33,12 +36,15 @@ impl TypeScriptDomainBoundary<'_> {
 ///
 /// Returns an error when the web source tree cannot be read.
 impl TypeScriptDomainBoundary<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the web source tree cannot be read.
     pub fn typescript_json_round_trip_clones(root: &Path) -> io::Result<Vec<Violation>> {
         TypeScriptDomainBoundary::source_violations(
             root,
             Path::new("nook-app/nook-web"),
             &["ts", "svelte"],
-            json_round_trip_clone_lines,
+            TypeScriptDomainBoundary::json_round_trip_clone_lines,
         )
     }
 }
@@ -52,12 +58,15 @@ impl TypeScriptDomainBoundary<'_> {
 ///
 /// Returns an error when the extension source tree cannot be read.
 impl TypeScriptDomainBoundary<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the extension source tree cannot be read.
     pub fn typescript_extension_persistence_policy(root: &Path) -> io::Result<Vec<Violation>> {
         TypeScriptDomainBoundary::source_violations(
             root,
             Path::new("nook-app/nook-web/nook-web-extension"),
             &["ts", "svelte"],
-            extension_persistence_policy_lines,
+            TypeScriptDomainBoundary::extension_persistence_policy_lines,
         )
     }
 }
@@ -83,24 +92,27 @@ impl TypeScriptDomainBoundary<'_> {
 ///
 /// Returns an error when the authored web source tree cannot be read.
 impl TypeScriptDomainBoundary<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the authored web source tree cannot be read.
     pub fn typescript_svelte_state_modeling_violations(root: &Path) -> io::Result<Vec<Violation>> {
         let mut violations = TypeScriptDomainBoundary::source_violations(
             root,
             Path::new("nook-app/nook-web"),
             &["ts", "svelte"],
-            redundant_optional_state_lines,
+            TypeScriptDomainBoundary::redundant_optional_state_lines,
         )?;
         violations.extend(TypeScriptDomainBoundary::source_violations(
             root,
             Path::new("nook-app/nook-web"),
             &["ts", "svelte"],
-            widened_domain_identifier_state_lines,
+            TypeScriptDomainBoundary::widened_domain_identifier_state_lines,
         )?);
         violations.extend(TypeScriptDomainBoundary::source_violations(
             root,
             Path::new("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/state"),
             &["ts"],
-            inline_object_collection_state_lines,
+            TypeScriptDomainBoundary::inline_object_collection_state_lines,
         )?);
 
         let relative_path =
@@ -331,12 +343,15 @@ impl TypeScriptDomainBoundary<'_> {
 ///
 /// Returns an error when the WASM source tree cannot be read.
 impl TypeScriptDomainBoundary<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the Rust or web source tree cannot be read.
     pub fn rust_wasm_domain_boundary_escape_hatches(root: &Path) -> io::Result<Vec<Violation>> {
         TypeScriptDomainBoundary::source_violations(
             root,
             Path::new("nook-app/nook-platform/nook-wasm/src"),
             &["rs"],
-            rust_wasm_boundary_violation_lines,
+            TypeScriptDomainBoundary::rust_wasm_boundary_violation_lines,
         )
     }
 }
@@ -624,7 +639,7 @@ impl TypeScriptDomainBoundary<'_> {
 }
 
 impl TypeScriptDomainBoundary<'_> {
-    pub(super) fn function_body_start(lines: &[&str], start: usize) -> FunctionBody {
+    fn function_body_start(lines: &[&str], start: usize) -> FunctionBody {
         let mut parentheses = 0_i32;
         for (index, line) in lines.iter().enumerate().skip(start) {
             for character in line.chars() {
@@ -688,7 +703,7 @@ impl TypeScriptDomainBoundary<'_> {
 }
 
 impl TypeScriptDomainBoundary<'_> {
-    pub(super) fn forwarded_parameters(declaration: &str) -> ForwardedParameters<'_> {
+    fn forwarded_parameters(declaration: &str) -> ForwardedParameters<'_> {
         let Some(open) = declaration.find('(') else {
             return ForwardedParameters::Unsupported;
         };
@@ -732,6 +747,15 @@ impl TypeScriptDomainBoundary<'_> {
     }
 }
 
+enum FunctionBody {
+    Located(usize),
+    Unterminated,
+}
+enum ForwardedParameters<'source> {
+    Identifiers(Vec<&'source str>),
+    Unsupported,
+}
+
 #[cfg(test)]
 mod tests {
     use super::TypeScriptDomainBoundary;
@@ -756,13 +780,4 @@ mod tests {
         let source = "const conflicts = $state.raw<NookSecurityConflict[]>([]);";
         assert!(TypeScriptDomainBoundary::inline_object_collection_state_lines(source).is_empty());
     }
-}
-
-enum FunctionBody {
-    Located(usize),
-    Unterminated,
-}
-enum ForwardedParameters<'source> {
-    Identifiers(Vec<&'source str>),
-    Unsupported,
 }

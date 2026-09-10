@@ -14,13 +14,13 @@ impl TypeScriptApplicationState<'_> {
             tree.root_node(),
             source,
             &mut lines,
-            typescript_code_raw_string_discriminant_lines,
+            TypeScriptApplicationState::typescript_code_raw_string_discriminant_lines,
         )?;
         TypeScriptApplicationState::collect_svelte_raw_text_fragments_with(
             tree.root_node(),
             source,
             &mut lines,
-            typescript_template_raw_string_discriminant_lines,
+            TypeScriptApplicationState::typescript_template_raw_string_discriminant_lines,
         )?;
         lines.sort_unstable();
         lines.dedup();
@@ -53,6 +53,7 @@ impl TypeScriptApplicationState<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::TypeScriptApplicationState;
 
     #[test]
     fn reports_raw_discriminants_in_template_expressions() -> Result<(), tree_sitter::LanguageError>

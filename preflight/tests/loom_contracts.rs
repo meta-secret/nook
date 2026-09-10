@@ -1,5 +1,6 @@
 use std::{
     env, fs,
+    ops::Deref,
     path::{Path, PathBuf},
 };
 
@@ -16,14 +17,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -61,9 +62,13 @@ fn task_body<'a>(taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one integration contract documents the complete Loom quality boundary"
+)]
 fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let root = RepositoryFixture::repository_root();
-    let manifest = (&root).read("agentic-ai/loom/package.json");
+    let manifest = root.read("agentic-ai/loom/package.json");
     for required in [
         "\"lint\": \"eslint src tests\"",
         "\"check\": \"tsc --noEmit\"",
@@ -76,7 +81,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         );
     }
 
-    let eslint = (&root).read("agentic-ai/loom/eslint.config.js");
+    let eslint = root.read("agentic-ai/loom/eslint.config.js");
     for required in [
         "'max-params': ['error', { max: 1 }]",
         "'@typescript-eslint/no-restricted-types'",
@@ -101,7 +106,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         );
     }
 
-    let guards = (&root).read("agentic-ai/loom/src/lib/guards.ts");
+    let guards = root.read("agentic-ai/loom/src/lib/guards.ts");
     for required in [
         "export type UntrustedYamlNode =",
         "export type UntrustedYamlMap =",
@@ -125,7 +130,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "Loom must not restore generic external value aliases"
     );
 
-    let taskfile = (&root).read(".task/agentic-ai.yml");
+    let taskfile = root.read(".task/agentic-ai.yml");
     for required in ["loom:lint:", "bun run lint", "task: loom:lint"] {
         assert!(
             taskfile.contains(required),
@@ -139,7 +144,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             && skills_install.contains("{{.REPO_ROOT}}"),
         "executable applications must install their pinned workspace"
     );
-    let skills_workspace = (&root).read(".cortex/package.json");
+    let skills_workspace = root.read(".cortex/package.json");
     for required in [
         "@nook/executable-skills-workspace",
         "gizmo/dynamic-skills/*/scripts",
@@ -151,7 +156,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             "executable-skill workspace must retain `{required}`"
         );
     }
-    let skills_bunfig = (&root).read(".cortex/bunfig.toml");
+    let skills_bunfig = root.read(".cortex/bunfig.toml");
     assert!(
         skills_bunfig.contains("linker = \"hoisted\""),
         "executable-skill workspace must retain one hoisted dependency tree"
@@ -182,7 +187,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "loom:pre-push must retain Loom setup without a harness skill workspace"
     );
 
-    let preflight = (&root).read("preflight/Taskfile.yml");
+    let preflight = root.read("preflight/Taskfile.yml");
     let format_contract = task_body(&preflight, "preflight:format-contract", "preflight:export");
     assert!(
         format_contract
@@ -193,12 +198,12 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "the formatter contract must be a detached, install-free preflight task"
     );
 
-    let skills_manifest = (&root)
-        .read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json");
+    let skills_manifest =
+        root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json");
     assert!(
         skills_manifest.contains("\"verify\":") && !skills_manifest.contains("\"dependencies\"")
     );
-    let skills_eslint = (&root)
+    let skills_eslint = root
         .read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/eslint.config.js");
     assert!(
         skills_eslint.contains("files: ['src/**/*.ts', 'tests/**/*.ts']")
@@ -206,11 +211,10 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             && skills_eslint.contains("unknown:"),
         "executable applications must retain repository TypeScript rules"
     );
-    let skills_typescript = (&root)
-        .read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json");
+    let skills_typescript =
+        root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json");
     assert!(skills_typescript.contains("\"include\": [\"src/**/*.ts\", \"tests/**/*.ts\"]"));
-    let source_gate =
-        (&root).read("agentic-ai/loom/tests/skill-application-source-boundary.test.ts");
+    let source_gate = root.read("agentic-ai/loom/tests/skill-application-source-boundary.test.ts");
     assert!(
         source_gate.contains("ExecutableSkillSource.analyze")
             && source_gate
@@ -218,7 +222,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             && source_gate.contains("ExecutableSkillRepository.readTrackedFiles"),
         "loom:verify must AST-audit every tracked executable application source"
     );
-    let tracked_inventory = (&root).read("agentic-ai/loom/src/executable-skills/repository.ts");
+    let tracked_inventory = root.read("agentic-ai/loom/src/executable-skills/repository.ts");
     assert!(
         tracked_inventory.contains("['ls-files', '--stage', '-z']")
             && tracked_inventory.contains("static readTrackedFiles"),
@@ -229,7 +233,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
 #[test]
 fn loom_workflow_audits_every_cortex_change() {
     let root = RepositoryFixture::repository_root();
-    let workflow = (&root).read(".github/workflows/repository-policy.yml");
+    let workflow = root.read(".github/workflows/repository-policy.yml");
     assert!(
         workflow.contains("fetch-depth: 0"),
         "repository policy must retain full history for exact stacked-base availability"

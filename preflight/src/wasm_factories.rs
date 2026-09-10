@@ -42,8 +42,11 @@ impl WasmInstanceFactories<'_> {
                 WasmInstanceFactories::inferred_wasm_class(node, source, wasm_class_bindings).ok()
             })
             && let Ok(binding) = WasmInstanceFactories::callable_declaration_binding(node)
-            && let Ok(mut factory) =
-                ScopedBinding::scoped_binding(binding, source, BindingProvenance::Class(wasm_type))
+            && let Ok(mut factory) = ScopedBinding::from_declaration(
+                binding,
+                source,
+                BindingProvenance::Class(wasm_type),
+            )
         {
             if matches!(
                 node.kind(),
@@ -61,9 +64,9 @@ impl WasmInstanceFactories<'_> {
         for child in node.children(&mut cursor) {
             factories = (WasmInstanceFactories {
                 node: child,
-                source: source,
-                wasm_class_bindings: wasm_class_bindings,
-                factories: factories,
+                source,
+                wasm_class_bindings,
+                factories,
             })
             .collect_wasm_instance_factories();
         }
@@ -116,10 +119,10 @@ pub(super) fn collect_typed_wasm_instances(node: tree_sitter::Node<'_>, source: 
         })
         && let Ok(text) = annotation.utf8_text(source.as_bytes())
         && let Some(wasm_type) = classes.get(text.trim().trim_start_matches(':').trim())
-        && let Ok(mut scoped) = ScopedBinding::scoped_binding(binding, source, BindingProvenance::Class(wasm_type.clone()))
+        && let Ok(mut scoped) = ScopedBinding::from_declaration(binding, source, BindingProvenance::Class(wasm_type.clone()))
     {
         if node.kind() == "public_field_definition"
-            && let Ok(name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
+            && let Ok(name) = (JavaScriptLiteral { node: binding, source }).semantic_javascript_name()
         {
             scoped.name = format!("this.{name}");
             if let Some(body) = node.parent() {
@@ -150,7 +153,7 @@ impl WasmInstanceFactories<'_> {
             && let Some(module) = node.child_by_field_name("source").and_then(|source_node| {
                 (JavaScriptLiteral {
                     node: source_node,
-                    source: source,
+                    source,
                 })
                 .static_javascript_string()
                 .ok()
@@ -232,7 +235,7 @@ impl WasmInstanceFactories<'_> {
             && let Some(local) = node.named_child(0).and_then(|child| {
                 (JavaScriptLiteral {
                     node: child,
-                    source: source,
+                    source,
                 })
                 .semantic_javascript_name()
                 .ok()
@@ -259,14 +262,14 @@ impl WasmInstanceFactories<'_> {
             && let Some(imported_node) = node.child_by_field_name("name")
             && let Ok(imported_name) = (JavaScriptLiteral {
                 node: imported_node,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
         {
             let local_node = node.child_by_field_name("alias").unwrap_or(imported_node);
             if let Ok(local_name) = (JavaScriptLiteral {
                 node: local_node,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
                 && called_bindings.contains(&local_name)
@@ -317,13 +320,13 @@ impl WasmInstanceFactories<'_> {
                 .or_else(|| value.child_by_field_name("index"))
             && let Ok(callable_name) = (JavaScriptLiteral {
                 node: property,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
             && callable_names.contains(&callable_name)
             && let Ok(receiver_name) = (JavaScriptLiteral {
                 node: object,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
         {
@@ -361,7 +364,7 @@ impl WasmInstanceFactories<'_> {
                 .or_else(|| node.child_by_field_name("left"))
             && let Ok(binding_name) = (JavaScriptLiteral {
                 node: binding,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
             && receivers.contains(&binding_name)
@@ -503,6 +506,7 @@ impl WasmInstanceFactories<'_> {
 }
 
 #[derive(Debug)]
+#[expect(dead_code, reason = "typed literal cause is retained for diagnostics")]
 enum FactoryResolutionFailure {
     MissingBody,
     NestedFunction,

@@ -14,7 +14,8 @@ pub(super) struct WasmTypeInventory {
 impl WasmTypeInventory {
     fn has_wasm_bindgen(attributes: &[Attribute], aliases: &HashSet<String>) -> bool {
         attributes.iter().any(|attribute| {
-            rust_wasm_attributes::attribute_has_wasm_bindgen_with_aliases(attribute, aliases)
+            rust_wasm_attributes::RustWasmAttributes { attribute, aliases }
+                .attribute_has_wasm_bindgen_with_aliases()
         })
     }
 }
@@ -22,7 +23,9 @@ impl WasmTypeInventory {
 impl WasmTypeInventory {
     fn is_wasm_accessor(attributes: &[Attribute], aliases: &HashSet<String>) -> bool {
         attributes.iter().any(|attribute| {
-            rust_wasm_attributes::attribute_is_wasm_accessor_with_aliases(attribute, aliases)
+            rust_wasm_attributes::RustWasmAttributes::attribute_is_wasm_accessor_with_aliases(
+                attribute, aliases,
+            )
         })
     }
 }
@@ -36,7 +39,9 @@ impl WasmInventory {
         } = request;
 
         let mut aliases = inherited_aliases.clone();
-        aliases.extend(rust_wasm_attributes::collect_wasm_bindgen_attribute_aliases(items));
+        aliases.extend(
+            rust_wasm_attributes::RustWasmAttributes::collect_wasm_bindgen_attribute_aliases(items),
+        );
         for item in items {
             match item {
                 Item::Fn(function) => {
@@ -86,7 +91,7 @@ impl WasmInventory {
                                     .entry(owner.clone())
                                     .or_default()
                                     .insert(name.clone());
-                                if let Some(returned) =
+                                if let WasmReturnType::Named(returned) =
                                     WasmTypeInventory::wasm_return_type(&function.sig.output)
                                 {
                                     self.types.returns.insert((owner.clone(), name), returned);
@@ -225,6 +230,7 @@ pub(super) enum WasmImplContext {
     Inside,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct WasmInventoryCollection<'a> {
     pub(crate) items: &'a [Item],
     pub(crate) enclosing_wasm_impl: WasmImplContext,

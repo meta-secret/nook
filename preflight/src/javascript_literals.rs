@@ -41,11 +41,7 @@ impl JavaScriptLiteral<'_> {
             .utf8_text(source.as_bytes())
             .map_err(|_| JavaScriptLiteralFailure::InvalidSource)?;
         if matches!(node.kind(), "string" | "template_string") {
-            (JavaScriptLiteral {
-                node: node,
-                source: source,
-            })
-            .static_javascript_string()
+            (JavaScriptLiteral { node, source }).static_javascript_string()
         } else {
             JavaScriptLiteral::decode_javascript_escapes(text)
         }

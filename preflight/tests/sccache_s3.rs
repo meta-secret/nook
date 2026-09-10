@@ -3,7 +3,11 @@
 #[path = "sccache_s3/delivery_cache_contracts.rs"]
 mod delivery_cache_contracts;
 
-use std::{env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    ops::Deref,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 
@@ -20,14 +24,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -282,6 +286,10 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     assert!(!cache_action_main.contains("REDIS"));
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one credential contract verifies every hosted workflow"
+)]
 fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     for path in [
         ".github/workflows/agent-implement.yml",

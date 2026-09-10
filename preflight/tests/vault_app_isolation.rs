@@ -1,5 +1,6 @@
 use std::{
     env, fs,
+    ops::Deref,
     os::unix::fs::{self as unix_fs, PermissionsExt},
     path::{Path, PathBuf},
     process::{self, Command},
@@ -19,14 +20,25 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+
+trait RepositoryPathRead {
+    fn read(&self, path: &str) -> String;
+}
+
+impl RepositoryPathRead for Path {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
+}
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -53,8 +65,7 @@ fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
 fn bake_target_body<'a>(bake: &'a str, target: &str) -> &'a str {
     let marker = format!("target \"{target}\" {{");
     bake.split_once(marker.as_str())
-        .map(|(_, rest)| rest.split("target \"").next().unwrap_or(""))
-        .unwrap_or("")
+        .map_or("", |(_, rest)| rest.split("target \"").next().unwrap_or(""))
 }
 
 fn bake_target_assigns_cache_to(bake: &str, target: &str) -> bool {

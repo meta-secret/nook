@@ -1,4 +1,8 @@
-use std::{env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    ops::Deref,
+    path::{Path, PathBuf},
+};
 
 struct RepositoryFixture {
     path: PathBuf,
@@ -13,14 +17,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -173,10 +177,10 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
     );
     let allowed = proof
         .find("name: \"cache-shard-allowed\"")
-        .expect("authorized BuildKit shard proof is missing");
+        .unwrap_or_else(|| panic!("authorized BuildKit shard proof is missing"));
     let denied = proof
         .find("name: \"cache-network-denied\"")
-        .expect("denied BuildKit service proof is missing");
+        .unwrap_or_else(|| panic!("denied BuildKit service proof is missing"));
     assert!(
         allowed < denied,
         "authorized service access must pass before denial"

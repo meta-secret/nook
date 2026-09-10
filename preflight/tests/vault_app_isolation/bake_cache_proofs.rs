@@ -38,6 +38,10 @@ fn theorem_empty_cache_overrides_banned_repo_wide() -> anyhow::Result<()> {
 }
 
 #[test]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "formal cache proofs share a fallible theorem signature"
+)]
 fn theorem_pr_workflows_have_no_host_rust_compilation() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     for relative in [
@@ -46,7 +50,7 @@ fn theorem_pr_workflows_have_no_host_rust_compilation() -> anyhow::Result<()> {
         ".github/workflows/hive.yml",
         ".github/workflows/repository-policy.yml",
     ] {
-        let workflow = (&root).read(relative);
+        let workflow = root.read(relative);
         for (index, line) in workflow.lines().enumerate() {
             let command = line.trim_start();
             for compiler in ["cargo ", "rustc ", "rustup ", "wasm-pack "] {
@@ -65,8 +69,8 @@ fn theorem_pr_workflows_have_no_host_rust_compilation() -> anyhow::Result<()> {
 #[test]
 fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let rust_bake = (&root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let preflight_bake = (&root).read("preflight/docker-bake.hcl");
+    let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let preflight_bake = root.read("preflight/docker-bake.hcl");
 
     assert_scope_arms(
         &rust_bake,
@@ -155,11 +159,15 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one cache theorem verifies exact and fallback scopes together"
+)]
 fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let rust_bake = (&root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let preflight_bake = (&root).read("preflight/docker-bake.hcl");
-    let web_image_bake = (&root).read("nook-app/nook-web/docker/web.docker-bake.hcl");
+    let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let preflight_bake = root.read("preflight/docker-bake.hcl");
+    let web_image_bake = root.read("nook-app/nook-web/docker/web.docker-bake.hcl");
     for (bake, name, availability, exact_marker, main_ref) in [
         (
             rust_bake.as_str(),
@@ -308,7 +316,7 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
 #[test]
 fn theorem_nightly_leaves_publish_only_their_full_graphs() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let docker_tasks = (&root).read("nook-app/nook-platform/docker/Taskfile.yml");
+    let docker_tasks = root.read("nook-app/nook-platform/docker/Taskfile.yml");
     for (task, leaf) in [
         ("docker:ecosystem:dylint", "rust-dylint"),
         ("docker:ecosystem:fuzz", "rust-fuzz-smoke"),
@@ -325,13 +333,17 @@ fn theorem_nightly_leaves_publish_only_their_full_graphs() -> anyhow::Result<()>
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one cache theorem verifies all context-parent write constraints"
+)]
 fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let rust_bake = (&root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let core_bake = (&root).read("nook-app/nook-platform/nook-core/docker-bake.hcl");
-    let web_toolchain = (&root).read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
-    let app_bake = (&root).read("nook-app/docker-bake.hcl");
-    let preflight_bake = (&root).read("preflight/docker-bake.hcl");
+    let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let core_bake = root.read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let web_toolchain = root.read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+    let app_bake = root.read("nook-app/docker-bake.hcl");
+    let preflight_bake = root.read("preflight/docker-bake.hcl");
 
     // Nested ecosystem leaves context rust-base. Importing the short rust-base
     // index there orphans nightly/policy RUNs after Main FALLBACK restored them.
@@ -480,14 +492,18 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one cache theorem verifies the complete GitHub Actions and Zot matrix"
+)]
 fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let setup = (&root).read(".github/actions/nook-docker-setup/action.yml");
-    let app_bake = (&root).read("nook-app/docker-bake.hcl");
-    let rust_bake = (&root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let web_image = (&root).read("nook-app/nook-web/docker/web.docker-bake.hcl");
-    let web_toolchain = (&root).read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
-    let preflight_bake = (&root).read("preflight/docker-bake.hcl");
+    let setup = root.read(".github/actions/nook-docker-setup/action.yml");
+    let app_bake = root.read("nook-app/docker-bake.hcl");
+    let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let web_image = root.read("nook-app/nook-web/docker/web.docker-bake.hcl");
+    let web_toolchain = root.read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+    let preflight_bake = root.read("preflight/docker-bake.hcl");
     let bake = format!("{app_bake}\n{rust_bake}\n{web_image}\n{web_toolchain}\n{preflight_bake}");
 
     assert!(
@@ -628,9 +644,9 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
 #[test]
 fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let setup = (&root).read(".github/actions/nook-docker-setup/action.yml");
-    let workflow = (&root).read(".github/workflows/hive.yml");
-    let tasks = (&root).read("agentic-ai/minds/hive/Taskfile.yml");
+    let setup = root.read(".github/actions/nook-docker-setup/action.yml");
+    let workflow = root.read(".github/workflows/hive.yml");
+    let tasks = root.read("agentic-ai/minds/hive/Taskfile.yml");
 
     assert!(
         setup.contains("HIVE_CACHE_FROM=$hive_remote_ref")
@@ -679,11 +695,11 @@ fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()>
 #[test]
 fn theorem_product_source_leaves_use_one_internal_dockerfile_lineage() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    let tasks = (&root).read("nook-app/nook-platform/docker/Taskfile.yml");
-    let rust_bake = (&root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let core_bake = (&root).read("nook-app/nook-platform/nook-core/docker-bake.hcl");
-    let wasm_bake = (&root).read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
-    let product = (&root).read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let tasks = root.read("nook-app/nook-platform/docker/Taskfile.yml");
+    let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let core_bake = root.read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let wasm_bake = root.read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    let product = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     let native = taskfile_task_body(&tasks, "docker:ci:rust:export")?;
     let export = taskfile_task_body(&tasks, "docker:ci:wasm:export")?;
 

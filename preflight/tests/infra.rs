@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env, fs,
+    ops::Deref,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -25,14 +26,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -57,13 +58,18 @@ fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
         for entry in fs::read_dir(&path)
             .unwrap_or_else(|error| panic!("failed to inventory {}: {error}", path.display()))
         {
-            let entry = entry.expect("repository entry must be readable");
+            let entry =
+                entry.unwrap_or_else(|error| panic!("repository entry must be readable: {error}"));
             let path = entry.path();
             if path.is_dir() {
                 let relative = path
                     .strip_prefix(RepositoryFixture::repository_root())
-                    .expect("repository entries must stay beneath the root");
-                let directory_name = path.file_name().expect("directory must have a name");
+                    .unwrap_or_else(|error| {
+                        panic!("repository entries must stay beneath the root: {error}")
+                    });
+                let directory_name = path
+                    .file_name()
+                    .unwrap_or_else(|| panic!("directory must have a name"));
                 if matches!(
                     directory_name.to_str(),
                     Some(".git" | "target" | "node_modules")
@@ -109,10 +115,12 @@ fn arc_buildkit_resolves_docker_hub_only_through_zot() {
 
 #[test]
 fn production_dockerfiles_never_resolve_docker_hub_directly() {
-    for path in production_dockerfiles(RepositoryFixture::repository_root()) {
+    for path in production_dockerfiles(RepositoryFixture::repository_root().to_path_buf()) {
         let relative = path
             .strip_prefix(RepositoryFixture::repository_root())
-            .expect("Dockerfile must stay beneath the repository root");
+            .unwrap_or_else(|error| {
+                panic!("Dockerfile must stay beneath the repository root: {error}")
+            });
         let path = relative.to_string_lossy();
         let dockerfile = RepositoryFixture::repository_root().read(&path);
         let mut image_arguments = HashMap::new();
@@ -136,7 +144,7 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
             let mut tokens = from.split_whitespace();
             let reference = tokens
                 .find(|token| !token.starts_with("--"))
-                .expect("FROM must contain an image or prior stage");
+                .unwrap_or_else(|| panic!("FROM must contain an image or prior stage"));
             let resolved = reference
                 .strip_prefix("${")
                 .and_then(|name| name.strip_suffix('}'))
@@ -219,41 +227,41 @@ fn arc_mesh_reconciliation_fails_closed() {
     );
     let empty_worker_check = worker_mesh
         .find("if test \"$(printf '%s' \"$compute_nodes\" | jq '.items | length')\" = 0")
-        .expect("mesh reconciliation must detect an empty compute tier");
+        .unwrap_or_else(|| panic!("mesh reconciliation must detect an empty compute tier"));
     let controller_key = worker_mesh
         .find("controller_public_key=\"$(sudo -n cat /etc/wireguard/nook-public.key)\"")
-        .expect("mesh reconciliation must read the controller WireGuard key");
+        .unwrap_or_else(|| panic!("mesh reconciliation must read the controller WireGuard key"));
     let peer_verification = worker_mesh
         .find("ping -c 1 -W 3 '$target_address'")
-        .expect("reachable workers must verify direct peer connectivity");
+        .unwrap_or_else(|| panic!("reachable workers must verify direct peer connectivity"));
     let taint_all = worker_mesh
         .find("set_mesh_pending \"$node_name\"\ndone <<<\"$workers\"")
-        .expect("all workers must become unschedulable before reconciliation");
+        .unwrap_or_else(|| panic!("all workers must become unschedulable before reconciliation"));
     let connection_preflight = worker_mesh
         .find("-o ConnectTimeout=5")
-        .expect("workers must be checked before configuration");
+        .unwrap_or_else(|| panic!("workers must be checked before configuration"));
     let clear_pending = worker_mesh
         .rfind("clear_mesh_pending \"$node_name\"")
-        .expect("verified workers must become schedulable");
+        .unwrap_or_else(|| panic!("verified workers must become schedulable"));
     assert!(empty_worker_check < controller_key);
     assert!(taint_all < connection_preflight);
     assert!(peer_verification < clear_pending);
     let install = services
         .find("- task: k0s:install")
-        .expect("standard deployment must install k0s");
+        .unwrap_or_else(|| panic!("standard deployment must install k0s"));
     let standard_reconcile = services
         .find("- task: k0s:worker-mesh:reconcile")
-        .expect("standard deployment must reconcile the direct worker mesh");
+        .unwrap_or_else(|| panic!("standard deployment must reconcile the direct worker mesh"));
     let standard_arc = services
         .find("- task: arc:deploy")
-        .expect("standard deployment must install ARC");
+        .unwrap_or_else(|| panic!("standard deployment must install ARC"));
     assert!(install < standard_reconcile && standard_reconcile < standard_arc);
     let reconcile = workers
         .find("task: k0s:worker-mesh:reconcile")
-        .expect("worker deployment must reconcile the direct worker mesh");
+        .unwrap_or_else(|| panic!("worker deployment must reconcile the direct worker mesh"));
     let qualify = workers
         .find("task: kata:install")
-        .expect("worker deployment must qualify Kata");
+        .unwrap_or_else(|| panic!("worker deployment must qualify Kata"));
     assert!(
         reconcile < qualify,
         "the direct worker mesh must converge before Kata and ARC qualification"
@@ -261,6 +269,10 @@ fn arc_mesh_reconciliation_fails_closed() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one infrastructure contract verifies runner placement as a unit"
+)]
 fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let values = RepositoryFixture::repository_root()
         .read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
@@ -401,19 +413,19 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     }
     let prepare = tasks
         .find("- task: arc:controller-build:prepare")
-        .expect("ARC deployment must prepare the controller build node");
+        .unwrap_or_else(|| panic!("ARC deployment must prepare the controller build node"));
     let storage = tasks
         .find("- task: arc:buildkit:storage:prepare")
-        .expect("ARC deployment must prepare retained storage");
+        .unwrap_or_else(|| panic!("ARC deployment must prepare retained storage"));
     let container_eligibility = tasks
         .find("- task: arc:container-hosts:reconcile")
-        .expect("ARC deployment must reconcile container-job eligibility");
+        .unwrap_or_else(|| panic!("ARC deployment must reconcile container-job eligibility"));
     let rollout = tasks
         .find("rollout status statefulset/nook-buildkit")
-        .expect("ARC deployment must wait for BuildKit");
+        .unwrap_or_else(|| panic!("ARC deployment must wait for BuildKit"));
     let activate = tasks
         .rfind("- task: arc:build-hosts:activate")
-        .expect("ARC deployment must activate converged nodes");
+        .unwrap_or_else(|| panic!("ARC deployment must activate converged nodes"));
     assert!(
         prepare < container_eligibility
             && container_eligibility < storage
@@ -422,10 +434,10 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     );
     let primary = tasks
         .find("for tier in primary secondary overflow")
-        .expect("ARC activation must expose primary capacity first");
+        .unwrap_or_else(|| panic!("ARC activation must expose primary capacity first"));
     let grouped = tasks
         .find("kubectl taint node \"${tier_nodes[@]}\"")
-        .expect("ARC activation must expose each tier as one group");
+        .unwrap_or_else(|| panic!("ARC activation must expose each tier as one group"));
     assert!(primary < grouped);
 }
 
@@ -469,7 +481,7 @@ fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Resu
     let root = RepositoryFixture::repository_root();
     let output = Command::new("bash")
         .arg(root.join("preflight/tests/neo4j_credentials.sh"))
-        .arg(&root)
+        .arg(root.as_ref())
         .output()?;
     assert!(
         output.status.success(),
@@ -538,7 +550,7 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
     ] {
         let output = Command::new("bash")
             .arg(root.join(harness))
-            .arg(&root)
+            .arg(root.as_ref())
             .output()?;
         assert!(
             output.status.success(),

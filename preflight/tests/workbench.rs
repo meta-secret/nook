@@ -6,11 +6,16 @@ mod harness_neutral;
 use anyhow::Context as _;
 use std::{
     env, fs,
+    ops::Deref,
     path::{Path, PathBuf},
 };
 
 struct RepositoryFixture {
     path: PathBuf,
+}
+
+fn assigned_gizmo_id(raw: &str) -> &str {
+    if raw == "null" { "" } else { raw }
 }
 impl RepositoryFixture {
     fn repository_root() -> Self {
@@ -22,14 +27,14 @@ impl RepositoryFixture {
         }
     }
 }
-impl std::ops::Deref for RepositoryFixture {
+impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-impl AsRef<std::path::Path> for RepositoryFixture {
-    fn as_ref(&self) -> &std::path::Path {
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
         &self.path
     }
 }
@@ -51,6 +56,10 @@ fn directory_has_files(path: &Path) -> bool {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one workbench contract verifies the complete claim boundary"
+)]
 fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Result<()> {
     let workflow =
         RepositoryFixture::repository_root().read(".github/workflows/agent-implement.yml");
@@ -179,9 +188,6 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
                     .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
         })
     };
-    fn assigned_gizmo_id(raw: &str) -> &str {
-        if raw == "null" { "" } else { raw }
-    }
     for accepted in ["2fa-slice", "123", "true", "false"] {
         assert!(
             canonical_gizmo_id(assigned_gizmo_id(accepted)),
@@ -355,6 +361,10 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one ownership contract verifies the complete team vocabulary"
+)]
 fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> anyhow::Result<()> {
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
     let ownership =
@@ -834,6 +844,10 @@ fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one publication contract verifies the complete worklog protocol"
+)]
 fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     let prompt = RepositoryFixture::repository_root().read(".github/prompts/agent-implement.md");
     let plan_prompt = RepositoryFixture::repository_root().read(".github/prompts/agent-plan.md");

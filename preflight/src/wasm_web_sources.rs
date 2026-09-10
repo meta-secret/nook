@@ -33,7 +33,7 @@ impl WebSourceInventory<'_> {
                 {
                     (WebSourceInventory {
                         directory: &path,
-                        files: files,
+                        files,
                     })
                     .collect_web_source_files()?;
                 }
