@@ -181,7 +181,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
     let pre_push = task_body(&taskfile, "loom:pre-push", "loom:cortex-audit");
     assert!(
-        pre_push.contains("deps: [loom:install]")
+        pre_push.contains("deps: [loom:install, tooling:install]")
             && pre_push.contains("task loom:default FAMILY=prePush")
             && !pre_push.contains("skills:"),
         "loom:pre-push must retain Loom setup without a harness skill workspace"

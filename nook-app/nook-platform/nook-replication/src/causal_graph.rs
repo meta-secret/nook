@@ -190,6 +190,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn quarantine(mut self, request: CausalQuarantine<Id>) -> Self {
         let CausalQuarantine { id, reason } = request;
         self.quarantine_roots = Self::merge_quarantine_reason(self.quarantine_roots, id, reason);

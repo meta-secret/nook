@@ -1,5 +1,7 @@
 //! Owned causal graph union and its algebraic behavior.
-use super::*;
+use super::CausalGraph;
+#[cfg(test)]
+use super::{CausalEventInsertion, CausalQuarantine, EventParents};
 impl<Id: Clone + Ord> CausalGraph<Id> {
     #[must_use]
     pub fn union(self, other: &Self) -> Self {

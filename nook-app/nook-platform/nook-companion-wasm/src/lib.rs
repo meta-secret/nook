@@ -403,7 +403,9 @@ pub fn belongs_to_sentinel_vault(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_companion_core::ExtensionEventCount;
+    use nook_companion_core::{
+        AuthenticationBackupCodesEvidence, BackupCodeCandidatePresence, ExtensionEventCount,
+    };
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn workflow_wasm_export_rejects_unbounded_observations() {

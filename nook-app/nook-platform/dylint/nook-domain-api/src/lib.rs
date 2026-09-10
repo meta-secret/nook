@@ -213,7 +213,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
                     cx,
                     impl_id: item.owner_id.def_id.to_def_id(),
                 })
-                .is_canonical())
+                .canonical())
             && (ImplementationSurface {
                 cx,
                 impl_id: item.owner_id.def_id,
@@ -742,7 +742,7 @@ impl CallableSurface<'_, '_> {
         if cx
             .tcx
             .impl_of_assoc(local_def_id.to_def_id())
-            .is_some_and(|impl_id| (CanonicalNumericConversion { cx, impl_id }).is_canonical())
+            .is_some_and(|impl_id| (CanonicalNumericConversion { cx, impl_id }).canonical())
         {
             return;
         }
@@ -768,7 +768,7 @@ struct CanonicalNumericConversion<'cx, 'tcx> {
     impl_id: DefId,
 }
 impl CanonicalNumericConversion<'_, '_> {
-    fn is_canonical(self) -> bool {
+    fn canonical(self) -> bool {
         let Self { cx, impl_id } = self;
         let Some(trait_ref) = cx.tcx.impl_opt_trait_ref(impl_id) else {
             return false;

@@ -182,11 +182,16 @@ where
         }
     }
 
+    #[must_use]
     pub fn dequeue_outbox(mut self, request: ReplicaOutboxRemoval<'_, Id>) -> ReplicaDequeue<Id> {
+        let ReplicaOutboxRemoval {
+            provider_id,
+            event_id,
+        } = request;
         let bytes = self
             .outbox
-            .get_mut(request.provider_id)
-            .and_then(|entries| entries.remove(request.event_id));
+            .get_mut(provider_id)
+            .and_then(|entries| entries.remove(event_id));
         let removal = match bytes {
             Some(bytes) => ReplicaOutboxRemovalResult::Removed(bytes),
             None => ReplicaOutboxRemovalResult::NotQueued,
@@ -239,6 +244,7 @@ where
     }
 
     /// Commit a validated exclusion set across events and their pending writes.
+    #[must_use]
     pub fn excluding_events(mut self, excluded: &BTreeSet<Id>) -> Self {
         self.events.retain(|id, _| !excluded.contains(id));
         for entries in self.outbox.values_mut() {

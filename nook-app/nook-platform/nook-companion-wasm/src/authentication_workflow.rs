@@ -143,6 +143,7 @@ pub fn companion_authentication_workflow_match_kind(
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
+    use nook_companion_core::{AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]

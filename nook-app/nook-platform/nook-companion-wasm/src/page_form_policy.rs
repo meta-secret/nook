@@ -366,10 +366,15 @@ mod tests {
             current_password_field_count: 1.into(),
             ..Default::default()
         };
-        assert_eq!((login).authentication_form_observation_priority(), 4);
         assert_eq!(
-            (nook_companion_core::AuthenticationPageObservationFacts::default())
-                .authentication_page_observation_facts_priority(),
+            u8::from((login).authentication_form_observation_priority()),
+            4
+        );
+        assert_eq!(
+            u8::from(
+                (nook_companion_core::AuthenticationPageObservationFacts::default())
+                    .authentication_page_observation_facts_priority()
+            ),
             1
         );
         let login_facts = nook_companion_core::AuthenticationPageObservationFacts {
@@ -386,7 +391,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            (login_facts).authentication_page_observation_facts_priority(),
+            u8::from((login_facts).authentication_page_observation_facts_priority()),
             4
         );
     }
@@ -744,7 +749,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            (generic_password_facts).authentication_page_observation_facts_priority(),
+            u8::from((generic_password_facts).authentication_page_observation_facts_priority()),
             3
         );
 
