@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
+import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CodexOptions } from '@openai/codex-sdk';
 import { err, ok, type Result } from 'neverthrow';
 import {
   ExpertIsolationFailureKind,
@@ -11,7 +11,6 @@ import type { ReadOnlyExpertContextFile } from './runtime-contract.ts';
 
 export type RepositorySnapshotRequest = {
   readonly codexHome: string;
-  readonly environment: NonNullable<CodexOptions['env']>;
   readonly excludedPaths: readonly string[];
   readonly optionalScopePaths: readonly string[];
   readonly sourceCommit: string;
@@ -21,9 +20,8 @@ export type RepositorySnapshotRequest = {
 
 type IsolatedCommandRequest = {
   readonly args: readonly string[];
-  readonly command: string;
+  readonly command: 'git' | 'tar';
   readonly cwd: string;
-  readonly environment: NonNullable<CodexOptions['env']>;
 };
 
 class SnapshotCommand {
@@ -31,11 +29,24 @@ class SnapshotCommand {
   execute(): Result<string, ExpertIsolationFailure> {
     let output;
     try {
-      output = spawnSync(this.request.command, [...this.request.args], {
+      const args = [...this.request.args];
+      const options: SpawnSyncOptionsWithStringEncoding = {
         cwd: this.request.cwd,
         encoding: 'utf8',
-        env: this.request.environment,
-      });
+        env: {
+          COMSPEC: process.env.COMSPEC,
+          PATH: process.env.PATH,
+          Path: process.env.Path,
+          PATHEXT: process.env.PATHEXT,
+          SYSTEMROOT: process.env.SYSTEMROOT,
+          SystemRoot: process.env.SystemRoot,
+          WINDIR: process.env.WINDIR,
+        },
+      };
+      output =
+        this.request.command === 'git'
+          ? spawnSync('git', args, options)
+          : spawnSync('tar', args, options);
     } catch {
       return err({
         kind: ExpertIsolationFailureKind.Snapshot,
@@ -71,7 +82,6 @@ export class RepositorySnapshot {
     const archived = new SnapshotCommand({
       command: 'git',
       cwd: request.workingDirectory,
-      environment: request.environment,
       args: [
         'archive',
         '--format=tar',
@@ -86,7 +96,6 @@ export class RepositorySnapshot {
     const extracted = new SnapshotCommand({
       command: 'tar',
       cwd: request.codexHome,
-      environment: request.environment,
       args: [
         '--extract',
         `--file=${archivePath}`,
@@ -137,7 +146,6 @@ export class RepositorySnapshot {
     const listed = new SnapshotCommand({
       command: 'git',
       cwd: request.workingDirectory,
-      environment: request.environment,
       args: [
         'ls-tree',
         '--name-only',

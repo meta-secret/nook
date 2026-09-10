@@ -119,7 +119,6 @@ export class ModuleExpertIsolation {
         const credential = credentialResult.value;
         const repositorySnapshotRequest: RepositorySnapshotRequest = {
           codexHome,
-          environment: processEnvironment,
           sourceCommit: request.sourceCommit,
           excludedPaths: request.snapshot.excludedPaths,
           optionalScopePaths: request.snapshot.optionalScopePaths,
