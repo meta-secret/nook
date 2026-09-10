@@ -102,6 +102,9 @@ export class ObserverClient {
       response.value,
       init,
     ).decode<ObservedTask>(isObservedTask);
-    return task.map((task) => ({ kind: DurableTaskLookupKind.Found, task }));
+    return task.map((task) => ({
+      kind: DurableTaskLookupKind.Found as const,
+      task,
+    }));
   }
 }

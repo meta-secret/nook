@@ -1,7 +1,8 @@
-import { execFile } from "node:child_process";
+import { err, ok, ResultAsync, type Result } from "neverthrow";
+import { CiFailureKind, type CiFailure } from "./failure.js";
+import { CiProcess } from "./process.js";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
 
 import type { Octokit } from "@octokit/rest";
 
@@ -13,13 +14,13 @@ export interface AuthoredNumstatSummarizeAuthoredNumstatRequest {
 export class AuthoredNumstat {
   constructor(private readonly value: string) {}
   summarizeAuthoredNumstat(
-    request: AuthoredNumstatSummarizeAuthoredNumstatRequest,
+    request: AuthoredNumstatSummarizeAuthoredNumstatRequest = {},
   ): AuthoredNumstatSummary {
     const numstat = this.value;
     const { deletedPaths = new Set() } = request;
 
     let authoredLines = 0;
-    const reportedOnly = this.emptyReportedOnlyNumstat();
+    let reportedOnly = this.emptyReportedOnlyNumstat();
     const records = numstat.split("\0");
     let index = 0;
     while (index < records.length) {
@@ -28,7 +29,10 @@ export class AuthoredNumstat {
       if (parsed.kind === NumstatRecordParseKind.End) break;
       index = parsed.nextIndex;
       if (parsed.kind === NumstatRecordParseKind.Malformed) {
-        reportedOnly.malformedRecords += 1;
+        reportedOnly = {
+          ...reportedOnly,
+          malformedRecords: reportedOnly.malformedRecords + 1,
+        };
         continue;
       }
       const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
@@ -37,36 +41,64 @@ export class AuthoredNumstat {
       );
       if (!/^\d+$/.test(parsed.added) || !/^\d+$/.test(parsed.deleted)) {
         if (deletedPaths.has(parsed.destinationPath)) {
-          reportedOnly.binaryFiles += 1;
+          reportedOnly = {
+            ...reportedOnly,
+            binaryFiles: reportedOnly.binaryFiles + 1,
+          };
           continue;
         }
         const extensionStart = filename.lastIndexOf(".");
         const extension =
           extensionStart >= 0 ? filename.slice(extensionStart) : "";
         if (AUTHORED_TEXT_EXTENSIONS.has(extension)) {
-          reportedOnly.unmeasurableAuthoredFiles += 1;
+          reportedOnly = {
+            ...reportedOnly,
+            unmeasurableAuthoredFiles:
+              reportedOnly.unmeasurableAuthoredFiles + 1,
+          };
         } else {
-          reportedOnly.binaryFiles += 1;
+          reportedOnly = {
+            ...reportedOnly,
+            binaryFiles: reportedOnly.binaryFiles + 1,
+          };
         }
         continue;
       }
       const addedLines = Number(parsed.added);
       const changedLines = addedLines + Number(parsed.deleted);
       if (REPORTED_ONLY_FILENAMES.has(filename)) {
-        reportedOnly.lockfileLines += changedLines;
+        reportedOnly = {
+          ...reportedOnly,
+          lockfileLines: reportedOnly.lockfileLines + changedLines,
+        };
       } else if (normalizedPath.endsWith(".snap")) {
-        reportedOnly.snapshotLines += changedLines;
+        reportedOnly = {
+          ...reportedOnly,
+          snapshotLines: reportedOnly.snapshotLines + changedLines,
+        };
       } else if (
         normalizedPath.includes("/generated/") ||
         REPOSITORY_GENERATED_PATHS.has(normalizedPath)
       ) {
-        reportedOnly.generatedLines += changedLines;
+        reportedOnly = {
+          ...reportedOnly,
+          generatedLines: reportedOnly.generatedLines + changedLines,
+        };
       } else if (normalizedPath.includes("/vendor/")) {
-        reportedOnly.vendoredLines += changedLines;
+        reportedOnly = {
+          ...reportedOnly,
+          vendoredLines: reportedOnly.vendoredLines + changedLines,
+        };
       } else if (normalizedPath.includes("/dist/")) {
-        reportedOnly.generatedLines += changedLines;
+        reportedOnly = {
+          ...reportedOnly,
+          generatedLines: reportedOnly.generatedLines + changedLines,
+        };
       } else if (parsed.renamed && changedLines === 0) {
-        reportedOnly.pureRenameFiles += 1;
+        reportedOnly = {
+          ...reportedOnly,
+          pureRenameFiles: reportedOnly.pureRenameFiles + 1,
+        };
       } else {
         authoredLines += addedLines;
       }
@@ -118,134 +150,101 @@ export interface CiRepositoryRevParseRequest {
 
 export class CiRepository {
   constructor(private readonly value: string) {}
-  trustedGitArgs(request: CiRepositoryTrustedGitArgsRequest): string[] {
-    const repoRoot = this.value;
-    const { args } = request;
-
-    return ["-C", repoRoot, ...TRUSTED_GIT_OPTIONS, ...args];
+  trustedGitArgs({ args }: CiRepositoryTrustedGitArgsRequest): string[] {
+    return ["-C", this.value, ...TRUSTED_GIT_OPTIONS, ...args];
   }
-
-  trustedGit(request: CiRepositoryTrustedGitRequest) {
-    const repoRoot = this.value;
-    const { args } = request;
-
-    return execFileAsync(
-      "git",
-      new CiRepository(repoRoot).trustedGitArgs({ args: args }),
+  trustedGit({ args }: CiRepositoryTrustedGitRequest) {
+    return new CiProcess("git", this.trustedGitArgs({ args })).execute();
+  }
+  excludeAgentRuntimeArtifacts() {
+    return this.trustedGit({
+      args: ["reset", "--quiet", "HEAD", "--", ...AGENT_RUNTIME_ARTIFACTS],
+    }).map(() => undefined);
+  }
+  async markSafeDirectory(): Promise<Result<void, CiFailure>> {
+    const explicit = await new CiProcess("git", [
+      "config",
+      "--global",
+      "--add",
+      "safe.directory",
+      this.value,
+    ]).execute();
+    const wildcard = await new CiProcess("git", [
+      "config",
+      "--global",
+      "--add",
+      "safe.directory",
+      "*",
+    ]).execute();
+    if (explicit.isErr() && wildcard.isErr()) return err(explicit.error);
+    return ok();
+  }
+  async assertGitRepo(): Promise<Result<void, CiFailure>> {
+    const present = await ResultAsync.fromPromise(
+      access(join(this.value, ".git")),
+      (): CiFailure => ({
+        kind: CiFailureKind.Git,
+        message: `REPO_ROOT is not a git working tree (missing .git): ${this.value}. If running in Docker, bind-mount the Actions checkout (and RUNNER_TEMP if .git is a gitfile).`,
+      }),
+    );
+    if (present.isErr()) return err(present.error);
+    return this.trustedGit({ args: ["rev-parse", "--git-dir"] }).map(
+      () => undefined,
     );
   }
-
-  async excludeAgentRuntimeArtifacts(): Promise<void> {
-    const repoRoot = this.value;
-
-    await new CiRepository(repoRoot).trustedGit({
-      args: ["reset", "--quiet", "HEAD", "--", ...AGENT_RUNTIME_ARTIFACTS],
-    });
-  }
-
-  async markSafeDirectory(): Promise<void> {
-    const repoRoot = this.value;
-
-    // Must run before any other git command: bind-mounted Actions checkouts are
-    // owned by the runner user while the agent container often runs as root.
-    try {
-      await execFileAsync("git", [
-        "config",
-        "--global",
-        "--add",
-        "safe.directory",
-        repoRoot,
-      ]);
-    } catch {
-      // may already be present
-    }
-    try {
-      await execFileAsync("git", [
-        "config",
-        "--global",
-        "--add",
-        "safe.directory",
-        "*",
-      ]);
-    } catch {
-      // optional wildcard
-    }
-  }
-
-  async assertGitRepo(): Promise<void> {
-    const repoRoot = this.value;
-
-    try {
-      await access(join(repoRoot, ".git"));
-    } catch {
-      throw new Error(
-        `REPO_ROOT is not a git working tree (missing .git): ${repoRoot}. ` +
-          `If running in Docker, bind-mount the Actions checkout (and RUNNER_TEMP if .git is a gitfile).`,
-      );
-    }
-
-    try {
-      await new CiRepository(repoRoot).trustedGit({
-        args: ["rev-parse", "--git-dir"],
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`git rev-parse failed in ${repoRoot}: ${message}`);
-    }
-  }
-
-  async configureGitForCi(
-    request: CiRepositoryConfigureGitForCiRequest,
-  ): Promise<void> {
-    const repoRoot = this.value;
-    const { octokit } = request;
-
-    await new CiRepository(repoRoot).markSafeDirectory();
-    await new CiRepository(repoRoot).assertGitRepo();
-
+  async configureGitForCi({
+    octokit,
+  }: CiRepositoryConfigureGitForCiRequest = {}): Promise<
+    Result<void, CiFailure>
+  > {
+    const safe = await this.markSafeDirectory();
+    if (safe.isErr()) return err(safe.error);
+    const repository = await this.assertGitRepo();
+    if (repository.isErr()) return err(repository.error);
     let userEmail: string = ACTIONS_BOT.email;
     let userName: string = ACTIONS_BOT.name;
-
     if (octokit) {
-      try {
-        const { data } = await octokit.rest.users.getAuthenticated();
+      const identity = await ResultAsync.fromPromise(
+        octokit.rest.users.getAuthenticated(),
+        (): CiFailure => ({
+          kind: CiFailureKind.Github,
+          message: "Unable to resolve authenticated Git identity",
+        }),
+      );
+      if (identity.isOk()) {
+        const { data } = identity.value;
         userName = data.name?.trim() || data.login;
         userEmail =
           data.email?.trim() ||
           `${data.id}+${data.login}@users.noreply.github.com`;
-      } catch {
-        // Fall back to github-actions[bot] when the token cannot resolve a user.
       }
     }
-
-    const globalConfig: Array<[string, string]> = [
+    for (const [key, value] of [
       ["user.email", userEmail],
       ["user.name", userName],
       ["core.untrackedCache", "true"],
-    ];
-
-    for (const [key, value] of globalConfig) {
-      await execFileAsync("git", ["config", "--global", key, value]);
+    ] as const) {
+      const configured = await new CiProcess("git", [
+        "config",
+        "--global",
+        key,
+        value,
+      ]).execute();
+      if (configured.isErr()) return err(configured.error);
     }
-
     log.info(
-      `Configured git identity as ${userName} <${userEmail}> in ${repoRoot}`,
+      `Configured git identity as ${userName} <${userEmail}> in ${this.value}`,
     );
+    return ok();
   }
-
-  async hasWorkingTreeChanges(): Promise<boolean> {
-    const repoRoot = this.value;
-
-    await new CiRepository(repoRoot).excludeAgentRuntimeArtifacts();
-    const { stdout } = await new CiRepository(repoRoot).trustedGit({
+  async hasWorkingTreeChanges(): Promise<Result<boolean, CiFailure>> {
+    const excluded = await this.excludeAgentRuntimeArtifacts();
+    if (excluded.isErr()) return err(excluded.error);
+    return this.trustedGit({
       args: ["status", "--porcelain", "--", ".", ...AGENT_RUNTIME_EXCLUSIONS],
-    });
-    return stdout.trim().length > 0;
+    }).map(({ stdout }) => stdout.trim().length > 0);
   }
-
-  private async pushAuthenticatedBranch(): Promise<void> {
-    const repoRoot = this.value;
-
+  private pushAuthenticatedBranch() {
     const token = process.env.NOOK_GITHUB_PAT?.trim();
     const authEnv = token
       ? {
@@ -255,73 +254,66 @@ export class CiRepository {
           GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
         }
       : process.env;
-    await execFileAsync(
+    return new CiProcess(
       "git",
-      ["-C", repoRoot, "push", "-u", "origin", "HEAD"],
-      {
-        env: authEnv,
-      },
-    );
+      ["-C", this.value, "push", "-u", "origin", "HEAD"],
+      { env: authEnv },
+    )
+      .execute()
+      .map(() => undefined);
   }
-
-  async pushFixBranch(
-    request: CiRepositoryPushFixBranchRequest,
-  ): Promise<void> {
-    const repoRoot = this.value;
-    const { fixBranch, runId } = request;
-
+  async pushFixBranch({
+    fixBranch,
+    runId,
+  }: CiRepositoryPushFixBranchRequest): Promise<Result<void, CiFailure>> {
     log.info(`Pushing fix branch ${fixBranch}`);
-    await new CiRepository(repoRoot).trustedGit({
+    const checkout = await this.trustedGit({
       args: ["checkout", "-B", fixBranch],
     });
-    await new CiRepository(repoRoot).excludeAgentRuntimeArtifacts();
-    await new CiRepository(repoRoot).trustedGit({
+    if (checkout.isErr()) return err(checkout.error);
+    const excluded = await this.excludeAgentRuntimeArtifacts();
+    if (excluded.isErr()) return err(excluded.error);
+    const added = await this.trustedGit({
       args: ["add", "-A", "--", ".", ...AGENT_RUNTIME_EXCLUSIONS],
     });
-
-    const staged = await new CiRepository(repoRoot).hasStagedChanges();
-    if (!staged) {
-      throw new Error("No staged changes to commit after git add -A");
-    }
-
+    if (added.isErr()) return err(added.error);
+    const staged = await this.hasStagedChanges();
+    if (staged.isErr()) return err(staged.error);
+    if (!staged.value)
+      return err({
+        kind: CiFailureKind.Git,
+        message: "No staged changes to commit after git add -A",
+      });
     const commitMessage =
       process.env.AGENT_COMMIT_MESSAGE?.trim() ||
       `Fix main CI failure (run ${runId}).`;
-
-    await new CiRepository(repoRoot).trustedGit({
+    const committed = await this.trustedGit({
       args: ["commit", "-m", commitMessage],
     });
-    await new CiRepository(repoRoot).trustedGit({
+    if (committed.isErr()) return err(committed.error);
+    const hooks = await this.trustedGit({
       args: ["config", "core.hooksPath", "/dev/null"],
     });
-    await new CiRepository(repoRoot).pushAuthenticatedBranch();
+    if (hooks.isErr()) return err(hooks.error);
+    const pushed = await this.pushAuthenticatedBranch();
+    if (pushed.isErr()) return err(pushed.error);
     log.info(`Pushed ${fixBranch}`);
+    return ok();
   }
-
-  async revParse(request: CiRepositoryRevParseRequest): Promise<string> {
-    const repoRoot = this.value;
-    const { ref } = request;
-
-    const { stdout } = await new CiRepository(repoRoot).trustedGit({
-      args: ["rev-parse", ref],
+  revParse({ ref }: CiRepositoryRevParseRequest) {
+    return this.trustedGit({ args: ["rev-parse", ref] }).map(({ stdout }) =>
+      stdout.trim(),
+    );
+  }
+  async hasStagedChanges(): Promise<Result<boolean, CiFailure>> {
+    const compared = await this.trustedGit({
+      args: ["diff", "--cached", "--quiet", "--no-ext-diff"],
     });
-    return stdout.trim();
-  }
-
-  async hasStagedChanges(): Promise<boolean> {
-    const repoRoot = this.value;
-
-    try {
-      await new CiRepository(repoRoot).trustedGit({
-        args: ["diff", "--cached", "--quiet", "--no-ext-diff"],
-      });
-      return false;
-    } catch (err: unknown) {
-      if (new GitCommandFailure({ err: err, code: 1 }).hasExitCode()) {
-        return true;
-      }
-      throw err;
-    }
+    if (compared.isOk()) return ok(false);
+    return compared.error.kind === CiFailureKind.Git &&
+      compared.error.code === 1
+      ? ok(true)
+      : err(compared.error);
   }
 }
 
@@ -381,14 +373,18 @@ class NumstatCursor {
 
 export class AuthoredChangeBudget {
   constructor(private readonly request: AuthoredBudgetArgs) {}
-  async enforce(): Promise<void> {
+  async enforce(): Promise<Result<void, CiFailure>> {
     const args = this.request;
 
-    await new CiRepository(args.repoRoot).excludeAgentRuntimeArtifacts();
-    await new CiRepository(args.repoRoot).trustedGit({
+    const excluded = await new CiRepository(
+      args.repoRoot,
+    ).excludeAgentRuntimeArtifacts();
+    if (excluded.isErr()) return err(excluded.error);
+    const staged = await new CiRepository(args.repoRoot).trustedGit({
       args: ["add", "-A", "--", ".", ...AGENT_RUNTIME_EXCLUSIONS],
     });
-    const { stdout } = await new CiRepository(args.repoRoot).trustedGit({
+    if (staged.isErr()) return err(staged.error);
+    const numstat = await new CiRepository(args.repoRoot).trustedGit({
       args: [
         "diff",
         "--cached",
@@ -400,6 +396,8 @@ export class AuthoredChangeBudget {
         args.baseRef,
       ],
     });
+    if (numstat.isErr()) return err(numstat.error);
+    const { stdout } = numstat.value;
     const deletedDiff = await new CiRepository(args.repoRoot).trustedGit({
       args: [
         "diff",
@@ -411,8 +409,9 @@ export class AuthoredChangeBudget {
         args.baseRef,
       ],
     });
+    if (deletedDiff.isErr()) return err(deletedDiff.error);
     const deletedPaths = new Set(
-      deletedDiff.stdout.split("\0").filter(Boolean),
+      deletedDiff.value.stdout.split("\0").filter(Boolean),
     );
     const summary = new AuthoredNumstat(stdout).summarizeAuthoredNumstat({
       deletedPaths: deletedPaths,
@@ -429,38 +428,22 @@ export class AuthoredChangeBudget {
       );
     }
     if (summary.reportedOnly.unmeasurableAuthoredFiles > 0) {
-      throw new Error(
-        `Implemented diff contains ${summary.reportedOnly.unmeasurableAuthoredFiles} authored source file(s) whose line counts are hidden by binary attributes`,
-      );
+      return err({
+        kind: CiFailureKind.Git,
+        message: `Implemented diff contains ${summary.reportedOnly.unmeasurableAuthoredFiles} authored source file(s) whose line counts are hidden by binary attributes`,
+      });
     }
     if (summary.authoredLines > args.maximumLines) {
-      throw new AuthoredChangeBudgetExceededError(
-        `Implemented diff exceeds the ${args.maximumLines} authored-addition budget: ${summary.authoredLines}`,
-      );
+      return err({
+        kind: CiFailureKind.Budget,
+        message: `Implemented diff exceeds the ${args.maximumLines} authored-addition budget: ${summary.authoredLines}`,
+      });
     }
-  }
-}
-
-interface RepositoryIsExecExitCodeRequest {
-  readonly err: unknown;
-  readonly code: number;
-}
-
-class GitCommandFailure {
-  constructor(private readonly request: RepositoryIsExecExitCodeRequest) {}
-  hasExitCode(): boolean {
-    const { err, code } = this.request;
-
-    return (
-      err instanceof Error &&
-      "code" in err &&
-      (err as { code: number }).code === code
-    );
+    return ok();
   }
 }
 
 const log = new Logger("git");
-const execFileAsync = promisify(execFile);
 const PR_ADDITION_WARNING = 1_500;
 
 const ACTIONS_BOT = {
@@ -528,8 +511,6 @@ export type AuthoredBudgetArgs = {
   baseRef: string;
   maximumLines: number;
 };
-
-export class AuthoredChangeBudgetExceededError extends Error {}
 
 enum NumstatRecordParseKind {
   End = "end",

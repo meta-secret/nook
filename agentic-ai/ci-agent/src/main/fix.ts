@@ -1,4 +1,23 @@
 import {
+  DependencyFixWithValidationEnvironment,
+  RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS,
+  runValidationCommand,
+  type ValidationRunner,
+} from "./dependency-validation.js";
+export {
+  DependencyFixCreateValidationEnvironment,
+  DependencyFixWithValidationEnvironment,
+  RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS,
+  runValidationCommand,
+} from "./dependency-validation.js";
+import type { Octokit } from "@octokit/rest";
+import type { RepoRef } from "./github.js";
+import { GithubRequestFailure } from "./github-failure.js";
+import { CiWorkingDirectory } from "./process.js";
+import { err, ok, ResultAsync, type Result } from "neverthrow";
+import { CiFailureKind, type CiFailure } from "./failure.js";
+import { AgentFile } from "./agent-files.js";
+import {
   DependencyFixAssertGitMetadataBaselineUnchanged,
   DependencyFixAssertRepositoryBaselineUnchanged,
 } from "./repository-baseline.js";
@@ -10,29 +29,19 @@ import {
   NulSeparatedRecords,
   GitConfiguration,
   GitConfigurationText,
-  type GitConfigEntry,
 } from "./git-configuration.js";
 export { GitConfiguration } from "./git-configuration.js";
 import {
   RustDependencyDocument,
   RustDependencyPath,
 } from "./rust-dependency-document.js";
-import { execFile, spawn } from "node:child_process";
-import {
-  copyFile,
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
-import { chdir } from "node:process";
-import { promisify } from "node:util";
 
-import { CiAgentConfigLoadKind, CiAgentEnvironment } from "./config.js";
+import {
+  type CiAgentConfig,
+  CiAgentConfigLoadKind,
+  CiAgentEnvironment,
+} from "./config.js";
 import {
   GitHubClient,
   GitHubEnvironment,
@@ -42,215 +51,228 @@ import {
 import { CiRepository } from "./git.js";
 import { Logger } from "./logger.js";
 import { AgentPrompt } from "./prompt.js";
-import {
-  AgentIsolation,
-  AgentRuntimeRestoreHostEnvironment,
-  ConfiguredAgentRuntime,
-} from "./run-agent.js";
+import { AgentIsolation, ConfiguredAgentRuntime } from "./run-agent.js";
 export class CiFixCommand {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
-  async runCiFix(): Promise<CiFixOutcome> {
-    const repository = this.environment.GITHUB_REPOSITORY?.trim();
-    const runId = this.environment.GITHUB_RUN_ID?.trim();
-    if (!repository || !runId) {
-      throw new Error("GITHUB_REPOSITORY and GITHUB_RUN_ID are required");
-    }
-
+  async runCiFix(): Promise<Result<CiFixOutcome, CiFailure>> {
+    const repository = this.environment.GITHUB_REPOSITORY?.trim(),
+      runId = this.environment.GITHUB_RUN_ID?.trim();
+    if (!repository || !runId)
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "GITHUB_REPOSITORY and GITHUB_RUN_ID are required",
+      });
     const repoRoot = this.environment.REPO_ROOT?.trim() || process.cwd();
     const fixBranch = this.environment.FIX_BRANCH?.trim() || `fix/ci-${runId}`;
     const profile = new CiFixProfileName(
       this.environment.CI_AGENT_FIX_PROFILE || "",
     ).parse();
-    chdir(repoRoot);
-
-    const octokit = new GitHubEnvironment(process.env).createOctokit();
-    await new CiRepository(repoRoot).configureGitForCi({ octokit: octokit });
-    const repoRef = new GitHubRepositoryName(repository).parse();
-
-    let openPr = await new GitHubClient(octokit).findOpenPr({
+    if (profile.isErr()) return err(profile.error);
+    const entered = new CiWorkingDirectory(repoRoot).enter();
+    if (entered.isErr()) return err(entered.error);
+    const client = new GitHubEnvironment(process.env).createOctokit();
+    if (client.isErr()) return err(client.error);
+    const octokit = client.value;
+    const configured = await new CiRepository(repoRoot).configureGitForCi({
+      octokit,
+    });
+    if (configured.isErr()) return err(configured.error);
+    const repositoryName = new GitHubRepositoryName(repository).parse();
+    if (repositoryName.isErr()) return err(repositoryName.error);
+    const repoRef = repositoryName.value;
+    const openPr = await new GitHubClient(octokit).findOpenPr({
       subject1: repoRef,
       headBranch: fixBranch,
     });
+    if (openPr.isErr()) return err(openPr.error);
     let prNumber: number;
-    let outcome: CiFixOutcome;
-    if (openPr.kind === OpenPrLookupKind.Found) {
-      prNumber = openPr.number;
-      if (profile === CiAgentFixProfile.RustDependencyUpdate) {
-        const token = this.environment.NOOK_GITHUB_PAT?.trim();
-        const [priorCount = ""] = [this.environment.GIT_CONFIG_COUNT];
-        const [priorKey = ""] = [this.environment.GIT_CONFIG_KEY_0];
-        const [priorValue = ""] = [this.environment.GIT_CONFIG_VALUE_0];
-        const hadCount = Object.hasOwn(this.environment, "GIT_CONFIG_COUNT");
-        const hadKey = Object.hasOwn(this.environment, "GIT_CONFIG_KEY_0");
-        const hadValue = Object.hasOwn(this.environment, "GIT_CONFIG_VALUE_0");
-        if (token) {
-          this.environment.GIT_CONFIG_COUNT = "1";
-          this.environment.GIT_CONFIG_KEY_0 =
-            "http.https://github.com/.extraheader";
-          this.environment.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
-        }
-        try {
-          await new DependencyFixRepository(repoRoot).gitOutput({
-            args: ["fetch", "--depth=1", "origin", "main", fixBranch],
-          });
-        } finally {
-          if (hadCount) this.environment.GIT_CONFIG_COUNT = priorCount;
-          else delete this.environment.GIT_CONFIG_COUNT;
-          if (hadKey) this.environment.GIT_CONFIG_KEY_0 = priorKey;
-          else delete this.environment.GIT_CONFIG_KEY_0;
-          if (hadValue) this.environment.GIT_CONFIG_VALUE_0 = priorValue;
-          else delete this.environment.GIT_CONFIG_VALUE_0;
-        }
-        await new DependencyFixRepository(repoRoot).gitOutput({
-          args: ["checkout", "--force", `origin/${fixBranch}`],
-        });
-        const auditedBase = (
-          await new DependencyFixRepository(repoRoot).gitOutput({
-            args: ["merge-base", "origin/main", "HEAD"],
-          })
-        ).trim();
-        await new DependencyFixRepository(repoRoot).assertTrustedChangeSet({
-          baseline: auditedBase,
-          changes: await new DependencyFixRepository(
-            repoRoot,
-          ).collectCommittedChangeSet({ base: auditedBase }),
-        });
-        await new DependencyFixRepository(
+    if (openPr.value.kind === OpenPrLookupKind.Found) {
+      prNumber = openPr.value.number;
+      if (profile.value === CiAgentFixProfile.RustDependencyUpdate) {
+        const audited = await this.auditExistingDependencyBranch(
           repoRoot,
-        ).runValidationWithoutPublicationCredentials();
+          fixBranch,
+        );
+        if (audited.isErr()) return err(audited.error);
       }
-      outcome = await new DependencyFixVerifyLiveFixPublication({
-        expectedHeadSha: await new CiRepository(repoRoot).revParse({
-          ref: "HEAD",
-        }),
-        fixBranch,
-        octokit,
-        prNumber,
-        repoRef,
-      }).execute();
-      log.info(
-        `Existing PR #${prNumber} exact head ${outcome.headSha} verified and handed to the continuing Gizmo owner`,
-      );
     } else {
-      const cursorApiKey = this.environment.CURSOR_API_KEY?.trim();
-      if (!cursorApiKey) {
+      const loaded = new CiAgentEnvironment(process.env).loadConfig();
+      if (loaded.kind === CiAgentConfigLoadKind.MissingApiKey) {
         console.log(
           "::warning::CURSOR_API_KEY is not set — skipping AI CI fix job.",
         );
-        console.log(
-          "Add repository secret CURSOR_API_KEY (Cursor Dashboard → Integrations → User API Keys).",
-        );
-        return CI_FIX_SKIPPED;
+        return ok(CI_FIX_SKIPPED);
       }
-
-      const loadedConfig = new CiAgentEnvironment(process.env).loadConfig();
-      if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
-        return CI_FIX_SKIPPED;
-      }
-      const config = loadedConfig.config;
-      let baselineState: RepositoryBaselineState = {
-        kind: RepositoryBaselineKind.NotRequired,
-      };
-      if (profile === CiAgentFixProfile.RustDependencyUpdate) {
-        await new DependencyFixRepository(
-          repoRoot,
-        ).assertCheckoutHasNoPersistedCredentials();
-        baselineState = {
-          baseline: await new DependencyFixRepository(
-            repoRoot,
-          ).captureRepositoryBaseline(),
-          kind: RepositoryBaselineKind.Captured,
-        };
-      }
-
-      const prompt = await new AgentPrompt(config).load();
-      await new ConfiguredAgentRuntime(config).runFixAgent({
-        prompt: prompt,
-        isolation: new DependencyFixIsolationForFixProfile(profile).execute(),
+      const edited = await this.edit(repoRoot, profile.value, loaded.config);
+      if (edited.isErr()) return err(edited.error);
+      if (edited.value === CiFixEdit.Unchanged) return ok(CI_FIX_SKIPPED);
+      const pushed = await new CiRepository(repoRoot).pushFixBranch({
+        fixBranch,
+        runId,
       });
-
-      if (baselineState.kind === RepositoryBaselineKind.Captured)
-        await new DependencyFixRepository(repoRoot).assertBaselineUnchanged({
-          baseline: baselineState.baseline,
-        });
-
-      if (!(await new CiRepository(repoRoot).hasWorkingTreeChanges())) {
-        console.log(
-          "::warning::Agent finished but working tree is clean — nothing to push.",
-        );
-        return CI_FIX_SKIPPED;
-      }
-
-      if (profile === CiAgentFixProfile.RustDependencyUpdate) {
-        if (baselineState.kind !== RepositoryBaselineKind.Captured) {
-          throw new Error("Rust dependency update baseline was not captured");
-        }
-        const { baseline } = baselineState;
-        const scoped = async () =>
-          new DependencyFixRepository(repoRoot).assertTrustedChangeSet({
-            baseline: baseline.headSha,
-            changes: await new DependencyFixRepository(
-              repoRoot,
-            ).collectChangedPaths(),
-          });
-        await new DependencyFixRepository(repoRoot).assertBaselineUnchanged({
-          baseline: baseline,
-        });
-        await scoped();
-        await new DependencyFixRepository(
-          repoRoot,
-        ).runValidationWithoutPublicationCredentials();
-        await new DependencyFixRepository(repoRoot).assertBaselineUnchanged({
-          baseline: baseline,
-        });
-        await scoped();
-        await new CiRepository(repoRoot).pushFixBranch({
-          fixBranch: fixBranch,
-          runId: runId,
-        });
-      } else {
-        await new CiRepository(repoRoot).pushFixBranch({
-          fixBranch: fixBranch,
-          runId: runId,
-        });
-      }
-
-      openPr = await new GitHubClient(octokit).findOpenPr({
+      if (pushed.isErr()) return err(pushed.error);
+      const published = await new GitHubClient(octokit).findOpenPr({
         subject1: repoRef,
         headBranch: fixBranch,
       });
-      if (openPr.kind === OpenPrLookupKind.Found) {
-        prNumber = openPr.number;
-      } else {
-        prNumber = await new GitHubClient(octokit).createFixPr({
-          repoRef: repoRef,
+      if (published.isErr()) return err(published.error);
+      if (published.value.kind === OpenPrLookupKind.Found)
+        prNumber = published.value.number;
+      else {
+        const created = await new GitHubClient(octokit).createFixPr({
+          repoRef,
           headBranch: fixBranch,
-          runId: runId,
-          fixLabel: config.fixLabel,
+          runId,
+          fixLabel: loaded.config.fixLabel,
           baseBranch: "main",
         });
+        if (created.isErr()) return err(created.error);
+        prNumber = created.value;
       }
-      const localHead = await new CiRepository(repoRoot).revParse({
-        ref: "HEAD",
-      });
-      outcome = await new DependencyFixVerifyLiveFixPublication({
-        expectedHeadSha: localHead,
-        fixBranch,
-        octokit,
-        prNumber,
-        repoRef,
-      }).execute();
-      log.info(
-        `PR #${prNumber} exact head ${outcome.headSha} verified and handed to the continuing Gizmo owner`,
-      );
     }
-
+    const head = await new CiRepository(repoRoot).revParse({ ref: "HEAD" });
+    if (head.isErr()) return err(head.error);
+    const published = await new DependencyFixVerifyLiveFixPublication({
+      expectedHeadSha: head.value,
+      fixBranch,
+      octokit,
+      prNumber,
+      repoRef,
+    }).execute();
+    if (published.isErr()) return err(published.error);
     const fixLabel = this.environment.CI_FIX_LABEL?.trim() || "main CI";
+    log.info(
+      `PR #${prNumber} exact head ${published.value.headSha} verified and handed to the continuing Gizmo owner`,
+    );
     log.info(
       `PR #${prNumber} is open without automatic merge; ${fixLabel} run ${runId} requires explicit merge authorization`,
     );
-    return outcome;
+    return published;
   }
+  private async auditExistingDependencyBranch(
+    repoRoot: string,
+    fixBranch: string,
+  ): Promise<Result<void, CiFailure>> {
+    const token = this.environment.NOOK_GITHUB_PAT?.trim();
+    const prior = Object.fromEntries(
+      ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"]
+        .filter((name) => Object.hasOwn(this.environment, name))
+        .map((name) => [name, this.environment[name]]),
+    );
+    if (token) {
+      this.environment.GIT_CONFIG_COUNT = "1";
+      this.environment.GIT_CONFIG_KEY_0 =
+        "http.https://github.com/.extraheader";
+      this.environment.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
+    }
+    const repository = new DependencyFixRepository(repoRoot);
+    const fetched = await repository.gitOutput({
+      args: ["fetch", "--depth=1", "origin", "main", fixBranch],
+    });
+    for (const name of [
+      "GIT_CONFIG_COUNT",
+      "GIT_CONFIG_KEY_0",
+      "GIT_CONFIG_VALUE_0",
+    ]) {
+      if (Object.hasOwn(prior, name)) this.environment[name] = prior[name];
+      else delete this.environment[name];
+    }
+    if (fetched.isErr()) return err(fetched.error);
+    const checkout = await repository.gitOutput({
+      args: ["checkout", "--force", `origin/${fixBranch}`],
+    });
+    if (checkout.isErr()) return err(checkout.error);
+    const base = await repository.gitOutput({
+      args: ["merge-base", "origin/main", "HEAD"],
+    });
+    if (base.isErr()) return err(base.error);
+    const auditedBase = base.value.trim();
+    const changes = await repository.collectCommittedChangeSet({
+      base: auditedBase,
+    });
+    if (changes.isErr()) return err(changes.error);
+    const admitted = await repository.assertTrustedChangeSet({
+      baseline: auditedBase,
+      changes: changes.value,
+    });
+    if (admitted.isErr()) return err(admitted.error);
+    return repository.runValidationWithoutPublicationCredentials();
+  }
+  private async edit(
+    repoRoot: string,
+    profile: CiAgentFixProfile,
+    config: CiAgentConfig,
+  ): Promise<Result<CiFixEdit, CiFailure>> {
+    const repository = new DependencyFixRepository(repoRoot);
+    let baselineState: RepositoryBaselineState = {
+      kind: RepositoryBaselineKind.NotRequired,
+    };
+    if (profile === CiAgentFixProfile.RustDependencyUpdate) {
+      const credentials =
+        await repository.assertCheckoutHasNoPersistedCredentials();
+      if (credentials.isErr()) return err(credentials.error);
+      const baseline = await repository.captureRepositoryBaseline();
+      if (baseline.isErr()) return err(baseline.error);
+      baselineState = {
+        kind: RepositoryBaselineKind.Captured,
+        baseline: baseline.value,
+      };
+    }
+    const prompt = await new AgentPrompt(config).load();
+    if (prompt.isErr()) return err(prompt.error);
+    const run = await new ConfiguredAgentRuntime(config).runFixAgent({
+      prompt: prompt.value,
+      isolation: new DependencyFixIsolationForFixProfile(profile).execute(),
+    });
+    if (run.isErr()) return err(run.error);
+    if (baselineState.kind === RepositoryBaselineKind.Captured) {
+      const unchanged = await repository.assertBaselineUnchanged({
+        baseline: baselineState.baseline,
+      });
+      if (unchanged.isErr()) return err(unchanged.error);
+    }
+    const changed = await new CiRepository(repoRoot).hasWorkingTreeChanges();
+    if (changed.isErr()) return err(changed.error);
+    if (!changed.value) {
+      console.log(
+        "::warning::Agent finished but working tree is clean — nothing to push.",
+      );
+      return ok(CiFixEdit.Unchanged);
+    }
+    if (profile === CiAgentFixProfile.RustDependencyUpdate) {
+      if (baselineState.kind !== RepositoryBaselineKind.Captured)
+        return err({
+          kind: CiFailureKind.Baseline,
+          message: "Rust dependency update baseline was not captured",
+        });
+      const { baseline } = baselineState;
+      const before = await this.admitEdit(repository, baseline);
+      if (before.isErr()) return err(before.error);
+      const validated =
+        await repository.runValidationWithoutPublicationCredentials();
+      if (validated.isErr()) return err(validated.error);
+      const after = await this.admitEdit(repository, baseline);
+      if (after.isErr()) return err(after.error);
+    }
+    return ok(CiFixEdit.Changed);
+  }
+  private async admitEdit(
+    repository: DependencyFixRepository,
+    baseline: RepositoryBaseline,
+  ): Promise<Result<void, CiFailure>> {
+    const unchanged = await repository.assertBaselineUnchanged({ baseline });
+    if (unchanged.isErr()) return err(unchanged.error);
+    const changes = await repository.collectChangedPaths();
+    if (changes.isErr()) return err(changes.error);
+    return repository.assertTrustedChangeSet({
+      baseline: baseline.headSha,
+      changes: changes.value,
+    });
+  }
+}
+enum CiFixEdit {
+  Unchanged,
+  Changed,
 }
 
 export interface DependencyFixRepositoryGitOutputRequest {
@@ -264,7 +286,9 @@ export interface DependencyFixRepositoryAssertBaselineUnchangedRequest {
 export interface DependencyFixRepositoryAssertRustDependencyUpdateChangeSetRequest {
   readonly changes: readonly ChangedPath[];
   readonly baselineModeForPath?: BaselineModeLookup;
-  readonly baselineContentForPath?: (path: string) => Promise<string>;
+  readonly baselineContentForPath?: (
+    path: string,
+  ) => Promise<Result<string, CiFailure>>;
 }
 
 export interface DependencyFixRepositoryGitShowRequest {
@@ -287,124 +311,100 @@ export interface DependencyFixRepositoryRunRustDependencyUpdateValidationRequest
 
 export class DependencyFixRepository {
   constructor(private readonly value: string) {}
-  async gitOutput(
-    request: DependencyFixRepositoryGitOutputRequest,
-  ): Promise<string> {
-    const repoRoot = this.value;
-    const { args } = request;
-
-    return (
-      await execFileAsync(
-        "git",
-        new CiRepository(repoRoot).trustedGitArgs({ args: args }),
-        {
-          encoding: "utf8",
-        },
-      )
-    ).stdout;
+  gitOutput({ args }: DependencyFixRepositoryGitOutputRequest) {
+    return new CiRepository(this.value)
+      .trustedGit({ args })
+      .map(({ stdout }) => stdout);
   }
-
-  async currentIndexTree(): Promise<string> {
-    const repoRoot = this.value;
-
-    return (
-      await new DependencyFixRepository(repoRoot).gitOutput({
-        args: ["write-tree"],
-      })
-    ).trim();
+  currentIndexTree() {
+    return this.gitOutput({ args: ["write-tree"] }).map((value) =>
+      value.trim(),
+    );
   }
-
   async captureGitMetadataBaseline(): Promise<
-    RepositoryBaseline["gitMetadata"]
+    Result<RepositoryBaseline["gitMetadata"], CiFailure>
   > {
-    const repoRoot = this.value;
-
-    const [commonDirectory, configuration, gitDirectory] = await Promise.all([
-      new DependencyFixRepository(repoRoot).gitOutput({
+    const records = await ResultAsync.combine([
+      this.gitOutput({
         args: ["rev-parse", "--path-format=absolute", "--git-common-dir"],
       }),
-      new DependencyFixRepository(repoRoot).gitOutput({
+      this.gitOutput({
         args: ["config", "--null", "--show-origin", "--show-scope", "--list"],
       }),
-      new DependencyFixRepository(repoRoot).gitOutput({
-        args: ["rev-parse", "--absolute-git-dir"],
-      }),
+      this.gitOutput({ args: ["rev-parse", "--absolute-git-dir"] }),
     ]);
+    if (records.isErr()) return err(records.error);
+    const [commonDirectory, configuration, gitDirectory] = records.value;
     const gitDir = gitDirectory.trim();
-    let exclude = "";
-    try {
-      exclude = await readFile(join(gitDir, "info", "exclude"), "utf8");
-    } catch {
-      exclude = "";
-    }
-    const indexFlags = await new DependencyFixRepository(repoRoot).gitOutput({
-      args: ["ls-files", "-v"],
-    });
+    const excluded = await new AgentFile(
+      join(gitDir, "info", "exclude"),
+    ).read();
+    const exclude = excluded.isOk() ? excluded.value : "";
+    const flags = await this.gitOutput({ args: ["ls-files", "-v"] });
+    if (flags.isErr()) return err(flags.error);
     if (
-      indexFlags
+      flags.value
         .split("\n")
         .some((line) => line.startsWith("S") || line.startsWith("h"))
     )
-      throw new Error("Bounded editor set nondefault Git index flags");
-    return {
+      return err({
+        kind: CiFailureKind.Baseline,
+        message: "Bounded editor set nondefault Git index flags",
+      });
+    return ok({
       commonDirectory: commonDirectory.trim(),
-      configuration: `${configuration}\0${exclude}\0${indexFlags}`,
+      configuration: `${configuration}\0${exclude}\0${flags.value}`,
       gitDirectory: gitDir,
-    };
+    });
   }
-
-  async captureRepositoryBaseline(): Promise<RepositoryBaseline> {
-    const repoRoot = this.value;
-
-    const [headSha, headTreeSha, indexTreeSha] = await Promise.all([
-      new CiRepository(repoRoot).revParse({ ref: "HEAD" }),
-      new CiRepository(repoRoot).revParse({ ref: "HEAD^{tree}" }),
-      new DependencyFixRepository(repoRoot).currentIndexTree(),
+  async captureRepositoryBaseline(): Promise<
+    Result<RepositoryBaseline, CiFailure>
+  > {
+    const trees = await ResultAsync.combine([
+      new CiRepository(this.value).revParse({ ref: "HEAD" }),
+      new CiRepository(this.value).revParse({ ref: "HEAD^{tree}" }),
+      this.currentIndexTree(),
     ]);
-    if (
-      indexTreeSha !== headTreeSha ||
-      (await new DependencyFixRepository(repoRoot).collectChangedPaths())
-        .length !== 0
-    )
-      throw new Error(
-        "Trusted dependency-update baseline checkout is not clean",
-      );
-    return {
-      gitMetadata: await new DependencyFixRepository(
-        repoRoot,
-      ).captureGitMetadataBaseline(),
+    if (trees.isErr()) return err(trees.error);
+    const [headSha, headTreeSha, indexTreeSha] = trees.value;
+    const changes = await this.collectChangedPaths();
+    if (changes.isErr()) return err(changes.error);
+    if (indexTreeSha !== headTreeSha || changes.value.length !== 0)
+      return err({
+        kind: CiFailureKind.Baseline,
+        message: "Trusted dependency-update baseline checkout is not clean",
+      });
+    const metadata = await this.captureGitMetadataBaseline();
+    return metadata.map((gitMetadata) => ({
+      gitMetadata,
       headSha,
       indexTreeSha,
-    };
+    }));
   }
-
-  async assertBaselineUnchanged(
-    request: DependencyFixRepositoryAssertBaselineUnchangedRequest,
-  ): Promise<void> {
-    const repoRoot = this.value;
-    const { baseline } = request;
-
-    new DependencyFixAssertRepositoryBaselineUnchanged({
+  async assertBaselineUnchanged({
+    baseline,
+  }: DependencyFixRepositoryAssertBaselineUnchangedRequest): Promise<
+    Result<void, CiFailure>
+  > {
+    const head = await new CiRepository(this.value).revParse({ ref: "HEAD" });
+    if (head.isErr()) return err(head.error);
+    const index = await this.currentIndexTree();
+    if (index.isErr()) return err(index.error);
+    const trees = new DependencyFixAssertRepositoryBaselineUnchanged({
       baseline,
-      currentHeadSha: await new CiRepository(repoRoot).revParse({
-        ref: "HEAD",
-      }),
-      currentIndexTreeSha: await new DependencyFixRepository(
-        repoRoot,
-      ).currentIndexTree(),
+      currentHeadSha: head.value,
+      currentIndexTreeSha: index.value,
     }).execute();
-    new DependencyFixAssertGitMetadataBaselineUnchanged({
+    if (trees.isErr()) return err(trees.error);
+    const metadata = await this.captureGitMetadataBaseline();
+    if (metadata.isErr()) return err(metadata.error);
+    return new DependencyFixAssertGitMetadataBaselineUnchanged({
       baseline: baseline.gitMetadata,
-      current: await new DependencyFixRepository(
-        repoRoot,
-      ).captureGitMetadataBaseline(),
+      current: metadata.value,
     }).execute();
   }
-
-  async collectChangedPaths(): Promise<ChangedPath[]> {
-    const repoRoot = this.value;
-
-    const status = await new DependencyFixRepository(repoRoot).gitOutput({
+  async collectChangedPaths(): Promise<Result<ChangedPath[], CiFailure>> {
+    const status = await this.gitOutput({
       args: [
         "status",
         "--porcelain=v1",
@@ -414,199 +414,208 @@ export class DependencyFixRepository {
         ".",
       ],
     });
-    return new DependencyFixParsePorcelainStatus(status).execute();
+    return status.andThen((source) =>
+      new DependencyFixParsePorcelainStatus(source).execute(),
+    );
   }
-
-  async assertRustDependencyUpdateChangeSet(
-    request: DependencyFixRepositoryAssertRustDependencyUpdateChangeSetRequest,
-  ): Promise<void> {
-    const repoRoot = this.value;
-    const {
-      changes,
-      baselineModeForPath = async () => "",
-      baselineContentForPath = async () => "",
-    } = request;
-
+  async assertRustDependencyUpdateChangeSet({
+    changes,
+    baselineModeForPath = async () => ok(""),
+    baselineContentForPath = async () => ok(""),
+  }: DependencyFixRepositoryAssertRustDependencyUpdateChangeSetRequest): Promise<
+    Result<void, CiFailure>
+  > {
     if (changes.length === 0)
-      throw new Error("Trusted dependency-update change set is empty");
-    const root = resolve(repoRoot);
+      return err({
+        kind: CiFailureKind.Dependency,
+        message: "Trusted dependency-update change set is empty",
+      });
+    const root = resolve(this.value);
     for (const change of changes) {
       if (change.path.startsWith("/") || change.path.split("/").includes(".."))
-        throw new Error("Dependency-update path escapes the repository");
-      if (new RustDependencyPath(change.path).isOrchestrationControl())
-        throw new Error(
-          `Dependency update changed trusted orchestration control: ${change.path}`,
-        );
-      if (!new RustDependencyPath(change.path).isAllowed())
-        throw new Error(
-          `Dependency update changed forbidden path: ${change.path}`,
-        );
+        return err({
+          kind: CiFailureKind.Dependency,
+          message: "Dependency-update path escapes the repository",
+        });
+      const path = new RustDependencyPath(change.path);
+      if (path.isOrchestrationControl())
+        return err({
+          kind: CiFailureKind.Dependency,
+          message: `Dependency update changed trusted orchestration control: ${change.path}`,
+        });
+      if (!path.isAllowed())
+        return err({
+          kind: CiFailureKind.Dependency,
+          message: `Dependency update changed forbidden path: ${change.path}`,
+        });
       const absolutePath = resolve(root, change.path);
       if (!absolutePath.startsWith(`${root}${sep}`))
-        throw new Error("Dependency-update path escapes the repository");
-      try {
-        const metadata = await lstat(absolutePath);
-        if (!metadata.isFile()) {
-          throw new Error(
-            `Dependency update produced a symlink or special file: ${change.path}`,
-          );
-        }
+        return err({
+          kind: CiFailureKind.Dependency,
+          message: "Dependency-update path escapes the repository",
+        });
+      const metadata = await new AgentFile(absolutePath).metadata();
+      if (metadata.isErr()) {
         if (
-          change.path.endsWith("Cargo.toml") ||
-          change.path.endsWith("Cargo.lock")
+          metadata.error.kind === CiFailureKind.Combined ||
+          metadata.error.code !== "ENOENT" ||
+          !change.status.includes("D")
         )
-          new RustDependencyDocument({
-            path: change.path,
-            content: await readFile(absolutePath, "utf8"),
-            baseline: await baselineContentForPath(change.path),
-          }).validateSources();
-      } catch (error: unknown) {
-        const code =
-          error && typeof error === "object" && "code" in error
-            ? String(error.code)
-            : "";
-        if (code !== "ENOENT" || !change.status.includes("D")) throw error;
+          return err(metadata.error);
         const baselineMode = await baselineModeForPath(change.path);
-        if (baselineMode !== "100644" && baselineMode !== "100755") {
-          throw new Error(
-            `Dependency update deleted a symlink or special file: ${change.path}`,
-          );
-        }
+        if (baselineMode.isErr()) return err(baselineMode.error);
+        if (baselineMode.value !== "100644" && baselineMode.value !== "100755")
+          return err({
+            kind: CiFailureKind.Dependency,
+            message: `Dependency update deleted a symlink or special file: ${change.path}`,
+          });
+        continue;
+      }
+      if (!metadata.value.isFile())
+        return err({
+          kind: CiFailureKind.Dependency,
+          message: `Dependency update produced a symlink or special file: ${change.path}`,
+        });
+      if (
+        change.path.endsWith("Cargo.toml") ||
+        change.path.endsWith("Cargo.lock")
+      ) {
+        const content = await new AgentFile(absolutePath).read();
+        if (content.isErr()) return err(content.error);
+        const baseline = await baselineContentForPath(change.path);
+        if (baseline.isErr()) return err(baseline.error);
+        const admitted = new RustDependencyDocument({
+          path: change.path,
+          content: content.value,
+          baseline: baseline.value,
+        }).validateSources();
+        if (admitted.isErr()) return err(admitted.error);
       }
     }
+    return ok();
   }
-
-  async gitShow(
-    request: DependencyFixRepositoryGitShowRequest,
-  ): Promise<string> {
-    const repoRoot = this.value;
-    const { spec } = request;
-
-    try {
-      return await new DependencyFixRepository(repoRoot).gitOutput({
-        args: ["show", spec],
-      });
-    } catch {
-      return "";
-    }
+  async gitShow({
+    spec,
+  }: DependencyFixRepositoryGitShowRequest): Promise<
+    Result<string, CiFailure>
+  > {
+    const content = await this.gitOutput({ args: ["show", spec] });
+    return content.isOk() ? content : ok("");
   }
-
-  async collectCommittedChangeSet(
-    request: DependencyFixRepositoryCollectCommittedChangeSetRequest,
-  ): Promise<ChangedPath[]> {
-    const repoRoot = this.value;
-    const { base } = request;
-
-    const records = new NulSeparatedRecords(
-      await new DependencyFixRepository(repoRoot).gitOutput({
-        args: ["diff", "-z", "--name-status", base],
-      }),
-    ).values();
-    const changes: ChangedPath[] = [];
+  async collectCommittedChangeSet({
+    base,
+  }: DependencyFixRepositoryCollectCommittedChangeSetRequest): Promise<
+    Result<ChangedPath[], CiFailure>
+  > {
+    const source = await this.gitOutput({
+      args: ["diff", "-z", "--name-status", base],
+    });
+    if (source.isErr()) return err(source.error);
+    const records = new NulSeparatedRecords(source.value).values();
+    let changes: ChangedPath[] = [];
     for (let index = 0; index < records.length;) {
-      const status = records[index]!;
+      const status = records[index];
+      const path = records[index + 1];
+      if (!status || !path)
+        return err({
+          kind: CiFailureKind.Schema,
+          message: "Malformed Git committed change record",
+        });
       if (status.startsWith("R") || status.startsWith("C")) {
-        changes.push(
-          { path: records[index + 2]!, status },
-          { path: records[index + 1]!, status },
-        );
+        const destination = records[index + 2];
+        if (!destination)
+          return err({
+            kind: CiFailureKind.Schema,
+            message: "Malformed Git committed rename record",
+          });
+        changes = [...changes, { path: destination, status }, { path, status }];
         index += 3;
       } else {
-        changes.push({
-          path: records[index + 1]!,
-          status: status.padEnd(2, " "),
-        });
+        changes = [...changes, { path, status: status.padEnd(2, " ") }];
         index += 2;
       }
     }
-    return changes;
+    return ok(changes);
   }
-
-  async assertTrustedChangeSet(
-    request: DependencyFixRepositoryAssertTrustedChangeSetRequest,
-  ): Promise<void> {
-    const repoRoot = this.value;
-    const { baseline, changes } = request;
-
-    await new DependencyFixRepository(
-      repoRoot,
-    ).assertRustDependencyUpdateChangeSet({
-      changes: changes,
-      baselineModeForPath: async (path) => {
-        const match = /^(\d{6})\s/u.exec(
-          await new DependencyFixRepository(repoRoot).gitOutput({
-            args: ["ls-tree", baseline, "--", path],
-          }),
-        );
-        return match ? match[1] || "" : "";
-      },
-      baselineContentForPath: async (path) =>
-        new DependencyFixRepository(repoRoot).gitShow({
-          spec: `${baseline}:${path}`,
-        }),
+  assertTrustedChangeSet({
+    baseline,
+    changes,
+  }: DependencyFixRepositoryAssertTrustedChangeSetRequest) {
+    return this.assertRustDependencyUpdateChangeSet({
+      changes,
+      baselineModeForPath: async (path) =>
+        this.gitOutput({ args: ["ls-tree", baseline, "--", path] }).map(
+          (source) => /^(\d{6})\s/u.exec(source)?.[1] || "",
+        ),
+      baselineContentForPath: (path) =>
+        this.gitShow({ spec: `${baseline}:${path}` }),
     });
   }
-
-  async assertCheckoutHasNoPersistedCredentials(): Promise<void> {
-    const repoRoot = this.value;
-
-    const config = await new DependencyFixRepository(repoRoot).gitOutput({
+  async assertCheckoutHasNoPersistedCredentials(): Promise<
+    Result<void, CiFailure>
+  > {
+    const config = await this.gitOutput({
       args: ["config", "--null", "--list"],
     });
-    new GitConfiguration(
-      new GitConfigurationText(config).decode(),
-    ).assertCredentialFree();
+    return config
+      .andThen((source) => new GitConfigurationText(source).decode())
+      .andThen((entries) =>
+        new GitConfiguration(entries).assertCredentialFree(),
+      );
   }
-
-  async runRustDependencyUpdateValidation(
-    request: DependencyFixRepositoryRunRustDependencyUpdateValidationRequest,
-  ): Promise<void> {
-    const repoRoot = this.value;
-    const { sanitizedEnvironment, runner = runValidationCommand } = request;
-
+  async runRustDependencyUpdateValidation({
+    sanitizedEnvironment,
+    runner = runValidationCommand,
+  }: DependencyFixRepositoryRunRustDependencyUpdateValidationRequest): Promise<
+    Result<void, CiFailure>
+  > {
     for (const validation of RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS) {
-      await runner("task", validation.args, {
-        cwd: repoRoot,
+      const outcome = await runner("task", validation.args, {
+        cwd: this.value,
         env: { ...sanitizedEnvironment, ...validation.environment },
       });
+      if (outcome.isErr()) return err(outcome.error);
     }
+    return ok();
   }
-
-  async runValidationWithoutPublicationCredentials(): Promise<void> {
-    const repoRoot = this.value;
-
-    await new DependencyFixWithValidationEnvironment({
+  runValidationWithoutPublicationCredentials() {
+    return new DependencyFixWithValidationEnvironment({
       environment: process.env,
-      operation: (validationEnvironment) =>
-        new DependencyFixRepository(repoRoot).runRustDependencyUpdateValidation(
-          { sanitizedEnvironment: validationEnvironment },
-        ),
+      operation: (sanitizedEnvironment) =>
+        this.runRustDependencyUpdateValidation({ sanitizedEnvironment }),
     }).execute();
   }
 }
 
 export class DependencyFixParsePorcelainStatus {
   constructor(private readonly request: string) {}
-  execute(): ChangedPath[] {
+  execute(): Result<ChangedPath[], CiFailure> {
     const output = this.request;
 
     const records = new NulSeparatedRecords(output).values();
-    const changes: ChangedPath[] = [];
+    let changes: ChangedPath[] = [];
     for (let index = 0; index < records.length; index += 1) {
       const record = records[index]!;
       if (record.length < 4 || record[2] !== " ") {
-        throw new Error("Malformed Git status record");
+        return err({
+          kind: CiFailureKind.Dependency,
+          message: "Malformed Git status record",
+        });
       }
       const status = record.slice(0, 2);
-      changes.push({ path: record.slice(3), status });
+      changes = [...changes, { path: record.slice(3), status }];
       if (status.includes("R") || status.includes("C")) {
         const source = records[index + 1];
-        if (!source) throw new Error("Malformed Git rename status record");
-        changes.push({ path: source, status });
+        if (!source)
+          return err({
+            kind: CiFailureKind.Dependency,
+            message: "Malformed Git rename status record",
+          });
+        changes = [...changes, { path: source, status }];
         index += 1;
       }
     }
-    return changes;
+    return ok(changes);
   }
 }
 
@@ -621,96 +630,9 @@ export class DependencyFixIsolationForFixProfile {
   }
 }
 
-export class DependencyFixCreateValidationEnvironment {
-  constructor(private readonly request: NodeJS.ProcessEnv) {}
-  execute(): NodeJS.ProcessEnv {
-    const hostEnvironment = this.request;
-
-    const environment: NodeJS.ProcessEnv = {};
-    for (const name of VALIDATION_ENV_ALLOWLIST) {
-      const value = hostEnvironment[name];
-      if (typeof value === "string") environment[name] = value;
-    }
-    return environment;
-  }
-}
-
-export interface DependencyFixWithValidationEnvironmentRequest<T> {
-  readonly environment: NodeJS.ProcessEnv;
-  readonly operation: (sanitized: NodeJS.ProcessEnv) => Promise<T>;
-}
-
-export class DependencyFixWithValidationEnvironment<T> {
-  constructor(
-    private readonly request: DependencyFixWithValidationEnvironmentRequest<T>,
-  ) {}
-  async execute(): Promise<T> {
-    const { environment, operation } = this.request;
-
-    const hostEnvironment = { ...environment };
-    const isolatedRoot = await mkdtemp(join(tmpdir(), "nook-validation-"));
-    try {
-      const base = new DependencyFixCreateValidationEnvironment(
-        hostEnvironment,
-      ).execute();
-      let dockerHost = "";
-      const [defaulted1 = ""] = [base.PATH];
-      for (const dir of defaulted1.split(":")) {
-        try {
-          await lstat(join(dir, "docker"));
-          dockerHost = join(dir, "docker");
-          break;
-        } catch {
-          continue;
-        }
-      }
-      if (!dockerHost) throw new Error("docker not found on sanitized PATH");
-      const bin = join(isolatedRoot, "bin");
-      const home = join(isolatedRoot, "home");
-      const docker = join(bin, "docker");
-      await Promise.all([mkdir(bin), mkdir(home)]);
-      await writeFile(docker, NETWORKLESS_DOCKER, { mode: 0o700 });
-      const builder = base.NOOK_PR_BUILDX_BUILDER;
-      const hostHome = environment.HOME;
-      if (builder) {
-        if (!/^[a-zA-Z0-9_.-]+$/u.test(builder) || !hostHome)
-          throw new Error("Invalid trusted Buildx instance metadata");
-        const buildx = join(hostHome, ".docker", "buildx");
-        const source = join(buildx, "instances", builder);
-        if (!(await lstat(source)).isFile())
-          throw new Error(
-            "Trusted Buildx instance metadata is not a regular file",
-          );
-        const instances = join(home, ".docker", "buildx", "instances");
-        await mkdir(instances, { recursive: true });
-        await copyFile(source, join(instances, builder));
-      }
-      new AgentRuntimeRestoreHostEnvironment({
-        snapshot: {
-          ...base,
-          DOCKER: docker,
-          HOME: home,
-          NOOK_VALIDATION_DOCKER: dockerHost,
-          PATH: `${bin}:${base.PATH || ""}`,
-          SCCACHE_OPTIONAL: "1",
-          ...(builder ? { BUILDX_BUILDER: builder } : {}),
-        },
-        environment: environment,
-      }).execute();
-      return await operation(environment);
-    } finally {
-      new AgentRuntimeRestoreHostEnvironment({
-        snapshot: hostEnvironment,
-        environment: environment,
-      }).execute();
-      await rm(isolatedRoot, { recursive: true, force: true });
-    }
-  }
-}
-
 export class DependencyFixAssertPublishedFixIdentity {
   constructor(private readonly request: PublishedFixIdentity) {}
-  execute(): string {
+  execute(): Result<string, CiFailure> {
     const identity = this.request;
 
     const mismatch = [
@@ -725,10 +647,11 @@ export class DependencyFixAssertPublishedFixIdentity {
       ["PR base", identity.actualBaseRef, identity.expectedBaseRef],
     ].find(([, actual, expected]) => actual !== expected);
     if (mismatch)
-      throw new Error(
-        `Published ${mismatch[0]} changed: expected ${mismatch[2]}, got ${mismatch[1]}`,
-      );
-    return identity.expectedHeadSha;
+      return err({
+        kind: CiFailureKind.Dependency,
+        message: `Published ${mismatch[0]} changed: expected ${mismatch[2]}, got ${mismatch[1]}`,
+      });
+    return ok(identity.expectedHeadSha);
   }
 }
 
@@ -739,23 +662,25 @@ export class DependencyFixVerifyPublishedFix {
       expectedHeadRef: string;
       expectedHeadSha: string;
       expectedPrNumber: number;
-      fetchPullRequest: () => Promise<PublishedPullRequest>;
-      fetchRemoteHeadSha: () => Promise<string>;
+      fetchPullRequest: () => Promise<Result<PublishedPullRequest, CiFailure>>;
+      fetchRemoteHeadSha: () => Promise<Result<string, CiFailure>>;
     },
   ) {}
-  async execute(): Promise<string> {
+  async execute(): Promise<Result<string, CiFailure>> {
     const args = this.request;
 
     const [pullRequest, remoteHeadSha] = await Promise.all([
       args.fetchPullRequest(),
       args.fetchRemoteHeadSha(),
     ]);
+    if (pullRequest.isErr()) return err(pullRequest.error);
+    if (remoteHeadSha.isErr()) return err(remoteHeadSha.error);
     return new DependencyFixAssertPublishedFixIdentity({
-      actualBaseRef: pullRequest.base.ref,
-      actualHeadRef: pullRequest.head.ref,
-      actualHeadSha: pullRequest.head.sha,
-      actualPrNumber: pullRequest.number,
-      actualRemoteHeadSha: remoteHeadSha,
+      actualBaseRef: pullRequest.value.base.ref,
+      actualHeadRef: pullRequest.value.head.ref,
+      actualHeadSha: pullRequest.value.head.sha,
+      actualPrNumber: pullRequest.value.number,
+      actualRemoteHeadSha: remoteHeadSha.value,
       expectedBaseRef: args.expectedBaseRef,
       expectedHeadRef: args.expectedHeadRef,
       expectedHeadSha: args.expectedHeadSha,
@@ -769,42 +694,48 @@ class DependencyFixVerifyLiveFixPublication {
     private readonly request: {
       expectedHeadSha: string;
       fixBranch: string;
-      octokit: ReturnType<GitHubEnvironment["createOctokit"]>;
+      octokit: Octokit;
       prNumber: number;
-      repoRef: ReturnType<GitHubRepositoryName["parse"]>;
+      repoRef: RepoRef;
     },
   ) {}
-  async execute(): Promise<PublishedCiFixOutcome> {
+  async execute(): Promise<Result<PublishedCiFixOutcome, CiFailure>> {
     const args = this.request;
 
-    return {
-      headSha: await new DependencyFixVerifyPublishedFix({
-        expectedBaseRef: "main",
-        expectedHeadRef: args.fixBranch,
-        expectedHeadSha: args.expectedHeadSha,
-        expectedPrNumber: args.prNumber,
-        fetchPullRequest: async () => {
-          const { data } = await args.octokit.rest.pulls.get({
+    const verified = await new DependencyFixVerifyPublishedFix({
+      expectedBaseRef: "main",
+      expectedHeadRef: args.fixBranch,
+      expectedHeadSha: args.expectedHeadSha,
+      expectedPrNumber: args.prNumber,
+      fetchPullRequest: async () => {
+        const response = await ResultAsync.fromPromise(
+          args.octokit.rest.pulls.get({
             ...args.repoRef,
             pull_number: args.prNumber,
-          });
-          return data;
-        },
-        fetchRemoteHeadSha: async () => {
-          const { data } = await args.octokit.rest.repos.getBranch({
+          }),
+          (cause) => new GithubRequestFailure(cause).outcome(),
+        );
+        return response.map(({ data }) => data);
+      },
+      fetchRemoteHeadSha: async () => {
+        const response = await ResultAsync.fromPromise(
+          args.octokit.rest.repos.getBranch({
             ...args.repoRef,
             branch: args.fixBranch,
-          });
-          return data.commit.sha;
-        },
-      }).execute(),
-      kind: CiFixOutcomeKind.Published,
-    };
+          }),
+          (cause) => new GithubRequestFailure(cause).outcome(),
+        );
+        return response.map(({ data }) => data.commit.sha);
+      },
+    }).execute();
+    return verified.map((headSha) => ({
+      headSha,
+      kind: CiFixOutcomeKind.Published as const,
+    }));
   }
 }
 
 const log = new Logger("fix");
-const execFileAsync = promisify(execFile);
 
 export enum CiAgentFixProfile {
   Default = "default",
@@ -831,118 +762,6 @@ export type PublishedCiFixOutcome = {
 };
 export type CiFixOutcome = typeof CI_FIX_SKIPPED | PublishedCiFixOutcome;
 
-const VALIDATION_ENV_ALLOWLIST = new Set([
-  "BUILDKIT_PROGRESS",
-  "BUILDX_BUILDER",
-  "CI",
-  "DOCKER_BUILDKIT",
-  "DOCKER_HOST",
-  "FORCE_COLOR",
-  "GITHUB_ACTIONS",
-  "LANG",
-  "LC_ALL",
-  "NO_COLOR",
-  "NOOK_ARC_HIVE",
-  "NOOK_BUILDKIT_REMOTE",
-  "NOOK_PR_BUILDX_BUILDER",
-  "PATH",
-  "RUNNER_TOOL_CACHE",
-  "SHELL",
-  "TERM",
-  "TMPDIR",
-]);
-
-const NETWORKLESS_DOCKER = `#!/bin/sh
-set -eu
-real=\${NOOK_VALIDATION_DOCKER:?}
-deny_net() { for a; do case "$a" in --network|--network=*|--net|--net=*) echo "Blocked Docker network override: $a" >&2; exit 97;; esac; done; }
-case "\${1:-}" in
-  build) shift; deny_net "$@"; exec "$real" build --network none "$@" ;;
-  buildx)
-    sub=\${2:-}; shift 2
-    case "$sub" in
-      bake) deny_net "$@"; exec "$real" buildx bake --set '*.network=none' "$@" ;;
-      build) deny_net "$@"; exec "$real" buildx build --network none "$@" ;;
-      create)
-        [ "$*" = "--name \${NOOK_PR_BUILDX_BUILDER:-} --driver docker-container --bootstrap" ] || exit 97
-        exec "$real" buildx create "$@" ;;
-      inspect|use|version) exec "$real" buildx "$sub" "$@" ;;
-      rm)
-        [ "$*" = "--force \${NOOK_PR_BUILDX_BUILDER:-}" ] || exit 97
-        exec "$real" buildx rm "$@" ;;
-      *) echo "Blocked Docker buildx operation during isolated validation: $sub" >&2; exit 97 ;;
-    esac ;;
-  run) shift; deny_net "$@"; exec "$real" run --network none "$@" ;;
-  container|cp|create|image|images|inspect|ps|rm|version) exec "$real" "$@" ;;
-  *) echo "Blocked Docker operation during isolated validation: \${1:-<empty>}" >&2; exit 97 ;;
-esac
-`;
-
-type ValidationCommand = {
-  args: readonly string[];
-  environment: Readonly<Record<string, string>>;
-};
-
-export const RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS: readonly ValidationCommand[] =
-  [
-    {
-      args: ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
-      environment: {},
-    },
-    { args: ["hive:verify"], environment: {} },
-  ];
-
-type ValidationRunner = (
-  command: string,
-  args: readonly string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv },
-) => Promise<void>;
-
-export const runValidationCommand: ValidationRunner = async (
-  command,
-  args,
-  options,
-) => {
-  if (command !== "task")
-    throw new Error("Isolated validation may only invoke task");
-  const cwd = process.cwd();
-  const hostEnvironment = { ...process.env };
-  process.chdir(options.cwd);
-  new AgentRuntimeRestoreHostEnvironment({
-    snapshot: options.env,
-    environment: process.env,
-  }).execute();
-  try {
-    const wait = (fuzz: boolean) =>
-      new Promise<void>((resolveRun, rejectRun) => {
-        const child = fuzz
-          ? spawn("task", ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"], {
-              stdio: "inherit",
-            })
-          : spawn("task", ["hive:verify"], { stdio: "inherit" });
-        child.once("error", rejectRun);
-        child.once("close", (code, signal) => {
-          if (code === 0 && !signal) resolveRun();
-          else rejectRun(new Error("Isolated validation command failed"));
-        });
-      });
-    if (args[0] === "hive:verify" && args.length === 1) await wait(false);
-    else if (
-      args[0] === "docker:ecosystem:fuzz" &&
-      args[1] === "FUZZ_SECONDS=20" &&
-      args.length === 2
-    )
-      await wait(true);
-    else throw new Error("Isolated validation command is not allowlisted");
-  } finally {
-    new AgentRuntimeRestoreHostEnvironment({
-      snapshot: hostEnvironment,
-      environment: process.env,
-    }).execute();
-    process.chdir(cwd);
-  }
-};
-
 export type RepositoryBaseline = {
   headSha: string;
   indexTreeSha: string;
@@ -958,18 +777,21 @@ type ChangedPath = {
   status: string;
 };
 
-type BaselineModeLookup = (path: string) => Promise<string>;
+type BaselineModeLookup = (path: string) => Promise<Result<string, CiFailure>>;
 
 export class CiFixProfileName {
   constructor(private readonly value: string = "") {}
-  parse(): CiAgentFixProfile {
+  parse(): Result<CiAgentFixProfile, CiFailure> {
     const value = this.value;
     const profile = value.trim();
-    if (!profile) return CiAgentFixProfile.Default;
+    if (!profile) return ok(CiAgentFixProfile.Default);
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
-      return CiAgentFixProfile.RustDependencyUpdate;
+      return ok(CiAgentFixProfile.RustDependencyUpdate);
     }
-    throw new Error(`Unsupported CI_AGENT_FIX_PROFILE: ${profile}`);
+    return err({
+      kind: CiFailureKind.Dependency,
+      message: `Unsupported CI_AGENT_FIX_PROFILE: ${profile}`,
+    });
   }
 }
 

@@ -2,7 +2,11 @@
 
 import type { InteractionUpdate, ToolCall } from "@cursor/sdk";
 
-import { AgentTextLog, ShellStreamLog } from "./interaction-log.js";
+import {
+  AgentTextLog,
+  ShellStreamLog,
+  StreamEvidence,
+} from "./interaction-log.js";
 import { Logger } from "./logger.js";
 import {
   ShellOutputEvent,
@@ -13,14 +17,18 @@ import {
 const log = new Logger("cursor");
 
 export class CiInteractionLogger {
-  private readonly agentText = new AgentTextLog();
-  private readonly shellStream = new ShellStreamLog();
+  constructor(
+    private readonly agentText = new AgentTextLog(),
+    private readonly shellStream = new ShellStreamLog(),
+  ) {}
 
-  log(update: InteractionUpdate): void {
+  log(update: InteractionUpdate): CiInteractionLogger {
+    let agentText = this.agentText,
+      shellStream = this.shellStream;
     switch (update.type) {
       case "text-delta":
         if (update.text) {
-          this.agentText.write(update.text);
+          agentText = agentText.write(update.text);
         }
         break;
       case "thinking-delta":
@@ -28,51 +36,55 @@ export class CiInteractionLogger {
       case "shell-output-delta": {
         const chunk = new ShellOutputEvent(update.event).text();
         if (chunk) {
-          this.agentText.closeBlock();
-          this.shellStream.write(chunk);
+          agentText = agentText.closeBlock();
+          shellStream = shellStream.write(chunk);
         }
         break;
       }
       case "tool-call-started":
-        this.agentText.closeBlock();
-        this.shellStream.closeBlock();
+        agentText = agentText.closeBlock();
+        shellStream = shellStream.closeBlock();
         log.info(new StartedToolCall(update.toolCall).format());
         if (update.toolCall.type === "shell") {
-          this.shellStream.openBlock();
+          shellStream = shellStream.openBlock();
         }
         break;
       case "tool-call-completed":
-        this.shellStream.closeBlock();
+        shellStream = shellStream.closeBlock();
         this.logToolCompleted(update.toolCall);
         break;
       case "step-started":
-        this.agentText.closeBlock();
-        this.shellStream.closeBlock();
+        agentText = agentText.closeBlock();
+        shellStream = shellStream.closeBlock();
         log.debug("step started");
         break;
       case "step-completed":
         log.debug("step completed");
         break;
       case "turn-ended":
-        this.agentText.closeBlock();
-        this.shellStream.closeBlock();
+        agentText = agentText.closeBlock();
+        shellStream = shellStream.closeBlock();
         log.debug("turn ended");
         break;
       default:
         break;
     }
+    return new CiInteractionLogger(agentText, shellStream);
   }
 
-  finish(): void {
-    this.agentText.closeBlock();
-    this.shellStream.closeBlock();
+  finish(): CiInteractionLogger {
+    return new CiInteractionLogger(
+      this.agentText.closeBlock(),
+      this.shellStream.closeBlock(),
+    );
   }
 
   private logToolCompleted(toolCall: ToolCall): void {
     const lines = new CompletedToolCall({
       toolCall: toolCall,
       options: {
-        includeShellOutput: !this.shellStream.hasStreamed(),
+        includeShellOutput:
+          this.shellStream.observation() !== StreamEvidence.Seen,
       },
     }).format();
     for (const line of lines) {
@@ -80,5 +92,3 @@ export class CiInteractionLogger {
     }
   }
 }
-
-export const defaultInteractionLogger = new CiInteractionLogger();

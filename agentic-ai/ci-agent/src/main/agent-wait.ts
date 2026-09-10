@@ -1,3 +1,5 @@
+import { err, type Result } from "neverthrow";
+import { CiFailureKind, type CiFailure } from "./failure.js";
 import { Logger } from "./logger.js";
 export class AgentWaitEnvironment {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
@@ -48,13 +50,13 @@ export class ElapsedDuration {
 
 export interface AgentWaitWaitWithHeartbeatRequest<T> {
   readonly label: string;
-  readonly wait: () => Promise<T>;
+  readonly wait: () => Promise<Result<T, CiFailure>>;
   readonly options: { timeoutMs: number; heartbeatMs: number };
 }
 
 export class AgentWait<T> {
   constructor(private readonly request: AgentWaitWaitWithHeartbeatRequest<T>) {}
-  async complete(): Promise<T> {
+  async complete(): Promise<Result<T, CiFailure>> {
     const { label, wait, options } = this.request;
 
     const started = Date.now();
@@ -64,22 +66,12 @@ export class AgentWait<T> {
       );
     }, options.heartbeatMs);
 
-    try {
-      return await Promise.race([
-        wait(),
-        new Promise<T>((_, reject) => {
-          setTimeout(() => {
-            reject(
-              new Error(
-                `${label} timed out after ${new ElapsedDuration(options.timeoutMs).format()} (CI_AGENT_TIMEOUT_MS)`,
-              ),
-            );
-          }, options.timeoutMs);
-        }),
-      ]);
-    } finally {
-      clearInterval(heartbeat);
-    }
+    const deadline = new AgentDeadline<T>(label, options.timeoutMs);
+    const scheduled = deadline.schedule();
+    const outcome = await Promise.race([wait(), scheduled.outcome]);
+    scheduled.cancel();
+    clearInterval(heartbeat);
+    return outcome;
   }
 }
 
@@ -87,3 +79,29 @@ const log = new Logger("agent-wait");
 
 const DEFAULT_TIMEOUT_MS = 90 * 60 * 1000;
 const DEFAULT_HEARTBEAT_MS = 60 * 1000;
+
+class AgentDeadline<T> {
+  constructor(
+    private readonly label: string,
+    private readonly timeoutMs: number,
+  ) {}
+  schedule() {
+    const controller = new AbortController();
+    const outcome = new Promise<Result<T, CiFailure>>((resolve) => {
+      const timer = setTimeout(
+        () =>
+          resolve(
+            err({
+              kind: CiFailureKind.Timeout,
+              message: `${this.label} timed out after ${new ElapsedDuration(this.timeoutMs).format()} (CI_AGENT_TIMEOUT_MS)`,
+            }),
+          ),
+        this.timeoutMs,
+      );
+      controller.signal.addEventListener("abort", () => clearTimeout(timer), {
+        once: true,
+      });
+    });
+    return { outcome, cancel: () => controller.abort() };
+  }
+}

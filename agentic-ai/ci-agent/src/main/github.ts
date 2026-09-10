@@ -1,3 +1,16 @@
+import { PullRequestRevisionConstraint } from "./github-revision.js";
+export {
+  GitHubRepositoryName,
+  PullRequestRevisionComparison,
+  PullRequestRevisionConstraint,
+} from "./github-revision.js";
+export type {
+  GitHubSamePullRequestRevisionRequest,
+  GitHubAssertPullRequestRevisionRequest,
+} from "./github-revision.js";
+import { err, ok, ResultAsync, type Result } from "neverthrow";
+import { CiFailureKind, type CiFailure } from "./failure.js";
+import { GithubRequestFailure } from "./github-failure.js";
 import { Octokit } from "@octokit/rest";
 
 import {
@@ -12,19 +25,31 @@ import {
 import { Logger } from "./logger.js";
 export class GitHubEnvironment {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
-  resolveGitHubToken(): string {
+  resolveGitHubToken(): Result<string, CiFailure> {
     const token =
       this.environment.NOOK_GITHUB_PAT?.trim() ||
       this.environment.GITHUB_TOKEN?.trim() ||
       this.environment.GH_TOKEN?.trim();
     if (!token) {
-      throw new Error("NOOK_GITHUB_PAT, GITHUB_TOKEN, or GH_TOKEN is required");
+      return err({
+        kind: CiFailureKind.Github,
+        message: "NOOK_GITHUB_PAT, GITHUB_TOKEN, or GH_TOKEN is required",
+      });
     }
-    return token;
+    return ok(token);
   }
 
-  createOctokit(): Octokit {
-    return new Octokit({ auth: this.resolveGitHubToken() });
+  createOctokit(): Result<Octokit, CiFailure> {
+    const token = this.resolveGitHubToken();
+    if (token.isErr()) return err(token.error);
+    try {
+      return ok(new Octokit({ auth: token.value }));
+    } catch {
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "Unable to create GitHub client",
+      });
+    }
   }
 }
 
@@ -54,82 +79,99 @@ export class GitHubClient {
   constructor(private readonly value: Octokit) {}
   async readPullRequestRevision(
     request: GitHubClientReadPullRequestRevisionRequest,
-  ): Promise<PullRequestRevision> {
+  ): Promise<Result<PullRequestRevision, CiFailure>> {
     const octokit = this.value;
     const { repoRef, prNumber, signal } = request;
 
     const { owner, repo } = repoRef;
-    const { data: pr } = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-      ...(signal ? { request: { signal } } : {}),
-    });
-    return {
+    const response1 = await ResultAsync.fromPromise(
+      octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: prNumber,
+        ...(signal ? { request: { signal } } : {}),
+      }),
+      (cause) => new GithubRequestFailure(cause).outcome(),
+    );
+    if (response1.isErr()) return err(response1.error);
+    const { data: pr } = response1.value;
+    return ok({
       baseRef: pr.base.ref,
       baseSha: pr.base.sha,
       headSha: pr.head.sha,
-    };
+    });
   }
 
   async findOpenPr(
     request: GitHubClientFindOpenPrRequest,
-  ): Promise<OpenPrLookup> {
+  ): Promise<Result<OpenPrLookup, CiFailure>> {
     const octokit = this.value;
     const { subject1, headBranch } = request;
     const { owner, repo } = subject1;
 
-    const { data } = await octokit.rest.pulls.list({
-      owner,
-      repo,
-      state: "open",
-      head: `${owner}:${headBranch}`,
-      per_page: 1,
-    });
+    const response2 = await ResultAsync.fromPromise(
+      octokit.rest.pulls.list({
+        owner,
+        repo,
+        state: "open",
+        head: `${owner}:${headBranch}`,
+        per_page: 1,
+      }),
+      (cause) => new GithubRequestFailure(cause).outcome(),
+    );
+    if (response2.isErr()) return err(response2.error);
+    const { data } = response2.value;
     const match = data[0];
-    return match
-      ? {
-          kind: OpenPrLookupKind.Found,
-          number: match.number,
-          baseBranch: match.base.ref,
-        }
-      : { kind: OpenPrLookupKind.NotFound };
+    return ok(
+      match
+        ? {
+            kind: OpenPrLookupKind.Found,
+            number: match.number,
+            baseBranch: match.base.ref,
+          }
+        : { kind: OpenPrLookupKind.NotFound },
+    );
   }
 
   async branchExistsOnOrigin(
     request: GitHubClientBranchExistsOnOriginRequest,
-  ): Promise<boolean> {
+  ): Promise<Result<boolean, CiFailure>> {
     const octokit = this.value;
     const { subject1, branch } = request;
     const { owner, repo } = subject1;
 
-    try {
-      await octokit.rest.repos.getBranch({ owner, repo, branch });
-      return true;
-    } catch (err: unknown) {
-      if (new GitHubFailure(err).isNotFound()) {
-        return false;
-      }
-      throw err;
-    }
+    const branchResult = await ResultAsync.fromPromise(
+      octokit.rest.repos.getBranch({ owner, repo, branch }),
+      (cause) => new GithubRequestFailure(cause).outcome(),
+    );
+    if (branchResult.isOk()) return ok(true);
+    return branchResult.error.kind === CiFailureKind.Github &&
+      branchResult.error.code === 404
+      ? ok(false)
+      : err(branchResult.error);
   }
 
   async inspectPrFeedback(
     request: GitHubClientInspectPrFeedbackRequest,
-  ): Promise<PrFeedbackSummary> {
+  ): Promise<Result<PrFeedbackSummary, CiFailure>> {
     const octokit = this.value;
     const { repoRef, prNumber, options = {} } = request;
 
     const { owner, repo } = repoRef;
     const { expectedRevision, signal } = options;
-    const { data: pr } = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-      ...(signal ? { request: { signal } } : {}),
-    });
+    const response3 = await ResultAsync.fromPromise(
+      octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: prNumber,
+        ...(signal ? { request: { signal } } : {}),
+      }),
+      (cause) => new GithubRequestFailure(cause).outcome(),
+    );
+    if (response3.isErr()) return err(response3.error);
+    const { data: pr } = response3.value;
     if (expectedRevision) {
-      new PullRequestRevisionConstraint({
+      const revision = new PullRequestRevisionConstraint({
         expected: expectedRevision,
         actual: {
           baseRef: pr.base.ref,
@@ -137,30 +179,36 @@ export class GitHubClient {
           headSha: pr.head.sha,
         },
       }).enforce();
+      if (revision.isErr()) return err(revision.error);
     }
-    const [issueComments, reviews, reviewComments] = await Promise.all([
-      octokit.paginate(octokit.rest.issues.listComments, {
-        owner,
-        repo,
-        issue_number: prNumber,
-        per_page: 100,
-        ...(signal ? { request: { signal } } : {}),
-      }),
-      octokit.paginate(octokit.rest.pulls.listReviews, {
-        owner,
-        repo,
-        pull_number: prNumber,
-        per_page: 100,
-        ...(signal ? { request: { signal } } : {}),
-      }),
-      octokit.paginate(octokit.rest.pulls.listReviewComments, {
-        owner,
-        repo,
-        pull_number: prNumber,
-        per_page: 100,
-        ...(signal ? { request: { signal } } : {}),
-      }),
-    ]);
+    const feedback = await ResultAsync.fromPromise(
+      Promise.all([
+        octokit.paginate(octokit.rest.issues.listComments, {
+          owner,
+          repo,
+          issue_number: prNumber,
+          per_page: 100,
+          ...(signal ? { request: { signal } } : {}),
+        }),
+        octokit.paginate(octokit.rest.pulls.listReviews, {
+          owner,
+          repo,
+          pull_number: prNumber,
+          per_page: 100,
+          ...(signal ? { request: { signal } } : {}),
+        }),
+        octokit.paginate(octokit.rest.pulls.listReviewComments, {
+          owner,
+          repo,
+          pull_number: prNumber,
+          per_page: 100,
+          ...(signal ? { request: { signal } } : {}),
+        }),
+      ]),
+      (cause) => new GithubRequestFailure(cause, signal).outcome(),
+    );
+    if (feedback.isErr()) return err(feedback.error);
+    const [issueComments, reviews, reviewComments] = feedback.value;
     const retiredAutomationComments = issueComments.filter((comment) => {
       const { body = "" } = comment;
       return new GitHubIsRetiredHeadTransitionAutomationComment({
@@ -168,16 +216,20 @@ export class GitHubClient {
         user: comment.user,
       }).execute();
     });
-    await Promise.all(
-      retiredAutomationComments.map((comment) =>
-        octokit.rest.issues.deleteComment({
-          owner,
-          repo,
-          comment_id: comment.id,
-          ...(signal ? { request: { signal } } : {}),
-        }),
+    const retired = await ResultAsync.fromPromise(
+      Promise.all(
+        retiredAutomationComments.map((comment) =>
+          octokit.rest.issues.deleteComment({
+            owner,
+            repo,
+            comment_id: comment.id,
+            ...(signal ? { request: { signal } } : {}),
+          }),
+        ),
       ),
+      (cause) => new GithubRequestFailure(cause, signal).outcome(),
     );
+    if (retired.isErr()) return err(retired.error);
     const activeIssueComments = issueComments.filter(
       (comment) =>
         !retiredAutomationComments.some((retired) => retired.id === comment.id),
@@ -194,9 +246,8 @@ export class GitHubClient {
       | { kind: PaginationKind.NextPage; cursor: string }
       | { kind: PaginationKind.Complete } = { kind: PaginationKind.FirstPage };
     while (pagination.kind !== PaginationKind.Complete) {
-      const page: ReviewThreadPage = await octokit.graphql<ReviewThreadPage>(
-        REVIEW_THREADS_QUERY,
-        {
+      const pageResult = await ResultAsync.fromPromise(
+        octokit.graphql<ReviewThreadPage>(REVIEW_THREADS_QUERY, {
           owner,
           repo,
           number: prNumber,
@@ -204,8 +255,11 @@ export class GitHubClient {
           ...(pagination.kind === PaginationKind.NextPage
             ? { cursor: pagination.cursor }
             : {}),
-        },
+        }),
+        (cause) => new GithubRequestFailure(cause, signal).outcome(),
       );
+      if (pageResult.isErr()) return err(pageResult.error);
+      const page: ReviewThreadPage = pageResult.value;
       const threads: ReviewThreads = page.repository.pullRequest.reviewThreads;
       unresolvedThreads += threads.nodes.filter(
         (thread) => !thread.isResolved,
@@ -219,22 +273,23 @@ export class GitHubClient {
           : { kind: PaginationKind.Complete };
     }
 
-    const handledIssueCommentIds = new Set<number>();
+    let handledIssueCommentIds = new Set<number>();
     pagination = { kind: PaginationKind.FirstPage };
     while (pagination.kind !== PaginationKind.Complete) {
-      const page: IssueCommentStatePage =
-        await octokit.graphql<IssueCommentStatePage>(
-          ISSUE_COMMENT_STATES_QUERY,
-          {
-            owner,
-            repo,
-            number: prNumber,
-            ...(signal ? { request: { signal } } : {}),
-            ...(pagination.kind === PaginationKind.NextPage
-              ? { cursor: pagination.cursor }
-              : {}),
-          },
-        );
+      const pageResult = await ResultAsync.fromPromise(
+        octokit.graphql<IssueCommentStatePage>(ISSUE_COMMENT_STATES_QUERY, {
+          owner,
+          repo,
+          number: prNumber,
+          ...(signal ? { request: { signal } } : {}),
+          ...(pagination.kind === PaginationKind.NextPage
+            ? { cursor: pagination.cursor }
+            : {}),
+        }),
+        (cause) => new GithubRequestFailure(cause, signal).outcome(),
+      );
+      if (pageResult.isErr()) return err(pageResult.error);
+      const page: IssueCommentStatePage = pageResult.value;
       const comments = page.repository.pullRequest.comments;
       for (const comment of comments.nodes) {
         if (
@@ -242,7 +297,10 @@ export class GitHubClient {
           comment.minimizedReason === "resolved" &&
           typeof comment.databaseId === "number"
         ) {
-          handledIssueCommentIds.add(comment.databaseId);
+          handledIssueCommentIds = new Set([
+            ...handledIssueCommentIds,
+            comment.databaseId,
+          ]);
         }
       }
       pagination =
@@ -283,8 +341,8 @@ export class GitHubClient {
         new SubmittedReviewState(review.state).matches() &&
         new ReviewActor(review.user).isCursorReviewer(),
     );
-    const requestReactions = (
-      await Promise.all(
+    const reactions = await ResultAsync.fromPromise(
+      Promise.all(
         reviewRequests.map((request) =>
           octokit.paginate(octokit.rest.reactions.listForIssueComment, {
             owner,
@@ -294,8 +352,11 @@ export class GitHubClient {
             ...(signal ? { request: { signal } } : {}),
           }),
         ),
-      )
-    ).flat();
+      ),
+      (cause) => new GithubRequestFailure(cause, signal).outcome(),
+    );
+    if (reactions.isErr()) return err(reactions.error);
+    const requestReactions = reactions.value.flat();
     const approvalReaction = requestReactions.some(
       (reaction) =>
         reaction.content === "+1" &&
@@ -391,7 +452,7 @@ export class GitHubClient {
       reviews: normalizedReviews,
     };
 
-    return {
+    return ok({
       codexReview: {
         approvalReaction,
         cleanComment,
@@ -412,9 +473,11 @@ export class GitHubClient {
       unhandledComments: unhandledComments.length,
       unthreadedReviewFindings: unthreadedReviewFindings.length,
       unresolvedThreads,
-    };
+    });
   }
-  async createFixPr(request: FixPullRequestInput): Promise<number> {
+  async createFixPr(
+    request: FixPullRequestInput,
+  ): Promise<Result<number, CiFailure>> {
     const octokit = this.value;
     const {
       repoRef,
@@ -436,31 +499,29 @@ export class GitHubClient {
         "- [ ] CI green on this PR",
       ].join("\n");
 
-    try {
-      const { data } = await octokit.rest.pulls.create({
+    const created = await ResultAsync.fromPromise(
+      octokit.rest.pulls.create({
         owner,
         repo,
         title,
         head: headBranch,
         base: baseBranch,
         body: requestedBody,
-      });
-      return data.number;
-    } catch (err: unknown) {
-      const existing = await new GitHubClient(octokit).findOpenPr({
-        subject1: repoRef,
-        headBranch: headBranch,
-      });
-      if (existing.kind === OpenPrLookupKind.Found) {
-        if (existing.baseBranch !== baseBranch) {
-          throw new Error(
-            `Open PR for ${headBranch} targets ${existing.baseBranch}, expected ${baseBranch}`,
-          );
-        }
-        return existing.number;
-      }
-      throw err;
+      }),
+      (cause) => new GithubRequestFailure(cause).outcome(),
+    );
+    if (created.isOk()) return ok(created.value.data.number);
+    const existing = await this.findOpenPr({ subject1: repoRef, headBranch });
+    if (existing.isErr()) return err(existing.error);
+    if (existing.value.kind === OpenPrLookupKind.Found) {
+      if (existing.value.baseBranch !== baseBranch)
+        return err({
+          kind: CiFailureKind.Github,
+          message: `Open PR for ${headBranch} targets ${existing.value.baseBranch}, expected ${baseBranch}`,
+        });
+      return ok(existing.value.number);
     }
+    return err(created.error);
   }
 }
 
@@ -505,73 +566,17 @@ export class PullRequestChangedPath {
   }
 }
 
-export class GitHubRepositoryName {
-  constructor(private readonly request: string) {}
-  parse(): RepoRef {
-    const fullName = this.request;
-
-    const [owner, repo] = fullName.split("/");
-    if (!owner || !repo) {
-      throw new Error(`Invalid GITHUB_REPOSITORY: ${fullName}`);
-    }
-    return { owner, repo };
-  }
-}
-
-export interface GitHubSamePullRequestRevisionRequest {
-  readonly left: PullRequestRevision;
-  readonly right: PullRequestRevision;
-}
-
-export class PullRequestRevisionComparison {
-  constructor(private readonly request: GitHubSamePullRequestRevisionRequest) {}
-  matches(): boolean {
-    const { left, right } = this.request;
-
-    return (
-      left.baseRef === right.baseRef &&
-      left.baseSha === right.baseSha &&
-      left.headSha === right.headSha
-    );
-  }
-}
-
-export interface GitHubAssertPullRequestRevisionRequest {
-  readonly expected: PullRequestRevision;
-  readonly actual: PullRequestRevision;
-}
-
-export class PullRequestRevisionConstraint {
-  constructor(
-    private readonly request: GitHubAssertPullRequestRevisionRequest,
-  ) {}
-  enforce(): void {
-    const { expected, actual } = this.request;
-
-    if (
-      new PullRequestRevisionComparison({
-        left: expected,
-        right: actual,
-      }).matches()
-    )
-      return;
-    throw new Error(
-      `Pull request revision changed from ${expected.headSha}/${expected.baseSha}/${expected.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
-    );
-  }
-}
-
 export class PullRequestWorkflowSelection {
   constructor(private readonly request: string[]) {}
   names(): RequiredPrWorkflow[] {
     const paths = this.request;
 
-    const required: RequiredPrWorkflow[] = [];
+    let required: RequiredPrWorkflow[] = [];
 
     if (
       paths.some((path) => new PullRequestChangedPath(path).isWebResearchPath())
     ) {
-      required.push(WEB_RESEARCH_PR_WORKFLOW);
+      required = [...required, WEB_RESEARCH_PR_WORKFLOW];
     }
     // Product PRs run ecosystem jobs inside pr.yml. Only minds-only PRs still
     // require the thin rust-ecosystem.yml entry point.
@@ -583,14 +588,14 @@ export class PullRequestWorkflowSelection {
         new PullRequestChangedPath(path).isMainPrIgnoredPath(),
       )
     ) {
-      required.push(RUST_ECOSYSTEM_PR_WORKFLOW);
+      required = [...required, RUST_ECOSYSTEM_PR_WORKFLOW];
     }
     if (
       paths.some(
         (path) => !new PullRequestChangedPath(path).isMainPrIgnoredPath(),
       )
     ) {
-      required.push(MAIN_PR_WORKFLOW);
+      required = [...required, MAIN_PR_WORKFLOW];
     }
 
     return required;
@@ -613,7 +618,7 @@ export class AutomatedFindingHistory {
   countBatches(): number {
     const request = this.request;
 
-    const reviewIds = new Set<number>();
+    let reviewIds = new Set<number>();
     const activeAutomatedReviewIds = new Set(
       request.reviews
         .filter((review) => {
@@ -629,7 +634,7 @@ export class AutomatedFindingHistory {
     for (const comment of request.comments) {
       if (comment.isReply) continue;
       if (activeAutomatedReviewIds.has(comment.reviewId)) {
-        reviewIds.add(comment.reviewId);
+        reviewIds = new Set([...reviewIds, comment.reviewId]);
       }
     }
     for (const review of request.reviews) {
@@ -640,22 +645,10 @@ export class AutomatedFindingHistory {
         !new ReviewActor(reviewer).isCursorReviewer()
       )
         continue;
-      if (review.reviewId > 0) reviewIds.add(review.reviewId);
+      if (review.reviewId > 0)
+        reviewIds = new Set([...reviewIds, review.reviewId]);
     }
     return reviewIds.size;
-  }
-}
-
-class GitHubFailure {
-  constructor(private readonly request: unknown) {}
-  isNotFound(): boolean {
-    const err = this.request;
-
-    return (
-      err instanceof Error &&
-      "status" in err &&
-      (err as { status: number }).status === 404
-    );
   }
 }
 

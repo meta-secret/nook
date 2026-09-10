@@ -1,3 +1,9 @@
+import {
+  assertSuccess,
+  assertFailure,
+  assertAsyncFailure,
+} from "./result-assertions.js";
+import { ok } from "neverthrow";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
@@ -36,19 +42,21 @@ const OTHER_SHA = "b".repeat(40);
 const execFileAsync = promisify(execFile);
 
 test("rust dependency update profile selects strict isolation", () => {
-  const profile = new CiFixProfileName("rust-dependency-update").parse();
+  const profile = assertSuccess(
+    new CiFixProfileName("rust-dependency-update").parse(),
+  );
   assert.equal(
     new DependencyFixIsolationForFixProfile(profile).execute(),
     AgentIsolation.Strict,
   );
   assert.equal(
     new DependencyFixIsolationForFixProfile(
-      new CiFixProfileName().parse(),
+      assertSuccess(new CiFixProfileName().parse()),
     ).execute(),
     AgentIsolation.Legacy,
   );
-  assert.throws(
-    () => new CiFixProfileName("rust-dependency-update-typo").parse(),
+  assertFailure(
+    new CiFixProfileName("rust-dependency-update-typo").parse(),
     /Unsupported CI_AGENT_FIX_PROFILE/,
   );
 });
@@ -125,25 +133,30 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
           /Blocked Docker operation/,
         );
         const names: string[] = [];
-        await new DependencyFixRepository(
-          "/repo",
-        ).runRustDependencyUpdateValidation({
-          sanitizedEnvironment: environment,
-          runner: async (_command, args, { env }) => {
-            names.push(String(args[0]));
-            assert.equal(env.HOME, environment.HOME);
-            assert.equal(
-              env.NOOK_VALIDATION_DOCKER,
-              environment.NOOK_VALIDATION_DOCKER,
-            );
-            assert.equal(env.SCCACHE_OPTIONAL, "1");
-            assert.equal(env.NOOK_ARC_HIVE, "1");
-            assert.equal(env.BUILDX_BUILDER, builder);
-          },
-        });
+        await new DependencyFixRepository("/repo")
+          .runRustDependencyUpdateValidation({
+            sanitizedEnvironment: environment,
+            runner: async (_command, args, { env }) => {
+              names.push(String(args[0]));
+              assert.equal(env.HOME, environment.HOME);
+              assert.equal(
+                env.NOOK_VALIDATION_DOCKER,
+                environment.NOOK_VALIDATION_DOCKER,
+              );
+              assert.equal(env.SCCACHE_OPTIONAL, "1");
+              assert.equal(env.NOOK_ARC_HIVE, "1");
+              assert.equal(env.BUILDX_BUILDER, builder);
+              return ok();
+            },
+          })
+          .then(assertSuccess);
         assert.deepEqual(names, ["docker:ecosystem:fuzz", "hive:verify"]);
+
+        return ok();
       },
-    }).execute();
+    })
+      .execute()
+      .then(assertSuccess);
     assert.equal(
       await readFile(log, "utf8"),
       `buildx build --network none .\nbuildx create --name ${builder} --driver docker-container --bootstrap\nbuildx rm --force ${builder}\nrun --network none image\n`,
@@ -188,12 +201,11 @@ test("baseline Git state mutations fail closed", () => {
     { currentHeadSha: OTHER_SHA, currentIndexTreeSha: baseline.indexTreeSha },
     { currentHeadSha: baseline.headSha, currentIndexTreeSha: SHA },
   ])
-    assert.throws(
-      () =>
-        new DependencyFixAssertRepositoryBaselineUnchanged({
-          baseline,
-          ...current,
-        }).execute(),
+    assertFailure(
+      new DependencyFixAssertRepositoryBaselineUnchanged({
+        baseline,
+        ...current,
+      }).execute(),
       /baseline (?:HEAD|index)/,
     );
   const gitMetadata = {
@@ -209,12 +221,11 @@ test("baseline Git state mutations fail closed", () => {
       configuration: `${gitMetadata.configuration}local\0file:.git/config\0core.hookspath\nattacker-hooks\0`,
     },
   ])
-    assert.throws(
-      () =>
-        new DependencyFixAssertGitMetadataBaselineUnchanged({
-          baseline: gitMetadata,
-          current,
-        }).execute(),
+    assertFailure(
+      new DependencyFixAssertGitMetadataBaselineUnchanged({
+        baseline: gitMetadata,
+        current,
+      }).execute(),
       /changed trusted Git metadata/,
     );
 });
@@ -231,16 +242,18 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       await mkdir(join(root, path, ".."), { recursive: true });
       await writeFile(join(root, path), "trusted change\n");
     }
-    await new DependencyFixRepository(root).assertRustDependencyUpdateChangeSet(
-      { changes: allowed.map((path) => ({ path, status: " M" })) },
-    );
+    await new DependencyFixRepository(root)
+      .assertRustDependencyUpdateChangeSet({
+        changes: allowed.map((path) => ({ path, status: " M" })),
+      })
+      .then(assertSuccess);
     const rejects = (
       path: string,
       status: string,
       message: RegExp,
-      lookup = async () => "",
+      lookup = async () => ok(""),
     ) =>
-      assert.rejects(
+      assertAsyncFailure(
         new DependencyFixRepository(root).assertRustDependencyUpdateChangeSet({
           changes: [{ path, status }],
           baselineModeForPath: lookup,
@@ -257,13 +270,13 @@ test("dependency update scope accepts only regular Rust mission files", async ()
     const pinned =
       'hickory = { git = "https://github.com/meta-secret/hickory-dns.git" }\n';
     await writeFile(join(root, "nook-app/nook-platform/Cargo.toml"), pinned);
-    await new DependencyFixRepository(root).assertRustDependencyUpdateChangeSet(
-      {
+    await new DependencyFixRepository(root)
+      .assertRustDependencyUpdateChangeSet({
         changes: [{ path: "nook-app/nook-platform/Cargo.toml", status: " M" }],
-        baselineModeForPath: async () => "",
-        baselineContentForPath: async () => pinned,
-      },
-    );
+        baselineModeForPath: async () => ok(""),
+        baselineContentForPath: async () => ok(pinned),
+      })
+      .then(assertSuccess);
     await writeFile(
       join(root, "nook-app/nook-platform/Cargo.toml"),
       'serde = { git = "https://evil.example/serde" }\n',
@@ -292,7 +305,7 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       "preflight/src/deleted.rs",
       " D",
       /deleted a symlink or special file/,
-      async () => "120000",
+      async () => ok("120000"),
     );
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -307,8 +320,8 @@ test("persisted Git authentication config fails without exposing values", () => 
     },
     { key: "credential.https://github.com.helper", value: "store" },
   ])
-    assert.throws(
-      () => new GitConfiguration([entry]).assertCredentialFree(),
+    assertFailure(
+      new GitConfiguration([entry]).assertCredentialFree(),
       (error) => {
         assert.match(String(error), /credential detected/);
         assert.doesNotMatch(String(error), /should-not-appear/);
@@ -339,7 +352,9 @@ test("publication outcomes and exact identity fail closed", async () => {
     [CiFixOutcomeKind.Skipped, CiFixOutcomeKind.Published],
   );
   assert.equal(
-    new DependencyFixAssertPublishedFixIdentity(PUBLISHED_IDENTITY).execute(),
+    assertSuccess(
+      new DependencyFixAssertPublishedFixIdentity(PUBLISHED_IDENTITY).execute(),
+    ),
     SHA,
   );
   const mismatches = [
@@ -350,12 +365,11 @@ test("publication outcomes and exact identity fail closed", async () => {
     { actualBaseRef: "release" },
   ] as const;
   for (const mismatch of mismatches)
-    assert.throws(
-      () =>
-        new DependencyFixAssertPublishedFixIdentity({
-          ...PUBLISHED_IDENTITY,
-          ...mismatch,
-        }).execute(),
+    assertFailure(
+      new DependencyFixAssertPublishedFixIdentity({
+        ...PUBLISHED_IDENTITY,
+        ...mismatch,
+      }).execute(),
       /Published (?:PR|remote branch)/,
     );
   const verify = (remoteHeadSha: string, expectedHeadSha = SHA) =>
@@ -364,14 +378,15 @@ test("publication outcomes and exact identity fail closed", async () => {
       expectedHeadRef: "fix/rust-dependencies-42",
       expectedHeadSha,
       expectedPrNumber: 1208,
-      fetchPullRequest: async () => ({
-        base: { ref: "main" },
-        head: { ref: "fix/rust-dependencies-42", sha: SHA },
-        number: 1208,
-      }),
-      fetchRemoteHeadSha: async () => remoteHeadSha,
+      fetchPullRequest: async () =>
+        ok({
+          base: { ref: "main" },
+          head: { ref: "fix/rust-dependencies-42", sha: SHA },
+          number: 1208,
+        }),
+      fetchRemoteHeadSha: async () => ok(remoteHeadSha),
     }).execute();
-  assert.equal(await verify(SHA), SHA);
-  await assert.rejects(verify(OTHER_SHA), /remote branch SHA/);
-  await assert.rejects(verify(SHA, OTHER_SHA), /PR head SHA/);
+  assert.equal(assertSuccess(await verify(SHA)), SHA);
+  await assertAsyncFailure(verify(OTHER_SHA), /remote branch SHA/);
+  await assertAsyncFailure(verify(SHA, OTHER_SHA), /PR head SHA/);
 });

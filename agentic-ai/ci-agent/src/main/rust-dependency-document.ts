@@ -1,3 +1,5 @@
+import { err, ok, type Result } from "neverthrow";
+import { CiFailureKind, type CiFailure } from "./failure.js";
 const RUST_DEPENDENCY_ROOTS = [
   "agentic-ai/minds/",
   "nook-app/nook-platform/",
@@ -13,7 +15,7 @@ export interface RustDependencyContent {
 }
 export class RustDependencyDocument {
   constructor(private readonly input: RustDependencyContent) {}
-  validateSources(): void {
+  validateSources(): Result<void, CiFailure> {
     const { path, content, baseline = "" } = this.input;
     const current = new CargoSourceText(content);
     const previous = new CargoSourceText(baseline);
@@ -28,7 +30,11 @@ export class RustDependencyDocument {
           )
         : [];
     if (introduced.length > 0)
-      throw new Error(`Dependency update used a non-crates.io source: ${path}`);
+      return err({
+        kind: CiFailureKind.Dependency,
+        message: `Dependency update used a non-crates.io source: ${path}`,
+      });
+    return ok();
   }
 }
 class CargoSourceText {

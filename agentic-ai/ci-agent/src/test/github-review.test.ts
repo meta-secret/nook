@@ -1,3 +1,4 @@
+import { assertSuccess, assertAsyncFailure } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -126,14 +127,18 @@ test("requestExactHeadReview posts one exact-head Codex marker", async () => {
   const createdBodies: string[] = [];
   const octokit = new GithubReviewMockOctokit({ createdBodies }).execute();
 
-  const first = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
-  const second = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const first = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
+  const second = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.deepEqual(first, {
     fallback: ExactHeadReviewFallback.None,
@@ -166,7 +171,7 @@ test("requestExactHeadReview detects a revision change before Codex contact", as
     revisions: [expected, { ...expected, headSha: "changed-head" }],
   }).execute();
 
-  await assert.rejects(
+  await assertAsyncFailure(
     new GitHubReviewClient(octokit).requestExactHeadReview({
       repoRef: repoRef,
       prNumber: 410,
@@ -209,10 +214,12 @@ test("an old same-head review cannot settle a new base-bound request", async () 
     sha: headSha,
   }).execute();
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.equal(result.requested, true);
   assert.deepEqual(createdBodies, [
@@ -234,10 +241,12 @@ test("requestExactHeadReview ignores an untrusted exact-head marker", async () =
     sha: headSha,
   }).execute();
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.equal(result.requested, true);
   assert.deepEqual(createdBodies, [
@@ -260,10 +269,12 @@ test("requestExactHeadReview keeps a workflow-token request idempotent", async (
     sha: headSha,
   }).execute();
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.equal(result.requested, false);
   assert.deepEqual(createdBodies, []);
@@ -285,10 +296,12 @@ test("requestExactHeadReview reports an exact-head Codex approval reaction as se
     sha: headSha,
   }).execute();
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.None,
@@ -316,10 +329,12 @@ test("requestExactHeadReview does not treat an eye reaction as settled", async (
     sha: headSha,
   }).execute();
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.equal(result.requested, false);
   assert.equal(result.settled, false);
@@ -344,12 +359,12 @@ test("requestExactHeadReview does not request a fallback after a Codex usage lim
     sha: headSha,
   }).execute();
 
-  const fallback = await new GitHubReviewClient(octokit).requestExactHeadReview(
-    { repoRef: repoRef, prNumber: 410 },
-  );
-  const idempotent = await new GitHubReviewClient(
-    octokit,
-  ).requestExactHeadReview({ repoRef: repoRef, prNumber: 410 });
+  const fallback = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
+  const idempotent = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.deepEqual(fallback, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
@@ -386,10 +401,12 @@ test("requestExactHeadReview recognizes a clean Codex comment for the exact head
     sha: headSha,
   }).execute();
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.None,
@@ -419,16 +436,18 @@ test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () =
     },
   };
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-    options: {
-      availability: {
-        clock,
-        probe: { intervalMs: 1, timeoutMs: 20 },
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+      options: {
+        availability: {
+          clock,
+          probe: { intervalMs: 1, timeoutMs: 20 },
+        },
       },
-    },
-  });
+    })
+    .then(assertSuccess);
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
@@ -460,10 +479,12 @@ test("requestExactHeadReview still prefers Codex on a new head after an older us
     sha: headSha,
   }).execute();
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.None,
@@ -490,10 +511,12 @@ test("requestExactHeadReview does not request Cursor while Codex is pending", as
     sha: headSha,
   }).execute();
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.None,
@@ -535,10 +558,12 @@ test("requestExactHeadReview ignores an inactive Cursor review fallback", async 
     sha: headSha,
   }).execute();
 
-  const result = await new GitHubReviewClient(octokit).requestExactHeadReview({
-    repoRef: repoRef,
-    prNumber: 410,
-  });
+  const result = await new GitHubReviewClient(octokit)
+    .requestExactHeadReview({
+      repoRef: repoRef,
+      prNumber: 410,
+    })
+    .then(assertSuccess);
 
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,

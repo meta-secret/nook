@@ -1,3 +1,5 @@
+import { assertSuccess, assertAsyncFailure } from "./result-assertions.js";
+import { ok } from "neverthrow";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -12,14 +14,16 @@ test("formatDuration renders human-readable durations", () => {
 test("waitWithHeartbeat resolves when work completes", async () => {
   const result = await new AgentWait({
     label: "Test",
-    wait: async () => "done",
+    wait: async () => ok("done"),
     options: { timeoutMs: 5_000, heartbeatMs: 60_000 },
-  }).complete();
+  })
+    .complete()
+    .then(assertSuccess);
   assert.equal(result, "done");
 });
 
 test("waitWithHeartbeat rejects on timeout", async () => {
-  await assert.rejects(
+  await assertAsyncFailure(
     new AgentWait({
       label: "Test",
       wait: () => new Promise(() => {}),

@@ -1,3 +1,5 @@
+import { err, ok, type Result } from "neverthrow";
+import { CiFailureKind, type CiFailure } from "./failure.js";
 import type { RepositoryBaseline } from "./fix.js";
 export class DependencyFixAssertGitMetadataBaselineUnchanged {
   constructor(
@@ -6,7 +8,7 @@ export class DependencyFixAssertGitMetadataBaselineUnchanged {
       current: RepositoryBaseline["gitMetadata"];
     },
   ) {}
-  execute(): void {
+  execute(): Result<void, CiFailure> {
     const args = this.request;
 
     if (
@@ -14,8 +16,12 @@ export class DependencyFixAssertGitMetadataBaselineUnchanged {
       args.current.gitDirectory !== args.baseline.gitDirectory ||
       args.current.configuration !== args.baseline.configuration
     ) {
-      throw new Error("Bounded editor changed trusted Git metadata");
+      return err({
+        kind: CiFailureKind.Baseline,
+        message: "Bounded editor changed trusted Git metadata",
+      });
     }
+    return ok();
   }
 }
 export class DependencyFixAssertRepositoryBaselineUnchanged {
@@ -26,7 +32,7 @@ export class DependencyFixAssertRepositoryBaselineUnchanged {
       currentIndexTreeSha: string;
     },
   ) {}
-  execute(): void {
+  execute(): Result<void, CiFailure> {
     const args = this.request;
 
     const changed =
@@ -36,6 +42,10 @@ export class DependencyFixAssertRepositoryBaselineUnchanged {
           ? "index"
           : "";
     if (changed)
-      throw new Error(`Bounded editor changed the trusted baseline ${changed}`);
+      return err({
+        kind: CiFailureKind.Baseline,
+        message: `Bounded editor changed the trusted baseline ${changed}`,
+      });
+    return ok();
   }
 }

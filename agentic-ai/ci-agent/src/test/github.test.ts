@@ -1,3 +1,4 @@
+import { assertSuccess } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -97,13 +98,15 @@ test("createFixPr leaves the PR body free of automatic merge control markers", a
   const priorBody = process.env.AGENT_PR_BODY;
   process.env.AGENT_PR_BODY = "## Summary\n\nOpen this PR for review.";
   try {
-    const prNumber = await new GitHubClient(octokit).createFixPr({
-      repoRef: repoRef,
-      headBranch: "agent/fix",
-      runId: "run-42",
-      fixLabel: "focused issue",
-      baseBranch: "codex/predecessor",
-    });
+    const prNumber = await new GitHubClient(octokit)
+      .createFixPr({
+        repoRef: repoRef,
+        headBranch: "agent/fix",
+        runId: "run-42",
+        fixLabel: "focused issue",
+        baseBranch: "codex/predecessor",
+      })
+      .then(assertSuccess);
     assert.equal(prNumber, 347);
     assert.equal(createdBase, "codex/predecessor");
     assert.equal(createdBody, "## Summary\n\nOpen this PR for review.");

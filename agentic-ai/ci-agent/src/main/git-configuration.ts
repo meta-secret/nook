@@ -1,3 +1,5 @@
+import { err, ok, type Result } from "neverthrow";
+import { CiFailureKind, type CiFailure } from "./failure.js";
 export class NulSeparatedRecords {
   constructor(private readonly request: string) {}
   values(): string[] {
@@ -9,7 +11,7 @@ export class NulSeparatedRecords {
 
 export class GitConfiguration {
   constructor(private readonly request: readonly GitConfigEntry[]) {}
-  assertCredentialFree(): void {
+  assertCredentialFree(): Result<void, CiFailure> {
     const entries = this.request;
 
     const forbidden = entries.some((entry) => {
@@ -26,25 +28,33 @@ export class GitConfiguration {
       );
     });
     if (forbidden)
-      throw new Error(
-        "Persisted Git publication credential detected in config",
-      );
+      return err({
+        kind: CiFailureKind.CredentialBoundary,
+        message: "Persisted Git publication credential detected in config",
+      });
+    return ok();
   }
 }
 
 export class GitConfigurationText {
   constructor(private readonly request: string) {}
-  decode(): GitConfigEntry[] {
+  decode(): Result<GitConfigEntry[], CiFailure> {
     const output = this.request;
 
-    return new NulSeparatedRecords(output).values().map((record) => {
+    let entries: GitConfigEntry[] = [];
+    for (const record of new NulSeparatedRecords(output).values()) {
       const separator = record.indexOf("\n");
-      if (separator < 1) throw new Error("Malformed Git config record");
-      return {
-        key: record.slice(0, separator),
-        value: record.slice(separator + 1),
-      };
-    });
+      if (separator < 1)
+        return err({
+          kind: CiFailureKind.Schema,
+          message: "Malformed Git config record",
+        });
+      entries = [
+        ...entries,
+        { key: record.slice(0, separator), value: record.slice(separator + 1) },
+      ];
+    }
+    return ok(entries);
   }
 }
 

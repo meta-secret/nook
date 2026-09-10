@@ -1,3 +1,5 @@
+import { assertSuccess, assertAsyncFailure } from "./result-assertions.js";
+import { ok, type Result } from "neverthrow";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -410,7 +412,9 @@ const repoRef = { owner: "meta-secret", repo: "nook" };
 test("buildPrAudit reports an exact-head repository-green PR as ready", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({}).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.deepEqual(audit.reasons, []);
@@ -431,7 +435,9 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
 test("buildPrAudit ignores a Cursor Bugbot disabled-account upsell comment", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({}).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.substantiveComments, 0);
@@ -443,7 +449,9 @@ test("buildPrAudit ignores a Cursor request comment and stale Cursor status revi
       codexReview: MockCodexReview.Missing,
       cursorReview: MockCursorReview.Stale,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.cursorReview.requested, true);
@@ -458,7 +466,9 @@ test("buildPrAudit blocks an actionable Cursor review body", async () => {
       codexReview: MockCodexReview.Missing,
       cursorReview: MockCursorReview.Finding,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.cursorReview.settled, true);
@@ -471,7 +481,9 @@ test("buildPrAudit keeps old actionable comments in scope", async () => {
       codexReview: MockCodexReview.Missing,
       historicalFinding: true,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveComments, 1);
@@ -485,7 +497,9 @@ test("buildPrAudit deletes retired automation comments", async () => {
       deletedCommentIds,
       legacyAutomationComment: true,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.deepEqual(deletedCommentIds, [82]);
@@ -500,7 +514,9 @@ test("buildPrAudit deletes retired automation but blocks genuine comments", asyn
       historicalFinding: true,
       legacyAutomationComment: true,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.deepEqual(deletedCommentIds, [82]);
@@ -509,7 +525,7 @@ test("buildPrAudit deletes retired automation but blocks genuine comments", asyn
 });
 
 test("buildPrAudit fails when retired automation cannot be deleted", async () => {
-  await assert.rejects(
+  await assertAsyncFailure(
     new PullRequestAuditClient(
       new PrAuditMockOctokit({
         legacyAutomationComment: true,
@@ -527,7 +543,9 @@ test("buildPrAudit keeps resolved old comments visible without blocking", async 
       handledHistoricalFinding: true,
       historicalFinding: true,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.substantiveComments, 1);
@@ -537,7 +555,9 @@ test("buildPrAudit keeps resolved old comments visible without blocking", async 
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ codexReview: MockCodexReview.Missing }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.settled, false);
@@ -547,7 +567,9 @@ test("buildPrAudit does not wait for a current-head Codex review", async () => {
 test("buildPrAudit accepts a Codex approval reaction on the exact-head request", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ codexReview: MockCodexReview.Reaction }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.approvalReaction, true);
@@ -560,7 +582,9 @@ test("buildPrAudit accepts a clean Codex issue comment for the exact head", asyn
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.CleanComment,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.cleanComment, true);
@@ -573,7 +597,9 @@ test("buildPrAudit keeps a stale clean Codex comment as non-actionable status", 
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.StaleCleanComment,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.cleanComment, false);
@@ -586,7 +612,9 @@ test("buildPrAudit rejects a lookalike clean Codex comment", async () => {
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.ImpostorCleanComment,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.codexReview.cleanComment, false);
@@ -599,7 +627,9 @@ test("buildPrAudit checks every duplicate exact-head Codex request for approval"
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.DuplicateReaction,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.approvalReaction, true);
@@ -611,7 +641,9 @@ test("buildPrAudit reports a dismissed exact-head Codex review without waiting",
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.Dismissed,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.currentHeadReview, false);
@@ -621,7 +653,9 @@ test("buildPrAudit reports a dismissed exact-head Codex review without waiting",
 test("buildPrAudit ignores the automated continuing-owner handoff", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokitWithAgentHandoff({}).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.substantiveComments, 0);
@@ -630,7 +664,9 @@ test("buildPrAudit ignores the automated continuing-owner handoff", async () => 
 test("buildPrAudit blocks a lookalike Codex status review", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ codexReview: MockCodexReview.Impostor }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.codexReview.currentHeadReview, false);
@@ -648,7 +684,9 @@ test("buildPrAudit blocks actionable content in a Codex review body", async () =
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.ReviewFinding,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
@@ -665,7 +703,9 @@ test("buildPrAudit blocks content injected into Codex about boilerplate", async 
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.ReviewDetailsFinding,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
@@ -677,7 +717,9 @@ test("buildPrAudit keeps handled submitted reviews visible without blocking", as
       codexReview: MockCodexReview.ReviewFinding,
       resolvedInlineReviewFinding: true,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.substantiveReviews, 1);
@@ -692,7 +734,9 @@ test("buildPrAudit still blocks an unresolved thread from an old review", async 
       resolvedInlineReviewFinding: true,
       unresolvedThreads: 1,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
@@ -707,7 +751,9 @@ test("buildPrAudit exposes stale-base status while reporting other blockers", as
       runStatus: MockRunStatus.InProgress,
       unresolvedThreads: 1,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.mergeState.behindBy, 2);
@@ -726,7 +772,9 @@ test("buildPrAudit exposes stale-base status while reporting other blockers", as
 test("buildPrAudit counts unresolved threads from dismissed reviews", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ dismissedThreads: 1 }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.unresolvedThreads, 1);
@@ -737,7 +785,9 @@ test("buildPrAudit rejects a green workflow when Native Rust failed", async () =
     new PrAuditMockOctokit({
       nativeConclusion: MockJobConclusion.Failure,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.ok(
@@ -750,7 +800,9 @@ test("buildPrAudit rejects a green workflow when Native Rust failed", async () =
 test("buildPrAudit rejects when a required PR job is missing from the latest run", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ omitNativeJob: true }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.ok(
@@ -763,7 +815,9 @@ test("buildPrAudit rejects when a required PR job is missing from the latest run
 test("buildPrAudit stays ready after main advances with successful exact-head checks", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ behindBy: 2 }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.mergeState.behindBy, 2);
@@ -777,7 +831,9 @@ test("buildPrAudit blocks a stale-base PR with a merge conflict", async () => {
       mergeable: false,
       staleBaseRun: true,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.equal(audit.mergeState.behindBy, 2);
@@ -799,14 +855,18 @@ test("buildPrAudit blocks stale-base PRs with unresolved or unhandled feedback",
       staleBaseRun: true,
       unresolvedThreads: 1,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
   const unhandled = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       behindBy: 2,
       historicalFinding: true,
       staleBaseRun: true,
     }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(unresolved.ready, false);
   assert.equal(unresolved.feedback.unresolvedThreads, 1);
@@ -827,7 +887,9 @@ test("buildPrAudit blocks stale-base PRs with unresolved or unhandled feedback",
 test("buildPrAudit accepts a same-branch run from a previous base revision", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ behindBy: 2, staleBaseRun: true }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.mergeState.behindBy, 2);
@@ -838,7 +900,9 @@ test("buildPrAudit accepts a same-branch run from a previous base revision", asy
 test("buildPrAudit rejects an exact-head run from another base branch", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ workflowBaseBranch: "release" }).execute(),
-  ).buildPrAudit({ repoRef: repoRef, prNumber: 410 });
+  )
+    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+    .then(assertSuccess);
 
   assert.equal(audit.ready, false);
   assert.match(audit.reasons.join("\n"), /not indexed for the current head/);

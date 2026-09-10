@@ -1,3 +1,7 @@
+import { err, ok, ResultAsync, Result } from "neverthrow";
+import { CiFailureKind, type CiFailure } from "./failure.js";
+import { GithubRequestFailure } from "./github-failure.js";
+import type { PrFeedbackSummary } from "./github.js";
 import type { Octokit } from "@octokit/rest";
 
 import {
@@ -11,15 +15,16 @@ import {
 import { JsonDocument } from "./json.js";
 export class PullRequestAuditEnvironment {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
-  readPrNumber(): number {
+  readPrNumber(): Result<number, CiFailure> {
     const [raw = ""] = [this.environment.PR_NUMBER?.trim()];
     const value = Number(raw);
     if (!Number.isInteger(value) || value <= 0) {
-      throw new Error(
-        `PR_NUMBER must be a positive integer (received ${raw || "empty"})`,
-      );
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: `PR_NUMBER must be a positive integer (received ${raw || "empty"})`,
+      });
     }
-    return value;
+    return ok(value);
   }
 }
 
@@ -48,22 +53,27 @@ export class PullRequestAuditClient {
   constructor(private readonly value: Octokit) {}
   async buildPrAudit(
     request: PullRequestAuditClientBuildPrAuditRequest,
-  ): Promise<PrAudit> {
+  ): Promise<Result<PrAudit, CiFailure>> {
     const octokit = this.value;
     const { repoRef, prNumber } = request;
 
     const { owner, repo } = repoRef;
-    const [{ data: pr }, files] = await Promise.all([
-      octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
-      octokit.paginate(octokit.rest.pulls.listFiles, {
-        owner,
-        repo,
-        pull_number: prNumber,
-        per_page: 100,
-      }),
-    ]);
+    const loaded = await ResultAsync.fromPromise(
+      Promise.all([
+        octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
+        octokit.paginate(octokit.rest.pulls.listFiles, {
+          owner,
+          repo,
+          pull_number: prNumber,
+          per_page: 100,
+        }),
+      ]),
+      (cause) => new GithubRequestFailure(cause).outcome(),
+    );
+    if (loaded.isErr()) return err(loaded.error);
+    const [{ data: pr }, files] = loaded.value;
     const changedFiles = files.map((file) => file.filename);
-    const requiredWorkflows = await new PullRequestAuditAuditWorkflows({
+    const workflows = await new PullRequestAuditAuditWorkflows({
       baseBranch: pr.base.ref,
       headSha: pr.head.sha,
       octokit,
@@ -71,40 +81,56 @@ export class PullRequestAuditClient {
       repoRef,
       workflows: new PullRequestWorkflowSelection(changedFiles).names(),
     }).execute();
-    const [comparison, feedback, branchProtection, exactHeadDeployment] =
-      await Promise.all([
+    if (workflows.isErr()) return err(workflows.error);
+    const requiredWorkflows = workflows.value;
+    const [
+      comparisonResult,
+      feedbackResult,
+      protectionResult,
+      deploymentResult,
+    ] = await Promise.all([
+      ResultAsync.fromPromise(
         octokit.rest.repos.compareCommitsWithBasehead({
           owner,
           repo,
           basehead: `${pr.base.ref}...${pr.head.sha}`,
         }),
-        new GitHubClient(octokit).inspectPrFeedback({
-          repoRef: repoRef,
-          prNumber: prNumber,
-        }),
-        new PullRequestAuditClient(octokit).inspectBranchProtection({
-          subject1: repoRef,
-          branch: pr.base.ref,
-        }),
-        new PullRequestAuditClient(octokit).inspectExactHeadDeployment({
-          subject1: repoRef,
-          headSha: pr.head.sha,
-        }),
-      ]);
-    const mergeable =
-      typeof pr.mergeable === "boolean"
-        ? pr.mergeable
-        : (
-            await octokit.rest.pulls.get({
-              owner,
-              repo,
-              pull_number: prNumber,
-            })
-          ).data.mergeable;
+        (cause) => new GithubRequestFailure(cause).outcome(),
+      ),
+      new GitHubClient(octokit).inspectPrFeedback({
+        repoRef: repoRef,
+        prNumber: prNumber,
+      }),
+      new PullRequestAuditClient(octokit).inspectBranchProtection({
+        subject1: repoRef,
+        branch: pr.base.ref,
+      }),
+      new PullRequestAuditClient(octokit).inspectExactHeadDeployment({
+        subject1: repoRef,
+        headSha: pr.head.sha,
+      }),
+    ]);
+    if (comparisonResult.isErr()) return err(comparisonResult.error);
+    if (feedbackResult.isErr()) return err(feedbackResult.error);
+    if (protectionResult.isErr()) return err(protectionResult.error);
+    if (deploymentResult.isErr()) return err(deploymentResult.error);
+    const comparison = comparisonResult.value,
+      feedback = feedbackResult.value,
+      branchProtection = protectionResult.value,
+      exactHeadDeployment = deploymentResult.value;
+    let mergeable = pr.mergeable;
+    if (typeof mergeable !== "boolean") {
+      const refreshed = await ResultAsync.fromPromise(
+        octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
+        (cause) => new GithubRequestFailure(cause).outcome(),
+      );
+      if (refreshed.isErr()) return err(refreshed.error);
+      mergeable = refreshed.value.data.mergeable;
+    }
 
-    const reasons: string[] = [];
-    if (pr.state !== "open") reasons.push(`state is ${pr.state}`);
-    if (pr.draft) reasons.push("pull request is draft");
+    let reasons: string[] = [];
+    if (pr.state !== "open") reasons = [...reasons, `state is ${pr.state}`];
+    if (pr.draft) reasons = [...reasons, "pull request is draft"];
     const mergeability =
       mergeable === true
         ? PullRequestMergeability.Mergeable
@@ -112,43 +138,51 @@ export class PullRequestAuditClient {
           ? PullRequestMergeability.Conflicting
           : PullRequestMergeability.Unknown;
     if (mergeability === PullRequestMergeability.Conflicting)
-      reasons.push("pull request has a merge conflict");
+      reasons = [...reasons, "pull request has a merge conflict"];
     if (mergeability === PullRequestMergeability.Unknown)
-      reasons.push("pull request mergeability is unknown");
+      reasons = [...reasons, "pull request mergeability is unknown"];
     for (const workflow of requiredWorkflows) {
       if (workflow.state === WorkflowAuditState.NotIndexed) {
-        reasons.push(
+        reasons = [
+          ...reasons,
           `${workflow.workflowName} run is not indexed for the current head`,
-        );
+        ];
       } else if (workflow.status.state === WorkflowRunStatusState.Unavailable) {
-        reasons.push(`${workflow.workflowName} run has no status`);
+        reasons = [...reasons, `${workflow.workflowName} run has no status`];
       } else if (workflow.status.state === WorkflowRunStatusState.Other) {
-        reasons.push(
+        reasons = [
+          ...reasons,
           `${workflow.workflowName} run is ${workflow.status.value}`,
-        );
+        ];
       } else if (
         workflow.conclusion.state === WorkflowConclusionState.Pending
       ) {
-        reasons.push(`${workflow.workflowName} run has no conclusion`);
+        reasons = [
+          ...reasons,
+          `${workflow.workflowName} run has no conclusion`,
+        ];
       } else if (
         workflow.conclusion.value !== GithubWorkflowConclusion.Success
       ) {
-        reasons.push(
+        reasons = [
+          ...reasons,
           `${workflow.workflowName} run concluded ${workflow.conclusion.value}`,
-        );
+        ];
       }
       if (workflow.state === WorkflowAuditState.Indexed) {
         for (const job of workflow.requiredJobAudits) {
           if (job.status !== WorkflowRunStatusState.Completed) {
             const [defaulted1 = "missing"] = [job.status];
-            reasons.push(
+            reasons = [
+              ...reasons,
               `${job.name} is ${defaulted1} on the latest ${workflow.workflowName} run`,
-            );
+            ];
           } else if (job.conclusion !== GithubWorkflowConclusion.Success) {
             const [defaulted2 = "unknown"] = [job.conclusion];
-            reasons.push(
+            reasons = [
+              ...reasons,
               `${job.name} concluded ${defaulted2} on the latest ${workflow.workflowName} run`,
-            );
+            ];
           }
         }
       }
@@ -159,25 +193,31 @@ export class PullRequestAuditClient {
       ) &&
       exactHeadDeployment?.state !== "success"
     ) {
-      reasons.push("exact-head github-pages deployment is not successful");
+      reasons = [
+        ...reasons,
+        "exact-head github-pages deployment is not successful",
+      ];
     }
     if (feedback.unresolvedThreads > 0) {
-      reasons.push(
+      reasons = [
+        ...reasons,
         `${feedback.unresolvedThreads} unresolved review thread(s) already present`,
-      );
+      ];
     }
     if (feedback.unhandledComments > 0) {
-      reasons.push(
+      reasons = [
+        ...reasons,
         `${feedback.unhandledComments} unhandled substantive PR comment(s) already present`,
-      );
+      ];
     }
     if (feedback.unthreadedReviewFindings > 0) {
-      reasons.push(
+      reasons = [
+        ...reasons,
         `${feedback.unthreadedReviewFindings} unthreaded submitted review finding(s) already present`,
-      );
+      ];
     }
     const [defaulted3 = false] = [pr.draft];
-    return {
+    return ok({
       base: { branch: pr.base.ref, sha: pr.base.sha },
       branchProtection,
       changedFiles,
@@ -197,238 +237,238 @@ export class PullRequestAuditClient {
       repository: `${owner}/${repo}`,
       requiredWorkflows,
       url: pr.html_url,
-    };
+    });
   }
 
   async auditRequiredJobs(
     request: PullRequestAuditClientAuditRequiredJobsRequest,
-  ): Promise<RequiredJobAudit[]> {
+  ): Promise<Result<RequiredJobAudit[], CiFailure>> {
     const octokit = this.value;
     const { subject1, runId, requiredJobs } = request;
     const { owner, repo } = subject1;
 
     if (requiredJobs.length === 0) {
-      return [];
+      return ok([]);
     }
-    const jobs = await octokit.paginate(
-      octokit.rest.actions.listJobsForWorkflowRun,
-      {
+    const loaded = await ResultAsync.fromPromise(
+      octokit.paginate(octokit.rest.actions.listJobsForWorkflowRun, {
         owner,
         repo,
         run_id: runId,
         filter: "latest",
         per_page: 100,
-      },
+      }),
+      (cause) => new GithubRequestFailure(cause).outcome(),
     );
-    return requiredJobs.map((name) => {
-      const job = jobs.find((candidate) => candidate.name === name);
-      if (!job) {
-        return { name };
-      }
-      return {
-        name,
-        ...(typeof job.conclusion === "string"
-          ? { conclusion: job.conclusion }
-          : {}),
-        ...(typeof job.status === "string" ? { status: job.status } : {}),
-      };
-    });
+    if (loaded.isErr()) return err(loaded.error);
+    const jobs = loaded.value;
+    return ok(
+      requiredJobs.map((name) => {
+        const job = jobs.find((candidate) => candidate.name === name);
+        if (!job) {
+          return { name };
+        }
+        return {
+          name,
+          ...(typeof job.conclusion === "string"
+            ? { conclusion: job.conclusion }
+            : {}),
+          ...(typeof job.status === "string" ? { status: job.status } : {}),
+        };
+      }),
+    );
   }
 
   async inspectBranchProtection(
     request: PullRequestAuditClientInspectBranchProtectionRequest,
-  ): Promise<BranchProtectionAudit> {
+  ): Promise<Result<BranchProtectionAudit, CiFailure>> {
     const octokit = this.value;
     const { subject1, branch } = request;
     const { owner, repo } = subject1;
 
-    try {
-      const { data } = await octokit.rest.repos.getBranchProtection({
-        owner,
-        repo,
-        branch,
-      });
-      const [defaulted6 = 0] = [
-        data.required_pull_request_reviews?.required_approving_review_count,
-      ];
-      const [defaulted7 = false] = [
-        data.required_conversation_resolution?.enabled,
-      ];
-      const [defaulted8 = new Array<string>()] = [
-        data.required_status_checks?.checks?.map((check) => check.context),
-      ];
-      return {
-        available: true,
-        requiresApprovingReviews: defaulted6 > 0,
-        requiresConversationResolution: defaulted7,
-        requiredStatusChecks: defaulted8,
-      };
-    } catch (error: unknown) {
-      if (
-        new PullRequestAuditIsHttpStatus({
-          error: error,
-          status: 403,
-        }).execute() ||
-        new PullRequestAuditIsHttpStatus({
-          error: error,
-          status: 404,
-        }).execute()
-      ) {
-        return { available: false };
-      }
-      throw error;
-    }
+    const loaded = await ResultAsync.fromPromise(
+      octokit.rest.repos.getBranchProtection({ owner, repo, branch }),
+      (cause) => new GithubRequestFailure(cause).outcome(),
+    );
+    if (loaded.isErr())
+      return loaded.error.kind === CiFailureKind.Github &&
+        (loaded.error.code === 403 || loaded.error.code === 404)
+        ? ok({ available: false })
+        : err(loaded.error);
+    const { data } = loaded.value;
+    return ok({
+      available: true,
+      requiresApprovingReviews:
+        (data.required_pull_request_reviews?.required_approving_review_count ||
+          0) > 0,
+      requiresConversationResolution:
+        data.required_conversation_resolution?.enabled || false,
+      requiredStatusChecks:
+        data.required_status_checks?.checks?.map((check) => check.context) ||
+        [],
+    });
   }
 
   async inspectExactHeadDeployment(
     request: PullRequestAuditClientInspectExactHeadDeploymentRequest,
-  ): Promise<PrAudit["exactHeadDeployment"]> {
+  ): Promise<Result<PrAudit["exactHeadDeployment"], CiFailure>> {
     const octokit = this.value;
     const { subject1, headSha } = request;
     const { owner, repo } = subject1;
 
-    const { data: deployments } = await octokit.rest.repos.listDeployments({
-      owner,
-      repo,
-      environment: "github-pages",
-      sha: headSha,
-      per_page: 20,
-    });
+    const loaded = await ResultAsync.fromPromise(
+      octokit.rest.repos.listDeployments({
+        owner,
+        repo,
+        environment: "github-pages",
+        sha: headSha,
+        per_page: 20,
+      }),
+      (cause) => new GithubRequestFailure(cause).outcome(),
+    );
+    if (loaded.isErr()) return err(loaded.error);
+    const { data: deployments } = loaded.value;
     for (const deployment of deployments) {
-      const { data: statuses } =
-        await octokit.rest.repos.listDeploymentStatuses({
+      const loaded = await ResultAsync.fromPromise(
+        octokit.rest.repos.listDeploymentStatuses({
           owner,
           repo,
           deployment_id: deployment.id,
           per_page: 1,
-        });
+        }),
+        (cause) => new GithubRequestFailure(cause).outcome(),
+      );
+      if (loaded.isErr()) return err(loaded.error);
+      const { data: statuses } = loaded.value;
       const latest = statuses[0];
       if (latest) {
-        return {
+        return ok({
           environment: deployment.environment,
           state: latest.state,
           ...(latest.environment_url ? { url: latest.environment_url } : {}),
-        };
+        });
       }
     }
-    return;
+    return ok(undefined);
   }
 }
 
+export enum AuditRequirement {
+  Snapshot,
+  Ready,
+}
 export class PullRequestAuditRunPrAudit {
-  constructor(private readonly request: boolean) {}
-  async execute(): Promise<void> {
-    const requireReady = this.request;
-
+  constructor(private readonly requirement: AuditRequirement) {}
+  async execute(): Promise<Result<void, CiFailure>> {
     const repository = process.env.GITHUB_REPOSITORY?.trim();
-    if (!repository) {
-      throw new Error("GITHUB_REPOSITORY is required");
-    }
+    if (!repository)
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "GITHUB_REPOSITORY is required",
+      });
     const prNumber = new PullRequestAuditEnvironment(
       process.env,
     ).readPrNumber();
-    const octokit = new GitHubEnvironment(process.env).createOctokit();
+    if (prNumber.isErr()) return err(prNumber.error);
+    const client = new GitHubEnvironment(process.env).createOctokit();
+    if (client.isErr()) return err(client.error);
     const repoRef = new GitHubRepositoryName(repository).parse();
-    const audit = await new PullRequestAuditClient(octokit).buildPrAudit({
-      repoRef: repoRef,
-      prNumber: prNumber,
+    if (repoRef.isErr()) return err(repoRef.error);
+    const audit = await new PullRequestAuditClient(client.value).buildPrAudit({
+      repoRef: repoRef.value,
+      prNumber: prNumber.value,
     });
-    console.log(new JsonDocument(audit).format());
-    if (requireReady && !audit.ready) {
-      throw new Error(
-        `PR #${prNumber} is not ready: ${audit.reasons.join("; ")}`,
-      );
-    }
+    if (audit.isErr()) return err(audit.error);
+    const report = new JsonDocument(audit.value).format();
+    if (report.isErr()) return err(report.error);
+    console.log(report.value);
+    if (this.requirement === AuditRequirement.Ready && !audit.value.ready)
+      return err({
+        kind: CiFailureKind.Github,
+        message: `PR #${prNumber.value} is not ready: ${audit.value.reasons.join("; ")}`,
+      });
+    return ok();
   }
 }
 
 class PullRequestAuditAuditWorkflows {
   constructor(private readonly request: WorkflowAuditRequest) {}
-  async execute(): Promise<WorkflowAudit[]> {
+  async execute(): Promise<Result<WorkflowAudit[], CiFailure>> {
     const request = this.request;
 
     const { owner, repo } = request.repoRef;
-    return Promise.all(
-      request.workflows.map(async (workflow) => {
-        const { data } = await request.octokit.rest.actions.listWorkflowRuns({
-          owner,
-          repo,
-          workflow_id: workflow.workflowFile,
-          event: "pull_request",
-          head_sha: request.headSha,
-          per_page: 20,
-        });
-        const runs = data.workflow_runs
-          .filter((candidate) => {
-            const pullRequests = Array.isArray(candidate.pull_requests)
-              ? candidate.pull_requests
-              : [];
-            return (
-              candidate.head_sha === request.headSha &&
-              pullRequests.some(
-                (pullRequest) =>
-                  pullRequest.number === request.prNumber &&
-                  pullRequest.base.ref === request.baseBranch,
-              )
-            );
-          })
-          .sort(
-            (left, right) =>
-              Date.parse(right.created_at) - Date.parse(left.created_at),
+    const outcomes = await Promise.all(
+      request.workflows.map(
+        async (workflow): Promise<Result<WorkflowAudit, CiFailure>> => {
+          const loaded = await ResultAsync.fromPromise(
+            request.octokit.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: workflow.workflowFile,
+              event: "pull_request",
+              head_sha: request.headSha,
+              per_page: 20,
+            }),
+            (cause) => new GithubRequestFailure(cause).outcome(),
           );
-        const run = runs[0];
-        if (!run) {
-          return { ...workflow, state: WorkflowAuditState.NotIndexed };
-        }
-        const conclusion: WorkflowConclusion = run.conclusion
-          ? {
-              state: WorkflowConclusionState.Reported,
-              value: run.conclusion,
-            }
-          : { state: WorkflowConclusionState.Pending };
-        const status: WorkflowRunStatus =
-          run.status === WorkflowRunStatusState.Completed
-            ? { state: WorkflowRunStatusState.Completed }
-            : typeof run.status === "string"
-              ? { state: WorkflowRunStatusState.Other, value: run.status }
-              : { state: WorkflowRunStatusState.Unavailable };
-        const [defaulted5 = []] = [workflow.requiredJobs];
-        const requiredJobAudits = await new PullRequestAuditClient(
-          request.octokit,
-        ).auditRequiredJobs({
-          subject1: { owner, repo },
-          runId: run.id,
-          requiredJobs: defaulted5,
-        });
-        return {
-          ...workflow,
-          state: WorkflowAuditState.Indexed,
-          conclusion,
-          requiredJobAudits,
-          runId: run.id,
-          status,
-          url: run.html_url,
-        };
-      }),
+          if (loaded.isErr()) return err(loaded.error);
+          const { data } = loaded.value;
+          const runs = data.workflow_runs
+            .filter((candidate) => {
+              const pullRequests = Array.isArray(candidate.pull_requests)
+                ? candidate.pull_requests
+                : [];
+              return (
+                candidate.head_sha === request.headSha &&
+                pullRequests.some(
+                  (pullRequest) =>
+                    pullRequest.number === request.prNumber &&
+                    pullRequest.base.ref === request.baseBranch,
+                )
+              );
+            })
+            .sort(
+              (left, right) =>
+                Date.parse(right.created_at) - Date.parse(left.created_at),
+            );
+          const run = runs[0];
+          if (!run) {
+            return ok({ ...workflow, state: WorkflowAuditState.NotIndexed });
+          }
+          const conclusion: WorkflowConclusion = run.conclusion
+            ? {
+                state: WorkflowConclusionState.Reported,
+                value: run.conclusion,
+              }
+            : { state: WorkflowConclusionState.Pending };
+          const status: WorkflowRunStatus =
+            run.status === WorkflowRunStatusState.Completed
+              ? { state: WorkflowRunStatusState.Completed }
+              : typeof run.status === "string"
+                ? { state: WorkflowRunStatusState.Other, value: run.status }
+                : { state: WorkflowRunStatusState.Unavailable };
+          const [defaulted5 = []] = [workflow.requiredJobs];
+          const requiredJobAudits = await new PullRequestAuditClient(
+            request.octokit,
+          ).auditRequiredJobs({
+            subject1: { owner, repo },
+            runId: run.id,
+            requiredJobs: defaulted5,
+          });
+          if (requiredJobAudits.isErr()) return err(requiredJobAudits.error);
+          return ok({
+            ...workflow,
+            state: WorkflowAuditState.Indexed,
+            conclusion,
+            requiredJobAudits: requiredJobAudits.value,
+            runId: run.id,
+            status,
+            url: run.html_url,
+          });
+        },
+      ),
     );
-  }
-}
-
-interface PullRequestAuditIsHttpStatusRequest {
-  readonly error: unknown;
-  readonly status: number;
-}
-
-class PullRequestAuditIsHttpStatus {
-  constructor(private readonly request: PullRequestAuditIsHttpStatusRequest) {}
-  execute(): boolean {
-    const { error, status } = this.request;
-
-    return (
-      error instanceof Error &&
-      "status" in error &&
-      (error as { status: number }).status === status
-    );
+    return Result.combine(outcomes);
   }
 }
 
@@ -508,7 +548,7 @@ export type PrAudit = {
   changedFiles: string[];
   exactHeadDeployment?: { environment: string; state: string; url?: string };
   externalReviewPolicy: "inspect-existing-feedback-without-waiting";
-  feedback: Awaited<ReturnType<GitHubClient["inspectPrFeedback"]>>;
+  feedback: PrFeedbackSummary;
   head: { branch: string; sha: string };
   mergeState: {
     behindBy: number;

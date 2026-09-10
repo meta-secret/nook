@@ -1,5 +1,7 @@
+import { err, ok, type Result } from "neverthrow";
+import { CiCleanupOutcome, CiFailureKind, type CiFailure } from "./failure.js";
+import { CiWorkingDirectory } from "./process.js";
 import { appendFileSync } from "node:fs";
-import { chdir } from "node:process";
 
 import { CiAgentConfigLoadKind, CiAgentEnvironment } from "./config.js";
 import {
@@ -9,181 +11,201 @@ import {
   OpenPrLookupKind,
   GitHubRepositoryName,
 } from "./github.js";
-import {
-  AuthoredChangeBudget,
-  AuthoredChangeBudgetExceededError,
-  CiRepository,
-} from "./git.js";
+import { AuthoredChangeBudget, CiRepository } from "./git.js";
 import { Logger } from "./logger.js";
 import { AgentPrompt, AgentPromptEnvironment } from "./prompt.js";
 import { AgentIsolation, ConfiguredAgentRuntime } from "./run-agent.js";
 export class CiImplementationCommand {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
   resolveTargetFromEnvironment() {
-    const [runId = ""] = [this.environment.GITHUB_RUN_ID?.trim()];
-    const agentBranch =
-      this.environment.AGENT_BRANCH?.trim() ||
-      this.environment.FIX_BRANCH?.trim() ||
-      `agent/prompt-${runId}`;
+    const runId = this.environment.GITHUB_RUN_ID?.trim() || "";
     return new AgentImplementationResolveImplementPrTarget({
-      branch: agentBranch,
+      branch:
+        this.environment.AGENT_BRANCH?.trim() ||
+        this.environment.FIX_BRANCH?.trim() ||
+        `agent/prompt-${runId}`,
       baseBranch: this.environment.AGENT_PR_BASE_BRANCH?.trim() || "main",
       kind:
         this.environment.AGENT_PR_TARGET_KIND?.trim() ||
         ImplementPrTargetKind.Standalone,
     }).execute();
   }
-
-  async legacyStandalonePrExists(): Promise<boolean> {
-    const repository = this.environment.GITHUB_REPOSITORY?.trim();
-    const runId = this.environment.GITHUB_RUN_ID?.trim();
-    if (!repository || !runId) {
-      throw new Error("GITHUB_REPOSITORY and GITHUB_RUN_ID are required");
-    }
+  async legacyStandalonePrExists(): Promise<Result<boolean, CiFailure>> {
+    const repository = this.environment.GITHUB_REPOSITORY?.trim(),
+      runId = this.environment.GITHUB_RUN_ID?.trim();
+    if (!repository || !runId)
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "GITHUB_REPOSITORY and GITHUB_RUN_ID are required",
+      });
     const target = this.resolveTargetFromEnvironment();
-    const existing = await new GitHubClient(
-      new GitHubEnvironment(process.env).createOctokit(),
-    ).findOpenPr({
-      subject1: new GitHubRepositoryName(repository).parse(),
-      headBranch: target.branch,
+    if (target.isErr()) return err(target.error);
+    const client = new GitHubEnvironment(process.env).createOctokit();
+    if (client.isErr()) return err(client.error);
+    const repoRef = new GitHubRepositoryName(repository).parse();
+    if (repoRef.isErr()) return err(repoRef.error);
+    const existing = await new GitHubClient(client.value).findOpenPr({
+      subject1: repoRef.value,
+      headBranch: target.value.branch,
     });
-    if (existing.kind === OpenPrLookupKind.NotFound) return false;
-    if (existing.baseBranch !== target.baseBranch) {
-      throw new Error(
-        "Existing standalone implementation PR has a changed base",
-      );
-    }
-    log.info(`PR #${existing.number} is already open; skipping legacy rerun`);
-    return true;
+    if (existing.isErr()) return err(existing.error);
+    if (existing.value.kind === OpenPrLookupKind.NotFound) return ok(false);
+    if (existing.value.baseBranch !== target.value.baseBranch)
+      return err({
+        kind: CiFailureKind.Github,
+        message: "Existing standalone implementation PR has a changed base",
+      });
+    log.info(
+      `PR #${existing.value.number} is already open; skipping legacy rerun`,
+    );
+    return ok(true);
   }
-
-  async runCiEdit(): Promise<CiEditOutcome> {
-    const repository = this.environment.GITHUB_REPOSITORY?.trim();
-    const runId = this.environment.GITHUB_RUN_ID?.trim();
-    if (!repository || !runId) {
-      throw new Error("GITHUB_REPOSITORY and GITHUB_RUN_ID are required");
-    }
-
-    new AgentPromptEnvironment(process.env).resolveAgentTask();
-
+  async runCiEdit(): Promise<Result<CiEditOutcome, CiFailure>> {
+    const repository = this.environment.GITHUB_REPOSITORY?.trim(),
+      runId = this.environment.GITHUB_RUN_ID?.trim();
+    if (!repository || !runId)
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "GITHUB_REPOSITORY and GITHUB_RUN_ID are required",
+      });
+    const task = new AgentPromptEnvironment(process.env).resolveAgentTask();
+    if (task.isErr()) return err(task.error);
     const repoRoot = this.environment.REPO_ROOT?.trim() || process.cwd();
     const target = this.resolveTargetFromEnvironment();
-    chdir(repoRoot);
-    await new CiRepository(repoRoot).configureGitForCi();
-    const loadedConfig = new CiAgentEnvironment(process.env).loadConfig();
-    if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
+    if (target.isErr()) return err(target.error);
+    const entered = new CiWorkingDirectory(repoRoot).enter();
+    if (entered.isErr()) return err(entered.error);
+    const configured = await new CiRepository(repoRoot).configureGitForCi();
+    if (configured.isErr()) return err(configured.error);
+    const loaded = new CiAgentEnvironment(process.env).loadConfig();
+    if (loaded.kind === CiAgentConfigLoadKind.MissingApiKey) {
       console.log(
         "::warning::CURSOR_API_KEY is not set — skipping agent implement job.",
       );
-      return CiEditOutcome.Skipped;
+      return ok(CiEditOutcome.Skipped);
     }
-    const config = loadedConfig.config;
-    await new ConfiguredAgentRuntime(config).runFixAgent({
-      prompt: await new AgentPrompt(config).load(),
+    const prompt = await new AgentPrompt(loaded.config).load();
+    if (prompt.isErr()) return err(prompt.error);
+    const run = await new ConfiguredAgentRuntime(loaded.config).runFixAgent({
+      prompt: prompt.value,
       isolation: AgentIsolation.Strict,
     });
-    if (!(await new CiRepository(repoRoot).hasWorkingTreeChanges())) {
+    if (run.isErr()) return err(run.error);
+    const changed = await new CiRepository(repoRoot).hasWorkingTreeChanges();
+    if (changed.isErr()) return err(changed.error);
+    if (!changed.value) {
       console.log(
         "::warning::Agent finished but working tree is clean — nothing to push.",
       );
-      return CiEditOutcome.Skipped;
+      return ok(CiEditOutcome.Skipped);
     }
-    return CiEditOutcome.Changed;
+    return ok(CiEditOutcome.Changed);
   }
-
-  async runCiEditOnly(): Promise<void> {
-    await new AgentImplementationRunCiImplementationPhases({
+  runCiEditOnly() {
+    return new AgentImplementationRunCiImplementationPhases({
       edit: () => this.runCiEdit(),
       mode: CiImplementationMode.EditOnly,
     }).execute();
   }
-
-  async runCiImplement(): Promise<void> {
-    await new AgentImplementationRunCiImplementationPhases({
+  runCiImplement() {
+    return new AgentImplementationRunCiImplementationPhases({
       deliver: () => this.runCiDeliver(),
       edit: () => this.runCiEdit(),
       legacyPrExists: () => this.legacyStandalonePrExists(),
       mode: CiImplementationMode.LegacyMonolithic,
     }).execute();
   }
-
-  async runCiDeliver(): Promise<void> {
-    const repository = this.environment.GITHUB_REPOSITORY?.trim();
-    const runId = this.environment.GITHUB_RUN_ID?.trim();
-    if (!repository || !runId) {
-      throw new Error("GITHUB_REPOSITORY and GITHUB_RUN_ID are required");
-    }
+  async runCiDeliver(): Promise<Result<void, CiFailure>> {
+    const repository = this.environment.GITHUB_REPOSITORY?.trim(),
+      runId = this.environment.GITHUB_RUN_ID?.trim();
+    if (!repository || !runId)
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "GITHUB_REPOSITORY and GITHUB_RUN_ID are required",
+      });
     const repoRoot = this.environment.REPO_ROOT?.trim() || process.cwd();
     const target = this.resolveTargetFromEnvironment();
-    chdir(repoRoot);
-    const octokit = new GitHubEnvironment(process.env).createOctokit();
-    await new CiRepository(repoRoot).configureGitForCi({ octokit: octokit });
-    if (!(await new CiRepository(repoRoot).hasWorkingTreeChanges())) {
-      throw new Error("Trusted delivery requires implementation changes");
-    }
-
-    const repoRef = new GitHubRepositoryName(repository).parse();
-    let prNumber: number;
-    try {
-      prNumber = await new AgentImplementationPreserveImplementedBranchBeforePr(
-        {
-          agentBranch: target.branch,
-          assertBudget: () =>
-            new AuthoredChangeBudget({
-              repoRoot,
-              baseRef: target.budgetBaseRef,
-              maximumLines: 2_000,
-            }).enforce(),
-          createPr: () =>
-            new GitHubClient(octokit).createFixPr({
-              repoRef: repoRef,
-              headBranch: target.branch,
-              runId: runId,
-              fixLabel: "agent implementation",
-              baseBranch: target.baseBranch,
-            }),
-          findPr: async () => {
-            const found = await new GitHubClient(octokit).findOpenPr({
-              subject1: repoRef,
-              headBranch: target.branch,
+    if (target.isErr()) return err(target.error);
+    const entered = new CiWorkingDirectory(repoRoot).enter();
+    if (entered.isErr()) return err(entered.error);
+    const client = new GitHubEnvironment(process.env).createOctokit();
+    if (client.isErr()) return err(client.error);
+    const octokit = client.value;
+    const configured = await new CiRepository(repoRoot).configureGitForCi({
+      octokit,
+    });
+    if (configured.isErr()) return err(configured.error);
+    const changed = await new CiRepository(repoRoot).hasWorkingTreeChanges();
+    if (changed.isErr()) return err(changed.error);
+    if (!changed.value)
+      return err({
+        kind: CiFailureKind.Baseline,
+        message: "Trusted delivery requires implementation changes",
+      });
+    const repositoryName = new GitHubRepositoryName(repository).parse();
+    if (repositoryName.isErr()) return err(repositoryName.error);
+    const repoRef = repositoryName.value,
+      selected = target.value;
+    const preserved =
+      await new AgentImplementationPreserveImplementedBranchBeforePr({
+        agentBranch: selected.branch,
+        assertBudget: () =>
+          new AuthoredChangeBudget({
+            repoRoot,
+            baseRef: selected.budgetBaseRef,
+            maximumLines: 2_000,
+          }).enforce(),
+        createPr: () =>
+          new GitHubClient(octokit).createFixPr({
+            repoRef,
+            headBranch: selected.branch,
+            runId,
+            fixLabel: "agent implementation",
+            baseBranch: selected.baseBranch,
+          }),
+        findPr: async () => {
+          const found = await new GitHubClient(octokit).findOpenPr({
+            subject1: repoRef,
+            headBranch: selected.branch,
+          });
+          if (found.isErr()) return err(found.error);
+          if (
+            found.value.kind === OpenPrLookupKind.Found &&
+            found.value.baseBranch !== selected.baseBranch
+          )
+            return err({
+              kind: CiFailureKind.Github,
+              message: "Published implementation PR identity or base changed",
             });
-            if (
-              found.kind === OpenPrLookupKind.Found &&
-              found.baseBranch !== target.baseBranch
-            ) {
-              throw new Error(
-                "Published implementation PR identity or base changed",
-              );
-            }
-            return found;
-          },
-          pushBranch: () =>
-            new CiRepository(repoRoot).pushFixBranch({
-              fixBranch: target.branch,
-              runId: runId,
-            }),
-          verifyBranch: () =>
-            new GitHubClient(octokit).branchExistsOnOrigin({
-              subject1: repoRef,
-              branch: target.branch,
-            }),
+          return found;
         },
-      ).execute();
-    } catch (error) {
-      new AgentImplementationRecordTrustedBudgetBlocker({
-        error: error,
+        pushBranch: () =>
+          new CiRepository(repoRoot).pushFixBranch({
+            fixBranch: selected.branch,
+            runId,
+          }),
+        verifyBranch: () =>
+          new GitHubClient(octokit).branchExistsOnOrigin({
+            subject1: repoRef,
+            branch: selected.branch,
+          }),
+      }).execute();
+    if (preserved.isErr()) {
+      const recorded = new AgentImplementationRecordTrustedBudgetBlocker({
+        error: preserved.error,
         outputPath: this.environment.GITHUB_OUTPUT || "",
       }).execute();
-      throw error;
+      return new CiCleanupOutcome(recorded).finish(err(preserved.error));
     }
     log.info(
-      `PR #${prNumber} opened; delivery verified and handed to the continuing owner`,
+      `PR #${preserved.value} opened; delivery verified and handed to the continuing owner`,
     );
+    return ok();
   }
 }
 
 export interface AgentImplementationRecordTrustedBudgetBlockerRequest {
-  readonly error: unknown;
+  readonly error: CiFailure;
   readonly outputPath: string;
 }
 
@@ -191,33 +213,50 @@ export class AgentImplementationRecordTrustedBudgetBlocker {
   constructor(
     private readonly request: AgentImplementationRecordTrustedBudgetBlockerRequest,
   ) {}
-  execute(): void {
+  execute(): Result<void, CiFailure> {
     const { error, outputPath } = this.request;
 
-    if (!(error instanceof AuthoredChangeBudgetExceededError) || !outputPath) {
-      return;
+    if (error.kind !== CiFailureKind.Budget || !outputPath) {
+      return ok();
     }
     const encoded = Buffer.from(error.message, "utf8").toString("base64");
-    appendFileSync(outputPath, `budget_blocker_b64=${encoded}\n`, "utf8");
+    try {
+      appendFileSync(outputPath, `budget_blocker_b64=${encoded}\n`, "utf8");
+      return ok();
+    } catch {
+      return err({
+        kind: CiFailureKind.Filesystem,
+        message: "Unable to record trusted budget blocker",
+      });
+    }
   }
 }
 
 export class AgentImplementationPreserveImplementedBranchBeforePr {
   constructor(private readonly request: PreserveImplementedBranchArgs) {}
-  async execute(): Promise<number> {
+  async execute(): Promise<Result<number, CiFailure>> {
     const args = this.request;
 
-    await args.assertBudget();
-    await args.pushBranch();
-    if (!(await args.verifyBranch())) {
-      throw new Error(
-        `Agent branch ${args.agentBranch} was not found on origin after push`,
-      );
+    const budget = await args.assertBudget();
+    if (budget.isErr()) return err(budget.error);
+    const pushed = await args.pushBranch();
+    if (pushed.isErr()) return err(pushed.error);
+    const verified = await args.verifyBranch();
+    if (verified.isErr()) return err(verified.error);
+    if (!verified.value) {
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: `Agent branch ${args.agentBranch} was not found on origin after push`,
+      });
     }
-    await args.verifyPublishedHead?.();
+    if (args.verifyPublishedHead) {
+      const head = await args.verifyPublishedHead();
+      if (head.isErr()) return err(head.error);
+    }
     const openPr = await args.findPr();
-    if (openPr.kind === OpenPrLookupKind.Found) {
-      return openPr.number;
+    if (openPr.isErr()) return err(openPr.error);
+    if (openPr.value.kind === OpenPrLookupKind.Found) {
+      return ok(openPr.value.number);
     }
     return args.createPr();
   }
@@ -261,30 +300,33 @@ export class AgentImplementationResolveImplementPrTarget {
       !new AgentImplementationIsValidBranch(input.branch).execute() ||
       !new AgentImplementationIsValidBranch(input.baseBranch).execute()
     ) {
-      throw new Error("Implement PR branch metadata is malformed");
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "Implement PR branch metadata is malformed",
+      });
     }
     if (input.kind !== ImplementPrTargetKind.Standalone) {
-      throw new Error("Only standalone implement PRs are supported");
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "Only standalone implement PRs are supported",
+      });
     }
     if (input.baseBranch !== "main") {
-      throw new Error("Standalone implement PRs must target main");
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "Standalone implement PRs must target main",
+      });
     }
-    return {
+    return ok({
       ...input,
       kind: ImplementPrTargetKind.Standalone,
       budgetBaseRef: "origin/main",
-    };
+    });
   }
 }
 
 export enum CiImplementationPhaseFailureKind {
   Consumed = "consumed",
-}
-export class CiImplementationPhaseError extends Error {
-  readonly kind = CiImplementationPhaseFailureKind.Consumed;
-  constructor() {
-    super("CI implementation phase has already been consumed");
-  }
 }
 enum EditingPhaseKind {
   Pending = "pending",
@@ -298,17 +340,23 @@ export class AgentImplementationRunCiImplementationPhases {
   constructor(request: CiImplementationPhases) {
     this.#phase = { kind: EditingPhaseKind.Pending, request: { ...request } };
   }
-  async execute(): Promise<void> {
+  async execute(): Promise<Result<void, CiFailure>> {
     if (this.#phase.kind === EditingPhaseKind.Consumed)
-      throw new CiImplementationPhaseError();
+      return err({
+        kind: CiFailureKind.Baseline,
+        message: "CI implementation phase has already been consumed",
+      });
     const { request } = this.#phase;
     this.#phase = { kind: EditingPhaseKind.Consumed };
     if (request.mode === CiImplementationMode.EditOnly) {
-      await request.edit();
-      return;
+      const edited = await request.edit();
+      return edited.map(() => undefined);
     }
-    const result = await ChangedCiImplementation.edit(request);
-    if (result.kind === CiChangeKind.Deliverable) await result.change.deliver();
+    const result = await new LegacyCiEdit(request).execute();
+    if (result.isErr()) return err(result.error);
+    return result.value.kind === CiChangeKind.Deliverable
+      ? result.value.change.deliver()
+      : ok();
   }
 }
 export enum CiChangeKind {
@@ -323,31 +371,31 @@ enum ChangeDeliveryKind {
   Consumed = "consumed",
 }
 type ChangeDelivery =
-  | { kind: ChangeDeliveryKind.Pending; deliver: () => Promise<void> }
+  | {
+      kind: ChangeDeliveryKind.Pending;
+      deliver: () => Promise<Result<void, CiFailure>>;
+    }
   | { kind: ChangeDeliveryKind.Consumed };
 /** A delivery operation exists only after the editing effect reports a change. */
+const changedDeliveryPermit: unique symbol = Symbol("changed-ci-delivery");
 export class ChangedCiImplementation {
   #delivery: ChangeDelivery;
-  private constructor(deliver: () => Promise<void>) {
+  constructor(
+    deliver: () => Promise<Result<void, CiFailure>>,
+    _permit: typeof changedDeliveryPermit,
+  ) {
     this.#delivery = { kind: ChangeDeliveryKind.Pending, deliver };
   }
-  static async edit(request: LegacyCiImplementation): Promise<CiChange> {
-    const { edit, deliver, legacyPrExists } = request;
-    if (await legacyPrExists()) return { kind: CiChangeKind.Skipped };
-    const result = await edit();
-    if (result === CiEditOutcome.Skipped) return { kind: CiChangeKind.Skipped };
-    return {
-      kind: CiChangeKind.Deliverable,
-      change: new ChangedCiImplementation(deliver),
-    };
-  }
-  async deliver(): Promise<void> {
+  async deliver(): Promise<Result<void, CiFailure>> {
     if (this.#delivery.kind === ChangeDeliveryKind.Consumed)
-      throw new CiImplementationPhaseError();
+      return err({
+        kind: CiFailureKind.Baseline,
+        message: "CI implementation phase has already been consumed",
+      });
     const { deliver } = this.#delivery;
     this.#delivery = { kind: ChangeDeliveryKind.Consumed };
     // The trusted delivery command still checks the live repository and published head.
-    await deliver();
+    return deliver();
   }
 }
 
@@ -355,12 +403,12 @@ const log = new Logger("implement");
 
 type PreserveImplementedBranchArgs = {
   agentBranch: string;
-  assertBudget: () => Promise<void>;
-  createPr: () => Promise<number>;
-  findPr: () => Promise<OpenPrLookup>;
-  pushBranch: () => Promise<void>;
-  verifyBranch: () => Promise<boolean>;
-  verifyPublishedHead?: () => Promise<void>;
+  assertBudget: () => Promise<Result<void, CiFailure>>;
+  createPr: () => Promise<Result<number, CiFailure>>;
+  findPr: () => Promise<Result<OpenPrLookup, CiFailure>>;
+  pushBranch: () => Promise<Result<void, CiFailure>>;
+  verifyBranch: () => Promise<Result<boolean, CiFailure>>;
+  verifyPublishedHead?: () => Promise<Result<void, CiFailure>>;
 };
 
 export enum ImplementPrTargetKind {
@@ -385,12 +433,30 @@ export enum CiImplementationMode {
 
 interface EditOnlyCiImplementation {
   mode: CiImplementationMode.EditOnly;
-  edit: () => Promise<CiEditOutcome>;
+  edit: () => Promise<Result<CiEditOutcome, CiFailure>>;
 }
 interface LegacyCiImplementation {
   mode: CiImplementationMode.LegacyMonolithic;
-  deliver: () => Promise<void>;
-  edit: () => Promise<CiEditOutcome>;
-  legacyPrExists: () => Promise<boolean>;
+  deliver: () => Promise<Result<void, CiFailure>>;
+  edit: () => Promise<Result<CiEditOutcome, CiFailure>>;
+  legacyPrExists: () => Promise<Result<boolean, CiFailure>>;
 }
 type CiImplementationPhases = EditOnlyCiImplementation | LegacyCiImplementation;
+
+export class LegacyCiEdit {
+  constructor(private readonly request: LegacyCiImplementation) {}
+  async execute(): Promise<Result<CiChange, CiFailure>> {
+    const { edit, deliver, legacyPrExists } = this.request;
+    const exists = await legacyPrExists();
+    if (exists.isErr()) return err(exists.error);
+    if (exists.value) return ok({ kind: CiChangeKind.Skipped });
+    const result = await edit();
+    if (result.isErr()) return err(result.error);
+    if (result.value === CiEditOutcome.Skipped)
+      return ok({ kind: CiChangeKind.Skipped });
+    return ok({
+      kind: CiChangeKind.Deliverable,
+      change: new ChangedCiImplementation(deliver, changedDeliveryPermit),
+    });
+  }
+}

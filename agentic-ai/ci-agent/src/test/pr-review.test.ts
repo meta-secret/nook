@@ -1,3 +1,6 @@
+import { assertSuccess, assertAsyncFailure } from "./result-assertions.js";
+import { ok, err } from "neverthrow";
+import { CiFailureKind } from "../main/failure.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -22,16 +25,17 @@ class PrReviewRequestInput {
     const overrides = this.request;
 
     return {
-      inspectFeedback: async () => cleanFeedback,
+      inspectFeedback: async () => ok(cleanFeedback),
       now: () => Date.now(),
-      readRevision: async () => revision,
-      requestReview: async () => ({
-        fallback: ExactHeadReviewFallback.None,
-        headSha: revision.headSha,
-        provider: ExactHeadReviewProvider.Codex,
-        requested: true,
-        settled: false,
-      }),
+      readRevision: async () => ok(revision),
+      requestReview: async () =>
+        ok({
+          fallback: ExactHeadReviewFallback.None,
+          headSha: revision.headSha,
+          provider: ExactHeadReviewProvider.Codex,
+          requested: true,
+          settled: false,
+        }),
       timeoutMs: 50,
       ...overrides,
     };
@@ -73,23 +77,26 @@ test("review request honors the circuit breaker across all comments", async () =
   const result =
     await new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
-        inspectFeedback: async () => ({
-          ...cleanFeedback,
-          findingBatches: 3,
-          substantiveComments: 1,
-        }),
+        inspectFeedback: async () =>
+          ok({
+            ...cleanFeedback,
+            findingBatches: 3,
+            substantiveComments: 1,
+          }),
         requestReview: async () => {
           requests += 1;
-          return {
+          return ok({
             fallback: ExactHeadReviewFallback.None,
             headSha: revision.headSha,
             provider: ExactHeadReviewProvider.Codex,
             requested: true,
             settled: false,
-          };
+          });
         },
       }).execute(),
-    ).execute();
+    )
+      .execute()
+      .then(assertSuccess);
   assert.equal(result.state, ReviewRequestState.CircuitBreaker);
   assert.equal(requests, 0);
 });
@@ -100,22 +107,25 @@ test("acknowledged stabilization permits a review request", async () => {
     await new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
         circuitBreakerAcknowledged: true,
-        inspectFeedback: async () => ({
-          ...cleanFeedback,
-          findingBatches: 3,
-        }),
+        inspectFeedback: async () =>
+          ok({
+            ...cleanFeedback,
+            findingBatches: 3,
+          }),
         requestReview: async () => {
           requests += 1;
-          return {
+          return ok({
             fallback: ExactHeadReviewFallback.None,
             headSha: revision.headSha,
             provider: ExactHeadReviewProvider.Codex,
             requested: true,
             settled: false,
-          };
+          });
         },
       }).execute(),
-    ).execute();
+    )
+      .execute()
+      .then(assertSuccess);
 
   assert.equal(result.state, ReviewRequestState.Requested);
   assert.equal(requests, 1);
@@ -125,15 +135,18 @@ test("provider unavailability remains not-requested", async () => {
   const result =
     await new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
-        requestReview: async () => ({
-          fallback: ExactHeadReviewFallback.CodexUsageLimit,
-          headSha: revision.headSha,
-          provider: ExactHeadReviewProvider.Codex,
-          requested: false,
-          settled: false,
-        }),
+        requestReview: async () =>
+          ok({
+            fallback: ExactHeadReviewFallback.CodexUsageLimit,
+            headSha: revision.headSha,
+            provider: ExactHeadReviewProvider.Codex,
+            requested: false,
+            settled: false,
+          }),
       }).execute(),
-    ).execute();
+    )
+      .execute()
+      .then(assertSuccess);
   assert.equal(result.state, ReviewRequestState.NotRequested);
   assert.equal(result.requested, false);
 });
@@ -141,24 +154,24 @@ test("provider unavailability remains not-requested", async () => {
 test("review request detects revision drift after feedback inspection", async () => {
   let reads = 0;
   let requests = 0;
-  await assert.rejects(
+  await assertAsyncFailure(
     new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
         readRevision: async () => {
           reads += 1;
-          return reads === 1
-            ? revision
-            : { ...revision, headSha: "changed-head" };
+          return ok(
+            reads === 1 ? revision : { ...revision, headSha: "changed-head" },
+          );
         },
         requestReview: async () => {
           requests += 1;
-          return {
+          return ok({
             fallback: ExactHeadReviewFallback.None,
             headSha: revision.headSha,
             provider: ExactHeadReviewProvider.Codex,
             requested: true,
             settled: false,
-          };
+          });
         },
       }).execute(),
     ).execute(),
@@ -170,7 +183,7 @@ test("review request detects revision drift after feedback inspection", async ()
 test("review request bounds stalled feedback inspection", async () => {
   const signals: AbortSignal[] = [];
   let requests = 0;
-  await assert.rejects(
+  await assertAsyncFailure(
     new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
         inspectFeedback: (_revision, signal) => {
@@ -179,13 +192,13 @@ test("review request bounds stalled feedback inspection", async () => {
         },
         requestReview: async () => {
           requests += 1;
-          return {
+          return ok({
             fallback: ExactHeadReviewFallback.None,
             headSha: revision.headSha,
             provider: ExactHeadReviewProvider.Codex,
             requested: true,
             settled: false,
-          };
+          });
         },
         timeoutMs: 10,
       }).execute(),
@@ -199,12 +212,12 @@ test("review request bounds stalled feedback inspection", async () => {
 test("review request bounds stalled revision verification", async () => {
   const signals: AbortSignal[] = [];
   let reads = 0;
-  await assert.rejects(
+  await assertAsyncFailure(
     new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
         readRevision: (signal) => {
           reads += 1;
-          if (reads === 1) return Promise.resolve(revision);
+          if (reads === 1) return Promise.resolve(ok(revision));
           signals.push(signal);
           return new Promise(() => {});
         },
@@ -218,7 +231,7 @@ test("review request bounds stalled revision verification", async () => {
 
 test("review request bounds a stalled provider request", async () => {
   const signals: AbortSignal[] = [];
-  await assert.rejects(
+  await assertAsyncFailure(
     new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
         requestReview: (_revision, signal) => {
@@ -237,12 +250,12 @@ test("stabilizeExactHeadReview waits once and accepts clean feedback", async () 
   let now = 0;
   let requests = 0;
   const result = await new PullRequestReviewStabilizeExactHeadReview({
-    inspectFeedback: async () => cleanFeedback,
+    inspectFeedback: async () => ok(cleanFeedback),
     now: () => now,
     pollIntervalMs: 15,
     requestReview: async () => {
       requests += 1;
-      return { headSha: "head-sha", settled: requests > 1 };
+      return ok({ headSha: "head-sha", settled: requests > 1 });
     },
     timeoutMs: 60,
     waitMs: async (milliseconds) => {
@@ -257,14 +270,15 @@ test("stabilizeExactHeadReview waits once and accepts clean feedback", async () 
 
 test("stabilizeExactHeadReview rejects settled actionable feedback", async () => {
   const result = await new PullRequestReviewStabilizeExactHeadReview({
-    inspectFeedback: async () => ({
-      ...cleanFeedback,
-      substantiveReviews: 1,
-      unresolvedThreads: 2,
-    }),
+    inspectFeedback: async () =>
+      ok({
+        ...cleanFeedback,
+        substantiveReviews: 1,
+        unresolvedThreads: 2,
+      }),
     now: () => 0,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: true }),
     timeoutMs: 60,
     waitMs: async () => {},
   }).execute();
@@ -276,16 +290,17 @@ test("stabilizeExactHeadReview rejects settled actionable feedback", async () =>
 test("stabilizeExactHeadReview opens the circuit after three finding batches", async () => {
   let requests = 0;
   const result = await new PullRequestReviewStabilizeExactHeadReview({
-    inspectFeedback: async () => ({
-      ...cleanFeedback,
-      findingBatches: 3,
-      unresolvedThreads: 1,
-    }),
+    inspectFeedback: async () =>
+      ok({
+        ...cleanFeedback,
+        findingBatches: 3,
+        unresolvedThreads: 1,
+      }),
     now: () => 0,
     pollIntervalMs: 15,
     requestReview: async () => {
       requests += 1;
-      return { headSha: "head-sha", settled: true };
+      return ok({ headSha: "head-sha", settled: true });
     },
     timeoutMs: 60,
     waitMs: async () => {},
@@ -298,15 +313,16 @@ test("stabilizeExactHeadReview opens the circuit after three finding batches", a
 test("stabilizeExactHeadReview keeps the circuit open after findings are resolved", async () => {
   let requests = 0;
   const result = await new PullRequestReviewStabilizeExactHeadReview({
-    inspectFeedback: async () => ({
-      ...cleanFeedback,
-      findingBatches: 3,
-    }),
+    inspectFeedback: async () =>
+      ok({
+        ...cleanFeedback,
+        findingBatches: 3,
+      }),
     now: () => 0,
     pollIntervalMs: 15,
     requestReview: async () => {
       requests += 1;
-      return { headSha: "head-sha", settled: true };
+      return ok({ headSha: "head-sha", settled: true });
     },
     timeoutMs: 60,
     waitMs: async () => {},
@@ -319,13 +335,14 @@ test("stabilizeExactHeadReview keeps the circuit open after findings are resolve
 test("stabilizeExactHeadReview reopens after comprehensive stabilization", async () => {
   const result = await new PullRequestReviewStabilizeExactHeadReview({
     circuitBreakerAcknowledged: true,
-    inspectFeedback: async () => ({
-      ...cleanFeedback,
-      findingBatches: 3,
-    }),
+    inspectFeedback: async () =>
+      ok({
+        ...cleanFeedback,
+        findingBatches: 3,
+      }),
     now: () => 0,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: true }),
     timeoutMs: 60,
     waitMs: async () => {},
   }).execute();
@@ -336,14 +353,15 @@ test("stabilizeExactHeadReview reopens after comprehensive stabilization", async
 test("stabilizeExactHeadReview keeps acknowledged findings actionable", async () => {
   const result = await new PullRequestReviewStabilizeExactHeadReview({
     circuitBreakerAcknowledged: true,
-    inspectFeedback: async () => ({
-      ...cleanFeedback,
-      findingBatches: 3,
-      unresolvedThreads: 1,
-    }),
+    inspectFeedback: async () =>
+      ok({
+        ...cleanFeedback,
+        findingBatches: 3,
+        unresolvedThreads: 1,
+      }),
     now: () => 0,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: true }),
     timeoutMs: 60,
     waitMs: async () => {},
   }).execute();
@@ -353,14 +371,15 @@ test("stabilizeExactHeadReview keeps acknowledged findings actionable", async ()
 
 test("stabilizeExactHeadReview keeps old top-level comments actionable", async () => {
   const result = await new PullRequestReviewStabilizeExactHeadReview({
-    inspectFeedback: async () => ({
-      ...cleanFeedback,
-      substantiveComments: 4,
-      unhandledComments: 4,
-    }),
+    inspectFeedback: async () =>
+      ok({
+        ...cleanFeedback,
+        substantiveComments: 4,
+        unhandledComments: 4,
+      }),
     now: () => 0,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: true }),
     timeoutMs: 60,
     waitMs: async () => {},
   }).execute();
@@ -374,11 +393,11 @@ test("stabilizeExactHeadReview permits validation after the bounded timeout", as
   const result = await new PullRequestReviewStabilizeExactHeadReview({
     inspectFeedback: async () => {
       feedbackInspections += 1;
-      return cleanFeedback;
+      return ok(cleanFeedback);
     },
     now: () => now,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: false }),
     timeoutMs: 30,
     waitMs: async (milliseconds) => {
       now += milliseconds;
@@ -392,13 +411,14 @@ test("stabilizeExactHeadReview permits validation after the bounded timeout", as
 test("stabilizeExactHeadReview stops on findings discovered at timeout", async () => {
   let now = 0;
   const result = await new PullRequestReviewStabilizeExactHeadReview({
-    inspectFeedback: async () => ({
-      ...cleanFeedback,
-      unresolvedThreads: 1,
-    }),
+    inspectFeedback: async () =>
+      ok({
+        ...cleanFeedback,
+        unresolvedThreads: 1,
+      }),
     now: () => now,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: false }),
     timeoutMs: 0,
     waitMs: async (milliseconds) => {
       now += milliseconds;
@@ -415,15 +435,17 @@ test("stabilizeExactHeadReview reinspects a review settled at the deadline", asy
   const result = await new PullRequestReviewStabilizeExactHeadReview({
     inspectFeedback: async () => {
       inspections += 1;
-      return inspections === 1
-        ? cleanFeedback
-        : { ...cleanFeedback, unresolvedThreads: 1 };
+      return ok(
+        inspections === 1
+          ? cleanFeedback
+          : { ...cleanFeedback, unresolvedThreads: 1 },
+      );
     },
     now: () => now,
     pollIntervalMs: 15,
     requestReview: async () => {
       now = 31;
-      return { headSha: "head-sha", settled: true };
+      return ok({ headSha: "head-sha", settled: true });
     },
     timeoutMs: 1,
     waitMs: async () => {},
@@ -439,13 +461,13 @@ test("stabilizeExactHeadReview preserves a bounded zero-wait feedback snapshot",
     inspectFeedback: () =>
       new Promise((resolve) => {
         setTimeout(
-          () => resolve({ ...cleanFeedback, unresolvedThreads: 1 }),
+          () => resolve(ok({ ...cleanFeedback, unresolvedThreads: 1 })),
           5,
         );
       }),
     now: () => 0,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: false }),
     timeoutMs: 0,
     waitMs: async () => {},
   }).execute();
@@ -457,12 +479,12 @@ test("stabilizeExactHeadReview preserves a bounded zero-wait feedback snapshot",
 test("stabilizeExactHeadReview does not dispatch a zero-wait review request", async () => {
   let requests = 0;
   const result = await new PullRequestReviewStabilizeExactHeadReview({
-    inspectFeedback: async () => cleanFeedback,
+    inspectFeedback: async () => ok(cleanFeedback),
     now: () => 0,
     pollIntervalMs: 15,
     requestReview: async () => {
       requests += 1;
-      return { headSha: "head-sha", settled: false };
+      return ok({ headSha: "head-sha", settled: false });
     },
     timeoutMs: 0,
     waitMs: async () => {},
@@ -477,11 +499,11 @@ test("stabilizeExactHeadReview performs one zero-wait feedback inspection", asyn
   const result = await new PullRequestReviewStabilizeExactHeadReview({
     inspectFeedback: async () => {
       inspections += 1;
-      return cleanFeedback;
+      return ok(cleanFeedback);
     },
     now: () => 0,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: false }),
     timeoutMs: 0,
     waitMs: async () => {},
   }).execute();
@@ -496,13 +518,15 @@ test("stabilizeExactHeadReview confirms clean settlement after thread indexing",
   const result = await new PullRequestReviewStabilizeExactHeadReview({
     inspectFeedback: async () => {
       inspections += 1;
-      return inspections < 3
-        ? cleanFeedback
-        : { ...cleanFeedback, unresolvedThreads: 1 };
+      return ok(
+        inspections < 3
+          ? cleanFeedback
+          : { ...cleanFeedback, unresolvedThreads: 1 },
+      );
     },
     now: () => now,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: true }),
     timeoutMs: 60,
     waitMs: async (milliseconds) => {
       now += milliseconds;
@@ -519,20 +543,20 @@ test("stabilizeExactHeadReview stops waiting after an explicit usage limit", asy
   const result = await new PullRequestReviewStabilizeExactHeadReview({
     inspectFeedback: async () => {
       inspections += 1;
-      return {
+      return ok({
         ...cleanFeedback,
         codexReview: { ...cleanFeedback.codexReview, settled: false },
-      };
+      });
     },
     now: () => 0,
     pollIntervalMs: 15,
     requestReview: async () => {
       requests += 1;
-      return {
+      return ok({
         fallback: ExactHeadReviewFallback.CodexUsageLimit,
         headSha: "head-sha",
         settled: false,
-      };
+      });
     },
     timeoutMs: 600_000,
     waitMs: async () => {},
@@ -547,12 +571,15 @@ test("stabilizeExactHeadReview bounds transient request errors", async () => {
   let now = 0;
   let requests = 0;
   const result = await new PullRequestReviewStabilizeExactHeadReview({
-    inspectFeedback: async () => cleanFeedback,
+    inspectFeedback: async () => ok(cleanFeedback),
     now: () => now,
     pollIntervalMs: 15,
     requestReview: async () => {
       requests += 1;
-      throw new Error("transient GitHub failure");
+      return err({
+        kind: CiFailureKind.Github,
+        message: "transient GitHub failure",
+      });
     },
     timeoutMs: 30,
     waitMs: async (milliseconds) => {
@@ -571,11 +598,14 @@ test("stabilizeExactHeadReview bounds feedback errors after review settles", asy
   const result = await new PullRequestReviewStabilizeExactHeadReview({
     inspectFeedback: async () => {
       feedbackInspections += 1;
-      throw new Error("review threads unavailable");
+      return err({
+        kind: CiFailureKind.Github,
+        message: "review threads unavailable",
+      });
     },
     now: () => now,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: true }),
     timeoutMs: 30,
     waitMs: async (milliseconds) => {
       now += milliseconds;
@@ -595,13 +625,15 @@ test("stabilizeExactHeadReview waits for feedback to observe settlement", async 
   const result = await new PullRequestReviewStabilizeExactHeadReview({
     inspectFeedback: async () => {
       inspections += 1;
-      return inspections < 3
-        ? unsettledFeedback
-        : { ...unsettledFeedback, unresolvedThreads: 1 };
+      return ok(
+        inspections < 3
+          ? unsettledFeedback
+          : { ...unsettledFeedback, unresolvedThreads: 1 },
+      );
     },
     now: () => 0,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: true }),
     timeoutMs: 60,
     waitMs: async () => {},
   }).execute();
@@ -620,7 +652,7 @@ test("stabilizeExactHeadReview bounds a stalled feedback request", async () => {
     },
     now: () => now,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    requestReview: async () => ok({ headSha: "head-sha", settled: false }),
     timeoutMs: 30,
     waitMs: async (milliseconds) => {
       now += milliseconds;
@@ -637,7 +669,7 @@ test("stabilizeExactHeadReview bounds a stalled review request", async () => {
   let requests = 0;
   const signals: AbortSignal[] = [];
   const result = await new PullRequestReviewStabilizeExactHeadReview({
-    inspectFeedback: async () => cleanFeedback,
+    inspectFeedback: async () => ok(cleanFeedback),
     now: () => now,
     pollIntervalMs: 15,
     requestReview: (signal) => {

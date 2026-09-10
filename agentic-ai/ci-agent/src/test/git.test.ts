@@ -1,3 +1,4 @@
+import { assertSuccess } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { access, chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -96,7 +97,7 @@ describe("implementation working tree", () => {
     try {
       await mkdir(repoRoot);
       await execFileAsync("git", ["-C", repoRoot, "init"]);
-      await new CiRepository(repoRoot).configureGitForCi();
+      await new CiRepository(repoRoot).configureGitForCi().then(assertSuccess);
       await writeFile(join(repoRoot, "README.md"), "base\n");
       await execFileAsync("git", ["-C", repoRoot, "add", "README.md"]);
       await execFileAsync("git", ["-C", repoRoot, "commit", "-m", "base"]);
@@ -108,7 +109,9 @@ describe("implementation working tree", () => {
       ]);
       assert.deepEqual(stdout.trim().split("\n"), [repoRoot, "*"]);
       assert.equal(
-        await new CiRepository(repoRoot).hasWorkingTreeChanges(),
+        await new CiRepository(repoRoot)
+          .hasWorkingTreeChanges()
+          .then(assertSuccess),
         false,
       );
     } finally {
@@ -154,10 +157,12 @@ describe("implementation working tree", () => {
       await writeFile(join(repoRoot, "README.md"), "trusted update\n");
       process.env.NOOK_GITHUB_PAT = "publication-secret";
 
-      await new CiRepository(repoRoot).pushFixBranch({
-        fixBranch: "fix/dependency-update",
-        runId: "42",
-      });
+      await new CiRepository(repoRoot)
+        .pushFixBranch({
+          fixBranch: "fix/dependency-update",
+          runId: "42",
+        })
+        .then(assertSuccess);
 
       await assert.rejects(access(marker), /ENOENT/);
       const { stdout } = await execFileAsync("git", [
@@ -209,12 +214,16 @@ describe("implementation working tree", () => {
         ".nook-workbench-worklog.md",
       ]);
       assert.equal(
-        await new CiRepository(repoRoot).hasWorkingTreeChanges(),
+        await new CiRepository(repoRoot)
+          .hasWorkingTreeChanges()
+          .then(assertSuccess),
         false,
       );
       await writeFile(join(repoRoot, "README.md"), "authored change\n");
       assert.equal(
-        await new CiRepository(repoRoot).hasWorkingTreeChanges(),
+        await new CiRepository(repoRoot)
+          .hasWorkingTreeChanges()
+          .then(assertSuccess),
         true,
       );
     } finally {

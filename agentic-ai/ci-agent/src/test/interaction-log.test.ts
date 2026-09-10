@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   AgentTextLog,
   ShellStreamLog,
+  StreamEvidence,
   type LogWriter,
 } from "../main/interaction-log.js";
 
@@ -38,12 +39,12 @@ function assertLogLines(
 
 test("AgentTextLog opens a block and streams agent text incrementally", () => {
   const { lines, streamed, writer } = captureLog();
-  const log = new AgentTextLog(writer);
+  let log = new AgentTextLog(writer);
 
-  log.write("The run may still");
-  log.write(" be finishing;\nI'll check");
-  log.write(" the logs.");
-  log.closeBlock();
+  log = log.write("The run may still");
+  log = log.write(" be finishing;\nI'll check");
+  log = log.write(" the logs.");
+  log = log.closeBlock();
 
   assertLogLines(lines, "ci-agent/cursor/agent", "agent output");
   assert.equal(
@@ -54,12 +55,12 @@ test("AgentTextLog opens a block and streams agent text incrementally", () => {
 
 test("AgentTextLog closes an in-progress line before the next block", () => {
   const { lines, streamed, writer } = captureLog();
-  const log = new AgentTextLog(writer);
+  let log = new AgentTextLog(writer);
 
-  log.write("partial");
-  log.closeBlock();
-  log.write("next message");
-  log.closeBlock();
+  log = log.write("partial");
+  log = log.closeBlock();
+  log = log.write("next message");
+  log = log.closeBlock();
 
   assertLogLines(lines, "ci-agent/cursor/agent", "agent output", 2);
   assert.equal(streamed.text, "    partial\n    next message\n");
@@ -67,25 +68,25 @@ test("AgentTextLog closes an in-progress line before the next block", () => {
 
 test("ShellStreamLog prefixes live shell output", () => {
   const { lines, streamed, writer } = captureLog();
-  const log = new ShellStreamLog(writer);
+  let log = new ShellStreamLog(writer);
 
-  log.openBlock();
-  log.write("task: ci:verify\nerror: failed");
-  log.closeBlock();
+  log = log.openBlock();
+  log = log.write("task: ci:verify\nerror: failed");
+  log = log.closeBlock();
 
   assertLogLines(lines, "ci-agent/cursor/shell", "output");
   assert.equal(streamed.text, "    | task: ci:verify\n    | error: failed\n");
-  assert.equal(log.hasStreamed(), true);
+  assert.equal(log.observation(), StreamEvidence.Seen);
 });
 
 test("ShellStreamLog streams partial shell output before newline", () => {
   const { lines, streamed, writer } = captureLog();
-  const log = new ShellStreamLog(writer);
+  let log = new ShellStreamLog(writer);
 
-  log.openBlock();
-  log.write("running");
-  log.write(" tests");
-  log.closeBlock();
+  log = log.openBlock();
+  log = log.write("running");
+  log = log.write(" tests");
+  log = log.closeBlock();
 
   assertLogLines(lines, "ci-agent/cursor/shell", "output");
   assert.equal(streamed.text, "    | running tests\n");

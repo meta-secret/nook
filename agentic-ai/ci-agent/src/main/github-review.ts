@@ -1,3 +1,6 @@
+import { err, ok, ResultAsync, type Result } from "neverthrow";
+import { CiFailureKind, type CiFailure } from "./failure.js";
+import { GithubRequestFailure } from "./github-failure.js";
 import type { Octokit } from "@octokit/rest";
 
 import type { PullRequestRevision, RepoRef } from "./github.js";
@@ -182,7 +185,7 @@ export class GitHubReviewClient {
   constructor(private readonly value: Octokit) {}
   async requestExactHeadReview(
     request: GitHubReviewClientRequestExactHeadReviewRequest,
-  ): Promise<ExactHeadReviewRequestResult> {
+  ): Promise<Result<ExactHeadReviewRequestResult, CiFailure>> {
     const octokit = this.value;
     const { repoRef, prNumber, options = {} } = request;
 
@@ -194,15 +197,20 @@ export class GitHubReviewClient {
         state: ExactHeadReviewRevisionState.Unbound,
       },
     ] = [options.revision];
-    const { data: pr } = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-      ...(signal ? { request: { signal } } : {}),
-    });
+    const requested1 = await ResultAsync.fromPromise(
+      octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: prNumber,
+        ...(signal ? { request: { signal } } : {}),
+      }),
+      (cause) => new GithubRequestFailure(cause, signal).outcome(),
+    );
+    if (requested1.isErr()) return err(requested1.error);
+    const { data: pr } = requested1.value;
     const headSha = pr.head.sha;
     const baseSha = pr.base.sha;
-    new GitHubReviewAssertExpectedRevision({
+    const revision3 = new GitHubReviewAssertExpectedRevision({
       expected: expectedRevision,
       actual: {
         baseRef: pr.base.ref,
@@ -210,7 +218,8 @@ export class GitHubReviewClient {
         headSha,
       },
     }).execute();
-    const snapshot = await new ReviewSnapshotQuery({
+    if (revision3.isErr()) return err(revision3.error);
+    const snapshotResult = await new ReviewSnapshotQuery({
       baseSha,
       headSha,
       octokit,
@@ -219,14 +228,21 @@ export class GitHubReviewClient {
       repo,
       signal,
     }).load();
+    if (snapshotResult.isErr()) return err(snapshotResult.error);
+    const snapshot = snapshotResult.value;
     if (expectedRevision.state === ExactHeadReviewRevisionState.Bound) {
-      const { data: currentPr } = await octokit.rest.pulls.get({
-        owner,
-        repo,
-        pull_number: prNumber,
-        ...(signal ? { request: { signal } } : {}),
-      });
-      new GitHubReviewAssertExpectedRevision({
+      const requested2 = await ResultAsync.fromPromise(
+        octokit.rest.pulls.get({
+          owner,
+          repo,
+          pull_number: prNumber,
+          ...(signal ? { request: { signal } } : {}),
+        }),
+        (cause) => new GithubRequestFailure(cause, signal).outcome(),
+      );
+      if (requested2.isErr()) return err(requested2.error);
+      const { data: currentPr } = requested2.value;
+      const revision4 = new GitHubReviewAssertExpectedRevision({
         expected: expectedRevision,
         actual: {
           baseRef: currentPr.base.ref,
@@ -234,57 +250,62 @@ export class GitHubReviewClient {
           headSha: currentPr.head.sha,
         },
       }).execute();
+      if (revision4.isErr()) return err(revision4.error);
     }
     if (snapshot.codex.settled) {
-      return {
+      return ok({
         fallback: ExactHeadReviewFallback.None,
         headSha,
         provider: ExactHeadReviewProvider.Codex,
         requested: false,
         settled: true,
-      };
+      });
     }
     if (snapshot.codex.usageLimited) {
-      return {
+      return ok({
         fallback: ExactHeadReviewFallback.CodexUsageLimit,
         headSha,
         provider: ExactHeadReviewProvider.Codex,
         requested: false,
         settled: false,
-      };
+      });
     }
     if (snapshot.codex.requested) {
-      return {
+      return ok({
         fallback: ExactHeadReviewFallback.None,
         headSha,
         provider: ExactHeadReviewProvider.Codex,
         requested: false,
         settled: false,
-      };
+      });
     }
 
     const codexMarker = new CodexReviewRevision({
       headSha: headSha,
       baseSha: baseSha,
     }).marker();
-    await octokit.rest.issues.createComment({
-      owner,
-      repo,
-      issue_number: prNumber,
-      body: `@codex review\n\n${codexMarker}`,
-      ...(signal ? { request: { signal } } : {}),
-    });
+    const comment = await ResultAsync.fromPromise(
+      octokit.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: prNumber,
+        body: `@codex review\n\n${codexMarker}`,
+        ...(signal ? { request: { signal } } : {}),
+      }),
+      (cause) => new GithubRequestFailure(cause, signal).outcome(),
+    );
+    if (comment.isErr()) return err(comment.error);
     if (!availability || availability.probe.timeoutMs <= 0) {
-      return {
+      return ok({
         fallback: ExactHeadReviewFallback.None,
         headSha,
         provider: ExactHeadReviewProvider.Codex,
         requested: true,
         settled: false,
-      };
+      });
     }
 
-    const probed = await new CodexAvailabilityProbe({
+    const probedResult = await new CodexAvailabilityProbe({
       availability,
       baseSha,
       headSha,
@@ -294,22 +315,24 @@ export class GitHubReviewClient {
       repo,
       signal,
     }).run();
+    if (probedResult.isErr()) return err(probedResult.error);
+    const probed = probedResult.value;
     if (probed.kind === CodexProbeKind.UsageLimited) {
-      return {
+      return ok({
         fallback: ExactHeadReviewFallback.CodexUsageLimit,
         headSha,
         provider: ExactHeadReviewProvider.Codex,
         requested: true,
         settled: false,
-      };
+      });
     }
-    return {
+    return ok({
       fallback: ExactHeadReviewFallback.None,
       headSha,
       provider: ExactHeadReviewProvider.Codex,
       requested: true,
       settled: probed.kind === CodexProbeKind.Settled,
-    };
+    });
   }
 }
 
@@ -376,7 +399,7 @@ class GitHubReviewAssertExpectedRevision {
   constructor(
     private readonly request: GitHubReviewAssertExpectedRevisionRequest,
   ) {}
-  execute(): void {
+  execute(): Result<void, CiFailure> {
     const { expected, actual } = this.request;
 
     if (
@@ -385,11 +408,12 @@ class GitHubReviewAssertExpectedRevision {
         expected.revision.baseSha === actual.baseSha &&
         expected.revision.headSha === actual.headSha)
     ) {
-      return;
+      return ok();
     }
-    throw new Error(
-      `Pull request revision changed from ${expected.revision.headSha}/${expected.revision.baseSha}/${expected.revision.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
-    );
+    return err({
+      kind: CiFailureKind.Github,
+      message: `Pull request revision changed from ${expected.revision.headSha}/${expected.revision.baseSha}/${expected.revision.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
+    });
   }
 }
 
@@ -418,16 +442,18 @@ class ReviewSnapshotQuery {
       signal?: AbortSignal;
     },
   ) {}
-  async load(): Promise<ReviewSnapshot> {
+  async load(): Promise<Result<ReviewSnapshot, CiFailure>> {
     const input = this.request;
 
     const [comments, reviews] = await Promise.all([
       new IssueCommentQuery(input).load(),
       new PullReviewQuery(input).load(),
     ]);
+    if (comments.isErr()) return err(comments.error);
+    if (reviews.isErr()) return err(reviews.error);
     return new ReviewSnapshotEvidence({
-      comments: comments,
-      reviews: reviews,
+      comments: comments.value,
+      reviews: reviews.value,
       headSha: input.headSha,
       baseSha: input.baseSha,
       reactionSource: input,
@@ -450,7 +476,7 @@ interface GitHubReviewSnapshotFromRequest {
 
 class ReviewSnapshotEvidence {
   constructor(private readonly request: GitHubReviewSnapshotFromRequest) {}
-  async project(): Promise<ReviewSnapshot> {
+  async project(): Promise<Result<ReviewSnapshot, CiFailure>> {
     const { comments, reviews, headSha, baseSha, reactionSource } =
       this.request;
 
@@ -521,11 +547,11 @@ class ReviewSnapshotEvidence {
             actor: comment.user,
           }),
       );
-    const requestReactions =
+    const reactions =
       codexReviewSettled || cleanComment || codexRequests.length === 0
-        ? []
-        : (
-            await Promise.all(
+        ? ok([])
+        : await ResultAsync.fromPromise(
+            Promise.all(
               codexRequests.map((request) =>
                 reactionSource.octokit.paginate(
                   reactionSource.octokit.rest.reactions.listForIssueComment,
@@ -540,14 +566,18 @@ class ReviewSnapshotEvidence {
                   },
                 ),
               ),
-            )
-          ).flat();
+            ),
+            (cause) =>
+              new GithubRequestFailure(cause, reactionSource.signal).outcome(),
+          );
+    if (reactions.isErr()) return err(reactions.error);
+    const requestReactions = reactions.value.flat();
     const approvalReaction = requestReactions.some(
       (reaction) =>
         reaction.content === "+1" &&
         new ReviewActor(reaction.user).isCodexReviewer(),
     );
-    return {
+    return ok({
       codex: {
         requested: codexRequests.length > 0,
         settled: codexReviewSettled || cleanComment || approvalReaction,
@@ -557,7 +587,7 @@ class ReviewSnapshotEvidence {
         requested: cursorRequests.length > 0,
         settled: cursorReviewSettled,
       },
-    };
+    });
   }
 }
 
@@ -574,7 +604,7 @@ class CodexAvailabilityProbe {
       signal?: AbortSignal;
     },
   ) {}
-  async run(): Promise<CodexProbeResult> {
+  async run(): Promise<Result<CodexProbeResult, CiFailure>> {
     const input = this.request;
 
     const deadline = Date.now() + input.availability.probe.timeoutMs;
@@ -582,15 +612,17 @@ class CodexAvailabilityProbe {
       await input.availability.clock.waitMs(
         input.availability.probe.intervalMs,
       );
-      const snapshot = await new ReviewSnapshotQuery(input).load();
+      const snapshotResult = await new ReviewSnapshotQuery(input).load();
+      if (snapshotResult.isErr()) return err(snapshotResult.error);
+      const snapshot = snapshotResult.value;
       if (snapshot.codex.settled) {
-        return { kind: CodexProbeKind.Settled };
+        return ok({ kind: CodexProbeKind.Settled });
       }
       if (snapshot.codex.usageLimited) {
-        return { kind: CodexProbeKind.UsageLimited };
+        return ok({ kind: CodexProbeKind.UsageLimited });
       }
     }
-    return { kind: CodexProbeKind.Pending };
+    return ok({ kind: CodexProbeKind.Pending });
   }
 }
 
@@ -679,26 +711,29 @@ class IssueCommentQuery {
       signal?: AbortSignal;
     },
   ) {}
-  async load(): Promise<IssueComment[]> {
+  async load(): Promise<Result<IssueComment[], CiFailure>> {
     const input = this.request;
 
-    const comments = await input.octokit.paginate(
-      input.octokit.rest.issues.listComments,
-      {
+    const comments = await ResultAsync.fromPromise(
+      input.octokit.paginate(input.octokit.rest.issues.listComments, {
         owner: input.owner,
         repo: input.repo,
         issue_number: input.prNumber,
         per_page: 100,
         ...(input.signal ? { request: { signal: input.signal } } : {}),
-      },
+      }),
+      (cause) => new GithubRequestFailure(cause, input.signal).outcome(),
     );
-    return comments.map((comment) => ({
-      authorAssociation: comment.author_association,
-      body: new GitHubTextValue(comment.body).read(),
-      createdAt: new GitHubTextValue(comment.created_at).read(),
-      id: comment.id,
-      user: comment.user,
-    }));
+    if (comments.isErr()) return err(comments.error);
+    return ok(
+      comments.value.map((comment) => ({
+        authorAssociation: comment.author_association,
+        body: new GitHubTextValue(comment.body).read(),
+        createdAt: new GitHubTextValue(comment.created_at).read(),
+        id: comment.id,
+        user: comment.user,
+      })),
+    );
   }
 }
 
@@ -712,26 +747,29 @@ class PullReviewQuery {
       signal?: AbortSignal;
     },
   ) {}
-  async load(): Promise<PullReview[]> {
+  async load(): Promise<Result<PullReview[], CiFailure>> {
     const input = this.request;
 
-    const reviews = await input.octokit.paginate(
-      input.octokit.rest.pulls.listReviews,
-      {
+    const reviews = await ResultAsync.fromPromise(
+      input.octokit.paginate(input.octokit.rest.pulls.listReviews, {
         owner: input.owner,
         repo: input.repo,
         pull_number: input.prNumber,
         per_page: 100,
         ...(input.signal ? { request: { signal: input.signal } } : {}),
-      },
+      }),
+      (cause) => new GithubRequestFailure(cause, input.signal).outcome(),
     );
-    return reviews.map((review) => ({
-      body: new GitHubTextValue(review.body).read(),
-      commitId: new GitHubTextValue(review.commit_id).read(),
-      state: new GitHubTextValue(review.state).read(),
-      submittedAt: new GitHubTextValue(review.submitted_at).read(),
-      user: review.user,
-    }));
+    if (reviews.isErr()) return err(reviews.error);
+    return ok(
+      reviews.value.map((review) => ({
+        body: new GitHubTextValue(review.body).read(),
+        commitId: new GitHubTextValue(review.commit_id).read(),
+        state: new GitHubTextValue(review.state).read(),
+        submittedAt: new GitHubTextValue(review.submitted_at).read(),
+        user: review.user,
+      })),
+    );
   }
 }
 
