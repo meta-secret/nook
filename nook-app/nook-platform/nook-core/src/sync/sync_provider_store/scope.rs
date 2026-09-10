@@ -164,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn active_vault_provider_scope_and_roles_are_core_owned() -> anyhow::Result<()> {
+    fn active_vault_provider_scope_and_roles_are_core_owned() {
         let mut local_a = ProviderScopeFixture::github("local-a", "ignored", "ignored").provider;
         local_a.provider_type = StorageProviderType::Local;
         local_a.store_id = ProviderVaultScope::StoreId("store-a".to_owned());
@@ -221,7 +221,6 @@ mod tests {
             .visible_while_locked(),
             vec![local_a]
         );
-        Ok(())
     }
 
     #[test]
@@ -356,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn role_views_keep_local_folder_and_copy_local_rows_verbatim() -> anyhow::Result<()> {
+    fn role_views_keep_local_folder_and_copy_local_rows_verbatim() {
         let mut first = ProviderScopeFixture::github("first", "repo", " retained credential ")
             .scoped("vault")
             .provider;
@@ -390,7 +389,6 @@ mod tests {
             .visible_while_locked(),
             vec![first, second]
         );
-        Ok(())
     }
 
     #[test]

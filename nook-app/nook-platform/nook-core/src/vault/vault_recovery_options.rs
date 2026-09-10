@@ -219,7 +219,7 @@ mod tests {
             let event = VaultEvent::sign(body, signing.signing_key())?;
             let id = event.id()?;
             match graph.insert(crate::EventGraphInsert {
-                event: event,
+                event,
                 expected_store_id: STORE_ID,
             }) {
                 Ok(inserted) => {

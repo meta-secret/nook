@@ -385,14 +385,14 @@ mod tests {
     #[test]
     fn build_secret_yaml_accepts_authenticator_uri() -> anyhow::Result<()> {
         let fields = SecretFormFields::Authenticator(AuthenticatorSecretForm {
-            issuer: "".to_owned(),
-            account: "".to_owned(),
-            website_url: "".to_owned(),
+            issuer: String::new(),
+            account: String::new(),
+            website_url: String::new(),
             totp_secret: "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example"
                 .to_owned(),
-            algorithm: "".to_owned(),
-            digits: "".to_owned(),
-            period: "".to_owned(),
+            algorithm: String::new(),
+            digits: String::new(),
+            period: String::new(),
             backup_codes: "one\ntwo".to_owned(),
         });
         let yaml = SecretFormFields::build_secret_yaml_from_form(&fields)?;
@@ -412,7 +412,7 @@ mod tests {
     -> anyhow::Result<()> {
         let content = Base64Engine::encode(&general_purpose::STANDARD, b"secret-bytes");
         let fields = SecretFormFields::FileAttachment(FileAttachmentSecretForm {
-            title: "".to_owned(),
+            title: String::new(),
             file_name: "notes.txt".to_owned(),
             mime_type: "text/plain".to_owned(),
             size_bytes: 12_u64.into(),

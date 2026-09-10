@@ -243,6 +243,7 @@ impl fmt::Display for DeviceAccessProfileRejection {
 impl error::Error for DeviceAccessProfileRejection {}
 
 impl DeviceAccessProfile {
+    #[allow(clippy::result_large_err)]
     pub fn set_passkey_name(
         mut self,
         credential_fingerprint: &str,
@@ -267,6 +268,7 @@ impl DeviceAccessProfile {
         Ok(self)
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn set_passkey_provider_label(
         mut self,
         credential_fingerprint: &str,
@@ -665,7 +667,9 @@ mod tests {
 
         let result = profile.set_passkey_name("passkey:other", "Wrong key".to_owned());
 
-        let rejection = result.expect_err("changed credential rejects");
+        let Err(rejection) = result else {
+            panic!("changed credential must reject");
+        };
         assert_eq!(
             rejection.cause,
             DeviceAccessProfileTransitionError::CredentialChanged
@@ -676,57 +680,57 @@ mod tests {
     #[test]
     fn distinguishes_missing_locked_and_unlocked_identity_sessions() {
         assert_eq!(
-            (&DeviceAccessIdentityObservation {
+            DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "",
                 persisted_identity: PersistedDeviceIdentityState::NotEstablished,
-            })
-                .identity_state(),
+            }
+            .identity_state(),
             DeviceAccessIdentityState::Missing
         );
         assert_eq!(
-            (&DeviceAccessIdentityObservation {
+            DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "",
                 persisted_identity: PersistedDeviceIdentityState::Established,
-            })
-                .identity_state(),
+            }
+            .identity_state(),
             DeviceAccessIdentityState::Locked
         );
         assert_eq!(
-            (&DeviceAccessIdentityObservation {
+            DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "device-persisted",
                 persisted_identity: PersistedDeviceIdentityState::Established,
-            })
-                .identity_state(),
+            }
+            .identity_state(),
             DeviceAccessIdentityState::Locked
         );
         assert_eq!(
-            (&DeviceAccessIdentityObservation {
+            DeviceAccessIdentityObservation {
                 session_unlocked: true.into(),
                 session_device_id: "device-session",
                 persisted_identity: PersistedDeviceIdentityState::Established,
-            })
-                .identity_state(),
+            }
+            .identity_state(),
             DeviceAccessIdentityState::Unlocked
         );
         assert_eq!(
-            (&DeviceAccessIdentityObservation {
+            DeviceAccessIdentityObservation {
                 session_unlocked: true.into(),
                 session_device_id: "device-companion",
                 persisted_identity: PersistedDeviceIdentityState::NotEstablished,
-            })
-                .identity_state(),
+            }
+            .identity_state(),
             DeviceAccessIdentityState::Unlocked
         );
         assert_eq!(
-            (&DeviceAccessIdentityObservation {
+            DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "device-companion",
                 persisted_identity: PersistedDeviceIdentityState::NotEstablished,
-            })
-                .identity_state(),
+            }
+            .identity_state(),
             DeviceAccessIdentityState::Locked
         );
     }
@@ -849,9 +853,11 @@ mod tests {
             PasskeyCreationCeremony::RegistrationOnly,
         );
 
-        let rejection = profile
-            .set_passkey_provider_label("passkey:stale", "Bitwarden".to_owned())
-            .expect_err("stale credential rejects");
+        let Err(rejection) =
+            profile.set_passkey_provider_label("passkey:stale", "Bitwarden".to_owned())
+        else {
+            return Err(anyhow::anyhow!("stale credential must reject"));
+        };
         assert_eq!(
             rejection.cause,
             DeviceAccessProfileTransitionError::CredentialChanged

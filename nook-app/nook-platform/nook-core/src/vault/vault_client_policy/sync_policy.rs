@@ -417,7 +417,7 @@ mod tests {
                     crate::VaultSyncTimerStartDecisionRequest {
                         authenticated: (authenticated).into(),
                         device_protection_ready: (true).into(),
-                        join_state: join_state,
+                        join_state,
                         awaiting_join_approval: (awaiting).into()
                     }
                 ),

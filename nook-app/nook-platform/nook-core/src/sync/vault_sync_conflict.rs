@@ -286,7 +286,7 @@ mod tests {
             let event_id = event.id()?;
             let mut graph = EventGraph::new();
             match graph.insert(crate::EventGraphInsert {
-                event: event,
+                event,
                 expected_store_id: TEST_STORE_ID,
             }) {
                 Ok(inserted) => {
@@ -328,7 +328,7 @@ mod tests {
             )?;
             let event_id = event.id()?;
             match graph.insert(crate::EventGraphInsert {
-                event: event,
+                event,
                 expected_store_id: TEST_STORE_ID,
             }) {
                 Ok(inserted) => {

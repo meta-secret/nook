@@ -571,7 +571,7 @@ mod tests {
         };
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                configuration: &StoredOAuthFileConfiguration::Configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::FileName(("draft-name").to_owned())
             })
             .project()?
@@ -583,7 +583,7 @@ mod tests {
         oauth.folder_id = StoredGoogleDriveFolder::FolderId("shared-folder".to_owned());
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                configuration: &StoredOAuthFileConfiguration::Configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::FileName(("ignored-draft-name").to_owned())
             })
             .project()?
@@ -639,7 +639,7 @@ mod tests {
         let before = oauth.clone();
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                configuration: &StoredOAuthFileConfiguration::Configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::Unresolved
             })
             .project()?,
@@ -650,7 +650,7 @@ mod tests {
         let before = oauth.clone();
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                configuration: &StoredOAuthFileConfiguration::Configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::Unresolved
             })
             .project(),

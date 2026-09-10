@@ -535,7 +535,7 @@ mod tests {
         let mut snapshot = AuthProvidersSnapshotData::github_snapshot(pat);
         snapshot = snapshot
             .seal_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         let StoredGithubPat::Token(stored) = &snapshot.providers[0].github_pat else {
             return Err(io::Error::other("sealed GitHub PAT must be present").into());
         };
@@ -545,7 +545,7 @@ mod tests {
         let mut opened = snapshot;
         opened = opened
             .open_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         assert_eq!(
             opened.providers[0].github_pat,
             StoredGithubPat::Token(pat.to_owned())
@@ -558,13 +558,11 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let access = "ya29.oauth-access-token";
         let refresh = "1//refresh-token-secret";
-        let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture {
-            access,
-            refresh: refresh,
-        });
+        let mut snapshot =
+            AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture { access, refresh });
         snapshot = snapshot
             .seal_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         let StoredOAuthFileConfiguration::Configured(oauth) = &snapshot.providers[0].oauth_file
         else {
             return Err((io::Error::other("test as_ref value must exist")).into());
@@ -583,7 +581,7 @@ mod tests {
         let mut opened = snapshot;
         opened = opened
             .open_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         let StoredOAuthFileConfiguration::Configured(opened_oauth) =
             &opened.providers[0].oauth_file
         else {
@@ -615,11 +613,11 @@ mod tests {
         let mut snapshot = AuthProvidersSnapshotData::github_snapshot("github_pat_11AAAA");
         snapshot = snapshot
             .seal_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         let sealed_once = snapshot.providers[0].github_pat.clone();
         snapshot = snapshot
             .seal_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         assert_eq!(snapshot.providers[0].github_pat, sealed_once);
         Ok(())
     }
@@ -631,7 +629,7 @@ mod tests {
         let mut snapshot = AuthProvidersSnapshotData::github_snapshot("github_pat_11SECRET");
         snapshot = snapshot
             .seal_credentials(&owner)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         let sealed = snapshot.clone();
         snapshot =
             ExpectedCredentialFailure::AnyError.verify_open(snapshot.open_credentials(&other))?;
@@ -673,7 +671,7 @@ mod tests {
         let mut snapshot = AuthProvidersSnapshotData::github_snapshot(pat);
         snapshot = snapshot
             .seal_credentials_for(&extension.public_key())
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         let StoredGithubPat::Token(stored) = &snapshot.providers[0].github_pat else {
             return Err(io::Error::other("sealed GitHub PAT must be present").into());
         };
@@ -683,7 +681,7 @@ mod tests {
         let mut opened = snapshot;
         opened = opened
             .open_credentials(&extension)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         assert_eq!(
             opened.providers[0].github_pat,
             StoredGithubPat::Token(pat.to_owned())
@@ -705,7 +703,7 @@ mod tests {
         );
         snapshot = snapshot
             .seal_credentials_for(&recipient.public_key())
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         let digest = snapshot.companion_pairing_manifest_digest()?;
 
         snapshot.authenticate_credentials_for(&recipient)?;
@@ -726,7 +724,7 @@ mod tests {
         );
         snapshot = snapshot
             .seal_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         assert_eq!(
             snapshot.credential_storage_admission(),
             ProviderCredentialStorageAdmission::MarkerCompatible
@@ -758,11 +756,11 @@ mod tests {
         let original = snapshot.clone();
         snapshot = snapshot
             .seal_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         assert_eq!(snapshot, original);
         snapshot = snapshot
             .seal_credentials_for(&identity.public_key())
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         assert_eq!(snapshot, original);
         snapshot = ExpectedCredentialFailure::AnyError
             .verify_open(snapshot.open_credentials(&identity))?;
@@ -797,7 +795,7 @@ mod tests {
         });
         snapshot = snapshot
             .seal_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(super::ProviderCredentialRejection::into_cause)?;
         let oauth = (match &mut snapshot.providers[0].oauth_file {
             StoredOAuthFileConfiguration::Configured(config) => Ok(config),
             StoredOAuthFileConfiguration::NotApplicable => {

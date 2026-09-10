@@ -405,7 +405,7 @@ impl VaultName {
 }
 
 #[cfg(test)]
-#[allow(clippy::unnecessary_wraps)]
+#[allow(clippy::items_after_test_module, clippy::unnecessary_wraps)]
 mod tests {
     use crate::RecordTypeDeclaration;
     use crate::{

@@ -989,3 +989,5 @@ mod wasm_tests {
 
 mod browser_material_admission;
 pub use browser_material_admission::*;
+
+mod bridge_coverage;

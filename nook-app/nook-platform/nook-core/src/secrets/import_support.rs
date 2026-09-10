@@ -578,6 +578,7 @@ pub(crate) enum ImportSkipReason {
     IncompletePayload,
     InvalidCard,
 }
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum ImportItemDisposition {
     Imported(crate::SecretValue),
     Skipped(ImportSkipReason),

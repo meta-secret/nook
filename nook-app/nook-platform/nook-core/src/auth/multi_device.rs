@@ -101,7 +101,7 @@ mod tests {
         SecretType, StoredRecordPayload, StoredSecretRecord,
     };
 
-    use std::io;
+    use std::{io, mem};
 
     use super::*;
     use crate::{
@@ -557,6 +557,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn extension_access_follows_approval_and_revocation_events() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let extension = DeviceIdentity::generate()?;
@@ -787,7 +788,7 @@ mod tests {
         let revocation = history.first_revocation()?;
         let revocation_id = revocation.id()?;
         let EventGraphInsertion { graph, status } =
-            std::mem::take(&mut history.graph).insert(EventGraphInsert {
+            mem::take(&mut history.graph).insert(EventGraphInsert {
                 event: revocation,
                 expected_store_id: history.store_id.as_str(),
             })?;
@@ -806,7 +807,7 @@ mod tests {
 
         let self_approval = history.self_approval(revocation_id)?;
         let EventGraphInsertion { graph, status } =
-            std::mem::take(&mut history.graph).insert(EventGraphInsert {
+            mem::take(&mut history.graph).insert(EventGraphInsert {
                 event: self_approval,
                 expected_store_id: history.store_id.as_str(),
             })?;
@@ -816,6 +817,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn active_device_envelopes_follow_revocation_and_reapproval() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let extension = DeviceIdentity::generate()?;

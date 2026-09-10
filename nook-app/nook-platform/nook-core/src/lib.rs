@@ -413,6 +413,7 @@ pub use vault_wire::{
 };
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod test_support {
     use crate::{VaultStoreIdentityRef, VaultVersionWrite};
 

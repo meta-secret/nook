@@ -383,7 +383,7 @@ mod tests {
                     number: "4111111111111111",
                     expiration_month: "",
                     expiration_year: "",
-                    cvv: cvv,
+                    cvv,
                     notes: ""
                 }),
                 Err(ValidationError::CreditCardCvvInvalid)

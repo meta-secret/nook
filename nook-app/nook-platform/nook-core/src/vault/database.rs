@@ -29,6 +29,7 @@ impl Default for Database {
 }
 
 #[derive(Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum SecretRemoval {
     AlreadyAbsent,
     Removed(SecretRecord),

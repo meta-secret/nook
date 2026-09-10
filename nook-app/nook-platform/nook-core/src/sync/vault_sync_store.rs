@@ -235,6 +235,7 @@ impl<'a> VaultSyncPair<'a> {
             last_common_content_hash,
         }
     }
+    #[allow(clippy::result_large_err)]
     pub fn prepare(self) -> Result<PreparedVaultSync, RejectedVaultSync> {
         let action = VaultSyncComparison::with_common(
             self.local.blob(),
@@ -325,6 +326,7 @@ impl VaultSyncFanOut {
     pub fn new(local: MemoryVaultStore, remotes: HashMap<String, MemoryVaultStore>) -> Self {
         Self { local, remotes }
     }
+    #[allow(clippy::result_large_err)]
     pub fn run(self) -> Result<CompletedVaultFanOut, RejectedVaultFanOut> {
         let Self { mut local, remotes } = self;
         let mut pending = remotes.into_iter().collect::<BTreeMap<_, _>>();
@@ -486,9 +488,9 @@ mod tests {
         let local = MemoryVaultStore::with_blob(local_blob.clone());
         let remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        let rejected = VaultSyncPair::new(local, remote)
-            .prepare()
-            .expect_err("different stores reject");
+        let Err(rejected) = VaultSyncPair::new(local, remote).prepare() else {
+            return Err(anyhow::anyhow!("different stores must reject"));
+        };
         let (local, remote) = (rejected.local, rejected.remote);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
