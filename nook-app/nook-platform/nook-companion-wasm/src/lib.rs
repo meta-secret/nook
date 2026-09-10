@@ -35,8 +35,6 @@ mod account_picker_authorization;
 mod authentication_observation_binding;
 mod authentication_workflow;
 mod authenticator_code_response;
-#[cfg(test)]
-mod bridge_coverage;
 mod companion_pairing;
 mod companion_protocol;
 mod credential_fill;
