@@ -15,6 +15,11 @@ pub struct StagedIdentityRebase<'a> {
     pub identity_id: &'a IdentityId,
 }
 
+enum StagedIdentityPresence<'a> {
+    Existing(&'a IdentityRecord),
+    NewlyCreated,
+}
+
 enum StagedRebaseRollback {
     Unchanged,
     Replaced {
@@ -39,7 +44,7 @@ impl IdentityDirectory {
             candidate,
             identity_id,
         } = request;
-        let Some(target) = candidate.identity(identity_id) else {
+        let StagedIdentityPresence::Existing(target) = candidate.identity(identity_id) else {
             return Err(IdentityDirectoryRejection {
                 directory: self,
                 cause: MultiDeviceError::IdentityNotFound {
@@ -63,14 +68,18 @@ impl IdentityDirectory {
                 .iter()
                 .position(|record| &record.identity_id == identity_id),
         ) {
-            (Some(_), Some(index)) if self.identities[index] == *target => {
+            (StagedIdentityPresence::Existing(_), Some(index))
+                if self.identities[index] == *target =>
+            {
                 StagedRebaseRollback::Unchanged
             }
-            (Some(original), Some(index)) if self.identities[index] == *original => {
+            (StagedIdentityPresence::Existing(original), Some(index))
+                if self.identities[index] == *original =>
+            {
                 let previous = std::mem::replace(&mut self.identities[index], target.clone());
                 StagedRebaseRollback::Replaced { index, previous }
             }
-            (None, None) => {
+            (StagedIdentityPresence::NewlyCreated, None) => {
                 self.identities.push(target.clone());
                 StagedRebaseRollback::Inserted
             }
@@ -99,10 +108,15 @@ impl IdentityDirectory {
         Ok(self)
     }
 
-    fn identity(&self, identity_id: &IdentityId) -> Option<&IdentityRecord> {
-        self.identities
+    fn identity(&self, identity_id: &IdentityId) -> StagedIdentityPresence<'_> {
+        match self
+            .identities
             .iter()
             .find(|record| &record.identity_id == identity_id)
+        {
+            Some(record) => StagedIdentityPresence::Existing(record),
+            None => StagedIdentityPresence::NewlyCreated,
+        }
     }
 
     fn identities_without(&self, identity_id: &IdentityId) -> Vec<&IdentityRecord> {

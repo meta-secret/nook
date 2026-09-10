@@ -51,9 +51,9 @@ pub use auth::enrollment::{
 pub use auth::identity::{
     IdentityId, IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation, IdentityMember,
     IdentityMemberKeyBinding, IdentityMemberSigningUpdate, IdentityMemberVaultGrant,
-    IdentityRecord, IdentityRecordRejection, IdentityVaultAppEnvelopes, IdentityVaultDek,
-    IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation,
-    IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
+    IdentityRecord, IdentityRecordRejection, IdentityVaultAppEnvelopes, IdentityVaultBinding,
+    IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
+    IdentityVaultDekReconciliation, IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
 };
 pub use auth::identity_directory::{
     AppKeyIdentityMembership, DirectoryCreationEnrollment, DirectoryLegacyMigration,
@@ -61,7 +61,7 @@ pub use auth::identity_directory::{
     DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
     IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentitySelection,
     LegacyDirectoryBase, LocalIdentityKeyRetirement, MigratedIdentityDirectory,
-    PreparedLegacyDirectoryMigration, StagedIdentityRebase,
+    PreparedLegacyDirectoryMigration, RecoveryRetirement, StagedIdentityRebase,
 };
 
 pub use auth::local_identity_keyring::{

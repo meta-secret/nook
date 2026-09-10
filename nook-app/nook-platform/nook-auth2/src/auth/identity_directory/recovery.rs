@@ -1,15 +1,20 @@
 //! Retirement and selection transitions for local identity recovery.
 use super::*;
 
+pub enum RecoveryRetirement {
+    RetireInstallation(crate::AppId),
+    PreserveRetiredKeys,
+}
+
 impl IdentityDirectory {
     /// Drop directory ownership sealed to an inaccessible installation key.
     /// Encrypted vault storage remains outside this portable record and may be
     /// rebound only after a recovery credential proves access.
     #[must_use]
-    pub fn reset_for_device_recovery(mut self, recovered_app_id: Option<crate::AppId>) -> Self {
+    pub fn reset_for_device_recovery(mut self, retirement: RecoveryRetirement) -> Self {
         self.identities.clear();
         self.selection = IdentitySelection::Empty;
-        if let Some(app_id) = recovered_app_id {
+        if let RecoveryRetirement::RetireInstallation(app_id) = retirement {
             self = self.retire_app_id(app_id);
         }
         self
@@ -123,7 +128,9 @@ mod tests {
             })?;
         directory = opened_identity.directory;
 
-        directory = directory.reset_for_device_recovery(Some(inaccessible_key.app_id().clone()));
+        directory = directory.reset_for_device_recovery(RecoveryRetirement::RetireInstallation(
+            inaccessible_key.app_id().clone(),
+        ));
 
         assert!(directory.identities().is_empty());
         assert_eq!(directory.selection(), &IdentitySelection::Empty);

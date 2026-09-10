@@ -32,6 +32,20 @@ pub enum ProtectedSigningMaterial {
     LegacySeedRequired,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+enum SigningSeedProtectionState {
+    Protected(AgeArmoredCiphertext),
+    #[default]
+    LegacyMigrationRequired,
+}
+
+impl SigningSeedProtectionState {
+    fn requires_legacy_migration(&self) -> bool {
+        matches!(self, Self::LegacyMigrationRequired)
+    }
+}
+
 pub const LOCAL_IDENTITY_KEYRING_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -40,8 +54,11 @@ pub struct LocalIdentityKeyringEntry {
     identity_id: IdentityId,
     app_id: AppId,
     wrapped_app_key: WrappedDeviceIdentity,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    signing_seed_envelope: Option<AgeArmoredCiphertext>,
+    #[serde(
+        default,
+        skip_serializing_if = "SigningSeedProtectionState::requires_legacy_migration"
+    )]
+    signing_seed_envelope: SigningSeedProtectionState,
 }
 
 impl LocalIdentityKeyringEntry {
@@ -57,7 +74,7 @@ impl LocalIdentityKeyringEntry {
             identity_id,
             app_id: app_key.app_id().clone(),
             wrapped_app_key,
-            signing_seed_envelope: Some(signing_seed_envelope),
+            signing_seed_envelope: SigningSeedProtectionState::Protected(signing_seed_envelope),
         };
         if entry.signing_public_key(app_key)? != signing_public_key {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
@@ -77,7 +94,7 @@ impl LocalIdentityKeyringEntry {
             identity_id,
             app_id,
             wrapped_app_key,
-            signing_seed_envelope: None,
+            signing_seed_envelope: SigningSeedProtectionState::LegacyMigrationRequired,
         }
     }
 
@@ -98,7 +115,10 @@ impl LocalIdentityKeyringEntry {
 
     #[must_use]
     pub fn has_signing_seed(&self) -> bool {
-        self.signing_seed_envelope.is_some()
+        matches!(
+            self.signing_seed_envelope,
+            SigningSeedProtectionState::Protected(_)
+        )
     }
 
     pub fn open_signing_seed(
@@ -107,10 +127,14 @@ impl LocalIdentityKeyringEntry {
     ) -> MultiDeviceResult<ProtectedSigningMaterial> {
         self.require_matching_app_key(app_key)?;
         match &self.signing_seed_envelope {
-            Some(envelope) => Ok(ProtectedSigningMaterial::Opened(
-                SigningSeedHex::from_trusted(app_key.open_utf8(envelope)?),
-            )),
-            None => Ok(ProtectedSigningMaterial::LegacySeedRequired),
+            SigningSeedProtectionState::Protected(envelope) => {
+                Ok(ProtectedSigningMaterial::Opened(
+                    SigningSeedHex::from_trusted(app_key.open_utf8(envelope)?),
+                ))
+            }
+            SigningSeedProtectionState::LegacyMigrationRequired => {
+                Ok(ProtectedSigningMaterial::LegacySeedRequired)
+            }
         }
     }
 
@@ -137,7 +161,8 @@ impl LocalIdentityKeyringEntry {
         let prepared = self.seal_signing_material(request);
         match prepared {
             Ok(material) => {
-                self.signing_seed_envelope = Some(material.envelope);
+                self.signing_seed_envelope =
+                    SigningSeedProtectionState::Protected(material.envelope);
                 Ok(ProtectedSigningEntry {
                     entry: self,
                     signing_public_key: material.public_key,
@@ -293,7 +318,8 @@ impl LocalIdentityKeyring {
                 });
             }
         };
-        self.entries[index].signing_seed_envelope = Some(material.envelope);
+        self.entries[index].signing_seed_envelope =
+            SigningSeedProtectionState::Protected(material.envelope);
         Ok(ProtectedIdentityKeyring {
             keyring: self,
             signing_public_key: material.public_key,

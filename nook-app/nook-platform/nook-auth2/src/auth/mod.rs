@@ -492,8 +492,10 @@ pub mod mock_passkey {
                 reason = "FFI boundary: mock authenticator looks up a WebAuthn credential-id ArrayBuffer"
             )
         )]
-        pub fn credential(&self, credential_id: &[u8]) -> Option<&StoredMockPasskey> {
-            self.credentials.get(credential_id)
+        pub fn credential(&self, credential_id: &[u8]) -> MockPasskeyResult<&StoredMockPasskey> {
+            self.credentials
+                .get(credential_id)
+                .ok_or(MockPasskeyError::NoMatchingCredential)
         }
 
         #[must_use]
@@ -589,7 +591,6 @@ pub mod mock_passkey {
     #[cfg(test)]
     mod tests {
         use crate::{PasskeyRecordMetadata, WrappedDeviceIdentity};
-        use std::io;
 
         use super::*;
         use crate::{
@@ -713,8 +714,7 @@ pub mod mock_passkey {
             assert!(matches!(result, Err(MockPasskeyError::AuthorizationDenied)));
             assert_eq!(
                 authenticator
-                    .credential(registration.credential_id())
-                    .ok_or_else(|| io::Error::other("registered credential must exist"))?
+                    .credential(registration.credential_id())?
                     .sign_count(),
                 0
             );
@@ -782,15 +782,13 @@ pub mod mock_passkey {
             assert_eq!(assertion.credential_id(), second.credential_id());
             assert_eq!(
                 authenticator
-                    .credential(first.credential_id())
-                    .ok_or_else(|| io::Error::other("first registered credential must exist"))?
+                    .credential(first.credential_id())?
                     .sign_count(),
                 0
             );
             assert_eq!(
                 authenticator
-                    .credential(second.credential_id())
-                    .ok_or_else(|| io::Error::other("second registered credential must exist"))?
+                    .credential(second.credential_id())?
                     .sign_count(),
                 1
             );
@@ -817,15 +815,13 @@ pub mod mock_passkey {
             ));
             assert_eq!(
                 authenticator
-                    .credential(first.credential_id())
-                    .ok_or_else(|| io::Error::other("first registered credential must exist"))?
+                    .credential(first.credential_id())?
                     .sign_count(),
                 0
             );
             assert_eq!(
                 authenticator
-                    .credential(second.credential_id())
-                    .ok_or_else(|| io::Error::other("second registered credential must exist"))?
+                    .credential(second.credential_id())?
                     .sign_count(),
                 0
             );

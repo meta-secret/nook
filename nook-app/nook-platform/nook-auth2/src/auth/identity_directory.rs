@@ -1,6 +1,7 @@
 //! Portable identity collection and active-identity selection policy.
 mod enrollment;
 mod recovery;
+pub use recovery::RecoveryRetirement;
 
 /// Membership of an admitted app key in the local identity directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -695,7 +696,7 @@ mod tests {
             .iter()
             .find(|identity| identity.identity_id == owner_id)
             .ok_or_else(|| anyhow::anyhow!("original owner missing"))?;
-        assert!(owner.vault_dek(&store_id).is_some());
+        assert!(owner.owns_vault(&store_id));
         assert_eq!(directory.selected()?.label, "Work");
 
         let unenrolled = AppKey::generate()?;

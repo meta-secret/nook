@@ -9,7 +9,9 @@ use super::{
     DeviceAccessProfileDecodeResult, DeviceAccessProfileVersionEnvelope,
     DeviceAccessProtectionKind, DeviceAccessProviderLabelError, PasskeyAccessProfile,
 };
-use crate::{AppId, IdentityDirectory, IdentityRecord, StoreId, WrappedDeviceIdentity};
+use crate::{
+    AppId, IdentityDirectory, IdentityRecord, IdentityVaultBinding, StoreId, WrappedDeviceIdentity,
+};
 use sha2::{Digest, Sha256};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,7 +63,7 @@ pub struct IdentityVaultAppGrant<'a> {
 impl IdentityVaultAppGrant<'_> {
     #[must_use]
     pub fn classify(&self) -> IdentityVaultAppGrantKind {
-        let Some(vault) = self.identity.vault_dek(self.store_id) else {
+        let IdentityVaultBinding::Bound(vault) = self.identity.vault_dek(self.store_id) else {
             return IdentityVaultAppGrantKind::NotLinked;
         };
         if !self.identity.has_app_id(self.app_id) {

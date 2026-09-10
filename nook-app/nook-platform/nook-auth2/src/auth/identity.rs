@@ -1,6 +1,11 @@
 //! First-class Identity: passkeys, app-key members, and identity-owned vault DEKs.
 mod legacy;
 
+pub enum IdentityVaultBinding<'a> {
+    Bound(&'a IdentityVaultDek),
+    Unbound,
+}
+
 enum CommittedVaultKeys {
     Opened(VaultKeys),
     VaultNotCreated,
@@ -302,7 +307,7 @@ impl IdentityRecord {
                 "existing app id has different key material".to_owned(),
             ));
         }
-        let Some(vault_dek) = self.vault_dek(&store_id) else {
+        let IdentityVaultBinding::Bound(vault_dek) = self.vault_dek(&store_id) else {
             return Ok(CommittedVaultKeys::VaultNotCreated);
         };
         let IdentityVaultAppEnvelopes::Granted { secrets, members } =
@@ -539,15 +544,20 @@ impl IdentityRecord {
     }
 
     #[must_use]
-    pub fn vault_dek(&self, store_id: &StoreId) -> Option<&IdentityVaultDek> {
-        self.vault_deks
+    pub fn vault_dek(&self, store_id: &StoreId) -> IdentityVaultBinding<'_> {
+        match self
+            .vault_deks
             .iter()
             .find(|entry| &entry.store_id == store_id)
+        {
+            Some(dek) => IdentityVaultBinding::Bound(dek),
+            None => IdentityVaultBinding::Unbound,
+        }
     }
 
     #[must_use]
     pub fn owns_vault(&self, store_id: &StoreId) -> bool {
-        self.vault_dek(store_id).is_some()
+        matches!(self.vault_dek(store_id), IdentityVaultBinding::Bound(_))
     }
 }
 
@@ -643,9 +653,9 @@ mod tests {
         assert!(identity.has_app_id(app_key.app_id()));
         assert!(identity.has_app_id(second_key.app_id()));
         assert!(identity.owns_vault(&store));
-        let vault_dek = identity
-            .vault_dek(&store)
-            .ok_or_else(|| anyhow::anyhow!("identity DEK missing after generate"))?;
+        let IdentityVaultBinding::Bound(vault_dek) = identity.vault_dek(&store) else {
+            anyhow::bail!("identity DEK missing after generate")
+        };
         let opened = app_key.decrypt_envelope(&vault_dek.secrets_envelopes[0].envelope)?;
         assert_eq!(opened.as_str(), keys.secrets_key.as_str());
         let opened_identity = identity.open_or_generate_vault_dek(IdentityVaultKeyOpening {
@@ -707,9 +717,9 @@ mod tests {
         let opened_identity = identity.generate_vault_dek(store_id.clone())?;
         identity = opened_identity.identity;
         identity = identity.remove_member(second.app_id())?;
-        let vault_dek = identity
-            .vault_dek(&store_id)
-            .ok_or_else(|| anyhow::anyhow!("vault DEK is missing"))?;
+        let IdentityVaultBinding::Bound(vault_dek) = identity.vault_dek(&store_id) else {
+            anyhow::bail!("vault DEK is missing")
+        };
         assert!(
             vault_dek
                 .secrets_envelopes

@@ -1,5 +1,5 @@
 //! Borrowed merge simulation admits every conflict before moving directory records.
-use super::{IdentityDirectory, LegacyIdentityMerge};
+use super::{IdentityDirectory, LegacyIdentityMerge, LegacyMigrationScope};
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppId, IdentityId, IdentityMember, IdentitySelection, StoreId};
 use std::collections::{HashMap, HashSet};
@@ -39,8 +39,7 @@ impl<'a> LegacyIdentityProjection<'a> {
 
 pub(super) struct LegacyDirectoryAdmission<'a> {
     pub(super) directory: &'a IdentityDirectory,
-    pub(super) preserved_identity_id: Option<&'a IdentityId>,
-    pub(super) inherited_components: Option<HashMap<IdentityId, usize>>,
+    pub(super) scope: LegacyMigrationScope<'a>,
 }
 impl LegacyDirectoryAdmission<'_> {
     pub(super) fn prepare(self) -> MultiDeviceResult<Vec<LegacyIdentityMerge>> {
@@ -76,7 +75,7 @@ impl LegacyDirectoryAdmission<'_> {
             let Some((left, right, app_id)) = duplicate else {
                 break;
             };
-            if let Some(components) = &self.inherited_components {
+            if let LegacyMigrationScope::FromBase { components, .. } = &self.scope {
                 let left_component = components.get(identities[left].identity_id);
                 let right_component = components.get(identities[right].identity_id);
                 if left_component.is_none() || left_component != right_component {
@@ -85,9 +84,9 @@ impl LegacyDirectoryAdmission<'_> {
                     });
                 }
             }
-            let survivor = if self.preserved_identity_id == Some(identities[right].identity_id) {
+            let survivor = if self.scope.preserves(identities[right].identity_id) {
                 right
-            } else if self.preserved_identity_id == Some(identities[left].identity_id) {
+            } else if self.scope.preserves(identities[left].identity_id) {
                 left
             } else if selection == Some(identities[right].identity_id) {
                 right

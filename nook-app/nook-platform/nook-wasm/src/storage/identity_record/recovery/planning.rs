@@ -14,6 +14,7 @@ use crate::{
 };
 use identity_record::keyring;
 use nook_core::LocalIdentityKeyRetirement;
+use nook_core::RecoveryRetirement;
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, LocalIdentityKeyring};
 pub(super) struct RecoveryState {
     pub(super) directory: nook_core::IdentityDirectory,
@@ -88,7 +89,7 @@ impl RecoveryPlanning<'_> {
             .iter()
             .map(|app_id| RecoveryAccessProfile { app_id }.key())
             .collect();
-        directory = directory.reset_for_device_recovery(None);
+        directory = directory.reset_for_device_recovery(RecoveryRetirement::PreserveRetiredKeys);
         for app_id in app_ids {
             directory = directory.retire_app_id(app_id);
         }
@@ -195,7 +196,10 @@ impl RecoveryPlanning<'_> {
                         "Recovery target changed before confirmation".to_owned(),
                     ));
                 }
-                directory = directory.reset_for_device_recovery(persisted_app_id.clone());
+                directory = directory.reset_for_device_recovery(match &persisted_app_id {
+                    Some(app_id) => RecoveryRetirement::RetireInstallation(app_id.clone()),
+                    None => RecoveryRetirement::PreserveRetiredKeys,
+                });
                 keyring = LocalIdentityKeyring::empty();
                 (None, persisted_app_id, Vec::new())
             };

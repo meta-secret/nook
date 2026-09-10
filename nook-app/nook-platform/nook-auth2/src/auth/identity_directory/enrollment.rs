@@ -1,5 +1,7 @@
 //! Authenticated installation enrollment into directory-owned identities.
 use super::*;
+#[cfg(test)]
+use crate::IdentityVaultBinding;
 impl IdentityDirectory {
     /// Enroll an authenticated installation into the identity that owns the
     /// paired vault, independent of the currently selected identity.
@@ -337,10 +339,9 @@ mod tests {
             })?;
         directory = resolved_identity.directory;
 
-        let grant = directory
-            .selected()?
-            .vault_dek(&store_id)
-            .ok_or_else(|| anyhow::anyhow!("vault grant missing"))?;
+        let IdentityVaultBinding::Bound(grant) = directory.selected()?.vault_dek(&store_id) else {
+            anyhow::bail!("vault grant missing")
+        };
         for envelopes in [&grant.secrets_envelopes, &grant.members_envelopes] {
             assert!(
                 envelopes

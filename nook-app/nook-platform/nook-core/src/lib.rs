@@ -231,7 +231,8 @@ pub use nook_auth2::{
     IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
     IdentityVaultDekReconciliation, IdentityVaultEventId, IdentityVaultKeyOpening,
     IdentityVaultKeys, LegacyDirectoryBase, LocalIdentityKeyRetirement, MemberDekEnvelope,
-    MigratedIdentityDirectory, PreparedLegacyDirectoryMigration, StagedIdentityRebase,
+    MigratedIdentityDirectory, PreparedLegacyDirectoryMigration, RecoveryRetirement,
+    StagedIdentityRebase,
 };
 
 pub use multi_device::{

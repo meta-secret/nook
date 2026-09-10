@@ -1,5 +1,7 @@
 //! Legacy vault import and authenticated epoch reconciliation.
 use super::*;
+#[cfg(test)]
+use crate::IdentityVaultBinding;
 
 impl IdentityRecord {
     pub fn reconcile_legacy_vault_member(
@@ -367,12 +369,15 @@ mod tests {
             MultiDeviceError::StaleVaultDekEpoch { .. }
         ));
 
+        let IdentityVaultBinding::Bound(dek) = identity.vault_dek(&store) else {
+            anyhow::bail!("committed vault binding must remain")
+        };
         assert_eq!(
-            identity.vault_dek(&store).map(|dek| &dek.key_epoch),
-            Some(&IdentityVaultDekEpoch::Known {
+            &dek.key_epoch,
+            &IdentityVaultDekEpoch::Known {
                 key_epoch,
                 checkpoint: advanced_checkpoint,
-            })
+            }
         );
         Ok(())
     }

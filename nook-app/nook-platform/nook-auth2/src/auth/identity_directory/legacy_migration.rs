@@ -39,10 +39,24 @@ pub struct LegacyDirectoryBase<'a> {
     pub base: &'a IdentityDirectory,
     pub preserved_identity_id: &'a IdentityId,
 }
-struct LegacyMigrationScope<'a> {
-    preserved_identity_id: Option<&'a IdentityId>,
-    inherited_components: Option<HashMap<IdentityId, usize>>,
+enum LegacyMigrationScope<'a> {
+    WholeDirectory,
+    Preserve(&'a IdentityId),
+    FromBase {
+        preserved: &'a IdentityId,
+        components: HashMap<IdentityId, usize>,
+    },
 }
+
+impl LegacyMigrationScope<'_> {
+    fn preserves(&self, identity: &IdentityId) -> bool {
+        match self {
+            Self::WholeDirectory => false,
+            Self::Preserve(preserved) | Self::FromBase { preserved, .. } => *preserved == identity,
+        }
+    }
+}
+
 struct LegacyIdentityMerge {
     survivor: usize,
     absorbed: usize,
@@ -74,17 +88,14 @@ impl PreparedLegacyDirectoryMigration {
 impl IdentityDirectory {
     #[must_use]
     pub fn has_legacy_duplicate_app_key_ownership(&self) -> bool {
-        self.duplicate_app_key_owners().is_some()
+        !self.app_key_owners_are_unique()
     }
 
     pub fn migrate_legacy_duplicate_app_key_ownership(
         self,
     ) -> Result<MigratedIdentityDirectory, IdentityDirectoryRejection> {
-        self.prepare_legacy_migration(LegacyMigrationScope {
-            preserved_identity_id: None,
-            inherited_components: None,
-        })
-        .map(PreparedLegacyDirectoryMigration::commit)
+        self.prepare_legacy_migration(LegacyMigrationScope::WholeDirectory)
+            .map(PreparedLegacyDirectoryMigration::commit)
     }
     pub fn migrate_legacy_duplicate_app_key_ownership_preserving(
         self,
@@ -97,10 +108,7 @@ impl IdentityDirectory {
         self,
         identity_id: &IdentityId,
     ) -> Result<PreparedLegacyDirectoryMigration, IdentityDirectoryRejection> {
-        self.prepare_legacy_migration(LegacyMigrationScope {
-            preserved_identity_id: Some(identity_id),
-            inherited_components: None,
-        })
+        self.prepare_legacy_migration(LegacyMigrationScope::Preserve(identity_id))
     }
     pub fn migrate_legacy_duplicate_app_key_ownership_from_base(
         self,
@@ -113,9 +121,9 @@ impl IdentityDirectory {
         self,
         request: LegacyDirectoryBase<'_>,
     ) -> Result<PreparedLegacyDirectoryMigration, IdentityDirectoryRejection> {
-        self.prepare_legacy_migration(LegacyMigrationScope {
-            preserved_identity_id: Some(request.preserved_identity_id),
-            inherited_components: Some(request.base.legacy_identity_components()),
+        self.prepare_legacy_migration(LegacyMigrationScope::FromBase {
+            preserved: request.preserved_identity_id,
+            components: request.base.legacy_identity_components(),
         })
     }
     fn prepare_legacy_migration(
@@ -124,8 +132,7 @@ impl IdentityDirectory {
     ) -> Result<PreparedLegacyDirectoryMigration, IdentityDirectoryRejection> {
         match (LegacyDirectoryAdmission {
             directory: &self,
-            preserved_identity_id: scope.preserved_identity_id,
-            inherited_components: scope.inherited_components,
+            scope,
         })
         .prepare()
         {
@@ -140,18 +147,18 @@ impl IdentityDirectory {
         }
     }
 
-    fn duplicate_app_key_owners(&self) -> Option<(usize, usize, AppId)> {
+    fn app_key_owners_are_unique(&self) -> bool {
         let mut owners = HashMap::<&AppId, usize>::new();
         for (index, identity) in self.identities.iter().enumerate() {
             for member in &identity.members {
                 if let Some(owner) = owners.insert(&member.app_id, index)
                     && owner != index
                 {
-                    return Some((owner, index, member.app_id.clone()));
+                    return false;
                 }
             }
         }
-        None
+        true
     }
 
     fn legacy_identity_components(&self) -> HashMap<IdentityId, usize> {
