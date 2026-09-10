@@ -35,6 +35,7 @@ use atomic_string::{
 pub(crate) use nook_core::ActiveVaultScope;
 mod local_vault;
 pub(crate) use local_vault::VaultSnapshotLookup;
+pub(crate) use local_vault::{ImportVaultLabel, RegistryLabelUpdate};
 #[path = "sentinel_storage.rs"]
 mod sentinel_storage;
 
@@ -60,13 +61,31 @@ pub(crate) const DEVICE_ID_KEY: &str = "device_id";
 pub(crate) const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
 pub(crate) use sentinel_storage::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY;
 
+/// Registry wire history remains an omitted field, null, or a timestamp string.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum VaultUnlockHistory {
+    #[default]
+    NeverUnlocked,
+    Unlocked(IsoTimestamp),
+}
+
+impl VaultUnlockHistory {
+    fn omitted_from_registry(&self) -> bool {
+        matches!(self, Self::NeverUnlocked)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultRegistryEntry {
     pub store_id: String,
     #[serde(default)]
     pub label: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_unlocked_at: Option<nook_core::IsoTimestamp>,
+    #[serde(
+        default,
+        skip_serializing_if = "VaultUnlockHistory::omitted_from_registry"
+    )]
+    pub last_unlocked_at: VaultUnlockHistory,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -375,25 +394,31 @@ mod unit_tests {
         NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
             registry: &mut registry,
             store_id: "store_registry01",
-            label: None,
+            label: RegistryLabelUpdate::PreserveOrDefault,
             touch_unlock: false,
         });
         assert_eq!(registry.vaults.len(), 1);
         assert!(!registry.vaults[0].label.is_empty());
-        assert!(registry.vaults[0].last_unlocked_at.is_none());
+        assert!(matches!(
+            registry.vaults[0].last_unlocked_at,
+            VaultUnlockHistory::NeverUnlocked
+        ));
 
         NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
             registry: &mut registry,
             store_id: "store_registry01",
-            label: Some(" Work "),
+            label: RegistryLabelUpdate::Set(" Work "),
             touch_unlock: false,
         });
         assert_eq!(registry.vaults[0].label, " Work ");
-        assert!(registry.vaults[0].last_unlocked_at.is_none());
+        assert!(matches!(
+            registry.vaults[0].last_unlocked_at,
+            VaultUnlockHistory::NeverUnlocked
+        ));
         NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
             registry: &mut registry,
             store_id: "store_registry02",
-            label: Some("Personal"),
+            label: RegistryLabelUpdate::Set("Personal"),
             touch_unlock: false,
         });
         assert_eq!(registry.vaults.len(), 2);
@@ -402,7 +427,7 @@ mod unit_tests {
     #[wasm_bindgen_test]
     fn yaml_projection_fails_closed_and_defaults_unusable_labels() {
         assert!(NookDatabase::store_id_from_yaml("not yaml").is_err());
-        assert!(NookDatabase::label_from_yaml("not yaml").is_none());
+        assert!(NookDatabase::label_from_yaml("not yaml").is_err());
         assert!(!NookDatabase::default_registry_label("store_registry01").is_empty());
     }
 }
@@ -597,7 +622,7 @@ mod sentinel_genesis_storage_tests {
         assert_eq!(
             NookDatabase::import_vault_blob(ImportVaultBlobRequest {
                 content: &first,
-                label: None
+                label: ImportVaultLabel::FromDocument
             })
             .await?,
             first_id
@@ -661,7 +686,7 @@ mod sentinel_genesis_storage_tests {
         assert_eq!(
             NookDatabase::import_vault_blob(ImportVaultBlobRequest {
                 content: &second,
-                label: Some("Imported label")
+                label: ImportVaultLabel::Override("Imported label")
             })
             .await?,
             second_id

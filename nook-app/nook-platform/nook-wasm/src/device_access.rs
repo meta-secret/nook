@@ -3,6 +3,7 @@
 mod passkey_metadata;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::device_access::DeviceAccessProfileKey;
+use crate::storage::indexed_db::VaultUnlockHistory;
 use crate::{NookDatabase, SaveVaultBlobRequest};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
@@ -621,11 +622,14 @@ impl NookDeviceVaultAccess {
             vaults.push(NookDeviceVaultAccess {
                 store_id: entry.store_id,
                 label: entry.label,
-                last_local_update_at: NookDeviceAccessText::from_option(
-                    entry
-                        .last_unlocked_at
-                        .map(|timestamp| timestamp.to_string()),
-                ),
+                last_local_update_at: match entry.last_unlocked_at {
+                    VaultUnlockHistory::NeverUnlocked => {
+                        NookDeviceAccessText(NookDeviceAccessTextValue::Unknown)
+                    }
+                    VaultUnlockHistory::Unlocked(timestamp) => {
+                        NookDeviceAccessText::from_string(timestamp.to_string())
+                    }
+                },
                 verified_at: NookDeviceAccessText::from_option(verified_at),
             });
         }
@@ -743,12 +747,12 @@ mod tests {
             indexed_db::VaultRegistryEntry {
                 store_id: personal_store.to_string(),
                 label: "Personal vault".to_owned(),
-                last_unlocked_at: None,
+                last_unlocked_at: VaultUnlockHistory::NeverUnlocked,
             },
             indexed_db::VaultRegistryEntry {
                 store_id: work_store.to_string(),
                 label: "Work vault".to_owned(),
-                last_unlocked_at: None,
+                last_unlocked_at: VaultUnlockHistory::NeverUnlocked,
             },
         ];
         let profiles = vec![
@@ -962,12 +966,12 @@ mod browser_tests {
             indexed_db::VaultRegistryEntry {
                 store_id: "invalid-store".into(),
                 label: "Zulu".into(),
-                last_unlocked_at: None,
+                last_unlocked_at: VaultUnlockHistory::NeverUnlocked,
             },
             indexed_db::VaultRegistryEntry {
                 store_id: "invalid-store-2".into(),
                 label: "Alpha".into(),
-                last_unlocked_at: Some(timestamp),
+                last_unlocked_at: VaultUnlockHistory::Unlocked(timestamp),
             },
         ];
         let rows = NookDeviceVaultAccess::vault_access_rows(BrowserVaultAccessRows {

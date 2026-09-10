@@ -2,9 +2,11 @@ use super::{application, wasm_bindgen};
 use crate::ConfiguredVaultApplication;
 use crate::VaultSnapshotLookup;
 use crate::storage::indexed_db;
+use crate::storage::indexed_db::ImportVaultLabel;
+use crate::storage::indexed_db::VaultUnlockHistory;
 use crate::{ImportVaultBlobRequest, NookDatabase, SetLocalVaultLabelRequest};
 use nook_core::ActiveVaultScope;
-use nook_core::{IsoTimestamp, VaultApplication, VaultConnectIntent, VaultType};
+use nook_core::{VaultApplication, VaultConnectIntent, VaultType};
 use wasm_bindgen::JsError;
 
 impl ConfiguredVaultApplication {
@@ -155,7 +157,7 @@ pub async fn has_active_local_vault() -> Result<bool, JsError> {
 pub struct NookLocalVaultEntry {
     pub(crate) store_id: String,
     pub(crate) label: String,
-    pub(crate) last_unlocked_at: Option<nook_core::IsoTimestamp>,
+    pub(crate) last_unlocked_at: VaultUnlockHistory,
 }
 
 #[wasm_bindgen]
@@ -190,19 +192,20 @@ impl NookLocalVaultEntry {
     #[wasm_bindgen(getter, js_name = unlockState)]
     #[must_use]
     pub fn unlock_state(&self) -> NookLocalVaultUnlockState {
-        if self.last_unlocked_at.is_some() {
-            NookLocalVaultUnlockState::Unlocked
-        } else {
-            NookLocalVaultUnlockState::NeverUnlocked
+        match self.last_unlocked_at {
+            VaultUnlockHistory::Unlocked(_) => NookLocalVaultUnlockState::Unlocked,
+            VaultUnlockHistory::NeverUnlocked => NookLocalVaultUnlockState::NeverUnlocked,
         }
     }
 
     #[wasm_bindgen(getter, js_name = lastUnlockedAt)]
     pub fn last_unlocked_at(&self) -> Result<String, JsError> {
-        self.last_unlocked_at
-            .as_ref()
-            .map(IsoTimestamp::to_string)
-            .ok_or_else(|| JsError::new("local vault has never been unlocked"))
+        match &self.last_unlocked_at {
+            VaultUnlockHistory::Unlocked(timestamp) => Ok(timestamp.to_string()),
+            VaultUnlockHistory::NeverUnlocked => {
+                Err(JsError::new("local vault has never been unlocked"))
+            }
+        }
     }
 }
 
@@ -303,7 +306,7 @@ pub async fn import_local_vault_blob(content: String) -> Result<String, JsError>
     ConfiguredVaultApplication::validate_configured_application_for_content(&content)?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: &content,
-        label: None,
+        label: ImportVaultLabel::FromDocument,
     })
     .await
     .map_err(Into::into)
@@ -317,7 +320,7 @@ pub async fn import_named_local_vault_blob(
     ConfiguredVaultApplication::validate_configured_application_for_content(&content)?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: &content,
-        label: Some(&label),
+        label: ImportVaultLabel::Override(&label),
     })
     .await
     .map_err(Into::into)

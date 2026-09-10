@@ -1,3 +1,4 @@
+use super::VaultUnlockHistory;
 use super::{
     ACTIVE_VAULT_KEY, Date, IsoTimestamp, NookError, PENDING_NEW_LOCAL_VAULT_KEY, TransactionMode,
     VAULT_REGISTRY_KEY, VaultName, VaultRegistry, VaultRegistryEntry, VaultStoreIdentity,
@@ -5,11 +6,21 @@ use super::{
 use crate::{IdbPutStringRequest, NookDatabase, SecretSearchBucketKeyRequest};
 use nook_core::ActiveVaultScope;
 
+pub(crate) enum RegistryLabelUpdate<'a> {
+    PreserveOrDefault,
+    Set(&'a str),
+}
+
+pub(crate) enum ImportVaultLabel<'a> {
+    FromDocument,
+    Override(&'a str),
+}
+
 /// Named values required by NookDatabase::upsert_registry_entry.
 pub(crate) struct UpsertRegistryEntryRequest<'a> {
     pub(crate) registry: &'a mut VaultRegistry,
     pub(crate) store_id: &'a str,
-    pub(crate) label: Option<&'a str>,
+    pub(crate) label: RegistryLabelUpdate<'a>,
     pub(crate) touch_unlock: bool,
 }
 
@@ -72,11 +83,10 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(crate) fn label_from_yaml(content: &str) -> Option<String> {
-        match nook_core::VaultFormatDocument::new(content).name() {
-            Ok(VaultName::Named(name)) => Some(name),
-            Ok(VaultName::Unnamed) | Err(_) => None,
-        }
+    pub(crate) fn label_from_yaml(content: &str) -> Result<VaultName, NookError> {
+        nook_core::VaultFormatDocument::new(content)
+            .name()
+            .map_err(|error| NookError::Database(error.to_string()))
     }
 }
 
@@ -175,16 +185,16 @@ impl NookDatabase {
             touch_unlock,
         } = request;
         let now = if touch_unlock {
-            Some(NookDatabase::chrono_lite_now())
+            VaultUnlockHistory::Unlocked(NookDatabase::chrono_lite_now())
         } else {
-            None
+            VaultUnlockHistory::NeverUnlocked
         };
         if let Some(entry) = registry
             .vaults
             .iter_mut()
             .find(|entry| entry.store_id == store_id)
         {
-            if let Some(text) = label {
+            if let RegistryLabelUpdate::Set(text) = label {
                 entry.label = text.to_owned();
             }
             if touch_unlock {
@@ -194,10 +204,12 @@ impl NookDatabase {
         }
         registry.vaults.push(VaultRegistryEntry {
             store_id: store_id.to_owned(),
-            label: label.map_or_else(
-                || NookDatabase::default_registry_label(store_id),
-                str::to_owned,
-            ),
+            label: match label {
+                RegistryLabelUpdate::PreserveOrDefault => {
+                    NookDatabase::default_registry_label(store_id)
+                }
+                RegistryLabelUpdate::Set(text) => text.to_owned(),
+            },
             last_unlocked_at: now,
         });
     }
@@ -241,7 +253,7 @@ impl NookDatabase {
         NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
             registry: &mut registry,
             store_id: store_id,
-            label: None,
+            label: RegistryLabelUpdate::PreserveOrDefault,
             touch_unlock: true,
         });
         NookDatabase::save_vault_registry(&registry).await?;
@@ -415,7 +427,7 @@ impl NookDatabase {
         NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
             registry: &mut registry,
             store_id: store_id,
-            label: Some(trimmed),
+            label: RegistryLabelUpdate::Set(trimmed),
             touch_unlock: false,
         });
         NookDatabase::save_vault_registry(&registry).await?;
@@ -461,14 +473,16 @@ impl NookDatabase {
             content: content,
         })
         .await?;
-        let yaml_label = NookDatabase::label_from_yaml(content);
-        let label = label.or(yaml_label.as_deref());
-        if let Some(label) = label {
+        let label = match label {
+            ImportVaultLabel::FromDocument => NookDatabase::label_from_yaml(content)?,
+            ImportVaultLabel::Override(label) => VaultName::Named(label.to_owned()),
+        };
+        if let VaultName::Named(label) = label {
             let mut registry = NookDatabase::load_vault_registry().await?;
             NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
                 registry: &mut registry,
                 store_id: &store_id,
-                label: Some(label),
+                label: RegistryLabelUpdate::Set(&label),
                 touch_unlock: false,
             });
             NookDatabase::save_vault_registry(&registry).await?;

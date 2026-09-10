@@ -7,6 +7,7 @@
 use super::NookVaultManager;
 use crate::BrowserTimestamp;
 use crate::VaultSnapshotLookup;
+use crate::storage::indexed_db::ImportVaultLabel;
 use nook_core::ActiveVaultScope;
 
 use crate::{ImportVaultBlobRequest, NookDatabase};
@@ -737,7 +738,7 @@ mod wasm_tests {
         )?;
         NookDatabase::import_vault_blob(ImportVaultBlobRequest {
             content: yaml.as_str(),
-            label: Some("Projection rejection test"),
+            label: ImportVaultLabel::Override("Projection rejection test"),
         })
         .await?;
         NookDatabase::switch_active_vault(&store_id).await?;
@@ -781,7 +782,7 @@ mod wasm_tests {
         let store_id = owner.vault.store_id.clone();
         NookDatabase::import_vault_blob(ImportVaultBlobRequest {
             content: yaml.as_str(),
-            label: Some("Password recovery"),
+            label: ImportVaultLabel::Override("Password recovery"),
         })
         .await?;
         NookDatabase::switch_active_vault(&store_id).await?;
@@ -830,7 +831,7 @@ mod wasm_tests {
         let store_id = owner.vault.store_id.clone();
         NookDatabase::import_vault_blob(ImportVaultBlobRequest {
             content: yaml.as_str(),
-            label: Some("Password recovery"),
+            label: ImportVaultLabel::Override("Password recovery"),
         })
         .await?;
         NookDatabase::switch_active_vault(&store_id).await?;

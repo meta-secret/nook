@@ -7,6 +7,7 @@ use crate::VaultSnapshotLookup;
 use crate::storage::auth_providers::{
     PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
 };
+use crate::storage::indexed_db::VaultUnlockHistory;
 use crate::storage::{auth_providers, extension_state, identity_record};
 use crate::vault_api_local::has_local_vault;
 use crate::{NookDatabase, SetLocalVaultLabelRequest};
@@ -550,7 +551,7 @@ mod projection_tests {
         let never = NookLocalVaultEntry {
             store_id: "store-1".into(),
             label: "  ".into(),
-            last_unlocked_at: None,
+            last_unlocked_at: VaultUnlockHistory::NeverUnlocked,
         };
         assert_eq!(never.store_id(), "store-1");
         assert_eq!(never.label(), "  ");
@@ -564,7 +565,7 @@ mod projection_tests {
         let unlocked = NookLocalVaultEntry {
             store_id: "store-2".into(),
             label: " Vault ".into(),
-            last_unlocked_at: Some(nook_core::IsoTimestamp::from_trusted(
+            last_unlocked_at: VaultUnlockHistory::Unlocked(nook_core::IsoTimestamp::from_trusted(
                 "2026-01-01T00:00:00Z".into(),
             )),
         };

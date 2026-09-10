@@ -1,6 +1,7 @@
 use super::NookVaultManager;
 use crate::BrowserTimestamp;
 use crate::IdentityDbValidateVaultIdentityEnrollment;
+use crate::storage::indexed_db::ImportVaultLabel;
 
 use crate::storage::identity_record;
 use crate::{ImportVaultBlobRequest, NookDatabase};
@@ -196,7 +197,7 @@ mod browser_tests {
         )?;
         NookDatabase::import_vault_blob(ImportVaultBlobRequest {
             content: yaml.as_str(),
-            label: Some("Sentinel password"),
+            label: ImportVaultLabel::Override("Sentinel password"),
         })
         .await?;
         NookDatabase::switch_active_vault(&store_id).await?;
@@ -248,7 +249,7 @@ mod browser_tests {
         )?;
         NookDatabase::import_vault_blob(ImportVaultBlobRequest {
             content: yaml.as_str(),
-            label: Some("No backup"),
+            label: ImportVaultLabel::Override("No backup"),
         })
         .await?;
         NookDatabase::switch_active_vault(&store_id).await?;
@@ -292,7 +293,7 @@ mod browser_tests {
         let store_id = owner.vault.store_id.clone();
         NookDatabase::import_vault_blob(ImportVaultBlobRequest {
             content: yaml.as_str(),
-            label: Some("Password fallback"),
+            label: ImportVaultLabel::Override("Password fallback"),
         })
         .await?;
         NookDatabase::switch_active_vault(&store_id).await?;
