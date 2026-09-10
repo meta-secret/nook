@@ -7,8 +7,15 @@ use nook_auth2::{AuthKeyId, DeviceSigningPublicKey};
 use super::{EventGraph, EventGraphRejection, VaultEvent};
 use crate::event::{VaultEventSchemaVersion, VaultOperation};
 use crate::signing::SigningIdentity;
-use crate::{EventError, EventResult};
+use crate::{
+    EpochCheckpointRequirement, EventError, EventId, EventResult, SecurityRotationTrigger,
+};
 use nook_replication::CausalQuarantine;
+
+enum EventQuarantineDecision {
+    Retain,
+    Quarantine(String),
+}
 
 impl EventGraph {
     pub(super) fn validate_event_actor_authorized(&self, event: &VaultEvent) -> EventResult<()> {
@@ -20,11 +27,12 @@ impl EventGraph {
         }
         let authorized = self.authorized_actors_before(event)?;
         if authorized.contains(&event.body.actor_id) {
-            return Ok(());
+            Ok(())
+        } else {
+            Err(EventError::UnauthorizedActor {
+                actor_id: event.body.actor_id.as_str().to_owned(),
+            })
         }
-        Err(EventError::UnauthorizedActor {
-            actor_id: event.body.actor_id.as_str().to_owned(),
-        })
     }
 
     pub(super) fn quarantine_rejected_applicable_events(
@@ -34,48 +42,68 @@ impl EventGraph {
             let mut changed = false;
             let ids = self.events.keys().cloned().collect::<Vec<_>>();
             for id in ids {
-                if self.causal.quarantined().contains_key(&id) {
-                    continue;
-                }
-                let Some(event) = self.events.get(&id) else {
-                    return Err(EventGraphRejection {
-                        graph: self,
-                        cause: EventError::MissingEvent {
-                            event_id: id.as_str().to_owned(),
-                        },
-                    });
-                };
-                if !self.event_ancestors_present(event) {
-                    continue;
-                }
-                let reason = if event
-                    .body
-                    .parents
-                    .iter()
-                    .any(|parent| self.causal.quarantined().contains_key(parent))
-                {
-                    Some("Ancestor event was rejected".to_owned())
-                } else if let Err(EventError::InvalidEpochCheckpointStructure { reason }) =
-                    self.validate_epoch_checkpoint_structure(event)
-                {
-                    Some(format!("Invalid security epoch checkpoint: {reason}"))
-                } else {
-                    match self.validate_event_actor_authorized(event) {
-                        Ok(()) => None,
-                        Err(EventError::UnauthorizedActor { actor_id }) => Some(format!(
-                            "Event actor {actor_id} was not authorized in causal history"
-                        )),
-                        Err(cause) => return Err(EventGraphRejection { graph: self, cause }),
+                match self.classify_event_quarantine(&id) {
+                    Ok(EventQuarantineDecision::Retain) => {}
+                    Ok(EventQuarantineDecision::Quarantine(reason)) => {
+                        self.causal = self.causal.quarantine(CausalQuarantine { id, reason });
+                        changed = true;
                     }
-                };
-                if let Some(reason) = reason {
-                    self.causal = self.causal.quarantine(CausalQuarantine { id, reason });
-                    changed = true;
+                    Err(cause) => return Err(EventGraphRejection { graph: self, cause }),
                 }
             }
             if !changed {
                 return Ok(self);
             }
+        }
+    }
+
+    fn classify_event_quarantine(&self, id: &EventId) -> EventResult<EventQuarantineDecision> {
+        if self.causal.quarantined().contains_key(id) {
+            return Ok(EventQuarantineDecision::Retain);
+        }
+        let event = self
+            .events
+            .get(id)
+            .ok_or_else(|| EventError::MissingEvent {
+                event_id: id.as_str().to_owned(),
+            })?;
+        if !self.event_ancestors_present(event) {
+            return Ok(EventQuarantineDecision::Retain);
+        }
+        if event
+            .body
+            .parents
+            .iter()
+            .any(|parent| self.causal.quarantined().contains_key(parent))
+        {
+            Ok(EventQuarantineDecision::Quarantine(
+                "Ancestor event was rejected".to_owned(),
+            ))
+        } else {
+            match self.validate_epoch_checkpoint_structure(event) {
+                Err(EventError::InvalidEpochCheckpointStructure { reason }) => {
+                    Ok(EventQuarantineDecision::Quarantine(format!(
+                        "Invalid security epoch checkpoint: {reason}"
+                    )))
+                }
+                // Only checkpoint structure errors classify an event for quarantine here.
+                Ok(()) | Err(_) => self.classify_event_actor_quarantine(event),
+            }
+        }
+    }
+
+    fn classify_event_actor_quarantine(
+        &self,
+        event: &VaultEvent,
+    ) -> EventResult<EventQuarantineDecision> {
+        match self.validate_event_actor_authorized(event) {
+            Ok(()) => Ok(EventQuarantineDecision::Retain),
+            Err(EventError::UnauthorizedActor { actor_id }) => {
+                Ok(EventQuarantineDecision::Quarantine(format!(
+                    "Event actor {actor_id} was not authorized in causal history"
+                )))
+            }
+            Err(cause) => Err(cause),
         }
     }
 
@@ -87,26 +115,27 @@ impl EventGraph {
         &self,
         event: &VaultEvent,
     ) -> EventResult<()> {
-        let crate::EpochCheckpointRequirement::SecurityRotationParent(parent_id) =
-            event.body.epoch_checkpoint_requirement()?
-        else {
-            return Ok(());
-        };
-        let parent = self
-            .events
-            .get(parent_id)
-            .ok_or_else(|| EventError::MissingEvent {
-                event_id: parent_id.as_str().to_owned(),
-            })?;
-        if matches!(
-            parent.body.security_rotation_trigger(),
-            crate::SecurityRotationTrigger::Other
-        ) {
-            return Err(EventError::InvalidEpochCheckpointStructure {
-                reason: "checkpoint parent must be one security rotation trigger",
-            });
+        match event.body.epoch_checkpoint_requirement()? {
+            EpochCheckpointRequirement::NotRequired => Ok(()),
+            EpochCheckpointRequirement::SecurityRotationParent(parent_id) => {
+                let parent =
+                    self.events
+                        .get(parent_id)
+                        .ok_or_else(|| EventError::MissingEvent {
+                            event_id: parent_id.as_str().to_owned(),
+                        })?;
+                match parent.body.security_rotation_trigger() {
+                    SecurityRotationTrigger::Other => {
+                        Err(EventError::InvalidEpochCheckpointStructure {
+                            reason: "checkpoint parent must be one security rotation trigger",
+                        })
+                    }
+                    SecurityRotationTrigger::PasswordRotated
+                    | SecurityRotationTrigger::PasswordRemoved
+                    | SecurityRotationTrigger::DeviceRevoked => Ok(()),
+                }
+            }
         }
-        Ok(())
     }
 
     fn authorized_actors_before(&self, event: &VaultEvent) -> EventResult<BTreeSet<AuthKeyId>> {
