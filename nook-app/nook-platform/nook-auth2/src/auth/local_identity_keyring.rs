@@ -318,137 +318,132 @@ impl LocalIdentityKeyring {
         mut self,
         request: IdentitySigningSeedProtection<'_>,
     ) -> Result<ProtectedIdentityKeyring, KeyringRejection> {
-        let Some(index) = self
-            .entries
-            .iter()
-            .position(|entry| entry.identity_id() == request.identity_id)
-        else {
-            return Err(KeyringRejection {
+        let prepared = self.entry_index(request.identity_id).and_then(|index| {
+            self.entries[index]
+                .seal_signing_material(request.material)
+                .map(|material| (index, material))
+        });
+        match prepared {
+            Err(cause) => Err(KeyringRejection {
                 keyring: self,
-                cause: MultiDeviceError::IdentityNotFound {
-                    identity_id: request.identity_id.to_string(),
-                },
-            });
-        };
-        let material = match self.entries[index].seal_signing_material(request.material) {
-            Ok(material) => material,
-            Err(cause) => {
-                return Err(KeyringRejection {
+                cause,
+            }),
+            Ok((index, material)) => {
+                self.entries[index].signing_seed_envelope =
+                    SigningSeedProtectionState::Protected(material.envelope);
+                Ok(ProtectedIdentityKeyring {
                     keyring: self,
-                    cause,
-                });
+                    signing_public_key: material.public_key,
+                })
             }
-        };
-        self.entries[index].signing_seed_envelope =
-            SigningSeedProtectionState::Protected(material.envelope);
-        Ok(ProtectedIdentityKeyring {
-            keyring: self,
-            signing_public_key: material.public_key,
-        })
+        }
     }
 
     pub fn replace_wrapped_app_key(
         mut self,
         request: WrappedAppKeyReplacement<'_>,
     ) -> Result<Self, KeyringRejection> {
-        let Some(index) = self
+        match self
             .entries
             .iter()
             .position(|entry| entry.app_id() == request.app_id)
-        else {
-            return Err(KeyringRejection {
+        {
+            None => Err(KeyringRejection {
                 keyring: self,
                 cause: MultiDeviceError::InvalidDeviceIdentity(
                     "wrapped app key has no local keyring owner".to_owned(),
                 ),
-            });
-        };
-        self.entries[index].wrapped_app_key = request.wrapped_app_key;
-        Ok(self)
+            }),
+            Some(index) => {
+                self.entries[index].wrapped_app_key = request.wrapped_app_key;
+                Ok(self)
+            }
+        }
     }
 
     pub fn insert(mut self, entry: LocalIdentityKeyringEntry) -> Result<Self, KeyringRejection> {
-        let cause = if matches!(
-            self.entry(entry.identity_id()),
-            LocalIdentityProtection::Protected(_)
-        ) {
-            Some(MultiDeviceError::DuplicateIdentity {
-                identity_id: entry.identity_id().to_string(),
-            })
-        } else if self
-            .entries
-            .iter()
-            .any(|existing| existing.app_id() == entry.app_id())
-        {
-            Some(MultiDeviceError::DuplicateAppKeyOwnership {
-                app_id: entry.app_id().to_string(),
-            })
-        } else {
-            self.validate().err()
-        };
-        if let Some(cause) = cause {
-            return Err(KeyringRejection {
+        match self.admit_insertion(&entry) {
+            Err(cause) => Err(KeyringRejection {
                 keyring: self,
                 cause,
-            });
+            }),
+            Ok(()) => {
+                self.entries.push(entry);
+                Ok(self)
+            }
         }
-        self.entries.push(entry);
-        Ok(self)
+    }
+
+    fn admit_insertion(&self, entry: &LocalIdentityKeyringEntry) -> MultiDeviceResult<()> {
+        match self.entry(entry.identity_id()) {
+            LocalIdentityProtection::Protected(_) => Err(MultiDeviceError::DuplicateIdentity {
+                identity_id: entry.identity_id().to_string(),
+            }),
+            LocalIdentityProtection::Unprotected => {
+                if self
+                    .entries
+                    .iter()
+                    .any(|existing| existing.app_id() == entry.app_id())
+                {
+                    return Err(MultiDeviceError::DuplicateAppKeyOwnership {
+                        app_id: entry.app_id().to_string(),
+                    });
+                }
+                self.validate()
+            }
+        }
     }
 
     pub fn replace(mut self, entry: LocalIdentityKeyringEntry) -> Result<Self, KeyringRejection> {
-        if let Err(cause) = self.validate() {
-            return Err(KeyringRejection {
+        match self.admit_replacement(&entry) {
+            Err(cause) => Err(KeyringRejection {
                 keyring: self,
                 cause,
-            });
+            }),
+            Ok(index) => {
+                self.entries[index] = entry;
+                Ok(self)
+            }
         }
-        let Some(index) = self
-            .entries
-            .iter()
-            .position(|candidate| candidate.identity_id() == entry.identity_id())
-        else {
-            return Err(KeyringRejection {
-                keyring: self,
-                cause: MultiDeviceError::IdentityNotFound {
-                    identity_id: entry.identity_id().to_string(),
-                },
-            });
-        };
+    }
+
+    fn admit_replacement(&self, entry: &LocalIdentityKeyringEntry) -> MultiDeviceResult<usize> {
+        self.validate()?;
+        let index = self.entry_index(entry.identity_id())?;
         if self.entries[index].app_id() != entry.app_id() {
-            return Err(KeyringRejection {
-                keyring: self,
-                cause: MultiDeviceError::InvalidDeviceIdentity(
-                    "cannot replace a local identity keyring entry with a different app id"
-                        .to_owned(),
-                ),
-            });
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "cannot replace a local identity keyring entry with a different app id".to_owned(),
+            ));
         }
-        self.entries[index] = entry;
-        Ok(self)
+        Ok(index)
+    }
+
+    fn entry_index(&self, identity_id: &IdentityId) -> MultiDeviceResult<usize> {
+        self.entries
+            .iter()
+            .position(|entry| entry.identity_id() == identity_id)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: identity_id.to_string(),
+            })
     }
 
     pub fn remove(
         mut self,
         identity_id: &IdentityId,
     ) -> Result<RemovedLocalIdentityKey, KeyringRejection> {
-        let Some(index) = self
-            .entries
-            .iter()
-            .position(|entry| entry.identity_id() == identity_id)
-        else {
-            return Err(KeyringRejection {
+        match self.entry_index(identity_id) {
+            Err(cause) => Err(KeyringRejection {
                 keyring: self,
-                cause: MultiDeviceError::IdentityNotFound {
-                    identity_id: identity_id.to_string(),
-                },
-            });
-        };
-        let entry = self.entries.remove(index);
-        Ok(RemovedLocalIdentityKey {
-            keyring: self,
-            entry,
-        })
+                cause,
+            }),
+            Ok(index) => {
+                let entry = self.entries.remove(index);
+                Ok(RemovedLocalIdentityKey {
+                    keyring: self,
+                    entry,
+                })
+            }
+        }
     }
 }
 

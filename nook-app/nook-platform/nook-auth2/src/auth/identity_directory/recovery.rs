@@ -15,10 +15,10 @@ impl IdentityDirectory {
     pub fn reset_for_device_recovery(mut self, retirement: RecoveryRetirement) -> Self {
         self.identities.clear();
         self.selection = IdentitySelection::Empty;
-        if let RecoveryRetirement::RetireInstallation(app_id) = retirement {
-            self = self.retire_app_id(app_id);
+        match retirement {
+            RecoveryRetirement::RetireInstallation(app_id) => self.retire_app_id(app_id),
+            RecoveryRetirement::PreserveRetiredKeys => self,
         }
-        self
     }
 
     /// Leave known identities visible without treating a peer-only identity as
@@ -33,44 +33,42 @@ impl IdentityDirectory {
     /// identities. A one-member identity is removed; a multi-member identity
     /// remains available to its other installations.
     pub fn retire_local_identity_key(
-        mut self,
+        self,
         request: LocalIdentityKeyRetirement<'_>,
     ) -> Result<Self, IdentityDirectoryRejection> {
-        let LocalIdentityKeyRetirement {
-            identity_id,
-            app_id,
-        } = request;
-        if let Err(cause) = self.validate() {
-            return Err(IdentityDirectoryRejection {
+        match self.admit_local_key_retirement(&request) {
+            Err(cause) => Err(IdentityDirectoryRejection {
                 directory: self,
                 cause,
-            });
+            }),
+            Ok(index) => {
+                self.retire_identity_member(LocalKeyRetirementApplication { index, request })
+            }
         }
-        let Some(index) = self
+    }
+
+    fn admit_local_key_retirement(
+        &self,
+        request: &LocalIdentityKeyRetirement<'_>,
+    ) -> MultiDeviceResult<usize> {
+        self.validate()?;
+        let index = self
             .identities
             .iter()
-            .position(|identity| &identity.identity_id == identity_id)
-        else {
-            return Err(IdentityDirectoryRejection {
-                directory: self,
-                cause: MultiDeviceError::IdentityNotFound {
-                    identity_id: identity_id.to_string(),
-                },
-            });
-        };
-        if !self.identities[index]
-            .members
-            .iter()
-            .any(|member| &member.app_id == app_id)
-        {
-            return Err(IdentityDirectoryRejection {
-                directory: self,
-                cause: MultiDeviceError::InvalidDeviceIdentity(
-                    "retired app key does not belong to the selected identity".to_owned(),
-                ),
-            });
-        }
-        if self.identities[index].members.len() == 1 {
+            .position(|identity| &identity.identity_id == request.identity_id)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: request.identity_id.to_string(),
+            })?;
+        self.identities[index].require_retiring_member(request.app_id)?;
+        Ok(index)
+    }
+
+    fn retire_identity_member(
+        mut self,
+        retirement: LocalKeyRetirementApplication<'_>,
+    ) -> Result<Self, IdentityDirectoryRejection> {
+        let LocalKeyRetirementApplication { index, request } = retirement;
+        let directory = if self.identities[index].members.len() == 1 {
             self.identities.remove(index);
             self.selection = self
                 .identities
@@ -78,12 +76,12 @@ impl IdentityDirectory {
                 .map_or(IdentitySelection::Empty, |identity| {
                     IdentitySelection::Selected(identity.identity_id.clone())
                 });
+            self
         } else {
-            self = self
-                .take_identity(identity_id)?
-                .update(|identity| identity.remove_member(app_id))?;
-        }
-        Ok(self.retire_app_id(app_id.clone()))
+            self.take_identity(request.identity_id)?
+                .update(|identity| identity.remove_member(request.app_id))?
+        };
+        Ok(directory.retire_app_id(request.app_id.clone()))
     }
 
     /// Permanently reject one installation key discovered outside a readable directory.
@@ -93,6 +91,22 @@ impl IdentityDirectory {
             self.retired_app_ids.push(app_id);
         }
         self
+    }
+}
+
+struct LocalKeyRetirementApplication<'a> {
+    index: usize,
+    request: LocalIdentityKeyRetirement<'a>,
+}
+
+impl IdentityRecord {
+    fn require_retiring_member(&self, app_id: &crate::AppId) -> MultiDeviceResult<()> {
+        if !self.members.iter().any(|member| &member.app_id == app_id) {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "retired app key does not belong to the selected identity".to_owned(),
+            ));
+        }
+        Ok(())
     }
 }
 

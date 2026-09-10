@@ -5,6 +5,7 @@ use crate::{
     DirectoryCreationEnrollment, DirectoryOwnedVaultOpening, IdentityCreation,
     IdentityVaultKeyOpening,
 };
+use std::mem;
 
 use super::{IdentityDirectory, IdentityDirectoryRejection};
 use crate::errors::MultiDeviceError;
@@ -40,73 +41,59 @@ impl IdentityDirectory {
         mut self,
         request: StagedIdentityRebase<'_>,
     ) -> Result<Self, IdentityDirectoryRejection> {
-        let StagedIdentityRebase {
-            base,
-            candidate,
-            identity_id,
-        } = request;
-        let StagedIdentityPresence::Existing(target) = candidate.identity(identity_id) else {
-            return Err(IdentityDirectoryRejection {
+        let applied = request.target().and_then(|target| {
+            self.apply_staged_identity(StagedIdentityApplication {
+                base: request.base,
+                target,
+            })
+        });
+        match applied {
+            Err(cause) => Err(IdentityDirectoryRejection {
                 directory: self,
-                cause: MultiDeviceError::IdentityNotFound {
-                    identity_id: identity_id.to_string(),
-                },
-            });
-        };
-        if base.identities_without(identity_id) != candidate.identities_without(identity_id)
-            || base.retired_app_ids != candidate.retired_app_ids
-        {
-            return Err(IdentityDirectoryRejection {
-                directory: self,
-                cause: Self::staged_identity_conflict(identity_id),
-            });
+                cause,
+            }),
+            Ok(rollback) => match self.validate() {
+                Ok(()) => Ok(self),
+                Err(cause) => {
+                    rollback.restore(&mut self);
+                    Err(IdentityDirectoryRejection {
+                        directory: self,
+                        cause,
+                    })
+                }
+            },
         }
-        // The staged snapshot remains retained as publication evidence. Only its
-        // target is copied; unrelated current records keep their existing owner.
-        let rollback = match (
-            base.identity(identity_id),
+    }
+
+    fn apply_staged_identity(
+        &mut self,
+        application: StagedIdentityApplication<'_>,
+    ) -> Result<StagedRebaseRollback, MultiDeviceError> {
+        let StagedIdentityApplication { base, target } = application;
+        // Only the candidate target is copied; unrelated current records retain ownership.
+        match (
+            base.identity(&target.identity_id),
             self.identities
                 .iter()
-                .position(|record| &record.identity_id == identity_id),
+                .position(|record| record.identity_id == target.identity_id),
         ) {
             (StagedIdentityPresence::Existing(_), Some(index))
                 if self.identities[index] == *target =>
             {
-                StagedRebaseRollback::Unchanged
+                Ok(StagedRebaseRollback::Unchanged)
             }
             (StagedIdentityPresence::Existing(original), Some(index))
                 if self.identities[index] == *original =>
             {
-                let previous = std::mem::replace(&mut self.identities[index], target.clone());
-                StagedRebaseRollback::Replaced { index, previous }
+                let previous = mem::replace(&mut self.identities[index], target.clone());
+                Ok(StagedRebaseRollback::Replaced { index, previous })
             }
             (StagedIdentityPresence::NewlyCreated, None) => {
                 self.identities.push(target.clone());
-                StagedRebaseRollback::Inserted
+                Ok(StagedRebaseRollback::Inserted)
             }
-            _ => {
-                return Err(IdentityDirectoryRejection {
-                    directory: self,
-                    cause: Self::staged_identity_conflict(identity_id),
-                });
-            }
-        };
-        if let Err(cause) = self.validate() {
-            match rollback {
-                StagedRebaseRollback::Unchanged => {}
-                StagedRebaseRollback::Replaced { index, previous } => {
-                    self.identities[index] = previous
-                }
-                StagedRebaseRollback::Inserted => {
-                    self.identities.pop();
-                }
-            }
-            return Err(IdentityDirectoryRejection {
-                directory: self,
-                cause,
-            });
+            _ => Err(Self::staged_identity_conflict(&target.identity_id)),
         }
-        Ok(self)
     }
 
     fn identity(&self, identity_id: &IdentityId) -> StagedIdentityPresence<'_> {
@@ -130,6 +117,43 @@ impl IdentityDirectory {
     fn staged_identity_conflict(identity_id: &IdentityId) -> MultiDeviceError {
         MultiDeviceError::StagedIdentityConflict {
             identity_id: identity_id.to_string(),
+        }
+    }
+}
+
+struct StagedIdentityApplication<'a> {
+    base: &'a IdentityDirectory,
+    target: &'a IdentityRecord,
+}
+
+impl<'a> StagedIdentityRebase<'a> {
+    fn target(&self) -> Result<&'a IdentityRecord, MultiDeviceError> {
+        let StagedIdentityPresence::Existing(target) = self.candidate.identity(self.identity_id)
+        else {
+            return Err(MultiDeviceError::IdentityNotFound {
+                identity_id: self.identity_id.to_string(),
+            });
+        };
+        if self.base.identities_without(self.identity_id)
+            != self.candidate.identities_without(self.identity_id)
+            || self.base.retired_app_ids != self.candidate.retired_app_ids
+        {
+            return Err(IdentityDirectory::staged_identity_conflict(
+                self.identity_id,
+            ));
+        }
+        Ok(target)
+    }
+}
+
+impl StagedRebaseRollback {
+    fn restore(self, directory: &mut IdentityDirectory) {
+        match self {
+            Self::Unchanged => {}
+            Self::Replaced { index, previous } => directory.identities[index] = previous,
+            Self::Inserted => {
+                directory.identities.pop();
+            }
         }
     }
 }
@@ -185,11 +209,10 @@ mod tests {
 
         assert_eq!(rebased.selection(), &previous_selection);
         assert_eq!(rebased.selected()?.identity_id, concurrent_id);
-        assert!(
-            rebased
-                .identity(&identity_id)
-                .is_some_and(|record| record.owns_vault(&store_id))
-        );
+        assert!(matches!(
+            rebased.identity(&identity_id),
+            StagedIdentityPresence::Existing(record) if record.owns_vault(&store_id)
+        ));
         Ok(())
     }
 

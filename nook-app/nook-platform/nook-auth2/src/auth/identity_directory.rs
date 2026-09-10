@@ -17,8 +17,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{
-    AppKey, IdentityId, IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation,
-    IdentityMember, IdentityMemberVaultGrant, IdentityRecord, IdentityVaultKeyOpening, StoreId,
+    AppKey, DeviceSigningPublicKey, IdentityId, IdentityLegacyVaultImport,
+    IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberVaultGrant, IdentityRecord,
+    IdentityVaultKeyOpening, StoreId,
 };
 
 mod legacy_migration;
@@ -53,6 +54,12 @@ pub struct IdentityDirectory {
     selection: IdentitySelection,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     retired_app_ids: Vec<crate::AppId>,
+}
+
+enum LegacyImportDestination {
+    VaultOwner(IdentityId),
+    AppKeyOwner(IdentityId),
+    NewIdentity,
 }
 
 impl IdentityDirectory {
@@ -205,6 +212,69 @@ impl IdentityDirectory {
     /// identity owns it. Existing ownership wins; otherwise the vault receives
     /// a synthesized identity because the legacy record has no identity id.
     pub fn import_legacy_vault(
+        self,
+        request: DirectoryLegacyVaultImport<'_>,
+    ) -> Result<IdentityDirectoryResolution, IdentityDirectoryRejection> {
+        match self.legacy_import_destination(&request) {
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+            Ok(LegacyImportDestination::VaultOwner(identity_id)) => {
+                let directory = self.take_identity(&identity_id)?.update(|identity| {
+                    identity.reconcile_legacy_vault_member(IdentityLegacyVaultReconciliation {
+                        app_key: request.app_key,
+                        store_id: &request.store_id,
+                        reconciliation: &request.reconciliation,
+                    })
+                })?;
+                Ok(IdentityDirectoryResolution {
+                    directory,
+                    identity_id,
+                }
+                .select())
+            }
+            Ok(LegacyImportDestination::AppKeyOwner(identity_id)) => {
+                let directory = self.take_identity(&identity_id)?.update(|identity| {
+                    identity.import_legacy_vault(IdentityLegacyVaultImport {
+                        app_key: request.app_key,
+                        store_id: request.store_id,
+                        reconciliation: &request.reconciliation,
+                    })
+                })?;
+                Ok(IdentityDirectoryResolution {
+                    directory,
+                    identity_id,
+                }
+                .select())
+            }
+            Ok(LegacyImportDestination::NewIdentity) => self.import_new_legacy_identity(request),
+        }
+    }
+
+    fn legacy_import_destination(
+        &self,
+        request: &DirectoryLegacyVaultImport<'_>,
+    ) -> MultiDeviceResult<LegacyImportDestination> {
+        self.ensure_app_key_active(request.app_key)?;
+        match self
+            .identities
+            .iter()
+            .find(|record| record.owns_vault(&request.store_id))
+        {
+            Some(record) => Ok(LegacyImportDestination::VaultOwner(
+                record.identity_id.clone(),
+            )),
+            None => match self.identity_for_app_key(request.app_key)? {
+                AppKeyIdentityMembership::Enrolled(identity_id) => {
+                    Ok(LegacyImportDestination::AppKeyOwner(identity_id))
+                }
+                AppKeyIdentityMembership::Unenrolled => Ok(LegacyImportDestination::NewIdentity),
+            },
+        }
+    }
+
+    fn import_new_legacy_identity(
         mut self,
         request: DirectoryLegacyVaultImport<'_>,
     ) -> Result<IdentityDirectoryResolution, IdentityDirectoryRejection> {
@@ -214,62 +284,14 @@ impl IdentityDirectory {
             store_id,
             reconciliation,
         } = request;
-        if let Err(cause) = self.ensure_app_key_active(app_key) {
-            return Err(IdentityDirectoryRejection {
-                directory: self,
-                cause,
-            });
-        }
-        if let Some(identity_id) = self
-            .identities
-            .iter()
-            .find(|record| record.owns_vault(&store_id))
-            .map(|record| record.identity_id.clone())
-        {
-            let directory = self.take_identity(&identity_id)?.update(|identity| {
-                identity.reconcile_legacy_vault_member(IdentityLegacyVaultReconciliation {
-                    app_key,
-                    store_id: &store_id,
-                    reconciliation: &reconciliation,
-                })
-            })?;
-            return Ok(IdentityDirectoryResolution {
-                directory,
-                identity_id,
-            }
-            .select());
-        }
-        let identity_id = match self.identity_for_app_key(app_key) {
-            Ok(identity_id) => identity_id,
-            Err(cause) => {
-                return Err(IdentityDirectoryRejection {
-                    directory: self,
-                    cause,
-                });
-            }
-        };
-        if let AppKeyIdentityMembership::Enrolled(identity_id) = identity_id {
-            let directory = self.take_identity(&identity_id)?.update(|identity| {
-                identity.import_legacy_vault(IdentityLegacyVaultImport {
-                    app_key,
-                    store_id,
-                    reconciliation: &reconciliation,
-                })
-            })?;
-            return Ok(IdentityDirectoryResolution {
-                directory,
-                identity_id,
-            }
-            .select());
-        }
         let member = IdentityMember {
             app_id: app_key.app_id().clone(),
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
+            signing_public_key: DeviceSigningPublicKey::Unavailable,
             label: MemberLabelState::Unnamed,
         };
-        let record = match IdentityRecord::synthesize_from_legacy_vault(
+        match IdentityRecord::synthesize_from_legacy_vault(
             label,
             member,
             store_id,
@@ -277,53 +299,55 @@ impl IdentityDirectory {
             reconciliation.members_envelope,
             reconciliation.epoch_update.committed_epoch(),
         ) {
-            Ok(record) => record,
-            Err(cause) => {
-                return Err(IdentityDirectoryRejection {
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+            Ok(record) => {
+                let identity_id = record.identity_id.clone();
+                self.identities.push(record);
+                Ok(IdentityDirectoryResolution {
                     directory: self,
-                    cause,
-                });
+                    identity_id,
+                }
+                .select())
             }
-        };
-        let identity_id = record.identity_id.clone();
-        self.identities.push(record);
-        Ok(IdentityDirectoryResolution {
-            directory: self,
-            identity_id,
         }
-        .select())
     }
 
     pub fn reconcile_vault_dek(
         self,
         request: IdentityLegacyVaultReconciliation<'_>,
     ) -> Result<IdentityDirectoryResolution, IdentityDirectoryRejection> {
-        if let Err(cause) = self.ensure_app_key_active(request.app_key) {
-            return Err(IdentityDirectoryRejection {
+        match self.reconciliation_owner(&request) {
+            Err(cause) => Err(IdentityDirectoryRejection {
                 directory: self,
                 cause,
-            });
+            }),
+            Ok(identity_id) => {
+                let directory = self
+                    .take_identity(&identity_id)?
+                    .update(|identity| identity.reconcile_legacy_vault_member(request))?;
+                Ok(IdentityDirectoryResolution {
+                    directory,
+                    identity_id,
+                })
+            }
         }
-        let Some(identity_id) = self
-            .identities
+    }
+
+    fn reconciliation_owner(
+        &self,
+        request: &IdentityLegacyVaultReconciliation<'_>,
+    ) -> MultiDeviceResult<IdentityId> {
+        self.ensure_app_key_active(request.app_key)?;
+        self.identities
             .iter()
             .find(|record| record.owns_vault(request.store_id))
             .map(|record| record.identity_id.clone())
-        else {
-            return Err(IdentityDirectoryRejection {
-                directory: self,
-                cause: MultiDeviceError::IdentityNotFound {
-                    identity_id: format!("vault:{}", request.store_id),
-                },
-            });
-        };
-        let directory = self
-            .take_identity(&identity_id)?
-            .update(|identity| identity.reconcile_legacy_vault_member(request))?;
-        Ok(IdentityDirectoryResolution {
-            directory,
-            identity_id,
-        })
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: format!("vault:{}", request.store_id),
+            })
     }
 
     pub fn open_vault_dek(
@@ -346,31 +370,31 @@ impl IdentityDirectory {
         self,
         request: IdentityVaultKeyOpening<'_>,
     ) -> Result<IdentityDirectoryVaultKeys, IdentityDirectoryRejection> {
-        if let Err(cause) = self.ensure_app_key_active(request.app_key) {
-            return Err(IdentityDirectoryRejection {
+        match self.vault_opening_identity(&request) {
+            Err(cause) => Err(IdentityDirectoryRejection {
                 directory: self,
                 cause,
-            });
+            }),
+            Ok(identity_id) => self
+                .take_identity(&identity_id)?
+                .open_keys(|identity| identity.open_or_generate_vault_dek(request)),
         }
-        let owner = self
+    }
+
+    fn vault_opening_identity(
+        &self,
+        request: &IdentityVaultKeyOpening<'_>,
+    ) -> MultiDeviceResult<IdentityId> {
+        self.ensure_app_key_active(request.app_key)?;
+        let owner = match self
             .identities
             .iter()
             .find(|identity| identity.owns_vault(&request.store_id))
-            .map(|identity| identity.identity_id.clone());
-        let identity_id = match owner {
-            Some(identity_id) => identity_id,
-            None => match self.selected() {
-                Ok(identity) => identity.identity_id.clone(),
-                Err(cause) => {
-                    return Err(IdentityDirectoryRejection {
-                        directory: self,
-                        cause,
-                    });
-                }
-            },
+        {
+            Some(owner) => owner,
+            None => self.selected()?,
         };
-        self.take_identity(&identity_id)?
-            .open_keys(|identity| identity.open_or_generate_vault_dek(request))
+        Ok(owner.identity_id.clone())
     }
 
     pub fn open_vault_dek_for_identity(
@@ -400,25 +424,31 @@ impl IdentityDirectory {
         self,
         request: DirectoryOwnedVaultOpening<'_>,
     ) -> Result<IdentityDirectoryVaultKeys, IdentityDirectoryRejection> {
-        if let Err(cause) = self.ensure_app_key_active(request.vault.app_key) {
-            return Err(IdentityDirectoryRejection {
+        match self.admit_owned_vault_opening(&request) {
+            Err(cause) => Err(IdentityDirectoryRejection {
                 directory: self,
                 cause,
-            });
+            }),
+            Ok(()) => self
+                .take_identity(request.identity_id)?
+                .open_keys(|identity| identity.open_or_generate_vault_dek(request.vault)),
         }
+    }
+
+    fn admit_owned_vault_opening(
+        &self,
+        request: &DirectoryOwnedVaultOpening<'_>,
+    ) -> MultiDeviceResult<()> {
+        self.ensure_app_key_active(request.vault.app_key)?;
         if self.identities.iter().any(|identity| {
             identity.owns_vault(&request.vault.store_id)
                 && identity.identity_id != *request.identity_id
         }) {
-            return Err(IdentityDirectoryRejection {
-                directory: self,
-                cause: MultiDeviceError::DuplicateVaultOwnership {
-                    store_id: request.vault.store_id.to_string(),
-                },
+            return Err(MultiDeviceError::DuplicateVaultOwnership {
+                store_id: request.vault.store_id.to_string(),
             });
         }
-        self.take_identity(request.identity_id)?
-            .open_keys(|identity| identity.open_or_generate_vault_dek(request.vault))
+        Ok(())
     }
 
     pub fn validate_vault_enrollment(

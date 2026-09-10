@@ -2,7 +2,7 @@
 use super::*;
 #[cfg(test)]
 use crate::IdentityVaultBinding;
-use crate::MemberLabelState;
+use crate::{DeviceSigningPublicKey, IdentityMemberKeyBinding, MemberLabelState};
 impl IdentityDirectory {
     /// Enroll an authenticated installation into the identity that owns the
     /// paired vault, independent of the currently selected identity.
@@ -71,7 +71,7 @@ impl IdentityDirectory {
                 app_id: new_app_key.app_id().clone(),
                 auth_id: new_app_key.auth_id(),
                 public_key: new_app_key.public_key(),
-                signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
+                signing_public_key: DeviceSigningPublicKey::Unavailable,
                 label: MemberLabelState::Unnamed,
             };
             Ok(IdentityEnrollmentPreparation::Grant(
@@ -122,68 +122,91 @@ impl IdentityDirectory {
         self,
         request: DirectoryCreationEnrollment<'_>,
     ) -> Result<IdentityDirectoryResolution, IdentityDirectoryRejection> {
-        let DirectoryCreationEnrollment { app_key, label } = request;
-        if let Err(cause) = self.ensure_app_key_active(app_key) {
-            return Err(IdentityDirectoryRejection {
+        match self.ensure_app_key_active(request.app_key) {
+            Err(cause) => Err(IdentityDirectoryRejection {
                 directory: self,
                 cause,
-            });
+            }),
+            Ok(()) => match &self.selection {
+                IdentitySelection::Empty => self.create_identity(IdentityCreation {
+                    label: request.label,
+                    app_key: request.app_key,
+                    member_label: MemberLabelState::Unnamed,
+                }),
+                IdentitySelection::Selected(_) => {
+                    self.enroll_selected_identity_for_creation(request.app_key)
+                }
+            },
         }
-        if matches!(&self.selection, IdentitySelection::Empty) {
-            return self.create_identity(IdentityCreation {
-                label,
-                app_key,
-                member_label: MemberLabelState::Unnamed,
-            });
-        }
-        let selected = match self.selected() {
-            Ok(selected) => selected,
-            Err(cause) => {
-                return Err(IdentityDirectoryRejection {
-                    directory: self,
-                    cause,
-                });
+    }
+
+    fn enroll_selected_identity_for_creation(
+        self,
+        app_key: &AppKey,
+    ) -> Result<IdentityDirectoryResolution, IdentityDirectoryRejection> {
+        let prepared = self.selected().and_then(|selected| {
+            selected
+                .prepare_creation_enrollment(app_key)
+                .map(|enrollment| (selected.identity_id.clone(), enrollment))
+        });
+        match prepared {
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+            Ok((identity_id, CreationMembership::Existing)) => Ok(IdentityDirectoryResolution {
+                directory: self,
+                identity_id,
+            }),
+            Ok((identity_id, CreationMembership::New(member))) => {
+                let directory = self
+                    .take_identity(&identity_id)?
+                    .update(|identity| identity.add_member(member))?;
+                Ok(IdentityDirectoryResolution {
+                    directory,
+                    identity_id,
+                })
             }
-        };
-        let identity_id = selected.identity_id.clone();
-        if let Some(member) = selected
+        }
+    }
+}
+
+enum CreationMembership {
+    Existing,
+    New(IdentityMember),
+}
+
+impl IdentityRecord {
+    fn prepare_creation_enrollment(
+        &self,
+        app_key: &AppKey,
+    ) -> MultiDeviceResult<CreationMembership> {
+        match self
             .members
             .iter()
             .find(|member| member.app_id == *app_key.app_id())
         {
-            if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key() {
-                return Err(IdentityDirectoryRejection {
-                    directory: self,
-                    cause: MultiDeviceError::InvalidDeviceIdentity(
+            Some(member) => match member.binding_to_app_key(app_key) {
+                IdentityMemberKeyBinding::Matches => Ok(CreationMembership::Existing),
+                IdentityMemberKeyBinding::DifferentKeyMaterial => {
+                    Err(MultiDeviceError::InvalidDeviceIdentity(
                         "existing app id has different key material".to_owned(),
-                    ),
-                });
+                    ))
+                }
+            },
+            None => {
+                if !self.vault_deks.is_empty() {
+                    return Err(MultiDeviceError::IdentityEnrollmentRequired);
+                }
+                Ok(CreationMembership::New(IdentityMember {
+                    app_id: app_key.app_id().clone(),
+                    auth_id: app_key.auth_id(),
+                    public_key: app_key.public_key(),
+                    signing_public_key: DeviceSigningPublicKey::Unavailable,
+                    label: MemberLabelState::Unnamed,
+                }))
             }
-            return Ok(IdentityDirectoryResolution {
-                directory: self,
-                identity_id,
-            });
         }
-        if !selected.vault_deks.is_empty() {
-            return Err(IdentityDirectoryRejection {
-                directory: self,
-                cause: MultiDeviceError::IdentityEnrollmentRequired,
-            });
-        }
-        let member = IdentityMember {
-            app_id: app_key.app_id().clone(),
-            auth_id: app_key.auth_id(),
-            public_key: app_key.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: MemberLabelState::Unnamed,
-        };
-        let directory = self
-            .take_identity(&identity_id)?
-            .update(|identity| identity.add_member(member))?;
-        Ok(IdentityDirectoryResolution {
-            directory,
-            identity_id,
-        })
     }
 }
 #[cfg(test)]
@@ -302,7 +325,7 @@ mod tests {
             app_id: revoked.app_id().clone(),
             auth_id: revoked.auth_id(),
             public_key: revoked.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
+            signing_public_key: DeviceSigningPublicKey::Unavailable,
             label: MemberLabelState::Unnamed,
         })?;
         let store_id = crate::StoreId::generate()?;
