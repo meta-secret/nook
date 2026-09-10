@@ -5,6 +5,8 @@
 )]
 //! Transaction-bound persistence for admitted event graphs.
 use crate::NookError;
+#[cfg(test)]
+use crate::storage::indexed_db::StoredStringRecord;
 use nook_core::GenesisImportRequest;
 use nook_core::LocalEventBytes;
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
@@ -619,16 +621,16 @@ mod browser {
 
     #[derive(Debug, PartialEq, Eq)]
     struct EventSnapshot {
-        index: Option<String>,
-        heads: Option<String>,
-        rows: Vec<Option<String>>,
+        index: StoredStringRecord,
+        heads: StoredStringRecord,
+        rows: Vec<StoredStringRecord>,
     }
 
     impl EventSnapshot {
         fn assert_empty(&self) {
-            assert!(self.index.is_none());
-            assert!(self.heads.is_none());
-            assert_eq!(self.rows, vec![None, None, None]);
+            assert!(matches!(self.index, StoredStringRecord::MissingKey));
+            assert!(matches!(self.heads, StoredStringRecord::MissingKey));
+            assert_eq!(self.rows, vec![StoredStringRecord::MissingKey; 3]);
         }
 
         fn assert_committed(&self, fixture: &EventFixture) -> anyhow::Result<()> {
@@ -638,19 +640,24 @@ mod browser {
                 fixture.checkpoint.event.id()?.into_inner(),
             ];
             ids.sort();
-            assert_eq!(self.index, Some(serde_json::to_string(&ids)?));
+            assert_eq!(
+                self.index,
+                StoredStringRecord::Stored(serde_json::to_string(&ids)?)
+            );
             assert_eq!(
                 self.heads,
-                Some(serde_json::to_string(&vec![
+                StoredStringRecord::Stored(serde_json::to_string(&vec![
                     fixture.checkpoint.event.id()?.into_inner()
                 ])?)
             );
             assert_eq!(
                 self.rows,
                 vec![
-                    Some(String::from_utf8(fixture.genesis.bytes.clone())?),
-                    Some(String::from_utf8(fixture.trigger.bytes.clone())?),
-                    Some(String::from_utf8(fixture.checkpoint.bytes.clone())?),
+                    StoredStringRecord::Stored(String::from_utf8(fixture.genesis.bytes.clone())?),
+                    StoredStringRecord::Stored(String::from_utf8(fixture.trigger.bytes.clone())?),
+                    StoredStringRecord::Stored(String::from_utf8(
+                        fixture.checkpoint.bytes.clone()
+                    )?),
                 ]
             );
             Ok(())
@@ -689,16 +696,16 @@ mod browser {
         }
         assert_eq!(fixture.snapshot().await?, before);
         let transaction = EventTransaction::begin(AppendKind::Single).await?;
-        assert!(
+        assert!(matches!(
             EventString {
                 store: &transaction.events,
                 key: &vault.event_key(unauthorized.event.id()?.as_str()),
                 context: "Test unauthorized event",
             }
             .read()
-            .await?
-            .is_none()
-        );
+            .await?,
+            StoredStringRecord::MissingKey
+        ));
         transaction.complete().await?;
         Ok(())
     }
@@ -738,14 +745,20 @@ mod browser {
         let expected = vec![fixture.genesis.event.id()?.into_inner()];
         assert_eq!(vault.append(fixture.genesis.append()).await?, expected);
         let snapshot = fixture.snapshot().await?;
-        assert_eq!(snapshot.index, Some(serde_json::to_string(&expected)?));
-        assert_eq!(snapshot.heads, Some(serde_json::to_string(&expected)?));
+        assert_eq!(
+            snapshot.index,
+            StoredStringRecord::Stored(serde_json::to_string(&expected)?)
+        );
+        assert_eq!(
+            snapshot.heads,
+            StoredStringRecord::Stored(serde_json::to_string(&expected)?)
+        );
         assert_eq!(
             snapshot.rows,
             vec![
-                Some(String::from_utf8(fixture.genesis.bytes.clone())?),
-                None,
-                None
+                StoredStringRecord::Stored(String::from_utf8(fixture.genesis.bytes.clone())?),
+                StoredStringRecord::MissingKey,
+                StoredStringRecord::MissingKey
             ]
         );
         assert_eq!(vault.append(fixture.genesis.append()).await?, expected);
@@ -815,8 +828,8 @@ mod browser {
             vec![fixture.trigger.event.id()?.into_inner()]
         );
         let before = fixture.snapshot().await?;
-        assert!(before.rows[1].is_some());
-        assert!(before.rows[2].is_none());
+        assert!(matches!(before.rows[1], StoredStringRecord::Stored(_)));
+        assert!(matches!(before.rows[2], StoredStringRecord::MissingKey));
         assert_eq!(
             vault.append_epoch_pair(fixture.pair()).await?,
             vec![fixture.checkpoint.event.id()?.into_inner()]
@@ -980,13 +993,19 @@ mod browser {
         stale_ids.push(fixture.genesis.event.id()?.into_inner());
         stale_ids.sort();
         let before = fixture.snapshot().await?;
-        assert_eq!(before.index, Some(serde_json::to_string(&stale_ids)?));
-        assert!(before.rows[1].is_none());
+        assert_eq!(
+            before.index,
+            StoredStringRecord::Stored(serde_json::to_string(&stale_ids)?)
+        );
+        assert!(matches!(before.rows[1], StoredStringRecord::MissingKey));
         let (heads, local) = vault.union_remote(RemoteEventUnion { events: &[] }).await?;
         assert_eq!(local.event_ids(), vec![fixture.genesis.event.id()?]);
         assert_eq!(heads, vec![fixture.genesis.event.id()?.into_inner()]);
         let after = fixture.snapshot().await?;
-        assert_eq!(after.index, Some(serde_json::to_string(&heads)?));
+        assert_eq!(
+            after.index,
+            StoredStringRecord::Stored(serde_json::to_string(&heads)?)
+        );
         assert_eq!(after.heads, before.heads);
         assert_eq!(after.rows, before.rows);
         Ok(())

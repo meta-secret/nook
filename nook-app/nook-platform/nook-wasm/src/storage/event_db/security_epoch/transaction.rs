@@ -6,6 +6,7 @@
 //! Contextual event rows and vault indexes within one live `IndexedDB` transaction.
 use super::VaultEventPersistence;
 use crate::NookDatabase;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{NookError, storage};
 use nook_core::{EventId, LocalEventStore};
 use rexie::{Rexie, Store, Transaction, TransactionMode};
@@ -96,7 +97,7 @@ pub(super) struct PersistedEventIds<'a> {
     pub(super) ids: &'a [String],
 }
 impl EventString<'_> {
-    pub(super) async fn read(&self) -> Result<Option<String>, NookError> {
+    pub(super) async fn read(&self) -> Result<StoredStringRecord, NookError> {
         let Self {
             store,
             key,
@@ -109,10 +110,12 @@ impl EventString<'_> {
             .await
             .map_err(|error| NookError::IndexedDb(format!("{context} read error: {error:?}")))?;
         match value {
-            None => Ok(None),
-            Some(value) if value.is_undefined() || value.is_null() => Ok(None),
+            None => Ok(StoredStringRecord::MissingKey),
+            Some(value) if value.is_undefined() || value.is_null() => {
+                Ok(StoredStringRecord::MissingKey)
+            }
             Some(value) => serde_wasm_bindgen::from_value(value)
-                .map(Some)
+                .map(StoredStringRecord::Stored)
                 .map_err(|error| {
                     NookError::IndexedDb(format!("{context} decode error: {error:?}"))
                 }),
@@ -170,21 +173,22 @@ impl TransactionEvents<'_> {
     pub(super) async fn load(&self) -> Result<(Vec<String>, LocalEventStore), NookError> {
         let events = self.store;
         let store_id = self.vault.store_id;
-        let mut ids: Vec<String> = EventString {
+        let mut ids: Vec<String> = match (EventString {
             store: events,
             key: &VaultEventPersistence::new(store_id).index_key(),
             context: "Epoch index",
-        }
+        })
         .read()
         .await?
-        .map(|json| serde_json::from_str(&json))
-        .transpose()
-        .map_err(|error| NookError::Serialization(error.to_string()))?
-        .unwrap_or_default();
+        {
+            StoredStringRecord::MissingKey => Vec::new(),
+            StoredStringRecord::Stored(json) => serde_json::from_str(&json)
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        };
         ids.sort();
         let mut local = LocalEventStore::new();
         for raw_id in &ids {
-            if let Some(bytes) = (EventString {
+            if let StoredStringRecord::Stored(bytes) = (EventString {
                 store: events,
                 key: &VaultEventPersistence::new(store_id).event_key(raw_id),
                 context: "Epoch event",
