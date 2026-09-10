@@ -1,82 +1,124 @@
 import Ajv from 'ajv';
 import standaloneCode from 'ajv/dist/standalone/index.js';
-import { execFileSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { err, ok, type Result } from 'neverthrow';
+import {
+  ContractDirectory,
+  ContractFile,
+  ContractWorkspaceRequest,
+  NativeObserverExport,
+  ContractFailureKind,
+  type ContractFailure,
+} from './observer-contract-io';
 
-const consoleRoot = fileURLToPath(new URL('../', import.meta.url));
-const generated = join(consoleRoot, 'src/generated');
-const staged = await mkdtemp(join(tmpdir(), 'hive-observer-contract-'));
-try {
-  const nativeInput = process.env.HIVE_OBSERVER_CONTRACT_INPUT;
-  if (nativeInput) {
-    // Docker supplies fresh native output from the same source build.
-    await cp(nativeInput, staged, { recursive: true });
-  } else {
-    execFileSync(
-      'cargo',
-      [
-        'run',
-        '--locked',
-        '--manifest-path',
-        join(consoleRoot, '../Cargo.toml'),
-        '-p',
-        'hive',
-        '--features',
-        'observer-contract-export',
-        '--bin',
-        'hive-export-observer-contract',
-        '--',
-        '--output',
-        staged,
-      ],
-      { stdio: 'inherit' },
-    );
+enum ObserverRoot {
+  Snapshot = 'ObserverSnapshot',
+  Task = 'ObservedTask',
+}
+class ObserverSchema {
+  constructor(private readonly source: string) {}
+  validator(): Result<string, ContractFailure> {
+    let schema: unknown;
+    try {
+      schema = JSON.parse(this.source);
+    } catch {
+      return err({
+        kind: ContractFailureKind.Schema,
+        message: 'Observer exporter emitted invalid schema JSON',
+      });
+    }
+    // Schema metadata is admitted by Ajv; it is not a domain payload mirror.
+    if (!(schema instanceof Object) || Array.isArray(schema))
+      return err({
+        kind: ContractFailureKind.Schema,
+        message: 'Observer exporter did not emit a schema object',
+      });
+    try {
+      const ajv = new Ajv({
+        code: { source: true, esm: true },
+        coerceTypes: false,
+        useDefaults: false,
+        removeAdditional: false,
+        validateFormats: false,
+      });
+      return ok(standaloneCode(ajv, ajv.compile(schema)));
+    } catch {
+      return err({
+        kind: ContractFailureKind.Schema,
+        message: 'Unable to compile exported observer schema',
+      });
+    }
   }
-  // These are root bindings, not field schemas. Rust derives emit both representations.
-  for (const root of ['ObserverSnapshot', 'ObservedTask']) {
-    const schema: unknown = JSON.parse(
-      await readFile(join(staged, root + '.schema.json'), 'utf8'),
-    );
-    if (!isSchemaObject(schema))
-      throw new Error('Observer exporter did not emit a schema object');
-    const ajv = new Ajv({
-      code: { source: true, esm: true },
-      coerceTypes: false,
-      useDefaults: false,
-      removeAdditional: false,
-      // Schemars integer-format labels do not change the JSON number representation.
-      validateFormats: false,
-    });
-    const validate = ajv.compile(schema);
-    await writeFile(
-      join(staged, root + '.validator.js'),
-      standaloneCode(ajv, validate),
-    );
-    await writeFile(
-      join(staged, root + '.validator.d.ts'),
+}
+class ObserverValidatorExport {
+  constructor(private readonly root: ObserverRoot) {}
+  async write(
+    staged: ContractDirectory,
+  ): Promise<Result<void, ContractFailure>> {
+    const source = await new ContractFile(
+      join(staged.path, this.root + '.schema.json'),
+    ).read();
+    if (source.isErr()) return err(source.error);
+    const validator = new ObserverSchema(source.value).validator();
+    if (validator.isErr()) return err(validator.error);
+    const written = await new ContractFile(
+      join(staged.path, this.root + '.validator.js'),
+    ).write(validator.value);
+    if (written.isErr()) return err(written.error);
+    return new ContractFile(
+      join(staged.path, this.root + '.validator.d.ts'),
+    ).write(
       '// Generated from the same Rust root as the schema validator.\n' +
-        'import type { ' +
-        root +
-        ' } from "./' +
-        root +
-        '";\n' +
-        'declare const validate: (value: unknown) => value is ' +
-        root +
-        ';\n' +
+        `import type { ${this.root} } from "./${this.root}";\n` +
+        `declare const validate: (value: unknown) => value is ${this.root};\n` +
         'export default validate;\n',
     );
   }
-  await mkdir(join(consoleRoot, 'src'), { recursive: true });
-  await rm(generated, { recursive: true, force: true });
-  await cp(staged, generated, { recursive: true });
-} finally {
-  await rm(staged, { recursive: true, force: true });
 }
-
-// JSON Schema is arbitrary metadata owned and checked by Ajv, not a domain payload mirror.
-function isSchemaObject(value: unknown): value is Record<string, unknown> {
-  return value instanceof Object && !Array.isArray(value);
+class ObserverContractGeneration {
+  constructor(private readonly consoleRoot: string) {}
+  async execute(): Promise<Result<void, ContractFailure>> {
+    const workspace = await new ContractWorkspaceRequest().create();
+    if (workspace.isErr()) return err(workspace.error);
+    const outcome = await this.generate(workspace.value);
+    const cleanup = await workspace.value.remove();
+    if (cleanup.isOk()) return outcome;
+    if (outcome.isOk()) return err(cleanup.error);
+    return err({
+      kind: ContractFailureKind.Combined,
+      message: outcome.error.message + '\n' + cleanup.error.message,
+      failures: [outcome.error, cleanup.error],
+    });
+  }
+  private async generate(
+    staged: ContractDirectory,
+  ): Promise<Result<void, ContractFailure>> {
+    const nativeInput = process.env.HIVE_OBSERVER_CONTRACT_INPUT;
+    const exported = nativeInput
+      ? await staged.copyFrom(nativeInput)
+      : new NativeObserverExport(this.consoleRoot).execute(staged.path);
+    if (exported.isErr()) return err(exported.error);
+    for (const root of Object.values(ObserverRoot)) {
+      const written = await new ObserverValidatorExport(root).write(staged);
+      if (written.isErr()) return err(written.error);
+    }
+    const source = await new ContractDirectory(
+      join(this.consoleRoot, 'src'),
+    ).create();
+    if (source.isErr()) return err(source.error);
+    const generated = new ContractDirectory(
+      join(this.consoleRoot, 'src/generated'),
+    );
+    const removed = await generated.remove();
+    if (removed.isErr()) return err(removed.error);
+    return generated.copyFrom(staged.path);
+  }
+}
+const outcome = await new ObserverContractGeneration(
+  fileURLToPath(new URL('../', import.meta.url)),
+).execute();
+if (outcome.isErr()) {
+  console.error(outcome.error.message);
+  process.exitCode = 1;
 }

@@ -27,11 +27,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ObservedAlert,
     ObservedTask,
     ObserverCopy,
-    ObserverSnapshot,
   } from './generated/index';
   import { ObservedAlertSeverity, ObservedTaskState } from './generated/values';
-  import isObservedTask from './generated/ObservedTask.validator.js';
-  import isObserverSnapshot from './generated/ObserverSnapshot.validator.js';
+  import { ObserverClient, ObserverFailureKind } from './observer-client';
   import { EmergencyCopyCatalog } from './emergency-copy';
   import {
     WorkerDisplayStatus,
@@ -153,13 +151,12 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       snapshotState.kind === ObserverFeedKind.Loaded
         ? snapshotState.snapshot.tasks
         : [];
-    const durableTasks: ObservedTask[] = [];
-    if (durableMatchState.kind === DurableTaskLookupKind.Found) {
-      const durableTask = durableMatchState.task;
-      if (!snapshotTasks.some((task) => task.id === durableTask.id)) {
-        durableTasks.push(durableTask);
-      }
-    }
+    const durableMatch = durableMatchState;
+    const durableTasks: ObservedTask[] =
+      durableMatch.kind === DurableTaskLookupKind.Found &&
+      !snapshotTasks.some((task) => task.id === durableMatch.task.id)
+        ? [durableMatch.task]
+        : [];
     let tasks = [...durableTasks, ...snapshotTasks];
 
     if (selectedTab === TaskTabFilter.Attention) {
@@ -206,13 +203,14 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   const groupedTasks = $derived.by(() => {
     if (!groupByKind) return [];
-    const groups: Record<string, ObservedTask[]> = {};
-    for (const task of filteredTasks) {
+    const groups = filteredTasks.reduce((groups, task) => {
       const label = task.kind_label || task.kind || 'Other';
-      if (!groups[label]) groups[label] = [];
-      groups[label].push(task);
-    }
-    return Object.entries(groups);
+      return new Map([
+        ...groups,
+        [label, [...(groups.get(label) ?? []), task]],
+      ]);
+    }, new Map<string, ObservedTask[]>());
+    return [...groups.entries()];
   });
   const normalizedSearch = $derived(search.trim());
   const recentActivity = $derived(
@@ -274,31 +272,25 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         durableMatchState = { kind: DurableTaskLookupKind.NotFound };
         return;
       }
-      try {
-        const locale = navigator.language || 'en';
-        const response = await fetch(
-          `/api/tasks/${encodeURIComponent(taskId)}?locale=${encodeURIComponent(locale)}`,
-          { signal: controller.signal },
-        );
-        if (response.status === 404) {
+      const result = await new ObserverClient(navigator.language || 'en').task(
+        taskId,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      if (result.isErr()) {
+        if (
+          result.error.kind !== ObserverFailureKind.Cancelled &&
+          result.error.kind !== ObserverFailureKind.Http
+        )
           durableMatchState = { kind: DurableTaskLookupKind.NotFound };
-          return;
-        }
-        if (!response.ok) return;
-        const match: unknown = await response.json();
-        if (!isObservedTask(match))
-          throw new Error('Invalid observer task response');
-        durableMatchState = { kind: DurableTaskLookupKind.Found, task: match };
-        if (!detailsClosed)
-          selectedIdState = {
-            kind: TaskSelectionKind.Selected,
-            taskId: match.id,
-          };
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          durableMatchState = { kind: DurableTaskLookupKind.NotFound };
-        }
+        return;
       }
+      durableMatchState = result.value;
+      if (result.value.kind === DurableTaskLookupKind.Found && !detailsClosed)
+        selectedIdState = {
+          kind: TaskSelectionKind.Selected,
+          taskId: result.value.task.id,
+        };
     }, 250);
 
     return () => {
@@ -321,52 +313,44 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   });
 
   async function loadSnapshot(request: SnapshotLoadRequest) {
-    try {
-      const locale = navigator.language || 'en';
-      document.documentElement.lang = locale
-        .toLocaleLowerCase()
-        .startsWith('ru')
-        ? 'ru'
-        : 'en';
-      const requestInit: RequestInit =
-        request.kind === SnapshotLoadRequestKind.ScheduledRefresh
-          ? { signal: request.signal }
-          : {};
-      const response = await fetch(
-        `/api/overview?locale=${encodeURIComponent(locale)}`,
-        requestInit,
-      );
-      if (!response.ok) throw new Error(`observer returned ${response.status}`);
-      const next: unknown = await response.json();
-      if (!isObserverSnapshot(next))
-        throw new Error('Invalid observer snapshot response');
-      snapshotState = { kind: ObserverFeedKind.Loaded, snapshot: next };
-      unavailable = false;
-      let selectedTaskStillAvailable = false;
-      if (selectedIdState.kind === TaskSelectionKind.Selected) {
-        const selectedTaskId = selectedIdState.taskId;
-        selectedTaskStillAvailable =
-          next.tasks.some((task) => task.id === selectedTaskId) ||
-          (durableMatchState.kind === DurableTaskLookupKind.Found &&
-            durableMatchState.task.id === selectedTaskId);
-      }
-      if (
-        (!detailsClosed && selectedIdState.kind === TaskSelectionKind.None) ||
-        !selectedTaskStillAvailable
-      ) {
-        if (!detailsClosed) {
-          const firstTask = next.tasks[0];
-          selectedIdState = firstTask
-            ? { kind: TaskSelectionKind.Selected, taskId: firstTask.id }
-            : { kind: TaskSelectionKind.None };
-        }
-      }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
+    const locale = navigator.language || 'en';
+    document.documentElement.lang = locale.toLocaleLowerCase().startsWith('ru')
+      ? 'ru'
+      : 'en';
+    const requestInit: RequestInit =
+      request.kind === SnapshotLoadRequestKind.ScheduledRefresh
+        ? { signal: request.signal }
+        : {};
+    const result = await new ObserverClient(locale).snapshot(requestInit);
+    if (result.isErr()) {
+      if (result.error.kind === ObserverFailureKind.Cancelled) return;
       unavailable = true;
-    } finally {
       loading = false;
+      return;
     }
+    const next = result.value;
+    snapshotState = { kind: ObserverFeedKind.Loaded, snapshot: next };
+    unavailable = false;
+    let selectedTaskStillAvailable = false;
+    if (selectedIdState.kind === TaskSelectionKind.Selected) {
+      const selectedTaskId = selectedIdState.taskId;
+      selectedTaskStillAvailable =
+        next.tasks.some((task) => task.id === selectedTaskId) ||
+        (durableMatchState.kind === DurableTaskLookupKind.Found &&
+          durableMatchState.task.id === selectedTaskId);
+    }
+    if (
+      (!detailsClosed && selectedIdState.kind === TaskSelectionKind.None) ||
+      !selectedTaskStillAvailable
+    ) {
+      if (!detailsClosed) {
+        const firstTask = next.tasks[0];
+        selectedIdState = firstTask
+          ? { kind: TaskSelectionKind.Selected, taskId: firstTask.id }
+          : { kind: TaskSelectionKind.None };
+      }
+    }
+    loading = false;
   }
 
   function isAgentHealthy(agent: ObservedAgent) {
