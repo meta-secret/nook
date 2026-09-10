@@ -353,8 +353,8 @@ test("persisted Git authentication config fails without exposing values", () => 
     assertFailure(
       new GitConfiguration([entry]).assertCredentialFree(),
       (error) => {
-        assert.match(String(error), /credential detected/);
-        assert.doesNotMatch(String(error), /should-not-appear/);
+        assert.match(error.message, /credential detected/);
+        assert.doesNotMatch(error.message, /should-not-appear/);
         return true;
       },
     );

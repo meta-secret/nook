@@ -227,7 +227,15 @@ export class GitHubClient {
           }),
         ),
       ),
-      (cause) => new GithubRequestFailure(cause, signal).outcome(),
+      (cause): CiFailure => ({
+        kind: signal?.aborted
+          ? CiFailureKind.Cancelled
+          : CiFailureKind.Github,
+        message:
+          cause instanceof Error
+            ? cause.message
+            : "Retired automation deletion failed",
+      }),
     );
     if (retired.isErr()) return err(retired.error);
     const activeIssueComments = issueComments.filter(

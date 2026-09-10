@@ -8,20 +8,10 @@ export interface ProcessOutput {
   readonly stderr: string;
 }
 export class CiProcess {
-  constructor(
-    private readonly command: string,
-    private readonly args: readonly string[],
-    private readonly options: {
-      env?: NodeJS.ProcessEnv;
-      cwd?: string;
-      maxBuffer?: number;
-      signal?: AbortSignal;
-    } = {},
-  ) {}
+  constructor(private readonly args: readonly string[]) {}
   execute(): ResultAsync<ProcessOutput, CiFailure> {
     return ResultAsync.fromPromise(
-      executeFile(this.command, [...this.args], {
-        ...this.options,
+      executeFile("git", [...this.args], {
         encoding: "utf8",
       }),
       (cause): CiFailure => {
@@ -32,10 +22,8 @@ export class CiProcess {
             ? cause.code
             : false;
         return {
-          kind: this.options.signal?.aborted
-            ? CiFailureKind.Cancelled
-            : CiFailureKind.Git,
-          message: `${this.command} command failed`,
+          kind: CiFailureKind.Git,
+          message: "git command failed",
           ...(code === false ? {} : { code }),
         };
       },

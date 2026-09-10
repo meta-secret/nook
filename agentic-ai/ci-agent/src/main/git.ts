@@ -2,11 +2,14 @@ import { err, ok, ResultAsync, type Result } from "neverthrow";
 import { CiFailureKind, type CiFailure } from "./failure.js";
 import { CiProcess } from "./process.js";
 import { access } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 import type { Octokit } from "@octokit/rest";
 
 import { Logger } from "./logger.js";
+const execFileAsync = promisify(execFile);
 export interface AuthoredNumstatSummarizeAuthoredNumstatRequest {
   readonly deletedPaths?: ReadonlySet<string>;
 }
@@ -154,7 +157,7 @@ export class CiRepository {
     return ["-C", this.value, ...TRUSTED_GIT_OPTIONS, ...args];
   }
   trustedGit({ args }: CiRepositoryTrustedGitRequest) {
-    return new CiProcess("git", this.trustedGitArgs({ args })).execute();
+    return new CiProcess(this.trustedGitArgs({ args })).execute();
   }
   excludeAgentRuntimeArtifacts() {
     return this.trustedGit({
@@ -162,14 +165,14 @@ export class CiRepository {
     }).map(() => {});
   }
   async markSafeDirectory(): Promise<Result<void, CiFailure>> {
-    const explicit = await new CiProcess("git", [
+    const explicit = await new CiProcess([
       "config",
       "--global",
       "--add",
       "safe.directory",
       this.value,
     ]).execute();
-    const wildcard = await new CiProcess("git", [
+    const wildcard = await new CiProcess([
       "config",
       "--global",
       "--add",
@@ -224,7 +227,7 @@ export class CiRepository {
       ["user.name", userName],
       ["core.untrackedCache", "true"],
     ] as const) {
-      const configured = await new CiProcess("git", [
+      const configured = await new CiProcess([
         "config",
         "--global",
         key,
@@ -244,7 +247,9 @@ export class CiRepository {
       args: ["status", "--porcelain", "--", ".", ...AGENT_RUNTIME_EXCLUSIONS],
     }).map(({ stdout }) => stdout.trim().length > 0);
   }
-  private pushAuthenticatedBranch() {
+  private async pushAuthenticatedBranch(): Promise<void> {
+    const repoRoot = this.value;
+
     const token = process.env.NOOK_GITHUB_PAT?.trim();
     const authEnv = token
       ? {
@@ -254,13 +259,13 @@ export class CiRepository {
           GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
         }
       : process.env;
-    return new CiProcess(
+    await execFileAsync(
       "git",
-      ["-C", this.value, "push", "-u", "origin", "HEAD"],
-      { env: authEnv },
-    )
-      .execute()
-      .map(() => {});
+      ["-C", repoRoot, "push", "-u", "origin", "HEAD"],
+      {
+        env: authEnv,
+      },
+    );
   }
   async pushFixBranch({
     fixBranch,
@@ -295,7 +300,22 @@ export class CiRepository {
       args: ["config", "core.hooksPath", "/dev/null"],
     });
     if (hooks.isErr()) return err(hooks.error);
-    const pushed = await this.pushAuthenticatedBranch();
+    const pushed = await ResultAsync.fromPromise(
+      this.pushAuthenticatedBranch(),
+      (cause): CiFailure => {
+        const code =
+          cause instanceof Error &&
+          "code" in cause &&
+          (typeof cause.code === "number" || typeof cause.code === "string")
+            ? cause.code
+            : false;
+        return {
+          kind: CiFailureKind.Git,
+          message: "git command failed",
+          ...(code === false ? {} : { code }),
+        };
+      },
+    );
     if (pushed.isErr()) return err(pushed.error);
     log.info(`Pushed ${fixBranch}`);
     return ok();
