@@ -10,12 +10,17 @@ use crate::GenesisImportRequest;
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
 use crate::graph::{EventGraph, EventInsertStatus};
+mod lookup;
 mod outbox;
+pub use lookup::LocalEventBytes;
 mod remote;
 use crate::{EventError, EventResult, EventStorageBytes};
 pub use nook_replication::RemoteEventLogClassification;
-use nook_replication::ReplicaStore;
-pub use remote::{CheckedRemoteEvent, LocalRemoteUnion, LocalRemoteUnionOutcome, RemoteEventBatch};
+use nook_replication::{ReplicaEventBytes, ReplicaStore};
+pub use remote::{
+    CheckedRemoteEvent, LocalRemoteUnion, LocalRemoteUnionOutcome, RemoteEventBatch,
+    RemoteStoreIdentity,
+};
 use std::collections::BTreeSet;
 
 pub struct LocalEventWrite {
@@ -40,10 +45,15 @@ pub struct LocalEventAppendOutcome {
     pub event_id: EventId,
     pub status: EventInsertStatus,
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LocalOutboxRemovalResult {
+    NotQueued,
+    Removed(EventStorageBytes),
+}
 #[derive(Debug)]
 pub struct LocalOutboxRemoved {
     pub store: LocalEventStore,
-    pub bytes: Option<EventStorageBytes>,
+    pub removal: LocalOutboxRemovalResult,
 }
 #[derive(Debug, thiserror::Error)]
 #[error("{cause}")]
@@ -82,10 +92,11 @@ impl LocalEventStore {
     }
 
     #[must_use]
-    pub fn get_bytes(&self, event_id: &EventId) -> Option<EventStorageBytes> {
-        self.replica
-            .get_bytes(event_id)
-            .map(|bytes| bytes.to_vec().into())
+    pub fn get_bytes(&self, event_id: &EventId) -> LocalEventBytes {
+        match self.replica.get_bytes(event_id) {
+            ReplicaEventBytes::UnknownEvent => LocalEventBytes::UnknownEvent,
+            ReplicaEventBytes::Stored(bytes) => LocalEventBytes::Stored(bytes.to_vec().into()),
+        }
     }
 
     #[must_use]
@@ -102,12 +113,14 @@ impl LocalEventStore {
     pub fn load_graph(&self, store_id: &str) -> EventResult<EventGraph> {
         let mut graph = EventGraph::new();
         for event_id in self.replica.event_ids() {
-            let bytes =
-                self.replica
-                    .get_bytes(&event_id)
-                    .ok_or_else(|| EventError::MissingEvent {
+            let bytes = match self.replica.get_bytes(&event_id) {
+                ReplicaEventBytes::Stored(bytes) => bytes,
+                ReplicaEventBytes::UnknownEvent => {
+                    return Err(EventError::MissingEvent {
                         event_id: event_id.as_str().to_owned(),
-                    })?;
+                    });
+                }
+            };
             let event = VaultEvent::parse_event_storage_bytes(&bytes.to_vec().into())?;
             graph = graph
                 .insert(crate::EventGraphInsert {
@@ -279,7 +292,7 @@ mod tests {
                 Err(rejected.cause)
             }
         }?;
-        assert!(local.get_bytes(&id).is_some());
+        assert!(matches!(local.get_bytes(&id), LocalEventBytes::Stored(_)));
         Ok(())
     }
 
@@ -305,7 +318,7 @@ mod tests {
                 Err(rejected.cause)
             }
         }?;
-        assert!(local.get_bytes(&id).is_some());
+        assert!(matches!(local.get_bytes(&id), LocalEventBytes::Stored(_)));
         assert_eq!(status, EventInsertStatus::Applied);
         Ok(())
     }
@@ -467,7 +480,10 @@ mod tests {
         .err()
         .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(err, EventError::RemoteEventIdMismatch { .. }));
-        assert!(local.get_bytes(&real_id).is_none());
+        assert!(matches!(
+            local.get_bytes(&real_id),
+            LocalEventBytes::UnknownEvent
+        ));
         Ok(())
     }
 
@@ -519,7 +535,7 @@ mod tests {
     #[test]
     fn classify_remote_event_log_allows_empty_provider() -> EventResult<()> {
         assert_eq!(
-            RemoteEventBatch::new(&[]).classify(Some(STORE))?,
+            RemoteEventBatch::new(&[]).classify(RemoteStoreIdentity::Identified(STORE))?,
             RemoteEventLogClassification::Empty
         );
         Ok(())
@@ -535,7 +551,7 @@ mod tests {
         let remote = vec![genesis.remote_record()?];
 
         assert_eq!(
-            RemoteEventBatch::new(&remote).classify(Some(STORE))?,
+            RemoteEventBatch::new(&remote).classify(RemoteStoreIdentity::Identified(STORE))?,
             RemoteEventLogClassification::SameStore {
                 store_id: STORE.to_owned()
             }
@@ -555,7 +571,7 @@ mod tests {
         ];
 
         assert_eq!(
-            RemoteEventBatch::new(&remote).classify(None)?,
+            RemoteEventBatch::new(&remote).classify(RemoteStoreIdentity::Empty)?,
             RemoteEventLogClassification::SameStore {
                 store_id: "store_otherstore1".to_owned()
             }
@@ -575,7 +591,7 @@ mod tests {
         ];
 
         assert_eq!(
-            RemoteEventBatch::new(&remote).classify(Some(STORE))?,
+            RemoteEventBatch::new(&remote).classify(RemoteStoreIdentity::Identified(STORE))?,
             RemoteEventLogClassification::DifferentStore {
                 local_store_id: STORE.to_owned(),
                 remote_store_id: "store_otherstore1".to_owned()
@@ -599,7 +615,8 @@ mod tests {
         .remote_record()?;
 
         assert_eq!(
-            RemoteEventBatch::new(&[local, remote]).classify(Some(STORE))?,
+            RemoteEventBatch::new(&[local, remote])
+                .classify(RemoteStoreIdentity::Identified(STORE))?,
             RemoteEventLogClassification::MultipleStores {
                 store_ids: vec!["store_otherstore1".to_owned(), STORE.to_owned()]
             }
@@ -611,7 +628,7 @@ mod tests {
     fn classify_remote_event_log_fails_closed_on_unreadable_event() -> anyhow::Result<()> {
         let event_id = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let err = RemoteEventBatch::new(&[(event_id, b"not event yaml".to_vec().into())])
-            .classify(Some(STORE))
+            .classify(RemoteStoreIdentity::Identified(STORE))
             .err()
             .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(err, EventError::ParseRemoteEvent(_)));
@@ -650,7 +667,10 @@ mod tests {
         .err()
         .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(err, EventError::SignatureVerificationFailed));
-        assert!(local.get_bytes(&event_id).is_none());
+        assert!(matches!(
+            local.get_bytes(&event_id),
+            LocalEventBytes::UnknownEvent
+        ));
         Ok(())
     }
 
@@ -700,7 +720,10 @@ mod tests {
         }?;
         assert!(imported.is_empty());
         assert!(local.load_graph(STORE)?.quarantined().is_empty());
-        assert!(local.get_bytes(&child_id).is_none());
+        assert!(matches!(
+            local.get_bytes(&child_id),
+            LocalEventBytes::UnknownEvent
+        ));
         Ok(())
     }
 
@@ -740,8 +763,14 @@ mod tests {
         }?;
 
         assert_eq!(imported, vec![genesis_id.clone()]);
-        assert!(local.get_bytes(&genesis_id).is_some());
-        assert!(local.get_bytes(&child_id).is_none());
+        assert!(matches!(
+            local.get_bytes(&genesis_id),
+            LocalEventBytes::Stored(_)
+        ));
+        assert!(matches!(
+            local.get_bytes(&child_id),
+            LocalEventBytes::UnknownEvent
+        ));
         assert!(local.load_graph(STORE)?.quarantined().is_empty());
         Ok(())
     }
@@ -778,7 +807,10 @@ mod tests {
             }
         }?;
         assert_eq!(imported, vec![child_id.clone()]);
-        assert!(local.get_bytes(&child_id).is_some());
+        assert!(matches!(
+            local.get_bytes(&child_id),
+            LocalEventBytes::Stored(_)
+        ));
 
         match local.union_remote(crate::LocalRemoteUnion {
             remote_events: &[(genesis_id.clone(), genesis_bytes)],
@@ -793,8 +825,14 @@ mod tests {
                 Err(rejected.cause)
             }
         }?;
-        assert!(local.get_bytes(&genesis_id).is_some());
-        assert!(local.get_bytes(&child_id).is_none());
+        assert!(matches!(
+            local.get_bytes(&genesis_id),
+            LocalEventBytes::Stored(_)
+        ));
+        assert!(matches!(
+            local.get_bytes(&child_id),
+            LocalEventBytes::UnknownEvent
+        ));
         assert!(local.load_graph(STORE)?.quarantined().is_empty());
         Ok(())
     }
@@ -842,9 +880,15 @@ mod tests {
 
         assert!(matches!(result, Err(EventError::ParseStoredEvent(_))));
         assert_eq!(local.event_ids(), before_event_ids);
-        assert_eq!(local.get_bytes(&existing_id), Some(existing_bytes.clone()));
+        assert_eq!(
+            local.get_bytes(&existing_id),
+            LocalEventBytes::Stored(existing_bytes.clone())
+        );
         assert_eq!(local.pending_outbox("drive"), before_outbox);
-        assert!(local.get_bytes(&remote_id).is_none());
+        assert!(matches!(
+            local.get_bytes(&remote_id),
+            LocalEventBytes::UnknownEvent
+        ));
         Ok(())
     }
 
@@ -926,7 +970,10 @@ mod tests {
             remote_events: &device_b
                 .event_ids()
                 .iter()
-                .filter_map(|id| device_b.get_bytes(id).map(|bytes| (id.clone(), bytes)))
+                .filter_map(|id| match device_b.get_bytes(id) {
+                    LocalEventBytes::Stored(bytes) => Some((id.clone(), bytes)),
+                    LocalEventBytes::UnknownEvent => None,
+                })
                 .collect::<Vec<_>>(),
             store_id: STORE,
         }) {
@@ -943,7 +990,10 @@ mod tests {
             remote_events: &device_a
                 .event_ids()
                 .iter()
-                .filter_map(|id| device_a.get_bytes(id).map(|bytes| (id.clone(), bytes)))
+                .filter_map(|id| match device_a.get_bytes(id) {
+                    LocalEventBytes::Stored(bytes) => Some((id.clone(), bytes)),
+                    LocalEventBytes::UnknownEvent => None,
+                })
                 .collect::<Vec<_>>(),
             store_id: STORE,
         }) {

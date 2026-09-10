@@ -9,6 +9,7 @@
 mod operation_application;
 mod security_conflicts;
 
+use crate::EventLookup;
 use crate::canonical::EventId;
 use crate::epoch::{EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch};
 use crate::graph::EventGraph;
@@ -153,9 +154,14 @@ impl VaultProjection {
         let mut replacements_by_old: BTreeMap<SecretId, Vec<(EventId, SecretId)>> = BTreeMap::new();
 
         for event_id in order {
-            let event = graph.get(&event_id).ok_or(EventError::MissingEvent {
-                event_id: event_id.as_str().to_owned(),
-            })?;
+            let event = match graph.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(EventError::MissingEvent {
+                        event_id: event_id.as_str().to_owned(),
+                    });
+                }
+            };
             if event.body.store_id != expected_store {
                 return Err(EventError::ProjectionStoreMismatch);
             }
@@ -250,15 +256,27 @@ impl VaultProjection {
     }
 }
 
+/// The initial epoch has no rotation checkpoint; rotated epochs name their commit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EpochCheckpoint {
+    Unrotated,
+    Committed(EventId),
+}
+
 impl EventGraph {
     /// Select the checkpoint that commits the projection's current rotated epoch.
     /// Concurrent access-neutral heads must not replace this causal checkpoint.
-    pub fn current_epoch_checkpoint(&self) -> EventResult<Option<EventId>> {
+    pub fn current_epoch_checkpoint(&self) -> EventResult<EpochCheckpoint> {
         let mut checkpoints = Vec::new();
         for event_id in self.topological_order()? {
-            let event = self.get(&event_id).ok_or(EventError::MissingEvent {
-                event_id: event_id.as_str().to_owned(),
-            })?;
+            let event = match self.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(EventError::MissingEvent {
+                        event_id: event_id.as_str().to_owned(),
+                    });
+                }
+            };
             if !event
                 .body
                 .operations
@@ -288,7 +306,10 @@ impl EventGraph {
                 reason: "multiple concurrent epoch checkpoints remain",
             });
         }
-        Ok(current.into_iter().next())
+        Ok(match current.into_iter().next() {
+            Some(checkpoint) => EpochCheckpoint::Committed(checkpoint),
+            None => EpochCheckpoint::Unrotated,
+        })
     }
 }
 

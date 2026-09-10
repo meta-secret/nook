@@ -1,5 +1,6 @@
 //! Owned provider outbox transitions.
 use super::*;
+use nook_replication::ReplicaOutboxRemovalResult;
 impl LocalEventStore {
     pub fn queue_outbox(mut self, request: LocalOutboxWrite<'_>) -> Self {
         self.replica = self
@@ -24,7 +25,12 @@ impl LocalEventStore {
         self.replica = removed.store;
         LocalOutboxRemoved {
             store: self,
-            bytes: removed.bytes.map(Into::into),
+            removal: match removed.removal {
+                ReplicaOutboxRemovalResult::NotQueued => LocalOutboxRemovalResult::NotQueued,
+                ReplicaOutboxRemovalResult::Removed(bytes) => {
+                    LocalOutboxRemovalResult::Removed(bytes.into())
+                }
+            },
         }
     }
     #[must_use]
@@ -58,9 +64,12 @@ mod tests {
                 event_id: &id,
             });
             local = removed.store;
-            removed.bytes
-        }
-        .ok_or(EventError::MissingOutboxEntry)?;
+            removed.removal
+        };
+        let dequeued = match dequeued {
+            LocalOutboxRemovalResult::Removed(bytes) => bytes,
+            LocalOutboxRemovalResult::NotQueued => return Err(EventError::MissingOutboxEntry),
+        };
         assert_eq!(dequeued, bytes);
         assert!(local.pending_outbox("github").is_empty());
         Ok(())

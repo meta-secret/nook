@@ -4,6 +4,7 @@
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 use nook_auth2::{GenesisMembersRecordsRequest, VaultMember};
+use nook_core::LocalEventBytes;
 use nook_core::RecordTypeDeclaration;
 use nook_core::{
     AgeArmoredCiphertext, SecretFingerprint, Sha256Hex, SymmetricKey, VaultError, VaultFormat,
@@ -286,11 +287,9 @@ impl EventLogDevice {
             .store
             .event_ids()
             .into_iter()
-            .filter_map(|id| {
-                self.session
-                    .store
-                    .get_bytes(&id)
-                    .map(|bytes| (id, bytes.into()))
+            .filter_map(|id| match self.session.store.get_bytes(&id) {
+                LocalEventBytes::Stored(bytes) => Some((id, bytes.into())),
+                LocalEventBytes::UnknownEvent => None,
             })
             .collect()
     }
@@ -373,7 +372,7 @@ pub fn write_all_device_events_to_provider(
         });
     };
     for (id, bytes) in device.remote_events() {
-        if bucket.get_bytes(&id).is_none() {
+        if matches!(bucket.get_bytes(&id), LocalEventBytes::UnknownEvent) {
             bucket = bucket.put_event(nook_core::LocalEventWrite {
                 event_id: id,
                 bytes: bytes.into(),
@@ -398,7 +397,10 @@ pub fn pull_provider_into_device(
     let events = bucket
         .event_ids()
         .into_iter()
-        .filter_map(|id| bucket.get_bytes(&id).map(|bytes| (id, bytes.into())))
+        .filter_map(|id| match bucket.get_bytes(&id) {
+            LocalEventBytes::Stored(bytes) => Some((id, bytes.into())),
+            LocalEventBytes::UnknownEvent => None,
+        })
         .collect::<Vec<_>>();
     device.union_events(&events)
 }
@@ -472,7 +474,7 @@ pub fn union_device_from_providers(
     let mut remote: Vec<(EventId, Vec<u8>)> = Vec::new();
     for bucket in providers.values() {
         for id in bucket.event_ids() {
-            if let Some(bytes) = bucket.get_bytes(&id) {
+            if let LocalEventBytes::Stored(bytes) = bucket.get_bytes(&id) {
                 remote.push((id, bytes.into()));
             }
         }

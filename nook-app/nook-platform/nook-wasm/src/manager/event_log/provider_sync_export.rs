@@ -2,6 +2,7 @@
 
 use super::{EventLogStorageRecord, NookError, NookVaultManager};
 use crate::NookDatabase;
+use nook_core::LocalEventBytes;
 use nook_core::VaultEvent;
 
 impl NookVaultManager {
@@ -10,9 +11,15 @@ impl NookVaultManager {
     ) -> Result<Vec<EventLogStorageRecord>, NookError> {
         let mut records = Vec::new();
         for event_id in store.event_ids() {
-            let bytes = store.get_bytes(&event_id).ok_or_else(|| {
-                NookError::Database(format!("Event {} missing from local store.", event_id))
-            })?;
+            let bytes = match store.get_bytes(&event_id) {
+                LocalEventBytes::Stored(bytes) => bytes,
+                LocalEventBytes::UnknownEvent => {
+                    return Err(NookError::Database(format!(
+                        "Event {} missing from local store.",
+                        event_id
+                    )));
+                }
+            };
             let event = VaultEvent::parse_event_storage_bytes(&bytes)?;
             records.push(EventLogStorageRecord {
                 event_id: event_id.as_str().to_owned(),

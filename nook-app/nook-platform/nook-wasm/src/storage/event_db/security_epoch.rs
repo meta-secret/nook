@@ -6,6 +6,7 @@
 //! Transaction-bound persistence for admitted event graphs.
 use crate::NookError;
 use nook_core::GenesisImportRequest;
+use nook_core::LocalEventBytes;
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
 mod transaction;
 use transaction::{
@@ -392,9 +393,14 @@ impl PreparedRemoteUnion<'_> {
             if persisted_ids.iter().any(|id| id == event_id.as_str()) {
                 continue;
             }
-            let bytes = local.get_bytes(&event_id).ok_or_else(|| {
-                NookError::Database("Admitted remote event bytes are missing.".to_owned())
-            })?;
+            let bytes = match local.get_bytes(&event_id) {
+                LocalEventBytes::Stored(bytes) => bytes,
+                LocalEventBytes::UnknownEvent => {
+                    return Err(NookError::Database(
+                        "Admitted remote event bytes are missing.".to_owned(),
+                    ));
+                }
+            };
             let value = String::from_utf8(bytes.to_vec())
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             EventString {
@@ -903,8 +909,8 @@ mod browser {
         assert_eq!(local.event_ids().len(), 3);
         for (id, bytes) in &remote {
             assert_eq!(
-                local.get_bytes(id).map(Vec::<u8>::from),
-                Some(bytes.clone())
+                local.get_bytes(id),
+                LocalEventBytes::Stored(bytes.clone().into())
             );
         }
         let snapshot = fixture.snapshot().await?;

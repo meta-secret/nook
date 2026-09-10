@@ -10,8 +10,9 @@ use crate::EventDbSaveEventBytes;
 use crate::EventDbSaveEventBytesToStore;
 use crate::storage::{event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
-use nook_core::DeviceAuthorization;
+use nook_core::EventLookup;
 use nook_core::MemberLabelState;
+use nook_core::{DeviceAuthorization, EpochCheckpoint};
 use nook_core::{
     DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
     IdentityVaultKeyOpening,
@@ -87,17 +88,22 @@ impl<'a> ExistingVaultHandoff<'a> {
             ));
         }
         let ordered_event_ids = graph.topological_order()?;
-        let checkpoint_event_id = graph
-            .current_epoch_checkpoint()?
-            .or_else(|| ordered_event_ids.last().cloned())
-            .ok_or_else(|| {
+        let checkpoint_event_id = match graph.current_epoch_checkpoint()? {
+            EpochCheckpoint::Committed(checkpoint) => checkpoint,
+            EpochCheckpoint::Unrotated => ordered_event_ids.last().cloned().ok_or_else(|| {
                 NookError::Database(
                     "Imported extension identity has no committed vault events.".to_owned(),
                 )
-            })?;
-        let checkpoint_event = graph.get(&checkpoint_event_id).ok_or_else(|| {
-            NookError::Database("Imported extension identity checkpoint is missing.".to_owned())
-        })?;
+            })?,
+        };
+        let checkpoint_event = match graph.get(&checkpoint_event_id) {
+            EventLookup::Recorded(event) => event,
+            EventLookup::UnknownEvent => {
+                return Err(NookError::Database(
+                    "Imported extension identity checkpoint is missing.".to_owned(),
+                ));
+            }
+        };
         let key_epoch = IdentityVaultEventId::parse(checkpoint_event.body.key_epoch.as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
         let checkpoint = IdentityVaultEventId::parse(checkpoint_event_id.as_str())

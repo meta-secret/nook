@@ -1,5 +1,6 @@
 //! Event-sourcing integration scenarios using the in-memory harness.
 
+use nook_core::LocalEventBytes;
 use nook_core::{
     DeviceId, LocalEventStore, ObservedHeads, SigningIdentity, VaultCrypto, VaultError,
     VaultEventSession,
@@ -57,7 +58,10 @@ impl EventLogDevice {
             self.session.store.pending_outbox("github"),
             before.store.pending_outbox("github")
         );
-        assert!(self.session.store.get_bytes(expected_id).is_none());
+        assert!(matches!(
+            self.session.store.get_bytes(expected_id),
+            LocalEventBytes::UnknownEvent
+        ));
         Ok(())
     }
 }
@@ -184,7 +188,7 @@ fn applied_pending_and_duplicate_appends_keep_publication_behavior() -> VaultRes
     assert_eq!(pending_outbox.len(), 1);
     assert_eq!(pending_outbox[0].0, event_id);
     assert_eq!(
-        Some(pending_outbox[0].1.clone()),
+        LocalEventBytes::Stored(pending_outbox[0].1.clone()),
         applied.session.store.get_bytes(&event_id)
     );
 
@@ -298,12 +302,10 @@ fn child_event_with_genesis(
     ciphertext: &str,
 ) -> VaultResult<(EventId, Vec<u8>, EventId, Vec<u8>)> {
     let genesis_head = EventId::parse(&device.session.heads[0])?;
-    let genesis_bytes = device
-        .session
-        .store
-        .get_bytes(&genesis_head)
-        .ok_or(EventError::MissingGenesisBytes)?
-        .into();
+    let genesis_bytes = match device.session.store.get_bytes(&genesis_head) {
+        LocalEventBytes::Stored(bytes) => bytes.into(),
+        LocalEventBytes::UnknownEvent => return Err(EventError::MissingGenesisBytes.into()),
+    };
     let store_id = StoreId::parse(device.store_id())?;
     let actor_id = device.actor_id()?;
     let key_epoch = EventId::parse(&device.session.key_epoch)?;

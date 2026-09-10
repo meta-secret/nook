@@ -73,6 +73,13 @@ pub enum EventGraphReplacementEvidence<'a> {
     GenesisOnly(&'a VaultEvent),
     Established(&'a VaultEvent),
 }
+/// A graph lookup reports membership independently from event payload contents.
+#[derive(Debug, Clone, Copy)]
+pub enum EventLookup<'a> {
+    UnknownEvent,
+    Recorded(&'a VaultEvent),
+}
+
 impl EventGraph {
     pub fn replacement_evidence(&self) -> EventGraphReplacementEvidence<'_> {
         if self.is_empty() || !self.pending_events().is_empty() || !self.quarantined().is_empty() {
@@ -118,8 +125,11 @@ impl EventGraph {
     }
 
     #[must_use]
-    pub fn get(&self, id: &EventId) -> Option<&VaultEvent> {
-        self.events.get(id)
+    pub fn get(&self, id: &EventId) -> EventLookup<'_> {
+        match self.events.get(id) {
+            Some(event) => EventLookup::Recorded(event),
+            None => EventLookup::UnknownEvent,
+        }
     }
 
     pub fn events(&self) -> impl Iterator<Item = (&EventId, &VaultEvent)> {

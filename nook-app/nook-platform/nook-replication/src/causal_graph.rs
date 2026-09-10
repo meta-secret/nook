@@ -1,6 +1,13 @@
 //! Generic causal DAG indexing for immutable replicated events.
 
 mod union;
+/// Causal membership distinguishes an unknown event from a recorded root.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventParents<'a, Id> {
+    UnknownEvent,
+    Known(&'a [Id]),
+}
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
@@ -120,8 +127,11 @@ where
     }
 
     #[must_use]
-    pub fn parents(&self, id: &Id) -> Option<&[Id]> {
-        self.parents.get(id).map(Vec::as_slice)
+    pub fn parents(&self, id: &Id) -> EventParents<'_, Id> {
+        match self.parents.get(id) {
+            Some(parents) => EventParents::Known(parents),
+            None => EventParents::UnknownEvent,
+        }
     }
 
     #[must_use]
@@ -612,7 +622,10 @@ mod tests {
 
         assert_eq!(left, right);
         assert!(left.quarantined().contains_key("same"));
-        assert_eq!(left.parents(&id("same")), Some([id("a")].as_slice()));
+        assert_eq!(
+            left.parents(&id("same")),
+            EventParents::Known([id("a")].as_slice())
+        );
         Ok(())
     }
 
@@ -744,7 +757,7 @@ mod tests {
         );
         assert_eq!(
             graph.parents(&id("same")),
-            Some([id("a"), id("b")].as_slice())
+            EventParents::Known([id("a"), id("b")].as_slice())
         );
         assert!(!graph.quarantined().contains_key("same"));
         Ok(())

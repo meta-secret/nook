@@ -136,7 +136,10 @@ mod tests {
         let right_left = right.clone().union(&left);
         assert_eq!(left_right, right_left);
         assert!(left_right.quarantined().contains_key("same"));
-        assert_eq!(left_right.parents(&id("same")), Some([id("a")].as_slice()));
+        assert_eq!(
+            left_right.parents(&id("same")),
+            EventParents::Known([id("a")].as_slice())
+        );
         Ok(())
     }
     #[test]

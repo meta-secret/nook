@@ -12,6 +12,7 @@
 )]
 
 use crate::EventError;
+use crate::EventLookup;
 use nook_event_log::{GenesisImportRequest, VaultEvent};
 
 use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultProjection, VaultResult};
@@ -111,11 +112,15 @@ impl VaultRecoveryOptions {
         let mut requires_sentinel_quorum = false;
 
         for event_id in graph.topological_order()? {
-            let event = graph
-                .get(&event_id)
-                .ok_or_else(|| EventError::MissingEvent {
-                    event_id: event_id.as_str().to_owned(),
-                })?;
+            let event = match graph.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(EventError::MissingEvent {
+                        event_id: event_id.as_str().to_owned(),
+                    }
+                    .into());
+                }
+            };
             for operation in &event.body.operations {
                 match operation {
                     VaultOperation::JoinApproved {

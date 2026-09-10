@@ -6,6 +6,7 @@
 
 use super::{LocalEventStore, RemoteEventLogClassification};
 use crate::GenesisImportRequest;
+use crate::LocalEventBytes;
 use crate::{EventError, EventId, EventResult, EventStorageBytes, StoreId, VaultEvent};
 use std::collections::BTreeSet;
 
@@ -51,6 +52,13 @@ impl CheckedRemoteEvent {
     }
 }
 
+/// Local selection against which a provider event batch is classified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteStoreIdentity<'a> {
+    Empty,
+    Identified(&'a str),
+}
+
 /// Borrowed provider records; classification validates every envelope before reporting scope.
 pub struct RemoteEventBatch<'a> {
     events: &'a [(EventId, EventStorageBytes)],
@@ -62,7 +70,7 @@ impl<'a> RemoteEventBatch<'a> {
     }
     pub fn classify(
         &self,
-        active_store_id: Option<&str>,
+        active_store_id: RemoteStoreIdentity<'_>,
     ) -> EventResult<RemoteEventLogClassification> {
         let mut remote_store_ids = BTreeSet::new();
         for (event_id, bytes) in self.events {
@@ -78,9 +86,14 @@ impl<'a> RemoteEventBatch<'a> {
             return Ok(RemoteEventLogClassification::Empty);
         }
 
-        let active_store_id = active_store_id
-            .map(str::trim)
-            .filter(|store_id| !store_id.is_empty());
+        let active_store_id = match active_store_id {
+            RemoteStoreIdentity::Identified(store_id) if !store_id.trim().is_empty() => {
+                RemoteStoreIdentity::Identified(store_id.trim())
+            }
+            RemoteStoreIdentity::Identified(_) | RemoteStoreIdentity::Empty => {
+                RemoteStoreIdentity::Empty
+            }
+        };
 
         if remote_store_ids.len() > 1 {
             return Ok(RemoteEventLogClassification::MultipleStores {
@@ -97,7 +110,9 @@ impl<'a> RemoteEventBatch<'a> {
                 })?;
 
         match active_store_id {
-            Some(local_store_id) if local_store_id != remote_store_id => {
+            RemoteStoreIdentity::Identified(local_store_id)
+                if local_store_id != remote_store_id =>
+            {
                 Ok(RemoteEventLogClassification::DifferentStore {
                     local_store_id: local_store_id.to_owned(),
                     remote_store_id,
@@ -150,7 +165,9 @@ impl PreparedRemoteUnion {
             let mut additions = Vec::new();
             let mut addition_ids = BTreeSet::new();
             for (event_id, bytes) in visible {
-                if local.get_bytes(&event_id).is_some() || addition_ids.contains(&event_id) {
+                if matches!(local.get_bytes(&event_id), LocalEventBytes::Stored(_))
+                    || addition_ids.contains(&event_id)
+                {
                     continue;
                 }
                 addition_ids.insert(event_id.clone());
@@ -408,7 +425,10 @@ mod tests {
             })
             .map_err(|rejected| rejected.into_cause())?;
         assert_eq!(admitted.imported, vec![record.0.clone()]);
-        assert_eq!(admitted.store.get_bytes(&record.0), Some(record.1));
+        assert_eq!(
+            admitted.store.get_bytes(&record.0),
+            LocalEventBytes::Stored(record.1)
+        );
         Ok(())
     }
 
@@ -441,7 +461,10 @@ mod tests {
         };
         local = rejected.store;
         assert!(matches!(rejected.cause, EventError::ParseStoredEvent(_)));
-        assert_eq!(local.get_bytes(id), Some(corrupt.clone()));
+        assert_eq!(
+            local.get_bytes(id),
+            LocalEventBytes::Stored(corrupt.clone())
+        );
         assert_eq!(
             local.pending_outbox("provider"),
             vec![(id.clone(), corrupt)]
@@ -460,7 +483,8 @@ mod tests {
         assert_eq!(checked.store_id().as_str(), STORE);
         assert_eq!(checked.into_store_id().as_str(), STORE);
         assert_eq!(
-            RemoteEventBatch::new(&fixture.records).classify(Some("  store_testtoken11  "))?,
+            RemoteEventBatch::new(&fixture.records)
+                .classify(RemoteStoreIdentity::Identified("  store_testtoken11  "))?,
             RemoteEventLogClassification::SameStore {
                 store_id: STORE.to_owned()
             }

@@ -5,7 +5,21 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
+
+/// Byte storage membership retains a stored empty event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplicaEventBytes<'a> {
+    UnknownEvent,
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: borrowed immutable event storage bytes"
+        )
+    )]
+    Stored(&'a [u8]),
+}
 
 /// Result of inserting immutable bytes for an event identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,16 +27,6 @@ pub enum ReplicaInsertStatus {
     Inserted,
     Duplicate,
     Conflict,
-}
-
-impl ReplicaInsertStatus {
-    fn classify(existing: Option<&[u8]>, incoming: &[u8]) -> Self {
-        match existing {
-            Some(bytes) if bytes == incoming => Self::Duplicate,
-            Some(_) => Self::Conflict,
-            None => Self::Inserted,
-        }
-    }
 }
 
 pub struct ReplicaEventWrite<Id> {
@@ -52,6 +56,13 @@ pub struct ReplicaWrite<Id> {
 #[derive(Debug)]
 pub struct ReplicaDequeue<Id> {
     pub store: ReplicaStore<Id>,
+    pub removal: ReplicaOutboxRemovalResult,
+}
+
+/// Removing an outbox entry preserves empty stored payloads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReplicaOutboxRemovalResult {
+    NotQueued,
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
         expect(
@@ -59,7 +70,7 @@ pub struct ReplicaDequeue<Id> {
             reason = "serialization boundary: removed opaque event storage bytes"
         )
     )]
-    pub bytes: Option<Vec<u8>>,
+    Removed(Vec<u8>),
 }
 
 /// Provider event-set classification before a connect or sync path mutates
@@ -110,13 +121,16 @@ where
             event_id,
             bytes: storage_bytes,
         } = request;
-        let status = ReplicaInsertStatus::classify(
-            self.events.get(&event_id).map(Vec::as_slice),
-            &storage_bytes,
-        );
-        if status == ReplicaInsertStatus::Inserted {
-            self.events.insert(event_id, storage_bytes);
-        }
+        let status = match self.events.entry(event_id) {
+            Entry::Occupied(entry) if entry.get() == &storage_bytes => {
+                ReplicaInsertStatus::Duplicate
+            }
+            Entry::Occupied(_) => ReplicaInsertStatus::Conflict,
+            Entry::Vacant(entry) => {
+                entry.insert(storage_bytes);
+                ReplicaInsertStatus::Inserted
+            }
+        };
         ReplicaWrite {
             store: self,
             status,
@@ -136,8 +150,11 @@ where
             reason = "serialization boundary: returns opaque immutable event storage bytes"
         )
     )]
-    pub fn get_bytes(&self, event_id: &Id) -> Option<&[u8]> {
-        self.events.get(event_id).map(Vec::as_slice)
+    pub fn get_bytes(&self, event_id: &Id) -> ReplicaEventBytes<'_> {
+        match self.events.get(event_id) {
+            Some(bytes) => ReplicaEventBytes::Stored(bytes),
+            None => ReplicaEventBytes::UnknownEvent,
+        }
     }
 
     #[must_use]
@@ -151,11 +168,14 @@ where
             event: ReplicaEventWrite { event_id, bytes },
         } = request;
         let entries = self.outbox.entry(provider_id.to_owned()).or_default();
-        let status =
-            ReplicaInsertStatus::classify(entries.get(&event_id).map(Vec::as_slice), &bytes);
-        if status == ReplicaInsertStatus::Inserted {
-            entries.insert(event_id, bytes);
-        }
+        let status = match entries.entry(event_id) {
+            Entry::Occupied(entry) if entry.get() == &bytes => ReplicaInsertStatus::Duplicate,
+            Entry::Occupied(_) => ReplicaInsertStatus::Conflict,
+            Entry::Vacant(entry) => {
+                entry.insert(bytes);
+                ReplicaInsertStatus::Inserted
+            }
+        };
         ReplicaWrite {
             store: self,
             status,
@@ -167,7 +187,14 @@ where
             .outbox
             .get_mut(request.provider_id)
             .and_then(|entries| entries.remove(request.event_id));
-        ReplicaDequeue { store: self, bytes }
+        let removal = match bytes {
+            Some(bytes) => ReplicaOutboxRemovalResult::Removed(bytes),
+            None => ReplicaOutboxRemovalResult::NotQueued,
+        };
+        ReplicaDequeue {
+            store: self,
+            removal,
+        }
     }
 
     #[must_use]
@@ -274,7 +301,10 @@ mod tests {
             },
             ReplicaInsertStatus::Conflict
         );
-        assert_eq!(store.get_bytes(&1), Some([].as_slice()));
+        assert_eq!(
+            store.get_bytes(&1),
+            ReplicaEventBytes::Stored([].as_slice())
+        );
         assert_eq!(
             {
                 let outcome = store.queue_outbox(ReplicaOutboxWrite {
@@ -388,9 +418,9 @@ mod tests {
                     event_id: &1,
                 });
                 store = outcome.store;
-                outcome.bytes
+                outcome.removal
             },
-            Some(vec![1])
+            ReplicaOutboxRemovalResult::Removed(vec![1])
         );
         assert!(store.pending_outbox("drive").is_empty());
         assert_eq!(store.pending_outbox("github"), vec![(1, vec![3])]);
@@ -463,7 +493,10 @@ mod tests {
             },
             ReplicaInsertStatus::Conflict
         );
-        assert_eq!(store.get_bytes(&1), Some([1_u8].as_slice()));
+        assert_eq!(
+            store.get_bytes(&1),
+            ReplicaEventBytes::Stored([1_u8].as_slice())
+        );
     }
 
     proptest! {
@@ -504,7 +537,7 @@ mod tests {
 mod loom_tests {
     use std::panic;
 
-    use super::{ReplicaInsertStatus, ReplicaStore};
+    use super::{ReplicaEventBytes, ReplicaInsertStatus, ReplicaStore};
     use loom::sync::{Arc, Mutex};
     use loom::thread;
 
@@ -566,14 +599,17 @@ mod loom_tests {
                 ),
                 "one serialized writer inserts and the other observes a conflict"
             );
-            assert!(matches!(guard.get_bytes(&1), Some([1]) | Some([2])));
+            assert!(matches!(
+                guard.get_bytes(&1),
+                ReplicaEventBytes::Stored([1]) | ReplicaEventBytes::Stored([2])
+            ));
         });
     }
 }
 
 #[cfg(kani)]
 mod kani_proofs {
-    use super::ReplicaInsertStatus;
+    use super::{ReplicaEventWrite, ReplicaInsertStatus, ReplicaStore};
 
     #[kani::proof]
     fn immutable_insert_status_covers_every_existing_state() {
@@ -581,7 +617,16 @@ mod kani_proofs {
         let same_payload = kani::any::<bool>();
         let existing = [7_u8];
         let incoming = [if same_payload { 7 } else { 9 }];
-        let existing = has_existing.then_some(existing.as_slice());
+        let store = if has_existing {
+            ReplicaStore::new()
+                .put_event(ReplicaEventWrite {
+                    event_id: 1_u8,
+                    bytes: existing.to_vec(),
+                })
+                .store
+        } else {
+            ReplicaStore::new()
+        };
         let expected_status = if !has_existing {
             ReplicaInsertStatus::Inserted
         } else if same_payload {
@@ -591,7 +636,12 @@ mod kani_proofs {
         };
 
         assert_eq!(
-            ReplicaInsertStatus::classify(existing, &incoming),
+            store
+                .put_event(ReplicaEventWrite {
+                    event_id: 1_u8,
+                    bytes: incoming.to_vec()
+                })
+                .status,
             expected_status
         );
     }

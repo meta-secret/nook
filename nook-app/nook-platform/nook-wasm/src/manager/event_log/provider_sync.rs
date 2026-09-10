@@ -9,9 +9,11 @@ use crate::EventDbQueueOutboxEntry;
 use crate::EventDbRemoveOutboxEntry;
 use crate::EventDbSaveKeyEpoch;
 use crate::storage::event_db::{RemoteEventUnion, VaultEventPersistence};
+use nook_core::LocalEventBytes;
 use nook_core::{
     CheckedRemoteEvent, EventStorageBytes, MultiDeviceError, ProjectionEpoch, RemoteEventBatch,
-    RemoteEventWrites, StorageMode, VaultCrypto, VaultEvent, VaultMetaGraphProjection, VaultType,
+    RemoteEventWrites, RemoteStoreIdentity, StorageMode, VaultCrypto, VaultEvent,
+    VaultMetaGraphProjection, VaultType,
 };
 use std::collections::BTreeSet;
 
@@ -225,8 +227,9 @@ impl NookVaultManager {
             return Ok(());
         }
         let remote_events = self.fetch_current_provider_events(missing).await?;
-        let classification =
-            RemoteEventBatch::new(&remote_events).classify(Some(self.vault.store_id.as_str()))?;
+        let classification = RemoteEventBatch::new(&remote_events).classify(
+            RemoteStoreIdentity::Identified(self.vault.store_id.as_str()),
+        )?;
         self.guard_remote_event_log_classification("Sync provider", &classification)
     }
 
@@ -298,9 +301,14 @@ impl NookVaultManager {
                 .missing_event_ids(&remote_ids)
                 .into_iter()
                 .map(|event_id| {
-                    let bytes = local.get_bytes(&event_id).ok_or_else(|| {
-                        NookError::Database(format!("Local event {event_id} is missing"))
-                    })?;
+                    let bytes = match local.get_bytes(&event_id) {
+                        LocalEventBytes::Stored(bytes) => bytes,
+                        LocalEventBytes::UnknownEvent => {
+                            return Err(NookError::Database(format!(
+                                "Local event {event_id} is missing"
+                            )));
+                        }
+                    };
                     Ok((event_id, bytes))
                 })
                 .collect::<Result<Vec<_>, NookError>>()?;
@@ -362,8 +370,9 @@ impl NookVaultManager {
                 .cloned()
                 .collect::<BTreeSet<_>>();
             let fetched = self.fetch_current_provider_events(missing_ids).await?;
-            let classification =
-                RemoteEventBatch::new(&fetched).classify(Some(self.vault.store_id.as_str()))?;
+            let classification = RemoteEventBatch::new(&fetched).classify(
+                RemoteStoreIdentity::Identified(self.vault.store_id.as_str()),
+            )?;
             self.guard_remote_event_log_classification("Sync provider", &classification)?;
             for (event_id, bytes) in fetched {
                 if !CheckedRemoteEvent::parse(&event_id, &bytes)
@@ -485,8 +494,9 @@ impl NookVaultManager {
                 .map(|(event_id, bytes, _)| (event_id, bytes))
                 .collect();
         } else {
-            let classification = RemoteEventBatch::new(&parsed_records)
-                .classify(Some(self.vault.store_id.as_str()))?;
+            let classification = RemoteEventBatch::new(&parsed_records).classify(
+                RemoteStoreIdentity::Identified(self.vault.store_id.as_str()),
+            )?;
             self.guard_remote_event_log_classification("Backup folder", &classification)?;
             for (event_id, bytes) in parsed_records {
                 if !CheckedRemoteEvent::parse(&event_id, &bytes)

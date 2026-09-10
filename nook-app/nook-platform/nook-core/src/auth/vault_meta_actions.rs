@@ -1,5 +1,6 @@
 //! Owned actions for replaying and projecting vault metadata.
 
+use crate::EventLookup;
 use crate::MemberLabelState;
 use crate::{EpochMetadataState, EventGraph, MemberLabel, SymmetricKey, VaultOperation};
 use nook_auth2::BuildMembersRecordsRequest;
@@ -228,11 +229,14 @@ impl<'a> VaultMetaGraphProjection<'a> {
             .map_err(|error| MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
         let mut applier = VaultMetaOperationApplier::new(&mut rebuilt);
         for event_id in order {
-            let event = self.graph.get(&event_id).ok_or_else(|| {
-                MultiDeviceError::InvalidDeviceIdentity(format!(
-                    "Missing event {event_id} in graph."
-                ))
-            })?;
+            let event = match self.graph.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(MultiDeviceError::InvalidDeviceIdentity(format!(
+                        "Missing event {event_id} in graph."
+                    )));
+                }
+            };
             for operation in &event.body.operations {
                 applier.apply(&VaultMetaOperationRequest {
                     operation,
@@ -299,11 +303,14 @@ impl<'a> EventGraphDeviceAccess<'a> {
             .topological_order()
             .map_err(|error| MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
         for event_id in order {
-            let event = self.graph.get(&event_id).ok_or_else(|| {
-                MultiDeviceError::InvalidDeviceIdentity(format!(
-                    "Missing event {event_id} in graph."
-                ))
-            })?;
+            let event = match self.graph.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(MultiDeviceError::InvalidDeviceIdentity(format!(
+                        "Missing event {event_id} in graph."
+                    )));
+                }
+            };
             for operation in &event.body.operations {
                 match operation {
                     VaultOperation::JoinApproved {
@@ -366,11 +373,14 @@ impl<'a> EventGraphAuthorizationProjection<'a> {
             .topological_order()
             .map_err(|error| MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
         for event_id in order {
-            let event = self.graph.get(&event_id).ok_or_else(|| {
-                MultiDeviceError::InvalidDeviceIdentity(format!(
-                    "Missing event {event_id} in graph."
-                ))
-            })?;
+            let event = match self.graph.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(MultiDeviceError::InvalidDeviceIdentity(format!(
+                        "Missing event {event_id} in graph."
+                    )));
+                }
+            };
             for operation in &event.body.operations {
                 match operation {
                     VaultOperation::JoinApproved {

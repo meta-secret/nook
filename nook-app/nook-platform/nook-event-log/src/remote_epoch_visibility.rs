@@ -7,6 +7,7 @@
 )]
 
 use crate::GenesisImportRequest;
+use crate::LocalEventBytes;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{EventId, EventResult, EventStorageBytes, LocalEventStore, VaultEvent, VaultOperation};
@@ -24,16 +25,23 @@ impl VaultEvent {
     }
 }
 
+enum CheckpointCommit<'a> {
+    NotCheckpoint,
+    Commits(&'a EventId),
+}
+
 impl VaultEvent {
-    pub(crate) fn committed_epoch_parent(&self) -> Option<&EventId> {
+    fn committed_epoch_parent(&self) -> CheckpointCommit<'_> {
         let is_checkpoint = self
             .body
             .operations
             .iter()
             .any(|operation| matches!(operation, VaultOperation::EpochCheckpoint { .. }));
         match self.body.parents.as_slice() {
-            [parent] if is_checkpoint && self.body.key_epoch == *parent => Some(parent),
-            _ => None,
+            [parent] if is_checkpoint && self.body.key_epoch == *parent => {
+                CheckpointCommit::Commits(parent)
+            }
+            _ => CheckpointCommit::NotCheckpoint,
         }
     }
 }
@@ -51,12 +59,14 @@ impl LocalGraphProjection<'_> {
             if self.excluded.contains(&id) {
                 continue;
             }
-            let bytes =
-                self.local
-                    .get_bytes(&id)
-                    .ok_or_else(|| crate::EventError::MissingEvent {
+            let bytes = match self.local.get_bytes(&id) {
+                LocalEventBytes::Stored(bytes) => bytes,
+                LocalEventBytes::UnknownEvent => {
+                    return Err(crate::EventError::MissingEvent {
                         event_id: id.to_string(),
-                    })?;
+                    });
+                }
+            };
             events.insert(id, VaultEvent::parse_event_storage_bytes(&bytes)?);
         }
         for (id, bytes) in self.remote {
@@ -83,7 +93,10 @@ impl crate::EventGraph {
         let committed = self
             .applicable_events()
             .into_iter()
-            .filter_map(VaultEvent::committed_epoch_parent)
+            .filter_map(|event| match event.committed_epoch_parent() {
+                CheckpointCommit::Commits(parent) => Some(parent),
+                CheckpointCommit::NotCheckpoint => None,
+            })
             .cloned()
             .collect::<BTreeSet<_>>();
         let security_triggers = self
@@ -147,7 +160,7 @@ impl LocalEventStore {
 
 impl VaultEvent {
     fn publish_priority(&self) -> u8 {
-        if self.committed_epoch_parent().is_some() {
+        if matches!(self.committed_epoch_parent(), CheckpointCommit::Commits(_)) {
             0
         } else if self.starts_security_epoch() {
             2
@@ -449,8 +462,14 @@ mod tests {
         }?;
 
         assert!(imported.is_empty());
-        assert!(local.get_bytes(&trigger.0).is_none());
-        assert!(local.get_bytes(&descendant_id).is_none());
+        assert!(matches!(
+            local.get_bytes(&trigger.0),
+            LocalEventBytes::UnknownEvent
+        ));
+        assert!(matches!(
+            local.get_bytes(&descendant_id),
+            LocalEventBytes::UnknownEvent
+        ));
         assert_eq!(local.event_ids().len(), 1);
         Ok(())
     }

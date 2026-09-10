@@ -2,6 +2,7 @@
 
 use super::{NookVaultManager, VaultNameState};
 use crate::NookDatabase;
+use nook_core::LocalEventBytes;
 
 use crate::types::NookVaultAccessReport;
 use nook_core::VaultEvent;
@@ -67,7 +68,7 @@ impl NookVaultManager {
                 &self.vault.store_id,
             )?);
             for event_id in store.event_ids() {
-                let Some(bytes) = store.get_bytes(&event_id) else {
+                let LocalEventBytes::Stored(bytes) = store.get_bytes(&event_id) else {
                     warnings.push(format!(
                         "Local event {event_id} is listed but its bytes are missing."
                     ));

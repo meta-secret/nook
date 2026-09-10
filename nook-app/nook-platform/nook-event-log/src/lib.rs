@@ -51,21 +51,22 @@ pub use event_bytes::{CanonicalEventBodyBytes, EventStorageBytes};
 pub use fingerprint::SecretFingerprint;
 pub use graph::{
     EventGraph, EventGraphInsert, EventGraphInsertion, EventGraphRejection,
-    EventGraphReplacementEvidence, EventGraphVaultArchitecture, EventInsertStatus,
+    EventGraphReplacementEvidence, EventGraphVaultArchitecture, EventInsertStatus, EventLookup,
     EventPendingReason,
 };
 pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
-    ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,
-    ProjectionIntegrity, SecretReplacementConflict, SecurityConflict, VaultProjection,
+    EpochCheckpoint, ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin,
+    ProjectionEpoch, ProjectionIntegrity, SecretReplacementConflict, SecurityConflict,
+    VaultProjection,
 };
 pub use remote_epoch_visibility::RemoteEventWrites;
 pub use signing::SigningIdentity;
 pub use store::{
-    CheckedRemoteEvent, LocalEventAppend, LocalEventAppendOutcome, LocalEventStore,
-    LocalEventStoreRejection, LocalEventWrite, LocalOutboxRemoval, LocalOutboxRemoved,
-    LocalOutboxWrite, LocalRemoteUnion, LocalRemoteUnionOutcome, RemoteEventBatch,
-    RemoteEventLogClassification,
+    CheckedRemoteEvent, LocalEventAppend, LocalEventAppendOutcome, LocalEventBytes,
+    LocalEventStore, LocalEventStoreRejection, LocalEventWrite, LocalOutboxRemoval,
+    LocalOutboxRemovalResult, LocalOutboxRemoved, LocalOutboxWrite, LocalRemoteUnion,
+    LocalRemoteUnionOutcome, RemoteEventBatch, RemoteEventLogClassification, RemoteStoreIdentity,
 };
 
 // Re-export typed wire values that appear in the event-log public API.

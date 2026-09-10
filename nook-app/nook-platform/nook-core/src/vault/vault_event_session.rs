@@ -1,5 +1,6 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
+use crate::LocalEventBytes;
 use crate::ResolveMemberRosterRequest;
 use crate::{
     EpochMetadataState, EpochPasswordState, EventError, EventInsertStatus, VaultEpochError,
@@ -163,7 +164,10 @@ impl VaultEventSession {
         for (event, bytes) in events {
             let event_id = event.id()?;
             // Existing event IDs are idempotent, even if unrelated stored data is malformed.
-            if self.store.get_bytes(&event_id).is_none() {
+            if matches!(
+                self.store.get_bytes(&event_id),
+                LocalEventBytes::UnknownEvent
+            ) {
                 let graph = match candidate {
                     SessionCandidateGraph::Unloaded => self.store.load_graph(&self.store_id)?,
                     SessionCandidateGraph::Loaded(graph) => graph,
@@ -270,7 +274,7 @@ impl VaultEventSession {
             mut remote,
         } = input;
         for (event_id, bytes) in self.store.pending_outbox(provider_id) {
-            if remote.get_bytes(&event_id).is_none() {
+            if matches!(remote.get_bytes(&event_id), LocalEventBytes::UnknownEvent) {
                 remote = remote.put_event(crate::LocalEventWrite {
                     event_id: event_id.clone(),
                     bytes,

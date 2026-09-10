@@ -248,17 +248,18 @@ pub use multi_device::{
 
 pub use nook_event_log::{
     AppendEventInput, CanonicalEventBodyBytes, CheckedRemoteEvent, ConcurrentEpochRotations,
-    Ed25519Signature, EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, EpochRecord,
-    EpochRotationReason, EpochTransition, EventCount, EventGraph, EventGraphInsert,
-    EventGraphInsertion, EventGraphRejection, EventGraphVaultArchitecture, EventId,
-    EventInsertStatus, EventPendingReason, EventStorageBytes, GenesisImportPayload,
-    GenesisImportRequest, KeyEpoch, LocalEventAppend, LocalEventAppendOutcome, LocalEventStore,
-    LocalEventStoreRejection, LocalEventWrite, LocalOutboxRemoval, LocalOutboxRemoved,
+    Ed25519Signature, EncryptedSecretPayload, EpochCheckpoint, EpochMetadataState,
+    EpochPasswordState, EpochRecord, EpochRotationReason, EpochTransition, EventCount, EventGraph,
+    EventGraphInsert, EventGraphInsertion, EventGraphRejection, EventGraphVaultArchitecture,
+    EventId, EventInsertStatus, EventLookup, EventPendingReason, EventStorageBytes,
+    GenesisImportPayload, GenesisImportRequest, KeyEpoch, LocalEventAppend,
+    LocalEventAppendOutcome, LocalEventBytes, LocalEventStore, LocalEventStoreRejection,
+    LocalEventWrite, LocalOutboxRemoval, LocalOutboxRemovalResult, LocalOutboxRemoved,
     LocalOutboxWrite, LocalRemoteUnion, LocalRemoteUnionOutcome, ObservedHeads, ProjectedSecret,
     ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch, RemoteEventBatch,
-    RemoteEventLogClassification, RemoteEventWrites, SecretFingerprint, SecretReplacementConflict,
-    SecurityConflict, SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
-    VaultEventSchemaVersion, VaultOperation, VaultProjection,
+    RemoteEventLogClassification, RemoteEventWrites, RemoteStoreIdentity, SecretFingerprint,
+    SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload, SigningIdentity,
+    VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation, VaultProjection,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,

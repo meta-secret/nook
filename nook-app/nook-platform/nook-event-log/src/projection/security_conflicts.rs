@@ -250,7 +250,10 @@ mod tests {
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(projection.security_conflicts.is_empty());
-        assert_eq!(graph.current_epoch_checkpoint()?, Some(checkpoint_id));
+        assert_eq!(
+            graph.current_epoch_checkpoint()?,
+            EpochCheckpoint::Committed(checkpoint_id)
+        );
         assert!(graph.heads().contains(&request_id));
         Ok(())
     }

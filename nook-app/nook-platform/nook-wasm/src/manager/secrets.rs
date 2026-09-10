@@ -4,6 +4,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::{NookSecretPage, NookSecretRecord, NookSecretTypeFilter, NookTotpCode};
+use nook_core::LocalEventBytes;
 use nook_core::{
     SecretId, SecretValue, StorageMode, StoredRecordPayload, SymmetricKey, VaultOperation,
 };
@@ -558,11 +559,9 @@ mod wasm_tests {
             .store
             .event_ids()
             .into_iter()
-            .filter_map(|id| {
-                device_a
-                    .store
-                    .get_bytes(&id)
-                    .map(|bytes| (id, bytes.into()))
+            .filter_map(|id| match device_a.store.get_bytes(&id) {
+                LocalEventBytes::Stored(bytes) => Some((id, bytes.into())),
+                LocalEventBytes::UnknownEvent => None,
             })
             .collect();
         match device_b.union_remote(&genesis_events) {
@@ -600,22 +599,18 @@ mod wasm_tests {
             .store
             .event_ids()
             .into_iter()
-            .filter_map(|id| {
-                device_a
-                    .store
-                    .get_bytes(&id)
-                    .map(|bytes| (id, bytes.into()))
+            .filter_map(|id| match device_a.store.get_bytes(&id) {
+                LocalEventBytes::Stored(bytes) => Some((id, bytes.into())),
+                LocalEventBytes::UnknownEvent => None,
             })
             .collect();
         let b_events: Vec<_> = device_b
             .store
             .event_ids()
             .into_iter()
-            .filter_map(|id| {
-                device_b
-                    .store
-                    .get_bytes(&id)
-                    .map(|bytes| (id, bytes.into()))
+            .filter_map(|id| match device_b.store.get_bytes(&id) {
+                LocalEventBytes::Stored(bytes) => Some((id, bytes.into())),
+                LocalEventBytes::UnknownEvent => None,
             })
             .collect();
         match device_a.union_remote(&b_events) {
