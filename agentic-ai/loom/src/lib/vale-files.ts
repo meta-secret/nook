@@ -4,6 +4,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { lstatSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { LoomFailureCode } from '../loom-failure.ts';
+import { YamlNullBoundary } from '../codec/external.ts';
 import { type UntrustedYamlNode, UntrustedYamlBoundary } from './guards.ts';
 import { type CommandOutput, type RunCommandArgs, HostCommand } from './run.ts';
 
@@ -293,7 +294,10 @@ export class ValeRepositoryContainment {
   }
 }
 const VALE_ALERT_SCHEMA = z.strictObject({
-  Action: z.strictObject({ Name: z.string(), Params: z.null() }),
+  Action: z.strictObject({
+    Name: z.string(),
+    Params: z.custom(YamlNullBoundary.matches),
+  }),
   Span: z.tuple([z.int().positive(), z.int().positive()]),
   Check: z.string().min(1),
   Line: z.int().positive(),

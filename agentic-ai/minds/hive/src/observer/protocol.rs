@@ -184,7 +184,7 @@ impl ObserverCopy {
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TaskObservation {
-    Observed(ObservedTask),
+    Observed(Box<ObservedTask>),
     #[default]
     Missing,
 }
@@ -209,8 +209,8 @@ pub(super) enum ObserverRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "result", content = "value", rename_all = "snake_case")]
 pub(super) enum ObserverResponse {
-    Snapshot(ObserverSnapshot),
-    Task(#[serde(default)] TaskObservation),
+    Snapshot(Box<ObserverSnapshot>),
+    Task(#[serde(default)] Box<TaskObservation>),
     Error(String),
 }
 
@@ -269,7 +269,7 @@ impl ObserverStore for ObserverCoordinatorStore {
             })
             .await?
         {
-            ObserverResponse::Snapshot(snapshot) => Ok(snapshot),
+            ObserverResponse::Snapshot(snapshot) => Ok(*snapshot),
             response => {
                 return Err(crate::HiveError::message(format!(
                     "unexpected observer coordinator response: {response:?}"
@@ -290,7 +290,7 @@ impl ObserverStore for ObserverCoordinatorStore {
             })
             .await?
         {
-            ObserverResponse::Task(task) => Ok(task),
+            ObserverResponse::Task(task) => Ok(*task),
             response => {
                 return Err(crate::HiveError::message(format!(
                     "unexpected observer coordinator response: {response:?}"
@@ -320,11 +320,11 @@ mod tests {
             let (reader, mut writer) = stream.into_split();
             let mut requests = BufReader::new(reader).lines();
             let responses = [
-                ObserverResponse::Snapshot(super::super::ObserverSnapshot::fixture("en")),
-                ObserverResponse::Task(TaskObservation::Observed(
+                ObserverResponse::Snapshot(Box::new(super::super::ObserverSnapshot::fixture("en"))),
+                ObserverResponse::Task(Box::new(TaskObservation::Observed(Box::new(
                     super::super::ObservedTask::fixture("task-7"),
-                )),
-                ObserverResponse::Task(TaskObservation::Missing),
+                )))),
+                ObserverResponse::Task(Box::new(TaskObservation::Missing)),
                 ObserverResponse::Error("coordinator unavailable".into()),
             ];
             for response in responses {

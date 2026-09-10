@@ -158,6 +158,32 @@ impl WorkerStartup<'_> {
     }
 }
 
+pub(super) struct TaskClaim<'a, S> {
+    pub(super) store: &'a S,
+    pub(super) agent_id: &'a AgentId,
+    pub(super) lease_seconds: i64,
+    pub(super) shutdown: watch::Receiver<bool>,
+    pub(super) lifecycle_marker: &'a Path,
+}
+struct ShutdownLease<'a, S> {
+    store: &'a S,
+    agent_id: &'a AgentId,
+}
+pub(super) struct WorkerCompletionMarker<'a> {
+    pub(super) path: &'a Path,
+}
+pub(super) struct WorkerStartup<'a> {
+    pub(super) workspace: &'a Path,
+    pub(super) pod_name: &'a str,
+}
+pub(super) struct WorkerShutdown {
+    pub(super) receiver: watch::Receiver<bool>,
+}
+pub(super) struct ClaimCompletion<F> {
+    pub(super) claim: F,
+    pub(super) shutdown: watch::Receiver<bool>,
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -170,8 +196,8 @@ mod tests {
 
     use super::{ClaimCompletion, ClaimStep, ClaimWindow, TaskClaim, WorkerStartup};
     use crate::model::{
-        ActivityLease, AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
-        EnqueueTask, LeaseToken, TaskActivity, TaskId,
+        ActiveDelivery, ActiveDeliveryQuery, ActivityLease, AgentId, AttemptId, CancellationTarget,
+        ClaimOutcome, ClaimedTask, Completion, EnqueueTask, LeaseToken, TaskActivity, TaskId,
     };
     use crate::store::TaskStore;
 
@@ -336,9 +362,9 @@ mod tests {
 
         async fn active_delivery(
             &self,
-            request: crate::model::ActiveDeliveryQuery<'_>,
-        ) -> crate::HiveResult<crate::model::ActiveDelivery> {
-            let crate::model::ActiveDeliveryQuery {
+            request: ActiveDeliveryQuery<'_>,
+        ) -> crate::HiveResult<ActiveDelivery> {
+            let ActiveDeliveryQuery {
                 source_commit: _source_commit,
                 kind: _kind,
             } = request;
@@ -416,11 +442,8 @@ mod tests {
             Ok(true)
         }
 
-        async fn complete(
-            &self,
-            completion: crate::model::Completion<'_>,
-        ) -> crate::HiveResult<bool> {
-            let crate::model::Completion {
+        async fn complete(&self, completion: Completion<'_>) -> crate::HiveResult<bool> {
+            let Completion {
                 task: _task,
                 agent_id: _agent_id,
                 relevance: _obsolete,
@@ -449,30 +472,4 @@ mod tests {
             unreachable!("not used by claim lifecycle test")
         }
     }
-}
-
-pub(super) struct TaskClaim<'a, S> {
-    pub(super) store: &'a S,
-    pub(super) agent_id: &'a AgentId,
-    pub(super) lease_seconds: i64,
-    pub(super) shutdown: watch::Receiver<bool>,
-    pub(super) lifecycle_marker: &'a Path,
-}
-struct ShutdownLease<'a, S> {
-    store: &'a S,
-    agent_id: &'a AgentId,
-}
-pub(super) struct WorkerCompletionMarker<'a> {
-    pub(super) path: &'a Path,
-}
-pub(super) struct WorkerStartup<'a> {
-    pub(super) workspace: &'a Path,
-    pub(super) pod_name: &'a str,
-}
-pub(super) struct WorkerShutdown {
-    pub(super) receiver: watch::Receiver<bool>,
-}
-pub(super) struct ClaimCompletion<F> {
-    pub(super) claim: F,
-    pub(super) shutdown: watch::Receiver<bool>,
 }

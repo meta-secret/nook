@@ -16,7 +16,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     DeviceAccessProtectionKind,
     DeviceProtectionStatus,
     NookIdentityLocalAccessKind,
-    set_vault_session_locked,
   } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
@@ -51,6 +50,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     type IdentityBridgeVaultSelection,
   } from './devices-access/identity-bridge-model'
   import { PasskeyCardPresentation } from './devices-access/passkey-card'
+  import { IdentitySessionTransition } from './devices-access/identity-session-transition'
+  import { IdentityVaultSelection } from './devices-access/identity-vault-selection'
 
   let {
     vault,
@@ -80,15 +81,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   let snapshotLoadGeneration = 0
 
   function clearPriorIdentitySession(): void {
-    set_vault_session_locked(true)
-    vault.clearUnlockedSession(false)
-    vault.clearIdentityProviderSession()
-    // The selected identity owns a separate active-vault and provider session.
-    // The local vault catalog is installation-wide and remains discoverable,
-    // but no catalog entry is active for the new identity until it authenticates
-    // and explicitly opens one.
-    vault.localVaultPresent = false
-    vault.providersLoaded = false
+    new IdentitySessionTransition(vault).clearPriorIdentity()
   }
 
   async function focusAfterProtectionReady(
@@ -141,10 +134,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
 
   function keepCurrentIdentitySession(): void {}
 
-  async function retryDashboard(): Promise<void> {
-    await reloadSnapshots()
-  }
-
   function chooseIdentity(identityId: string): void {
     if (directoryLoadState.kind !== IdentityDirectoryLoadKind.Ready) return
     directoryLoadState = {
@@ -171,37 +160,11 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   }
 
   function resetSelectedVaultForIdentity(): void {
-    if (
-      loadState.kind !== DashboardLoadKind.Ready ||
-      directoryLoadState.kind !== IdentityDirectoryLoadKind.Ready
-    ) {
-      return
-    }
-    const identitySelection = new IdentityDirectoryPresentation(
-      directoryLoadState.view,
-    ).selectedIdentity()
-    if (identitySelection.kind === IdentityDirectorySelectionKind.Empty) {
-      selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
-      return
-    }
-    if (identitySelection.identity.vaults.length === 0) {
-      selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
-      return
-    }
-    if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
-      const selectedVaultId = selectedVault.storeId
-      if (
-        identitySelection.identity.vaults.some(
-          (entry) => entry.storeId === selectedVaultId,
-        )
-      ) {
-        return
-      }
-    }
-    selectedVault = {
-      kind: IdentityBridgeVaultSelectionKind.Selected,
-      storeId: identitySelection.identity.vaults[0].storeId,
-    }
+    selectedVault = new IdentityVaultSelection({
+      loadState,
+      directoryLoadState,
+      selectedVault,
+    }).reset()
   }
 
   async function renamePasskey(name: string): Promise<boolean> {
@@ -495,7 +458,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
         variant="outline"
         class="mt-3"
         data-testid="devices-access-retry"
-        onclick={() => void retryDashboard()}
+        onclick={() => void reloadSnapshots()}
       >
         <RefreshCw class="size-4" />
         {vault.t(I18N_KEYS.DevicesAccessTryAgain)}
@@ -522,7 +485,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
         variant="outline"
         class="mt-3"
         data-testid="devices-access-retry"
-        onclick={() => void retryDashboard()}
+        onclick={() => void reloadSnapshots()}
       >
         <RefreshCw class="size-4" />
         {vault.t(I18N_KEYS.DevicesAccessTryAgain)}

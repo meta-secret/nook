@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter, Result as FormatResult};
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(from = "String", into = "String")]
 pub enum CheckExecution {
@@ -33,8 +35,8 @@ impl From<CheckExecution> for String {
         }
     }
 }
-impl std::fmt::Display for CheckExecution {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for CheckExecution {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FormatResult {
         f.write_str(self.as_str())
     }
 }
@@ -82,8 +84,8 @@ impl From<CheckConclusion> for String {
         }
     }
 }
-impl std::fmt::Display for CheckConclusion {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for CheckConclusion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FormatResult {
         f.write_str(self.as_str())
     }
 }
@@ -133,8 +135,8 @@ impl From<RunExecution> for String {
         }
     }
 }
-impl std::fmt::Display for RunExecution {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for RunExecution {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FormatResult {
         f.write_str(self.as_str())
     }
 }
@@ -182,8 +184,8 @@ impl From<RunConclusion> for String {
         }
     }
 }
-impl std::fmt::Display for RunConclusion {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for RunConclusion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FormatResult {
         f.write_str(self.as_str())
     }
 }

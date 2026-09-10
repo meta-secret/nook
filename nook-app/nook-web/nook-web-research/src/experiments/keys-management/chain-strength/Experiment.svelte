@@ -40,7 +40,19 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   import { Fingerprint, Laptop, Vault as VaultIcon } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
-  import { type Device, GraphId, HereKind, type KeyGraph, KeyStore, NodeKind, type NodeRef, type Passkey, Reach, type Vault, KeyGraphView } from '../_shared/key-graph'
+  import {
+    type Device,
+    GraphId,
+    HereKind,
+    type KeyGraph,
+    KeyStore,
+    NodeKind,
+    type NodeRef,
+    type Passkey,
+    Reach,
+    type Vault,
+    KeyGraphView,
+  } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
   import { PathReach, Redundancy } from './chain-grade'
 
@@ -81,10 +93,12 @@ get a quiet footer: they exist, and that is all this browser can say about them.
 
   let { navigate }: ExperimentProps = $props()
   let graphId = $state(GraphId.Tangle)
-  let selected = $state<NodeRef>(new KeyGraphView(graphById(GraphId.Tangle)).defaultNode(KeyGraphView.graphByIdst graph = $derived(KeyGraphView.graphById(graphId))
+  let selected = $state<NodeRef>(
+    new KeyGraphView(KeyGraphView.graphById(GraphId.Tangle)).defaultNode(),
+  )
+  const graph = $derived(KeyGraphView.graphById(graphId))
   const highlight = $derived.by(() => {
-    const selectionContext: Parameters<KeyGraphView["highlightFor"]>[0] = {
-
+    const selectionContext: Parameters<KeyGraphView['highlightFor']>[0] = {
       node: selected,
     }
     return new KeyGraphView(graph).highlightFor(selectionContext)
@@ -100,8 +114,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   )
   const others = $derived(
     graph.devices.filter((device) => {
-      const nookNamedArgument237: Parameters<KeyGraphView["isHere"]>[0] = {
-
+      const nookNamedArgument237: Parameters<KeyGraphView['isHere']>[0] = {
         device,
       }
       return !new KeyGraphView(graph).isHere(nookNamedArgument237)
@@ -119,8 +132,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     device,
     passkey,
   }: StrandForArgs): Strand {
-    const nookNamedArgument238: Parameters<KeyGraphView["isHere"]>[0] = {
-
+    const nookNamedArgument238: Parameters<KeyGraphView['isHere']>[0] = {
       device,
     }
     const mine = new KeyGraphView(source).isHere(nookNamedArgument238)
@@ -143,27 +155,30 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   }
 
   function readFor({ source, vault }: ReadForArgs): VaultRead {
-    const nookNamedArgument240: Parameters<KeyGraphView["devicesForVault"]>[0] = {
-
-      vault,
-    }
-    const discoveredStrands = new KeyGraphView(source).devicesForVault(nookNamedArgument240).flatMap(
-      (device) => {
-        const nookNamedArgument241: Parameters<KeyGraphView["passkeysForDevice"]>[0] = {
-
+    const nookNamedArgument240: Parameters<KeyGraphView['devicesForVault']>[0] =
+      {
+        vault,
+      }
+    const discoveredStrands = new KeyGraphView(source)
+      .devicesForVault(nookNamedArgument240)
+      .flatMap((device) => {
+        const nookNamedArgument241: Parameters<
+          KeyGraphView['passkeysForDevice']
+        >[0] = {
           device,
         }
-        return new KeyGraphView(source).passkeysForDevice(nookNamedArgument241).map((passkey) => {
-          const nookNamedArgument242: Parameters<typeof strandFor>[0] = {
-            source,
-            vault,
-            device,
-            passkey,
-          }
-          return strandFor(nookNamedArgument242)
-        })
-      },
-    )
+        return new KeyGraphView(source)
+          .passkeysForDevice(nookNamedArgument241)
+          .map((passkey) => {
+            const nookNamedArgument242: Parameters<typeof strandFor>[0] = {
+              source,
+              vault,
+              device,
+              passkey,
+            }
+            return strandFor(nookNamedArgument242)
+          })
+      })
     const reachOrder = [
       PathReach.Now,
       PathReach.OtherDevice,
@@ -272,9 +287,9 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   function usableFrom(passkey: Passkey): boolean {
     return (
       passkey.reach === Reach.Here &&
-      new KeyGraphView(graph).hereDevices().some((device) =>
-        device.passkeyIds.includes(passkey.id),
-      )
+      new KeyGraphView(graph)
+        .hereDevices()
+        .some((device) => device.passkeyIds.includes(passkey.id))
     )
   }
 
@@ -284,11 +299,14 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   }
 
   function vaultCount(passkey: Passkey): string {
-    const nookNamedArgument244: Parameters<KeyGraphView["vaultsForPasskey"]>[0] = {
-
+    const nookNamedArgument244: Parameters<
+      KeyGraphView['vaultsForPasskey']
+    >[0] = {
       passkeyId: passkey.id,
     }
-    const count = new KeyGraphView(graph).vaultsForPasskey(nookNamedArgument244).length
+    const count = new KeyGraphView(graph).vaultsForPasskey(
+      nookNamedArgument244,
+    ).length
     return count === 1 ? '1 vault' : `${count} vaults`
   }
 
@@ -304,7 +322,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     light
     onGraph={(next) => {
       graphId = next
-      selected = defaultNode(graphById(next))
+      selected = new KeyGraphView(KeyGraphView.graphById(next)).defaultNode()
     }}
   />
 

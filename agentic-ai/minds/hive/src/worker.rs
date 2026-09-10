@@ -21,8 +21,8 @@ use crate::auth::{AuthBroker, BrokerExternalAuth};
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::delivery::MainRepairDelivery;
 use crate::model::{
-    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimedTask, CompletionArtifact, EnqueueTask,
-    TaskActivity, TaskTrigger, TerminalResult,
+    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimedTask, Completion, CompletionArtifact,
+    CompletionRelevance, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
 };
 use crate::store::TaskStore;
 
@@ -335,7 +335,7 @@ impl<S: TaskStore> Worker<S> {
                     } => {
                         let accepted = self
                             .store
-                            .complete(crate::model::Completion {
+                            .complete(Completion {
                                 task,
                                 agent_id: &self.config.agent_id,
                                 relevance,
@@ -343,7 +343,7 @@ impl<S: TaskStore> Worker<S> {
                                 artifact: &artifact,
                             })
                             .await?;
-                        if !accepted && relevance == crate::model::CompletionRelevance::Obsolete {
+                        if !accepted && relevance == CompletionRelevance::Obsolete {
                             if !self.store.release(task, &self.config.agent_id).await? {
                                 return Err(WorkerCancellationRequested.into());
                             }
@@ -476,7 +476,7 @@ enum TaskDisposition {
     Completed {
         summary: String,
         artifact: CompletionArtifact,
-        relevance: crate::model::CompletionRelevance,
+        relevance: CompletionRelevance,
     },
     Blocked {
         blocker: EnqueueTask,
@@ -573,14 +573,20 @@ impl TaskDisposition {
     }
 }
 
+struct BlockerDisposition<'a> {
+    task: &'a ClaimedTask,
+    summary: &'a str,
+    blocker: &'a BlockerRequest,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         BlockerDisposition, MAX_PERSISTED_RESULT_BYTES, TaskActivityStream, TaskDisposition,
     };
     use crate::model::{
-        ActivityKind, AgentId, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact,
-        LeaseToken, TaskActivity, TaskId, TerminalResult,
+        ActivityKind, AgentId, AttemptId, BlockerRequest, ClaimedTask, Completion,
+        CompletionArtifact, CompletionRelevance, LeaseToken, TaskActivity, TaskId, TerminalResult,
     };
     use crate::store::TaskStore;
     use crate::store::tests::{MemoryStore, task};
@@ -620,13 +626,13 @@ mod tests {
         assert_eq!(
             task.kind
                 .completion_relevance(result.completion_relevance()),
-            crate::model::CompletionRelevance::Current
+            CompletionRelevance::Current
         );
         task.kind = "blocker".into();
         assert_eq!(
             task.kind
                 .completion_relevance(result.completion_relevance()),
-            crate::model::CompletionRelevance::Obsolete
+            CompletionRelevance::Obsolete
         );
         Ok(())
     }
@@ -732,7 +738,7 @@ mod tests {
             dependency_artifacts: Vec::new(),
         };
 
-        let prompt = (&task).task_prompt();
+        let prompt = task.task_prompt();
         assert!(prompt.contains("prerequisite-ownership task"));
         assert!(prompt.contains("check out that existing PR branch"));
         assert!(prompt.contains("This task is a dependency leaf"));
@@ -771,7 +777,7 @@ mod tests {
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let prompt = (&task).task_prompt();
+        let prompt = task.task_prompt();
 
         assert!(prompt.contains("GH_TOKEN"));
         assert!(prompt.contains("codex/hive-main-failure-recovery"));
@@ -795,7 +801,7 @@ mod tests {
         let store = MemoryStore::default();
         store.enqueue(&task("activity-task", Vec::new())?).await?;
         let agent = AgentId::try_from("activity-agent")?;
-        let claimed = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let claimed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         let (sender, receiver) = mpsc::unbounded_channel();
         assert!(
             sender
@@ -832,10 +838,10 @@ mod tests {
 
         assert!(
             store
-                .complete(crate::model::Completion {
+                .complete(Completion {
                     task: &claimed,
                     agent_id: &agent,
-                    relevance: crate::model::CompletionRelevance::Current,
+                    relevance: CompletionRelevance::Current,
                     summary: "activity captured",
                     artifact: &CompletionArtifact::NotProduced
                 })
@@ -868,10 +874,4 @@ mod tests {
         ));
         Ok(())
     }
-}
-
-struct BlockerDisposition<'a> {
-    task: &'a ClaimedTask,
-    summary: &'a str,
-    blocker: &'a BlockerRequest,
 }

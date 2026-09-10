@@ -1,4 +1,5 @@
 use super::*;
+use serde::de::value::StringDeserializer;
 
 #[derive(Debug, Clone)]
 pub enum GitHubCredential {
@@ -63,9 +64,9 @@ impl CodexOptions {
                 .insert("GITHUB_TOKEN".to_owned(), github_token.clone());
         }
         let model_reasoning_effort =
-            serde::Deserialize::deserialize(serde::de::value::StringDeserializer::<
-                serde_json::Error,
-            >::new(options.reasoning_effort.clone()))
+            serde::Deserialize::deserialize(StringDeserializer::<serde_json::Error>::new(
+                options.reasoning_effort.clone(),
+            ))
             .map_err(|error| {
                 CodexError::Configuration(format!(
                     "invalid reasoning effort `{}`: {error}",

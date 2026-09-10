@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Formatter, Result as FormatResult};
+
 #[derive(Default, serde::Deserialize)]
 #[serde(untagged)]
 enum ReviewCursor {
@@ -9,8 +11,8 @@ enum DeploymentObservation {
     NoStatus,
     Status(String),
 }
-impl std::fmt::Debug for DeploymentObservation {
-    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for DeploymentObservation {
+    fn fmt(&self, output: &mut Formatter<'_>) -> FormatResult {
         match self {
             Self::NoStatus => output.write_str("None"),
             Self::Status(status) => output.debug_tuple("Some").field(status).finish(),

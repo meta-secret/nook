@@ -593,7 +593,7 @@ mod tests {
         }
         assert!(ClaimOutcome::NoTask.is_idle());
         assert_eq!(
-            crate::model::ClaimedTask::try_from(ClaimOutcome::NoTask),
+            ClaimedTask::try_from(ClaimOutcome::NoTask),
             Err(ModelError::NoClaimableTask)
         );
         Ok(())

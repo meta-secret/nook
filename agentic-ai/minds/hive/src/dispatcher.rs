@@ -39,7 +39,9 @@ use crate::HiveContext;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
-use crate::model::{EnqueueTask, TaskId, TaskTrigger};
+use crate::model::{
+    ActiveDelivery, ActiveDeliveryQuery, Completion, EnqueueTask, TaskId, TaskKind, TaskTrigger,
+};
 use crate::store::TaskStore;
 
 mod github;
@@ -167,10 +169,10 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             }
             let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
             if body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER) {
-                if let crate::model::ActiveDelivery::Active(task_id) = store
-                    .active_delivery(crate::model::ActiveDeliveryQuery {
+                if let ActiveDelivery::Active(task_id) = store
+                    .active_delivery(ActiveDeliveryQuery {
                         source_commit: &source_commit,
-                        kind: &crate::model::TaskKind::from("main-repair"),
+                        kind: &TaskKind::from("main-repair"),
                     })
                     .await?
                 {
@@ -241,10 +243,10 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
         run_attempt: u64,
     ) -> crate::HiveResult<()> {
         let task_id = TaskId::main_failure_task_id(task_base, run_id, run_attempt)?;
-        if let crate::model::ActiveDelivery::Active(active_id) = store
-            .active_delivery(crate::model::ActiveDeliveryQuery {
+        if let ActiveDelivery::Active(active_id) = store
+            .active_delivery(ActiveDeliveryQuery {
                 source_commit,
-                kind: &crate::model::TaskKind::from("main-repair"),
+                kind: &TaskKind::from("main-repair"),
             })
             .await?
         {
@@ -467,7 +469,8 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::model::{
-        AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, EnqueueTask, LeaseToken, TaskId,
+        ActiveDelivery, ActiveDeliveryQuery, AgentId, CancellationTarget, ClaimOutcome,
+        ClaimedTask, Completion, EnqueueTask, LeaseToken, TaskId,
     };
     use crate::store::TaskStore;
 
@@ -478,7 +481,7 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct RecordingStore {
-        active: Arc<Mutex<crate::model::ActiveDelivery>>,
+        active: Arc<Mutex<ActiveDelivery>>,
         cancelled: Arc<Mutex<Vec<TaskId>>>,
         enqueued: Arc<Mutex<Vec<TaskId>>>,
     }
@@ -500,9 +503,9 @@ mod tests {
         }
         async fn active_delivery(
             &self,
-            request: crate::model::ActiveDeliveryQuery<'_>,
-        ) -> crate::HiveResult<crate::model::ActiveDelivery> {
-            let crate::model::ActiveDeliveryQuery {
+            request: ActiveDeliveryQuery<'_>,
+        ) -> crate::HiveResult<ActiveDelivery> {
+            let ActiveDeliveryQuery {
                 source_commit: _,
                 kind: _,
             } = request;
@@ -550,11 +553,8 @@ mod tests {
         async fn release(&self, _: &ClaimedTask, _: &AgentId) -> crate::HiveResult<bool> {
             unreachable!()
         }
-        async fn complete(
-            &self,
-            completion: crate::model::Completion<'_>,
-        ) -> crate::HiveResult<bool> {
-            let crate::model::Completion {
+        async fn complete(&self, completion: Completion<'_>) -> crate::HiveResult<bool> {
+            let Completion {
                 task: _,
                 agent_id: _,
                 relevance: _,
@@ -700,7 +700,7 @@ mod tests {
             .active
             .lock()
             .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))? =
-            crate::model::ActiveDelivery::Active(current);
+            ActiveDelivery::Active(current);
 
         WorkbenchDispatcher::reconcile_delivery(
             &store,
@@ -760,7 +760,7 @@ mod tests {
             .active
             .lock()
             .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))? =
-            crate::model::ActiveDelivery::Active(old.clone());
+            ActiveDelivery::Active(old.clone());
 
         assert!(
             WorkbenchDispatcher::reconcile_delivery(
@@ -794,7 +794,7 @@ mod tests {
             .active
             .lock()
             .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))? =
-            crate::model::ActiveDelivery::Idle;
+            ActiveDelivery::Idle;
         WorkbenchDispatcher::reconcile_delivery(
             &store,
             "abcdef",

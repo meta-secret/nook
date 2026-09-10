@@ -12,8 +12,9 @@ pub(crate) mod tests {
 
     use super::TaskStore;
     use crate::model::{
-        ActivityLease, AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
-        CompletionArtifact, EnqueueTask, LeaseToken, TaskActivity, TaskId, TaskTrigger,
+        ActiveDelivery, ActiveDeliveryQuery, ActivityLease, AgentId, AttemptId, CancellationTarget,
+        ClaimOutcome, ClaimedTask, Completion, CompletionArtifact, CompletionRelevance,
+        EnqueueTask, LeaseToken, TaskActivity, TaskId, TaskKind, TaskTrigger,
     };
 
     #[derive(Debug, Clone)]
@@ -181,9 +182,9 @@ pub(crate) mod tests {
 
         async fn active_delivery(
             &self,
-            request: crate::model::ActiveDeliveryQuery<'_>,
-        ) -> crate::HiveResult<crate::model::ActiveDelivery> {
-            let crate::model::ActiveDeliveryQuery {
+            request: ActiveDeliveryQuery<'_>,
+        ) -> crate::HiveResult<ActiveDelivery> {
+            let ActiveDeliveryQuery {
                 source_commit,
                 kind,
             } = request;
@@ -197,8 +198,8 @@ pub(crate) mod tests {
                         && &task.definition.kind == kind
                         && matches!(task.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                 })
-                .map(|task| crate::model::ActiveDelivery::Active(task.definition.id.clone()))
-                .unwrap_or(crate::model::ActiveDelivery::Idle))
+                .map(|task| ActiveDelivery::Active(task.definition.id.clone()))
+                .unwrap_or(ActiveDelivery::Idle))
         }
 
         async fn cancel(&self, task_id: &TaskId, _reason: &str) -> crate::HiveResult<bool> {
@@ -414,11 +415,8 @@ pub(crate) mod tests {
                 }))
         }
 
-        async fn complete(
-            &self,
-            completion: crate::model::Completion<'_>,
-        ) -> crate::HiveResult<bool> {
-            let crate::model::Completion {
+        async fn complete(&self, completion: Completion<'_>) -> crate::HiveResult<bool> {
+            let Completion {
                 task: claimed,
                 agent_id: _agent_id,
                 relevance,
@@ -438,7 +436,7 @@ pub(crate) mod tests {
                 })
                 .map(|(_, owner)| owner)
                 .collect::<Vec<_>>();
-            let retirement_guard_matches = relevance == crate::model::CompletionRelevance::Current
+            let retirement_guard_matches = relevance == CompletionRelevance::Current
                 || (!claimed.owning_repairs.is_empty()
                     && active_owners.len() == claimed.owning_repairs.len()
                     && active_owners.iter().all(|owner| {
@@ -453,7 +451,7 @@ pub(crate) mod tests {
                 && retirement_guard_matches;
             if accepted {
                 task.status = "COMPLETED";
-                task.obsolete = matches!(relevance, crate::model::CompletionRelevance::Obsolete);
+                task.obsolete = matches!(relevance, CompletionRelevance::Obsolete);
                 task.lease = TestLease::Unleased;
             }
             let completed = tasks
@@ -628,7 +626,7 @@ pub(crate) mod tests {
             .await?;
         let agent = AgentId::try_from("agent")?;
 
-        let first = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let first = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(first.id, dependency.id);
         assert!(store.claim(&agent, 300).await?.is_idle());
         Ok(())
@@ -660,21 +658,21 @@ pub(crate) mod tests {
             .await?;
         let agent = AgentId::try_from("agent")?;
 
-        let rearmed_child = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let rearmed_child = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(rearmed_child.id, child.id);
         assert_eq!(rearmed_child.attempt_number, 3);
         assert!(
             store
-                .complete(crate::model::Completion {
+                .complete(Completion {
                     task: &rearmed_child,
                     agent_id: &agent,
-                    relevance: crate::model::CompletionRelevance::Current,
+                    relevance: CompletionRelevance::Current,
                     summary: "child repaired",
                     artifact: &CompletionArtifact::NotProduced
                 })
                 .await?
         );
-        let rearmed_parent = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let rearmed_parent = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(rearmed_parent.id, parent.id);
         assert_eq!(rearmed_parent.attempt_number, 3);
         Ok(())
@@ -686,9 +684,9 @@ pub(crate) mod tests {
         store.enqueue(&task("task-1", Vec::new())?).await?;
         let agent = AgentId::try_from("agent")?;
 
-        let first = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let first = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert!(store.release(&first, &agent).await?);
-        let replacement = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let replacement = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
 
         assert_eq!(replacement.attempt_number, 1);
         Ok(())
@@ -700,7 +698,7 @@ pub(crate) mod tests {
         let store = MemoryStore::default();
         store.enqueue(&task("original", Vec::new())?).await?;
         let agent = AgentId::try_from("agent")?;
-        let original = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let original = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         let mut blocker = task("blocker", Vec::new())?;
         blocker.priority = 100;
 
@@ -709,20 +707,20 @@ pub(crate) mod tests {
                 .block(&original, &agent, &blocker, "blocked by prerequisite")
                 .await?
         );
-        let blocker_claim = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let blocker_claim = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(blocker_claim.id, blocker.id);
         assert!(
             store
-                .complete(crate::model::Completion {
+                .complete(Completion {
                     task: &blocker_claim,
                     agent_id: &agent,
-                    relevance: crate::model::CompletionRelevance::Current,
+                    relevance: CompletionRelevance::Current,
                     summary: "blocker fixed",
                     artifact: &CompletionArtifact::NotProduced
                 })
                 .await?
         );
-        let resumed = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let resumed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(resumed.id, original.id);
         assert_eq!(resumed.attempt_number, 1);
         Ok(())
@@ -735,9 +733,9 @@ pub(crate) mod tests {
         store.enqueue(&definition).await?;
         let agent_a = AgentId::try_from("agent-a")?;
         let agent_b = AgentId::try_from("agent-b")?;
-        let stale = crate::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
+        let stale = ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
         store.expire(&definition.id)?;
-        let current = crate::model::ClaimedTask::try_from(store.claim(&agent_b, 300).await?)?;
+        let current = ClaimedTask::try_from(store.claim(&agent_b, 300).await?)?;
 
         assert_ne!(stale.lease_token, current.lease_token);
         assert_eq!(current.attempt_number, 2);
@@ -748,10 +746,10 @@ pub(crate) mod tests {
         );
         assert!(
             !store
-                .complete(crate::model::Completion {
+                .complete(Completion {
                     task: &stale,
                     agent_id: &agent_a,
-                    relevance: crate::model::CompletionRelevance::Current,
+                    relevance: CompletionRelevance::Current,
                     summary: "late",
                     artifact: &CompletionArtifact::NotProduced
                 })
@@ -759,10 +757,10 @@ pub(crate) mod tests {
         );
         assert!(
             store
-                .complete(crate::model::Completion {
+                .complete(Completion {
                     task: &current,
                     agent_id: &agent_b,
-                    relevance: crate::model::CompletionRelevance::Current,
+                    relevance: CompletionRelevance::Current,
                     summary: "done",
                     artifact: &CompletionArtifact::NotProduced
                 })
@@ -777,7 +775,7 @@ pub(crate) mod tests {
         let definition = task("main-failure-sha", Vec::new())?;
         store.enqueue(&definition).await?;
         let agent = AgentId::try_from("agent")?;
-        let stale = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let stale = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
 
         assert!(
             store
@@ -791,22 +789,22 @@ pub(crate) mod tests {
         );
         assert_eq!(
             store
-                .active_delivery(crate::model::ActiveDeliveryQuery {
+                .active_delivery(ActiveDeliveryQuery {
                     source_commit: "0123456789abcdef0123456789abcdef01234567",
-                    kind: &crate::model::TaskKind::from("code")
+                    kind: &TaskKind::from("code")
                 })
                 .await?,
-            crate::model::ActiveDelivery::Active(definition.id.clone())
+            ActiveDelivery::Active(definition.id.clone())
         );
         assert!(store.acknowledge_cancellation(&stale, &agent).await?);
         assert_eq!(
             store
-                .active_delivery(crate::model::ActiveDeliveryQuery {
+                .active_delivery(ActiveDeliveryQuery {
                     source_commit: "0123456789abcdef0123456789abcdef01234567",
-                    kind: &crate::model::TaskKind::from("code")
+                    kind: &TaskKind::from("code")
                 })
                 .await?,
-            crate::model::ActiveDelivery::Idle
+            ActiveDelivery::Idle
         );
         assert!(store.claim(&agent, 300).await?.is_idle());
         Ok(())
@@ -818,7 +816,7 @@ pub(crate) mod tests {
         let definition = task("main-failure-failed-sha", Vec::new())?;
         store.enqueue(&definition).await?;
         let agent = AgentId::try_from("agent")?;
-        let claimed = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let claimed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert!(store.fail(&claimed, &agent, "terminal failure").await?);
 
         assert!(
@@ -836,7 +834,7 @@ pub(crate) mod tests {
         let root = task("main-failure-sha", Vec::new())?;
         store.enqueue(&root).await?;
         let agent = AgentId::try_from("agent")?;
-        let claimed_root = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let claimed_root = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         let blocker = task("main-failure-sha-blocker", Vec::new())?;
         assert!(
             store
@@ -855,7 +853,7 @@ pub(crate) mod tests {
         let root = task("main-failure-sha", Vec::new())?;
         store.enqueue(&root).await?;
         let agent = AgentId::try_from("agent")?;
-        let claimed_root = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let claimed_root = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         let blocker = task("shared-blocker", Vec::new())?;
         assert!(
             store
@@ -867,7 +865,7 @@ pub(crate) mod tests {
             .await?;
 
         assert!(store.cancel(&root.id, "deferred E2E-only rerun").await?);
-        let preserved = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let preserved = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(preserved.id, blocker.id);
         Ok(())
     }
@@ -879,13 +877,13 @@ pub(crate) mod tests {
         let old = task("main-failure-sha-run-1-attempt-1", Vec::new())?;
         store.enqueue(&old).await?;
         let agent = AgentId::try_from("agent")?;
-        let completed = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let completed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert!(
             store
-                .complete(crate::model::Completion {
+                .complete(Completion {
                     task: &completed,
                     agent_id: &agent,
-                    relevance: crate::model::CompletionRelevance::Current,
+                    relevance: CompletionRelevance::Current,
                     summary: "fixed",
                     artifact: &CompletionArtifact::NotProduced
                 })
@@ -895,7 +893,7 @@ pub(crate) mod tests {
 
         let current = task("main-failure-sha-run-1-attempt-3", Vec::new())?;
         store.enqueue(&current).await?;
-        let claimed = crate::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+        let claimed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(claimed.id, current.id);
         assert_eq!(claimed.attempt_number, 1);
         Ok(())
@@ -909,12 +907,12 @@ pub(crate) mod tests {
 
         assert_eq!(
             store
-                .active_delivery(crate::model::ActiveDeliveryQuery {
+                .active_delivery(ActiveDeliveryQuery {
                     source_commit: &active.source_commit,
                     kind: &active.kind
                 })
                 .await?,
-            crate::model::ActiveDelivery::Active(active.id)
+            ActiveDelivery::Active(active.id)
         );
         Ok(())
     }

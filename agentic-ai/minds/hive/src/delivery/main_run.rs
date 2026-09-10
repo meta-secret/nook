@@ -26,6 +26,10 @@ impl<'a> MainRunSelection<'a> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_test_module,
+    reason = "the tests exercise the selection API before its private outcome machinery"
+)]
 mod tests {
     use super::{DeliveryRun, MainRunSelection};
 

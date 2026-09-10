@@ -8,8 +8,9 @@ use uuid::Uuid;
 use self::claim_retry::CLAIM_RETRY_LIMIT;
 use crate::HIVE_TLS_PROVIDER;
 use crate::model::{
-    ActivityLease, AgentId, Artifact, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
-    CompletionArtifact, DependencyResult, EnqueueTask, LeaseToken, TaskActivity, TaskId,
+    ActiveDelivery, ActiveDeliveryQuery, ActivityLease, AgentId, Artifact, AttemptId,
+    CancellationTarget, ClaimOutcome, ClaimedTask, Completion, CompletionArtifact,
+    CompletionRelevance, DependencyResult, EnqueueTask, LeaseToken, TaskActivity, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -67,13 +68,13 @@ impl TaskStore for Neo4jTaskStore {
 
     async fn active_delivery(
         &self,
-        request: crate::model::ActiveDeliveryQuery<'_>,
-    ) -> crate::HiveResult<crate::model::ActiveDelivery> {
-        let crate::model::ActiveDeliveryQuery {
+        request: ActiveDeliveryQuery<'_>,
+    ) -> crate::HiveResult<ActiveDelivery> {
+        let ActiveDeliveryQuery {
             source_commit,
             kind,
         } = request;
-        self.active_delivery_task(crate::model::ActiveDeliveryQuery {
+        self.active_delivery_task(ActiveDeliveryQuery {
             source_commit,
             kind,
         })
@@ -544,8 +545,8 @@ impl TaskStore for Neo4jTaskStore {
         Ok(rows.next().await?.is_some())
     }
 
-    async fn complete(&self, completion: crate::model::Completion<'_>) -> crate::HiveResult<bool> {
-        let crate::model::Completion {
+    async fn complete(&self, completion: Completion<'_>) -> crate::HiveResult<bool> {
+        let Completion {
             task,
             agent_id,
             relevance,
@@ -596,7 +597,7 @@ impl TaskStore for Neo4jTaskStore {
                 .param("attempt_id", task.attempt_id.as_str())
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", task.lease_token.as_str())
-                .param("obsolete", matches!(relevance, crate::model::CompletionRelevance::Obsolete))
+            .param("obsolete", matches!(relevance, CompletionRelevance::Obsolete))
                 .param(
                     "owning_repair_ids",
                     task.owning_repairs

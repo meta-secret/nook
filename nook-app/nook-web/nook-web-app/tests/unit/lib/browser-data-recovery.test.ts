@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { browserDataLifecycle } from '$lib/runtime/browser-data'
+import { VaultStorageFailureKind } from '$lib/runtime/storage-failure'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -12,12 +13,15 @@ describe('local data recovery support', () => {
     vi.stubGlobal('navigator', {})
     vi.stubGlobal('BroadcastChannel', broadcastChannel)
 
-    expect(() =>
-      browserDataLifecycle.requireLocalDataRecoverySupport(),
-    ).toThrow('Safe cross-tab local data deletion is unavailable')
-    await expect(
-      browserDataLifecycle.quiesceOtherTabsForLocalRecovery(),
-    ).rejects.toThrow('Safe cross-tab local data deletion is unavailable')
+    const support = browserDataLifecycle.requireLocalDataRecoverySupport()
+    expect(support.isErr() ? support.error.kind : support.value).toBe(
+      VaultStorageFailureKind.LockUnavailable,
+    )
+    const quiescence =
+      await browserDataLifecycle.quiesceOtherTabsForLocalRecovery()
+    expect(quiescence.isErr() ? quiescence.error.kind : quiescence.value).toBe(
+      VaultStorageFailureKind.LockUnavailable,
+    )
     expect(broadcastChannel).not.toHaveBeenCalled()
   })
 
@@ -73,11 +77,12 @@ describe('local data recovery support', () => {
     vi.stubGlobal('navigator', { locks: {} })
     vi.stubGlobal('BroadcastChannel', RecoveryChannel)
 
-    const rejection = expect(
-      browserDataLifecycle.quiesceOtherTabsForLocalRecovery(),
-    ).rejects.toThrow('peer failed')
+    const pending = browserDataLifecycle.quiesceOtherTabsForLocalRecovery()
     await vi.runAllTimersAsync()
-    await rejection
+    const rejection = await pending
+    expect(rejection.isErr() ? rejection.error.kind : rejection.value).toBe(
+      VaultStorageFailureKind.PeerFailed,
+    )
     expect(messages.some((message) => message.type === 'reload')).toBe(true)
   })
 })

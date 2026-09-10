@@ -17,8 +17,7 @@ use hive::dispatcher::{DispatcherHealth, WorkbenchDispatcher};
 use hive::model::{AgentId, EnqueueTask, TaskId, TaskTrigger};
 use hive::observer::{ObserverCoordinator, ObserverCoordinatorStore, ObserverServer};
 use hive::{
-    CoordinatorTaskStore, Neo4jTaskStore, TaskStore, Worker, WorkerConfig,
-    install_rustls_crypto_provider,
+    CoordinatorTaskStore, HIVE_TLS_PROVIDER, Neo4jTaskStore, TaskStore, Worker, WorkerConfig,
 };
 
 #[derive(Debug, Parser)]
@@ -445,7 +444,7 @@ impl Cli {
                 store.migrate().await?;
                 let dependencies = depends_on
                     .into_iter()
-                    .map(TaskId::new)
+                    .map(TaskId::try_from)
                     .collect::<Result<Vec<_>, _>>()
                     .hive_context("invalid dependency id")?;
                 store
@@ -482,9 +481,7 @@ mod tests {
     use clap::Parser;
     use std::path;
 
-    use super::{
-        Arg0DispatchPaths, Cli, Command, PathBuf, QueueAction, install_rustls_crypto_provider,
-    };
+    use super::{Arg0DispatchPaths, Cli, Command, HIVE_TLS_PROVIDER, PathBuf, QueueAction};
 
     fn parse(arguments: &[&str]) -> hive::HiveResult<Cli> {
         Cli::try_parse_from(arguments).map_err(|error| hive::HiveError::message(error.to_string()))

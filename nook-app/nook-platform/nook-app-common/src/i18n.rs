@@ -373,6 +373,12 @@ impl TranslationCatalog {
 /// Returns an error when either input is not valid JSON or when the merged
 /// catalog cannot be serialized.
 impl TranslationCatalog {
+    /// Deep-merges two serialized translation catalogs, preferring overlay values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when either catalog cannot be parsed or the merged catalog
+    /// cannot be serialized.
     pub fn merge_translation_catalogs(
         request: MergeTranslationCatalogsRequest<'_>,
     ) -> serde_json::Result<String> {

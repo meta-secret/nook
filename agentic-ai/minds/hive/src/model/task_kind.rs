@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter, Result as FormatResult};
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(from = "String", into = "String")]
 pub enum TaskKind {
@@ -36,8 +38,8 @@ impl From<TaskKind> for String {
         }
     }
 }
-impl std::fmt::Display for TaskKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for TaskKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FormatResult {
         f.write_str(self.as_str())
     }
 }
@@ -63,6 +65,18 @@ impl TaskKind {
     }
 }
 
+impl TaskKind {
+    pub fn completion_relevance(
+        &self,
+        reported: super::CompletionRelevance,
+    ) -> super::CompletionRelevance {
+        match self {
+            Self::Blocker => reported,
+            Self::MainRepair | Self::Other(_) => super::CompletionRelevance::Current,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::TaskKind;
@@ -79,17 +93,5 @@ mod tests {
         assert_eq!(serde_json::to_string(&value)?, r#"" custom-kind ""#);
         assert!(TaskKind::from("  ").is_empty());
         Ok(())
-    }
-}
-
-impl TaskKind {
-    pub fn completion_relevance(
-        &self,
-        reported: super::CompletionRelevance,
-    ) -> super::CompletionRelevance {
-        match self {
-            Self::Blocker => reported,
-            Self::MainRepair | Self::Other(_) => super::CompletionRelevance::Current,
-        }
     }
 }

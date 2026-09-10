@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
 use crate::model::{
-    ActivityLease, AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, EnqueueTask, LeaseToken,
-    TaskActivity, TaskId,
+    ActiveDelivery, ActiveDeliveryQuery, ActivityLease, AgentId, CancellationTarget, ClaimOutcome,
+    ClaimedTask, Completion, EnqueueTask, LeaseToken, TaskActivity, TaskId,
 };
 
 #[async_trait]
@@ -15,8 +15,8 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
 
     async fn active_delivery(
         &self,
-        request: crate::model::ActiveDeliveryQuery<'_>,
-    ) -> crate::HiveResult<crate::model::ActiveDelivery>;
+        request: ActiveDeliveryQuery<'_>,
+    ) -> crate::HiveResult<ActiveDelivery>;
 
     async fn cancel(&self, task_id: &TaskId, reason: &str) -> crate::HiveResult<bool>;
 
@@ -58,7 +58,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
 
     async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> crate::HiveResult<bool>;
 
-    async fn complete(&self, completion: crate::model::Completion<'_>) -> crate::HiveResult<bool>;
+    async fn complete(&self, completion: Completion<'_>) -> crate::HiveResult<bool>;
 
     async fn fail(
         &self,

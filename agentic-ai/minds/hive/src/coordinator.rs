@@ -13,8 +13,9 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Mutex;
 
 use crate::model::{
-    ActivityLease, AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
-    EnqueueTask, LeaseToken, TaskActivity, TaskId,
+    ActiveDelivery, ActiveDeliveryQuery, ActivityLease, AgentId, CancellationTarget, ClaimOutcome,
+    ClaimedTask, Completion, CompletionArtifact, CompletionRelevance, EnqueueTask, LeaseToken,
+    TaskActivity, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -179,9 +180,9 @@ impl TaskStore for CoordinatorTaskStore {
 
     async fn active_delivery(
         &self,
-        request: crate::model::ActiveDeliveryQuery<'_>,
-    ) -> crate::HiveResult<crate::model::ActiveDelivery> {
-        let crate::model::ActiveDeliveryQuery {
+        request: ActiveDeliveryQuery<'_>,
+    ) -> crate::HiveResult<ActiveDelivery> {
+        let ActiveDeliveryQuery {
             source_commit: _source_commit,
             kind: _kind,
         } = request;
@@ -282,8 +283,8 @@ impl TaskStore for CoordinatorTaskStore {
         .await
     }
 
-    async fn complete(&self, completion: crate::model::Completion<'_>) -> crate::HiveResult<bool> {
-        let crate::model::Completion {
+    async fn complete(&self, completion: Completion<'_>) -> crate::HiveResult<bool> {
+        let Completion {
             task,
             agent_id,
             relevance,
@@ -293,7 +294,7 @@ impl TaskStore for CoordinatorTaskStore {
         self.accepted(Request::Complete {
             task: task.clone(),
             agent_id: agent_id.clone(),
-            obsolete: matches!(relevance, crate::model::CompletionRelevance::Obsolete),
+            obsolete: matches!(relevance, CompletionRelevance::Obsolete),
             summary: summary.to_owned(),
             artifact: artifact.clone(),
         })
@@ -435,13 +436,13 @@ impl Request {
                 artifact,
             } => Ok(Response::Accepted(
                 store
-                    .complete(crate::model::Completion {
+                    .complete(Completion {
                         task: &task,
                         agent_id: &agent_id,
                         relevance: if obsolete {
-                            crate::model::CompletionRelevance::Obsolete
+                            CompletionRelevance::Obsolete
                         } else {
-                            crate::model::CompletionRelevance::Current
+                            CompletionRelevance::Current
                         },
                         summary: &summary,
                         artifact: &artifact,
@@ -487,8 +488,9 @@ impl CoordinatorSocket<'_> {
 mod tests {
     use super::{CoordinatorServer, CoordinatorTaskStore, Request};
     use crate::model::{
-        ActivityKind, ActivityLease, AgentId, AttemptId, CompletionArtifact, LeaseToken,
-        TaskActivity, TaskId,
+        ActiveDeliveryQuery, ActivityKind, ActivityLease, AgentId, AttemptId, ClaimedTask,
+        Completion, CompletionArtifact, CompletionRelevance, LeaseToken, TaskActivity, TaskId,
+        TaskKind,
     };
     use crate::store::TaskStore;
     use crate::store::tests::{MemoryStore, task};
@@ -544,7 +546,7 @@ mod tests {
 
         client.migrate().await?;
         client.register_agent(&agent, "worker-pod").await?;
-        let claimed = crate::model::ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
+        let claimed = ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
         assert_eq!(claimed.id.as_str(), "complete-me");
         assert!(
             client
@@ -566,13 +568,13 @@ mod tests {
         );
         assert!(!client.acknowledge_cancellation(&claimed, &agent).await?);
         assert!(client.release(&claimed, &agent).await?);
-        let resumed = crate::model::ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
+        let resumed = ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
         assert!(
             client
-                .complete(crate::model::Completion {
+                .complete(Completion {
                     task: &resumed,
                     agent_id: &agent,
-                    relevance: crate::model::CompletionRelevance::Current,
+                    relevance: CompletionRelevance::Current,
                     summary: "completed through coordinator",
                     artifact: &CompletionArtifact::NotProduced
                 })
@@ -580,11 +582,11 @@ mod tests {
         );
 
         backing.enqueue(&task("fail-me", Vec::new())?).await?;
-        let failed = crate::model::ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
+        let failed = ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
         assert!(client.fail(&failed, &agent, "expected failure").await?);
 
         backing.enqueue(&task("block-me", Vec::new())?).await?;
-        let blocked = crate::model::ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
+        let blocked = ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
         let mut blocker = task("prerequisite", Vec::new())?;
         blocker.kind = "blocker".into();
         assert!(
@@ -596,9 +598,9 @@ mod tests {
         for denied in [
             client.enqueue(&task("denied", Vec::new())?).await,
             client
-                .active_delivery(crate::model::ActiveDeliveryQuery {
+                .active_delivery(ActiveDeliveryQuery {
                     source_commit: "head",
-                    kind: &crate::model::TaskKind::from("main-repair"),
+                    kind: &TaskKind::from("main-repair"),
                 })
                 .await
                 .map(drop),

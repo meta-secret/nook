@@ -24,6 +24,7 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Mutex;
 use tower_http::services::{ServeDir, ServeFile};
 
+use crate::model::TaskKind;
 use crate::neo4j::Neo4jTaskStore;
 use crate::store::TaskStore;
 
@@ -128,10 +129,12 @@ impl ObserverCoordinator {
                 Ok(ObserverRequest::Snapshot { locale }) => store
                     .observer_snapshot_view(&locale)
                     .await
+                    .map(Box::new)
                     .map(ObserverResponse::Snapshot),
                 Ok(ObserverRequest::Task { task_id, locale }) => store
                     .observer_task_view(&task_id, &locale)
                     .await
+                    .map(Box::new)
                     .map(ObserverResponse::Task),
                 Err(error) => Err(crate::HiveError::message(format!(
                     "decode observer request: {error}"
@@ -185,7 +188,7 @@ async fn task_detail<S: ObserverStore>(
         .observer_task_view(&task_id, &locale.locale)
         .await?
     {
-        TaskObservation::Observed(task) => Ok(Json(task)),
+        TaskObservation::Observed(task) => Ok(Json(*task)),
         TaskObservation::Missing => Err(ObserverError::not_found("task was not found")),
     }
 }
@@ -287,7 +290,7 @@ impl Neo4jTaskStore {
         self.attach_triggers(&mut tasks, locale).await?;
         self.attach_activity(&mut tasks, locale).await?;
         Ok(match tasks.pop() {
-            Some(task) => TaskObservation::Observed(task),
+            Some(task) => TaskObservation::Observed(Box::new(task)),
             None => TaskObservation::Missing,
         })
     }
@@ -315,7 +318,7 @@ impl Neo4jTaskStore {
             agents.push(ObservedAgent {
                 id: row.get("id")?,
                 pod_name: row.get("pod_name")?,
-                status: row.get::<String>("status")?.into(),
+                status: row.get::<String>("status")?,
                 last_seen_at,
                 presence_expires_at: ObservedAgent::presence_expires_at(last_seen_at),
             });
@@ -473,8 +476,7 @@ impl Neo4jTaskStore {
             tasks.push(ObservedTask {
                 id: row.get("id")?,
                 kind: row.get::<String>("kind")?.into(),
-                kind_label: (crate::model::TaskKind::from(row.get::<String>("kind")?))
-                    .localized_label(locale),
+                kind_label: TaskKind::from(row.get::<String>("kind")?).localized_label(locale),
                 trigger_kind: row.get::<String>("trigger_kind")?.into(),
                 trigger: String::new(),
                 status: row.get("status")?,
@@ -693,7 +695,7 @@ mod tests {
         ) -> crate::HiveResult<super::TaskObservation> {
             match self {
                 Self::Ready if task_id == "task-1" => Ok(super::TaskObservation::Observed(
-                    ObservedTask::fixture(task_id),
+                    Box::new(ObservedTask::fixture(task_id)),
                 )),
                 Self::Ready => Ok(super::TaskObservation::Missing),
                 Self::Failed => Err(crate::HiveError::message("database unavailable")),

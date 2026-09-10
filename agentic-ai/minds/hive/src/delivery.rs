@@ -4,7 +4,7 @@ use outcome::{CheckAdmission, RepositoryCheckSet};
 mod check_state;
 use check_state::{CheckConclusion, CheckExecution, RunConclusion, RunExecution};
 pub(crate) struct MainRepairDelivery<'a> {
-    pub(crate) repository: &'a std::path::Path,
+    pub(crate) repository: &'a Path,
     pub(crate) branch: &'a str,
 }
 use std::collections::HashMap;
@@ -159,8 +159,8 @@ impl MainRepairDelivery<'_> {
         .require_delivery("Hive repair delivery is incomplete: no pull request generation exists")?
         .clone();
 
-        (&pull_request).validate_hive_marker()?;
-        (&pull_request).validate_merged_hive_pull_request()?;
+        pull_request.validate_hive_marker()?;
+        pull_request.validate_merged_hive_pull_request()?;
         let merge_commit = pull_request.merge_commit.require_commit()?;
 
         DeliveryCommand::run_git_status(
@@ -180,7 +180,7 @@ impl MainRepairDelivery<'_> {
             "verify Main contains the Hive repair merge",
         )
         .await?;
-        (&pull_request).validate_squash_merge(repository).await?;
+        pull_request.validate_squash_merge(repository).await?;
 
         let mut runs: Vec<DeliveryRun> = serde_json::from_str(
             &(DeliveryCommand {
@@ -473,16 +473,16 @@ mod tests {
                 oid: "pending".to_owned(),
             }),
         );
-        (&marked).validate_hive_marker()?;
+        marked.validate_hive_marker()?;
         marked.title = "repair without marker".to_owned();
-        let title_error = (&marked)
+        let title_error = marked
             .validate_hive_marker()
             .err()
             .ok_or_else(|| crate::HiveError::message("unmarked delivery title was accepted"))?;
         assert!(title_error.to_string().contains("title marker"));
         marked.title = "[Hive] repair".to_owned();
         marked.labels.retain(|label| label.name != "hive");
-        let label_error = (&marked)
+        let label_error = marked
             .validate_hive_marker()
             .err()
             .ok_or_else(|| crate::HiveError::message("unlabelled Hive delivery was accepted"))?;
@@ -491,7 +491,7 @@ mod tests {
         let repository = tempfile::tempdir()?;
         let missing_commit =
             DeliveryPullRequest::fixture(42, "repair", "MERGED", super::DeliveryMerge::Unmerged);
-        let commit_error = (&missing_commit)
+        let commit_error = missing_commit
             .validate_squash_merge(repository.path())
             .await
             .err()
@@ -516,7 +516,7 @@ mod tests {
                 oid: root_commit.clone(),
             }),
         );
-        let history_error = (&root_delivery)
+        let history_error = root_delivery
             .validate_squash_merge(repository.path())
             .await
             .err()
@@ -538,7 +538,7 @@ mod tests {
                 oid: valid_commit.clone(),
             }),
         );
-        (&valid).validate_squash_merge(repository.path()).await?;
+        valid.validate_squash_merge(repository.path()).await?;
 
         fs::write(
             repository.path().join("repair.txt"),
@@ -558,7 +558,7 @@ mod tests {
                 oid: invalid_commit.clone(),
             }),
         );
-        let subject_error = (&invalid)
+        let subject_error = invalid
             .validate_squash_merge(repository.path())
             .await
             .err()
@@ -673,7 +673,7 @@ mod tests {
     #[test]
     fn delivery_requires_a_merged_pull_request() -> anyhow::Result<()> {
         let error =
-            (&DeliveryPullRequest::fixture(42, "repair", "OPEN", super::DeliveryMerge::Unmerged))
+            DeliveryPullRequest::fixture(42, "repair", "OPEN", super::DeliveryMerge::Unmerged)
                 .validate_merged_hive_pull_request()
                 .err()
                 .ok_or_else(|| {
@@ -687,7 +687,7 @@ mod tests {
     #[test]
     fn delivery_requires_the_squash_merge_commit() -> anyhow::Result<()> {
         let error =
-            (&DeliveryPullRequest::fixture(42, "repair", "MERGED", super::DeliveryMerge::Unmerged))
+            DeliveryPullRequest::fixture(42, "repair", "MERGED", super::DeliveryMerge::Unmerged)
                 .validate_merged_hive_pull_request()
                 .err()
                 .ok_or_else(|| {
@@ -702,15 +702,15 @@ mod tests {
 
     #[test]
     fn delivery_accepts_a_merged_pull_request_with_its_commit() -> crate::HiveResult<()> {
-        (&DeliveryPullRequest::fixture(
+        DeliveryPullRequest::fixture(
             42,
             "repair",
             "MERGED",
             super::DeliveryMerge::Merged(DeliveryCommit {
                 oid: "abc123".to_owned(),
             }),
-        ))
-            .validate_merged_hive_pull_request()?;
+        )
+        .validate_merged_hive_pull_request()?;
         Ok(())
     }
 
@@ -864,6 +864,13 @@ mod tests {
 
 #[derive(Clone, Copy)]
 enum MainMergeEvidence {
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "pre-merge evidence is exercised by delivery contract tests"
+        )
+    )]
     NotEstablished,
     SuccessfulDescendant,
 }

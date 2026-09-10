@@ -62,10 +62,7 @@
     configured_vault_application_supports_extension,
   } from '$app-wasm'
   import { sentinelOnboardingBrowser } from '$lib/enrollment/sentinel-onboarding-link'
-  import {
-    initialExtensionConnectIntent,
-    initialLegalRoute,
-  } from '$lib/app/route-state'
+  import { InitialApplicationRoute } from '$lib/app/initial-application-route'
   import { sentinelGenesisBrowser } from '$lib/enrollment/sentinel-genesis-link'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
@@ -99,23 +96,16 @@
   )
   let colorMode = $state<ColorMode>(browserColorMode.systemColorMode())
   let followsSystemColorMode = $state(true)
-  let legalPageState = $state(initialLegalRoute())
-  let logsPage = $state<boolean>(
-    'window' in globalThis &&
-      new ApplicationRoute(window.location.pathname).isLogsPath(),
-  )
-  let appLogsPage = $state<boolean>(
-    'window' in globalThis &&
-      new AppLogsLocation(window.location.pathname).matches,
-  )
+  const initialRoute = new InitialApplicationRoute({
+    isSimpleApplication: IS_SIMPLE_APP,
+    supportsExtension: SUPPORTS_EXTENSION,
+  }).read()
+  let legalPageState = $state(initialRoute.legalPage)
+  let logsPage = $state(initialRoute.logsPage)
+  let appLogsPage = $state(initialRoute.appLogsPage)
   const initialExtensionConnectRequestState: ExtensionConnectIntent =
-    initialExtensionConnectIntent(SUPPORTS_EXTENSION)
-  let extensionConnectRoute = $state<boolean>(
-    'window' in globalThis
-      ? SUPPORTS_EXTENSION &&
-          connectionBrowser.isExtensionConnectPath(window.location.pathname)
-      : false,
-  )
+    initialRoute.extensionConnectIntent
+  let extensionConnectRoute = $state(initialRoute.extensionConnectRoute)
   let extensionConnectRequestState = $state<ExtensionConnectIntent>(
     initialExtensionConnectRequestState,
   )
@@ -134,21 +124,11 @@
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const EXTENSION_LOCKED_RETRY_MS = 3_000
-  let sentinelInvitationRequest = $state(
-    'window' in globalThis && !IS_SIMPLE_APP
-      ? sentinelGenesisBrowser.consumeSentinelGenesisRequestFromLocation()
-      : '',
-  )
+  let sentinelInvitationRequest = $state(initialRoute.sentinelInvitationRequest)
   let sentinelParticipantResponse = $state(
-    'window' in globalThis && !IS_SIMPLE_APP
-      ? sentinelGenesisBrowser.consumeSentinelGenesisParticipantResponseFromLocation()
-      : '',
+    initialRoute.sentinelParticipantResponse,
   )
-  let sentinelOnboardingPackage = $state(
-    'window' in globalThis && !IS_SIMPLE_APP
-      ? sentinelOnboardingBrowser.consumeSentinelOnboardingFromLocation()
-      : '',
-  )
+  let sentinelOnboardingPackage = $state(initialRoute.sentinelOnboardingPackage)
   function syncRoute(event?: Event) {
     if (!IS_SIMPLE_APP) {
       const invitationRequest =

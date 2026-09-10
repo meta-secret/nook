@@ -4,6 +4,7 @@ pub(super) enum InspectionHints {
     Files(String),
 }
 pub(super) enum ProgressDetail<'a> {
+    #[cfg(test)]
     Summary,
     Detail(&'a str),
 }
@@ -119,9 +120,11 @@ impl<W: Write> TaskProgressReporter<W> {
         };
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn paint(&self, code: &str, text: &str) -> String {
         self.state.decorate.paint(code, text)
     }
+    #[cfg(test)]
     pub(super) fn command_finished(
         self,
         command: &[String],
@@ -135,10 +138,12 @@ impl<W: Write> TaskProgressReporter<W> {
         );
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn announce_finalizing(self) -> (Self, io::Result<()>) {
         let plan = ProgressPlan::new(self.state.clone()).announce_finalizing();
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn line(
         self,
         color: &str,
@@ -266,22 +271,27 @@ impl<W: Write> ProgressReporter<W> {
         };
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn reasoning_delta(self, delta: &str) -> (Self, io::Result<()>) {
         let plan = ProgressPlan::new(self.state).reasoning_delta(delta);
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn announce_plan_output(self) -> (Self, io::Result<()>) {
         let plan = ProgressPlan::new(self.state).announce_plan_output();
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn inspection(self, command: &[String]) -> (Self, io::Result<()>) {
         let plan = ProgressPlan::new(self.state).inspection(command);
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn failed_inspection(self, code: i32, command: &[String]) -> (Self, io::Result<()>) {
         let plan = ProgressPlan::new(self.state).failed_inspection(code, command);
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn phase(
         self,
         symbol: &str,
@@ -291,10 +301,12 @@ impl<W: Write> ProgressReporter<W> {
         let plan = ProgressPlan::new(self.state).phase(symbol, title, detail);
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn note(self, message: &str) -> (Self, io::Result<()>) {
         let plan = ProgressPlan::new(self.state).note(message);
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn alert(
         self,
         symbol: &str,
@@ -305,10 +317,12 @@ impl<W: Write> ProgressReporter<W> {
         let plan = ProgressPlan::new(self.state).alert(symbol, title, detail, color);
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn finish_reasoning(self) -> (Self, io::Result<()>) {
         let plan = ProgressPlan::new(self.state).finish_reasoning();
         self.output(plan)
     }
+    #[cfg(test)]
     pub(super) fn plan_output_announced(&self) -> Announcement {
         self.state.plan_output
     }

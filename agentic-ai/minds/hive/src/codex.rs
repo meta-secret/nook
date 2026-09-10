@@ -313,15 +313,10 @@ impl CodexError {
 }
 
 impl CodexRunner for InProcessCodexRunner {
-    fn run<'a>(
-        &'a self,
-        prompt: &'a str,
-    ) -> impl Future<Output = Result<PlannerOutput, CodexError>> + Send + 'a {
-        async move {
-            match self.run_turn(prompt, TurnKind::Planning).await? {
-                CodexTurnOutput::Planning(plan) => Ok(plan),
-                CodexTurnOutput::Task(_) => Err(CodexError::UnexpectedOutput),
-            }
+    async fn run<'a>(&'a self, prompt: &'a str) -> Result<PlannerOutput, CodexError> {
+        match self.run_turn(prompt, TurnKind::Planning).await? {
+            CodexTurnOutput::Planning(plan) => Ok(plan),
+            CodexTurnOutput::Task(_) => Err(CodexError::UnexpectedOutput),
         }
     }
 }

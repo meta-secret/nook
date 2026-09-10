@@ -4,11 +4,10 @@
     VaultStorageFailure,
     VaultStorageFailureKind,
   } from '$lib/runtime/storage-failure'
-  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
-  type SentinelGenesisParticipation = {
-    readonly payload: string
-    readonly participantLabel?: string
-  }
+  import type {
+    LoginCreateVaultChooserProps,
+    SentinelGenesisParticipation,
+  } from './login-create-vault-chooser-contract'
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { tick } from 'svelte'
@@ -35,7 +34,6 @@
     sentinelDashboardPortal,
     type SentinelDashboardChoice,
   } from '$lib/components/login/sentinel-dashboard-portal'
-  import type { VaultState } from '$lib/vault.svelte'
   import {
     ChosenVaultPath,
     VaultCreationWizardStep,
@@ -47,9 +45,6 @@
     evaluate_sentinel_policy_draft,
     VaultApplication,
     sentinel_genesis_participant_fingerprint,
-    type NookSentinelGenesisDelivery,
-    type NookSentinelGenesisParticipantStatus,
-    type StartSentinelGenesisArgs,
   } from '$app-wasm'
 
   let {
@@ -78,47 +73,7 @@
     sentinelOnboardingPackage = '',
     onAcceptSentinelOnboardingPackage,
     onFinishSentinelInvitation,
-  }: {
-    vault: VaultState
-    appKind: VaultApplication
-    isVerifying: boolean
-    isInitializing: boolean
-    usesExtensionDeviceIdentity?: boolean
-    onCreateDeviceVault: (label: string) => void | Promise<void>
-    onConnectStorage: () => void
-    onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
-    onAddSentinelGenesisParticipantResponse?: (
-      args: SentinelGenesisParticipation,
-    ) => Promise<SentinelActionResult<void>>
-    onFinalizeSentinelGenesis?: () => Promise<SentinelActionResult<void>>
-    onCreateSentinelGenesisParticipantResponse?: (
-      requestPayload: string,
-    ) => Promise<SentinelActionResult<string>>
-    onCreateSentinelGenesisPublicKeyAnnouncement?: () => Promise<
-      SentinelActionResult<string>
-    >
-    onRememberSentinelGenesisRequest?: (
-      requestPayload: string,
-    ) => Promise<SentinelActionResult<void>>
-    onReceiveSentinelGenesisShare?: (
-      sharePayload: string,
-    ) => Promise<SentinelActionResult<void>>
-    onCompleteSentinelGenesisDelivery?: () => Promise<
-      SentinelActionResult<void>
-    >
-    sentinelGenesisPhase?: SentinelGenesisPhase
-    sentinelGenesisRequest?: string
-    sentinelGenesisParticipants?: NookSentinelGenesisParticipantStatus[]
-    sentinelGenesisDeliveries?: NookSentinelGenesisDelivery[]
-    sentinelInvitationRequest?: string
-    sentinelParticipantResponsePending?: boolean
-    sentinelParticipantResponse?: string
-    sentinelOnboardingPackage?: string
-    onAcceptSentinelOnboardingPackage?: (
-      packageJson: string,
-    ) => void | Promise<void>
-    onFinishSentinelInvitation?: () => void
-  } = $props()
+  }: LoginCreateVaultChooserProps = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
   let wizardStep = $state<VaultCreationWizardStep>(

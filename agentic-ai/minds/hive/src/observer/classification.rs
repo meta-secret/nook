@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter, Result as FormatResult};
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(from = "String", into = "String")]
 pub enum ObservedTaskState {
@@ -51,8 +53,8 @@ impl From<ObservedTaskState> for String {
         }
     }
 }
-impl std::fmt::Display for ObservedTaskState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ObservedTaskState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FormatResult {
         f.write_str(self.as_str())
     }
 }
@@ -97,8 +99,8 @@ impl From<ObservedTaskTrigger> for String {
         }
     }
 }
-impl std::fmt::Display for ObservedTaskTrigger {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ObservedTaskTrigger {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FormatResult {
         f.write_str(self.as_str())
     }
 }

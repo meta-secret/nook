@@ -10,7 +10,9 @@ use crate::storage::indexed_db::StoredStringRecord;
 use nook_core::GenesisImportRequest;
 use nook_core::LocalEventBytes;
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
+mod requests;
 mod transaction;
+pub(crate) use requests::{EpochPairAppend, EventAppend, RemoteEventUnion};
 use transaction::{
     AppendKind, EventString, EventTransaction, PersistedEventIds, TransactionEvents,
 };
@@ -20,21 +22,6 @@ use transaction::{
 pub(crate) struct VaultEventPersistence<'a> {
     store_id: &'a str,
 }
-#[derive(Clone, Copy)]
-pub(crate) struct EventAppend<'a> {
-    pub(crate) event: &'a VaultEvent,
-    pub(crate) bytes: &'a [u8],
-}
-#[derive(Clone, Copy)]
-pub(crate) struct EpochPairAppend<'a> {
-    pub(crate) trigger: EventAppend<'a>,
-    pub(crate) checkpoint: EventAppend<'a>,
-}
-#[derive(Clone, Copy)]
-pub(crate) struct RemoteEventUnion<'a> {
-    pub(crate) events: &'a [(EventId, Vec<u8>)],
-}
-
 struct VaultAppendGraph<'a> {
     graph: EventGraph,
     store_id: &'a str,

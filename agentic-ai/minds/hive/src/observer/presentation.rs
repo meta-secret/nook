@@ -263,6 +263,10 @@ impl<'a> ActivityLocalization<'a> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_test_module,
+    reason = "presentation tests stay next to localization while private attention rules follow"
+)]
 mod tests {
     use super::{
         ActivityLocalization, AlertKind, AlertSeverity, ObservedAgent, ObservedAlert, ObservedTask,

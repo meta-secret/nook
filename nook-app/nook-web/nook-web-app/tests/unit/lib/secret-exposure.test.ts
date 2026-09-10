@@ -6,12 +6,21 @@ import {
 import { describe, expect, test, vi } from 'vitest'
 import type { NookSecretRecord } from '$lib/nook'
 import { SecretExposure } from '$lib/vault/secret-exposure'
+import type { Result } from 'neverthrow'
 
 function fakeRecord(value: string) {
   return {
     primaryCredential: value,
     free: vi.fn(),
   } as unknown as NookSecretRecord
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((admit) => {
+    resolve = admit
+  })
+  return { promise, resolve }
 }
 
 describe('secret exposure lifecycle', () => {
@@ -97,5 +106,48 @@ describe('secret exposure lifecycle', () => {
 
     expect(first.free).toHaveBeenCalledOnce()
     expect(second.free).toHaveBeenCalledOnce()
+  })
+
+  test('a record loaded after release is freed without being exposed', async () => {
+    const record = fakeRecord('late credential')
+    const pending = deferred<Result<NookSecretRecord, VaultStorageFailure>>()
+    const exposure = new SecretExposure({})
+    const toggled = exposure.toggle({
+      id: 'secret-1',
+      load: () => pending.promise,
+    })
+
+    exposure.free()
+    pending.resolve(ok(record))
+    const result = await toggled
+
+    expect(result.isErr() ? result.error.kind : result.value).toBe(
+      VaultStorageFailureKind.GenerationChanged,
+    )
+    expect(record.free).toHaveBeenCalledOnce()
+  })
+
+  test('a duplicate concurrent load is discarded at the active boundary', async () => {
+    const firstRecord = fakeRecord('first credential')
+    const secondRecord = fakeRecord('second credential')
+    const first = deferred<Result<NookSecretRecord, VaultStorageFailure>>()
+    const second = deferred<Result<NookSecretRecord, VaultStorageFailure>>()
+    const load = vi
+      .fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+    const exposure = new SecretExposure({})
+
+    const firstToggle = exposure.toggle({ id: 'secret-1', load })
+    const secondToggle = exposure.toggle({ id: 'secret-1', load })
+    second.resolve(ok(secondRecord))
+    await secondToggle
+    first.resolve(ok(firstRecord))
+    await firstToggle
+
+    expect(firstRecord.free).toHaveBeenCalledOnce()
+    expect(secondRecord.free).not.toHaveBeenCalled()
+    exposure.free()
+    expect(secondRecord.free).toHaveBeenCalledOnce()
   })
 })

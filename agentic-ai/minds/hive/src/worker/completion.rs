@@ -1,4 +1,5 @@
 use crate::model::{ClaimedTask, CompletionArtifact, CompletionRelevance, TaskId, TerminalResult};
+use std::path::Path;
 
 pub(super) struct TaskCompletionProposal<'a> {
     pub(super) task: &'a ClaimedTask,
@@ -64,10 +65,7 @@ impl CompletionPlan<'_> {
 }
 
 impl CompletionPlan<'_> {
-    pub(super) async fn verify_owner_deliveries(
-        &self,
-        repository: &std::path::Path,
-    ) -> crate::HiveResult<()> {
+    pub(super) async fn verify_owner_deliveries(&self, repository: &Path) -> crate::HiveResult<()> {
         use crate::HiveContext;
         if let Self::ObsoleteRetirement { owning_repairs } = self {
             for owner in *owning_repairs {
