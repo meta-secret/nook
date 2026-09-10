@@ -18,10 +18,23 @@ pub(crate) struct SaveVaultBlobRequest<'a> {
     pub(crate) content: &'a str,
 }
 
+pub(crate) enum SecretSearchBucketMutation {
+    Write { bucket: u8, ciphertext: String },
+    Delete { bucket: u8 },
+}
+
+impl SecretSearchBucketMutation {
+    fn bucket(&self) -> u8 {
+        match self {
+            Self::Write { bucket, .. } | Self::Delete { bucket } => *bucket,
+        }
+    }
+}
+
 /// Named values required by NookDatabase::save_secret_search_catalog_buckets.
 pub(crate) struct SaveSecretSearchCatalogBucketsRequest<'a> {
     pub(crate) store_id: &'a str,
-    pub(crate) writes: &'a [(u8, Option<String>)],
+    pub(crate) writes: &'a [SecretSearchBucketMutation],
 }
 
 /// Named values required by NookDatabase::set_local_vault_label.
@@ -276,30 +289,34 @@ impl NookDatabase {
         let store = transaction
             .store("vault")
             .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
-        for (bucket, ciphertext) in writes {
-            if *bucket >= nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT {
+        for mutation in writes {
+            let bucket = mutation.bucket();
+            if bucket >= nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT {
                 return Err(NookError::IndexedDb(format!(
                     "Secret search bucket {bucket} is out of range."
                 )));
             }
             let key = NookDatabase::secret_search_bucket_key(SecretSearchBucketKeyRequest {
                 store_id: store_id,
-                bucket: *bucket,
+                bucket: bucket,
             });
             let id_key = serde_wasm_bindgen::to_value(&key)
                 .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-            if let Some(ciphertext) = ciphertext {
-                let value = serde_wasm_bindgen::to_value(ciphertext)
-                    .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-                store
-                    .put(&value, Some(&id_key))
-                    .await
-                    .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
-            } else {
-                store
-                    .delete(id_key)
-                    .await
-                    .map_err(|e| NookError::IndexedDb(format!("Delete error: {e:?}")))?;
+            match mutation {
+                SecretSearchBucketMutation::Write { ciphertext, .. } => {
+                    let value = serde_wasm_bindgen::to_value(ciphertext)
+                        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+                    store
+                        .put(&value, Some(&id_key))
+                        .await
+                        .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
+                }
+                SecretSearchBucketMutation::Delete { .. } => {
+                    store
+                        .delete(id_key)
+                        .await
+                        .map_err(|e| NookError::IndexedDb(format!("Delete error: {e:?}")))?;
+                }
             }
         }
         transaction

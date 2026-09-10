@@ -7,7 +7,7 @@
 use super::{
     NookError, NookVaultManager, SearchCatalogRestore, SearchCatalogState, Zeroize, wasm_bindgen,
 };
-use crate::storage::indexed_db;
+use crate::storage::indexed_db::{self, SecretSearchBucketMutation};
 use crate::{NookDatabase, SaveSecretSearchCatalogBucketsRequest};
 use nook_core::{
     AgeArmoredCiphertext, SearchCatalogBucketPayload, SecretSearchCatalog, SymmetricKey,
@@ -57,7 +57,7 @@ impl SearchCatalogRestore {
 struct PreparedSearchCatalogWrite<'a> {
     store_id: &'a str,
     pending_mask: u64,
-    writes: Vec<(u8, Option<String>)>,
+    writes: Vec<SecretSearchBucketMutation>,
 }
 
 impl<'a> PreparedSearchCatalogWrite<'a> {
@@ -72,15 +72,18 @@ impl<'a> PreparedSearchCatalogWrite<'a> {
             if pending_mask & (1_u64 << bucket) == 0 {
                 continue;
             }
-            let ciphertext = match catalog.bucket_json(bucket.into())? {
+            let mutation = match catalog.bucket_json(bucket.into())? {
                 SearchCatalogBucketPayload::Json(mut json) => {
                     let ciphertext = crypto.encrypt_value(&json)?;
                     json.zeroize();
-                    Some(ciphertext.as_str().to_owned())
+                    SecretSearchBucketMutation::Write {
+                        bucket,
+                        ciphertext: ciphertext.as_str().to_owned(),
+                    }
                 }
-                SearchCatalogBucketPayload::Empty => None,
+                SearchCatalogBucketPayload::Empty => SecretSearchBucketMutation::Delete { bucket },
             };
-            writes.push((bucket, ciphertext));
+            writes.push(mutation);
         }
         Ok(Self {
             store_id,

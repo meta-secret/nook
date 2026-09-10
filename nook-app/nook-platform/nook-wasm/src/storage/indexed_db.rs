@@ -448,7 +448,16 @@ mod sentinel_genesis_storage_tests {
         let store_id = "store_search01";
         NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
             store_id: store_id,
-            writes: &[(0, Some("first".to_owned())), (2, Some("third".to_owned()))],
+            writes: &[
+                SecretSearchBucketMutation::Write {
+                    bucket: 0,
+                    ciphertext: "first".to_owned(),
+                },
+                SecretSearchBucketMutation::Write {
+                    bucket: 2,
+                    ciphertext: "third".to_owned(),
+                },
+            ],
         })
         .await?;
         assert_eq!(
@@ -457,7 +466,7 @@ mod sentinel_genesis_storage_tests {
         );
         NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
             store_id: store_id,
-            writes: &[(0, None)],
+            writes: &[SecretSearchBucketMutation::Delete { bucket: 0 }],
         })
         .await?;
         assert_eq!(
@@ -467,10 +476,10 @@ mod sentinel_genesis_storage_tests {
         let error = NookDatabase::save_secret_search_catalog_buckets(
             SaveSecretSearchCatalogBucketsRequest {
                 store_id: store_id,
-                writes: &[(
-                    nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT,
-                    Some("bad".to_owned()),
-                )],
+                writes: &[SecretSearchBucketMutation::Write {
+                    bucket: nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT,
+                    ciphertext: "bad".to_owned(),
+                }],
             },
         )
         .await
@@ -656,7 +665,7 @@ mod sentinel_genesis_storage_tests {
 
 pub(crate) use local_vault::{
     ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SaveVaultBlobRequest,
-    SetLocalVaultLabelRequest, UpsertRegistryEntryRequest,
+    SecretSearchBucketMutation, SetLocalVaultLabelRequest, UpsertRegistryEntryRequest,
 };
 
 pub(crate) use device_identity::{
