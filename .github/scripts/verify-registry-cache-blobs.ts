@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { err, ok, type Result } from "neverthrow";
+import { z } from "zod";
 import {
   RegistryDescriptorCollection, RegistryDescriptorKind, RegistryFailureKind,
   type RegistryDescriptor, type RegistryFailure,
@@ -16,49 +17,50 @@ type ManifestReference =
   | { kind: ManifestReferenceKind.Tag; reference: string }
   | { kind: ManifestReferenceKind.Descriptor; reference: string; descriptor: RegistryDescriptor };
 
-class RegistryDescriptorDocument {
-  constructor(private readonly value: unknown) {}
-  admit(): Result<RegistryDescriptor, RegistryFailure> {
-    const value = this.value;
-    if (typeof value !== "object" || !value || !("digest" in value) ||
-      typeof value.digest !== "string" || !/^sha256:[0-9a-f]{64}$/.test(value.digest) ||
-      !("size" in value) || typeof value.size !== "number" || !Number.isSafeInteger(value.size) ||
-      value.size < 0 || !("mediaType" in value) || typeof value.mediaType !== "string")
-      return err({ kind: RegistryFailureKind.Schema, message: "registry descriptor has an invalid schema" });
-    return ok({ digest: value.digest, size: value.size, mediaType: value.mediaType });
-  }
-}
+const descriptorSchema = z.object({
+  digest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+  size: z.number().nonnegative().refine(Number.isSafeInteger),
+  mediaType: z.string(),
+});
+const manifestSchema = z.object({
+  config: descriptorSchema.optional(),
+  layers: z.array(descriptorSchema).default([]),
+  manifests: z.array(descriptorSchema).default([]),
+});
 
 class RegistryManifest {
   constructor(private readonly text: string) {}
   decode(): Result<RegistryDocument, RegistryFailure> {
     let value: unknown;
-    try { value = JSON.parse(this.text); }
-    catch { return err({ kind: RegistryFailureKind.Schema, message: "registry manifest is not valid JSON" }); }
-    if (typeof value !== "object" || !value || Array.isArray(value))
-      return err({ kind: RegistryFailureKind.Schema, message: "registry manifest has an invalid schema" });
-    const blobs: RegistryDescriptor[] = [];
-    if ("config" in value) {
-      const config = new RegistryDescriptorDocument(value.config).admit();
-      if (config.isErr()) return err(config.error);
-      blobs.push(config.value);
+    try {
+      value = JSON.parse(this.text);
+    } catch {
+      return err({
+        kind: RegistryFailureKind.Schema,
+        message: "registry manifest is not valid JSON",
+      });
     }
-    const layers = this.descriptors("layers" in value ? value.layers : []);
-    if (layers.isErr()) return err(layers.error);
-    const manifests = this.descriptors("manifests" in value ? value.manifests : []);
-    if (manifests.isErr()) return err(manifests.error);
-    return ok({ blobs: [...blobs, ...layers.value], manifests: manifests.value });
-  }
-  private descriptors(value: unknown): Result<RegistryDescriptor[], RegistryFailure> {
-    if (!Array.isArray(value))
-      return err({ kind: RegistryFailureKind.Schema, message: "registry descriptor list has an invalid schema" });
-    const descriptors: RegistryDescriptor[] = [];
-    for (const entry of value) {
-      const admitted = new RegistryDescriptorDocument(entry).admit();
-      if (admitted.isErr()) return err(admitted.error);
-      descriptors.push(admitted.value);
+    const parsed = manifestSchema.safeParse(value);
+    if (!parsed.success) {
+      const path = parsed.error.issues[0]?.path ?? [];
+      const subject =
+        path.length === 0
+          ? "manifest"
+          : path.length === 1 && path[0] !== "config"
+            ? "descriptor list"
+            : "descriptor";
+      return err({
+        kind: RegistryFailureKind.Schema,
+        message: `registry ${subject} has an invalid schema`,
+      });
     }
-    return ok(descriptors);
+    return ok({
+      blobs: [
+        ...(parsed.data.config ? [parsed.data.config] : []),
+        ...parsed.data.layers,
+      ],
+      manifests: parsed.data.manifests,
+    });
   }
 }
 

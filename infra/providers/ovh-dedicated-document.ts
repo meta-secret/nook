@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
+import { z } from "zod";
 import { OvhFailure, OvhFailureKind } from "./ovh-dedicated-failure";
 import {
   OvhRecoveryMarkerObservation,
@@ -9,23 +10,67 @@ import {
   EndpointMode,
   OvhTaskStatus,
   type CompatibleTemplates,
-  type DedicatedServerDefinition,
   type DedicatedServerInventory,
   type OvhCredentials,
   type OvhTask,
 } from "./ovh-dedicated-contracts";
 
-/** Decodes the fields owned by each OVH contract without exposing credential values. */
+const credentialsSchema = z.object({
+  applicationKey: z.string(),
+  applicationSecret: z.string(),
+  consumerKey: z.string(),
+  endpoint: z.string(),
+});
+const recoveryMarkerSchema = z.object({
+  version: z.literal(1),
+  hostname: z.string(),
+  operatingSystem: z.string(),
+  serviceName: z.string(),
+});
+const serverSchema = z.object({
+  commercialRange: z.string(),
+  datacenter: z.string(),
+  ip: z.string(),
+  name: z.string(),
+  os: z.string(),
+  state: z.string(),
+});
+const templatesSchema = z.object({ ovh: z.array(z.string()) });
+const taskSchema = z.object({
+  taskId: z.number().refine(Number.isSafeInteger),
+  status: z.enum(OvhTaskStatus),
+});
+const credentialValidationSchema = z.object({});
+const inventorySchema = z.object({
+  servers: z.record(
+    z.string(),
+    z.object({
+      expectedCommercialRange: z.string(),
+      expectedDatacenter: z.string(),
+      meshAddress: z.string(),
+      operatingSystem: z.string(),
+      publicAddress: z.string(),
+      serviceName: z.string(),
+      sshPublicKeyFile: z.string(),
+      sshUser: z.string(),
+      arcTier: z.enum(ArcTier),
+      endpointMode: z.enum(EndpointMode),
+    }),
+  ),
+});
+
+/** Provider documents project only declared fields; failures never expose their contents. */
 export class OvhDocument {
   constructor(private readonly input: unknown) {}
   private failure(schema: string): OvhFailure {
-    return new OvhFailure(OvhFailureKind.Schema, `OVH ${schema} has an invalid schema`);
-  }
-  private record(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && !!value && !Array.isArray(value);
+    return new OvhFailure(
+      OvhFailureKind.Schema,
+      `OVH ${schema} has an invalid schema`,
+    );
   }
   private parse(): Result<unknown, OvhFailure> {
-    if (typeof this.input !== "string") return err(new OvhFailure(OvhFailureKind.Schema, "OVH JSON document has an invalid schema"));
+    if (typeof this.input !== "string")
+      return err(this.failure("JSON document"));
     try {
       return ok(JSON.parse(this.input));
     } catch {
@@ -33,148 +78,71 @@ export class OvhDocument {
     }
   }
   credentials(): Result<OvhCredentials, OvhFailure> {
-    const parsed = this.parse();
-    if (parsed.isErr()) return err(parsed.error);
-    const value = parsed.value;
-    if (
-      !this.record(value) ||
-      typeof value.applicationKey !== "string" ||
-      typeof value.applicationSecret !== "string" ||
-      typeof value.consumerKey !== "string" ||
-      typeof value.endpoint !== "string"
-    )
-      return err(this.failure("credentials"));
-    return ok({
-      applicationKey: value.applicationKey,
-      applicationSecret: value.applicationSecret,
-      consumerKey: value.consumerKey,
-      endpoint: value.endpoint,
+    return this.parse().andThen((value) => {
+      const parsed = credentialsSchema.safeParse(value);
+      return parsed.success
+        ? ok(parsed.data)
+        : err(this.failure("credentials"));
     });
   }
   recoveryMarker(): Result<OvhRecoveryMarkerObservation, OvhFailure> {
-    const parsed = this.parse();
-    if (parsed.isErr()) return err(parsed.error);
-    const value = parsed.value;
-    if (
-      !this.record(value) ||
-      value.version !== 1 ||
-      typeof value.hostname !== "string" ||
-      typeof value.operatingSystem !== "string" ||
-      typeof value.serviceName !== "string"
-    )
-      return err(this.failure("recovery marker"));
-    return ok(OvhRecoveryMarkerObservation.fromRecord({
-      version: value.version,
-      hostname: value.hostname,
-      operatingSystem: value.operatingSystem,
-      serviceName: value.serviceName,
-    }));
+    return this.parse().andThen((value) => {
+      const parsed = recoveryMarkerSchema.safeParse(value);
+      return parsed.success
+        ? ok(OvhRecoveryMarkerObservation.fromRecord(parsed.data))
+        : err(this.failure("recovery marker"));
+    });
   }
   server(): Result<OvhServerObservation, OvhFailure> {
-    const parsed = this.parse();
-    if (parsed.isErr()) return err(parsed.error);
-    const value = parsed.value;
-    if (
-      !this.record(value) ||
-      typeof value.commercialRange !== "string" ||
-      typeof value.datacenter !== "string" ||
-      typeof value.ip !== "string" ||
-      typeof value.name !== "string" ||
-      typeof value.os !== "string" ||
-      typeof value.state !== "string"
-    )
-      return err(this.failure("server"));
-    return ok(OvhServerObservation.fromRecord({
-      commercialRange: value.commercialRange,
-      datacenter: value.datacenter,
-      ip: value.ip,
-      name: value.name,
-      os: value.os,
-      state: value.state,
-    }));
+    return this.parse().andThen((value) => {
+      const parsed = serverSchema.safeParse(value);
+      return parsed.success
+        ? ok(OvhServerObservation.fromRecord(parsed.data))
+        : err(this.failure("server"));
+    });
   }
   compatibleTemplates(): Result<CompatibleTemplates, OvhFailure> {
-    const parsed = this.parse();
-    if (parsed.isErr()) return err(parsed.error);
-    const value = parsed.value;
-    if (
-      !this.record(value) ||
-      !Array.isArray(value.ovh) ||
-      !value.ovh.every((item): item is string => typeof item === "string")
-    )
-      return err(this.failure("compatible templates"));
-    return ok({ ovh: value.ovh });
+    return this.parse().andThen((value) => {
+      const parsed = templatesSchema.safeParse(value);
+      return parsed.success
+        ? ok(parsed.data)
+        : err(this.failure("compatible templates"));
+    });
   }
   task(): Result<OvhTask, OvhFailure> {
-    const parsed = this.parse();
-    if (parsed.isErr()) return err(parsed.error);
-    const value = parsed.value;
-    if (
-      !this.record(value) ||
-      typeof value.taskId !== "number" ||
-      !Number.isSafeInteger(value.taskId)
-    )
-      return err(this.failure("task"));
-    const status = Object.values(OvhTaskStatus).find(
-      (status): status is OvhTaskStatus =>
-        typeof status === "string" && status === value.status,
-    );
-    if (!status) return err(this.failure("task status"));
-    return ok({ taskId: value.taskId, status });
+    return this.parse().andThen((value) => {
+      const parsed = taskSchema.safeParse(value);
+      return parsed.success
+        ? ok(parsed.data)
+        : err(
+            this.failure(
+              parsed.error.issues[0]?.path[0] === "status"
+                ? "task status"
+                : "task",
+            ),
+          );
+    });
   }
   credentialValidation(): Result<void, OvhFailure> {
-    // This endpoint confirms authorization; its provider-owned record is not used internally.
-    const parsed = this.parse();
-    if (parsed.isErr()) return err(parsed.error);
-    const value = parsed.value;
-    if (!this.record(value))
-      return err(this.failure("credential validation"));
-    return ok();
+    // Only the provider's authorization success matters; none of its record is consumed.
+    return this.parse().andThen((value) =>
+      credentialValidationSchema.safeParse(value).success
+        ? ok()
+        : err(this.failure("credential validation")),
+    );
   }
   inventory(): Result<DedicatedServerInventory, OvhFailure> {
-    const value = this.input;
-    if (!this.record(value) || !this.record(value.servers))
-      return err(this.failure("server inventory"));
-    const servers: Array<[string, DedicatedServerDefinition]> = [];
-    for (const [name, definitionValue] of Object.entries(value.servers)) {
-      const admitted = this.definition(definitionValue);
-      if (admitted.isErr()) return err(admitted.error);
-      servers.push([name, admitted.value]);
-    }
-    return ok({ servers: Object.fromEntries(servers) });
-  }
-  private definition(value: unknown): Result<DedicatedServerDefinition, OvhFailure> {
-    if (
-      !this.record(value) ||
-      typeof value.expectedCommercialRange !== "string" ||
-      typeof value.expectedDatacenter !== "string" ||
-      typeof value.meshAddress !== "string" ||
-      typeof value.operatingSystem !== "string" ||
-      typeof value.publicAddress !== "string" ||
-      typeof value.serviceName !== "string" ||
-      typeof value.sshPublicKeyFile !== "string" ||
-      typeof value.sshUser !== "string"
-    )
-      return err(this.failure("server definition"));
-    const arcTier = Object.values(ArcTier).find(
-      (tier) => tier === value.arcTier,
+    const parsed = inventorySchema.safeParse(this.input);
+    if (parsed.success) return ok(parsed.data);
+    const path = parsed.error.issues[0]?.path ?? [];
+    return err(
+      this.failure(
+        path.length < 2
+          ? "server inventory"
+          : path[2] === "arcTier" || path[2] === "endpointMode"
+            ? "server definition mode"
+            : "server definition",
+      ),
     );
-    const endpointMode = Object.values(EndpointMode).find(
-      (mode) => mode === value.endpointMode,
-    );
-    if (!arcTier || !endpointMode)
-      return err(this.failure("server definition mode"));
-    return ok({
-      arcTier,
-      endpointMode,
-      expectedCommercialRange: value.expectedCommercialRange,
-      expectedDatacenter: value.expectedDatacenter,
-      meshAddress: value.meshAddress,
-      operatingSystem: value.operatingSystem,
-      publicAddress: value.publicAddress,
-      serviceName: value.serviceName,
-      sshPublicKeyFile: value.sshPublicKeyFile,
-      sshUser: value.sshUser,
-    });
   }
 }

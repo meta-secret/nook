@@ -1,9 +1,7 @@
 import { err, ok, type Result } from "neverthrow";
+import { z } from "zod";
 
-interface PreviewComment {
-  id: number;
-  body: string;
-}
+type PreviewComment = z.infer<typeof previewCommentsSchema>[number];
 enum PreviewFailureKind {
   Configuration = "configuration",
   Network = "network",
@@ -37,35 +35,37 @@ class PreviewEnvironment {
   }
 }
 
-class PreviewCommentDocument {
-  constructor(private readonly value: unknown) {}
-  admit(): Result<PreviewComment, PreviewFailure> {
-    const value = this.value;
-    if (typeof value !== "object" || !value || !("id" in value) ||
-      typeof value.id !== "number" || !Number.isSafeInteger(value.id) ||
-      !("body" in value) || typeof value.body !== "string")
-      return err({ kind: PreviewFailureKind.Schema, message: "GitHub comments response has an invalid schema" });
-    return ok({ id: value.id, body: value.body });
-  }
-}
+const previewCommentsSchema = z.array(
+  z.object({
+    id: z.number().refine(Number.isSafeInteger),
+    body: z.string(),
+  }),
+);
 
 class PreviewCommentsResponse {
   constructor(private readonly response: Response) {}
   async admit(): Promise<Result<PreviewComment[], PreviewFailure>> {
     if (!this.response.ok)
-      return err({ kind: PreviewFailureKind.Http, message: `GitHub API request failed (${this.response.status})` });
+      return err({
+        kind: PreviewFailureKind.Http,
+        message: `GitHub API request failed (${this.response.status})`,
+      });
     let value: unknown;
-    try { value = await this.response.json(); }
-    catch { return err({ kind: PreviewFailureKind.Response, message: "Unable to decode GitHub comments response" }); }
-    if (!Array.isArray(value))
-      return err({ kind: PreviewFailureKind.Schema, message: "GitHub comments response has an invalid schema" });
-    const comments: PreviewComment[] = [];
-    for (const item of value) {
-      const admitted = new PreviewCommentDocument(item).admit();
-      if (admitted.isErr()) return err(admitted.error);
-      comments.push(admitted.value);
+    try {
+      value = await this.response.json();
+    } catch {
+      return err({
+        kind: PreviewFailureKind.Response,
+        message: "Unable to decode GitHub comments response",
+      });
     }
-    return ok(comments);
+    const parsed = previewCommentsSchema.safeParse(value);
+    return parsed.success
+      ? ok(parsed.data)
+      : err({
+          kind: PreviewFailureKind.Schema,
+          message: "GitHub comments response has an invalid schema",
+        });
   }
 }
 
