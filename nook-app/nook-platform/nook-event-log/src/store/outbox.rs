@@ -100,11 +100,16 @@ mod tests {
     fn missing_event_ids_excludes_locally_stored_events() -> EventResult<()> {
         let stored = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
         let missing = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
-        let local = LocalEventStore::new().put_event(crate::LocalEventWrite {
-            event_id: stored.clone(),
-            bytes: EventStorageBytes::from(b"stored".to_vec()),
-        });
-        let remote = BTreeSet::from([stored, missing.clone()]);
+        let local = LocalEventStore::new()
+            .put_event(crate::LocalEventWrite {
+                event_id: stored.clone(),
+                bytes: EventStorageBytes::from(b"stored".to_vec()),
+            })
+            .put_event(crate::LocalEventWrite {
+                event_id: missing.clone(),
+                bytes: EventStorageBytes::from(b"missing-remotely".to_vec()),
+            });
+        let remote = BTreeSet::from([stored]);
 
         assert_eq!(local.missing_event_ids(&remote), vec![missing]);
         Ok(())
