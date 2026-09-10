@@ -1,69 +1,99 @@
+import { err, ok, type Result } from "neverthrow";
 import {
-  chmodSync,
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+  FixtureFile,
+  FixtureDirectory,
+  FixtureWorkspaceRequest,
+  FixtureEmbeddedSource,
+} from "./operational-fixture";
+import {
+  OperationalCommandProbe,
+  OperationalContractFailureKind,
+  type OperationalContractFailure,
+} from "./operational-contract";
 import { join, resolve } from "node:path";
 
-class ServicesNetworkRepairTestRepairSource {
+class NetworkRepairSource {
   constructor(private readonly request: string) {}
-  execute(): string {
+  execute(): Result<string, OperationalContractFailure> {
     const remoteDirectory = this.request;
 
-    const source = readFileSync(taskfile, "utf8").split(taskStart)[1];
-    const embedded = source.split(scriptStart)[1].split(scriptEnd)[0];
-    const dedented = embedded.replace(/^ {8}/gm, "");
-    return `#!/usr/bin/env bash\nset -euo pipefail\n${dedented}`.replace(
-      'remote_dir="{{.INFRA_REMOTE_DIR}}"',
-      `remote_dir=${remoteDirectory}`,
+    const source = new FixtureFile(taskfile).read();
+    if (source.isErr()) return err(source.error);
+    const taskOffset = source.value.indexOf(taskStart);
+    if (taskOffset < 0)
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "Network repair task is missing",
+      });
+    const embedded = new FixtureEmbeddedSource(
+      source.value.slice(taskOffset),
+    ).between(scriptStart, scriptEnd);
+    if (embedded.isErr()) return err(embedded.error);
+    const dedented = embedded.value.replace(/^ {8}/gm, "");
+    return ok(
+      `#!/usr/bin/env bash\nset -euo pipefail\n${dedented}`.replace(
+        'remote_dir="{{.INFRA_REMOTE_DIR}}"',
+        `remote_dir=${remoteDirectory}`,
+      ),
     );
   }
 }
 
-class ServicesNetworkRepairTestExecutable {
+class NetworkRepairExecutable {
   constructor(private readonly request: { path: string; source: string }) {}
-  execute(): void {
+  execute(): Result<void, OperationalContractFailure> {
     const input = this.request;
 
-    writeFileSync(input.path, input.source);
-    chmodSync(input.path, 0o755);
+    const prepared3 = new FixtureFile(input.path).write(input.source);
+    if (prepared3.isErr()) return err(prepared3.error);
+    const executable = new FixtureFile(input.path).makeExecutable();
+    return executable;
   }
 }
 
-class ServicesNetworkRepairTestRunCase {
+class NetworkRepairScenario {
   constructor(
     private readonly request: { existing: string[]; version: string },
   ) {}
-  execute(): RepairResult {
+  execute(): Result<RepairResult, OperationalContractFailure> {
+    const workspace = new FixtureWorkspaceRequest(
+      "nook-network-repair-",
+    ).create();
+    if (workspace.isErr()) return err(workspace.error);
+    return workspace.value.finish(this.executeIn(workspace.value.path));
+  }
+  private executeIn(
+    work: string,
+  ): Result<RepairResult, OperationalContractFailure> {
     const input = this.request;
-
-    const work = mkdtempSync(join(tmpdir(), "nook-network-repair-"));
-    try {
-      writeFileSync(join(work, "compose.yaml"), "services: {}\n");
-      const mockBin = join(work, "bin");
-      const state = join(work, "state");
-      const log = join(work, "commands.log");
-      mkdirSync(mockBin);
-      mkdirSync(state);
-      for (const item of input.existing) {
-        writeFileSync(join(state, item), "");
-      }
-      const dockerMock = {
-        path: join(mockBin, "docker"),
-        source: `#!/usr/bin/env bash
+    const prepared4 = new FixtureFile(join(work, "compose.yaml")).write(
+      "services: {}\n",
+    );
+    if (prepared4.isErr()) return err(prepared4.error);
+    const mockBin = join(work, "bin");
+    const state = join(work, "state");
+    const log = join(work, "commands.log");
+    const prepared1 = new FixtureDirectory(mockBin).create();
+    if (prepared1.isErr()) return err(prepared1.error);
+    const prepared2 = new FixtureDirectory(state).create();
+    if (prepared2.isErr()) return err(prepared2.error);
+    for (const item of input.existing) {
+      const prepared5 = new FixtureFile(join(state, item)).write("");
+      if (prepared5.isErr()) return err(prepared5.error);
+    }
+    const dockerMock = {
+      path: join(mockBin, "docker"),
+      source: `#!/usr/bin/env bash
 set -euo pipefail
 printf 'docker %s\\n' "$*" >> "$MOCK_LOG"
 if test "\${1:-}" = version; then printf '%s\\n' "$MOCK_DOCKER_VERSION"; fi
 `,
-      };
-      new ServicesNetworkRepairTestExecutable(dockerMock).execute();
-      const sudoMock = {
-        path: join(mockBin, "sudo"),
-        source: `#!/usr/bin/env bash
+    };
+    const dockerMockReady = new NetworkRepairExecutable(dockerMock).execute();
+    if (dockerMockReady.isErr()) return err(dockerMockReady.error);
+    const sudoMock = {
+      path: join(mockBin, "sudo"),
+      source: `#!/usr/bin/env bash
 set -euo pipefail
 if test "\${1:-}" = -n; then shift; fi
 printf 'sudo %s\\n' "$*" >> "$MOCK_LOG"
@@ -88,35 +118,40 @@ case "$operation" in
   *) exit 2 ;;
 esac
 `,
-      };
-      new ServicesNetworkRepairTestExecutable(sudoMock).execute();
-      const curlMock = {
-        path: join(mockBin, "curl"),
-        source: "#!/bin/sh\nprintf '200\\n'\n",
-      };
-      new ServicesNetworkRepairTestExecutable(curlMock).execute();
-      const harness = {
-        path: join(work, "harness.sh"),
-        source: new ServicesNetworkRepairTestRepairSource(work).execute(),
-      };
-      new ServicesNetworkRepairTestExecutable(harness).execute();
-      const processInput = {
-        cmd: [harness.path],
-        env: {
-          ...process.env,
-          PATH: `${mockBin}:${executablePath}`,
-          MOCK_LOG: log,
-          MOCK_STATE: state,
-          MOCK_DOCKER_VERSION: input.version,
-        },
-        stdout: "pipe" as const,
-        stderr: "pipe" as const,
-      };
-      const result = Bun.spawnSync(processInput);
-      return { code: result.exitCode, commands: readFileSync(log, "utf8") };
-    } finally {
-      rmSync(work, { recursive: true, force: true });
-    }
+    };
+    const sudoMockReady = new NetworkRepairExecutable(sudoMock).execute();
+    if (sudoMockReady.isErr()) return err(sudoMockReady.error);
+    const curlMock = {
+      path: join(mockBin, "curl"),
+      source: "#!/bin/sh\nprintf '200\\n'\n",
+    };
+    const curlMockReady = new NetworkRepairExecutable(curlMock).execute();
+    if (curlMockReady.isErr()) return err(curlMockReady.error);
+    const source = new NetworkRepairSource(work).execute();
+    if (source.isErr()) return err(source.error);
+    const harness = {
+      path: join(work, "harness.sh"),
+      source: source.value,
+    };
+    const harnessReady = new NetworkRepairExecutable(harness).execute();
+    if (harnessReady.isErr()) return err(harnessReady.error);
+    const processInput = {
+      cmd: [harness.path],
+      env: {
+        ...process.env,
+        PATH: `${mockBin}:${executablePath}`,
+        MOCK_LOG: log,
+        MOCK_STATE: state,
+        MOCK_DOCKER_VERSION: input.version,
+      },
+      stdout: "pipe" as const,
+      stderr: "pipe" as const,
+    };
+    const result = new OperationalCommandProbe(processInput).execute();
+    if (result.isErr()) return err(result.error);
+    return new FixtureFile(log)
+      .read()
+      .map((commands) => ({ code: result.value.exitCode, commands }));
   }
 }
 
@@ -133,62 +168,109 @@ interface RepairResult {
   commands: string;
 }
 
-const missingInput = { existing: [], version: "26.1.4" };
-const missing = new ServicesNetworkRepairTestRunCase(missingInput).execute();
-if (missing.code !== 0)
-  throw new Error(`missing-chain case exited ${missing.code}`);
-for (const command of [
-  "--table nat --new-chain DOCKER",
-  "--table filter --new-chain DOCKER",
-  "--table filter --new-chain DOCKER-ISOLATION-STAGE-1",
-  "--table filter --new-chain DOCKER-ISOLATION-STAGE-2",
-]) {
-  if (!missing.commands.includes(command))
-    throw new Error(`missing command: ${command}`);
-}
-if (
-  missing.commands.lastIndexOf("sudo iptables") >=
-  missing.commands.indexOf(" down --remove-orphans")
-) {
-  throw new Error("firewall repair must finish before Compose is restarted");
-}
+class NetworkRepairContract {
+  execute(): Result<void, OperationalContractFailure> {
+    const missingInput = { existing: [], version: "26.1.4" };
+    const missingOutcome = new NetworkRepairScenario(missingInput).execute();
+    if (missingOutcome.isErr()) return err(missingOutcome.error);
+    const missing = missingOutcome.value;
+    if (missing.code !== 0)
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: `missing-chain case exited ${missing.code}`,
+      });
+    for (const command of [
+      "--table nat --new-chain DOCKER",
+      "--table filter --new-chain DOCKER",
+      "--table filter --new-chain DOCKER-ISOLATION-STAGE-1",
+      "--table filter --new-chain DOCKER-ISOLATION-STAGE-2",
+    ]) {
+      if (!missing.commands.includes(command))
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `missing command: ${command}`,
+        });
+    }
+    if (
+      missing.commands.lastIndexOf("sudo iptables") >=
+      missing.commands.indexOf(" down --remove-orphans")
+    ) {
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "firewall repair must finish before Compose is restarted",
+      });
+    }
 
-const partialInput = {
-  existing: ["nat-DOCKER", "filter-DOCKER", "filter-DOCKER-ISOLATION-STAGE-1"],
-  version: "26.1.4",
-};
-const partial = new ServicesNetworkRepairTestRunCase(partialInput).execute();
-if (partial.code !== 0)
-  throw new Error(`partial-chain case exited ${partial.code}`);
-for (const command of [
-  "sudo iptables --table nat --new-chain DOCKER",
-  "sudo iptables --table filter --new-chain DOCKER",
-  "sudo iptables --table filter --new-chain DOCKER-ISOLATION-STAGE-1",
-]) {
-  if (partial.commands.split("\n").includes(command))
-    throw new Error(`unexpected command: ${command}`);
-}
-for (const fragment of [
-  "--table filter --new-chain DOCKER-ISOLATION-STAGE-2",
-  "--append DOCKER-ISOLATION-STAGE-1 --jump RETURN",
-  "--append DOCKER-ISOLATION-STAGE-2 --jump RETURN",
-]) {
-  if (!partial.commands.includes(fragment))
-    throw new Error(`missing command: ${fragment}`);
-}
+    const partialInput = {
+      existing: [
+        "nat-DOCKER",
+        "filter-DOCKER",
+        "filter-DOCKER-ISOLATION-STAGE-1",
+      ],
+      version: "26.1.4",
+    };
+    const partialOutcome = new NetworkRepairScenario(partialInput).execute();
+    if (partialOutcome.isErr()) return err(partialOutcome.error);
+    const partial = partialOutcome.value;
+    if (partial.code !== 0)
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: `partial-chain case exited ${partial.code}`,
+      });
+    for (const command of [
+      "sudo iptables --table nat --new-chain DOCKER",
+      "sudo iptables --table filter --new-chain DOCKER",
+      "sudo iptables --table filter --new-chain DOCKER-ISOLATION-STAGE-1",
+    ]) {
+      if (partial.commands.split("\n").includes(command))
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `unexpected command: ${command}`,
+        });
+    }
+    for (const fragment of [
+      "--table filter --new-chain DOCKER-ISOLATION-STAGE-2",
+      "--append DOCKER-ISOLATION-STAGE-1 --jump RETURN",
+      "--append DOCKER-ISOLATION-STAGE-2 --jump RETURN",
+    ]) {
+      if (!partial.commands.includes(fragment))
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `missing command: ${fragment}`,
+        });
+    }
 
-const unsupportedInput = { existing: [], version: "27.0.1" };
-const unsupported = new ServicesNetworkRepairTestRunCase(
-  unsupportedInput,
-).execute();
-if (unsupported.code !== 1)
-  throw new Error(`unsupported-version case exited ${unsupported.code}`);
-for (const fragment of [
-  "iptables",
-  " down --remove-orphans",
-  " up --detach --wait",
-]) {
-  if (unsupported.commands.includes(fragment))
-    throw new Error(`unsupported version ran: ${fragment}`);
+    const unsupportedInput = { existing: [], version: "27.0.1" };
+    const unsupportedOutcome = new NetworkRepairScenario(
+      unsupportedInput,
+    ).execute();
+    if (unsupportedOutcome.isErr()) return err(unsupportedOutcome.error);
+    const unsupported = unsupportedOutcome.value;
+    if (unsupported.code !== 1)
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: `unsupported-version case exited ${unsupported.code}`,
+      });
+    for (const fragment of [
+      "iptables",
+      " down --remove-orphans",
+      " up --detach --wait",
+    ]) {
+      if (unsupported.commands.includes(fragment))
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `unsupported version ran: ${fragment}`,
+        });
+    }
+    console.log(
+      "Docker network repair missing, partial, and version guards: ok",
+    );
+
+    return ok();
+  }
 }
-console.log("Docker network repair missing, partial, and version guards: ok");
+const outcome = new NetworkRepairContract().execute();
+if (outcome.isErr()) {
+  console.error(outcome.error.message);
+  process.exitCode = 1;
+}
