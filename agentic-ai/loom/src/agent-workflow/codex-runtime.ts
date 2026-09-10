@@ -174,7 +174,7 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
       sourceCommit: execution.invocation.sourceCommit,
       phase: AgentSourceStabilityPhase.BeforeAttempt,
     };
-    const before = AgentSourceSnapshot.assertStable(beforeAttempt);
+    const before = new AgentSourceSnapshot(beforeAttempt).assertStable();
     if (before.isErr()) return err(before.error);
     try {
       return await this.executeStable();
@@ -184,7 +184,7 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
         sourceCommit: execution.invocation.sourceCommit,
         phase: AgentSourceStabilityPhase.AfterAttempt,
       };
-      const after = AgentSourceSnapshot.assertStable(afterAttempt);
+      const after = new AgentSourceSnapshot(afterAttempt).assertStable();
       if (after.isErr()) return err(after.error);
     }
   }
@@ -206,7 +206,15 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
         execution.invocation.agentProfile.reasoningEffort,
       ),
     };
-    const thread = execution.codex.startThread(threadOptions);
+    let thread;
+    try {
+      thread = execution.codex.startThread(threadOptions);
+    } catch {
+      return err({
+        kind: CodexExecutionFailureKind.RuntimeBoundary,
+        message: 'Codex could not create the requested thread.',
+      });
+    }
     const prompt = this.buildPrompt();
     const outputSchema = WorkflowResultSchema.workflowTaskOutputSchema(
       execution.invocation.execution.resultKind,
@@ -215,13 +223,21 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
       outputSchema,
       signal: execution.invocation.signal,
     };
-    const streamedTurn = await thread.runStreamed(prompt, turnOptions);
+    let streamedTurn;
+    try {
+      streamedTurn = await thread.runStreamed(prompt, turnOptions);
+    } catch {
+      return err({
+        kind: CodexExecutionFailureKind.RuntimeBoundary,
+        message: 'Codex could not start the requested turn.',
+      });
+    }
     const collectionArgs: CollectCodexTurnArgs = {
       events: streamedTurn.events,
       expectedResultKind: execution.invocation.execution.resultKind,
       observe: execution.invocation.observe,
     };
-    return CodexTurn.collect(collectionArgs);
+    return new CodexTurn(collectionArgs).collect();
   }
   private buildPrompt(): string {
     const invocation = this.execution.invocation;
@@ -265,39 +281,110 @@ enum TurnValuePresence {
 type TurnText =
   | { readonly presence: TurnValuePresence.Missing }
   | { readonly presence: TurnValuePresence.Present; readonly text: string };
-export class CodexTurn {
-  private termination = TurnTermination.Pending;
-  private thread: TurnText = { presence: TurnValuePresence.Missing };
-  private output: TurnText = { presence: TurnValuePresence.Missing };
-  private constructor(private readonly request: CollectCodexTurnArgs) {}
-  static collect(
-    request: CollectCodexTurnArgs,
-  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
-    return new CodexTurn(request).complete();
+class CodexTurnState {
+  constructor(
+    readonly termination: TurnTermination = TurnTermination.Pending,
+    readonly thread: TurnText = { presence: TurnValuePresence.Missing },
+    readonly output: TurnText = { presence: TurnValuePresence.Missing },
+  ) {}
+
+  advance(event: ThreadEvent): CodexTurnState {
+    const thread =
+      event.type === 'thread.started'
+        ? new CodexTurnText(event.thread_id).value()
+        : this.thread;
+    const termination =
+      event.type === 'turn.failed' || event.type === 'error'
+        ? TurnTermination.Failed
+        : event.type === 'turn.completed' &&
+            this.termination !== TurnTermination.Failed
+          ? TurnTermination.Completed
+          : this.termination;
+    const output =
+      termination !== TurnTermination.Failed &&
+      event.type === 'item.completed' &&
+      event.item.type === 'agent_message'
+        ? new CodexTurnText(event.item.text).value()
+        : this.output;
+    return new CodexTurnState(termination, thread, output);
   }
-  private async complete(): Promise<
+}
+
+class CodexTurnText {
+  constructor(private readonly text: string) {}
+  value(): TurnText {
+    return this.text.length === 0
+      ? { presence: TurnValuePresence.Missing }
+      : { presence: TurnValuePresence.Present, text: this.text };
+  }
+}
+
+enum CodexStreamLifecycle {
+  Open = 'open',
+  Exhausted = 'exhausted',
+}
+
+class CodexEventStream {
+  constructor(private readonly events: AsyncIterable<ThreadEvent>) {}
+  async collect(
+    observe: RuntimeActivityObserver,
+  ): Promise<Result<CodexTurnState, AgentExecutionFailure>> {
+    let iterator;
+    try {
+      iterator = this.events[Symbol.asyncIterator]();
+    } catch {
+      return err({
+        kind: CodexExecutionFailureKind.RuntimeBoundary,
+        message: 'Codex event stream could not be opened.',
+      });
+    }
+    let state = new CodexTurnState();
+    let lifecycle = CodexStreamLifecycle.Open;
+    try {
+      while (true) {
+        let next;
+        try {
+          next = await iterator.next();
+        } catch {
+          return err({
+            kind: CodexExecutionFailureKind.RuntimeBoundary,
+            message: 'Codex event stream failed.',
+          });
+        }
+        if (next.done) {
+          lifecycle = CodexStreamLifecycle.Exhausted;
+          return ok(state);
+        }
+        state = state.advance(next.value);
+        const observation = new CodexActivity(next.value).normalize();
+        if (observation) await observe(observation);
+      }
+    } finally {
+      if (lifecycle === CodexStreamLifecycle.Open && iterator.return) {
+        try {
+          await iterator.return();
+        } catch {
+          return err({
+            kind: CodexExecutionFailureKind.RuntimeBoundary,
+            message: 'Codex event stream could not be closed.',
+          });
+        }
+      }
+    }
+  }
+}
+
+export class CodexTurn {
+  constructor(private readonly request: CollectCodexTurnArgs) {}
+  async collect(): Promise<
     Result<AgentExecutionCompletion, AgentExecutionFailure>
   > {
-    for await (const event of this.request.events) {
-      if (event.type === 'thread.started')
-        this.thread = this.text(event.thread_id);
-      if (
-        event.type === 'turn.completed' &&
-        this.termination !== TurnTermination.Failed
-      )
-        this.termination = TurnTermination.Completed;
-      if (event.type === 'turn.failed' || event.type === 'error')
-        this.termination = TurnTermination.Failed;
-      if (
-        this.termination !== TurnTermination.Failed &&
-        event.type === 'item.completed' &&
-        event.item.type === 'agent_message'
-      )
-        this.output = this.text(event.item.text);
-      const observation = new CodexActivity(event).normalize();
-      if (observation) await this.request.observe(observation);
-    }
-    if (this.termination === TurnTermination.Failed)
+    const collected = await new CodexEventStream(this.request.events).collect(
+      this.request.observe,
+    );
+    if (collected.isErr()) return err(collected.error);
+    const state = collected.value;
+    if (state.termination === TurnTermination.Failed)
       return err(
         new CodexExecutionFailure({
           kind: CodexExecutionFailureKind.FailedTurn,
@@ -305,9 +392,9 @@ export class CodexTurn {
         }),
       );
     if (
-      this.termination !== TurnTermination.Completed ||
-      this.thread.presence === TurnValuePresence.Missing ||
-      this.output.presence === TurnValuePresence.Missing
+      state.termination !== TurnTermination.Completed ||
+      state.thread.presence === TurnValuePresence.Missing ||
+      state.output.presence === TurnValuePresence.Missing
     )
       return err(
         new CodexExecutionFailure({
@@ -317,7 +404,7 @@ export class CodexTurn {
         }),
       );
     const output = WorkflowResultSchema.decodeWorkflowTaskOutput(
-      this.output.text,
+      state.output.text,
     );
     if (output.resultKind !== this.request.expectedResultKind)
       return err(
@@ -326,22 +413,12 @@ export class CodexTurn {
           message: `Codex result kind ${output.resultKind} does not match ${this.request.expectedResultKind}.`,
         }),
       );
-    return ok({ threadId: this.thread.text, output });
-  }
-  private text(text: string): TurnText {
-    return text.length === 0
-      ? { presence: TurnValuePresence.Missing }
-      : { presence: TurnValuePresence.Present, text };
+    return ok({ threadId: state.thread.text, output });
   }
 }
 export class AgentSourceSnapshot {
-  private constructor(private readonly check: AgentSourceStabilityCheck) {}
-  static assertStable(
-    check: AgentSourceStabilityCheck,
-  ): Result<void, AgentExecutionFailure> {
-    return new AgentSourceSnapshot(check).assertCurrent();
-  }
-  private assertCurrent(): Result<void, AgentExecutionFailure> {
+  constructor(private readonly check: AgentSourceStabilityCheck) {}
+  assertStable(): Result<void, AgentExecutionFailure> {
     const check = this.check;
     const headCommand: RunCommandArgs = {
       command: 'git',
