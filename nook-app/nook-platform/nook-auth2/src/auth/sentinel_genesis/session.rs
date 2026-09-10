@@ -379,7 +379,7 @@ impl ReadySentinelGenesis<'_> {
             })
             .collect::<MultiDeviceResult<Vec<_>>>()?;
         let mut records = VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: &roster,
+            roster: roster,
             members_key: &keys.members_key,
         })?;
         records.extend(share_records);

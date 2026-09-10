@@ -216,6 +216,10 @@ impl NookVaultManager {
             .into_iter()
             .find(|entry| entry.device_id == join_device)
             .ok_or_else(|| NookError::Database("Join request not found.".to_owned()))?;
+        // The signed event and encrypted roster each retain this public identity tuple.
+        let event_device_id = join.device_id.clone();
+        let event_public_key = join.public_key.clone();
+        let event_signing_public_key = join.signing_public_key.clone();
         let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let mut operations = Vec::new();
@@ -224,7 +228,7 @@ impl NookVaultManager {
                 let (auth_record, join_key, member_records) = nook_core::JoinRequestApproval::new(
                     &secrets_key,
                     &members_key,
-                    &join,
+                    join,
                     &identity,
                     &records,
                 )
@@ -236,49 +240,50 @@ impl NookVaultManager {
                     serde_json::from_str(auth_record.value.as_str())
                         .map_err(|e| NookError::Serialization(e.to_string()))?;
                 operations.push(VaultOperation::JoinApproved {
-                    device_id: join.device_id.clone(),
-                    encryption_public_key: join.public_key.clone(),
-                    signing_public_key: join.signing_public_key.clone(),
+                    device_id: event_device_id,
+                    encryption_public_key: event_public_key,
+                    signing_public_key: event_signing_public_key,
                     label: MemberLabel::from_trusted(String::new()),
-                    secrets_key_ciphertext: envelopes.secrets_key.clone(),
-                    members_key_ciphertext: envelopes.members_key.clone(),
+                    secrets_key_ciphertext: envelopes.secrets_key,
+                    members_key_ciphertext: envelopes.members_key,
                 });
             }
             VaultType::Sentinel => {
                 if !self.vault.meta.sentinel_shares.is_empty() {
                     return Err(MultiDeviceError::SentinelGenesisRosterFull.into());
                 }
-                let new_member = VaultMember::member_from_join(&join)?;
                 let roster = match VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
                     records: &records,
                     members_key: &members_key,
                 }) {
                     Ok(existing) => VaultMember::roster_add_member(RosterAddMemberRequest {
                         roster: existing,
-                        member: new_member,
+                        member: VaultMember::try_from(join)?,
                     }),
-                    Err(_) => vec![
-                        VaultMember::member_from_identity(MemberFromIdentityRequest {
-                            identity: &identity,
-                            enrolled_at: &join.requested_at,
-                        }),
-                        new_member,
-                    ],
+                    Err(_) => {
+                        let approver =
+                            VaultMember::member_from_identity(MemberFromIdentityRequest {
+                                identity: &identity,
+                                enrolled_at: &join.requested_at,
+                            });
+                        vec![approver, VaultMember::try_from(join)?]
+                    }
                 };
+                let share_records = self.prepare_sentinel_shares(&roster)?;
                 let member_records =
                     VaultMember::build_members_records(BuildMembersRecordsRequest {
-                        roster: &roster,
+                        roster: roster,
                         members_key: &members_key,
                     })?;
-                self.vault.meta.remove_key(join.device_id.as_str());
+                self.vault.meta.remove_key(event_device_id.as_str());
                 self.vault.meta.replace_member_records(&member_records)?;
                 operations.push(VaultOperation::SentinelParticipantEnrolled {
-                    device_id: join.device_id.clone(),
-                    encryption_public_key: join.public_key.clone(),
-                    signing_public_key: join.signing_public_key.clone(),
+                    device_id: event_device_id,
+                    encryption_public_key: event_public_key,
+                    signing_public_key: event_signing_public_key,
                     label: MemberLabel::from_trusted(String::new()),
                 });
-                if let Some(share_op) = self.maybe_issue_sentinel_shares(&roster)? {
+                if let Some(share_op) = self.apply_sentinel_share_records(share_records)? {
                     operations.push(share_op);
                 }
             }
@@ -287,19 +292,28 @@ impl NookVaultManager {
         Ok(self.get_records()?)
     }
 
+    #[cfg(test)]
     fn maybe_issue_sentinel_shares(
         &mut self,
         roster: &[nook_core::VaultMember],
     ) -> Result<Option<nook_core::VaultOperation>, NookError> {
+        let records = self.prepare_sentinel_shares(roster)?;
+        self.apply_sentinel_share_records(records)
+    }
+
+    fn prepare_sentinel_shares(
+        &self,
+        roster: &[nook_core::VaultMember],
+    ) -> Result<Vec<nook_core::StoredSecretRecord>, NookError> {
         let policy = self.vault.architecture.sentinel.policy_or_default();
         if roster.len() > usize::from(u8::from(policy.required_participants)) {
             return Err(MultiDeviceError::SentinelGenesisRosterFull.into());
         }
         if roster.len() < usize::from(u8::from(policy.required_participants)) {
-            return Ok(None);
+            return Ok(Vec::new());
         }
         if !self.vault.meta.sentinel_shares.is_empty() {
-            return Ok(None);
+            return Ok(Vec::new());
         }
         let keys = nook_core::VaultKeys {
             secrets_key: SymmetricKey::parse(&self.vault.secrets_key)?,
@@ -316,6 +330,17 @@ impl NookVaultManager {
                 threshold: policy.threshold,
             },
         )?;
+        Ok(share_records)
+    }
+
+    fn apply_sentinel_share_records(
+        &mut self,
+        share_records: Vec<nook_core::StoredSecretRecord>,
+    ) -> Result<Option<nook_core::VaultOperation>, NookError> {
+        if share_records.is_empty() {
+            return Ok(None);
+        }
+        let policy = self.vault.architecture.sentinel.policy_or_default();
         let mut shares = Vec::with_capacity(share_records.len());
         for record in &share_records {
             self.vault.meta.apply_record(record)?;
@@ -808,12 +833,16 @@ impl NookVaultManager {
             signing_public_key: DeviceSigningPublicKey::parse(&join_signing_public_key)?,
             requested_at: BrowserTimestamp::now().into_iso_string(),
         };
+        // The signed event and encrypted roster each retain this public identity tuple.
+        let event_device_id = join.device_id.clone();
+        let event_public_key = join.public_key.clone();
+        let event_signing_public_key = join.signing_public_key.clone();
         let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let (auth_record, _join_key, member_records) = nook_core::JoinRequestApproval::new(
             &secrets_key,
             &members_key,
-            &join,
+            join,
             &identity,
             &records,
         )
@@ -823,12 +852,12 @@ impl NookVaultManager {
         let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         let operations = vec![VaultOperation::JoinApproved {
-            device_id: join.device_id.clone(),
-            encryption_public_key: join.public_key.clone(),
-            signing_public_key: join.signing_public_key.clone(),
+            device_id: event_device_id,
+            encryption_public_key: event_public_key,
+            signing_public_key: event_signing_public_key,
             label: MemberLabel::from_trusted(label),
-            secrets_key_ciphertext: envelopes.secrets_key.clone(),
-            members_key_ciphertext: envelopes.members_key.clone(),
+            secrets_key_ciphertext: envelopes.secrets_key,
+            members_key_ciphertext: envelopes.members_key,
         }];
         self.persist_vault_change(operations).await?;
         Ok(self.get_records()?)

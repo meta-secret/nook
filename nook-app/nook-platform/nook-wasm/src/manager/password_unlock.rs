@@ -493,7 +493,7 @@ impl NookVaultManager {
             }),
         });
         let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: &updated_roster,
+            roster: updated_roster,
             members_key: &keys.members_key,
         })?;
         for record in &member_records {

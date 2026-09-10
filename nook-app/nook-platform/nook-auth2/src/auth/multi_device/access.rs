@@ -70,7 +70,7 @@ impl VaultMetaState {
         });
         Ok(SelfRosterSync::Updated(VaultMember::build_members_records(
             BuildMembersRecordsRequest {
-                roster: &updated,
+                roster: updated,
                 members_key: members_key,
             },
         )?))
@@ -176,7 +176,7 @@ mod tests {
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
-            &join,
+            join,
             approver,
             records,
         )

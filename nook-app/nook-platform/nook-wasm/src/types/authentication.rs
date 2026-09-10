@@ -15,7 +15,7 @@ pub struct NookLoginAccount {
 
 pub(crate) struct LoginAccountProjection<'a> {
     pub(crate) secret_id: &'a SecretId,
-    pub(crate) login: &'a LoginSecret,
+    pub(crate) login: LoginSecret,
 }
 
 #[wasm_bindgen]
@@ -277,19 +277,25 @@ impl NookAuthenticationWorkflowSnapshot {
     }
 }
 
-#[wasm_bindgen]
-impl NookLoginAccount {
-    pub(crate) fn from_projection(projection: &LoginAccountProjection<'_>) -> Self {
+impl From<LoginAccountProjection<'_>> for NookLoginAccount {
+    fn from(mut projection: LoginAccountProjection<'_>) -> Self {
+        use zeroize::Zeroize;
+        let website_host = WebsiteHost::normalize(&projection.login.website_url)
+            .map(WebsiteHost::into_string)
+            .unwrap_or_default();
+        projection.login.password.zeroize();
+        projection.login.notes.zeroize();
         Self {
             secret_id: projection.secret_id.to_string(),
-            username: projection.login.username.clone(),
-            website_url: projection.login.website_url.clone(),
-            website_host: WebsiteHost::normalize(&projection.login.website_url)
-                .map(WebsiteHost::into_string)
-                .unwrap_or_default(),
+            username: projection.login.username,
+            website_url: projection.login.website_url,
+            website_host,
         }
     }
+}
 
+#[wasm_bindgen]
+impl NookLoginAccount {
     #[wasm_bindgen(getter, js_name = secretId)]
     pub fn secret_id(&self) -> String {
         self.secret_id.clone()
@@ -502,9 +508,9 @@ mod browser_tests {
             password: "secret".into(),
             notes: String::new(),
         };
-        let account = NookLoginAccount::from_projection(&LoginAccountProjection {
+        let account = NookLoginAccount::from(LoginAccountProjection {
             secret_id: &id,
-            login: &login,
+            login,
         });
         assert_eq!(account.secret_id(), "secret-1");
         assert_eq!(account.username(), "alice");

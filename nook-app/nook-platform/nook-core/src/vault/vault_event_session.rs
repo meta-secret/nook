@@ -256,7 +256,7 @@ impl VaultEventSession {
             members_key: members_key,
         })?;
         let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: &roster,
+            roster: roster,
             members_key: members_key,
         })?;
         let json = serde_json::to_string(&member_records)

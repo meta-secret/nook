@@ -66,7 +66,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     let (auth_two, join_key, member_records) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
-        &join_two,
+        join_two,
         &genesis,
         &records,
     )
@@ -87,7 +87,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     let (auth_three, join_key, member_records) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
-        &join_three,
+        join_three,
         &genesis,
         &records,
     )
@@ -229,7 +229,7 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Resul
     let (auth, join_key, _) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
-        &join,
+        join,
         &genesis,
         &records,
     )
@@ -285,7 +285,7 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     let (auth, join_key, member_records) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
-        &join,
+        join,
         &genesis,
         &records,
     )

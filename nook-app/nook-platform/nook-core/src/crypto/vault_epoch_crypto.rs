@@ -137,7 +137,7 @@ impl<'a> MembersCheckpointHash<'a> {
             members_key: old_members_key,
         })?;
         let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: &roster,
+            roster: roster,
             members_key: new_members_key,
         })?;
         let json = serde_json::to_string(&member_records)
@@ -191,7 +191,7 @@ impl<'a> VaultMetaRecordRewrap<'a> {
         }
         records.extend(VaultMember::build_members_records(
             BuildMembersRecordsRequest {
-                roster: &roster,
+                roster: roster,
                 members_key: &new_keys.members_key,
             },
         )?);
@@ -362,7 +362,7 @@ mod tests {
         let (joiner_auth, join_key, member_records) = JoinRequestApproval::new(
             &old_keys.secrets_key,
             &old_keys.members_key,
-            &join,
+            join,
             &owner,
             &records,
         )

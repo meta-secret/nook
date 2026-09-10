@@ -17,6 +17,21 @@ struct DecryptedPasskeys {
     rows: Vec<(nook_core::SecretId, nook_core::PasskeySecret)>,
 }
 
+impl DecryptedPasskeys {
+    fn into_accounts(mut self, rp_id: &str) -> Vec<NookPasskeyAccount> {
+        let mut accounts = Vec::new();
+        self.rows.reverse();
+        while let Some((_, mut passkey)) = self.rows.pop() {
+            if passkey.rp_id.eq_ignore_ascii_case(rp_id) {
+                accounts.push(NookPasskeyAccount::from(passkey));
+            } else {
+                passkey.zeroize_plaintext();
+            }
+        }
+        accounts
+    }
+}
+
 impl Drop for DecryptedPasskeys {
     fn drop(&mut self) {
         for (_, passkey) in &mut self.rows {
@@ -443,13 +458,7 @@ impl NookVaultManager {
             .validate()
             .map_err(|error| NookVaultManager::passkey_error(&error))?;
         let passkeys = self.decrypt_passkeys()?;
-        let accounts = passkeys
-            .rows
-            .iter()
-            .filter(|(_, passkey)| passkey.rp_id.eq_ignore_ascii_case(rp_id))
-            .map(|(_, passkey)| NookPasskeyAccount::from_core(passkey))
-            .collect();
-        Ok(accounts)
+        Ok(passkeys.into_accounts(rp_id))
     }
 
     #[wasm_bindgen]

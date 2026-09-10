@@ -56,7 +56,7 @@ impl IdentityRecord {
         }
         records.extend(VaultMember::build_members_records(
             BuildMembersRecordsRequest {
-                roster: &roster,
+                roster: roster,
                 members_key: &keys.members_key,
             },
         )?);

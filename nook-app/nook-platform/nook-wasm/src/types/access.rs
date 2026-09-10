@@ -184,6 +184,19 @@ pub struct NookVaultMember {
 
 #[wasm_bindgen]
 impl NookVaultMember {
+    /// Snapshot public enrollment metadata while the live vault retains its join record.
+    pub(crate) fn from_enrolled_join(
+        join: &nook_core::JoinRequest,
+    ) -> Result<Self, nook_core::MultiDeviceError> {
+        Ok(Self {
+            auth_id: join.public_key.auth_id()?.to_string(),
+            device_id: join.device_id.to_string(),
+            public_key: join.public_key.as_str().to_owned(),
+            enrolled_at: join.requested_at.clone(),
+            label: String::new(),
+        })
+    }
+
     pub(crate) fn from_core(member: nook_core::VaultMember) -> Self {
         Self {
             auth_id: member.auth_id.to_string(),

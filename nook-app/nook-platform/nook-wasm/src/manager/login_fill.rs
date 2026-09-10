@@ -38,18 +38,21 @@ impl NookVaultManager {
                 .map_err(|error| NookError::Database(error.to_string())),
                 _ => Ok(false),
             };
-            let account = match (&record.data, &matches) {
-                (SecretValue::Login(login), Ok(true)) => {
-                    Some(NookLoginAccount::from_projection(&LoginAccountProjection {
-                        secret_id: id,
-                        login,
-                    }))
+            match matches {
+                Ok(true) => match record.data {
+                    SecretValue::Login(login) => {
+                        accounts.push(NookLoginAccount::from(LoginAccountProjection {
+                            secret_id: id,
+                            login,
+                        }))
+                    }
+                    mut other => other.zeroize_plaintext(),
+                },
+                Ok(false) => record.zeroize_plaintext(),
+                Err(error) => {
+                    record.zeroize_plaintext();
+                    return Err(error);
                 }
-                _ => None,
-            };
-            record.zeroize_plaintext();
-            if matches? && let Some(account) = account {
-                accounts.push(account);
             }
         }
         Ok(accounts)

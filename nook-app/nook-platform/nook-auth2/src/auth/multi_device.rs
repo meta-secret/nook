@@ -87,7 +87,7 @@ mod tests {
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
-            &join,
+            join,
             approver,
             records,
         )
@@ -270,7 +270,7 @@ mod tests {
         let wrong_members_key = SymmetricKey::generate_for_vault()?;
         let corrupt_member_record =
             VaultMember::build_members_records(BuildMembersRecordsRequest {
-                roster: &[VaultMember::member_from_identity(
+                roster: vec![VaultMember::member_from_identity(
                     MemberFromIdentityRequest {
                         identity: &genesis,
                         enrolled_at: ENROLLED_AT,
@@ -298,7 +298,7 @@ mod tests {
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
-            &join,
+            join,
             &genesis,
             &records,
         )

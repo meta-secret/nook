@@ -15,7 +15,7 @@ pub struct MemberFromIdentityRequest<'a> {
 
 /// Named values required by VaultMember::build_members_records.
 pub struct BuildMembersRecordsRequest<'a> {
-    pub roster: &'a [VaultMember],
+    pub roster: Vec<VaultMember>,
     pub members_key: &'a SymmetricKey,
 }
 
@@ -76,37 +76,41 @@ impl VaultMember {
     }
 }
 
-impl VaultMember {
-    pub fn member_from_join(join: &JoinRequest) -> MultiDeviceResult<VaultMember> {
-        Ok(VaultMember {
+impl TryFrom<JoinRequest> for VaultMember {
+    type Error = MultiDeviceError;
+
+    fn try_from(join: JoinRequest) -> MultiDeviceResult<Self> {
+        Ok(Self {
             auth_id: join.public_key.auth_id()?,
-            device_id: join.device_id.clone(),
-            public_key: join.public_key.clone(),
-            enrolled_at: join.requested_at.clone(),
+            device_id: join.device_id,
+            public_key: join.public_key,
+            enrolled_at: join.requested_at,
             label: None,
         })
     }
 }
 
-impl VaultMember {
-    fn member_to_entry(member: &VaultMember) -> MemberEntry {
-        MemberEntry {
-            pk_id: member.auth_id.clone(),
-            pk: member.public_key.clone(),
-            label: member.label.clone(),
-            enrolled_at: member.enrolled_at.clone(),
+impl From<VaultMember> for MemberEntry {
+    fn from(member: VaultMember) -> Self {
+        Self {
+            pk_id: member.auth_id,
+            pk: member.public_key,
+            label: member.label,
+            enrolled_at: member.enrolled_at,
         }
     }
 }
 
-impl VaultMember {
-    fn entry_to_member(entry: &MemberEntry) -> MultiDeviceResult<VaultMember> {
-        Ok(VaultMember {
-            auth_id: entry.pk_id.clone(),
+impl TryFrom<MemberEntry> for VaultMember {
+    type Error = MultiDeviceError;
+
+    fn try_from(entry: MemberEntry) -> MultiDeviceResult<Self> {
+        Ok(Self {
             device_id: entry.pk.try_app_id()?,
-            public_key: entry.pk.clone(),
-            enrolled_at: entry.enrolled_at.clone(),
-            label: entry.label.clone(),
+            auth_id: entry.pk_id,
+            public_key: entry.pk,
+            enrolled_at: entry.enrolled_at,
+            label: entry.label,
         })
     }
 }
@@ -156,7 +160,7 @@ impl VaultMember {
         } = request;
         let mut records = Vec::with_capacity(roster.len());
         for member in roster {
-            let entry = VaultMember::member_to_entry(member);
+            let entry = MemberEntry::from(member);
             records.push(StoredSecretRecord {
                 key: SecretId::from_vault_record(&entry.pk_id.member_record_key()),
                 secret_type: None,
@@ -200,7 +204,7 @@ impl VaultMember {
                     actual_key: record.key.to_string(),
                 });
             }
-            roster.push(VaultMember::entry_to_member(&entry)?);
+            roster.push(VaultMember::try_from(entry)?);
         }
         roster.sort_by(|a, b| a.auth_id.cmp(&b.auth_id));
         Ok(roster)
@@ -228,7 +232,7 @@ impl VaultMember {
             enrolled_at,
         } = request;
         VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: &[VaultMember::member_from_identity(
+            roster: vec![VaultMember::member_from_identity(
                 MemberFromIdentityRequest {
                     identity: identity,
                     enrolled_at: enrolled_at,
@@ -298,7 +302,7 @@ impl VaultMember {
             })
             .collect::<Vec<_>>();
         VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: &roster,
+            roster: roster,
             members_key: members_key,
         })
     }
@@ -352,7 +356,7 @@ impl VaultMember {
         VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
             records: &mut updated,
             member_records: VaultMember::build_members_records(BuildMembersRecordsRequest {
-                roster: &remaining_roster,
+                roster: remaining_roster,
                 members_key: members_key,
             })?,
         })?;
@@ -414,7 +418,7 @@ mod tests {
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
-            &join,
+            join,
             approver,
             records,
         )

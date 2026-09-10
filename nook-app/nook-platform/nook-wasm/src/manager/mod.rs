@@ -501,9 +501,9 @@ impl NookVaultManager {
         }
         let mut enrolled = Vec::new();
         for join in self.vault.meta.enrolled_devices.values() {
-            enrolled.push(VaultMember::member_from_join(join)?);
+            enrolled.push(NookVaultMember::from_enrolled_join(join)?);
         }
-        Ok(NookVaultMember::members_to_vec(enrolled))
+        Ok(enrolled)
     }
 
     pub(in crate::manager) fn serialize_current_projection_yaml(

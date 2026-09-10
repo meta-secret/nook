@@ -67,7 +67,7 @@ impl<'a> JoinRequestIssuance<'a> {
 pub struct JoinRequestApproval<'a> {
     secrets_key: &'a SymmetricKey,
     members_key: &'a SymmetricKey,
-    join: &'a JoinRequest,
+    join: JoinRequest,
     approver: &'a DeviceIdentity,
     records: &'a [StoredSecretRecord],
 }
@@ -77,7 +77,7 @@ impl<'a> JoinRequestApproval<'a> {
     pub fn new(
         secrets_key: &'a SymmetricKey,
         members_key: &'a SymmetricKey,
-        join: &'a JoinRequest,
+        join: JoinRequest,
         approver: &'a DeviceIdentity,
         records: &'a [StoredSecretRecord],
     ) -> Self {
@@ -102,28 +102,28 @@ impl<'a> JoinRequestApproval<'a> {
             &self.join.public_key,
         )
         .issue()?;
-        let new_member = VaultMember::member_from_join(self.join)?;
+        let join_key = self.join.device_id.to_string();
         let roster = match VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
             records: self.records,
             members_key: self.members_key,
         }) {
             Ok(existing) => VaultMember::roster_add_member(RosterAddMemberRequest {
                 roster: existing,
-                member: new_member,
+                member: VaultMember::try_from(self.join)?,
             }),
-            Err(_) => vec![
-                VaultMember::member_from_identity(MemberFromIdentityRequest {
+            Err(_) => {
+                let approver = VaultMember::member_from_identity(MemberFromIdentityRequest {
                     identity: self.approver,
                     enrolled_at: &self.join.requested_at,
-                }),
-                new_member,
-            ],
+                });
+                vec![approver, VaultMember::try_from(self.join)?]
+            }
         };
         let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: &roster,
+            roster: roster,
             members_key: self.members_key,
         })?;
-        Ok((auth_record, self.join.device_id.to_string(), member_records))
+        Ok((auth_record, join_key, member_records))
     }
 }
 
