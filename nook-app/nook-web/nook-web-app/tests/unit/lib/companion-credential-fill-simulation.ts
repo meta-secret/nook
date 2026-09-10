@@ -1,4 +1,8 @@
 import {
+  CredentialFillHandlePhase,
+  type CredentialFillObservationLifetime,
+} from './companion-credential-fill-lifetime'
+import {
   CredentialFillEditability,
   CredentialFillFieldClassificationOutcome,
   CredentialFillFieldIndex,
@@ -522,7 +526,10 @@ function planCredentialFillPage({
   page,
   form,
 }: PlanCredentialFillPageRequest): CredentialFillPlanning {
-  const observations = new CredentialFillObservations()
+  let observations: CredentialFillObservationLifetime = {
+    kind: CredentialFillHandlePhase.Owned,
+    handle: new CredentialFillObservations(),
+  }
   try {
     for (const field_identity of page.observed_field_identities) {
       const request: ResolveSimulatedCredentialFieldRequest = {
@@ -531,14 +538,20 @@ function planCredentialFillPage({
       }
       const field = resolveSimulatedCredentialField(request)
       switch (field.classification.kind) {
-        case CredentialFillFieldClassificationOutcome.Observed:
-          observations.add(field.classification.observation)
+        case CredentialFillFieldClassificationOutcome.Observed: {
+          const receiver = observations.handle
+          observations = { kind: CredentialFillHandlePhase.Consumed }
+          observations = {
+            kind: CredentialFillHandlePhase.Owned,
+            handle: receiver.add(field.classification.observation),
+          }
           break
+        }
         case CredentialFillFieldClassificationOutcome.Ignored:
           break
       }
     }
-    const result = plan_companion_credential_fill(observations)
+    const result = plan_companion_credential_fill(observations.handle)
     try {
       switch (result.kind) {
         case CredentialFillPlanningOutcome.Planned:
@@ -557,7 +570,8 @@ function planCredentialFillPage({
       result.free()
     }
   } finally {
-    observations.free()
+    if (observations.kind === CredentialFillHandlePhase.Owned)
+      observations.handle.free()
   }
 }
 
@@ -576,9 +590,7 @@ function resolveCredentialValue({
     case CredentialKind.CurrentPassword:
       return credentials.password
   }
-  throw new Error(
-    'credential fill plan contains an unsupported credential kind',
-  )
+  throw new Error('credential fill plan contains an unsupported credential kind')
 }
 
 type ResolvedCredentialAssignment = {
@@ -693,35 +705,31 @@ function simulateLoginPage({
     const planning = planCredentialFillPage(planningRequest)
     switch (planning.kind) {
       case CredentialFillPlanningOutcome.Planned: {
-        try {
-          const applyRequest: ApplyCredentialPlanRequest = {
-            plan: planning.plan,
-            form,
-            credentials,
-          }
-          applyCredentialPlan(applyRequest)
-          const snapshotRequest: SnapshotLoginPageRequest = {
-            page_identity: page.page_identity,
-            form,
-          }
-          const snapshot = snapshotLoginPage(snapshotRequest)
-          switch (success.kind) {
-            case CredentialFillJourneyOutcomeKind.Replaced:
-              return {
-                kind: CredentialFillJourneyOutcomeKind.Replaced,
-                next_page_identity: success.next_page_identity,
-                snapshot,
-              }
-            case CredentialFillJourneyOutcomeKind.Completed:
-              return {
-                kind: CredentialFillJourneyOutcomeKind.Completed,
-                snapshot,
-              }
-          }
-          throw new Error('unsupported successful login page outcome')
-        } finally {
-          planning.plan.free()
+        const applyRequest: ApplyCredentialPlanRequest = {
+          plan: planning.plan,
+          form,
+          credentials,
         }
+        applyCredentialPlan(applyRequest)
+        const snapshotRequest: SnapshotLoginPageRequest = {
+          page_identity: page.page_identity,
+          form,
+        }
+        const snapshot = snapshotLoginPage(snapshotRequest)
+        switch (success.kind) {
+          case CredentialFillJourneyOutcomeKind.Replaced:
+            return {
+              kind: CredentialFillJourneyOutcomeKind.Replaced,
+              next_page_identity: success.next_page_identity,
+              snapshot,
+            }
+          case CredentialFillJourneyOutcomeKind.Completed:
+            return {
+              kind: CredentialFillJourneyOutcomeKind.Completed,
+              snapshot,
+            }
+        }
+        throw new Error('unsupported successful login page outcome')
       }
       case CredentialFillPlanningOutcome.Rejected: {
         const snapshotRequest: SnapshotLoginPageRequest = {
