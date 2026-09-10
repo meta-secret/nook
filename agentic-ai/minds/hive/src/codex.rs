@@ -28,6 +28,7 @@ pub use output::{
 
 mod activity;
 mod progress;
+mod progress_output;
 
 use progress::*;
 
@@ -472,8 +473,9 @@ impl CodexTurn<'_> {
                 .next_event()
                 .await
                 .map_err(|error| CodexError::Run(error.to_string()))?;
-            progress
-                .observe(&event.msg)
+            let observed;
+            (progress, observed) = progress.observe(&event.msg);
+            observed
                 .map_err(|error| CodexError::Run(format!("failed to write progress: {error}")))?;
             if let (Some(sender), Some(activity)) = (
                 activity_sender,
@@ -705,17 +707,28 @@ mod tests {
             decoration: ProgressDecoration::Plain,
         });
 
-        progress.reasoning_delta("Inspecting ")?;
-        progress.reasoning_delta("the repository.\n")?;
-        progress.announce_plan_output()?;
-        progress.announce_plan_output()?;
-        progress.finish_reasoning()?;
+        let outcome;
+        (progress, outcome) = progress.reasoning_delta("Inspecting ");
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.reasoning_delta("the repository.\n");
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.announce_plan_output();
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.announce_plan_output();
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.finish_reasoning();
+        outcome?;
 
+        let announcement = progress.plan_output_announced();
         assert_eq!(
             String::from_utf8(progress.writer)?,
             "  ↳ Inspecting the repository.\n  ◆  Building feature plan\n     Writing structured tasks and dependencies\n"
         );
-        assert!(progress.plan_output_announced);
+        assert!(matches!(announcement, Announcement::Announced));
         Ok(())
     }
 
@@ -744,7 +757,9 @@ mod tests {
         ];
 
         for command in commands {
-            progress.inspection(&command)?;
+            let outcome;
+            (progress, outcome) = progress.inspection(&command);
+            outcome?;
         }
         let output = String::from_utf8(progress.writer)?;
 
@@ -765,7 +780,9 @@ mod tests {
         });
         let command = vec!["/bin/zsh".into(), "-lc".into(), "rg missing-file".into()];
 
-        progress.failed_inspection(2, &command)?;
+        let outcome;
+        (progress, outcome) = progress.failed_inspection(2, &command);
+        outcome?;
         let output = String::from_utf8(progress.writer)?;
 
         assert!(output.contains("Repository inspection failed (exit 2)"));
@@ -783,15 +800,26 @@ mod tests {
             task_id: "core-agent".into(),
         });
 
-        progress.line("36", "●", "start", "Agent started")?;
-        progress.command_finished(
+        let outcome;
+        (progress, outcome) = progress.line("36", "●", "start", "Agent started");
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.command_finished(
             &["cargo".into(), "test".into(), "-p".into(), "core".into()],
             0,
             1.24,
-        )?;
-        progress.line("33", "!", "warning", "Embedded turn reported a warning")?;
-        progress.announce_finalizing()?;
-        progress.announce_finalizing()?;
+        );
+        outcome?;
+        let outcome;
+        (progress, outcome) =
+            progress.line("33", "!", "warning", "Embedded turn reported a warning");
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.announce_finalizing();
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.announce_finalizing();
+        outcome?;
 
         let output = String::from_utf8(progress.writer)?;
         assert!(output.contains("core-agent"));
@@ -811,11 +839,13 @@ mod tests {
             task_id: "ui-agent".into(),
         });
 
-        progress.command_finished(
+        let outcome;
+        (progress, outcome) = progress.command_finished(
             &["secret-command".into(), "credential-value".into()],
             1,
             0.5,
-        )?;
+        );
+        outcome?;
 
         let output = String::from_utf8(progress.writer)?;
         assert!(output.contains("failed  · Repository command exited with status 1"));
@@ -891,10 +921,18 @@ mod tests {
             writer: Vec::new(),
             decoration: ProgressDecoration::Plain,
         });
-        progress.reasoning_delta("unfinished")?;
-        progress.phase("✓", "Complete", Some("all checks passed"))?;
-        progress.note("first\n\n second ")?;
-        progress.alert("!", "Warning", "bounded detail", "33")?;
+        let outcome;
+        (progress, outcome) = progress.reasoning_delta("unfinished");
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.phase("✓", "Complete", Some("all checks passed"));
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.note("first\n\n second ");
+        outcome?;
+        let outcome;
+        (progress, outcome) = progress.alert("!", "Warning", "bounded detail", "33");
+        outcome?;
         let output = String::from_utf8(progress.writer)?;
         assert!(output.contains("unfinished\n  ✓  Complete"));
         assert!(output.contains("↳ first\n  ↳ second"));
