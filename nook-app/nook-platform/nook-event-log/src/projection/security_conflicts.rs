@@ -266,6 +266,67 @@ mod tests {
     }
 
     #[test]
+    fn ordered_security_changes_remain_resolved_without_a_checkpoint() -> EventResult<()> {
+        let owner_key = key();
+        let member_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = {
+            let prepared = ProjectionFixtures::genesis(graph, &owner_key)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
+        assert_eq!(
+            graph.current_epoch_checkpoint()?,
+            EpochCheckpoint::Unrotated
+        );
+
+        let device_id = DeviceId::parse("abcd1234ef567890")?;
+        let grant = ProjectionFixtures::signed_operation(
+            &owner_key,
+            vec![genesis_id],
+            VaultOperation::JoinApproved {
+                device_id: device_id.clone(),
+                encryption_public_key: DevicePublicKey::from_trusted("age1member".to_owned()),
+                signing_public_key: public_key(&member_key),
+                label: MemberLabel::from_trusted("Member".to_owned()),
+                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret".to_owned()),
+                members_key_ciphertext: AgeArmoredCiphertext::from_trusted("members".to_owned()),
+            },
+        )?;
+        let grant_id = grant.id()?;
+        graph = graph
+            .insert(crate::EventGraphInsert {
+                event: grant,
+                expected_store_id: STORE,
+            })
+            .map_err(EventGraphRejection::into_cause)?
+            .graph;
+
+        let revoke = ProjectionFixtures::signed_operation(
+            &owner_key,
+            vec![grant_id],
+            VaultOperation::DeviceRevoked { device_id },
+        )?;
+        graph = graph
+            .insert(crate::EventGraphInsert {
+                event: revoke,
+                expected_store_id: STORE,
+            })
+            .map_err(EventGraphRejection::into_cause)?
+            .graph;
+
+        let projection = VaultProjection::from_graph(&graph, STORE)?;
+        assert!(projection.security_conflicts.is_empty());
+        assert!(!projection.has_blocking_conflicts());
+        assert_eq!(projection.integrity(), ProjectionIntegrity::Resolved);
+        assert_eq!(
+            graph.current_epoch_checkpoint()?,
+            EpochCheckpoint::Unrotated
+        );
+        Ok(())
+    }
+
+    #[test]
     fn projection_integrity_prioritizes_schema_and_conflict_states() {
         let mut projection = VaultProjection::default();
         assert_eq!(projection.integrity(), ProjectionIntegrity::Resolved);
