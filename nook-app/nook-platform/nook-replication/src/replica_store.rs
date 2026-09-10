@@ -11,7 +11,16 @@ use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplicaEventBytes<'a> {
     UnknownEvent,
-    Stored(&'a [u8]),
+    Stored(
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "serialization boundary: borrowed immutable event storage bytes"
+            )
+        )]
+        &'a [u8],
+    ),
 }
 
 /// Result of inserting immutable bytes for an event identifier.
@@ -57,7 +66,16 @@ pub struct ReplicaDequeue<Id> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplicaOutboxRemovalResult {
     NotQueued,
-    Removed(Vec<u8>),
+    Removed(
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "serialization boundary: removed opaque event storage bytes"
+            )
+        )]
+        Vec<u8>,
+    ),
 }
 
 /// Provider event-set classification before a connect or sync path mutates

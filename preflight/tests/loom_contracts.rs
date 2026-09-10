@@ -221,13 +221,14 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         source_gate.contains("ExecutableSkillSource.analyze")
             && source_gate
                 .contains(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts")
-            && source_gate.contains("ExecutableSkillRepository.readTrackedFiles"),
+            && source_gate.contains("new ExecutableSkillCheckout(")
+            && source_gate.contains(").readTrackedFiles()"),
         "loom:verify must AST-audit every tracked executable application source"
     );
     let tracked_inventory = root.read("agentic-ai/loom/src/executable-skills/repository.ts");
     assert!(
         tracked_inventory.contains("['ls-files', '--stage', '-z']")
-            && tracked_inventory.contains("static readTrackedFiles"),
+            && tracked_inventory.contains("readTrackedFiles(): Result<"),
         "executable application gates must share the NUL-safe staged inventory"
     );
 }
