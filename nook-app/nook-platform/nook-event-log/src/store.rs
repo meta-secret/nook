@@ -10,6 +10,11 @@ use crate::GenesisImportRequest;
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
 use crate::graph::{EventGraph, EventInsertStatus};
+mod transitions;
+pub use transitions::{
+    LocalEventAppend, LocalEventAppendOutcome, LocalEventStoreRejection, LocalEventWrite,
+    LocalOutboxRemoval, LocalOutboxRemovalResult, LocalOutboxRemoved, LocalOutboxWrite,
+};
 mod lookup;
 mod outbox;
 pub use lookup::LocalEventBytes;
@@ -22,51 +27,6 @@ pub use remote::{
     RemoteStoreIdentity,
 };
 use std::collections::BTreeSet;
-
-pub struct LocalEventWrite {
-    pub event_id: EventId,
-    pub bytes: EventStorageBytes,
-}
-pub struct LocalOutboxWrite<'a> {
-    pub provider_id: &'a str,
-    pub event: LocalEventWrite,
-}
-pub struct LocalOutboxRemoval<'a> {
-    pub provider_id: &'a str,
-    pub event_id: &'a EventId,
-}
-pub struct LocalEventAppend<'a> {
-    pub event: &'a VaultEvent,
-    pub store_id: &'a str,
-}
-#[derive(Debug)]
-pub struct LocalEventAppendOutcome {
-    pub store: LocalEventStore,
-    pub event_id: EventId,
-    pub status: EventInsertStatus,
-}
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LocalOutboxRemovalResult {
-    NotQueued,
-    Removed(EventStorageBytes),
-}
-#[derive(Debug)]
-pub struct LocalOutboxRemoved {
-    pub store: LocalEventStore,
-    pub removal: LocalOutboxRemovalResult,
-}
-#[derive(Debug, thiserror::Error)]
-#[error("{cause}")]
-pub struct LocalEventStoreRejection {
-    pub store: LocalEventStore,
-    #[source]
-    pub cause: EventError,
-}
-impl LocalEventStoreRejection {
-    pub fn into_cause(self) -> EventError {
-        self.cause
-    }
-}
 
 /// Local event persistence surface (`IndexedDB` / provider adapters implement I/O).
 #[derive(Debug, Clone, Default)]
