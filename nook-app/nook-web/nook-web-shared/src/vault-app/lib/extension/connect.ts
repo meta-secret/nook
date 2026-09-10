@@ -53,10 +53,7 @@ import {
   type ExtensionConnectRequestFor,
   type PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
-import {
-  ExtensionConnectScope,
-  isExtensionConnectScopeValue,
-} from "$web-shared/extension/extension-connect-scope";
+import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -224,7 +221,9 @@ class ExtensionConnectionBrowser {
       .map((scope) => scope.trim())
       .filter(Boolean);
 
-    return scopes.filter(isExtensionConnectScopeValue);
+    return scopes.filter((scope) =>
+      ExtensionConnectScope.isExtensionConnectScopeValue(scope),
+    );
   }
 
   extensionConnectRequestFromLocation(

@@ -11,13 +11,6 @@ use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplicaEventBytes<'a> {
     UnknownEvent,
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: borrowed immutable event storage bytes"
-        )
-    )]
     Stored(&'a [u8]),
 }
 
@@ -44,6 +37,7 @@ pub struct ReplicaOutboxWrite<'a, Id> {
     pub provider_id: &'a str,
     pub event: ReplicaEventWrite<Id>,
 }
+#[derive(Clone, Copy)]
 pub struct ReplicaOutboxRemoval<'a, Id> {
     pub provider_id: &'a str,
     pub event_id: &'a Id,
@@ -63,13 +57,6 @@ pub struct ReplicaDequeue<Id> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplicaOutboxRemovalResult {
     NotQueued,
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: removed opaque event storage bytes"
-        )
-    )]
     Removed(Vec<u8>),
 }
 
@@ -143,13 +130,6 @@ where
     }
 
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: returns opaque immutable event storage bytes"
-        )
-    )]
     pub fn get_bytes(&self, event_id: &Id) -> ReplicaEventBytes<'_> {
         match self.events.get(event_id) {
             Some(bytes) => ReplicaEventBytes::Stored(bytes),

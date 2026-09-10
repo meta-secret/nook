@@ -201,7 +201,9 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let skills_manifest =
         root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json");
     assert!(
-        skills_manifest.contains("\"verify\":") && !skills_manifest.contains("\"dependencies\"")
+        skills_manifest.contains("\"verify\":")
+            && skills_manifest.contains("\"zod\":")
+            && skills_manifest.contains("\"neverthrow\":")
     );
     let skills_eslint = root
         .read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/eslint.config.js");
