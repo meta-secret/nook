@@ -3,8 +3,6 @@
 use crate::BrowserDeviceAccessSnapshotForSessionWithProtected;
 use crate::BrowserDeviceVaultAccessForIdentity;
 use crate::NookDatabase;
-#[cfg(target_arch = "wasm32")]
-use crate::device_access;
 use crate::storage::identity_record;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::{ProtectedIdentityLookup, SelectedIdentityRecord};
@@ -12,8 +10,6 @@ use crate::{
     NookError,
     device_access::{NookDeviceAccessSnapshot, NookDeviceVaultAccess},
 };
-#[cfg(target_arch = "wasm32")]
-use nook_core::AppId;
 use nook_core::MemberLabelState;
 use nook_core::{
     DeviceAccessProtectionKind, IdentityId, IdentitySelection, IdentityVaultAppGrant,
@@ -78,27 +74,29 @@ impl LocalAppProtection {
     }
 }
 
-/// Named values required by NookIdentityDirectorySnapshot::provider_vault_identity_observations.
+/// Named values required by `NookIdentityDirectorySnapshot::provider_vault_identity_observations`.
 pub(crate) struct BrowserProviderVaultIdentityObservations<'a> {
     pub(crate) session_app_id: &'a str,
     pub(crate) store_id: &'a nook_core::StoreId,
 }
 
-/// Named values required by NookIdentityDirectorySnapshot::provider_vault_identity_observations_from_projection.
+/// Named values required by `NookIdentityDirectorySnapshot::provider_vault_identity_observations_from_projection`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserProviderVaultIdentityObservationsFromProjection<'a> {
     pub(crate) session_app_id: &'a str,
     pub(crate) store_id: &'a nook_core::StoreId,
     pub(crate) projection: &'a identity_record::LocalIdentityProjection,
 }
 
-/// Named values required by NookIdentityDirectorySnapshot::identity_directory_snapshot_for_session.
+/// Named values required by `NookIdentityDirectorySnapshot::identity_directory_snapshot_for_session`.
 pub(crate) struct BrowserIdentityDirectorySnapshotForSession<'a> {
     pub(crate) session_app_id: &'a str,
     pub(crate) session_unlocked: nook_core::DeviceSessionLockState,
     pub(crate) selected_store_id: VaultSnapshotScope<'a>,
 }
 
-/// Named values required by NookIdentityDirectorySnapshot::selected_vault_current_app_granted.
+/// Named values required by `NookIdentityDirectorySnapshot::selected_vault_current_app_granted`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserSelectedVaultCurrentAppGranted<'a> {
     pub(crate) identities: &'a [&'a nook_core::IdentityRecord],
     pub(crate) selected_store_id: VaultSnapshotScope<'a>,
@@ -354,7 +352,7 @@ enum NookIdentityDirectorySelection {
     Selected(String),
 }
 
-/// Named values required by NookIdentityDirectorySelection::directory_selection_for_session.
+/// Named values required by `NookIdentityDirectorySelection::directory_selection_for_session`.
 pub(crate) struct BrowserDirectorySelectionForSession<'a> {
     pub(crate) persisted_selection: &'a nook_core::IdentitySelection,
     pub(crate) current_identity_id: IdentitySelection,
@@ -469,8 +467,8 @@ impl NookIdentityDirectorySnapshot {
         let access = NookDeviceAccessSnapshot::device_access_snapshot_for_session_with_protected(
             BrowserDeviceAccessSnapshotForSessionWithProtected {
                 session_device_id: session_app_id,
-                session_unlocked: session_unlocked,
-                protected: protected,
+                session_unlocked,
+                protected,
             },
         )
         .await?;
@@ -510,7 +508,7 @@ impl NookIdentityDirectorySnapshot {
             NookIdentityDirectorySnapshot::selected_vault_current_app_granted(
                 BrowserSelectedVaultCurrentAppGranted {
                     identities: &selected_identities,
-                    selected_store_id: selected_store_id,
+                    selected_store_id,
                     current_app_id: &current_app,
                 },
             );
@@ -522,7 +520,7 @@ impl NookIdentityDirectorySnapshot {
                 BrowserDeviceVaultAccessForIdentity {
                     identity: record,
                     local_app_ids: &local_app_ids,
-                    session_app_id: session_app_id,
+                    session_app_id,
                 },
             )
             .await?;
@@ -574,7 +572,8 @@ impl NookIdentityDirectorySnapshot {
     }
 }
 
-/// Named values required by NookSelectedVaultIdentityContextKind::selected_vault_context_kind.
+/// Named values required by `NookSelectedVaultIdentityContextKind::selected_vault_context_kind`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserSelectedVaultContextKind<'a> {
     pub(crate) identities: &'a [NookIdentitySnapshot],
     pub(crate) current_app_granted: bool,

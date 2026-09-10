@@ -51,6 +51,7 @@ mod tests {
     use crate::storage::identity_record::{
         IDENTITY_DIRECTORY_KEY, recovery::LocalIdentityRecoveryRequest,
     };
+    use crate::{IdbPutStringRequest, IdentityDbSaveNewProtectedLocalIdentity};
     use nook_core::{AppKey, DeviceIdentityProtection};
     use wasm_bindgen_test::wasm_bindgen_test;
     #[cfg_attr(

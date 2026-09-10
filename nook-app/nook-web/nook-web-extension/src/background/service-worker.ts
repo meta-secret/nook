@@ -382,6 +382,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       .then(async () => {
         const admission = AuthenticationWorkflowSnapshotIngress.admit(message)
         if (admission.kind !== 'accepted') {
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           sendResponse({ ok: false, reason: 'workflow-invalid-observation' })
           return
         }
@@ -434,6 +435,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
         )
       })
       .catch(() =>
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         sendResponse({ ok: false, reason: 'workflow-invalid-observation' }),
       )
     return true
@@ -847,6 +849,7 @@ chrome.runtime.onMessageExternal.addListener(
       sendResponse,
     }
     void routeExternalCompanionMessage(externalRoutingArgs).catch(() =>
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       sendResponse({ ok: false, reason: 'forbidden-sender' }),
     )
     return true

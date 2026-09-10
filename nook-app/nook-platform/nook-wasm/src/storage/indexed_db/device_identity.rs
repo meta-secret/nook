@@ -163,14 +163,14 @@ impl NookDatabase {
         store: &rexie::Store,
     ) -> Result<ProtectedIdentityLookup, NookError> {
         let wrapped = NookDatabase::read_string_preferring(ReadStringPreferringRequest {
-            store: store,
+            store,
             preferred_key: APP_KEY_WRAPPED_KEY,
             legacy_key: WRAPPED_DEVICE_IDENTITY_KEY,
             label: "App key wrapped",
         })
         .await?;
         let app_id = NookDatabase::read_string_preferring(ReadStringPreferringRequest {
-            store: store,
+            store,
             preferred_key: APP_ID_KEY,
             legacy_key: DEVICE_ID_KEY,
             label: "App id",
@@ -216,8 +216,8 @@ impl NookDatabase {
 
         NookDatabase::put_wrapped_device_identity(PutWrappedDeviceIdentityRequest {
             store: &store,
-            device_id: device_id,
-            record: record,
+            device_id,
+            record,
         })
         .await?;
 

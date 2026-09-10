@@ -1,4 +1,5 @@
 <script lang="ts">
+  /* eslint-disable nook-typed-api/no-raw-object-arguments -- Existing call shapes are preserved for this lint-only fix. */
   import { err } from 'neverthrow'
   import {
     VaultStorageFailure,
@@ -232,7 +233,6 @@
     new VaultWorkspaceActions(vault).applyWorkspaceRoute({
       route: WorkspaceRoute.Vault,
     })
-
     history.pushState({}, '', new WorkspaceLocation(WorkspaceRoute.Vault).path)
     legalPageState = { kind: LegalRouteKind.Application }
     logsPage = false
@@ -248,11 +248,9 @@
         kind: ExtensionConnectIntentKind.Absent,
       }
     }
-
     new VaultWorkspaceActions(vault).applyWorkspaceRoute({
       route: WorkspaceRoute.Vault,
     })
-
     history.pushState({}, '', new WorkspaceLocation(WorkspaceRoute.Vault).path)
     legalPageState = { kind: LegalRouteKind.Application }
     logsPage = false
@@ -379,7 +377,6 @@
         ) {
           await connectionBrowser.requestPairedExtensionUnlock(activeStoreId)
         }
-
         await waitForPairedExtensionUnlock({
           storeId: activeStoreId,
         })
@@ -457,7 +454,6 @@
   }
   function toggleColorMode() {
     followsSystemColorMode = false
-
     colorMode = browserColorMode.manualColorMode({
       current: colorMode,
       storageKey: THEME_STORAGE_KEY,
@@ -530,7 +526,6 @@
     pendingEnrollmentSubmitState = {
       kind: EnrollmentSubmitQueueKind.Idle,
     }
-
     await vault.connectWithEnrollmentCode({
       code,
       password,

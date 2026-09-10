@@ -1,5 +1,10 @@
 //! Identity adoption and verified epoch reconciliation at connect completion.
-use super::*;
+use super::{
+    EventGraphAuthorizationProjection, EventId, ExtensionIdentityPublication,
+    IdentityDbEnsureLocalIdentityForAppKey, IdentityVaultDekEpoch, IdentityVaultEventId,
+    NookDatabase, NookError, NookVaultManager, SimpleGenesisCompletion, SimpleGenesisProgress,
+    StoreId, VaultNameState, VerifiedPreviousEpoch, identity_record,
+};
 
 impl NookVaultManager {
     pub(super) async fn complete_connected_identity(
@@ -35,6 +40,10 @@ impl NookVaultManager {
     }
 
     /// Persist a first-class Identity after connect, synthesizing from vault auth when needed.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "connect completion remains one ordered persistence transaction"
+    )]
     pub(in crate::manager) async fn ensure_identity_after_connect(
         &mut self,
         identity: &nook_core::DeviceIdentity,

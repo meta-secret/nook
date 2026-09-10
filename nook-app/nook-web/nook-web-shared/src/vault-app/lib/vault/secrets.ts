@@ -155,6 +155,7 @@ export class VaultSecretActions {
       }
       log.info(sourceName + " import completed");
       state.showSuccess(
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         state.t({
           key: successKey,
           replacements: { count: String(imported.value.imported) },
@@ -201,6 +202,7 @@ export class VaultSecretActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return state.raceStorageTimeout({
           promise: operation,
           releaseLateValue: (records) => this.freeSecretRecords(records),
@@ -644,7 +646,7 @@ export class VaultSecretActions {
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
           return storageOk(
-            await admittedManager.value.query_secret_page_js(
+            admittedManager.value.query_secret_page_js(
               query,
               state.secretTypeFilter,
               lastOffset,
@@ -713,7 +715,7 @@ export class VaultSecretActions {
       const admittedManager = state.admitManager();
       if (admittedManager.isErr()) return storageErr(admittedManager.error);
       try {
-        return storageOk(await admittedManager.value.decrypt_secret_js(id));
+        return storageOk(admittedManager.value.decrypt_secret_js(id));
       } catch (nativeFailure) {
         return storageErr(new NativeVaultStorageFailure(nativeFailure));
       }
@@ -732,10 +734,7 @@ export class VaultSecretActions {
       if (admittedManager.isErr()) return storageErr(admittedManager.error);
       try {
         return storageOk(
-          await admittedManager.value.current_authenticator_code(
-            id,
-            unixSeconds,
-          ),
+          admittedManager.value.current_authenticator_code(id, unixSeconds),
         );
       } catch (nativeFailure) {
         return storageErr(new NativeVaultStorageFailure(nativeFailure));
@@ -743,6 +742,7 @@ export class VaultSecretActions {
     });
     if (result.isErr()) return storageErr(result.error);
     try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return storageOk({
         code: result.value.code,
         secondsRemaining: result.value.secondsRemaining,

@@ -493,13 +493,13 @@ impl NookVaultManager {
         let signing_pk =
             DeviceSigningPublicKey::from_trusted(hex::encode(signing.verifying_key().as_bytes()));
         let existing_roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
-            records: records,
+            records,
             members_key: &keys.members_key,
         })?;
         let updated_roster = VaultMember::roster_add_member(RosterAddMemberRequest {
             roster: existing_roster,
             member: VaultMember::member_from_identity(MemberFromIdentityRequest {
-                identity: identity,
+                identity,
                 enrolled_at: &BrowserTimestamp::now().into_iso_string(),
             }),
         });

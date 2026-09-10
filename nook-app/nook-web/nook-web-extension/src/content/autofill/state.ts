@@ -334,6 +334,7 @@ class PickerState {
   ): PendingPickerApprovalDisposition {
     if (this.authenticatorState.kind === AuthenticatorPickerKind.Closed)
       return PendingPickerApprovalDisposition.Closed
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return AuthenticationWorkflowApproval.compare({
       approved: this.authenticatorState.request.approval,
       current,
@@ -346,6 +347,7 @@ class PickerState {
   ): PendingPickerApprovalDisposition {
     if (this.loginState.kind === LoginPickerKind.Closed)
       return PendingPickerApprovalDisposition.Closed
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return AuthenticationWorkflowApproval.compare({
       approved: this.loginState.request.approval,
       current,

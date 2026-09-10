@@ -429,6 +429,7 @@ export async function websiteLoginSaveOffer({
       },
     }
     const delivery0_7 = await extensionPairingIdentity
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       .sendSessionMessage(nookTypedArgs0_7)
       .finally(() => {
         pendingPassword.value = ''

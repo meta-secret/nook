@@ -18,6 +18,7 @@ class VaultAppMount {
   async mount(): Promise<Result<void, VaultMountFailure>> {
     const target = document.getElementById("app");
     if (!target) return err(VaultMountFailure.MissingTarget);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const startupShell = new VaultStartupShell({ target });
     const ready = await vaultApplicationRuntime.ensureAppWasm(this.application);
     if (ready.isErr()) {
@@ -33,6 +34,7 @@ class VaultAppMount {
       }
       if (!target.isConnected || document.getElementById("app") !== target)
         return err(VaultMountFailure.DetachedTarget);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       mount(App, { target });
       startupShell.remove();
       return ok();

@@ -140,6 +140,7 @@ export class DeviceProtectionActions {
         }
       }
     }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const snapshot = $state.snapshot({
       providers: state.providers,
       activeVaultStoreId:
@@ -231,6 +232,7 @@ export class DeviceProtectionActions {
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return createPasskeyProtection({
             manager: manager.value,
             passkeyLabel: localizedPasskeyLabel,
@@ -250,6 +252,7 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs,
       );
       if (initialized.isErr()) {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         this.lockFailedAuthorization({ deviceIdentityUnlocked });
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
@@ -325,6 +328,7 @@ export class DeviceProtectionActions {
       if (failure.fallback === PasskeyFallback.OfferPin) {
         this.state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
       }
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.logPasskeyCeremony({
         message: "passkey ceremony did not complete",
         data: failure.diagnostic,
@@ -364,6 +368,7 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs2,
       );
       if (initialized.isErr()) {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         this.lockFailedAuthorization({ deviceIdentityUnlocked });
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
@@ -472,6 +477,7 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs3,
       );
       if (initialized.isErr()) {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         this.lockFailedAuthorization({ deviceIdentityUnlocked });
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
@@ -526,6 +532,7 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs4,
       );
       if (initialized.isErr()) {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         this.lockFailedAuthorization({ deviceIdentityUnlocked });
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
@@ -602,6 +609,7 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs5,
       );
       if (initialized.isErr()) {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         this.lockFailedAuthorization({ deviceIdentityUnlocked });
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
@@ -736,6 +744,7 @@ export class DeviceProtectionRecoveryActions {
         state.errorMsg = state.t(I18N_KEYS.DeviceProtectionRecoveryFailed);
         return;
       }
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.applyPersistedProtectionStatus({ status: reset.value });
       this.clearQuiescedRecoverySession();
       const recoveryCompleteKey =

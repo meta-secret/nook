@@ -1,5 +1,5 @@
 //! Passkey attachment and backup-state browser projections.
-use super::*;
+use super::{PasskeyAuthenticatorAttachment, PasskeyBackupState, wasm_bindgen};
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookPasskeyAttachmentState {

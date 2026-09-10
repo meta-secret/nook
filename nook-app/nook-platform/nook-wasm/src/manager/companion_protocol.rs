@@ -18,6 +18,7 @@ use nook_core::{
     VaultApplication,
 };
 use std::mem;
+use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -161,6 +162,10 @@ impl NookDiscoveredCompanionExtensionEndpoint {
         self.inner.status()
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "wasm-bindgen owns the exported observation argument"
+    )]
     pub fn rediscover(
         self,
         discovery: CompanionIdentityDiscoveryObservation,
@@ -276,7 +281,7 @@ impl NookVaultManager {
         self.device.extension_handoff_private_key.zeroize();
         self.device.extension_handoff_private_key.clear();
         begin.validate()?;
-        self.device.handoff_generation = Default::default();
+        self.device.handoff_generation = Rc::default();
         let recipient = DeviceIdentity::generate().map_err(NookError::from)?;
         let context = begin.context.clone();
         let request = begin.prepare(recipient.public_key().into_inner())?;

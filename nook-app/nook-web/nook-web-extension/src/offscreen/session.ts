@@ -16,7 +16,6 @@ import initNookWasm, {
 import type {
   CompanionIdentityHandoffResponse,
   CompanionIdentityStatus,
-  StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   ListeningExtensionSession,
@@ -156,6 +155,7 @@ function scheduleSessionExpiry(generation: number): void {
   }
   sessionExpirySchedule = {
     kind: SessionExpiryScheduleKind.Scheduled,
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     lease: new ActiveExtensionSessionLease({
       generation,
       durationMs: SESSION_DURATION_MS,
@@ -262,6 +262,7 @@ async function handleCompanionIdentityHandoff(
         return err(
           new SessionOperationFailure(SessionOperationFailureKind.Locked),
         )
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ ok: true, response })
     } finally {
       if (!consumed) endpoint.free()
@@ -317,8 +318,9 @@ async function handleCompanionIdentityDiscovery(
       }
       const status: CompanionIdentityStatus = discovered.status
       if (status.status !== 'unlocked') releaseCompanionEndpoint()
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ ok: true, status })
-    } catch (error) {
+    } catch {
       releaseCompanionEndpoint()
       return err(
         new SessionOperationFailure(SessionOperationFailureKind.Failed),

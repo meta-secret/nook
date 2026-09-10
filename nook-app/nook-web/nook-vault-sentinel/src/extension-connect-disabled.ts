@@ -112,6 +112,7 @@ export const extensionConnectionBrowser = {
   discoverPairedExtensionIdentity,
   requestPairedExtensionUnlock,
   adoptExtensionIdentity,
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
   async deliverExtensionPairingApproval(_request: unknown): Promise<never> {
     void _request;
     throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);

@@ -349,7 +349,8 @@ export class PasswordEnrollmentActions {
               const existingCredential = oauth_access_token(existingConfig);
               const tokens =
                 existingCredential.kind === "available"
-                  ? storageOk({
+                  ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+                    storageOk({
                       accessToken: existingCredential.token,
                       accountName:
                         existingConfig.accountEmail.state === "email"

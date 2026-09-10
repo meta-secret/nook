@@ -176,7 +176,7 @@ impl BrowserPasskeyClient {
             })?;
         BrowserPasskeyClient::credential_from_promise(BrowserPasskeyCredentialFromPromise {
             method: "create",
-            promise: promise,
+            promise,
         })
         .await
     }
@@ -202,7 +202,7 @@ impl BrowserPasskeyClient {
             })?;
         BrowserPasskeyClient::credential_from_promise(BrowserPasskeyCredentialFromPromise {
             method: "get",
-            promise: promise,
+            promise,
         })
         .await
     }
@@ -222,9 +222,9 @@ impl BrowserPasskeyClient {
         }
         let _ = BrowserPasskeyClient::try_signal_current_user_details(
             BrowserPasskeyTrySignalCurrentUserDetails {
-                rp_id: rp_id,
-                user_handle: user_handle,
-                passkey_label: passkey_label,
+                rp_id,
+                user_handle,
+                passkey_label,
             },
         )
         .await;
@@ -323,7 +323,7 @@ impl BrowserPasskeyClient {
         let BrowserPasskeyCredentialFromPromise { method, promise } = request;
         let credential = JsFuture::from(promise).await.map_err(|error| {
             BrowserPasskeyClient::credential_ceremony_error(BrowserPasskeyCredentialCeremonyError {
-                method: method,
+                method,
                 error: &error.unchecked_into(),
             })
         })?;
@@ -337,16 +337,16 @@ impl BrowserPasskeyClient {
     fn credential_ceremony_error(request: BrowserPasskeyCredentialCeremonyError<'_>) -> JsError {
         let BrowserPasskeyCredentialCeremonyError { method, error } = request;
         let name = BrowserPasskeyClient::js_error_text(BrowserPasskeyJsErrorText {
-            error: error,
+            error,
             property: "name",
         });
         let message = BrowserPasskeyClient::js_error_text(BrowserPasskeyJsErrorText {
-            error: error,
+            error,
             property: "message",
         });
         JsError::new(&BrowserPasskeyClient::credential_ceremony_error_message(
             BrowserPasskeyCredentialCeremonyErrorMessage {
-                method: method,
+                method,
                 name: name.detail(),
                 message: message.detail(),
             },

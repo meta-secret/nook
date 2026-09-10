@@ -222,9 +222,9 @@ pub(crate) use storage::NookDatabase;
 
 pub(crate) use storage::indexed_db::{SecretSearchBucketKeyRequest, VaultSnapshotLookup};
 
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(test)]
 pub(crate) use storage::indexed_db::SaveVaultBlobRequest;
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(test)]
 pub(crate) use storage::indexed_db::SaveWrappedDeviceIdentityRequest;
 pub(crate) use storage::indexed_db::{
     IdbPutStringRequest, ImportVaultBlobRequest, ReadStringPreferringRequest,
@@ -244,7 +244,7 @@ pub(crate) use conversion::{
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use storage::event_db::EventDbRemoveEventFixture;
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(test)]
 pub(crate) use storage::event_db::EventDbSaveEventBytesToStore;
 pub(crate) use storage::event_db::{
     EventDbAppendOutboxIndex, EventDbLoadLocalEventStoreFromStore, EventDbQueueOutboxEntry,
@@ -291,8 +291,6 @@ pub(crate) use storage::github::{
 };
 
 pub(crate) use storage::drive::DriveStorageClient;
-#[cfg(target_arch = "wasm32")]
-pub(crate) use storage::drive::DriveStorageClientDriveError;
 
 pub(crate) use storage::drive_shared::DriveStorageClientShareFolderWithEmail;
 

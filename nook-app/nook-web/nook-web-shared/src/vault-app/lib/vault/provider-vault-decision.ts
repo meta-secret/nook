@@ -34,6 +34,7 @@ export type ProviderVaultEvidence =
 
 export class ReadyProviderVaultEvidence {
   readonly kind = ProviderVaultEvidenceKind.Ready;
+  // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
   constructor(
     readonly projection: NookProviderVaultDecisionProjection,
     readonly identities: readonly NookProviderVaultIdentityProjection[],

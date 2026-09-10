@@ -837,7 +837,7 @@ impl NookVaultManager {
         let records = self.stored_records_snapshot();
         match VaultMetaState::assess_connect_access(AssessConnectAccessRequest {
             records: &records,
-            identity: identity,
+            identity,
         })? {
             ConnectAccessStatus::Ready => {}
             ConnectAccessStatus::JoinPending => {

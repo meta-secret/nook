@@ -118,6 +118,7 @@ class VaultBrowserLifecycle {
             vault.enqueueStorage(async () => {
               const manager = vault.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
+              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
               return saveAuthProviders({ manager: manager.value, snapshot });
             }),
           unselectedVaultScope,

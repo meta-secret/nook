@@ -420,14 +420,14 @@ impl NookVaultManager {
                 NookDatabase::save_new_protected_local_identity(
                     IdentityDbSaveNewProtectedLocalIdentity {
                         app_key: &app_key,
-                        record: record,
+                        record,
                         prior_app_key: match &prior_app_key {
                             PriorLocalAuthorizer::Authorized(key) => {
                                 PriorAppAuthorization::Authorized(key)
                             }
                             PriorLocalAuthorizer::Unavailable => PriorAppAuthorization::Unavailable,
                         },
-                        label: label,
+                        label,
                     },
                 )
                 .await?
@@ -435,7 +435,7 @@ impl NookVaultManager {
             LocalIdentityCreation::ExistingIdentity => {
                 NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
                     app_key: &app_key,
-                    record: record,
+                    record,
                     label: DEFAULT_IDENTITY_LABEL,
                 })
                 .await?
@@ -471,7 +471,7 @@ impl NookVaultManager {
         } else {
             NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
                 app_key: &app_key,
-                record: record,
+                record,
                 label: DEFAULT_IDENTITY_LABEL,
             })
             .await?

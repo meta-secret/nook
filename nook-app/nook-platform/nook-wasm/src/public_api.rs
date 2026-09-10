@@ -88,7 +88,7 @@ pub use shared_storage_grant::*;
     prf_input: Vec<u8>,
 ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
     BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
-        rp_id: rp_id,
+        rp_id,
         credential_id: &credential_id,
         prf_input: &prf_input,
     })
@@ -111,9 +111,9 @@ pub use shared_storage_grant::*;
     prf_input: Vec<u8>,
 ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
     BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
-        rp_id: rp_id,
-        rp_name: rp_name,
-        passkey_label: passkey_label,
+        rp_id,
+        rp_name,
+        passkey_label,
         user_handle: &user_handle,
         prf_input: &prf_input,
     })

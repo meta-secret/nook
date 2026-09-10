@@ -193,7 +193,7 @@ impl DeviceAccessProfileKey {
         let legacy_owner = self.legacy_owner;
         NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
             key: &self.value,
-            fallback_key: fallback_key,
+            fallback_key,
             guard: mutation.guard,
             can_adopt_fallback: move |raw: &str| match &legacy_owner {
                 LegacyProfileOwner::SoleProtectedIdentity(owner) => {

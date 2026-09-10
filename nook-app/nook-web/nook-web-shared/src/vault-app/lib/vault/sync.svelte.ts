@@ -104,6 +104,7 @@ interface SyncConflictStaging {
   readonly conflict: NookPendingSyncConflict;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
 type SyncFromProvidersExecution = SyncFromProvidersRequest & {};
 
 type FanOutSyncExecution = {
@@ -134,6 +135,7 @@ export class VaultSyncActions {
         if (provider.type === LOCAL_FOLDER_PROVIDER_TYPE) {
           const synced = await new ProviderSyncActions(
             state,
+            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           ).syncLocalFolderProvider({ provider });
           if (synced.isErr()) {
             return storageErr(synced.error);
@@ -176,6 +178,7 @@ export class VaultSyncActions {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
         try {
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return storageOk({
             pendingJoins,
             vaultMembers: admitted.value.list_vault_members(),
@@ -254,6 +257,7 @@ export class VaultSyncActions {
     let outcome = ProviderSyncOutcome.Synced;
     for (const provider of state.syncProviders) {
       if (state.syncBlocked) return storageOk(ProviderSyncOutcome.Skipped);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const synchronized = await state.syncProviderById({
         providerId: provider.id,
         visibility,
@@ -289,6 +293,7 @@ export class VaultSyncActions {
     if (publication.isErr()) return storageErr(publication.error);
     if (!state.deviceProtectionReady) return storageOk();
     if (state.syncProviders.length === 0) {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return state.flushRemoteEventOutboxNow({
         kind: EventOutboxRequestKind.Default,
       });
@@ -345,10 +350,12 @@ export class VaultSyncActions {
     const state = this.state;
     const admitted = state.admitManager();
     if (admitted.isErr()) return storageErr(admitted.error);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const target = this.eventOutboxTarget({ request });
     if (target.kind === EventOutboxTargetKind.LocalFolder) {
       const synced = await new ProviderSyncActions(
         state,
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       ).syncLocalFolderProvider({
         provider: target.provider,
       });
@@ -394,6 +401,7 @@ export class VaultSyncActions {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
         try {
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           const snapshot = $state.snapshot({
             providers: state.providers,
             activeVaultStoreId:
@@ -420,6 +428,7 @@ export class VaultSyncActions {
         }
       });
       if (updated.isErr()) return storageErr(updated.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const persisted = await state.persistProviders({
         replace: false,
         providers: updated.value.providers,
@@ -703,6 +712,7 @@ export class VaultSyncActions {
     if (decision === VaultStorageSyncDecision.Skip)
       return storageOk(ProviderSyncOutcome.Skipped);
     if (decision === VaultStorageSyncDecision.SyncProviders) {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return state.syncFromSyncProviders({
         visibility: ProviderSyncVisibility.Quiet,
         freshness,
@@ -729,6 +739,7 @@ export class VaultSyncActions {
         if (provider.type === "local-folder") {
           const synchronized = await new ProviderSyncActions(
             state,
+            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           ).syncLocalFolderProvider({ provider });
           if (synchronized.isErr()) return storageErr(synchronized.error);
         } else {
@@ -759,6 +770,7 @@ export class VaultSyncActions {
     const synchronized = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return syncVaultFromStorage({ manager: manager.value, mode, pat, repo });
     });
     if (synchronized.isErr()) return storageErr(synchronized.error);

@@ -122,14 +122,14 @@ impl BrowserPasskeyClient {
             .map_err(|error| JsError::new(&error.to_string()))?;
         let passkey_label = BrowserPasskeyClient::passkey_label_with_passkey_handle(
             BrowserPasskeyPasskeyLabelWithPasskeyHandle {
-                passkey_label: passkey_label,
+                passkey_label,
                 user_handle: setup.user_handle().as_ref(),
             },
         );
         let options =
             BrowserPasskeyClient::creation_options_struct(BrowserPasskeyCreationOptionsStruct {
-                rp_id: rp_id,
-                rp_name: rp_name,
+                rp_id,
+                rp_name,
                 passkey_label: &passkey_label,
                 user_handle: setup.user_handle().as_ref(),
                 prf_input: setup.prf_input().as_ref(),
@@ -160,7 +160,7 @@ impl BrowserPasskeyClient {
         let request = PasskeyAssertionRequest::new(credential_id, prf_input);
         let options =
             BrowserPasskeyClient::request_options_struct(BrowserPasskeyRequestOptionsStruct {
-                rp_id: rp_id,
+                rp_id,
                 credential_id: request.credential_id().as_ref(),
                 prf_input: request.prf_input().as_ref(),
             })?;
@@ -177,7 +177,7 @@ impl BrowserPasskeyClient {
         let prf_input = WebAuthnPrfInput::deterministic();
         let options =
             BrowserPasskeyClient::recovery_options_struct(BrowserPasskeyRecoveryOptionsStruct {
-                rp_id: rp_id,
+                rp_id,
                 prf_input: prf_input.as_ref(),
             })?;
         BrowserPasskeyClient::to_browser_object(&options)
@@ -325,8 +325,8 @@ impl BrowserPasskeyClient {
         let BrowserPasskeySetUint8ArrayField { target, field } = request;
         let BrowserObjectProperty::Reported(bytes) =
             BrowserPasskeyClient::get_optional_object(BrowserPasskeyGetOptionalObject {
-                target: target,
-                field: field,
+                target,
+                field,
             })?
         else {
             return Ok(());
@@ -389,7 +389,7 @@ impl BrowserPasskeyClient {
                 attestation_formats: None,
                 extensions: Some(BrowserPasskeyClient::prf_extension(
                     BrowserPasskeyPrfExtension {
-                        prf_input: prf_input,
+                        prf_input,
                         credential_id: PrfCredentialSelection::Discoverable,
                     },
                 )),
@@ -490,7 +490,7 @@ impl BrowserPasskeyClient {
                 attestation_formats: None,
                 extensions: Some(BrowserPasskeyClient::prf_extension(
                     BrowserPasskeyPrfExtension {
-                        prf_input: prf_input,
+                        prf_input,
                         credential_id: PrfCredentialSelection::Identified(credential_id),
                     },
                 )),
@@ -519,7 +519,7 @@ impl BrowserPasskeyClient {
                 attestation_formats: None,
                 extensions: Some(BrowserPasskeyClient::prf_extension(
                     BrowserPasskeyPrfExtension {
-                        prf_input: prf_input,
+                        prf_input,
                         credential_id: PrfCredentialSelection::Discoverable,
                     },
                 )),

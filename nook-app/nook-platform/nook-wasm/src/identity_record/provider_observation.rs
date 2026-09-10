@@ -1,12 +1,10 @@
 //! Provider eligibility projected from local identity ownership.
-use super::*;
+use super::{CurrentAppIdentity, LocalAppProtection};
 use crate::{
     BrowserProviderVaultIdentityObservations,
     BrowserProviderVaultIdentityObservationsFromProjection, NookDatabase,
     NookIdentityDirectorySnapshot,
 };
-#[cfg(target_arch = "wasm32")]
-use nook_core::MemberLabelState;
 use nook_core::{DeviceAccessProtectionKind, IdentityVaultAppGrant, IdentityVaultAppGrantKind};
 impl NookIdentityDirectorySnapshot {
     pub(crate) async fn provider_vault_identity_observations(
@@ -20,8 +18,8 @@ impl NookIdentityDirectorySnapshot {
         Ok(
             NookIdentityDirectorySnapshot::provider_vault_identity_observations_from_projection(
                 BrowserProviderVaultIdentityObservationsFromProjection {
-                    session_app_id: session_app_id,
-                    store_id: store_id,
+                    session_app_id,
+                    store_id,
                     projection: &projection,
                 },
             ),
@@ -112,7 +110,7 @@ mod tests {
     use super::*;
     use nook_core::{
         AppKey, CurrentVaultReplaceability, DeviceIdentityProtection, IdentityDirectory,
-        IdentityRecord, LocalIdentityKeyring, LocalIdentityKeyringEntry,
+        IdentityRecord, LocalIdentityKeyring, LocalIdentityKeyringEntry, MemberLabelState,
     };
     use nook_core::{
         ProviderVaultDecision as Decision, ProviderVaultDecisionReason as Reason,
@@ -155,9 +153,9 @@ mod tests {
         CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(
             NookIdentityDirectorySnapshot::provider_vault_identity_observations_from_projection(
                 BrowserProviderVaultIdentityObservationsFromProjection {
-                    session_app_id: session_app_id,
-                    store_id: store_id,
-                    projection: projection,
+                    session_app_id,
+                    store_id,
+                    projection,
                 },
             ),
         )

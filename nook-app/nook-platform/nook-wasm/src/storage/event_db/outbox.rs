@@ -28,8 +28,8 @@ impl NookDatabase {
         NookDatabase::store_put(EventDbStorePut {
             store_name: STORE_OUTBOX,
             key: &NookDatabase::outbox_key(EventDbOutboxKey {
-                provider_id: provider_id,
-                event_id: event_id,
+                provider_id,
+                event_id,
             }),
             value: &value,
         })
@@ -55,7 +55,7 @@ impl NookDatabase {
         let mut out = Vec::new();
         for event_id in entries {
             let key = NookDatabase::outbox_key(EventDbOutboxKey {
-                provider_id: provider_id,
+                provider_id,
                 event_id: &event_id,
             });
             if let StoredStringRecord::Stored(text) = NookDatabase::store_get(EventDbStoreGet {
@@ -117,8 +117,8 @@ impl NookDatabase {
         NookDatabase::store_put(EventDbStorePut {
             store_name: STORE_OUTBOX,
             key: &NookDatabase::outbox_key(EventDbOutboxKey {
-                provider_id: provider_id,
-                event_id: event_id,
+                provider_id,
+                event_id,
             }),
             value: "",
         })
@@ -148,7 +148,12 @@ impl NookDatabase {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{
+        EVENT_LOG_MODE_KEY, EventDbSaveHeads, EventDbSaveKeyEpoch, EventDbStoreDelete,
+        SIGNING_SEED_KEY, STORE_VAULT, StoredKeyEpoch,
+    };
     use super::*;
+    use nook_core::StoredSigningSeed;
     use wasm_bindgen_test::*;
     #[wasm_bindgen_test]
     async fn event_log_and_outbox_projections_round_trip() -> Result<(), NookError> {
@@ -170,13 +175,13 @@ mod tests {
         let store_id = "projection-round-trip";
         let heads = vec!["head-b".to_owned(), "head-a".to_owned()];
         NookDatabase::save_heads(EventDbSaveHeads {
-            store_id: store_id,
+            store_id,
             heads: &heads,
         })
         .await?;
         assert_eq!(NookDatabase::load_heads(store_id).await?, heads);
         NookDatabase::save_key_epoch(EventDbSaveKeyEpoch {
-            store_id: store_id,
+            store_id,
             epoch: "epoch-2",
         })
         .await?;

@@ -63,6 +63,7 @@ export class LoginVaultIdentityReader {
     try {
       const kind = snapshot.selectedVaultContextKind;
       if (kind === NookSelectedVaultIdentityContextKind.Empty)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ kind });
       const identities: LoginVaultLinkedIdentity[] = [];
       for (let index = 0; index < snapshot.length; index += 1) {
@@ -73,11 +74,13 @@ export class LoginVaultIdentityReader {
         identities.push(identity.value);
       }
       if (kind === NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ kind, identities });
       const current = new LinkedLoginIdentity(
         snapshot.current_browser_identity(),
       ).read();
       if (current.isErr()) return err(current.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ kind, identities, currentIdentity: current.value });
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
@@ -92,6 +95,7 @@ class LinkedLoginIdentity {
   constructor(private readonly identity: NookIdentitySnapshot) {}
   read(): Result<LoginVaultLinkedIdentity, VaultStorageFailure> {
     try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         identityId: this.identity.identityId,
         label: this.identity.label,

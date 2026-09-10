@@ -9,6 +9,7 @@ export class SecretEditRejection {
   constructor(
     readonly restriction: Exclude<
       VaultEditRestriction,
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       { decision: VaultEditDecision.Allowed }
     >,
   ) {}

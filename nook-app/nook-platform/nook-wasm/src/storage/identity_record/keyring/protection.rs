@@ -91,7 +91,7 @@ impl<'a> ProtectedIdentityPublication<'a> {
                 directory: self.directory,
                 app_key: self.app_key,
                 label: self.label,
-                allow_peer_only_bootstrap: allow_peer_only_bootstrap,
+                allow_peer_only_bootstrap,
             },
         )?;
         self.directory = ensured.directory;

@@ -41,7 +41,7 @@ pub enum NookBip39MnemonicLength {
 )]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn suggest_bip39_words(prefix: &str, limit: u32) -> Vec<String> {
     SeedPhraseSecret::suggest_bip39_words(Bip39WordSuggestions {
-        prefix: prefix,
+        prefix,
         limit: (limit as usize).into(),
     })
     .into_iter()
@@ -60,7 +60,7 @@ pub enum NookBip39MnemonicLength {
 )]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: u32) -> bool {
     SeedPhraseSecret::is_bip39_word_sequence_valid(Bip39WordSequence {
-        text: text,
+        text,
         expected_word_count: (expected_word_count as usize).into(),
     })
 }

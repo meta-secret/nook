@@ -186,10 +186,7 @@ impl OrdinarySimpleGenesisRequest<'_> {
             )));
         }
         let identity = NookDatabase::ensure_local_identity_for_app_key(
-            IdentityDbEnsureLocalIdentityForAppKey {
-                app_key: app_key,
-                label: label,
-            },
+            IdentityDbEnsureLocalIdentityForAppKey { app_key, label },
         )
         .await?;
         let proposed = PendingSimpleGenesis {

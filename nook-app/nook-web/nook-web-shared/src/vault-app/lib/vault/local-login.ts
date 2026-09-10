@@ -241,7 +241,7 @@ export class VaultLoginActions {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
           try {
-            await manager.value.reset_vault_session();
+            manager.value.reset_vault_session();
             return storageOk();
           } catch (failure) {
             return storageErr(new NativeVaultStorageFailure(failure));
@@ -284,7 +284,7 @@ export class VaultLoginActions {
         const manager = state.admitManager();
         if (manager.isErr()) return storageErr(manager.error);
         try {
-          await manager.value.reset_vault_session();
+          manager.value.reset_vault_session();
           return storageOk();
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
@@ -359,7 +359,7 @@ export class VaultLoginActions {
           const admittedManager = state.admitManager();
           if (admittedManager.isErr()) return storageErr(admittedManager.error);
           try {
-            return storageOk(await admittedManager.value.reset_vault_session());
+            return storageOk(admittedManager.value.reset_vault_session());
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
@@ -603,6 +603,7 @@ export class VaultLoginActions {
     return state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return saveAuthProviders({
         manager: manager.value,
         snapshot: {

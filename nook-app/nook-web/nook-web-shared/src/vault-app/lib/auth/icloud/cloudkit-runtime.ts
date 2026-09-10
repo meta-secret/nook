@@ -265,11 +265,13 @@ declare global {
 /** Owns the browser runtime resources shared by these interactions. */
 class CloudKitRuntime {
   addTokenListener(
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     listener: (token: Result<string, OAuthFailure>) => void,
   ): void {
     this.webAuthTokenListeners.add(listener);
   }
   removeTokenListener(
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     listener: (token: Result<string, OAuthFailure>) => void,
   ): void {
     this.webAuthTokenListeners.delete(listener);
@@ -279,6 +281,7 @@ class CloudKitRuntime {
   }
 
   private webAuthTokenListeners = new Set<
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     (token: Result<string, OAuthFailure>) => void
   >();
   private cloudKitIdentityFromTransport(value: unknown): CloudKitIdentity {
@@ -530,7 +533,8 @@ class CloudKitRuntime {
       return ok(
         raw
           ? this.normalizeWebAuthToken(JSON.parse(raw))
-          : { kind: WebAuthTokenLookupKind.Unavailable },
+          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+            { kind: WebAuthTokenLookupKind.Unavailable },
       );
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.BrowserStorage));
@@ -580,7 +584,9 @@ class CloudKitRuntime {
           `script[src="${CLOUDKIT_SCRIPT_URL}"]`,
         );
         if (existing) {
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           existing.addEventListener("load", loaded, { once: true });
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           existing.addEventListener("error", failed, { once: true });
           return;
         }

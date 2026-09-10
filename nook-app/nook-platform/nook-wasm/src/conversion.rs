@@ -8,7 +8,8 @@ use js_sys::Date;
 use nook_core::{ResolveMemberRosterRequest, SymmetricKey, VaultMember};
 use wasm_bindgen::JsError;
 
-/// Named values required by NookVaultSyncResult::sync_result_session.
+/// Named values required by `NookVaultSyncResult::sync_result_session`.
+#[derive(Clone, Copy)]
 pub(crate) struct SyncResultSessionRequest<'a> {
     pub(crate) manager: &'a NookVaultManager,
     pub(crate) changed: bool,
@@ -58,7 +59,8 @@ pub(crate) struct LoadedVault {
     pub(crate) members_key: nook_core::SymmetricKey,
 }
 
-/// Named values required by LoadedVault::unlock.
+/// Named values required by `LoadedVault::unlock`.
+#[derive(Clone, Copy)]
 pub(crate) struct LoadedVaultUnlockRequest<'a> {
     pub(crate) content: &'a str,
     pub(crate) identity: &'a nook_core::DeviceIdentity,
@@ -86,13 +88,15 @@ impl NookJoinRequest {
     }
 }
 
-/// Named values required by NookVaultMember::vault_member_records.
+/// Named values required by `NookVaultMember::vault_member_records`.
+#[derive(Clone, Copy)]
 pub(crate) struct VaultMemberRecordsRequest<'a> {
     pub(crate) records: &'a [nook_core::StoredSecretRecord],
     pub(crate) members_key: &'a str,
 }
 
-/// Named values required by NookVaultMember::vault_members_to_vec.
+/// Named values required by `NookVaultMember::vault_members_to_vec`.
+#[derive(Clone, Copy)]
 pub(crate) struct VaultMemberProjectionRequest<'a> {
     pub(crate) records: &'a [nook_core::StoredSecretRecord],
     pub(crate) members_key: &'a str,
@@ -108,7 +112,7 @@ impl NookVaultMember {
         } = request;
         Ok(VaultMember::resolve_member_roster(
             ResolveMemberRosterRequest {
-                records: records,
+                records,
                 members_key: &SymmetricKey::parse(members_key)?,
             },
         )?)
@@ -135,8 +139,8 @@ impl NookVaultMember {
         } = request;
         Ok(NookVaultMember::members_to_vec(
             NookVaultMember::vault_member_records(VaultMemberRecordsRequest {
-                records: records,
-                members_key: members_key,
+                records,
+                members_key,
             })?,
         ))
     }

@@ -46,27 +46,32 @@ export class WorkflowCopy {
   static forKind(kind: AuthenticationWorkflowKind): WorkflowCopy {
     switch (kind) {
       case AuthenticationWorkflowKind.Login:
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return new WorkflowCopy({
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
           descriptionKey: BROWSER_MESSAGE_KEYS.WidgetLoginDescription,
         })
       case AuthenticationWorkflowKind.Signup:
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return new WorkflowCopy({
           titleKey: BROWSER_MESSAGE_KEYS.WidgetSignupTitle,
           descriptionKey: BROWSER_MESSAGE_KEYS.WidgetSignupDescription,
         })
       case AuthenticationWorkflowKind.PasswordChange:
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return new WorkflowCopy({
           titleKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle,
           descriptionKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeDescription,
         })
       case AuthenticationWorkflowKind.TotpChallenge:
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return new WorkflowCopy({
           titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
           descriptionKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorDescription,
         })
       case AuthenticationWorkflowKind.TotpEnrollment:
       case AuthenticationWorkflowKind.Manual:
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return new WorkflowCopy({
           titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
           descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,
@@ -187,4 +192,5 @@ class WorkflowUi {
   }
 }
 
+// eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
 export const workflowUi = new WorkflowUi({ widgetState, saveOfferState })

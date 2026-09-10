@@ -186,11 +186,11 @@ pub(crate) struct LoggerState {
 }
 
 thread_local! {
-    static LOGGER: RefCell<LoggerState> = RefCell::new(LoggerState {
+    static LOGGER: RefCell<LoggerState> = const { RefCell::new(LoggerState {
         level: LogLevel::Info,
         pending: Vec::new(),
         set_filter: LogFilterInstallation::NotInstalled,
-    });
+    }) };
 
     /// Guards one-time subscriber installation across HMR / repeated init.
     static INIT_DONE: Cell<bool> = const { Cell::new(false) };
@@ -203,7 +203,8 @@ impl LogEntry {
 }
 
 /// Push an entry onto the write-behind queue.
-/// Named values required by LoggerState::console_echo.
+/// Named values required by `LoggerState::console_echo`.
+#[derive(Clone, Copy)]
 pub(crate) struct LoggerConsoleEcho<'a> {
     pub(crate) level: &'a str,
     pub(crate) scope: &'a str,
@@ -211,14 +212,14 @@ pub(crate) struct LoggerConsoleEcho<'a> {
     pub(crate) data: &'a LogMetadata,
 }
 
-/// Named values required by LoggerState::dump_entries.
+/// Named values required by `LoggerState::dump_entries`.
 pub(crate) struct LoggerDumpEntries {
     pub(crate) min_level: LogThreshold,
     pub(crate) limit: LogPageLimit,
     pub(crate) offset: u32,
 }
 
-/// Named values required by LoggerState::log_record_entry.
+/// Named values required by `LoggerState::log_record_entry`.
 pub(crate) struct LoggerLogRecordEntry<'a> {
     pub(crate) level: &'a str,
     pub(crate) scope: &'a str,
@@ -226,7 +227,7 @@ pub(crate) struct LoggerLogRecordEntry<'a> {
     pub(crate) data: LogMetadata,
 }
 
-/// Named values required by LoggerState::log_dump_page.
+/// Named values required by `LoggerState::log_dump_page`.
 pub(crate) struct LoggerPage {
     pub(crate) min_level: String,
     pub(crate) limit: u32,
@@ -321,7 +322,7 @@ impl<S: tracing::Subscriber> Layer<S> for IndexedDbLayer {
         };
 
         LoggerState::console_echo(LoggerConsoleEcho {
-            level: level,
+            level,
             scope: &scope,
             message: &visitor.message,
             data: &data,
@@ -459,7 +460,7 @@ impl LoggerState {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn log_init() {
-    LoggerState::log_init()
+    LoggerState::log_init();
 }
 impl LoggerState {
     fn log_init() {
@@ -485,7 +486,7 @@ impl LoggerState {
                 let _ = handle.modify(|current| *current = level);
             });
             LOGGER.with(|logger| {
-                logger.borrow_mut().set_filter = LogFilterInstallation::Installed(setter)
+                logger.borrow_mut().set_filter = LogFilterInstallation::Installed(setter);
             });
         }
     }
@@ -500,7 +501,7 @@ impl LoggerState {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn log_set_level(level: &str) {
-    LoggerState::log_set_level(level)
+    LoggerState::log_set_level(level);
 }
 impl LoggerState {
     fn log_set_level(level: &str) {
@@ -542,9 +543,9 @@ impl LoggerState {
 )]
 pub fn log_record(level: &str, scope: &str, message: &str) {
     LoggerState::log_record_entry(LoggerLogRecordEntry {
-        level: level,
-        scope: scope,
-        message: message,
+        level,
+        scope,
+        message,
         data: LogMetadata::NoFields,
     });
 }
@@ -556,9 +557,9 @@ pub fn log_record(level: &str, scope: &str, message: &str) {
 )]
 pub fn log_record_with_data(level: &str, scope: &str, message: &str, data: String) {
     LoggerState::log_record_entry(LoggerLogRecordEntry {
-        level: level,
-        scope: scope,
-        message: message,
+        level,
+        scope,
+        message,
         data: LogMetadata::Json(data),
     });
 }
@@ -644,9 +645,9 @@ pub async fn log_dump_page(
     offset: u32,
 ) -> Result<NookLogEntries, wasm_bindgen::JsError> {
     LoggerState::log_dump_page(LoggerPage {
-        min_level: min_level,
-        limit: limit,
-        offset: offset,
+        min_level,
+        limit,
+        offset,
     })
     .await
 }

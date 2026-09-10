@@ -38,8 +38,8 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn translate_key(locale: &str, key: &str) -> String {
     TranslationCatalog::translate(TranslateRequest {
-        locale: locale,
-        key: key,
+        locale,
+        key,
     })
 }
 
@@ -158,8 +158,8 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
     match TranslationCatalog::lookup_translation(LookupTranslationRequest {
-        catalog_json: catalog_json,
-        key: key,
+        catalog_json,
+        key,
     }) {
         TranslationLookup::Found(value) => Ok(value),
         TranslationLookup::Missing | TranslationLookup::InvalidCatalog => {
@@ -172,9 +172,9 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> String {
     TranslationCatalog::translate_from_catalog(TranslateFromCatalogRequest {
-        catalog_json: catalog_json,
-        locale: locale,
-        key: key,
+        catalog_json,
+        locale,
+        key,
     })
 }
 
@@ -192,9 +192,9 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
         .zip(replacement_values)
         .collect::<Vec<_>>();
     TranslationCatalog::translate_with_replacements(TranslateWithReplacementsRequest {
-        catalog_json: catalog_json,
-        locale: locale,
-        key: key,
+        catalog_json,
+        locale,
+        key,
         replacements: &replacements,
     })
 }
@@ -203,9 +203,9 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) -> String {
     TranslationCatalog::resolve_error_message(ResolveErrorMessageRequest {
-        catalog_json: catalog_json,
-        locale: locale,
-        message: message,
+        catalog_json,
+        locale,
+        message,
     })
 }
 
@@ -215,8 +215,8 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
     overlay_json: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
     TranslationCatalog::merge_translation_catalogs(MergeTranslationCatalogsRequest {
-        base_json: base_json,
-        overlay_json: overlay_json,
+        base_json,
+        overlay_json,
     })
     .map_err(Into::into)
 }
@@ -225,7 +225,7 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> String {
     TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
-        locale: locale,
+        locale,
         wasm_catalog_json: TranslationCatalogSource::Supplied(wasm_catalog_json),
     })
 }
@@ -234,7 +234,7 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_translation_catalog(locale: &str) -> String {
     TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
-        locale: locale,
+        locale,
         wasm_catalog_json: TranslationCatalogSource::Bundled,
     })
 }

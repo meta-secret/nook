@@ -153,7 +153,7 @@ impl NookDatabase {
     async fn vault_get(key: &str) -> Result<StoredStringRecord, NookError> {
         NookDatabase::store_get(EventDbStoreGet {
             store_name: STORE_VAULT,
-            key: key,
+            key,
         })
         .await
     }
@@ -194,8 +194,8 @@ impl NookDatabase {
         let EventDbVaultPut { key, value } = request;
         NookDatabase::store_put(EventDbStorePut {
             store_name: STORE_VAULT,
-            key: key,
-            value: value,
+            key,
+            value,
         })
         .await
     }
@@ -263,10 +263,7 @@ impl NookDatabase {
         let EventDbRemoveEventFixture { store_id, event_id } = request;
         NookDatabase::store_delete(EventDbStoreDelete {
             store_name: STORE_EVENTS,
-            key: &NookDatabase::event_key(EventDbEventKey {
-                store_id: store_id,
-                event_id: event_id,
-            }),
+            key: &NookDatabase::event_key(EventDbEventKey { store_id, event_id }),
         })
         .await
     }
@@ -396,7 +393,7 @@ impl NookDatabase {
                 .map_err(|e| NookError::Serialization(e.to_string()))?;
             for raw_id in ids {
                 let key = NookDatabase::event_key(EventDbEventKey {
-                    store_id: store_id,
+                    store_id,
                     event_id: &raw_id,
                 });
                 if let StoredStringRecord::Stored(bytes) =
@@ -408,7 +405,7 @@ impl NookDatabase {
                     && let Ok(event_id) = EventId::parse(&raw_id)
                 {
                     local = local.put_event(nook_core::LocalEventWrite {
-                        event_id: event_id,
+                        event_id,
                         bytes: bytes.into_bytes().into(),
                     });
                 }
@@ -432,7 +429,7 @@ impl NookDatabase {
         let result =
             NookDatabase::load_local_event_store_from_store(EventDbLoadLocalEventStoreFromStore {
                 store: &store,
-                store_id: store_id,
+                store_id,
             })
             .await;
         transaction
@@ -504,7 +501,7 @@ impl NookDatabase {
         }
         for raw_id in ids {
             let key = serde_wasm_bindgen::to_value(&NookDatabase::event_key(EventDbEventKey {
-                store_id: store_id,
+                store_id,
                 event_id: &raw_id,
             }))
             .map_err(|error| NookError::IndexedDb(format!("Event key error: {error:?}")))?;
@@ -529,10 +526,7 @@ impl NookDatabase {
                     "Event row {raw_id} contains event {stored_event_id}."
                 )));
             }
-            local = local.put_event(nook_core::LocalEventWrite {
-                event_id: event_id,
-                bytes: bytes,
-            });
+            local = local.put_event(nook_core::LocalEventWrite { event_id, bytes });
         }
         Ok(local)
     }
@@ -602,9 +596,9 @@ impl NookDatabase {
         })?;
         NookDatabase::save_event_bytes_to_store(EventDbSaveEventBytesToStore {
             store: &store,
-            store_id: store_id,
-            event_id: event_id,
-            bytes: bytes,
+            store_id,
+            event_id,
+            bytes,
         })
         .await?;
         transaction.done().await.map(|_| ()).map_err(|error| {
@@ -643,8 +637,8 @@ impl NookDatabase {
                 }
             };
         let event_key = serde_wasm_bindgen::to_value(&NookDatabase::event_key(EventDbEventKey {
-            store_id: store_id,
-            event_id: event_id,
+            store_id,
+            event_id,
         }))
         .map_err(|error| NookError::IndexedDb(format!("Event key error: {error:?}")))?;
         let event_value = serde_wasm_bindgen::to_value(&value)
@@ -707,7 +701,7 @@ mod tests {
         let result =
             NookDatabase::load_local_event_store_from_store(EventDbLoadLocalEventStoreFromStore {
                 store: &store,
-                store_id: store_id,
+                store_id,
             })
             .await;
         transaction.done().await.map_err(|error| {
@@ -741,7 +735,7 @@ mod tests {
         NookDatabase::store_put(EventDbStorePut {
             store_name: STORE_EVENTS,
             key: &NookDatabase::event_key(EventDbEventKey {
-                store_id: store_id,
+                store_id,
                 event_id: "not-an-event-id",
             }),
             value: "event bytes",
@@ -764,10 +758,7 @@ mod tests {
     async fn transactional_loader_rejects_unindexed_event_row() -> Result<(), NookError> {
         let store_id = "unindexed-event-test";
         let event_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo";
-        let row_key = NookDatabase::event_key(EventDbEventKey {
-            store_id: store_id,
-            event_id: event_id,
-        });
+        let row_key = NookDatabase::event_key(EventDbEventKey { store_id, event_id });
         NookDatabase::store_put(EventDbStorePut {
             store_name: STORE_EVENTS,
             key: &row_key,
@@ -785,7 +776,7 @@ mod tests {
         let result =
             NookDatabase::load_local_event_store_from_store(EventDbLoadLocalEventStoreFromStore {
                 store: &store,
-                store_id: store_id,
+                store_id,
             })
             .await;
         transaction.done().await.map_err(|error| {
@@ -810,7 +801,7 @@ mod tests {
     async fn cleanup_removes_orphan_rows_even_with_malformed_index() -> Result<(), NookError> {
         let store_id = "malformed-cleanup-test";
         let row_key = NookDatabase::event_key(EventDbEventKey {
-            store_id: store_id,
+            store_id,
             event_id: "orphan",
         });
         let index_key = format!("event_index:{store_id}");
@@ -852,10 +843,7 @@ mod tests {
     async fn malformed_index_is_rejected_before_event_row_write() -> Result<(), NookError> {
         let store_id = "malformed-save-test";
         let event_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo";
-        let row_key = NookDatabase::event_key(EventDbEventKey {
-            store_id: store_id,
-            event_id: event_id,
-        });
+        let row_key = NookDatabase::event_key(EventDbEventKey { store_id, event_id });
         let index_key = format!("event_index:{store_id}");
         NookDatabase::store_put(EventDbStorePut {
             store_name: STORE_EVENTS,
@@ -866,8 +854,8 @@ mod tests {
 
         assert!(
             NookDatabase::save_event_bytes(EventDbSaveEventBytes {
-                store_id: store_id,
-                event_id: event_id,
+                store_id,
+                event_id,
                 bytes: b"event bytes"
             })
             .await

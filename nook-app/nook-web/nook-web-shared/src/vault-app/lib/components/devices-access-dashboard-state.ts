@@ -49,7 +49,7 @@ export class KnownDashboardText {
   readonly kind = DashboardTextKind.Known;
   constructor(readonly value: string) {}
 
-  displayText(_unavailable: () => string): string {
+  displayText(): string {
     return this.value;
   }
 

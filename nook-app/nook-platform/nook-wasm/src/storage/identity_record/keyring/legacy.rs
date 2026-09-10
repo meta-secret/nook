@@ -35,8 +35,8 @@ impl NookDatabase {
             indexed_db::WRAPPED_DEVICE_IDENTITY_KEY,
         ] {
             NookDatabase::keyring_delete_key(KeyringDbKeyringDeleteKey {
-                store: store,
-                key: key,
+                store,
+                key,
                 context: "Legacy active app key",
             })
             .await?;
@@ -59,14 +59,14 @@ impl NookDatabase {
             mut keyring,
         } = request;
         let wrapped = NookDatabase::read_string_preferring(ReadStringPreferringRequest {
-            store: store,
+            store,
             preferred_key: indexed_db::APP_KEY_WRAPPED_KEY,
             legacy_key: indexed_db::WRAPPED_DEVICE_IDENTITY_KEY,
             label: "Legacy wrapped app key",
         })
         .await?;
         let app_id = NookDatabase::read_string_preferring(ReadStringPreferringRequest {
-            store: store,
+            store,
             preferred_key: indexed_db::APP_ID_KEY,
             legacy_key: indexed_db::DEVICE_ID_KEY,
             label: "Legacy app id",
@@ -98,7 +98,7 @@ impl NookDatabase {
             NookDatabase::validate_keyring_directory_binding(
                 KeyringDbValidateKeyringDirectoryBinding {
                     keyring: &keyring,
-                    directory: directory,
+                    directory,
                 },
             )?;
             if existing.wrapped_app_key() != &wrapped {
@@ -109,7 +109,7 @@ impl NookDatabase {
                     })
                     .map_err(|rejected| NookError::Database(rejected.into_cause().to_string()))?;
                 NookDatabase::write_keyring(KeyringDbWriteKeyring {
-                    store: store,
+                    store,
                     keyring: &keyring,
                 })
                 .await?;
@@ -145,7 +145,7 @@ impl NookDatabase {
             ))
             .map_err(|error| NookError::Database(error.to_string()))?;
         NookDatabase::write_keyring(KeyringDbWriteKeyring {
-            store: store,
+            store,
             keyring: &keyring,
         })
         .await?;

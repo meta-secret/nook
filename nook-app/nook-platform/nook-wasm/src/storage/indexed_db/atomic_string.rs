@@ -64,11 +64,11 @@ impl NookDatabase {
     {
         let IndexedDbUpdate { key, guard, update } = request;
         NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
-            key: key,
+            key,
             fallback_key: StringRecordFallback::Disabled,
-            guard: guard,
+            guard,
             can_adopt_fallback: (|_: &str| true) as fn(&str) -> bool,
-            update: update,
+            update,
         })
         .await
     }
@@ -179,7 +179,7 @@ impl NookDatabase {
         })?;
         let mut current = NookDatabase::read_string_record(ReadStringRecordRequest {
             store: &store,
-            key: key,
+            key,
             context: "Atomic string update",
         })
         .await?;

@@ -293,8 +293,8 @@ impl DriveEventStore<'_> {
         // When every candidate is unreadable, treat the event as absent so put-if-absent
         // can publish good local bytes beside the leftover name.
         Self::select_matching_drive_event_bytes(DriveEventCandidates {
-            event_id: event_id,
-            candidates: candidates,
+            event_id,
+            candidates,
         })
     }
 

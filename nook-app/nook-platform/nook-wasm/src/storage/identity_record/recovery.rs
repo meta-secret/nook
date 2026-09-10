@@ -146,12 +146,12 @@ impl RecoveryState {
     async fn write(&self, store: &Store) -> Result<(), NookError> {
         let state = self;
         NookDatabase::write_identity_directory(IdentityDbWriteIdentityDirectory {
-            store: store,
+            store,
             directory: &state.directory,
         })
         .await?;
         NookDatabase::write_keyring(KeyringDbWriteKeyring {
-            store: store,
+            store,
             keyring: &state.keyring,
         })
         .await?;

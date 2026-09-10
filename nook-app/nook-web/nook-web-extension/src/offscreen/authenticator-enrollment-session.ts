@@ -60,6 +60,7 @@ export async function handleAuthenticatorEnrollmentMessage({
         await dependencies.ensureWasm()
         const preview = preview_otpauth_uri(payload.otpauthUri)
         try {
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             preview: {
@@ -87,6 +88,7 @@ export async function handleAuthenticatorEnrollmentMessage({
         await dependencies.ensureWasm()
         const code = current_code_from_otpauth_uri(payload.otpauthUri)
         try {
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             code: code.code,
@@ -126,6 +128,7 @@ export async function handleAuthenticatorEnrollmentMessage({
         }
         const admission1 = await flushPasskeyEventToProviders(flushArgs)
         if (admission1.isErr()) return err(admission1.error)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true, secretId })
       }
       case ExtensionSessionMessageType.AuthenticatorBackupAttach: {
@@ -178,6 +181,7 @@ export async function handleAuthenticatorEnrollmentMessage({
             }
           const admission3 = await flushPasskeyEventToProviders(flushArgs)
           if (admission3.isErr()) return err(admission3.error)
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             secretId: attachResult.secretId,

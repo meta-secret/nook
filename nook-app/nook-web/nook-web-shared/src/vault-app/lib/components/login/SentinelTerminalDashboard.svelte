@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
     ArrowLeft,
     Check,
@@ -8,18 +8,18 @@
     KeyRound,
     RefreshCw,
     Terminal,
-  } from '@lucide/svelte'
-  import { tick } from 'svelte'
-  import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
+  } from "@lucide/svelte";
+  import { tick } from "svelte";
+  import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
   import {
     SentinelRequestClipboard,
     SentinelDashboardInteraction,
-  } from '$lib/components/login/sentinel-dashboard-actions'
+  } from "$lib/components/login/sentinel-dashboard-actions";
   import {
     SentinelTerminalLineTone,
     SentinelTerminalPolicyStep,
-  } from '$lib/components/login/sentinel-dashboard-state'
-  import type { VaultState } from '$lib/vault.svelte'
+  } from "$lib/components/login/sentinel-dashboard-state";
+  import type { VaultState } from "$lib/vault.svelte";
   import {
     SentinelGenesisPhase,
     evaluate_sentinel_policy_draft,
@@ -27,13 +27,13 @@
     type NookSentinelGenesisDelivery,
     type NookSentinelGenesisParticipantStatus,
     type StartSentinelGenesisArgs,
-  } from '$app-wasm'
+  } from "$app-wasm";
 
-  type Line = { text: string; tone: SentinelTerminalLineTone }
+  type Line = { text: string; tone: SentinelTerminalLineTone };
 
   let {
     vault,
-    name = $bindable(''),
+    name = $bindable(""),
     participantCount = $bindable(3),
     threshold = $bindable(2),
     status,
@@ -47,34 +47,34 @@
     onFinalize,
     onCompleteDelivery,
   }: {
-    vault: VaultState
-    name: string
-    participantCount: number
-    threshold: number
-    status: SentinelGenesisPhase
-    request: string
-    participants: NookSentinelGenesisParticipantStatus[]
-    deliveries: NookSentinelGenesisDelivery[]
-    isBusy: boolean
-    onBack: () => void
-    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
-    onAddParticipant: (payload: string) => Promise<SentinelActionResult<void>>
-    onFinalize: () => Promise<SentinelActionResult<void>>
-    onCompleteDelivery: () => Promise<SentinelActionResult<void>>
-  } = $props()
+    vault: VaultState;
+    name: string;
+    participantCount: number;
+    threshold: number;
+    status: SentinelGenesisPhase;
+    request: string;
+    participants: NookSentinelGenesisParticipantStatus[];
+    deliveries: NookSentinelGenesisDelivery[];
+    isBusy: boolean;
+    onBack: () => void;
+    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>;
+    onAddParticipant: (payload: string) => Promise<SentinelActionResult<void>>;
+    onFinalize: () => Promise<SentinelActionResult<void>>;
+    onCompleteDelivery: () => Promise<SentinelActionResult<void>>;
+  } = $props();
 
   let policyStep = $state<SentinelTerminalPolicyStep>(
     SentinelTerminalPolicyStep.Total,
-  )
-  let response = $state('')
-  let actionBusy = $state(false)
-  let copied = $state(false)
-  let outputElement = $state<HTMLDivElement>()
+  );
+  let response = $state("");
+  let actionBusy = $state(false);
+  let copied = $state(false);
+  let outputElement = $state<HTMLDivElement>();
 
   const canFinalize = $derived(
     status === SentinelGenesisPhase.ReadyToFinalize ||
       status === SentinelGenesisPhase.AwaitingCompletionCheck,
-  )
+  );
 
   function finalize() {
     const action: ConstructorParameters<
@@ -83,27 +83,28 @@
       allowed: canFinalize && !isBusy && !actionBusy,
       setBusy: (value) => (actionBusy = value),
       action: async () => {
-        const finalized = await onFinalize()
+        const finalized = await onFinalize();
         if (finalized.isErr())
-          vault.errorMsg = vault.t(finalized.error.translationKey)
+          vault.errorMsg = vault.t(finalized.error.translationKey);
       },
-    }
-    return new SentinelDashboardInteraction(action).execute()
+    };
+    return new SentinelDashboardInteraction(action).execute();
   }
 
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
-  )
+  );
   const policyDraft = $derived(
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     evaluate_sentinel_policy_draft({
       participants: participantCount,
       threshold,
     }),
-  )
+  );
   const policyValid = $derived(
-    name.trim().length > 0 && policyDraft.admission.kind === 'accepted',
-  )
-  const rosterCount = $derived(Math.max(1, participants.length))
+    name.trim().length > 0 && policyDraft.admission.kind === "accepted",
+  );
+  const rosterCount = $derived(Math.max(1, participants.length));
   const workflowStage = $derived(
     status === SentinelGenesisPhase.DeliveringShares ||
       status === SentinelGenesisPhase.Complete
@@ -116,10 +117,10 @@
               policyStep === SentinelTerminalPolicyStep.Threshold
             ? 2
             : 3,
-  )
+  );
   const policyLines = $derived<Line[]>([
     {
-      text: 'NOOK SENTINEL INIT v0.3.0',
+      text: "NOOK SENTINEL INIT v0.3.0",
       tone: SentinelTerminalLineTone.Accent,
     },
     {
@@ -141,59 +142,60 @@
           : `${vault.t(I18N_KEYS.LoginSentinelTerminalStatus)}  ${vault.t(sentinel_genesis_phase_translation_key(status)).toUpperCase()}`,
       tone: SentinelTerminalLineTone.Muted,
     },
-  ])
+  ]);
 
   async function scrollOutput() {
-    await tick()
-    if (outputElement) outputElement.scrollTop = outputElement.scrollHeight
+    await tick();
+    if (outputElement) outputElement.scrollTop = outputElement.scrollHeight;
   }
 
   function chooseTotal(value: number) {
-    participantCount = value
+    participantCount = value;
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const choices = evaluate_sentinel_policy_draft({
       participants: value,
       threshold,
-    }).thresholdChoices
+    }).thresholdChoices;
     if (!choices.includes(threshold)) {
-      if (choices.length > 0) threshold = choices[choices.length - 1]!
+      if (choices.length > 0) threshold = choices[choices.length - 1]!;
     }
-    policyStep = SentinelTerminalPolicyStep.Threshold
-    void scrollOutput()
+    policyStep = SentinelTerminalPolicyStep.Threshold;
+    void scrollOutput();
   }
 
   function chooseThreshold(value: number) {
-    threshold = value
-    policyStep = SentinelTerminalPolicyStep.Confirm
-    void scrollOutput()
+    threshold = value;
+    policyStep = SentinelTerminalPolicyStep.Confirm;
+    void scrollOutput();
   }
 
   async function start() {
-    if (!policyValid || isBusy || actionBusy) return
-    actionBusy = true
+    if (!policyValid || isBusy || actionBusy) return;
+    actionBusy = true;
     try {
       const onStartArgs: Parameters<typeof onStart>[0] = {
         label: name.trim(),
         participantCount,
         threshold,
-      }
-      await onStart(onStartArgs)
+      };
+      await onStart(onStartArgs);
     } finally {
-      actionBusy = false
+      actionBusy = false;
     }
   }
 
   async function addParticipant() {
-    if (!response.trim() || isBusy || actionBusy) return
-    actionBusy = true
+    if (!response.trim() || isBusy || actionBusy) return;
+    actionBusy = true;
     try {
-      const added = await onAddParticipant(response.trim())
+      const added = await onAddParticipant(response.trim());
       if (added.isErr()) {
-        vault.errorMsg = vault.t(added.error.translationKey)
-        return
+        vault.errorMsg = vault.t(added.error.translationKey);
+        return;
       }
-      response = ''
+      response = "";
     } finally {
-      actionBusy = false
+      actionBusy = false;
     }
   }
 </script>
@@ -217,7 +219,7 @@
 
   <section
     {...status === SentinelGenesisPhase.Inactive
-      ? { 'data-testid': 'sentinel-genesis-policy-step' }
+      ? { "data-testid": "sentinel-genesis-policy-step" }
       : {}}
     class="mx-auto max-w-6xl overflow-hidden rounded-xl border border-[#41613b] bg-[#030503] shadow-[0_0_80px_rgb(93_255_103/0.08)]"
   >
@@ -299,17 +301,17 @@
                     >[0] = {
                       request,
                       onCopied: () => {
-                        copied = true
-                        setTimeout(() => (copied = false), 1500)
+                        copied = true;
+                        setTimeout(() => (copied = false), 1500);
                       },
                       onFailure: () =>
                         (vault.errorMsg = vault.t(
                           I18N_KEYS.LoginSentinelGenesisCopyFailed,
                         )),
-                    }
+                    };
                     return new SentinelRequestClipboard(
                       copySentinelRequestArgs,
-                    ).execute()
+                    ).execute();
                   })()}
               >
                 <Copy class="size-4" />
@@ -354,10 +356,10 @@
                   <button
                     {...choice === participantCount
                       ? {
-                          'data-testid': 'sentinel-genesis-participant-count',
+                          "data-testid": "sentinel-genesis-participant-count",
                         }
                       : {}}
-                    class={`border px-4 py-2 text-xs ${choice === participantCount ? 'border-[#83e273] bg-[#11200f] text-[#d4ffc7]' : 'border-[#22321f] text-[#5e8955]'}`}
+                    class={`border px-4 py-2 text-xs ${choice === participantCount ? "border-[#83e273] bg-[#11200f] text-[#d4ffc7]" : "border-[#22321f] text-[#5e8955]"}`}
                     data-participant-count={choice}
                     onclick={() => chooseTotal(choice)}
                     >❯ {choice}
@@ -374,9 +376,9 @@
                 {#each policyDraft.thresholdChoices as choice (choice)}
                   <button
                     {...choice === threshold
-                      ? { 'data-testid': 'sentinel-genesis-threshold' }
+                      ? { "data-testid": "sentinel-genesis-threshold" }
                       : {}}
-                    class={`border px-4 py-2 text-xs ${choice === threshold ? 'border-[#83e273] bg-[#11200f] text-[#d4ffc7]' : 'border-[#22321f] text-[#5e8955]'}`}
+                    class={`border px-4 py-2 text-xs ${choice === threshold ? "border-[#83e273] bg-[#11200f] text-[#d4ffc7]" : "border-[#22321f] text-[#5e8955]"}`}
                     onclick={() => chooseThreshold(choice)}
                     >❯ {choice} of {participantCount}</button
                   >
@@ -464,9 +466,9 @@
                 data-testid="sentinel-genesis-delivery-complete"
                 disabled={memberDeliveries.length === 0}
                 onclick={async () => {
-                  const completed = await onCompleteDelivery()
+                  const completed = await onCompleteDelivery();
                   if (completed.isErr())
-                    vault.errorMsg = vault.t(completed.error.translationKey)
+                    vault.errorMsg = vault.t(completed.error.translationKey);
                 }}
               >
                 {vault.t(I18N_KEYS.LoginSentinelOnboardingFinishAction)}
@@ -498,25 +500,25 @@
           <div>
             <dt class="text-[#456440]">VAULT</dt>
             <dd
-              class={`mt-1 ${status === SentinelGenesisPhase.DeliveringShares || status === SentinelGenesisPhase.Complete ? 'text-[#83e273]' : 'text-[#d9c365]'}`}
+              class={`mt-1 ${status === SentinelGenesisPhase.DeliveringShares || status === SentinelGenesisPhase.Complete ? "text-[#83e273]" : "text-[#d9c365]"}`}
             >
               {status === SentinelGenesisPhase.DeliveringShares ||
               status === SentinelGenesisPhase.Complete
-                ? 'SEALED'
-                : 'DOES NOT EXIST'}
+                ? "SEALED"
+                : "DOES NOT EXIST"}
             </dd>
           </div>
         </dl>
         <div class="mt-8 border-t border-[#22321f] pt-5">
           <p class="text-[#456440]">WORKFLOW</p>
           <ol class="mt-4 space-y-4">
-            {#each ['Name draft', 'Set N / K', vault.t(I18N_KEYS.LoginSentinelGenesisCollectTitle), 'Seal vault'] as item, index (item)}
+            {#each ["Name draft", "Set N / K", vault.t(I18N_KEYS.LoginSentinelGenesisCollectTitle), "Seal vault"] as item, index (item)}
               <li
-                class={`flex items-center gap-3 ${index + 1 < workflowStage ? 'text-[#83e273]' : index + 1 === workflowStage ? 'text-[#d9c365]' : 'text-[#385334]'}`}
+                class={`flex items-center gap-3 ${index + 1 < workflowStage ? "text-[#83e273]" : index + 1 === workflowStage ? "text-[#d9c365]" : "text-[#385334]"}`}
               >
                 <span
                   class="grid size-5 place-items-center border border-current"
-                  >{index + 1 < workflowStage ? '✓' : index + 1}</span
+                  >{index + 1 < workflowStage ? "✓" : index + 1}</span
                 >
                 {item}
               </li>

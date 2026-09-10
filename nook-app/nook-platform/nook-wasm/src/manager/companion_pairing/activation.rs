@@ -9,7 +9,7 @@ use nook_core::{
     EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId,
     LocalEventStore, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
 };
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(test)]
 use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use std::collections::BTreeSet;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -112,10 +112,7 @@ impl NookPrevalidatedCompanionPairingApproval {
             if !checked.belongs_to_store(store_id.as_str()) {
                 return Err(CompanionPairingPreparationFailure::VaultMismatch);
             }
-            event_store = event_store.put_event(nook_core::LocalEventWrite {
-                event_id: event_id,
-                bytes: bytes,
-            });
+            event_store = event_store.put_event(nook_core::LocalEventWrite { event_id, bytes });
         }
         if unique.is_empty() {
             return Err(CompanionPairingPreparationFailure::GraphInvalid);

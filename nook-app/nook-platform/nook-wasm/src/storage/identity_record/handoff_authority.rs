@@ -19,6 +19,7 @@ impl VaultCreationAuthority {
         }
     }
 }
+#[derive(Clone, Copy)]
 pub(crate) enum HandoffAuthorization<'a> {
     Unauthenticated,
     Authenticated(&'a AppKey),

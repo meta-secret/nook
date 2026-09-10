@@ -88,6 +88,7 @@ class SessionWebsitePasskeys {
             )
           }
           this.canceledWebsitePasskeyRequests.add(payload.requestId)
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({ ok: true })
         }
         case ExtensionSessionMessageType.RegisterPasskey: {
@@ -130,6 +131,7 @@ class SessionWebsitePasskeys {
               }
               const admission1 = await flushEvent(flushArgs)
               if (admission1.isErr()) return err(admission1.error)
+              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
               return ok({
                 ok: true,
                 credentialId: registration.credentialId,
@@ -184,6 +186,7 @@ class SessionWebsitePasskeys {
               }
               const admission3 = await flushEvent(flushArgs)
               if (admission3.isErr()) return err(admission3.error)
+              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
               return ok({
                 ok: true,
                 credentialId: assertion.credentialId,

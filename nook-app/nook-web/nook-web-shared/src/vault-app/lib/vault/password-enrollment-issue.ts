@@ -99,6 +99,7 @@ export class PasswordEnrollmentIssue {
       // future leaves its IndexedDB transaction dangling, which surfaces later as
       // "database is not open" and poisons subsequent borrows. Surface a
       // retriable error instead.
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const idle = await state.raceStorageTimeout({
         promise: state.waitForStorageChain().then(() => storageOk()),
         releaseLateValue: () => {},

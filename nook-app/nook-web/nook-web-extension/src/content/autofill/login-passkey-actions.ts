@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Existing call shapes are preserved for this lint-only fix. */
 import { LiveAuthenticationWorkflowDisposition } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import {
@@ -108,7 +109,6 @@ class LoginPasskeyInteraction {
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
-
       authenticationWorkflowUi.setStatus({
         description,
         continueButton,
@@ -123,7 +123,6 @@ class LoginPasskeyInteraction {
       RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
         approval.facts,
       )
-
     const releaseOutcome = await new RevalidatedAuthenticationAction({
       workflow,
       expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
@@ -141,7 +140,6 @@ class LoginPasskeyInteraction {
       releaseOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted
     )
       return showFillFailure()
-
     const delivery = await loginFillRuntimeTransport.sendLoginFillMessage({
       type: WebsiteLoginRevealMessageType.NookWebsiteLoginFill,
       payload: {
@@ -249,7 +247,6 @@ class LoginPasskeyInteraction {
                 approvedFillRequest,
               ),
           }
-
           submission.result = passwordFormInteraction.submitLoginForm({
             kind: PasswordFormQueryKind.Scoped,
             root: currentWorkflow.root,
@@ -290,7 +287,6 @@ class LoginPasskeyInteraction {
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
         })
-
         authenticationWorkflowUi.setStatus({
           description,
           continueButton,
@@ -317,7 +313,6 @@ class LoginPasskeyInteraction {
         continueButton.hidden = true
         return true
       }
-
       workflowUi.setFlightProgress({
         step,
         title,
@@ -363,7 +358,6 @@ class LoginPasskeyInteraction {
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
-
       authenticationWorkflowUi.setStatus({
         description,
         continueButton,
@@ -384,7 +378,6 @@ class LoginPasskeyInteraction {
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
-
       authenticationWorkflowUi.setStatus({
         description,
         continueButton,
@@ -404,7 +397,6 @@ class LoginPasskeyInteraction {
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
-
       authenticationWorkflowUi.setStatus({
         description,
         continueButton,
@@ -425,7 +417,6 @@ class LoginPasskeyInteraction {
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
       })
-
       authenticationWorkflowUi.setStatus({
         description,
         continueButton,
@@ -456,7 +447,6 @@ class LoginPasskeyInteraction {
         const taken = pickerState.takeLogin(requestId)
         if (taken.kind !== PendingPickerTakeKind.Taken) return
         const pending = taken.request
-
         authenticationWorkflowUi.setStatus({
           description: pending.description,
           continueButton: pending.continueButton,
@@ -474,7 +464,6 @@ class LoginPasskeyInteraction {
       },
       Math.max(0, response.expiresAt - Date.now()),
     )
-
     pickerState.openLogin({
       requestId,
       workflow,
@@ -488,7 +477,6 @@ class LoginPasskeyInteraction {
         facts: approval.facts,
       },
     })
-
     workflowUi.setFlightProgress({
       step,
       title,
@@ -497,7 +485,6 @@ class LoginPasskeyInteraction {
       ),
       titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
     })
-
     authenticationWorkflowUi.setStatus({
       description,
       continueButton,
@@ -538,14 +525,12 @@ class LoginPasskeyInteraction {
       currentPasswordFieldCount: workflow.summary.currentPasswordFieldCount,
       newPasswordFieldCount: workflow.summary.newPasswordFieldCount,
     })
-
     workflowUi.setFlightProgress({
       step,
       title,
       ...activity.generationProgress,
       titleKey: WorkflowCopy.forKind(activity.kind).titleKey,
     })
-
     authenticationWorkflowUi.setStatus({
       description,
       continueButton,
@@ -562,7 +547,6 @@ class LoginPasskeyInteraction {
         RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
           approval.facts,
         )
-
       const releaseApproved = await new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.GeneratePassword,
@@ -676,7 +660,6 @@ class LoginPasskeyInteraction {
         })
         return
       }
-
       authenticationWorkflowUi.setStatus({
         description,
         continueButton,
@@ -718,7 +701,6 @@ class LoginPasskeyInteraction {
         })
         return
       }
-
       authenticationWorkflowUi.setStatus({
         description,
         continueButton,
@@ -732,7 +714,6 @@ class LoginPasskeyInteraction {
     }
     widgetState.busy = true
     continueButton.disabled = true
-
     authenticationWorkflowUi.setStatus({
       description,
       continueButton,
@@ -751,7 +732,6 @@ class LoginPasskeyInteraction {
         RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
           approval.facts,
         )
-
       const outcome = await new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: action,
@@ -806,7 +786,6 @@ class LoginPasskeyInteraction {
         })
         return
       }
-
       authenticationWorkflowUi.setStatus({
         description,
         continueButton,
@@ -835,7 +814,6 @@ class LoginPasskeyInteraction {
       return
     widgetState.busy = true
     continueButton.disabled = true
-
     workflowUi.setFlightProgress({
       step,
       title,
@@ -844,7 +822,6 @@ class LoginPasskeyInteraction {
       ),
       titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
     })
-
     authenticationWorkflowUi.setStatus({
       description,
       continueButton,
@@ -871,7 +848,6 @@ class LoginPasskeyInteraction {
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         })
-
         authenticationWorkflowUi.setStatus({
           description,
           continueButton,
@@ -893,7 +869,6 @@ class LoginPasskeyInteraction {
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         })
-
         authenticationWorkflowUi.setStatus({
           description,
           continueButton,
@@ -914,7 +889,6 @@ class LoginPasskeyInteraction {
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         })
-
         authenticationWorkflowUi.setStatus({
           description,
           continueButton,
@@ -938,7 +912,6 @@ class LoginPasskeyInteraction {
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         })
-
         authenticationWorkflowUi.setStatus({
           description,
           continueButton,
@@ -965,7 +938,6 @@ class LoginPasskeyInteraction {
         })
         return
       }
-
       await this.openLoginPicker({
         workflow,
         approval,

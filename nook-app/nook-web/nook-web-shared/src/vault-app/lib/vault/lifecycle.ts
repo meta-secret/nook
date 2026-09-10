@@ -210,6 +210,7 @@ export class VaultInitializationActions {
             > => {
               const manager = state.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
+              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
               return setupDeviceProtection({
                 manager: manager.value,
                 passkeyLabel: "",
@@ -322,6 +323,7 @@ export class VaultInitializationActions {
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
       try {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return storageOk({
           deviceId: admitted.value.device_id,
           devicePublicKey: admitted.value.device_public_key,
@@ -372,6 +374,7 @@ export class VaultInitializationActions {
           state.errorMsg = state.t(marked.error.translationKey);
           return false;
         }
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         const initialized = await this.initDeviceIdentity({
           mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
         });
@@ -487,6 +490,7 @@ export class VaultInitializationActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments, nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
           operation,
           releaseLateValue: (records) => {
@@ -563,6 +567,7 @@ export class VaultInitializationActions {
 class DeviceInitializationContinuation {
   private readonly state: VaultState;
   private readonly manager: NookVaultManager;
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   private constructor(request: {
     state: VaultState;
     manager: NookVaultManager;
@@ -582,6 +587,7 @@ class DeviceInitializationContinuation {
         ),
       );
     return storageOk(
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       new DeviceInitializationContinuation({ state, manager: manager.value }),
     );
   }

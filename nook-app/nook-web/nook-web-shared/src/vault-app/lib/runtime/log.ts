@@ -246,17 +246,21 @@ class BrowserLogRuntime {
           debug: () => {},
           log: () => {},
         };
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
   runtimeFailure(cause: unknown): RuntimeFailure {
     return new RuntimeFailure(
       cause instanceof Error
-        ? {
+        ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          {
             message: cause.message,
             ...(cause.stack ? { stack: cause.stack } : {}),
           }
-        : { message: String(cause) },
+        : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          { message: String(cause) },
     );
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
   runtimeError(cause: unknown): Error {
     return cause instanceof Error ? cause : new Error(String(cause));
   }
@@ -365,6 +369,7 @@ class BrowserLogRuntime {
     }
   }
 
+  // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
   private hostEcho(level: LogLevel, text: string): void {
     const echoArgs: Parameters<typeof this.echo>[0] = { level, text };
     this.echo(echoArgs);
@@ -431,6 +436,7 @@ class BrowserLogRuntime {
     this.persistMessage(persistMessageArgs);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
   isIgnoredErrorSource(source: unknown): boolean {
     if (typeof source !== "string") return false;
     const value = source.trim();

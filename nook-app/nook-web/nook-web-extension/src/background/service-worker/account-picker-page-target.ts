@@ -1,6 +1,7 @@
 type AccountPickerPageMessageDelivery = {
   tabId: number
   frameId: number
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   message: unknown
 }
 
@@ -37,6 +38,7 @@ export class AccountPickerPageTarget {
     tabId,
     frameId,
     message,
+    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   }: AccountPickerPageMessageDelivery): Promise<unknown> {
     const options: chrome.tabs.MessageSendOptions = { frameId }
     return chrome.tabs.sendMessage(tabId, message, options)

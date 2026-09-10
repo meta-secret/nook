@@ -31,23 +31,21 @@ class IdentityHandoffFixture {
   readonly clearUnlockedSession: MockInstance<
     VaultState['clearUnlockedSession']
   >
-  readonly rollback = vi.fn((_manager: NookVaultManager): void => {})
-  readonly confirm = vi.fn((_manager: NookVaultManager): void => {})
-  readonly requiresConnect = vi.fn((_manager: NookVaultManager) => false)
+  readonly rollback = vi.fn((): void => {})
+  readonly confirm = vi.fn((): void => {})
+  readonly requiresConnect = vi.fn(() => false)
   readonly committed = {
     confirm: this.confirm,
-    rollback: vi.fn((_manager: NookVaultManager): void => {}),
+    rollback: vi.fn((): void => {}),
     free: vi.fn(),
     [Symbol.dispose]: vi.fn(),
   } satisfies NookCommittedExtensionIdentityHandoff
-  readonly commit = vi.fn(async (_manager: NookVaultManager) => this.committed)
+  readonly commit = vi.fn(async () => this.committed)
   readonly adopted = {
     requires_connect: this.requiresConnect,
-    mark_existing_vault_import: vi.fn((_manager: NookVaultManager): void => {}),
+    mark_existing_vault_import: vi.fn((): void => {}),
     commit: this.commit,
-    after_verified_connect: vi.fn(
-      (_manager: NookVaultManager) => this.committed,
-    ),
+    after_verified_connect: vi.fn(() => this.committed),
     rollback: this.rollback,
     free: vi.fn(),
     [Symbol.dispose]: vi.fn(),

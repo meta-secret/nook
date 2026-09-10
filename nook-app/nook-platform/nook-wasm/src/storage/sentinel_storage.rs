@@ -113,8 +113,8 @@ impl NookDatabase {
         });
         let delivery_key = serde_wasm_bindgen::to_value(&NookDatabase::sentinel_genesis_share_key(
             SentinelDbSentinelGenesisShareKey {
-                store_id: store_id,
-                device_id: device_id,
+                store_id,
+                device_id,
             },
         ))
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
@@ -155,8 +155,8 @@ impl NookDatabase {
         Ok(
             match NookDatabase::idb_get_string(&NookDatabase::sentinel_genesis_share_key(
                 SentinelDbSentinelGenesisShareKey {
-                    store_id: store_id,
-                    device_id: device_id,
+                    store_id,
+                    device_id,
                 },
             ))
             .await?
@@ -244,8 +244,8 @@ mod browser_tests {
 
         NookDatabase::save_sentinel_genesis_share_delivery(
             SentinelDbSaveSentinelGenesisShareDelivery {
-                store_id: store_id,
-                device_id: device_id,
+                store_id,
+                device_id,
                 delivery_json: payload,
             },
         )
@@ -254,7 +254,7 @@ mod browser_tests {
         assert_eq!(
             NookDatabase::load_sentinel_genesis_share_delivery(
                 SentinelDbLoadSentinelGenesisShareDelivery {
-                    store_id: store_id,
+                    store_id,
                     device_id: device_id
                 }
             )

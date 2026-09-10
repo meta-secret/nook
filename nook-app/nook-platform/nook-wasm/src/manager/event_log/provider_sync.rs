@@ -125,7 +125,7 @@ impl NookVaultManager {
         NookDatabase::queue_outbox_entry(EventDbQueueOutboxEntry {
             provider_id: &provider_id,
             event_id: event_id.as_str(),
-            bytes: bytes,
+            bytes,
         })
         .await?;
         NookDatabase::append_outbox_index(EventDbAppendOutboxIndex {
@@ -706,7 +706,7 @@ mod tests {
         let mut store = nook_core::LocalEventStore::new();
         store = store.put_event(nook_core::LocalEventWrite {
             event_id: event_id.clone(),
-            bytes: bytes,
+            bytes,
         });
 
         let records = NookVaultManager::export_event_records_from_store(&store)?;
@@ -723,7 +723,7 @@ mod tests {
         let event_id = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
         let mut store = nook_core::LocalEventStore::new();
         store = store.put_event(nook_core::LocalEventWrite {
-            event_id: event_id,
+            event_id,
             bytes: b"corrupt event bytes".to_vec().into(),
         });
 

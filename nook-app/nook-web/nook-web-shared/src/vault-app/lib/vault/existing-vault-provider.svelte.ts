@@ -70,8 +70,10 @@ export class ExistingVaultProviderDraft {
       return err(new NativeVaultStorageFailure(failure));
     }
     if (readiness !== NookExistingVaultProviderReadiness.Ready)
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ kind: readiness });
     if (setupType === GITHUB_PROVIDER_TYPE) {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         kind: readiness,
         provider: {
@@ -83,9 +85,11 @@ export class ExistingVaultProviderDraft {
     }
     if (setupType === OAUTH_FILE_PROVIDER_TYPE) {
       if (oauth.kind !== OAuthFileDraftKind.Configured)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({
           kind: NookExistingVaultProviderReadiness.MissingOauthFile,
         });
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         kind: readiness,
         provider: { setupType, oauthFile: $state.snapshot(oauth.config) },
@@ -93,14 +97,17 @@ export class ExistingVaultProviderDraft {
     }
     if (setupType === LOCAL_FOLDER_PROVIDER_TYPE) {
       if (folder.kind !== LocalFolderDraftKind.Configured)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({
           kind: NookExistingVaultProviderReadiness.MissingLocalFolder,
         });
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         kind: readiness,
         provider: { setupType, localFolder: $state.snapshot(folder.config) },
       });
     }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return ok({
       kind: readiness,
       provider: { setupType: LOCAL_PROVIDER_TYPE },

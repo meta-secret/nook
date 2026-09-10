@@ -442,7 +442,8 @@ describe('generated companion protocol composition', () => {
       structuredClone(presence),
     )
     const observation = discovery('request-correlation')
-    const status = endpoint.discover(structuredClone(observation))
+    const endpoint = initial.discover(structuredClone(observation))
+    const status = endpoint.status
     endpoint.free()
     const admission = admit_companion_identity_status({
       discovery: structuredClone(observation),
@@ -467,7 +468,7 @@ describe('generated companion protocol composition', () => {
   })
 
   test('rejects unrelated and stale status admission in Rust', () => {
-    const endpoint = new NookCompanionExtensionEndpoint(
+    const initial = new NookCompanionExtensionEndpoint(
       structuredClone(presence),
     )
     const observation = discovery('request-admission')

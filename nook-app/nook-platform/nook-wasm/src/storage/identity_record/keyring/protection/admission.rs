@@ -44,6 +44,7 @@ impl IdentityTransitionAdmission<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::IdbPutStringRequest;
     use crate::storage::identity_record::simple_genesis;
     use rexie::TransactionMode;
     use wasm_bindgen_test::wasm_bindgen_test;

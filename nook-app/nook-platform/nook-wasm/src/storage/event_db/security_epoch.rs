@@ -165,7 +165,7 @@ impl<'a> VaultEventPersistence<'a> {
             .collect::<Vec<_>>();
         let heads = match local.union_remote(nook_core::LocalRemoteUnion {
             remote_events: &typed_events,
-            store_id: store_id,
+            store_id,
         }) {
             Ok(outcome) => {
                 local = outcome.store;

@@ -105,7 +105,7 @@ impl ExtensionPairingDatabase {
 impl ExtensionPairingDatabase {
     pub(crate) async fn write_all(state: &ExtensionPairingState) -> Result<(), NookError> {
         ExtensionPairingDatabase::reconcile(ExtensionPairingReconciliation {
-            state: state,
+            state,
             removed_keys: &[],
         })
         .await

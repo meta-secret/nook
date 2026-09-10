@@ -112,8 +112,8 @@ impl NookVaultManager {
         if self.vault.architecture.vault_type == VaultType::Simple {
             for record in IdentityRecord::identity_vault_genesis_records(
                 IdentityVaultGenesisRecordsRequest {
-                    identity: identity,
-                    keys: keys,
+                    identity,
+                    keys,
                     enrolled_at: "genesis",
                 },
             )? {
@@ -150,7 +150,7 @@ impl NookVaultManager {
             }
         }
         for member in VaultMember::genesis_members_records(GenesisMembersRecordsRequest {
-            identity: identity,
+            identity,
             members_key: &keys.members_key,
             enrolled_at: "genesis",
         })? {

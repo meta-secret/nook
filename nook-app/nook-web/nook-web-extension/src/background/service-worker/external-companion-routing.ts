@@ -78,10 +78,7 @@ export async function routeExternalCompanionMessage({
     refreshAuthenticationSurfaces,
     requestPairedVaultUnlock,
   } = dependencies
-  const launcherMessage =
-    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage(
-      message,
-    )
+  const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
   if (
     launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
   ) {

@@ -1,5 +1,11 @@
 //! Manager-owned secret transitions behind the one-use handoff handles.
-use super::*;
+use super::{
+    AgeArmoredCiphertext, AuthorizerMemberSigning, DeviceId, DeviceIdentity, DeviceIdentitySecret,
+    DevicePublicKey, DeviceSigningPublicKey, HandoffSignerPublication, HandoffSigningSeedChoice,
+    JsError, NookDatabase, NookExtensionIdentityHandoffContext, NookVaultManager,
+    PendingExtensionIdentityEnrollment, PendingExtensionIdentityHandoff, StoreId, Zeroize,
+    identity_record, mem,
+};
 use crate::manager::device_protection::ExtensionIdentityPublication;
 use crate::storage::identity_record::AuthorizerSigningUpdate;
 use crate::storage::identity_record::HandoffAuthorization;

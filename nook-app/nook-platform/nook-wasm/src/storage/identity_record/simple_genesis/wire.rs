@@ -336,8 +336,8 @@ impl<'de> Visitor<'de> for GenesisSigningAdmission {
             (GenesisEnvelopeInput::Unspecified, GenesisSeedInput::Unspecified) => {
                 Ok(GenesisSigningMaterial::LegacyEventOnly)
             }
-            (GenesisEnvelopeInput::Unspecified, GenesisSeedInput::Unsealed(seed)) => {
-                Ok(GenesisSigningMaterial::LegacyUnsealed(seed))
+            (GenesisEnvelopeInput::Unspecified, GenesisSeedInput::Unsealed(unsealed_seed)) => {
+                Ok(GenesisSigningMaterial::LegacyUnsealed(unsealed_seed))
             }
             (GenesisEnvelopeInput::Sealed(envelope), GenesisSeedInput::Unspecified) => {
                 Ok(GenesisSigningMaterial::Sealed(SealedGenesisSigner {

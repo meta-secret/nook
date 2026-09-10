@@ -32,6 +32,10 @@ const renderState = vi.hoisted(() => ({
     enrollmentRenderDisposition: () => 'replace',
     workflowRenderDisposition: () => 'replace',
   },
+  saveOfferState: {
+    clearActiveOffer: vi.fn(),
+    confirmationActive: false,
+  },
 }))
 
 type MountTestWidgetShellArgs = {
@@ -128,6 +132,7 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
     Assigned: 'assigned',
   },
   pickerState: renderState.pickerState,
+  saveOfferState: renderState.saveOfferState,
   widgetState: renderState.widgetState,
 }))
 

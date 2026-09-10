@@ -1,8 +1,5 @@
 import { err, type Result } from 'neverthrow'
-import {
-  type SerializedExtensionStorageProviders,
-  ProviderCredentialBuffer,
-} from '../lib/provider-credential-staging'
+import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   SessionOperationCleanupKind,
@@ -58,9 +55,7 @@ export type SessionMessageDispatchContext<SessionResponse> = {
   handleCompanionIdentityHandoff: (
     message: CompanionIdentityHandoffSessionTransportRequest,
   ) => Promise<Result<SessionResponse, SessionOperationFailure>>
-  decodeProviders: (
-    providers: SerializedExtensionStorageProviders,
-  ) => Promise<StorageProvider[]>
+  decodeProviders: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 
 function sessionMessagePriority(
@@ -247,8 +242,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
       )
     }
-    const providerCandidate: SerializedExtensionStorageProviders =
-      payload.providers
+    const providerCandidate: StorageProvider[] = payload.providers
     const stagingArgs: Parameters<ProviderCredentialBuffer['stage']>[0] = {
       decode: this.context.decodeProviders,
     }
@@ -469,6 +463,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         }
         void this.enqueueCompanionIdentityDiscovery(message).then((result) =>
           result.match(sendResponse, (failure) =>
+            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
             sendResponse({ ok: false, error: failure.message }),
           ),
         )
@@ -488,6 +483,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         }
         void this.enqueueCompanionIdentityHandoff(message).then((result) =>
           result.match(sendResponse, (failure) =>
+            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
             sendResponse({ ok: false, error: failure.message }),
           ),
         )
@@ -526,6 +522,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           : this.enqueue(request)
         void response.then((result) =>
           result.match(sendResponse, (failure) =>
+            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
             sendResponse({ ok: false, error: failure.message }),
           ),
         )

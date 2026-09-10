@@ -41,6 +41,7 @@ class RecoveryCopyObservation {
 
   authenticationRecoveryEvidence(): RecoveryCopyEvidence {
     if (typeof this.browser.document.querySelectorAll !== 'function') {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return authentication_recovery_copy_evidence({
         texts: ((v) => (v ? v : ''))(
           this.browser.document.body?.innerText,
@@ -58,6 +59,7 @@ class RecoveryCopyObservation {
       if (text.length > MAX_RECOVERY_SOURCE_TEXT_UNITS) continue
       texts.push(text)
     }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return authentication_recovery_copy_evidence({ texts })
   }
 

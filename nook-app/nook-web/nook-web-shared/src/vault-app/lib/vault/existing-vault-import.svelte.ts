@@ -59,6 +59,7 @@ export class ExistingVaultImportLifecycle {
 
   remember(storeId: string): void {
     if (this.vault.loginSetup.kind !== LoginSetupKind.Active) return;
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const prepared = new ExistingVaultProviderDraft({
       state: this.vault,
       setupType: this.vault.loginSetup.providerType,

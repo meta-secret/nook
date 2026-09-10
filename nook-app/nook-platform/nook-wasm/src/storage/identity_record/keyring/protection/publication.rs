@@ -44,8 +44,9 @@ impl PreparedProtectedIdentity<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::IdentityDbSaveNewProtectedLocalIdentity;
     use crate::storage::identity_record::PriorAppAuthorization;
-    use nook_core::{DeviceIdentityProtection, SigningIdentity};
+    use nook_core::{AppKey, DeviceIdentityProtection, SigningIdentity};
     use wasm_bindgen_test::wasm_bindgen_test;
     #[cfg_attr(
         dylint_lib = "nook_domain_api",

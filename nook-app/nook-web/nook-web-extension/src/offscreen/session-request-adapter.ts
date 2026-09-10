@@ -1,6 +1,5 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
 import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import {
   ExtensionSessionRequestValidation,
@@ -88,7 +87,7 @@ type ExtensionSessionImportTransportRequest = {
     GeneratedExtensionSessionImportRequest['payload'],
     'providers'
   > & {
-    providers: SerializedStorageProvider[]
+    providers: StorageProvider[]
   }
 }
 export type ExtensionSessionTransportRequest =

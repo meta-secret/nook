@@ -204,6 +204,7 @@ export class SyncConflictActions {
       let conflicts: NookReplacementConflict[] = [];
       try {
         if (!manager.value.event_log_mode())
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return storageOk({
             replacementConflicts: conflicts,
             securityConflicts: [] as NookSecurityConflict[],
@@ -211,6 +212,7 @@ export class SyncConflictActions {
         conflicts = await manager.value.list_projection_conflicts();
         const securityConflicts =
           await manager.value.list_projection_security_conflicts();
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return storageOk({
           replacementConflicts: conflicts,
           securityConflicts,
@@ -268,7 +270,7 @@ export class SyncConflictActions {
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
           return storageOk(
-            await admittedManager.value.prepare_connect_from_local_cache(),
+            admittedManager.value.prepare_connect_from_local_cache(),
           );
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));

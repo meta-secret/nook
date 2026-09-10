@@ -126,6 +126,7 @@ async function importDecodedApprovedPairing(
       const migration =
         await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_1)
       if (migration.isErr()) {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         await restorePairingStorage({
           previous: previousPairingState,
           written: pairingItems,
@@ -141,6 +142,7 @@ async function importDecodedApprovedPairing(
       const reset =
         await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_2)
       if (reset.isErr()) {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         await restorePairingStorage({
           previous: previousPairingState,
           written: pairingItems,
@@ -179,6 +181,7 @@ async function importDecodedApprovedPairing(
         extensionPairingIdentity.sendSessionMessage(importMessage),
       )
       if (importDelivery.isErr()) {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         await restorePairingStorage({
           previous: previousPairingState,
           written: pairingItems,

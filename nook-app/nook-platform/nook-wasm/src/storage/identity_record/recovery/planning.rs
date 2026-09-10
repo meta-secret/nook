@@ -59,7 +59,7 @@ impl RecoveryPlanning<'_> {
     async fn legacy_app_id(&self) -> RetiredInstallation {
         let store = self.store;
         match NookDatabase::read_string_preferring(ReadStringPreferringRequest {
-            store: store,
+            store,
             preferred_key: indexed_db::APP_ID_KEY,
             legacy_key: indexed_db::DEVICE_ID_KEY,
             label: "Identity reset app id",
@@ -141,7 +141,7 @@ impl RecoveryPlanning<'_> {
         }
         let mut directory = recovered_directory.value;
         let mut keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
-            store: store,
+            store,
             directory: &directory,
         })
         .await?;

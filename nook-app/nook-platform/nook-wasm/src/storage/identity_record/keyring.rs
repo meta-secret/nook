@@ -132,7 +132,7 @@ impl NookDatabase {
         store: &rexie::Store,
     ) -> Result<nook_core::LocalIdentityKeyring, NookError> {
         match NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
-            store: store,
+            store,
             key: LOCAL_IDENTITY_KEYRING_KEY,
             context: "Local identity keyring",
         })
@@ -218,7 +218,7 @@ impl NookDatabase {
     ) -> Result<nook_core::LocalIdentityKeyring, NookError> {
         let KeyringDbLoadKeyringForStore { store, directory } = request;
         let keyring = match NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
-            store: store,
+            store,
             key: LOCAL_IDENTITY_KEYRING_KEY,
             context: "Local identity keyring",
         })
@@ -228,8 +228,8 @@ impl NookDatabase {
             StoredStringRecord::MissingKey => LocalIdentityKeyring::empty(),
         };
         let migrated = NookDatabase::migrate_legacy_active_key(LegacyIdentityKeyMigration {
-            store: store,
-            directory: directory,
+            store,
+            directory,
             keyring,
         })
         .await?;
@@ -237,12 +237,12 @@ impl NookDatabase {
         NookDatabase::validate_keyring_directory_binding(
             KeyringDbValidateKeyringDirectoryBinding {
                 keyring: &keyring,
-                directory: directory,
+                directory,
             },
         )?;
         if matches!(migrated.state, legacy::LegacyKeyMigrationState::Migrated) {
             NookDatabase::write_keyring(KeyringDbWriteKeyring {
-                store: store,
+                store,
                 keyring: &keyring,
             })
             .await?;
@@ -257,7 +257,7 @@ impl NookDatabase {
     ) -> Result<StoredIdentityProtection, NookError> {
         let directory = NookDatabase::load_directory_for_write(store).await?;
         let keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
-            store: store,
+            store,
             directory: &directory,
         })
         .await?;
@@ -281,7 +281,7 @@ impl NookDatabase {
         let directory = NookDatabase::load_directory_for_write(store).await?;
         Ok(
             NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
-                store: store,
+                store,
                 directory: &directory,
             })
             .await?

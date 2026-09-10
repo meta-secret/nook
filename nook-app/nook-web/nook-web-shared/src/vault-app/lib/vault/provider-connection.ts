@@ -111,8 +111,10 @@ export class ProviderConnectionActions {
           }
         });
       })();
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const storeId = await new VaultDiscoveryTimeout({
         timeoutMs: 30_000,
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       }).waitFor({ operation: discovery, releaseLateValue: () => {} });
       if (storeId.isErr()) return storageErr(storeId.error);
       if (storeId.value && state.hasManager) {

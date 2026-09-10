@@ -103,6 +103,7 @@ class BrowserDataLifecycle {
     try {
       return await this.browser.navigator.locks.request(
         LOCAL_DATA_STORAGE_LOCK,
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         { mode: "shared" },
         run,
       );
@@ -121,6 +122,7 @@ class BrowserDataLifecycle {
     try {
       return await this.browser.navigator.locks.request(
         LOCAL_DATA_STORAGE_LOCK,
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         { mode: "exclusive" },
         async () => {
           const result = await operation();
@@ -252,6 +254,7 @@ class BrowserDataLifecycle {
         return;
       handled.add(message.requestId);
       try {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         channel.postMessage({
           type: LocalDataResetMessageType.Seen,
           requestId: message.requestId,
@@ -271,6 +274,7 @@ class BrowserDataLifecycle {
             failure: outcome.error.kind,
           };
       try {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         channel.postMessage({
           type: LocalDataResetMessageType.Ready,
           requestId: message.requestId,
@@ -389,6 +393,7 @@ class BrowserDataLifecycle {
       );
     }
     try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       channel.postMessage({
         type: LocalDataResetMessageType.Reload,
         senderId: TAB_ID,

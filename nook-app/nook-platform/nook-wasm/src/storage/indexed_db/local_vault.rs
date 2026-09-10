@@ -254,7 +254,7 @@ impl NookDatabase {
         let mut registry = NookDatabase::load_vault_registry().await?;
         NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
             registry: &mut registry,
-            store_id: store_id,
+            store_id,
             label: RegistryLabelUpdate::PreserveOrDefault,
             touch_unlock: true,
         });
@@ -286,8 +286,8 @@ impl NookDatabase {
         let mut buckets = Vec::new();
         for bucket in 0..nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT {
             let key = NookDatabase::secret_search_bucket_key(SecretSearchBucketKeyRequest {
-                store_id: store_id,
-                bucket: bucket,
+                store_id,
+                bucket,
             });
             let id_key = serde_wasm_bindgen::to_value(&key)
                 .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
@@ -329,8 +329,8 @@ impl NookDatabase {
                 )));
             }
             let key = NookDatabase::secret_search_bucket_key(SecretSearchBucketKeyRequest {
-                store_id: store_id,
-                bucket: bucket,
+                store_id,
+                bucket,
             });
             let id_key = serde_wasm_bindgen::to_value(&key)
                 .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
@@ -399,7 +399,7 @@ impl NookDatabase {
         let store_id = NookDatabase::store_id_from_yaml(content)?;
         NookDatabase::save_vault_blob(SaveVaultBlobRequest {
             store_id: &store_id,
-            content: content,
+            content,
         })
         .await
     }
@@ -428,7 +428,7 @@ impl NookDatabase {
         }
         NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
             registry: &mut registry,
-            store_id: store_id,
+            store_id,
             label: RegistryLabelUpdate::Set(trimmed),
             touch_unlock: false,
         });
@@ -472,7 +472,7 @@ impl NookDatabase {
         let store_id = NookDatabase::store_id_from_yaml(content)?;
         NookDatabase::save_vault_blob(SaveVaultBlobRequest {
             store_id: &store_id,
-            content: content,
+            content,
         })
         .await?;
         let label = match label {

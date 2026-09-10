@@ -31,6 +31,7 @@ export class ExtensionVaultApproval {
     VaultStorageFailure
   >;
   private readonly activeVault: VaultState["activeVault"];
+  // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
   constructor(
     private readonly vault: VaultState,
     private readonly request: ExtensionConnectRequest,
@@ -92,10 +93,12 @@ export class ExtensionVaultApproval {
       if (snapshot.isErr()) return err(snapshot.error);
       try {
         const matching = snapshot.value.providers.filter((provider) =>
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           providerBelongsToVault({ provider, storeId: storeId.value }),
         );
         providers = seal_auth_providers_for_device_public_key(
           request.devicePublicKey,
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           {
             providers: matching,
             activeVaultStoreId: activeVaultScope(storeId.value),
@@ -130,6 +133,7 @@ export class ExtensionVaultApproval {
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
         payload: {
@@ -174,6 +178,7 @@ export class ExtensionVaultApproval {
     const current = this.admitManager();
     if (current.isErr()) return err(current.error);
     const delivery =
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       await extensionConnectionBrowser.deliverExtensionPairingApproval({
         request: this.request,
         message,

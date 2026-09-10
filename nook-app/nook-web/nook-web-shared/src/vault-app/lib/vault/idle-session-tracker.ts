@@ -64,6 +64,7 @@ export class ActiveVaultIdleSession {
     this.configuration = request.configuration;
     this.activityDocument = request.activityDocument;
     for (const event of ACTIVITY_EVENTS) {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.activityDocument.addEventListener(event, this.onActivity, {
         passive: true,
       });
@@ -168,6 +169,7 @@ export class VaultIdleSessionTracker {
       return { kind: VaultIdleSessionStartKind.Unavailable };
     return {
       kind: VaultIdleSessionStartKind.Tracking,
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       session: new ActiveVaultIdleSession({
         configuration: this.configuration,
         activityDocument: document,

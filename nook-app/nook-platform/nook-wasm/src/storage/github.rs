@@ -134,7 +134,7 @@ impl GitHubStorageClient<'_> {
                 operation: "user",
                 repo: "",
                 path: "",
-                status: status,
+                status,
             });
             return Err(NookError::GitHub(
             "GitHub rejected your token (401). Check that it is valid, not expired, and has repo access.".to_owned(),
@@ -146,7 +146,7 @@ impl GitHubStorageClient<'_> {
                 operation: "user",
                 repo: "",
                 path: "",
-                status: status,
+                status,
             });
             return Err(NookError::GitHub(format!(
                 "Failed to fetch GitHub user details: status {status}"
@@ -172,9 +172,9 @@ impl GitHubStorageClient<'_> {
         if status != StatusCode::NOT_FOUND {
             GitHubStorageClient::log_github_api_failure(GitHubStorageClientLogGithubApiFailure {
                 operation: "repo_check",
-                repo: repo,
+                repo,
                 path: "",
-                status: status,
+                status,
             });
             return Err(NookError::GitHub(format!(
                 "Failed to check GitHub repository {repo}: status {status}"
@@ -202,9 +202,9 @@ impl GitHubStorageClient<'_> {
         if !status.is_success() {
             GitHubStorageClient::log_github_api_failure(GitHubStorageClientLogGithubApiFailure {
                 operation: "contents_list",
-                repo: repo,
-                path: path,
-                status: status,
+                repo,
+                path,
+                status,
             });
             return Err(NookError::GitHub(format!(
                 "GitHub API responded with status {status}"
@@ -245,9 +245,9 @@ impl GitHubStorageClient<'_> {
         if !status.is_success() {
             GitHubStorageClient::log_github_api_failure(GitHubStorageClientLogGithubApiFailure {
                 operation: "file_fetch",
-                repo: repo,
-                path: path,
-                status: status,
+                repo,
+                path,
+                status,
             });
             return Err(NookError::GitHub(format!(
                 "GitHub API responded with status {status}"
@@ -285,9 +285,9 @@ impl GitHubStorageClient<'_> {
         if !status.is_success() {
             GitHubStorageClient::log_github_api_failure(GitHubStorageClientLogGithubApiFailure {
                 operation: "file_write",
-                repo: repo,
-                path: path,
-                status: status,
+                repo,
+                path,
+                status,
             });
             let message = if status == StatusCode::NOT_FOUND {
                 format!(
@@ -330,7 +330,7 @@ impl GitHubStorageClient<'_> {
         let status = response.status();
         let text = response.text().await?;
         GitHubStorageClient::github_username_response(GitHubStorageClientGithubUsernameResponse {
-            status: status,
+            status,
             text: &text,
         })
     }
@@ -353,7 +353,7 @@ impl GitHubStorageClient<'_> {
 
         if GitHubStorageClient::github_repo_check_result(
             GitHubStorageClientGithubRepoCheckResult {
-                repo: repo,
+                repo,
                 status: check.status(),
             },
         )? {
@@ -391,9 +391,9 @@ impl GitHubStorageClient<'_> {
         let status = create.status();
         GitHubStorageClient::log_github_api_failure(GitHubStorageClientLogGithubApiFailure {
             operation: "repo_create",
-            repo: repo,
+            repo,
             path: "",
-            status: status,
+            status,
         });
         Err(NookError::GitHub(format!(
             "Failed to create GitHub repository {repo}: status {status}"
@@ -420,10 +420,10 @@ impl GitHubStorageClient<'_> {
         let status = file_response.status();
         let text = file_response.text().await?;
         GitHubStorageClient::github_file_response(GitHubStorageClientGithubFileResponse {
-            status: status,
+            status,
             text: &text,
-            repo: repo,
-            path: path,
+            repo,
+            path,
         })
     }
 }
@@ -444,10 +444,7 @@ impl GitHubStorageClient<'_> {
         // Event files and other nested paths are not listed under the repo root.
         if path.contains('/') {
             return GitHubStorageClient::new(pat)
-                .fetch_github_file_at_path(GitHubStorageClientFetchGithubFileAtPath {
-                    repo: repo,
-                    path: path,
-                })
+                .fetch_github_file_at_path(GitHubStorageClientFetchGithubFileAtPath { repo, path })
                 .await;
         }
 
@@ -473,8 +470,8 @@ impl GitHubStorageClient<'_> {
             GitHubStorageClientGithubDirectoryListing {
                 status: list_status,
                 text: &list_text,
-                repo: repo,
-                path: path,
+                repo,
+                path,
             },
         )?;
         match listing {
@@ -486,10 +483,7 @@ impl GitHubStorageClient<'_> {
         }
 
         GitHubStorageClient::new(pat)
-            .fetch_github_file_at_path(GitHubStorageClientFetchGithubFileAtPath {
-                repo: repo,
-                path: path,
-            })
+            .fetch_github_file_at_path(GitHubStorageClientFetchGithubFileAtPath { repo, path })
             .await
     }
 }
@@ -535,10 +529,10 @@ impl GitHubStorageClient<'_> {
         let status = response.status();
         let text = response.text().await?;
         GitHubStorageClient::github_put_response(GitHubStorageClientGithubPutResponse {
-            status: status,
+            status,
             text: &text,
-            repo: repo,
-            path: path,
+            repo,
+            path,
         })
     }
 }

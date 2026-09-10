@@ -54,8 +54,8 @@ impl NookPasskeySetup {
         rp_name: &str,
     ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
         BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
-            rp_id: rp_id,
-            rp_name: rp_name,
+            rp_id,
+            rp_name,
             passkey_label: passkey_browser::DEFAULT_PASSKEY_LABEL,
             user_handle: &self.user_handle,
             prf_input: &self.prf_input,
@@ -73,9 +73,9 @@ impl NookPasskeySetup {
         passkey_label: &str,
     ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
         BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
-            rp_id: rp_id,
-            rp_name: rp_name,
-            passkey_label: passkey_label,
+            rp_id,
+            rp_name,
+            passkey_label,
             user_handle: &self.user_handle,
             prf_input: &self.prf_input,
         })
@@ -133,7 +133,7 @@ impl NookPasskeyUnlockOptions {
         rp_id: &str,
     ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
         BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
-            rp_id: rp_id,
+            rp_id,
             credential_id: &self.credential_id,
             prf_input: &self.prf_input,
         })

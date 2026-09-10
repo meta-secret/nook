@@ -49,7 +49,7 @@ impl NookVaultManager {
             }
             let result = NookVaultSyncResult::sync_result_session(SyncResultSessionRequest {
                 manager: self,
-                changed: changed,
+                changed,
             })?;
             tracing::debug!(
                 scope = "wasm-sync",

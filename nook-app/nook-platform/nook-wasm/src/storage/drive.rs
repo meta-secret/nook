@@ -83,7 +83,7 @@ impl DriveStorageClient<'_> {
             let body = response.text().await.unwrap_or_default();
             return Err(DriveStorageClient::drive_error(
                 DriveStorageClientDriveError {
-                    status: status,
+                    status,
                     body: &body,
                 },
             ));

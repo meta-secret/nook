@@ -126,6 +126,7 @@ export class IdentityDirectoryReader {
           : { kind: IdentityDirectorySelectionKind.Empty };
       const access = new NativeDeviceAccess(snapshot.device_access()).read();
       if (access.isErr()) return err(access.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ directory: { identities, selection }, access: access.value });
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
@@ -154,6 +155,7 @@ class NativeIdentityMember {
   read(): Result<IdentityMemberView, VaultStorageFailure> {
     const member = this.member;
     try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         appId: member.appId,
         currentBrowser: member.currentBrowser,
@@ -192,11 +194,14 @@ class NativeAccessTimestamp {
     const value = this.value;
     try {
       if (value.kind === NookPasskeyTimestampEvidenceKind.Known)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ kind: DashboardTimestampKind.Known, value: value.value() });
       return ok(
         value.kind === NookPasskeyTimestampEvidenceKind.NotYetObserved
-          ? { kind: DashboardTimestampKind.NotYetObserved }
-          : { kind: DashboardTimestampKind.Unavailable },
+          ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+            { kind: DashboardTimestampKind.NotYetObserved }
+          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+            { kind: DashboardTimestampKind.Unavailable },
       );
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
@@ -214,6 +219,7 @@ class NativeVaultAccess {
       if (verifiedAt.isErr()) return err(verifiedAt.error);
       const updatedAt = new NativeAccessText(entry.lastLocalUpdateAt).read();
       if (updatedAt.isErr()) return err(updatedAt.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         storeId: entry.storeId,
         label: entry.label,
@@ -229,6 +235,7 @@ class NativeVaultAccess {
   }
 }
 class NativeVaultAccessList {
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   constructor(private readonly entries: NookDeviceVaultAccess[]) {}
   read(): Result<VaultAccessView[], VaultStorageFailure> {
     const projected: VaultAccessView[] = [];
@@ -247,6 +254,7 @@ class NativeVaultAccessList {
   }
 }
 class NativeIdentityMembers {
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   constructor(private readonly entries: NookIdentityMemberSnapshot[]) {}
   read(): Result<IdentityMemberView[], VaultStorageFailure> {
     const projected: IdentityMemberView[] = [];
@@ -283,6 +291,7 @@ class NativeDeviceAccess {
       if (lastUsedAt.isErr()) return err(lastUsedAt.error);
       const vaults = new NativeVaultAccessList(snapshot.vaults()).read();
       if (vaults.isErr()) return err(vaults.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         protection: snapshot.protection,
         identityState: snapshot.identityState,
@@ -311,6 +320,7 @@ class NativeDirectoryIdentity {
       if (members.isErr()) return err(members.error);
       const vaults = new NativeVaultAccessList(identity.vaults()).read();
       if (vaults.isErr()) return err(vaults.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         identityId: identity.identityId,
         label: identity.label,

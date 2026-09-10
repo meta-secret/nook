@@ -6,11 +6,7 @@
 //! files under that parent.
 
 use crate::DriveStorageClient;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::DriveStorageClientDriveError;
 use nook_core::i18n_keys;
-#[cfg(all(test, target_arch = "wasm32"))]
-use reqwest::Client;
 
 use super::drive::wire::{
     AppendPermission, CapabilityReport, FileIdentity, FileName,
@@ -171,7 +167,7 @@ impl DriveStorageClient<'_> {
             let body = response.text().await.unwrap_or_default();
             return Err(DriveStorageClient::shared_drive_error(
                 DriveStorageClientSharedDriveError {
-                    status: status,
+                    status,
                     body: &body,
                 },
             ));
@@ -180,7 +176,7 @@ impl DriveStorageClient<'_> {
             NookError::Serialization(format!("Failed to parse Drive folder create: {e}"))
         })?;
         DriveStorageClient::create_folder_projection(DriveStorageClientCreateFolderProjection {
-            parsed: parsed,
+            parsed,
             fallback_name: folder_name,
         })
     }
@@ -232,7 +228,7 @@ impl DriveStorageClient<'_> {
             let body = response.text().await.unwrap_or_default();
             return Err(DriveStorageClient::shared_drive_error(
                 DriveStorageClientSharedDriveError {
-                    status: status,
+                    status,
                     body: &body,
                 },
             ));
@@ -270,7 +266,7 @@ impl DriveStorageClient<'_> {
             let body = response.text().await.unwrap_or_default();
             return Err(DriveStorageClient::shared_drive_error(
                 DriveStorageClientSharedDriveError {
-                    status: status,
+                    status,
                     body: &body,
                 },
             ));
@@ -279,7 +275,7 @@ impl DriveStorageClient<'_> {
             NookError::Serialization(format!("Failed to parse Drive folder metadata: {error}"))
         })?;
         DriveStorageClient::verify_folder_projection(DriveStorageClientVerifyFolderProjection {
-            parsed: parsed,
+            parsed,
             fallback_id: folder_id.into_inner(),
         })
     }

@@ -25,7 +25,9 @@ export type ExtensionSessionTransportResult<T> = Result<
 /** Host wire values are admitted by the concrete Rust response decoder at the caller. */
 export interface ExtensionSessionTransport {
   sendMessage(
+    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
     message: unknown,
+    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   ): Promise<ExtensionSessionTransportResult<unknown>>
 }
 
@@ -39,7 +41,9 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   private access = SessionDocumentAccess.Sending
 
   sendMessage(
+    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
     message: unknown,
+    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   ): Promise<ExtensionSessionTransportResult<unknown>> {
     if (this.access === SessionDocumentAccess.Revoked)
       return Promise.resolve(
@@ -147,6 +151,7 @@ export class ExtensionSessionDocumentOwner {
     ExtensionSessionTransportResult<OpenExtensionSessionDocument>
   > {
     try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       await chrome.offscreen.createDocument({
         url: extensionSessionDocument,
         reasons: [chrome.offscreen.Reason.WORKERS],
@@ -241,6 +246,7 @@ export class ExtensionSessionDocumentOwner {
     ExtensionSessionTransportResult<void>
   > {
     try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const contexts = await chrome.runtime.getContexts({
         contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
         documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],

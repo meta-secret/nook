@@ -417,10 +417,7 @@ impl NookVaultManager {
                 members_key,
             });
         }
-        LoadedVault::unlock(LoadedVaultUnlockRequest {
-            content: content,
-            identity: identity,
-        })
+        LoadedVault::unlock(LoadedVaultUnlockRequest { content, identity })
     }
 
     /// Hydrate architecture + encrypted share meta without vault keys so the
@@ -663,7 +660,7 @@ mod tests {
         let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
         let records = SentinelShareEnvelope::create_sentinel_share_records(
             CreateSentinelShareRecordsRequest {
-                keys: keys,
+                keys,
                 participants: &participants,
                 threshold: 2.into(),
             },

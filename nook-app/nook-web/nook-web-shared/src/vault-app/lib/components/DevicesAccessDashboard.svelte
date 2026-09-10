@@ -6,34 +6,34 @@ FIRST VIEWPORT: The complete local identity directory and one selected-identity 
 FORM: A quiet master-detail layout makes identity ownership primary while a compact switch chooses either the key inventory or relationship graph.
 -->
 <script lang="ts">
-  import { err, ok } from 'neverthrow'
-  import { SelectedIdentityVault } from './devices-access/selected-identity-vault'
-  import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { onDestroy, untrack } from 'svelte'
-  import { ArrowLeft, Fingerprint, RefreshCw } from '@lucide/svelte'
+  import { err, ok } from "neverthrow";
+  import { SelectedIdentityVault } from "./devices-access/selected-identity-vault";
+  import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import { onDestroy, untrack } from "svelte";
+  import { ArrowLeft, Fingerprint, RefreshCw } from "@lucide/svelte";
   import {
     DeviceAccessProtectionKind,
     DeviceProtectionStatus,
     NookIdentityLocalAccessKind,
-  } from '$app-wasm'
-  import { Button } from '$lib/components/ui/button'
-  import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
-  import { DeviceProtectionGateFrame } from '$lib/components/device-protection-gate-state'
-  import type { VaultState } from '$lib/vault.svelte'
+  } from "$app-wasm";
+  import { Button } from "$lib/components/ui/button";
+  import DeviceProtectionGate from "$lib/components/DeviceProtectionGate.svelte";
+  import { DeviceProtectionGateFrame } from "$lib/components/device-protection-gate-state";
+  import type { VaultState } from "$lib/vault.svelte";
   import {
     DashboardLoadKind,
     type DashboardLoadState,
     DashboardTextKind,
     type DashboardView,
     DevicesAccessRepresentationKind,
-  } from './devices-access-dashboard-state'
-  import IdentityDirectoryRail from './devices-access/IdentityDirectoryRail.svelte'
-  import IdentityKeyInventory from './devices-access/IdentityKeyInventory.svelte'
-  import IdentityRepresentationSwitch from './devices-access/IdentityRepresentationSwitch.svelte'
-  import { AccessChainPresentation } from './devices-access/access-chain'
-  import IdentityBridgeGraph from './devices-access/IdentityBridgeGraph.svelte'
-  import IdentityBridgeNavigation from './devices-access/IdentityBridgeNavigation.svelte'
+  } from "./devices-access-dashboard-state";
+  import IdentityDirectoryRail from "./devices-access/IdentityDirectoryRail.svelte";
+  import IdentityKeyInventory from "./devices-access/IdentityKeyInventory.svelte";
+  import IdentityRepresentationSwitch from "./devices-access/IdentityRepresentationSwitch.svelte";
+  import { AccessChainPresentation } from "./devices-access/access-chain";
+  import IdentityBridgeGraph from "./devices-access/IdentityBridgeGraph.svelte";
+  import IdentityBridgeNavigation from "./devices-access/IdentityBridgeNavigation.svelte";
   import {
     IdentityDirectoryLoadKind,
     type IdentityDirectoryLoadState,
@@ -41,101 +41,101 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     type IdentityDirectoryView,
     IdentityDirectoryReader,
     IdentityDirectoryPresentation,
-  } from './devices-access/identity-directory-view'
+  } from "./devices-access/identity-directory-view";
   import {
     IdentityBridgeDeviceIconKind,
     IdentityBridgePerspective,
     IdentityBridgeVaultSelectionKind,
     type IdentityBridgeCopy,
     type IdentityBridgeVaultSelection,
-  } from './devices-access/identity-bridge-model'
-  import { PasskeyCardPresentation } from './devices-access/passkey-card'
-  import { IdentitySessionTransition } from './devices-access/identity-session-transition'
-  import { IdentityVaultSelection } from './devices-access/identity-vault-selection'
+  } from "./devices-access/identity-bridge-model";
+  import { PasskeyCardPresentation } from "./devices-access/passkey-card";
+  import { IdentitySessionTransition } from "./devices-access/identity-session-transition";
+  import { IdentityVaultSelection } from "./devices-access/identity-vault-selection";
 
   let {
     vault,
     onBack,
   }: {
-    vault: VaultState
-    onBack: () => void
-  } = $props()
+    vault: VaultState;
+    onBack: () => void;
+  } = $props();
 
   let loadState = $state<DashboardLoadState<DashboardView>>({
     kind: DashboardLoadKind.Loading,
-  })
+  });
   let directoryLoadState = $state<IdentityDirectoryLoadState>({
     kind: IdentityDirectoryLoadKind.Loading,
-  })
+  });
 
-  let selectedRepresentation = $state(DevicesAccessRepresentationKind.List)
-  let selectedPerspective = $state(IdentityBridgePerspective.Identities)
+  let selectedRepresentation = $state(DevicesAccessRepresentationKind.List);
+  let selectedPerspective = $state(IdentityBridgePerspective.Identities);
   let selectedVault = $state<IdentityBridgeVaultSelection>({
     kind: IdentityBridgeVaultSelectionKind.Empty,
-  })
-  let identityCreationOpen = $state(false)
-  let identityCreationPending = false
-  let identityCreationActionInFlight = false
-  let identityCreationCleanupRequested = false
-  let dashboardMounted = true
-  let snapshotLoadGeneration = 0
+  });
+  let identityCreationOpen = $state(false);
+  let identityCreationPending = false;
+  let identityCreationActionInFlight = false;
+  let identityCreationCleanupRequested = false;
+  let dashboardMounted = true;
+  let snapshotLoadGeneration = 0;
 
   function clearPriorIdentitySession(): void {
-    new IdentitySessionTransition(vault).clearPriorIdentity()
+    new IdentitySessionTransition(vault).clearPriorIdentity();
   }
 
   async function focusAfterProtectionReady(
     committedIdentityCreation: boolean,
   ): Promise<void> {
     if (committedIdentityCreation) {
-      identityCreationPending = false
+      identityCreationPending = false;
       // Rust has committed and adopted the new app key. Only now discard the
       // prior vault UI session. The immutable action intent matters here:
       // navigation may close the panel while the browser ceremony is running.
-      clearPriorIdentitySession()
+      clearPriorIdentitySession();
     }
-    identityCreationOpen = false
-    vault.devicesAccessIdentityProtectionOpen = false
+    identityCreationOpen = false;
+    vault.devicesAccessIdentityProtectionOpen = false;
     const providerLoadOptions: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
-    }
+    };
     try {
-      const loadedProviders1 = await vault.loadProviders(providerLoadOptions)
+      const loadedProviders1 = await vault.loadProviders(providerLoadOptions);
       if (loadedProviders1.isErr()) {
-        vault.errorMsg = vault.t(loadedProviders1.error.translationKey)
-        return
+        vault.errorMsg = vault.t(loadedProviders1.error.translationKey);
+        return;
       }
-      vault.applyActiveProviderCredentials()
+      vault.applyActiveProviderCredentials();
       // Navigation can unmount the dashboard while WebAuthn is still in
       // flight. Keep the login gate alive until the selected identity's
       // providers are available, regardless of which shell now owns it.
-      vault.devicesAccessIdentityTransitionPending = false
+      vault.devicesAccessIdentityTransitionPending = false;
     } catch (error) {
       vault.errorMsg =
         error instanceof Error
           ? error.message
-          : vault.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired)
+          : vault.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired);
     }
-    if (!dashboardMounted) return
-    directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading }
-    await reloadSnapshots()
+    if (!dashboardMounted) return;
+    directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading };
+    await reloadSnapshots();
   }
 
   function beginIdentityCreationProtectionAction(): void {
-    identityCreationActionInFlight = true
+    identityCreationActionInFlight = true;
   }
 
   function finishIdentityCreationProtectionAction(): void {
-    identityCreationActionInFlight = false
+    identityCreationActionInFlight = false;
     if (identityCreationCleanupRequested) {
-      void finishPendingIdentityCreationCancellation()
+      void finishPendingIdentityCreationCancellation();
     }
   }
 
   function keepCurrentIdentitySession(): void {}
 
   function chooseIdentity(identityId: string): void {
-    if (directoryLoadState.kind !== IdentityDirectoryLoadKind.Ready) return
+    if (directoryLoadState.kind !== IdentityDirectoryLoadKind.Ready) return;
     directoryLoadState = {
       kind: IdentityDirectoryLoadKind.Ready,
       view: {
@@ -145,26 +145,27 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
           identityId,
         },
       },
-    }
-    selectedPerspective = IdentityBridgePerspective.Identities
-    selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
+    };
+    selectedPerspective = IdentityBridgePerspective.Identities;
+    selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty };
     const nextIdentity = directoryLoadState.view.identities.find(
       (entry) => entry.identityId === identityId,
-    )
+    );
     if (
       nextIdentity?.localAccess !== NookIdentityLocalAccessKind.CurrentBrowser
     ) {
-      selectedRepresentation = DevicesAccessRepresentationKind.List
+      selectedRepresentation = DevicesAccessRepresentationKind.List;
     }
-    resetSelectedVaultForIdentity()
+    resetSelectedVaultForIdentity();
   }
 
   function resetSelectedVaultForIdentity(): void {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     selectedVault = new IdentityVaultSelection({
       loadState,
       directoryLoadState,
       selectedVault,
-    }).reset()
+    }).reset();
   }
 
   async function renamePasskey(name: string): Promise<boolean> {
@@ -173,28 +174,28 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       loadState.view.credentialId.kind !== DashboardTextKind.Known ||
       loadState.view.deviceId.kind !== DashboardTextKind.Known
     ) {
-      return false
+      return false;
     }
-    const credentialFingerprint = loadState.view.credentialId.value
-    const appId = loadState.view.deviceId.value
-    const manager = vault.admitManager()
+    const credentialFingerprint = loadState.view.credentialId.value;
+    const appId = loadState.view.deviceId.value;
+    const manager = vault.admitManager();
     if (manager.isErr()) {
-      vault.errorMsg = vault.t(manager.error.translationKey)
-      return false
+      vault.errorMsg = vault.t(manager.error.translationKey);
+      return false;
     }
     try {
       await manager.value.set_device_access_passkey_name(
         appId,
         credentialFingerprint,
         name,
-      )
+      );
     } catch (failure) {
       vault.errorMsg = vault.t(
         new NativeVaultStorageFailure(failure).translationKey,
-      )
-      return false
+      );
+      return false;
     }
-    return (await reloadSnapshots()) === DashboardLoadKind.Ready
+    return (await reloadSnapshots()) === DashboardLoadKind.Ready;
   }
 
   async function beginAddIdentity(): Promise<void> {
@@ -204,164 +205,164 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
         count:
           directoryLoadState.kind === IdentityDirectoryLoadKind.Ready
             ? String(directoryLoadState.view.identities.length + 1)
-            : '1',
+            : "1",
       },
-    }
+    };
     const created = await vault.enqueueStorage(async () => {
-      const manager = vault.admitManager()
-      if (manager.isErr()) return err(manager.error)
+      const manager = vault.admitManager();
+      if (manager.isErr()) return err(manager.error);
       try {
-        await manager.value.begin_local_identity_creation(vault.t(labelArgs))
-        return ok()
+        await manager.value.begin_local_identity_creation(vault.t(labelArgs));
+        return ok();
       } catch (failure) {
-        return err(new NativeVaultStorageFailure(failure))
+        return err(new NativeVaultStorageFailure(failure));
       }
-    })
+    });
     if (created.isErr()) {
-      vault.errorMsg = vault.t(created.error.translationKey)
-      return
+      vault.errorMsg = vault.t(created.error.translationKey);
+      return;
     }
-    vault.dismissError()
-    identityCreationOpen = true
-    identityCreationPending = true
-    identityCreationCleanupRequested = false
-    vault.devicesAccessIdentityProtectionOpen = false
+    vault.dismissError();
+    identityCreationOpen = true;
+    identityCreationPending = true;
+    identityCreationCleanupRequested = false;
+    vault.devicesAccessIdentityProtectionOpen = false;
   }
 
   async function finishPendingIdentityCreationCancellation(): Promise<void> {
-    if (!identityCreationPending || identityCreationActionInFlight) return
-    const manager = vault.admitManager()
+    if (!identityCreationPending || identityCreationActionInFlight) return;
+    const manager = vault.admitManager();
     if (manager.isErr()) {
-      vault.errorMsg = vault.t(manager.error.translationKey)
-      return
+      vault.errorMsg = vault.t(manager.error.translationKey);
+      return;
     }
     try {
-      manager.value.cancel_local_identity_creation()
+      manager.value.cancel_local_identity_creation();
     } catch (failure) {
       vault.errorMsg = vault.t(
         new NativeVaultStorageFailure(failure).translationKey,
-      )
-      return
+      );
+      return;
     }
-    identityCreationPending = false
-    identityCreationCleanupRequested = false
-    identityCreationOpen = false
+    identityCreationPending = false;
+    identityCreationCleanupRequested = false;
+    identityCreationOpen = false;
     try {
       vault.deviceProtectionStatus =
-        await manager.value.device_protection_status()
+        await manager.value.device_protection_status();
     } catch (failure) {
       vault.errorMsg = vault.t(
         new NativeVaultStorageFailure(failure).translationKey,
-      )
-      return
+      );
+      return;
     }
-    vault.dismissError()
+    vault.dismissError();
   }
 
   async function abandonPendingIdentityCreation(): Promise<void> {
-    if (!identityCreationPending) return
-    identityCreationCleanupRequested = true
-    identityCreationOpen = false
+    if (!identityCreationPending) return;
+    identityCreationCleanupRequested = true;
+    identityCreationOpen = false;
     if (!identityCreationActionInFlight) {
-      await finishPendingIdentityCreationCancellation()
+      await finishPendingIdentityCreationCancellation();
     }
   }
 
   async function cancelAddIdentity(): Promise<void> {
-    await abandonPendingIdentityCreation()
+    await abandonPendingIdentityCreation();
   }
 
   async function leaveDashboard(): Promise<void> {
-    dashboardMounted = false
-    await abandonPendingIdentityCreation()
-    vault.devicesAccessIdentityProtectionOpen = false
-    onBack()
+    dashboardMounted = false;
+    await abandonPendingIdentityCreation();
+    vault.devicesAccessIdentityProtectionOpen = false;
+    onBack();
   }
 
   onDestroy(() => {
-    dashboardMounted = false
-    void abandonPendingIdentityCreation()
-  })
+    dashboardMounted = false;
+    void abandonPendingIdentityCreation();
+  });
 
   async function useIdentity(identityId: string): Promise<void> {
     const activated = await vault.enqueueStorage(async () => {
-      const manager = vault.admitManager()
-      if (manager.isErr()) return err(manager.error)
+      const manager = vault.admitManager();
+      if (manager.isErr()) return err(manager.error);
       try {
-        await manager.value.activate_local_identity(identityId)
-        return ok()
+        await manager.value.activate_local_identity(identityId);
+        return ok();
       } catch (failure) {
-        return err(new NativeVaultStorageFailure(failure))
+        return err(new NativeVaultStorageFailure(failure));
       }
-    })
+    });
     if (activated.isErr()) {
-      vault.errorMsg = vault.t(activated.error.translationKey)
-      return
+      vault.errorMsg = vault.t(activated.error.translationKey);
+      return;
     }
     // Establish the cross-shell transition before clearing authentication.
     // The authenticated dashboard is unmounted as soon as the vault session
     // closes, while the login-shell dashboard reuses this shared vault state.
-    vault.devicesAccessIdentityTransitionPending = true
-    vault.devicesAccessIdentityProtectionOpen = true
-    vault.deviceProtectionStatus = DeviceProtectionStatus.Loading
-    clearPriorIdentitySession()
-    const manager = vault.admitManager()
+    vault.devicesAccessIdentityTransitionPending = true;
+    vault.devicesAccessIdentityProtectionOpen = true;
+    vault.deviceProtectionStatus = DeviceProtectionStatus.Loading;
+    clearPriorIdentitySession();
+    const manager = vault.admitManager();
     if (manager.isErr()) {
-      vault.errorMsg = vault.t(manager.error.translationKey)
-      return
+      vault.errorMsg = vault.t(manager.error.translationKey);
+      return;
     }
     try {
       vault.deviceProtectionStatus =
-        await manager.value.device_protection_status()
+        await manager.value.device_protection_status();
     } catch (failure) {
       vault.errorMsg = vault.t(
         new NativeVaultStorageFailure(failure).translationKey,
-      )
-      return
+      );
+      return;
     }
-    vault.deviceId = ''
-    vault.devicePublicKey = ''
-    await reloadSnapshots()
+    vault.deviceId = "";
+    vault.devicePublicKey = "";
+    await reloadSnapshots();
   }
 
   function selectPerspective(perspective: IdentityBridgePerspective): void {
-    selectedPerspective = perspective
+    selectedPerspective = perspective;
   }
 
   function selectVault(storeId: string): void {
     selectedVault = {
       kind: IdentityBridgeVaultSelectionKind.Selected,
       storeId,
-    }
+    };
   }
 
   async function reloadSnapshots(): Promise<DashboardLoadKind> {
-    const generation = ++snapshotLoadGeneration
+    const generation = ++snapshotLoadGeneration;
     // A re-read keeps the current readout on screen. Blanking it would move
     // focus and hide the link the person is reading mid-save.
     if (untrack(() => loadState.kind) !== DashboardLoadKind.Ready) {
-      loadState = { kind: DashboardLoadKind.Loading }
+      loadState = { kind: DashboardLoadKind.Loading };
     }
     if (
       untrack(() => directoryLoadState.kind) !== IdentityDirectoryLoadKind.Ready
     ) {
-      directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading }
+      directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading };
     }
-    const manager = vault.admitManager()
-    if (manager.isErr()) return failSnapshotLoad(generation)
-    const loaded = await new IdentityDirectoryReader(manager.value).load()
-    if (loaded.isErr()) return failSnapshotLoad(generation)
-    const snapshot = loaded.value
+    const manager = vault.admitManager();
+    if (manager.isErr()) return failSnapshotLoad(generation);
+    const loaded = await new IdentityDirectoryReader(manager.value).load();
+    if (loaded.isErr()) return failSnapshotLoad(generation);
+    const snapshot = loaded.value;
     if (generation !== snapshotLoadGeneration) {
-      return DashboardLoadKind.Loading
+      return DashboardLoadKind.Loading;
     }
     const browsedIdentityId = untrack(() =>
       directoryLoadState.kind === IdentityDirectoryLoadKind.Ready &&
       directoryLoadState.view.selection.kind ===
         IdentityDirectorySelectionKind.Selected
         ? directoryLoadState.view.selection.identityId
-        : '',
-    )
+        : "",
+    );
     const preservedDirectory: IdentityDirectoryView =
       browsedIdentityId.length > 0 &&
       snapshot.directory.identities.some(
@@ -374,40 +375,40 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
               identityId: browsedIdentityId,
             } as const,
           }
-        : snapshot.directory
-    loadState = { kind: DashboardLoadKind.Ready, view: snapshot.access }
+        : snapshot.directory;
+    loadState = { kind: DashboardLoadKind.Ready, view: snapshot.access };
     directoryLoadState = {
       kind: IdentityDirectoryLoadKind.Ready,
       view: preservedDirectory,
-    }
+    };
     const identitySelection = new IdentityDirectoryPresentation(
       preservedDirectory,
-    ).selectedIdentity()
+    ).selectedIdentity();
     if (
       identitySelection.kind === IdentityDirectorySelectionKind.Selected &&
       identitySelection.identity.localAccess ===
         NookIdentityLocalAccessKind.OtherInstallation
     ) {
-      selectedRepresentation = DevicesAccessRepresentationKind.List
+      selectedRepresentation = DevicesAccessRepresentationKind.List;
     }
-    resetSelectedVaultForIdentity()
-    return DashboardLoadKind.Ready
+    resetSelectedVaultForIdentity();
+    return DashboardLoadKind.Ready;
   }
 
   function failSnapshotLoad(generation: number): DashboardLoadKind {
     if (generation === snapshotLoadGeneration) {
-      loadState = { kind: DashboardLoadKind.Failed }
-      directoryLoadState = { kind: IdentityDirectoryLoadKind.Failed }
-      return DashboardLoadKind.Failed
+      loadState = { kind: DashboardLoadKind.Failed };
+      directoryLoadState = { kind: IdentityDirectoryLoadKind.Failed };
+      return DashboardLoadKind.Failed;
     }
-    return DashboardLoadKind.Loading
+    return DashboardLoadKind.Loading;
   }
 
   $effect(() => {
-    void vault.deviceProtectionStatus
-    void vault.localVaults.length
-    void reloadSnapshots()
-  })
+    void vault.deviceProtectionStatus;
+    void vault.localVaults.length;
+    void reloadSnapshots();
+  });
 </script>
 
 <section class="w-full space-y-8 pb-4" data-testid="devices-access-dashboard">
@@ -500,7 +501,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     {@const selectedIdentityId =
       directory.selection.kind === IdentityDirectorySelectionKind.Selected
         ? directory.selection.identityId
-        : ''}
+        : ""}
     <div class="grid min-w-0 gap-8 md:grid-cols-[18rem_minmax(0,1fr)] md:gap-0">
       <IdentityDirectoryRail
         {vault}
@@ -587,7 +588,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 frame={DeviceProtectionGateFrame.HostSection}
                 creationOnly={false}
                 initializeSession={false}
-                recoveryAppId={view.deviceId.displayText(() => '')}
+                recoveryAppId={view.deviceId.displayText(() => "")}
                 onBeforeProtectionAction={keepCurrentIdentitySession}
                 onProtectionReady={() => void focusAfterProtectionReady(false)}
               />
@@ -664,6 +665,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
               {@const verifiedVaultCount = view.vaults.filter(
                 (entry) => entry.verified,
               ).length}
+              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments --
+              Existing call shape is preserved for this lint-only fix.
               {@const selectedVaultView = new SelectedIdentityVault({
                 selection: selectedVault,
                 vaults: identity.vaults,
@@ -712,11 +715,11 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                     ? vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice)
                     : (() => {
                         const deviceKeyTitleArgs: Parameters<
-                          AccessChainPresentation['deviceKeyTitle']
-                        >[0] = { protection: view.protection }
+                          AccessChainPresentation["deviceKeyTitle"]
+                        >[0] = { protection: view.protection };
                         return new AccessChainPresentation(
                           vault,
-                        ).deviceKeyTitle(deviceKeyTitleArgs)
+                        ).deviceKeyTitle(deviceKeyTitleArgs);
                       })(),
                 currentIdentity: identityTitle,
                 selectedIdentity: companionIdentity
@@ -731,19 +734,19 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 ),
                 identityDescription: (() => {
                   const protectionLabelArgs: Parameters<
-                    AccessChainPresentation['protectionLabel']
-                  >[0] = { protection: view.protection }
+                    AccessChainPresentation["protectionLabel"]
+                  >[0] = { protection: view.protection };
                   return new AccessChainPresentation(vault).protectionLabel(
                     protectionLabelArgs,
-                  )
+                  );
                 })(),
                 identityState: (() => {
                   const identityStateLabelArgs: Parameters<
-                    AccessChainPresentation['identityStateLabel']
-                  >[0] = { state: view.identityState }
+                    AccessChainPresentation["identityStateLabel"]
+                  >[0] = { state: view.identityState };
                   return new AccessChainPresentation(vault).identityStateLabel(
                     identityStateLabelArgs,
-                  )
+                  );
                 })(),
                 deviceMetricLabel: vault.t(
                   I18N_KEYS.DevicesAccessBridgeDeviceEvidence,
@@ -755,8 +758,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                   const tArgs: Parameters<typeof vault.t>[0] = {
                     key: I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount,
                     replacements: { count: String(verifiedVaultCount) },
-                  }
-                  return vault.t(tArgs)
+                  };
+                  return vault.t(tArgs);
                 })(),
                 statusMetricLabel: vault.t(I18N_KEYS.DevicesAccessStatusLabel),
                 evidenceMetricLabel: vault.t(
@@ -797,8 +800,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                       replacements: {
                         vault: vaultLabel,
                       },
-                    }
-                    return vault.t(tArgs2)
+                    };
+                    return vault.t(tArgs2);
                   })(),
                 deviceVaultRelation: (vaultLabel: string) =>
                   (() => {
@@ -807,8 +810,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                       replacements: {
                         vault: vaultLabel,
                       },
-                    }
-                    return vault.t(tArgs3)
+                    };
+                    return vault.t(tArgs3);
                   })(),
                 vaultDeviceRelation: (vaultLabel: string) =>
                   (() => {
@@ -817,17 +820,17 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                       replacements: {
                         vault: vaultLabel,
                       },
-                    }
-                    return vault.t(tArgs4)
+                    };
+                    return vault.t(tArgs4);
                   })(),
                 formatEvidence: (value: string) =>
                   (() => {
                     const formatAccessDateArgs: Parameters<
-                      AccessChainPresentation['formatAccessDate']
-                    >[0] = { value }
+                      AccessChainPresentation["formatAccessDate"]
+                    >[0] = { value };
                     return new AccessChainPresentation(vault).formatAccessDate(
                       formatAccessDateArgs,
-                    )
+                    );
                   })(),
                 unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
               } satisfies IdentityBridgeCopy}
@@ -868,15 +871,15 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                                     : I18N_KEYS.DevicesAccessBridgeVaultPlural,
                                 ),
                               },
-                            }
-                            return vault.t(tArgs5)
+                            };
+                            return vault.t(tArgs5);
                           })()}
                         {:else if selectedVaultExists}
                           {(() => {
                             const tArgs6: Parameters<typeof vault.t>[0] = {
                               key: I18N_KEYS.DevicesAccessBridgeVaultHeadline,
                               replacements: {
-                                count: selectedVaultIsVerified ? '1' : '0',
+                                count: selectedVaultIsVerified ? "1" : "0",
                                 identities: vault.t(
                                   selectedVaultIsVerified
                                     ? I18N_KEYS.DevicesAccessBridgeIdentitySingular
@@ -884,8 +887,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                                 ),
                                 vault: selectedVaultName,
                               },
-                            }
-                            return vault.t(tArgs6)
+                            };
+                            return vault.t(tArgs6);
                           })()}
                         {:else}
                           {vault.t(
@@ -915,11 +918,11 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                       {protectionSummary}
                       protectionLabel={(() => {
                         const protectionLabelArgs2: Parameters<
-                          AccessChainPresentation['protectionLabel']
-                          >[0] = { protection: view.protection }
+                          AccessChainPresentation["protectionLabel"]
+                        >[0] = { protection: view.protection };
                         return new AccessChainPresentation(
                           vault,
-                        ).protectionLabel(protectionLabelArgs2)
+                        ).protectionLabel(protectionLabelArgs2);
                       })()}
                       deviceIconKind={view.protection ===
                       DeviceAccessProtectionKind.PasskeyStandard
@@ -937,13 +940,13 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                         I18N_KEYS.DevicesAccessBridgeGraphControls,
                       )}
                       ariaLabelConfig={{
-                        'node.a11yDescription.default': vault.t(
+                        "node.a11yDescription.default": vault.t(
                           I18N_KEYS.DevicesAccessBridgeA11yNode,
                         ),
-                        'node.a11yDescription.keyboardDisabled': vault.t(
+                        "node.a11yDescription.keyboardDisabled": vault.t(
                           I18N_KEYS.DevicesAccessBridgeA11yNode,
                         ),
-                        'node.a11yDescription.ariaLiveMessage': ({
+                        "node.a11yDescription.ariaLiveMessage": ({
                           direction,
                           x,
                           y,
@@ -956,31 +959,31 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                                 x: String(x),
                                 y: String(y),
                               },
-                            }
-                            return vault.t(tArgs7)
+                            };
+                            return vault.t(tArgs7);
                           })(),
-                        'edge.a11yDescription.default': vault.t(
+                        "edge.a11yDescription.default": vault.t(
                           I18N_KEYS.DevicesAccessBridgeA11yEdge,
                         ),
-                        'controls.ariaLabel': vault.t(
+                        "controls.ariaLabel": vault.t(
                           I18N_KEYS.DevicesAccessBridgeGraphControls,
                         ),
-                        'controls.zoomIn.ariaLabel': vault.t(
+                        "controls.zoomIn.ariaLabel": vault.t(
                           I18N_KEYS.DevicesAccessBridgeA11yZoomIn,
                         ),
-                        'controls.zoomOut.ariaLabel': vault.t(
+                        "controls.zoomOut.ariaLabel": vault.t(
                           I18N_KEYS.DevicesAccessBridgeA11yZoomOut,
                         ),
-                        'controls.fitView.ariaLabel': vault.t(
+                        "controls.fitView.ariaLabel": vault.t(
                           I18N_KEYS.DevicesAccessBridgeA11yFitView,
                         ),
-                        'controls.interactive.ariaLabel': vault.t(
+                        "controls.interactive.ariaLabel": vault.t(
                           I18N_KEYS.DevicesAccessBridgeA11yInteractivity,
                         ),
-                        'minimap.ariaLabel': vault.t(
+                        "minimap.ariaLabel": vault.t(
                           I18N_KEYS.DevicesAccessBridgeA11yMinimap,
                         ),
-                        'handle.ariaLabel': vault.t(
+                        "handle.ariaLabel": vault.t(
                           I18N_KEYS.DevicesAccessBridgeA11yHandle,
                         ),
                       }}

@@ -27,13 +27,7 @@ use crate::LoggerState;
 use crate::NookDatabase;
 use crate::NookError;
 use crate::VaultMemberProjectionRequest;
-#[cfg(target_arch = "wasm32")]
-use crate::logger;
 use crate::storage::local_folder::LocalFolderHandles;
-#[cfg(target_arch = "wasm32")]
-use crate::storage::{auth_providers, indexed_db};
-#[cfg(target_arch = "wasm32")]
-use nook_core::VaultMember;
 use nook_core::{
     DeviceIdentity, DeviceIdentitySecret, DriveEventParent, ICloudEventTarget, MultiDeviceError,
     SelfRosterSync, SentinelGenesisPhase, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
@@ -648,7 +642,7 @@ impl NookVaultManager {
         if let SelfRosterSync::Updated(member_records) =
             VaultMetaState::ensure_self_in_roster(EnsureSelfInRosterRequest {
                 records: &records,
-                identity: identity,
+                identity,
                 members_key: &SymmetricKey::parse(&members_key)?,
             })?
         {

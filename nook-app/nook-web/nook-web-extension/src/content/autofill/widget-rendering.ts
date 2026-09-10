@@ -193,6 +193,7 @@ class AuthenticationWidgetRenderer {
       authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
     }
     if (
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.ui.widgetState.workflowRenderDisposition({
         key: workflowKey,
         observation: workflow,
@@ -392,6 +393,7 @@ class AuthenticationWidgetRenderer {
 
     body.append(takeOverButton)
     if (
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       saved_login_action_available({ action: snapshot.action, loginMatches })
     ) {
       const savedLoginButton = document.createElement('button')
@@ -466,6 +468,7 @@ class AuthenticationWidgetRenderer {
   }
 }
 
+// eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
 export const authenticationWidgetRenderer = new AuthenticationWidgetRenderer({
   widgetState,
   pickerState,

@@ -2,10 +2,6 @@ import { err, ok, type Result } from 'neverthrow'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/extension/runtime-messages'
 
-/** Structured-clone provider value admitted before stored-provider use. */
-export type SerializedStorageProvider = StorageProvider
-export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
-export type DecodedExtensionStorageProviders = StorageProvider[]
 export type ExtensionStorageProviderIdentities =
   ExtensionStorageProviderPayload[]
 
@@ -16,9 +12,7 @@ export enum ProviderCredentialFailure {
 }
 
 export type StageProviderCredentialsArgs = {
-  decode: (
-    providers: SerializedExtensionStorageProviders,
-  ) => Promise<DecodedExtensionStorageProviders>
+  decode: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 
 enum SerializedProviderFieldAdmission {
@@ -52,9 +46,7 @@ class SerializedProviderField {
 }
 
 export class ProviderCredentialBuffer {
-  constructor(
-    private readonly providers: SerializedExtensionStorageProviders,
-  ) {}
+  constructor(private readonly providers: StorageProvider[]) {}
   identities(): Result<
     ExtensionStorageProviderIdentities,
     ProviderCredentialFailure
@@ -73,8 +65,7 @@ export class ProviderCredentialBuffer {
     for (const provider of providers) {
       if (!provider || typeof provider !== 'object') continue
       if ('githubPat' in provider) {
-        if (typeof provider.githubPat === 'string') delete provider.githubPat
-        else provider.githubPat = { state: 'missing' }
+        provider.githubPat = { state: 'missing' }
       }
       if (
         'oauthFile' in provider &&
@@ -110,11 +101,9 @@ export class ProviderCredentialBuffer {
   }
   async stage(
     args: StageProviderCredentialsArgs,
-  ): Promise<
-    Result<DecodedExtensionStorageProviders, ProviderCredentialFailure>
-  > {
+  ): Promise<Result<StorageProvider[], ProviderCredentialFailure>> {
     // Only the external structured-clone and WASM admission boundaries may reject.
-    let staged: SerializedExtensionStorageProviders
+    let staged: StorageProvider[]
     try {
       if (
         new SerializedProviderField(this.providers).admission() !==

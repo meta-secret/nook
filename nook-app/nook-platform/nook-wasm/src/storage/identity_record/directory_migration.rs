@@ -163,7 +163,7 @@ impl NookDatabase {
             }
         };
         let migrated = NookDatabase::migrate_directory(IdentityDbMigrateDirectory {
-            directory: directory,
+            directory,
             selection,
         })?;
         if let SimpleGenesisProgress::Pending(pending) = pending {
@@ -214,7 +214,7 @@ impl NookDatabase {
                 migration,
             } = NookDatabase::migrate_directory_in_store(IdentityDbMigrateDirectoryInStore {
                 store: &store,
-                directory: directory,
+                directory,
             })
             .await?;
             let raw = if migration == DirectoryLegacyMigration::Merged {
@@ -283,9 +283,11 @@ impl NookDatabase {
 }
 #[cfg(test)]
 mod tests {
+    use crate::IdbPutStringRequest;
     use crate::storage::event_db;
-    #[cfg(target_arch = "wasm32")]
-    use crate::storage::identity_record::SimpleGenesisProgress;
+    use crate::storage::identity_record::{
+        SimpleGenesisCompletion, genesis_flow, simple_genesis, staged_genesis,
+    };
     use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
     use super::*;

@@ -176,8 +176,8 @@ impl IdentityHandoffCommit<'_> {
                 .set_member_signing_public_key(DirectoryMemberSigningUpdate {
                     identity_id: &identity_id,
                     member: IdentityMemberSigningUpdate {
-                        app_id: app_id,
-                        signing_public_key: signing_public_key,
+                        app_id,
+                        signing_public_key,
                     },
                 })
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;

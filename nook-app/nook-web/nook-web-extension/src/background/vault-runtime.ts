@@ -81,8 +81,6 @@ type ExtensionEventLogImportRequest = {
   records: ExtensionEventLogRecord[]
 }
 
-export type SerializedExtensionStorageProviders = StorageProvider[]
-
 /** Owns the browser runtime resources shared by these interactions. */
 class BackgroundVaultRuntime {
   private backgroundWasmStartup: BackgroundWasmStartup = {
@@ -237,7 +235,7 @@ class BackgroundVaultRuntime {
   }
 
   async decodeExtensionStorageProviders(
-    providers: SerializedExtensionStorageProviders,
+    providers: StorageProvider[],
   ): Promise<StorageProvider[]> {
     await this.ensureExtensionWasm()
     return admit_extension_storage_providers(providers)

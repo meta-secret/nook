@@ -2,13 +2,13 @@
 
 mod display_text;
 mod passkey_metadata;
-#[cfg(target_arch = "wasm32")]
+#[cfg(test)]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::NookDatabase;
-#[cfg(target_arch = "wasm32")]
+#[cfg(test)]
 use crate::SaveVaultBlobRequest;
 use crate::storage::device_access::DeviceAccessProfileKey;
-#[cfg(target_arch = "wasm32")]
+#[cfg(test)]
 use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::{ProtectedIdentityLookup, ProtectedLocalIdentity};
 use crate::storage::indexed_db::VaultUnlockHistory;
@@ -16,7 +16,7 @@ use display_text::NookDeviceAccessTextValue;
 pub use display_text::{NookDeviceAccessText, NookDeviceAccessTextKind};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(test)]
 use nook_core::MemberLabelState;
 use nook_core::{
     AppId, DeviceAccessCredentialKind, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment,
@@ -141,21 +141,21 @@ struct LocalAccessProfile {
     profile: device_access::DeviceAccessProfile,
 }
 
-/// Named values required by NookDeviceVaultAccess::vaults_for_identity.
+/// Named values required by `NookDeviceVaultAccess::vaults_for_identity`.
 #[cfg(test)]
 pub(crate) struct BrowserVaultsForIdentity<'a> {
     pub(crate) vaults: &'a [NookDeviceVaultAccess],
     pub(crate) identity: &'a nook_core::IdentityRecord,
 }
 
-/// Named values required by NookDeviceVaultAccess::device_vault_access_for_identity.
+/// Named values required by `NookDeviceVaultAccess::device_vault_access_for_identity`.
 pub(crate) struct BrowserDeviceVaultAccessForIdentity<'a> {
     pub(crate) identity: &'a nook_core::IdentityRecord,
     pub(crate) local_app_ids: &'a [nook_core::AppId],
     pub(crate) session_app_id: &'a str,
 }
 
-/// Named values required by NookDeviceVaultAccess::vault_access_rows.
+/// Named values required by `NookDeviceVaultAccess::vault_access_rows`.
 pub(crate) enum VaultAccessScope<'a> {
     AllLocalVaults,
     Identity(&'a nook_core::IdentityRecord),
@@ -268,13 +268,13 @@ impl NookDeviceVaultAccess {
     }
 }
 
-/// Named values required by NookDeviceAccessSnapshot::device_access_snapshot_for_session.
+/// Named values required by `NookDeviceAccessSnapshot::device_access_snapshot_for_session`.
 pub(crate) struct BrowserDeviceAccessSnapshotForSession<'a> {
     pub(crate) session_device_id: &'a str,
     pub(crate) session_unlocked: nook_core::DeviceSessionLockState,
 }
 
-/// Named values required by NookDeviceAccessSnapshot::device_access_snapshot_for_session_with_protected.
+/// Named values required by `NookDeviceAccessSnapshot::device_access_snapshot_for_session_with_protected`.
 pub(crate) struct BrowserDeviceAccessSnapshotForSessionWithProtected<'a> {
     pub(crate) session_device_id: &'a str,
     pub(crate) session_unlocked: nook_core::DeviceSessionLockState,
@@ -392,9 +392,9 @@ impl NookDeviceAccessSnapshot {
         };
         NookDeviceAccessSnapshot::device_access_snapshot_for_session_with_protected(
             BrowserDeviceAccessSnapshotForSessionWithProtected {
-                session_device_id: session_device_id,
-                session_unlocked: session_unlocked,
-                protected: protected,
+                session_device_id,
+                session_unlocked,
+                protected,
             },
         )
         .await
@@ -402,6 +402,10 @@ impl NookDeviceAccessSnapshot {
 }
 
 impl NookDeviceAccessSnapshot {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the snapshot projection maps one complete browser-facing record"
+    )]
     pub(crate) async fn device_access_snapshot_for_session_with_protected(
         request: BrowserDeviceAccessSnapshotForSessionWithProtected<'_>,
     ) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
@@ -411,7 +415,7 @@ impl NookDeviceAccessSnapshot {
             protected,
         } = request;
         let session_device_id = session_device_id.trim();
-        let identity_state = (&nook_core::DeviceAccessIdentityObservation {
+        let identity_state = nook_core::DeviceAccessIdentityObservation {
             session_unlocked,
             session_device_id,
             persisted_identity: match &protected {
@@ -420,8 +424,8 @@ impl NookDeviceAccessSnapshot {
                     PersistedDeviceIdentityState::NotEstablished
                 }
             },
-        })
-            .identity_state();
+        }
+        .identity_state();
         let session_uses_companion = !session_device_id.is_empty()
             && match &protected {
                 ProtectedIdentityLookup::Configured(identity) => {
@@ -768,7 +772,7 @@ mod tests {
             identity: VaultAccessScope::Identity(&personal),
         });
         let work_rows = NookDeviceVaultAccess::vault_access_rows(BrowserVaultAccessRows {
-            registry: registry,
+            registry,
             profiles: &profiles,
             identity: VaultAccessScope::Identity(&work),
         });

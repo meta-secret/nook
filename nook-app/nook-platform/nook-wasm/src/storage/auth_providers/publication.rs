@@ -74,7 +74,7 @@ impl ProviderSnapshotPublication<'_> {
         let legacy = rollback_projection::ProviderSnapshotObservation::from(legacy);
         let legacy_belongs_to_identity = AuthProviderDatabase::legacy_snapshot_belongs_to_identity(
             ProviderDbLegacySnapshotBelongsToIdentity {
-                identity: identity,
+                identity,
                 scoped: &scoped,
                 legacy: &legacy,
             },

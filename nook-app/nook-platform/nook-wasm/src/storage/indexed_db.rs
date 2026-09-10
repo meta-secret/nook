@@ -115,7 +115,7 @@ pub(crate) struct ClearVaultStoreRequest<'a> {
     pub(crate) store_name: &'a str,
 }
 
-/// IndexedDB string rows retain key absence independently from empty text.
+/// `IndexedDB` string rows retain key absence independently from empty text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum StoredStringRecord {
     MissingKey,
@@ -182,7 +182,7 @@ impl NookDatabase {
         for store_name in STORES {
             if let Err(error) = NookDatabase::clear_vault_store(ClearVaultStoreRequest {
                 rexie: &rexie,
-                store_name: store_name,
+                store_name,
             })
             .await
             {
@@ -457,7 +457,7 @@ mod sentinel_genesis_storage_tests {
         let _ = Rexie::delete("nook_db").await;
         let store_id = "store_indexeddb01";
         NookDatabase::save_vault_blob(SaveVaultBlobRequest {
-            store_id: store_id,
+            store_id,
             content: "encrypted-vault",
         })
         .await?;
@@ -477,7 +477,7 @@ mod sentinel_genesis_storage_tests {
             VaultSnapshotLookup::NotStored
         ));
         NookDatabase::save_vault_blob(SaveVaultBlobRequest {
-            store_id: store_id,
+            store_id,
             content: "updated-vault",
         })
         .await?;
@@ -499,7 +499,7 @@ mod sentinel_genesis_storage_tests {
         let _ = Rexie::delete("nook_db").await;
         let store_id = "store_search01";
         NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
-            store_id: store_id,
+            store_id,
             writes: &[
                 SecretSearchBucketMutation::Write {
                     bucket: 0,
@@ -517,7 +517,7 @@ mod sentinel_genesis_storage_tests {
             vec![(0, "first".to_owned()), (2, "third".to_owned())]
         );
         NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
-            store_id: store_id,
+            store_id,
             writes: &[SecretSearchBucketMutation::Delete { bucket: 0 }],
         })
         .await?;
@@ -527,7 +527,7 @@ mod sentinel_genesis_storage_tests {
         );
         let error = NookDatabase::save_secret_search_catalog_buckets(
             SaveSecretSearchCatalogBucketsRequest {
-                store_id: store_id,
+                store_id,
                 writes: &[SecretSearchBucketMutation::Write {
                     bucket: nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT,
                     ciphertext: "bad".to_owned(),
@@ -716,14 +716,16 @@ mod sentinel_genesis_storage_tests {
     }
 }
 
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(test)]
+pub(crate) use local_vault::SaveVaultBlobRequest;
+#[cfg(test)]
 pub(crate) use local_vault::UpsertRegistryEntryRequest;
 pub(crate) use local_vault::{
-    ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SaveVaultBlobRequest,
-    SecretSearchBucketMutation, SetLocalVaultLabelRequest,
+    ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SecretSearchBucketMutation,
+    SetLocalVaultLabelRequest,
 };
 
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(test)]
 pub(crate) use device_identity::SaveWrappedDeviceIdentityRequest;
 
 pub(crate) use sentinel_storage::{

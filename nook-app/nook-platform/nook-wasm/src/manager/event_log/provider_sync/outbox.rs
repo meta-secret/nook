@@ -67,6 +67,8 @@ impl PublishedOutboxEvent<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{EventDbAppendOutboxIndex, EventDbQueueOutboxEntry};
+    use nook_core::StorageMode;
     use wasm_bindgen_test::wasm_bindgen_test;
     impl OutboxFixture {
         async fn queue(&self) -> Result<PendingOutboxEvent<'_>, NookError> {

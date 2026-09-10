@@ -110,7 +110,7 @@ impl IdentitySigningSource<'_> {
                 if matches!(self.origin, SigningSeedOrigin::MigrateLegacy) =>
             {
                 match NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
-                    store: store,
+                    store,
                     key: event_db::SIGNING_SEED_KEY,
                     context: "Legacy signing seed",
                 })
@@ -210,7 +210,7 @@ impl LegacySignerProtection<'_> {
         } = self;
         let StoredStringRecord::Stored(seed) =
             NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
-                store: store,
+                store,
                 key: event_db::SIGNING_SEED_KEY,
                 context: "Legacy signing seed",
             })

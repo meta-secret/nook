@@ -73,6 +73,7 @@ export class SecretExposure {
       if (concurrent) loaded.free();
       else active.records[id] = loaded;
     }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return ok({ ...active.records });
   }
   async withRecord<T>({

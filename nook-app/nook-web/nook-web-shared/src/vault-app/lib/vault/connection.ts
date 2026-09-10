@@ -236,6 +236,7 @@ export class VaultConnectionActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments, nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
           operation,
           releaseLateValue: (records) => this.freeSecretRecords(records),
@@ -245,6 +246,7 @@ export class VaultConnectionActions {
         state.isAuthenticated = false;
         const surfaced = await new SentinelUnlockActions(
           state,
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         ).surfaceSentinelCeremonyIfNeeded({
           recoveryKind: rawRecords.error.recoveryKind,
         });

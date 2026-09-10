@@ -36,7 +36,7 @@ export class VaultSessionActions {
           const admittedManager = state.admitManager();
           if (admittedManager.isErr()) return storageErr(admittedManager.error);
           try {
-            return storageOk(await admittedManager.value.reset_vault_session());
+            return storageOk(admittedManager.value.reset_vault_session());
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }

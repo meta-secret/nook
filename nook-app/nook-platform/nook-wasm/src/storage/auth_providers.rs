@@ -119,7 +119,7 @@ impl AuthProviderDatabase {
         let value = AuthProviderDatabase::read_raw_snapshot_from_store(
             ProviderDbReadRawSnapshotFromStore {
                 store: &store,
-                state_key: state_key,
+                state_key,
             },
         )
         .await?;
@@ -161,8 +161,8 @@ impl AuthProviderDatabase {
             .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "nook_auth store error", e)))?;
         ProviderSnapshotStore {
             store: &store,
-            state_key: state_key,
-            schema_key: schema_key,
+            state_key,
+            schema_key,
         }
         .write(snapshot)
         .await?;
@@ -179,7 +179,7 @@ impl AuthProviderDatabase {
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: STATE_KEY,
             schema_key: SCHEMA_KEY,
-            snapshot: snapshot,
+            snapshot,
         })
         .await
     }

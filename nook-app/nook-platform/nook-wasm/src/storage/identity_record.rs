@@ -253,8 +253,8 @@ impl NookDatabase {
                 .unwrap_or_else(IdentityDirectory::empty)
         };
         NookDatabase::migrate_directory_in_store(IdentityDbMigrateDirectoryInStore {
-            store: store,
-            directory: directory,
+            store,
+            directory,
         })
         .await
         .map(|migrated| migrated.directory)
@@ -453,7 +453,7 @@ impl NookDatabase {
         NookDatabase::update_identity_directory(move |directory| {
             NookDatabase::ensure_local_identity_in_directory(
                 IdentityDbEnsureLocalIdentityInDirectory {
-                    directory: directory,
+                    directory,
                     app_key: &app_key,
                     label: &label,
                     allow_peer_only_bootstrap: false,
@@ -554,7 +554,7 @@ impl NookDatabase {
                     identity_id: &identity_id,
                     vault: IdentityVaultKeyOpening {
                         app_key: &app_key,
-                        store_id: store_id,
+                        store_id,
                     },
                 })
                 .map(IdentityDirectoryWrite::from)

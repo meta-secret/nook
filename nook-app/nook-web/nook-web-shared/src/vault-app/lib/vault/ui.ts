@@ -19,6 +19,7 @@ import {
 } from "$lib/vault/state/ui.svelte";
 import { WorkspaceRoute, WorkspaceLocation } from "$lib/app/workspace-route";
 
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
 export type OpenSettingsRequest = SettingsNavigationRequest & {};
 
 type SettingsViewSelection = {
@@ -264,7 +265,7 @@ export class VaultWorkspaceActions {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
           try {
-            await manager.value.quiesce_for_local_recovery();
+            manager.value.quiesce_for_local_recovery();
             return storageOk();
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));

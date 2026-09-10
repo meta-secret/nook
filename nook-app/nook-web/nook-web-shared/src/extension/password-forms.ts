@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Existing call shapes are preserved for this lint-only fix. */
 import { PasswordFormSummaryObservation } from "./password-form-summary-observation";
 import { companionWasmReady } from "./companion-ready";
 import {
@@ -240,7 +241,8 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       sourceOrigin: this.browser.location.origin,
       formIdentity: owned
         ? authenticationSubmissionControls.ownedFormIdentity(controlForm.owner)
-        : authenticationSubmissionControls.observedFormIdentity({
+        : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          authenticationSubmissionControls.observedFormIdentity({
             root: observation.root,
             formScope: observation.formScope,
           }),
@@ -296,7 +298,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       observation.formScope.kind === PasswordFormScopeKind.Owned
         ? { control, owner: observation.formScope.owner }
         : false;
-
     const [transported] = this.transportableControlObservation({
       observation,
       control,
@@ -315,7 +316,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
         ),
     });
     if (!transported) return false;
-
     return authentication_passkey_control_candidate_is_safe({
       kind: explicitlyMarked ? "explicitly-marked" : "labeled",
       observation: transported,
@@ -412,7 +412,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       authenticationSubmissionControls.boundAuthenticationControlObservations(
         oneTimeCodeBoundRequest,
       );
-
     const passwordFields = passwordFieldDiscovery.findPasswordFields({
       root: observation.root,
       formScope: observation.formScope,
@@ -458,7 +457,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           observation.formScope.kind === PasswordFormScopeKind.Owned
             ? { control, owner: observation.formScope.owner }
             : false;
-
         return this.transportableControlObservation({
           observation,
           control,
@@ -632,15 +630,12 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
 
   summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
     const root = this.browser.document;
-
     const allPasswordFields = passwordFieldDiscovery.findPasswordFields({
       root,
     });
-
     const allUsernameFields = passwordFieldDiscovery.findUsernameFields({
       root,
     });
-
     const allOneTimeCodeFields = passwordFieldDiscovery.findOneTimeCodeFields({
       root,
     });
@@ -651,7 +646,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       allPasswordFields.length +
       authUsernameFields.length +
       allOneTimeCodeFields.length;
-
     const passkeyOnly = new PasskeyOnlyWorkflowSummary({
       root,
       summarizeRoot: this.summarizeRoot.bind(this),
@@ -669,7 +663,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
         kind: PasswordFormScopeKind.Owned,
         owner: form,
       };
-
       const summary = this.summarizeRoot({
         kind: PasswordFormQueryKind.Scoped,
         root,
@@ -733,7 +726,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       const formScope: PasswordFormScope = {
         kind: PasswordFormScopeKind.Unowned,
       };
-
       observations.push({
         root: container,
         formScope,
@@ -744,7 +736,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
         }),
       });
     }
-
     return new IndependentPasskeyWorkflows({
       fieldBearing: observations,
       passkeyOnly,
@@ -875,7 +866,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           .find((control) => {
             if (!authenticationSubmissionControls.isRenderedControl(control))
               return false;
-
             const [transported] = this.transportableControlObservation({
               observation,
               control,

@@ -158,9 +158,9 @@ impl SharedDriveGrantPolicy {
                     {
                         DriveStorageClient::grant_existing_drive_folder(ExistingDriveFolderGrant {
                             access_token: token,
-                            instructions_key: instructions_key,
-                            joiner_identity: joiner_identity,
-                            target: target,
+                            instructions_key,
+                            joiner_identity,
+                            target,
                         })
                         .await
                     } else {
@@ -173,9 +173,9 @@ impl SharedDriveGrantPolicy {
                         };
                         DriveStorageClient::create_and_grant_drive_folder(NewDriveFolderGrant {
                             access_token: token,
-                            folder_name: folder_name,
-                            instructions_key: instructions_key,
-                            joiner_identity: joiner_identity,
+                            folder_name,
+                            instructions_key,
+                            joiner_identity,
                         })
                         .await
                     }

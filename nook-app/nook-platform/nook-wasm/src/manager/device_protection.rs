@@ -1,5 +1,7 @@
 //! Passkey-PRF setup, unlock, and recovery orchestration.
 
+use std::rc::Rc;
+
 use super::NookVaultManager;
 use crate::BrowserPasskeyClient;
 use crate::BrowserPasskeyCreationOptions;
@@ -360,7 +362,7 @@ impl NookVaultManager {
     /// Require passkey authorization again before any device-key operation.
     #[wasm_bindgen]
     pub fn lock_device_identity(&mut self) {
-        self.device.handoff_generation = Default::default();
+        self.device.handoff_generation = Rc::default();
         self.device.identity_private_key.zeroize();
         self.device.identity_private_key.clear();
         self.device.extension_handoff_private_key.zeroize();
@@ -375,7 +377,7 @@ impl NookVaultManager {
     pub fn begin_extension_identity_handoff(
         &mut self,
     ) -> Result<NookPendingExtensionIdentityHandoff, JsError> {
-        self.device.handoff_generation = Default::default();
+        self.device.handoff_generation = Rc::default();
         self.device.extension_handoff_private_key.zeroize();
         let recipient = DeviceIdentity::generate()?;
         self.device.extension_handoff_private_key =
@@ -542,8 +544,8 @@ impl NookVaultManager {
             let prf_input = setup.prf_input();
             let creation_options =
                 BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
-                    rp_id: rp_id,
-                    rp_name: rp_name,
+                    rp_id,
+                    rp_name,
                     passkey_label: &passkey_label,
                     user_handle: &user_handle,
                     prf_input: &prf_input,
@@ -583,7 +585,7 @@ impl NookVaultManager {
                     let request = pending.request();
                     let request_options =
                         BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
-                            rp_id: rp_id,
+                            rp_id,
                             credential_id: request.credential_id().as_ref(),
                             prf_input: request.prf_input().as_ref(),
                         })?;
@@ -620,7 +622,7 @@ impl NookVaultManager {
             );
             BrowserPasskeyClient::signal_current_user_details(
                 BrowserPasskeySignalCurrentUserDetails {
-                    rp_id: rp_id,
+                    rp_id,
                     user_handle: user_handle.as_ref(),
                     passkey_label: &updated_label,
                 },

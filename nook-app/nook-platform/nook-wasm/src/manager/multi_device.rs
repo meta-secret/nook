@@ -277,7 +277,7 @@ impl NookVaultManager {
                 let share_records = self.prepare_sentinel_shares(&roster)?;
                 let member_records =
                     VaultMember::build_members_records(BuildMembersRecordsRequest {
-                        roster: roster,
+                        roster,
                         members_key: &members_key,
                     })?;
                 self.vault.meta.remove_key(event_device_id.as_str());

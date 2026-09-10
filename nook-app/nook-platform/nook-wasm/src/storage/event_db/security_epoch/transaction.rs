@@ -199,7 +199,7 @@ impl TransactionEvents<'_> {
                 && let Ok(event_id) = EventId::parse(raw_id)
             {
                 local = local.put_event(nook_core::LocalEventWrite {
-                    event_id: event_id,
+                    event_id,
                     bytes: bytes.into_bytes().into(),
                 });
             }

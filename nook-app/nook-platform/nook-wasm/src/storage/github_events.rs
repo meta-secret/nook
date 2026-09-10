@@ -180,7 +180,7 @@ impl GitHubEventStore<'_> {
             Self::github_repo_response(RepositoryResponse {
                 status: repo_status,
                 text: &repo_text,
-                repo: repo,
+                repo,
             })?
         else {
             return Ok(Vec::new());
@@ -230,7 +230,7 @@ impl GitHubEventStore<'_> {
         let path = event_id.storage_path();
         if let GitHubVaultDiscovery::FileLoaded(file) = GitHubStorageClient::new(pat)
             .fetch_github_vault(GitHubStorageClientFetchGithubVault {
-                repo: repo,
+                repo,
                 path: &path,
                 root: GitHubRootDiscovery::Inspect,
             })
@@ -276,9 +276,9 @@ impl GitHubEventStore<'_> {
         for attempt in 0..3 {
             match GitHubStorageClient::new(pat)
                 .write_github_text_file(GitHubStorageClientWriteGithubTextFile {
-                    repo: repo,
+                    repo,
                     path: &path,
-                    content: content,
+                    content,
                     write: GitHubFileWrite::Create,
                 })
                 .await
@@ -289,7 +289,7 @@ impl GitHubEventStore<'_> {
                         if let Ok(GitHubVaultDiscovery::FileLoaded(existing)) =
                             GitHubStorageClient::new(pat)
                                 .fetch_github_vault(GitHubStorageClientFetchGithubVault {
-                                    repo: repo,
+                                    repo,
                                     path: &path,
                                     root: GitHubRootDiscovery::Inspect,
                                 })

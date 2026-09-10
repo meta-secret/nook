@@ -69,6 +69,10 @@ impl NookPendingExtensionIdentityHandoff {
     pub fn recipient_public_key(&self) -> String {
         self.recipient_public_key.clone()
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "wasm-bindgen owns this exported handoff boundary signature"
+    )]
     pub async fn finish(
         self,
         manager: &mut NookVaultManager,
@@ -217,7 +221,7 @@ impl NookCommittedExtensionIdentityHandoff {
     pub fn confirm(self, manager: &mut NookVaultManager) -> Result<(), JsError> {
         self.binding.check(manager)?;
         manager.confirm_extension_identity_handoff();
-        manager.device.handoff_generation = Default::default();
+        manager.device.handoff_generation = Rc::default();
         Ok(())
     }
     pub fn rollback(self, manager: &mut NookVaultManager) -> Result<(), JsError> {

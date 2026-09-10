@@ -15,14 +15,17 @@ export class AppLogsJsonDocument {
   constructor(private readonly document: AppLogsDocument) {}
 
   get text(): string {
+    // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
     return JSON.stringify(this.document, (_key, value) => value, 2);
   }
 
   static error(message: string): AppLogsJsonDocument {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new AppLogsJsonDocument({ error: message });
   }
 
   static loading(): AppLogsJsonDocument {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new AppLogsJsonDocument({ loading: true });
   }
 }

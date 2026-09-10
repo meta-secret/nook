@@ -41,6 +41,7 @@ export enum OAuthFailureKind {
 export class OAuthFailure {
   constructor(readonly kind: OAuthFailureKind) {}
   get translationKey() {
+    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- The default branch intentionally groups equivalent failures.
     switch (this.kind) {
       case OAuthFailureKind.GoogleConfiguration:
         return I18N_KEYS.ProviderSetupGoogleOauthUnconfigured;

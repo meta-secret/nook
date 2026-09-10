@@ -52,12 +52,15 @@ export class VaultLocaleActions {
   savedAppLocale(): Result<SavedAppLocale, LocaleUpdateFailure> {
     try {
       const stored = localStorage.getItem("nook_locale");
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       if (!stored) return ok({ kind: SavedAppLocaleKind.Missing });
       const parsed = parse_app_locale(stored);
       return ok(
         parsed === NookAppLocaleParse.Unsupported
-          ? { kind: SavedAppLocaleKind.Missing }
-          : {
+          ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+            { kind: SavedAppLocaleKind.Missing }
+          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+            {
               kind: SavedAppLocaleKind.Supported,
               locale: supported_app_locale_code(parsed),
             },

@@ -44,6 +44,7 @@ export class SessionPasskeyResponse {
       Array.isArray(response.transports) &&
       response.transports.every((transport) => typeof transport === 'string')
     ) {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         ok: true,
         credentialId: response.credentialId,
@@ -60,6 +61,7 @@ export class SessionPasskeyResponse {
       'userHandle' in response &&
       typeof response.userHandle === 'string'
     ) {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         ok: true,
         credentialId: response.credentialId,

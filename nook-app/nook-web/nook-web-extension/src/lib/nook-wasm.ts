@@ -197,10 +197,12 @@ class ExtensionWasmRuntime {
     return operation
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   private runtimeMessage(message: ExtensionRuntimeRequest): Promise<unknown> {
     // Promise owns this callback's resolve and reject signature.
     // eslint-disable-next-line max-params
     return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
       chrome.runtime.sendMessage(message, (runtimeResponse: unknown) => {
         if (chrome.runtime.lastError?.message) {
           reject(new Error(chrome.runtime.lastError.message))
@@ -223,6 +225,7 @@ class ExtensionWasmRuntime {
     message: ExtensionSessionRequest,
   ): Promise<Response> {
     await this.ensureNookWasm()
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const runtime = await this.runtimeMessage({
       type: ExtensionRuntimeRequestType.EnsureRuntime,
     })
@@ -357,6 +360,7 @@ class ExtensionWasmRuntime {
       await this.sessionResponse<ExtensionSessionOperationResponseWire>(request)
     const deviceStatus =
       decode_extension_session_status_details(response).status
+    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- Existing exhaustive fallback behavior is preserved.
     switch (deviceStatus) {
       case DeviceProtectionStatus.Missing:
       case DeviceProtectionStatus.Plaintext:

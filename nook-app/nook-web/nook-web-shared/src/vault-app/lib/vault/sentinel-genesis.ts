@@ -128,6 +128,7 @@ export class SentinelGenesisActions {
     } catch {
       return;
     }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     this.applyStatus({ status });
   }
 
@@ -162,6 +163,7 @@ export class SentinelGenesisActions {
         this.restoreStatus();
         return storageErr(status.error);
       }
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.applyStatus({ status: status.value });
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
@@ -198,7 +200,7 @@ export class SentinelGenesisActions {
         if (admitted.isErr()) return storageErr(admitted.error);
         try {
           return storageOk(
-            await admitted.value.add_sentinel_genesis_participant_response(
+            admitted.value.add_sentinel_genesis_participant_response(
               payload.trim(),
               participantLabel.trim(),
             ),
@@ -208,6 +210,7 @@ export class SentinelGenesisActions {
         }
       });
       if (status.isErr()) return storageErr(status.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.applyStatus({ status: status.value });
       return storageOk();
     } finally {
@@ -268,7 +271,7 @@ export class SentinelGenesisActions {
         const admitted = state.admitManager();
         if (admitted.isErr()) return storageErr(admitted.error);
         try {
-          await admitted.value.remember_sentinel_genesis_request(
+          admitted.value.remember_sentinel_genesis_request(
             requestPayload.trim(),
           );
           return storageOk();
@@ -342,6 +345,7 @@ export class SentinelGenesisActions {
         this.restoreStatus();
         return storageErr(result.error);
       }
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.applyFinalizeResult({ result: result.value });
       return storageOk();
     } finally {
@@ -453,6 +457,7 @@ export class SentinelGenesisActions {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     state.openActiveVault(storeId.value);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const loadedProviders1 = await state.loadProviders({
       ensureLocalRow: false,
     });

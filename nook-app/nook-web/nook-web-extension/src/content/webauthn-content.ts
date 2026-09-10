@@ -94,7 +94,7 @@ function respond({
 function runtimeMessage<T>(message: unknown): Promise<T> {
   // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage<T>(message, (response) => {
+    void chrome.runtime.sendMessage<T>(message, (response) => {
       const error = chrome.runtime.lastError?.message
       if (error) reject(new Error(error))
       else resolve(response)

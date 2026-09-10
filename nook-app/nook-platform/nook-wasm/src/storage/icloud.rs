@@ -288,9 +288,9 @@ impl ICloudEventStore<'_> {
             record_name,
         } = request;
         Self::lookup_vault_record(CloudKitRecordQuery {
-            web_auth_token: web_auth_token,
-            target: target,
-            record_name: record_name,
+            web_auth_token,
+            target,
+            record_name,
         })
         .await
     }
@@ -392,7 +392,7 @@ impl ICloudEventStore<'_> {
         );
         let record = match Self::lookup_record(CloudKitRecordQuery {
             web_auth_token: token.as_ref(),
-            target: target,
+            target,
             record_name: &record_name,
         })
         .await?
@@ -466,8 +466,8 @@ impl ICloudEventStore<'_> {
     ) -> Result<bool, NookError> {
         if let RecordLookup::Loaded(existing) = Self::lookup_record(CloudKitRecordQuery {
             web_auth_token: token,
-            target: target,
-            record_name: record_name,
+            target,
+            record_name,
         })
         .await?
         {

@@ -134,11 +134,8 @@ impl NookDatabase {
         request: IdentityDbLocalKeyringEntryForAppIdFromStore<'_>,
     ) -> Result<StoredIdentityProtection, NookError> {
         let IdentityDbLocalKeyringEntryForAppIdFromStore { store, app_id } = request;
-        NookDatabase::entry_for_app_id_from_store(KeyringDbEntryForAppIdFromStore {
-            store: store,
-            app_id: app_id,
-        })
-        .await
+        NookDatabase::entry_for_app_id_from_store(KeyringDbEntryForAppIdFromStore { store, app_id })
+            .await
     }
 }
 

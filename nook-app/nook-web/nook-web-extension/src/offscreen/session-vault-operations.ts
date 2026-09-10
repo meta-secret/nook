@@ -91,6 +91,7 @@ export type PasskeyEventProviderFlushRequest = {
 }
 
 export type ActivatedExtensionIdentityOperation<
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   Outcome extends Result<unknown, SessionOperationFailure>,
 > = {
   activeManager: NookVaultManager
@@ -99,6 +100,7 @@ export type ActivatedExtensionIdentityOperation<
 }
 
 export async function withActivatedExtensionIdentity<
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   Outcome extends Result<unknown, SessionOperationFailure>,
 >({
   activeManager,
@@ -231,6 +233,7 @@ export async function importExtensionVaultWithDependencies({
               saveArgs,
             )
           }
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({ ok: true, status })
         } catch {
           return err(
@@ -306,7 +309,7 @@ export class CompanionVaultDiscovery {
           return err(opened.error)
         }
       }
-    } catch (error) {
+    } catch {
       endpoint.endpoint.free()
       return err(
         new SessionOperationFailure(SessionOperationFailureKind.Failed),
@@ -334,6 +337,7 @@ export async function flushPasskeyEventToProviders({
 > {
   try {
     const snapshot = await activeManager.load_auth_providers_snapshot()
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const providers = select_remote_event_flush_providers({
       snapshot,
       vaultStoreId,

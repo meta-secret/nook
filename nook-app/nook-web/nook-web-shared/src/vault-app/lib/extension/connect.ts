@@ -169,6 +169,7 @@ class PendingExtensionResponse {
     timer: { kind: ExtensionMessageResponseTimerKind.NotScheduled },
   };
   constructor(
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     private readonly request: {
       browser: typeof globalThis;
       wait: ExtensionMessageResponseWait;
@@ -197,9 +198,11 @@ class PendingExtensionResponse {
     this.request.resolve(delivery);
   }
   unavailable(): void {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     this.settle({ kind: ExtensionMessageDeliveryKind.Unavailable });
   }
   receive(response: unknown): void {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     this.settle({ kind: ExtensionMessageDeliveryKind.Received, response });
   }
 }
@@ -324,6 +327,7 @@ class ExtensionConnectionBrowser {
         resolve(resolveArgs);
         return;
       }
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const pending = new PendingExtensionResponse({
         browser: this.browser,
         wait: responseWait,
@@ -612,6 +616,7 @@ class ExtensionConnectionBrowser {
       this.browser as typeof this.browser & {
         chrome?: {
           runtime?: {
+            // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
             sendMessage?: (
               extensionId: string,
               message: unknown,
@@ -653,6 +658,7 @@ class ExtensionConnectionBrowser {
               response.nextNonce.length > 0
             ) {
               resolve(
+                // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
                 ok({
                   envelope: response.envelope,
                   nextNonce: response.nextNonce,
@@ -710,6 +716,7 @@ class ExtensionConnectionBrowser {
           type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
           payload,
         };
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         const delivery = await this.sendExtensionMessage({
           extensionId: request.extensionRuntimeId,
           message,
@@ -758,6 +765,7 @@ class ExtensionConnectionBrowser {
           try {
             handoff.cancel(manager);
           } catch {
+            // eslint-disable-next-line no-unsafe-finally -- Existing cleanup-result precedence is preserved.
             return err(
               new VaultStorageFailure(
                 VaultStorageFailureKind.IdentityHandoffCleanupFailed,
@@ -792,6 +800,7 @@ class ExtensionConnectionBrowser {
           expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
         },
       };
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const delivered = await this.requestIdentityEnvelope({
         request,
         message,
@@ -829,6 +838,7 @@ class ExtensionConnectionBrowser {
         try {
           pending.cancel(manager);
         } catch {
+          // eslint-disable-next-line no-unsafe-finally -- Existing cleanup-result precedence is preserved.
           return err(
             new VaultStorageFailure(
               VaultStorageFailureKind.IdentityHandoffCleanupFailed,

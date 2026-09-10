@@ -358,6 +358,7 @@ class ExtensionPairingIdentity {
     const stored = await this.getPairingStorage()
     const grant = stored[key]
     if (!pairingPolicy.isStoredExtensionPairingGrant(grant)) {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ kind: 'unavailable' })
     }
     const selected = pairingPolicy.selectedPairingGrant(stored)
@@ -376,6 +377,7 @@ class ExtensionPairingIdentity {
       this.websiteSessionStatusTransport(statusResponse) !==
       ExtensionSessionStatusAvailability.Unlocked
     ) {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         kind: 'locked',
         vault_type: currentGrant.vaultType,
@@ -383,6 +385,7 @@ class ExtensionPairingIdentity {
         vault_name: currentGrant.vaultName,
       })
     }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return ok({
       kind: 'unlocked',
       vault_type: currentGrant.vaultType,
@@ -711,6 +714,7 @@ class ExtensionPairingIdentity {
           (key) =>
             legacyKeys.includes(key) &&
             key in current &&
+            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
             pairingPolicy.compare_extension_pairing_records({
               current: current[key],
               migrated: migrated[key],

@@ -134,10 +134,8 @@ impl AuthProviderDatabase {
             scoped,
             legacy,
         } = request;
-        if AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch {
-            scoped: scoped,
-            legacy: legacy,
-        }) == ProviderProjectionRelation::Equal
+        if AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch { scoped, legacy })
+            == ProviderProjectionRelation::Equal
         {
             return LegacyProjectionOwnership::Owned;
         }
