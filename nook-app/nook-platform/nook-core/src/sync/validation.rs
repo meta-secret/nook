@@ -30,6 +30,13 @@ pub enum StorageMode {
     ICloud,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionCredentialValidation {
+    Local,
+    Github(GithubPat),
+    GoogleDrive,
+    ICloud,
+}
 impl StorageMode {
     /// Canonical short tag used at every cross-language boundary (wasm-bindgen
     /// arguments, `IndexedDB` JSON, GitHub PR descriptions, log lines).
@@ -68,14 +75,23 @@ impl StorageMode {
         }
     }
 
-    pub fn validate_connect(self, credential: &str) -> Result<Option<GithubPat>, ValidationError> {
+    pub fn validate_connect(
+        self,
+        credential: &str,
+    ) -> Result<ConnectionCredentialValidation, ValidationError> {
         match self {
-            Self::Github => Ok(Some(GithubPat::parse(credential)?)),
-            Self::GoogleDrive | Self::ICloud => {
+            Self::Github => Ok(ConnectionCredentialValidation::Github(GithubPat::parse(
+                credential,
+            )?)),
+            Self::GoogleDrive => {
                 OauthAccessToken::parse(credential)?;
-                Ok(None)
+                Ok(ConnectionCredentialValidation::GoogleDrive)
             }
-            Self::Local => Ok(None),
+            Self::ICloud => {
+                OauthAccessToken::parse(credential)?;
+                Ok(ConnectionCredentialValidation::ICloud)
+            }
+            Self::Local => Ok(ConnectionCredentialValidation::Local),
         }
     }
 }
@@ -403,7 +419,6 @@ pub enum SyncProviderTarget {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
-    use std::io;
 
     use super::*;
 
@@ -439,11 +454,8 @@ mod tests {
                 .is_err()
         );
         assert_eq!(
-            StorageMode::parse(STORAGE_MODE_GITHUB)?
-                .validate_connect(" ghp_test ")?
-                .ok_or_else(|| io::Error::other("GitHub credential must be returned"))?
-                .as_str(),
-            "ghp_test"
+            StorageMode::parse(STORAGE_MODE_GITHUB)?.validate_connect(" ghp_test ")?,
+            ConnectionCredentialValidation::Github(GithubPat::parse("ghp_test")?)
         );
         Ok(())
     }
@@ -452,7 +464,7 @@ mod tests {
     fn validate_connect_local_ok() -> anyhow::Result<()> {
         assert_eq!(
             StorageMode::parse(STORAGE_MODE_LOCAL)?.validate_connect("")?,
-            None
+            ConnectionCredentialValidation::Local
         );
         Ok(())
     }
@@ -497,7 +509,7 @@ mod tests {
         );
         assert_eq!(
             StorageMode::parse("icloud")?.validate_connect(" ck-web-token ")?,
-            None
+            ConnectionCredentialValidation::ICloud
         );
         Ok(())
     }
@@ -511,7 +523,7 @@ mod tests {
         );
         assert_eq!(
             StorageMode::parse("google-drive")?.validate_connect(" ya29.test ")?,
-            None
+            ConnectionCredentialValidation::GoogleDrive
         );
         Ok(())
     }

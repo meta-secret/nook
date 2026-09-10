@@ -382,14 +382,11 @@ fn connect_validation_matches_ui_rules() -> anyhow::Result<()> {
     assert!(StorageMode::parse("dropbox").is_err());
     assert_eq!(
         StorageMode::parse("local")?.validate_connect("ignored")?,
-        None
+        nook_core::ConnectionCredentialValidation::Local
     );
     assert_eq!(
-        StorageMode::parse("github")?
-            .validate_connect("  ghp_abc  ")?
-            .ok_or_else(|| io::Error::other("GitHub credential must be returned"))?
-            .as_str(),
-        "ghp_abc"
+        StorageMode::parse("github")?.validate_connect("  ghp_abc  ")?,
+        nook_core::ConnectionCredentialValidation::Github(nook_core::GithubPat::parse("ghp_abc")?)
     );
     Ok(())
 }

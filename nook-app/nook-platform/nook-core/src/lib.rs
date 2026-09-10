@@ -303,12 +303,13 @@ pub use sync_provider_store::{
     VaultStorageConnection,
 };
 pub use validation::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_SHARED_FOLDER_REF_PREFIX,
-    DRIVE_STORAGE_REF_SEP, DriveBackupName, DriveEventParent, ExistingVaultProviderReadiness,
-    GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget, GoogleDriveFolderId,
-    GoogleDriveMode, ICloudEventTarget, ICloudMode, ICloudShareRole, ICloudSharedTarget,
-    LocalFolderSyncTarget, OauthAccessToken, OauthFilePreset, OauthFileSyncTarget,
-    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
+    ConnectionCredentialValidation, DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME,
+    DRIVE_SHARED_FOLDER_REF_PREFIX, DRIVE_STORAGE_REF_SEP, DriveBackupName, DriveEventParent,
+    ExistingVaultProviderReadiness, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
+    GoogleDriveFolderId, GoogleDriveMode, ICloudEventTarget, ICloudMode, ICloudShareRole,
+    ICloudSharedTarget, LocalFolderSyncTarget, OauthAccessToken, OauthFilePreset,
+    OauthFileSyncTarget, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType,
+    SyncProviderTarget,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,
