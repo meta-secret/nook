@@ -31,9 +31,11 @@ import {
   companion_pairing_provider_manifest_digest,
   configure_vault_application,
   NookCompanionExtensionEndpoint,
+  type NookCompanionPairingCandidateCommitOutcome,
+  NookCompanionPairingCandidateCommitOutcomeState,
   NookCompanionPairingCandidateFailure,
-  type NookCompanionPairingCandidateOutcome,
-  NookCompanionPairingCandidateOutcomeState,
+  type NookCompanionPairingCandidateLoadOutcome,
+  NookCompanionPairingCandidateLoadOutcomeState,
   NookCompanionPairingExtensionEndpoint,
   NookExternalEventLogRecords,
   NookPreparedCompanionPairingActivation,
@@ -169,35 +171,57 @@ class CompanionPairingApprovalFixture {
 }
 
 class PairingActivationScenario {
-  private static storedCandidate(
-    outcome: NookCompanionPairingCandidateOutcome,
+  private static committedCandidate(
+    outcome: NookCompanionPairingCandidateCommitOutcome,
   ): NookStoredCompanionPairingActivationCandidate {
     const state = outcome.state
     switch (state) {
-      case NookCompanionPairingCandidateOutcomeState.Stored:
+      case NookCompanionPairingCandidateCommitOutcomeState.Stored:
         return outcome.into_stored()
-      case NookCompanionPairingCandidateOutcomeState.Rejected:
+      case NookCompanionPairingCandidateCommitOutcomeState.Rejected:
         throw new Error(`candidate storage rejected: ${outcome.into_failure()}`)
       default:
+        outcome.free()
         throw new Error(
           `unreachable candidate outcome: ${state satisfies never}`,
         )
     }
   }
 
-  private static candidateFailure(
-    outcome: NookCompanionPairingCandidateOutcome,
+  private static commitFailure(
+    outcome: NookCompanionPairingCandidateCommitOutcome,
   ): NookCompanionPairingCandidateFailure {
     const state = outcome.state
     switch (state) {
-      case NookCompanionPairingCandidateOutcomeState.Stored:
+      case NookCompanionPairingCandidateCommitOutcomeState.Stored:
         outcome.into_stored().free()
         throw new Error('candidate storage unexpectedly succeeded')
-      case NookCompanionPairingCandidateOutcomeState.Rejected:
+      case NookCompanionPairingCandidateCommitOutcomeState.Rejected:
         return outcome.into_failure()
       default:
+        outcome.free()
         throw new Error(
           `unreachable candidate outcome: ${state satisfies never}`,
+        )
+    }
+  }
+
+  private static loadedCandidate(
+    outcome: NookCompanionPairingCandidateLoadOutcome,
+  ): NookStoredCompanionPairingActivationCandidate {
+    const state = outcome.state
+    switch (state) {
+      case NookCompanionPairingCandidateLoadOutcomeState.Stored:
+        return outcome.into_stored()
+      case NookCompanionPairingCandidateLoadOutcomeState.Absent:
+        outcome.free()
+        throw new Error('candidate is absent')
+      case NookCompanionPairingCandidateLoadOutcomeState.Rejected:
+        throw new Error(`candidate load rejected: ${outcome.into_failure()}`)
+      default:
+        outcome.free()
+        throw new Error(
+          `unreachable candidate load outcome: ${state satisfies never}`,
         )
     }
   }
@@ -215,9 +239,19 @@ class PairingActivationScenario {
     const records = NookExternalEventLogRecords.from_array(eventRecords)
     const prepared = approval.with_event_log(records)
     expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
-    const stored = this.storedCandidate(await prepared.commit(extension))
+    const absent = await extension.load_companion_pairing_activation_candidate()
+    expect(absent.state).toBe(
+      NookCompanionPairingCandidateLoadOutcomeState.Absent,
+    )
+    absent.free()
+    const stored = this.committedCandidate(await prepared.commit(extension))
     expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
     stored.free()
+    const loaded = this.loadedCandidate(
+      await extension.load_companion_pairing_activation_candidate(),
+    )
+    expect(loaded).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
+    loaded.free()
     const replayApprovalRequest: CompanionPairingApprovalFixtureRequest = {
       requestId: 'pairing-activation-replay',
       substituteProvider: false,
@@ -229,7 +263,7 @@ class PairingActivationScenario {
     const replay = await replayApproval
       .with_event_log(replayRecords)
       .commit(extension)
-    expect(this.candidateFailure(replay)).toBe(
+    expect(this.commitFailure(replay)).toBe(
       NookCompanionPairingCandidateFailure.Replay,
     )
 

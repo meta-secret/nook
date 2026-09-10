@@ -44,8 +44,9 @@ pub use identity_record::{
 pub use logger::{NookLogEntries, log_count, log_dump_page};
 pub use manager::{
     NookCompanionExtensionEndpoint, NookCompanionPairingApprovalAuthority,
-    NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateOutcome,
-    NookCompanionPairingCandidateOutcomeState, NookCompanionPairingExtensionEndpoint,
+    NookCompanionPairingCandidateCommitOutcome, NookCompanionPairingCandidateCommitOutcomeState,
+    NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateLoadOutcome,
+    NookCompanionPairingCandidateLoadOutcomeState, NookCompanionPairingExtensionEndpoint,
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExtensionIdentityHandoffContext, NookExternalEventLogRecords,
     NookPreparedCompanionPairingActivation, NookPrevalidatedCompanionPairingApproval,

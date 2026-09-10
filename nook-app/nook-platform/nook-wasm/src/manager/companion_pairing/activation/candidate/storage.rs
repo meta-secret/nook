@@ -1,20 +1,29 @@
 //! Atomic storage for inert candidates; the gate is the only publication point.
 
 use super::{
-    ActivationClock, CompanionPairingCandidateFailure, PairingActivationCandidate,
-    PairingActivationStorageAdmission,
+    ActivationClock, CompanionPairingCandidateFailure, CurrentActivationBinding,
+    PairingActivationCandidate, PairingActivationStorageAdmission,
 };
+use crate::manager::NookVaultManager;
 use crate::storage::open_nook_database;
+use nook_core::StoreId;
 use rexie::TransactionMode;
 
 mod schema;
-use schema::{CandidateSchema, EncodedCandidate};
+use schema::{
+    CandidateLocatorValidation, CandidateReadbackFailure, CandidateReadbackIntegrityStage,
+    CandidateSchema, EncodedCandidate,
+};
 
 const VAULT_STORE: &str = "vault";
 
 pub(super) struct PairingActivationCommit<'a, Clock> {
     pub(super) admission: PairingActivationStorageAdmission<'a>,
     pub(super) clock: &'a Clock,
+}
+
+pub(super) struct PairingActivationLoad<'a> {
+    pub(super) manager: &'a NookVaultManager,
 }
 
 pub(super) struct StoredPairingActivationCandidate {
@@ -172,13 +181,127 @@ impl PairingActivationStore {
             _candidate: admission.candidate,
         })
     }
+
+    pub(super) async fn load(
+        request: PairingActivationLoad<'_>,
+    ) -> Result<Option<StoredPairingActivationCandidate>, CompanionPairingCandidateFailure> {
+        Self::load_staged(request)
+            .await
+            .map_err(CandidateReadbackFailure::public)
+    }
+
+    async fn load_staged(
+        request: PairingActivationLoad<'_>,
+    ) -> Result<Option<StoredPairingActivationCandidate>, CandidateReadbackFailure> {
+        let store_id = StoreId::parse(&request.manager.vault.store_id).map_err(|_| {
+            CandidateReadbackFailure::Integrity(CandidateReadbackIntegrityStage::Locator)
+        })?;
+        let gate_key = CandidateSchema::gate_key(&store_id);
+        let connection = open_nook_database()
+            .await
+            .map_err(|_| CandidateReadbackFailure::Storage)?;
+        let transaction = connection
+            .transaction(&[VAULT_STORE], TransactionMode::ReadOnly)
+            .map_err(|_| CandidateReadbackFailure::Storage)?;
+        let vault = transaction
+            .store(VAULT_STORE)
+            .map_err(|_| CandidateReadbackFailure::Storage)?;
+        let Some(gate_json) = Self::get_string(StoredStringRead {
+            store: &vault,
+            key: &gate_key,
+        })
+        .await
+        .map_err(|failure| {
+            CandidateReadbackFailure::from_candidate(
+                &failure,
+                CandidateReadbackIntegrityStage::Gate,
+            )
+        })?
+        else {
+            transaction
+                .done()
+                .await
+                .map_err(|_| CandidateReadbackFailure::Storage)?;
+            return Ok(None);
+        };
+        let gate = CandidateSchema::decode(&gate_json).map_err(|_| {
+            CandidateReadbackFailure::Integrity(CandidateReadbackIntegrityStage::Gate)
+        })?;
+        EncodedCandidate::validate_locator(&CandidateLocatorValidation {
+            gate: &gate,
+            store_id: &store_id,
+        })
+        .map_err(|_| {
+            CandidateReadbackFailure::Integrity(CandidateReadbackIntegrityStage::Locator)
+        })?;
+        let mut events = Vec::with_capacity(gate.event_payload_keys.len());
+        for key in &gate.event_payload_keys {
+            let value = Self::get_string(StoredStringRead { store: &vault, key })
+                .await
+                .map_err(|failure| {
+                    CandidateReadbackFailure::from_candidate(
+                        &failure,
+                        CandidateReadbackIntegrityStage::Payload,
+                    )
+                })?
+                .ok_or(CandidateReadbackFailure::Integrity(
+                    CandidateReadbackIntegrityStage::Payload,
+                ))?;
+            events.push((key.clone(), value));
+        }
+        let providers = Self::get_string(StoredStringRead {
+            store: &vault,
+            key: &gate.provider_payload_key,
+        })
+        .await
+        .map_err(|failure| {
+            CandidateReadbackFailure::from_candidate(
+                &failure,
+                CandidateReadbackIntegrityStage::Provider,
+            )
+        })?
+        .ok_or(CandidateReadbackFailure::Integrity(
+            CandidateReadbackIntegrityStage::Provider,
+        ))?;
+        transaction
+            .done()
+            .await
+            .map_err(|_| CandidateReadbackFailure::Storage)?;
+        let candidate = EncodedCandidate {
+            gate_key,
+            gate,
+            events,
+            providers,
+        }
+        .decode_staged()
+        .map_err(CandidateReadbackFailure::Integrity)?;
+        CurrentActivationBinding {
+            approval: &candidate.approval,
+            store_id: &candidate.vault_store_id,
+            providers: &candidate.providers,
+            manager: request.manager,
+            observed_at: candidate.stored_at,
+        }
+        .validate()
+        .map_err(|_| {
+            CandidateReadbackFailure::Integrity(CandidateReadbackIntegrityStage::CurrentBinding)
+        })?;
+        Ok(Some(StoredPairingActivationCandidate {
+            _candidate: candidate,
+        }))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{CandidateFixture, DeterministicClock};
+    use super::super::tests::{CandidateCommitFixture, CandidateFixture, DeterministicClock};
     use super::*;
     use crate::manager::companion_pairing::activation::tests::ActivationFixture;
+    use nook_companion_core::{CompanionPairingProviderManifestDigest, ExtensionConnectScope};
+    use nook_core::{
+        ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, ProviderVaultScope,
+        StorageProviderData, VaultApplication,
+    };
     use std::collections::BTreeMap;
 
     #[derive(Default)]
@@ -189,6 +312,10 @@ mod tests {
     struct InterruptedCommit<'a> {
         encoded: &'a EncodedCandidate,
         writes_before_failure: usize,
+    }
+
+    struct MemoryActivationLoad<'a> {
+        manager: &'a NookVaultManager,
     }
 
     impl MemoryActivationStore {
@@ -254,11 +381,121 @@ mod tests {
             *self = transaction;
             Ok(())
         }
+
+        fn load(
+            &self,
+            request: MemoryActivationLoad<'_>,
+        ) -> Result<Option<StoredPairingActivationCandidate>, CompanionPairingCandidateFailure>
+        {
+            let store_id = StoreId::parse(&request.manager.vault.store_id)
+                .map_err(|_| CompanionPairingCandidateFailure::Integrity)?;
+            let gate_key = CandidateSchema::gate_key(&store_id);
+            let Some(gate_json) = self.vault.get(&gate_key) else {
+                return Ok(None);
+            };
+            let gate = CandidateSchema::decode(gate_json)?;
+            EncodedCandidate::validate_locator(&CandidateLocatorValidation {
+                gate: &gate,
+                store_id: &store_id,
+            })?;
+            let events = gate
+                .event_payload_keys
+                .iter()
+                .map(|key| {
+                    self.vault
+                        .get(key)
+                        .cloned()
+                        .map(|value| (key.clone(), value))
+                        .ok_or(CompanionPairingCandidateFailure::Integrity)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let providers = self
+                .vault
+                .get(&gate.provider_payload_key)
+                .cloned()
+                .ok_or(CompanionPairingCandidateFailure::Integrity)?;
+            let candidate = EncodedCandidate {
+                gate_key,
+                gate,
+                events,
+                providers,
+            }
+            .decode()?;
+            CurrentActivationBinding {
+                approval: &candidate.approval,
+                store_id: &candidate.vault_store_id,
+                providers: &candidate.providers,
+                manager: request.manager,
+                observed_at: candidate.stored_at,
+            }
+            .validate()
+            .map_err(|_| CompanionPairingCandidateFailure::Integrity)?;
+            Ok(Some(StoredPairingActivationCandidate {
+                _candidate: candidate,
+            }))
+        }
     }
 
     struct MemoryStorageScenarios;
 
     impl MemoryStorageScenarios {
+        fn canonical_commit_then_load_is_stored() -> anyhow::Result<()> {
+            let mut fixture =
+                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
+            let identity = fixture.manager.device_identity()?;
+            let vault_store_id = fixture.candidate.vault_store_id.as_str().to_owned();
+            let mut provider = StorageProviderData::github(
+                "github-generated-flow",
+                "GitHub",
+                "github_pat_generated_flow",
+                "nook",
+                "2026-09-08T00:00:00Z",
+            );
+            provider.store_id = ProviderVaultScope::StoreId(vault_store_id.clone());
+            fixture.candidate.providers = AuthProvidersSnapshotData {
+                providers: vec![provider],
+                active_vault_store_id: ActiveVaultScope::StoreId(vault_store_id),
+            };
+            fixture
+                .candidate
+                .providers
+                .seal_credentials_for(&identity.public_key())?;
+            fixture
+                .candidate
+                .approval
+                .request
+                .scopes
+                .push(ExtensionConnectScope::SyncProviderCredentials);
+            fixture.candidate.approval.provider_manifest_digest =
+                CompanionPairingProviderManifestDigest::parse(
+                    fixture
+                        .candidate
+                        .providers
+                        .companion_pairing_manifest_digest()?
+                        .as_str(),
+                )?;
+            let CandidateCommitFixture {
+                candidate,
+                envelopes,
+                manager,
+            } = fixture;
+            let mut store = MemoryActivationStore::default();
+            store.commit_with_clock(PairingActivationCommit {
+                admission: PairingActivationStorageAdmission {
+                    candidate,
+                    envelopes,
+                    manager: &manager,
+                },
+                clock: &DeterministicClock::new(vec![ActivationFixture::epoch("160")?; 3]),
+            })?;
+            assert!(
+                store
+                    .load(MemoryActivationLoad { manager: &manager })?
+                    .is_some()
+            );
+            Ok(())
+        }
+
         fn commit_publishes_only_activation_keys() -> anyhow::Result<()> {
             let candidate = CandidateFixture::candidate()
                 .map_err(|failure| anyhow::anyhow!(failure.to_string()))?;
@@ -349,7 +586,7 @@ mod tests {
             }
             let mut fixture =
                 CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
-            fixture.manager.application = nook_core::VaultApplication::Simple;
+            fixture.manager.application = VaultApplication::Simple;
             assert!(matches!(
                 store.commit_with_clock(PairingActivationCommit {
                     admission: PairingActivationStorageAdmission {
@@ -364,6 +601,102 @@ mod tests {
             assert!(store.vault.is_empty());
             Ok(())
         }
+
+        fn readback_distinguishes_absence_from_integrity() -> anyhow::Result<()> {
+            let fixture =
+                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
+            let mut store = MemoryActivationStore::default();
+            assert!(
+                store
+                    .load(MemoryActivationLoad {
+                        manager: &fixture.manager,
+                    })?
+                    .is_none()
+            );
+            let encoded = EncodedCandidate::new(&fixture.candidate)?;
+            let event_key = encoded.events[0].0.clone();
+            store.commit(encoded)?;
+            store.vault.remove(&event_key);
+            assert!(matches!(
+                store.load(MemoryActivationLoad {
+                    manager: &fixture.manager,
+                }),
+                Err(CompanionPairingCandidateFailure::Integrity)
+            ));
+            Ok(())
+        }
+
+        fn readback_reconstructs_real_candidate_and_revalidates_manager() -> anyhow::Result<()> {
+            let mut fixture =
+                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
+            let mut store = MemoryActivationStore::default();
+            store.commit(EncodedCandidate::new(&fixture.candidate)?)?;
+            let stored = store.load(MemoryActivationLoad {
+                manager: &fixture.manager,
+            })?;
+            assert!(stored.is_some());
+            fixture.manager.application = VaultApplication::Simple;
+            assert!(matches!(
+                store.load(MemoryActivationLoad {
+                    manager: &fixture.manager,
+                }),
+                Err(CompanionPairingCandidateFailure::Integrity)
+            ));
+            Ok(())
+        }
+
+        fn readback_rejects_provider_for_another_recipient() -> anyhow::Result<()> {
+            let mut fixture =
+                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
+            let other = DeviceIdentity::generate()?;
+            let mut provider = StorageProviderData::github(
+                "github-readback",
+                "GitHub",
+                "github_pat_readback",
+                "nook",
+                "2026-09-08T00:00:00Z",
+            );
+            provider.store_id =
+                ProviderVaultScope::StoreId(fixture.candidate.vault_store_id.as_str().to_owned());
+            fixture.candidate.providers = AuthProvidersSnapshotData {
+                providers: vec![provider],
+                active_vault_store_id: ActiveVaultScope::StoreId(
+                    fixture.candidate.vault_store_id.as_str().to_owned(),
+                ),
+            };
+            fixture
+                .candidate
+                .providers
+                .seal_credentials_for(&other.public_key())?;
+            fixture
+                .candidate
+                .approval
+                .request
+                .scopes
+                .push(ExtensionConnectScope::SyncProviderCredentials);
+            fixture.candidate.approval.provider_manifest_digest =
+                CompanionPairingProviderManifestDigest::parse(
+                    fixture
+                        .candidate
+                        .providers
+                        .companion_pairing_manifest_digest()?
+                        .as_str(),
+                )?;
+            let mut store = MemoryActivationStore::default();
+            store.commit(EncodedCandidate::new(&fixture.candidate)?)?;
+            assert!(matches!(
+                store.load(MemoryActivationLoad {
+                    manager: &fixture.manager,
+                }),
+                Err(CompanionPairingCandidateFailure::Integrity)
+            ));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn canonical_real_candidate_commit_then_load_is_stored() -> anyhow::Result<()> {
+        MemoryStorageScenarios::canonical_commit_then_load_is_stored()
     }
 
     #[test]
@@ -385,11 +718,29 @@ mod tests {
     fn late_expiry_and_manager_mutation_discard_memory_transaction() -> anyhow::Result<()> {
         MemoryStorageScenarios::late_expiry_and_manager_mutation_discard_transaction()
     }
+
+    #[test]
+    fn memory_readback_distinguishes_absence_from_integrity() -> anyhow::Result<()> {
+        MemoryStorageScenarios::readback_distinguishes_absence_from_integrity()
+    }
+
+    #[test]
+    fn memory_readback_reconstructs_and_revalidates() -> anyhow::Result<()> {
+        MemoryStorageScenarios::readback_reconstructs_real_candidate_and_revalidates_manager()
+    }
+
+    #[test]
+    fn memory_readback_rejects_wrong_provider_recipient() -> anyhow::Result<()> {
+        MemoryStorageScenarios::readback_rejects_provider_for_another_recipient()
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
-    use super::super::tests::{CandidateCommitFixture, CandidateFixture, DeterministicClock};
+    use super::super::{
+        BrowserActivationClock,
+        tests::{CandidateCommitFixture, CandidateFixture, DeterministicClock},
+    };
     use super::*;
     use crate::{
         NookError,
@@ -402,6 +753,11 @@ mod browser_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     struct BrowserStorageFixture;
+
+    struct CommittedBrowserCandidate {
+        _stored: StoredPairingActivationCandidate,
+        manager: NookVaultManager,
+    }
 
     impl BrowserStorageFixture {
         fn candidate() -> Result<CandidateCommitFixture, NookError> {
@@ -427,18 +783,56 @@ mod browser_tests {
 
         async fn commit(
             fixture: CandidateCommitFixture,
-        ) -> Result<StoredPairingActivationCandidate, NookError> {
-            let clock = super::super::BrowserActivationClock;
-            PairingActivationStore::commit(PairingActivationCommit {
+        ) -> Result<CommittedBrowserCandidate, NookError> {
+            let CandidateCommitFixture {
+                candidate,
+                envelopes,
+                manager,
+            } = fixture;
+            let clock = BrowserActivationClock;
+            let stored = PairingActivationStore::commit(PairingActivationCommit {
                 admission: PairingActivationStorageAdmission {
-                    candidate: fixture.candidate,
-                    envelopes: fixture.envelopes,
-                    manager: &fixture.manager,
+                    candidate,
+                    envelopes,
+                    manager: &manager,
                 },
                 clock: &clock,
             })
             .await
-            .map_err(|failure| NookError::Database(failure.to_string()))
+            .map_err(|failure| NookError::Database(failure.to_string()))?;
+            Ok(CommittedBrowserCandidate {
+                _stored: stored,
+                manager,
+            })
+        }
+
+        async fn load(
+            manager: &NookVaultManager,
+        ) -> Result<Option<StoredPairingActivationCandidate>, NookError> {
+            PairingActivationStore::load_staged(PairingActivationLoad { manager })
+                .await
+                .map_err(|failure| NookError::Database(format!("readback stage: {failure:?}")))
+        }
+
+        async fn delete_key(key: &str) -> Result<(), NookError> {
+            let connection = open_nook_database().await?;
+            let transaction = connection
+                .transaction(&[VAULT_STORE], TransactionMode::ReadWrite)
+                .map_err(|error| NookError::Database(format!("test transaction: {error:?}")))?;
+            let vault = transaction
+                .store(VAULT_STORE)
+                .map_err(|error| NookError::Database(format!("test store: {error:?}")))?;
+            let key = serde_wasm_bindgen::to_value(key)
+                .map_err(|error| NookError::Database(format!("test key encode: {error}")))?;
+            vault
+                .delete(key)
+                .await
+                .map_err(|error| NookError::Database(format!("test delete: {error:?}")))?;
+            transaction
+                .done()
+                .await
+                .map_err(|error| NookError::Database(format!("test write: {error:?}")))?;
+            Ok(())
         }
 
         async fn activation_keys() -> Result<Vec<String>, NookError> {
@@ -494,12 +888,32 @@ mod browser_tests {
         async fn commit_and_replay_remain_inert() -> Result<(), NookError> {
             indexed_db::clear_vault_db().await?;
             let authoritative_before = extension_state::read_all().await?;
-            let fixture = Self::candidate()?;
-            Self::commit(fixture).await?;
+            let committed = Self::commit(Self::candidate()?).await?;
+            assert!(Self::load(&committed.manager).await?.is_some());
             assert!(!Self::activation_keys().await?.is_empty());
             assert_eq!(extension_state::read_all().await?, authoritative_before);
             Self::authoritative_events_exclude_candidates().await?;
             assert!(Self::commit(Self::candidate()?).await.is_err());
+            Ok(())
+        }
+
+        async fn readback_distinguishes_absence_and_corruption() -> Result<(), NookError> {
+            indexed_db::clear_vault_db().await?;
+            let fixture = Self::candidate()?;
+            assert!(Self::load(&fixture.manager).await?.is_none());
+            let provider_key = EncodedCandidate::new(&fixture.candidate)
+                .map_err(|failure| NookError::Database(failure.to_string()))?
+                .gate
+                .provider_payload_key;
+            let committed = Self::commit(fixture).await?;
+            Self::delete_key(&provider_key).await?;
+            assert!(
+                PairingActivationStore::load(PairingActivationLoad {
+                    manager: &committed.manager,
+                })
+                .await
+                .is_err()
+            );
             Ok(())
         }
 
@@ -577,5 +991,10 @@ mod browser_tests {
     #[wasm_bindgen_test]
     async fn indexed_db_observation_failure_aborts_payloads_and_gate() -> Result<(), NookError> {
         BrowserStorageFixture::observation_failure_aborts_payloads_and_gate().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn indexed_db_readback_distinguishes_absence_and_corruption() -> Result<(), NookError> {
+        BrowserStorageFixture::readback_distinguishes_absence_and_corruption().await
     }
 }

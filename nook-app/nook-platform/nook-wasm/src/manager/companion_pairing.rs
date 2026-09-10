@@ -9,8 +9,9 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 mod activation;
 pub use activation::{
-    NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateOutcome,
-    NookCompanionPairingCandidateOutcomeState, NookPreparedCompanionPairingActivation,
+    NookCompanionPairingCandidateCommitOutcome, NookCompanionPairingCandidateCommitOutcomeState,
+    NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateLoadOutcome,
+    NookCompanionPairingCandidateLoadOutcomeState, NookPreparedCompanionPairingActivation,
     NookStoredCompanionPairingActivationCandidate,
 };
 
