@@ -5,6 +5,7 @@
 )]
 //! Selection of the initiating local identity and surviving protected keys.
 use crate::storage::identity_record::IdentityDirectoryWrite;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{device_access, identity_record, indexed_db};
 use crate::{IdbPutStringRequest, NookDatabase, NookError, ReadStringPreferringRequest};
 use crate::{
@@ -51,16 +52,17 @@ impl RecoveryAccessProfile<'_> {
 impl RecoveryPlanning<'_> {
     async fn legacy_app_id(&self) -> Option<AppId> {
         let store = self.store;
-        NookDatabase::read_string_preferring(ReadStringPreferringRequest {
+        match NookDatabase::read_string_preferring(ReadStringPreferringRequest {
             store: store,
             preferred_key: indexed_db::APP_ID_KEY,
             legacy_key: indexed_db::DEVICE_ID_KEY,
             label: "Identity reset app id",
         })
         .await
-        .ok()
-        .flatten()
-        .and_then(|raw| AppId::parse(&raw).ok())
+        {
+            Ok(StoredStringRecord::Stored(raw)) => AppId::parse(&raw).ok(),
+            Ok(StoredStringRecord::MissingKey) | Err(_) => None,
+        }
     }
     async fn full(self, input: FullRecovery) -> Result<RecoveryState, NookError> {
         let FullRecovery {

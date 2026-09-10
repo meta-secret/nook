@@ -337,7 +337,7 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn read_string_preferring(
         request: ReadStringPreferringRequest<'_>,
-    ) -> Result<Option<String>, NookError> {
+    ) -> Result<StoredStringRecord, NookError> {
         let ReadStringPreferringRequest {
             store,
             preferred_key,
@@ -355,10 +355,10 @@ impl NookDatabase {
                 let decoded: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
                     NookError::IndexedDb(format!("{label} decode error: {error:?}"))
                 })?;
-                return Ok(Some(decoded));
+                return Ok(StoredStringRecord::Stored(decoded));
             }
         }
-        Ok(None)
+        Ok(StoredStringRecord::MissingKey)
     }
 }
 
@@ -559,7 +559,7 @@ mod sentinel_genesis_storage_tests {
                 label: "fixture"
             })
             .await?,
-            Some("new-value".to_owned())
+            StoredStringRecord::Stored("new-value".to_owned())
         );
         transaction
             .done()

@@ -1,3 +1,4 @@
+use super::StoredStringRecord;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::identity_record;
 use crate::{IdbPutStringRequest, NookDatabase, ReadStringPreferringRequest};
@@ -144,14 +145,17 @@ impl NookDatabase {
             label: "App id",
         })
         .await?;
-        let Some(raw) = wrapped else {
+        let StoredStringRecord::Stored(raw) = wrapped else {
             return Ok(None);
         };
-        let app_id = app_id
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| {
-                NookError::IndexedDb("Protected app key is missing app_id.".to_owned())
-            })?;
+        let app_id = match app_id {
+            StoredStringRecord::Stored(value) if !value.trim().is_empty() => value,
+            StoredStringRecord::Stored(_) | StoredStringRecord::MissingKey => {
+                return Err(NookError::IndexedDb(
+                    "Protected app key is missing app_id.".to_owned(),
+                ));
+            }
+        };
         let wrapped = WrappedDeviceIdentity::parse(&raw)?;
         Ok(Some((app_id, wrapped)))
     }

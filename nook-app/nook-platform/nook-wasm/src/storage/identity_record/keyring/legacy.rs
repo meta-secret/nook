@@ -3,6 +3,7 @@
 use crate::KeyringDbKeyringDeleteKey;
 use crate::KeyringDbValidateKeyringDirectoryBinding;
 use crate::KeyringDbWriteKeyring;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{NookDatabase, ReadStringPreferringRequest};
 use nook_core::WrappedDeviceIdentity;
 use nook_core::{AppId, LocalIdentityKeyring, LocalIdentityKeyringEntry, WrappedAppKeyReplacement};
@@ -67,8 +68,8 @@ impl NookDatabase {
             label: "Legacy app id",
         })
         .await?;
-        let Some(wrapped) = wrapped else {
-            if app_id.is_some() {
+        let StoredStringRecord::Stored(wrapped) = wrapped else {
+            if let StoredStringRecord::Stored(_) = app_id {
                 return Err(NookError::IndexedDb(
                     "Legacy app id exists without a wrapped app key".to_owned(),
                 ));
@@ -78,8 +79,11 @@ impl NookDatabase {
                 state: LegacyKeyMigrationState::Unchanged,
             });
         };
-        let app_id = AppId::parse(app_id.as_deref().unwrap_or_default())
-            .map_err(|error| NookError::Database(error.to_string()))?;
+        let app_id = match app_id {
+            StoredStringRecord::Stored(raw) => AppId::parse(&raw),
+            StoredStringRecord::MissingKey => AppId::parse(""),
+        }
+        .map_err(|error| NookError::Database(error.to_string()))?;
         let wrapped = WrappedDeviceIdentity::parse(&wrapped)?;
 
         if let Some(existing) = keyring
