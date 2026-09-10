@@ -1,5 +1,6 @@
 use gloo_storage::{SessionStorage, Storage};
 
+#[derive(Clone, Copy)]
 pub(crate) enum VaultSessionLock {
     Locked,
     Unlocked,

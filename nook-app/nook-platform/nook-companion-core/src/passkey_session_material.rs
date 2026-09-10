@@ -33,26 +33,28 @@ pub struct PasskeyUnlockMaterial {
     pub credential_id: PasskeyByteMaterial,
     pub prf_input: PasskeyByteMaterial,
 }
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Tsify)]
 #[serde(untagged)]
 pub enum PasskeySetupAvailability {
     Available(PasskeySetupMaterial),
     #[default]
     Unavailable,
 }
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Tsify)]
 #[serde(untagged)]
 pub enum PasskeyUnlockAvailability {
     Available(PasskeyUnlockMaterial),
     #[default]
     Unavailable,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
 pub struct PasskeySetupMaterialResponse {
     #[serde(default)]
     pub setup: PasskeySetupAvailability,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
 pub struct PasskeyUnlockMaterialResponse {
     #[serde(default)]
     pub material: PasskeyUnlockAvailability,

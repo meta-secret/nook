@@ -24,14 +24,14 @@ use super::{
 };
 use nook_core::DeviceProtectionStatus;
 
-/// Named values required by NookDatabase::save_wrapped_device_identity.
+/// Named values required by `NookDatabase::save_wrapped_device_identity`.
 #[allow(dead_code)]
 pub(crate) struct SaveWrappedDeviceIdentityRequest<'a> {
     pub(crate) device_id: &'a str,
     pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
 }
 
-/// Named values required by NookDatabase::put_wrapped_device_identity.
+/// Named values required by `NookDatabase::put_wrapped_device_identity`.
 #[allow(dead_code)]
 pub(crate) struct PutWrappedDeviceIdentityRequest<'a> {
     pub(crate) store: &'a rexie::Store,

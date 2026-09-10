@@ -20,6 +20,7 @@ use super::checked_event_write::CheckedEventWrite;
 use super::github::{GitHubFileWrite, GitHubRootDiscovery, GitHubVaultDiscovery};
 use super::remote_event::RemoteEventRead;
 use crate::NookError;
+#[derive(Clone, Copy)]
 struct RepositoryResponse<'a> {
     status: StatusCode,
     text: &'a str,

@@ -311,7 +311,7 @@ impl LocalFolderHandles {
     pub(crate) async fn remove(&self, handle_id: String) -> Result<(), NookError> {
         if handle_id.trim().is_empty() {
             return Ok(());
-        };
+        }
         self.memory.borrow_mut().remove(&handle_id);
 
         let rexie = Self::open_database().await?;

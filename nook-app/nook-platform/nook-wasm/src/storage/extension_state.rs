@@ -8,13 +8,14 @@ use nook_companion_core::{ExtensionPairingRecord, ExtensionPairingState};
 use rexie::{ObjectStore, Rexie, TransactionMode};
 
 use std::collections::HashMap;
+use std::ops::Deref;
 
 use crate::NookError;
 
 pub(crate) struct ExtensionPairingDatabase {
     connection: Rexie,
 }
-impl std::ops::Deref for ExtensionPairingDatabase {
+impl Deref for ExtensionPairingDatabase {
     type Target = Rexie;
     fn deref(&self) -> &Rexie {
         &self.connection
@@ -22,7 +23,7 @@ impl std::ops::Deref for ExtensionPairingDatabase {
 }
 const DB_NAME: &str = "nook_extension";
 const STORE: &str = "pairing";
-/// Named values required by ExtensionPairingDatabase::reconcile.
+/// Named values required by `ExtensionPairingDatabase::reconcile`.
 pub(crate) struct ExtensionPairingReconciliation<'a> {
     pub(crate) state: &'a ExtensionPairingState,
     pub(crate) removed_keys: &'a [String],

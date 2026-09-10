@@ -22,9 +22,6 @@ const actionMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
-  clearLoginCredentials: actionMocks.clearLoginCredentials,
-  fillGeneratedPassword: actionMocks.fillGeneratedPassword,
-  fillOneTimeCode: actionMocks.fillOneTimeCode,
   FormSubmissionResult: {
     NotObserved: 'not-observed',
     Submitted: 'submitted',
@@ -32,6 +29,11 @@ vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
   },
   PasskeyControlLookupKind: { Absent: 'absent', Found: 'found' },
   PasswordFormQueryKind: { Scoped: 'scoped' },
+  passwordFormCredentialInteraction: {
+    clearLoginCredentials: actionMocks.clearLoginCredentials,
+    fillGeneratedPassword: actionMocks.fillGeneratedPassword,
+    fillOneTimeCode: actionMocks.fillOneTimeCode,
+  },
   passwordFormInteraction: {
     fillLoginCredentials: actionMocks.fillLoginCredentials,
     findWorkflowPasskeyControl: actionMocks.findWorkflowPasskeyControl,
@@ -155,7 +157,11 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
     credentialActuationInFlight: false,
     workflowAdmission: () => ({ kind: 'unassigned' }),
     controlDisposition: (control: HTMLButtonElement) =>
-      control.isConnected ? 'active' : 'detached',
+      widgetState.dismissed
+        ? 'dismissed'
+        : control.isConnected
+          ? 'active'
+          : 'detached',
   },
 }))
 import { widgetState } from '../../../../nook-web-extension/src/content/autofill/state'

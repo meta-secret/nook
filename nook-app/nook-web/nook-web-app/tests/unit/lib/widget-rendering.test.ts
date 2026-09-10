@@ -164,11 +164,10 @@ vi.mock(
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/workflow-ui',
-  () => ({
-    workflowCopy: () => ({
-      titleKey: 'widgetLoginTitle',
-      descriptionKey: 'widgetLoginDescription',
-    }),
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('../../../../nook-web-extension/src/content/autofill/workflow-ui')
+    >()),
     workflowUi: {
       removeWidget: vi.fn(),
       translatedMessage: (key: string) => key,

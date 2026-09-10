@@ -37,7 +37,7 @@ pub(crate) struct IndexedDbUpdate<'a, F> {
     pub(crate) guard: StringUpdateGuard<'a>,
     pub(crate) update: F,
 }
-/// Named values required by NookDatabase::guarded_keyring_entry.
+/// Named values required by `NookDatabase::guarded_keyring_entry`.
 pub(crate) struct GuardedKeyringEntryRequest<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) guard: StringUpdateGuard<'a>,

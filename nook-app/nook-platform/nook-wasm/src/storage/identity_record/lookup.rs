@@ -1,5 +1,9 @@
 //! Persisted local identity protection selection.
-use super::*;
+use super::{
+    AppId, IdentityDbLocalKeyringEntryForAppIdFromStore, IdentityDirectory, IdentitySelection,
+    KeyringDbEntryForAppIdFromStore, KeyringDbLoadKeyringForStore, LocalIdentityProtection,
+    NookDatabase, NookError, TransactionMode,
+};
 use nook_core::{IdentityRecord, LocalIdentityKeyringEntry};
 
 enum ProjectionAppSelection {

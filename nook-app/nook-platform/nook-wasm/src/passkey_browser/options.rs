@@ -32,7 +32,8 @@ use web_sys::{CredentialCreationOptions, CredentialRequestOptions};
 
 const CHALLENGE_LEN: usize = 32;
 
-/// Named values required by BrowserPasskeyClient::creation_options.
+/// Named values required by `BrowserPasskeyClient::creation_options`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyCreationOptions<'a> {
     pub(crate) rp_id: &'a str,
     pub(crate) rp_name: &'a str,
@@ -41,20 +42,23 @@ pub(crate) struct BrowserPasskeyCreationOptions<'a> {
     pub(crate) prf_input: &'a [u8],
 }
 
-/// Named values required by BrowserPasskeyClient::request_options.
+/// Named values required by `BrowserPasskeyClient::request_options`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyRequestOptions<'a> {
     pub(crate) rp_id: &'a str,
     pub(crate) credential_id: &'a [u8],
     pub(crate) prf_input: &'a [u8],
 }
 
-/// Named values required by BrowserPasskeyClient::set_uint8_array_field.
+/// Named values required by `BrowserPasskeyClient::set_uint8_array_field`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeySetUint8ArrayField<'a> {
     pub(crate) target: &'a js_sys::Object,
     pub(crate) field: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::creation_options_struct.
+/// Named values required by `BrowserPasskeyClient::creation_options_struct`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyCreationOptionsStruct<'a> {
     pub(crate) rp_id: &'a str,
     pub(crate) rp_name: &'a str,
@@ -63,20 +67,23 @@ pub(crate) struct BrowserPasskeyCreationOptionsStruct<'a> {
     pub(crate) prf_input: &'a [u8],
 }
 
-/// Named values required by BrowserPasskeyClient::passkey_label_with_passkey_handle.
+/// Named values required by `BrowserPasskeyClient::passkey_label_with_passkey_handle`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyPasskeyLabelWithPasskeyHandle<'a> {
     pub(crate) passkey_label: &'a str,
     pub(crate) user_handle: &'a [u8],
 }
 
-/// Named values required by BrowserPasskeyClient::request_options_struct.
+/// Named values required by `BrowserPasskeyClient::request_options_struct`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyRequestOptionsStruct<'a> {
     pub(crate) rp_id: &'a str,
     pub(crate) credential_id: &'a [u8],
     pub(crate) prf_input: &'a [u8],
 }
 
-/// Named values required by BrowserPasskeyClient::recovery_options_struct.
+/// Named values required by `BrowserPasskeyClient::recovery_options_struct`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyRecoveryOptionsStruct<'a> {
     pub(crate) rp_id: &'a str,
     pub(crate) prf_input: &'a [u8],
@@ -90,7 +97,7 @@ enum RelyingPartySelection {
     BrowserOrigin,
     Explicit(String),
 }
-/// Named values required by BrowserPasskeyClient::prf_extension.
+/// Named values required by `BrowserPasskeyClient::prf_extension`.
 pub(crate) struct BrowserPasskeyPrfExtension<'a> {
     pub(crate) prf_input: &'a [u8],
     pub(crate) credential_id: PrfCredentialSelection<'a>,

@@ -1,5 +1,5 @@
 //! Recovery directory evidence and fail-closed full-reset selection.
-use super::*;
+use super::{RecoveryPlanning, identity_record};
 use crate::{NookDatabase, NookError};
 use nook_core::IdentityDirectory;
 pub(super) struct RecoveryDirectory {

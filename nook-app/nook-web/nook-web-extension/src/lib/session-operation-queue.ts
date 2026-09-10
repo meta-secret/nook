@@ -232,7 +232,6 @@ export class SessionOperationQueue {
   enqueue<T>(
     request: EnqueueSessionOperationArgs<T>,
   ): Promise<Result<T, SessionOperationFailure>> {
-    // eslint-disable-next-line max-params -- Promise owns its executor signature.
     return new Promise<Result<T, SessionOperationFailure>>((resolve) => {
       const entry = new QueuedSessionOperation({
         sequence: this.sequence++,
@@ -246,8 +245,8 @@ export class SessionOperationQueue {
       }
       this.entries.push(entry)
       entry.scheduleExpiry()
-      // eslint-disable-next-line max-params -- Array.sort owns the comparator signature.
       this.entries.sort(
+        // eslint-disable-next-line max-params -- Array.sort owns the comparator signature.
         (left, right) =>
           priorityOrder[left.priority] - priorityOrder[right.priority] ||
           left.sequence - right.sequence,

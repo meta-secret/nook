@@ -94,6 +94,10 @@ impl IdentityHandoffCommit<'_> {
         Ok(())
     }
     /// Commit identity membership and its matching event signer in one transaction.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the transaction commit keeps its atomic write and rollback sequence together"
+    )]
     pub(crate) async fn commit(self) -> Result<IdentityHandoffCommitResult, NookError> {
         let input = self;
         let rexie = NookDatabase::open_nook_database().await?;

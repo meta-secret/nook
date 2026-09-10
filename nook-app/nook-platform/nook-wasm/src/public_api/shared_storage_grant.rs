@@ -320,7 +320,7 @@ mod browser_tests {
         Ok(())
     }
 }
-/// Named values required by DriveStorageClient::grant_existing_drive_folder.
+/// Named values required by `DriveStorageClient::grant_existing_drive_folder`.
 pub(crate) struct ExistingDriveFolderGrant<'a> {
     pub(crate) access_token: &'a str,
     pub(crate) instructions_key: String,
@@ -328,7 +328,7 @@ pub(crate) struct ExistingDriveFolderGrant<'a> {
     pub(crate) target: nook_core::SharedStorageGrantTarget,
 }
 
-/// Named values required by DriveStorageClient::create_and_grant_drive_folder.
+/// Named values required by `DriveStorageClient::create_and_grant_drive_folder`.
 pub(crate) struct NewDriveFolderGrant<'a> {
     pub(crate) access_token: &'a str,
     pub(crate) folder_name: &'a str,

@@ -302,6 +302,10 @@ impl NookVaultManager {
         .await
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "genesis bootstrap keeps the atomic event-log persistence sequence together"
+    )]
     async fn bootstrap_event_log_genesis_inner(
         &mut self,
         input: GenesisBootstrap<'_>,

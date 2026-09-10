@@ -1,5 +1,8 @@
 //! Identity transition admission before protected publication.
-use super::*;
+use super::{
+    KeyringDbKeyringReadString, NookDatabase, NookError, PENDING_SIMPLE_GENESIS_KEY, Store,
+    indexed_db, recovery,
+};
 use crate::storage::indexed_db::StoredStringRecord;
 pub(in super::super) struct IdentityTransitionAdmission<'a> {
     pub(in super::super) store: &'a Store,

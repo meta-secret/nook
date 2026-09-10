@@ -21,6 +21,7 @@ use crate::vault_api_local::has_local_vault;
 use js_sys::Date;
 #[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::ActiveVaultScope;
+use nook_core::ProviderCredentialRejection;
 use nook_core::{
     ActiveProviderLoginSetup, AppId, DevicePublicKey, ProviderSaveOutcome, ProviderSaveSetup,
     VaultSyncAction,
@@ -281,7 +282,7 @@ impl NookVaultManager {
     let public_key = DevicePublicKey::parse(device_public_key)?;
     snapshot = snapshot
         .seal_credentials_for(&public_key)
-        .map_err(|rejection| rejection.into_cause())?;
+        .map_err(ProviderCredentialRejection::into_cause)?;
     Ok(snapshot)
 }
 

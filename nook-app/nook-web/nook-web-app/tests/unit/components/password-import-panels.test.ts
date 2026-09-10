@@ -42,14 +42,15 @@ const vault = {
 } as unknown as VaultState
 
 function importResult(): SecretOperationResult<NookImportResult> {
-  return ok(
-    Object.assign(Object.create(NookImportResult.prototype), {
-      imported: 2,
-      skippedUnsupported: 1,
-      skippedDuplicates: 3,
-      free: vi.fn(),
-    }),
-  )
+  const result = Object.create(NookImportResult.prototype) as NookImportResult
+  const descriptors: PropertyDescriptorMap = {
+    imported: { value: 2 },
+    skippedUnsupported: { value: 1 },
+    skippedDuplicates: { value: 3 },
+    free: { value: vi.fn() },
+  }
+  Object.defineProperties(result, descriptors)
+  return ok(result)
 }
 
 describe('KeePassXC import panel', () => {

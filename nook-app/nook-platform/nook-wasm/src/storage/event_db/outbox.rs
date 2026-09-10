@@ -1,5 +1,8 @@
 //! Provider outbox persistence and its event-projection integration.
-use super::*;
+use super::{
+    EventDbAppendOutboxIndex, EventDbOutboxKey, EventDbQueueOutboxEntry, EventDbRemoveOutboxEntry,
+    EventDbStoreGet, EventDbStorePut, NookDatabase, NookError, STORE_OUTBOX, StoredStringRecord,
+};
 
 impl NookDatabase {
     fn outbox_key(request: EventDbOutboxKey<'_>) -> String {

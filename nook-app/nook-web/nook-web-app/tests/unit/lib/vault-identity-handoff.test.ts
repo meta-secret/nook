@@ -1,4 +1,11 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import {
+  afterEach,
+  describe,
+  expect,
+  test,
+  vi,
+  type MockInstance,
+} from 'vitest'
 import { err, ok, type Result } from 'neverthrow'
 import {
   DeviceProtectionStatus,
@@ -19,9 +26,11 @@ import { TranslationMessage } from '$lib/vault/translation'
 /** Only the native boundary is doubled; browser lifecycle and handle ownership are real. */
 class IdentityHandoffFixture {
   readonly manager = new NookVaultManager()
-  readonly state = new VaultState()
-  readonly lifecycle = new VaultInitializationActions(this.state)
-  readonly clearUnlockedSession = vi.spyOn(this.state, 'clearUnlockedSession')
+  readonly state: VaultState
+  readonly lifecycle: VaultInitializationActions
+  readonly clearUnlockedSession: MockInstance<
+    VaultState['clearUnlockedSession']
+  >
   readonly rollback = vi.fn((_manager: NookVaultManager): void => {})
   readonly confirm = vi.fn((_manager: NookVaultManager): void => {})
   readonly requiresConnect = vi.fn((_manager: NookVaultManager) => false)
@@ -46,6 +55,17 @@ class IdentityHandoffFixture {
   private storageAdmission: Result<void, VaultStorageFailure> = ok()
 
   constructor() {
+    const browserWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+    Reflect.deleteProperty(globalThis, 'window')
+    try {
+      this.state = new VaultState()
+    } finally {
+      if (browserWindow) {
+        Object.defineProperty(globalThis, 'window', browserWindow)
+      }
+    }
+    this.lifecycle = new VaultInitializationActions(this.state)
+    this.clearUnlockedSession = vi.spyOn(this.state, 'clearUnlockedSession')
     this.state.openManager(this.manager)
     this.state.deviceProtectionStatus = DeviceProtectionStatus.Passkey
     this.state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey

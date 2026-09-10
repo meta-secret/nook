@@ -1,7 +1,10 @@
 //! Atomic identity-directory and pending-genesis migration.
 use super::genesis_flow::PendingSimpleGenesisFlow;
 use super::staged_genesis::StagedSimpleGenesisIdentity;
-use super::*;
+use super::{
+    IDENTITY_DIRECTORY_KEY, IdentityMigrationSelection, LEGACY_IDENTITY_RECORD_KEY,
+    PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, TransactionMode,
+};
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::{
@@ -57,6 +60,10 @@ impl PendingGenesisMigrationRejection {
     }
 }
 impl PendingSimpleGenesis {
+    #[expect(
+        clippy::result_large_err,
+        reason = "the rejection retains pending genesis state so the caller can fail without losing secrets"
+    )]
     pub(super) fn migrate_directories(
         mut self,
     ) -> Result<MigratedPendingGenesis, PendingGenesisMigrationRejection> {

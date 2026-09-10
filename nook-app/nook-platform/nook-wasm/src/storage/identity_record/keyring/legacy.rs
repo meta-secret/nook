@@ -10,7 +10,7 @@ use nook_core::{AppId, LocalIdentityKeyring, LocalIdentityKeyringEntry, WrappedA
 
 use crate::{NookError, storage::indexed_db};
 
-/// Named values required by NookDatabase::migrate_legacy_active_key.
+/// Named values required by `NookDatabase::migrate_legacy_active_key`.
 pub(crate) struct LegacyIdentityKeyMigration<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) directory: &'a nook_core::IdentityDirectory,
@@ -46,6 +46,10 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "legacy-key migration keeps the single transactional migration sequence together"
+    )]
     pub(super) async fn migrate_legacy_active_key(
         request: LegacyIdentityKeyMigration<'_>,
     ) -> Result<LegacyKeyMigration, NookError> {

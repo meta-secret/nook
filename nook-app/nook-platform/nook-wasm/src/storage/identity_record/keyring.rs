@@ -32,39 +32,40 @@ pub(crate) struct ProtectedLocalIdentitySave {
     pub(crate) signing_seed: String,
 }
 
-/// Named values required by NookDatabase::keyring_read_string.
+/// Named values required by `NookDatabase::keyring_read_string`.
 pub(crate) struct KeyringDbKeyringReadString<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) key: &'a str,
     pub(crate) context: &'a str,
 }
 
-/// Named values required by NookDatabase::keyring_delete_key.
+/// Named values required by `NookDatabase::keyring_delete_key`.
 pub(crate) struct KeyringDbKeyringDeleteKey<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) key: &'a str,
     pub(crate) context: &'a str,
 }
 
-/// Named values required by NookDatabase::validate_keyring_directory_binding.
+/// Named values required by `NookDatabase::validate_keyring_directory_binding`.
+#[derive(Clone, Copy)]
 pub(crate) struct KeyringDbValidateKeyringDirectoryBinding<'a> {
     pub(crate) keyring: &'a nook_core::LocalIdentityKeyring,
     pub(crate) directory: &'a nook_core::IdentityDirectory,
 }
 
-/// Named values required by NookDatabase::write_keyring.
+/// Named values required by `NookDatabase::write_keyring`.
 pub(crate) struct KeyringDbWriteKeyring<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) keyring: &'a nook_core::LocalIdentityKeyring,
 }
 
-/// Named values required by NookDatabase::load_keyring_for_store.
+/// Named values required by `NookDatabase::load_keyring_for_store`.
 pub(crate) struct KeyringDbLoadKeyringForStore<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) directory: &'a nook_core::IdentityDirectory,
 }
 
-/// Named values required by NookDatabase::entry_for_app_id_from_store.
+/// Named values required by `NookDatabase::entry_for_app_id_from_store`.
 pub(crate) struct KeyringDbEntryForAppIdFromStore<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) app_id: &'a nook_core::AppId,

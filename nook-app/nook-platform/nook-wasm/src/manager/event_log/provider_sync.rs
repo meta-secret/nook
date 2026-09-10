@@ -199,7 +199,7 @@ impl NookVaultManager {
             if let RemoteEventRead::Retrieved(bytes) =
                 self.read_current_provider_event(&event_id).await?
             {
-                events.push((event_id, bytes.into()));
+                events.push((event_id, bytes));
             }
         }
         Ok(events)

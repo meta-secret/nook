@@ -50,44 +50,44 @@ pub(crate) use handoff::{
 pub(crate) use keyring::LOCAL_IDENTITY_KEYRING_KEY;
 pub(crate) use keyring::{LocalIdentitySigner, ProtectedLocalIdentitySave};
 
-/// Named values required by NookDatabase::local_keyring_entry_for_app_id_from_store.
+/// Named values required by `NookDatabase::local_keyring_entry_for_app_id_from_store`.
 pub(crate) struct IdentityDbLocalKeyringEntryForAppIdFromStore<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) app_id: &'a AppId,
 }
 
-/// Named values required by NookDatabase::persist_pending_genesis.
+/// Named values required by `NookDatabase::persist_pending_genesis`.
 pub(crate) struct IdentityDbPersistPendingGenesis<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) pending: &'a PendingSimpleGenesis,
 }
 
-/// Named values required by NookDatabase::migrate_directory_in_store.
+/// Named values required by `NookDatabase::migrate_directory_in_store`.
 pub(crate) struct IdentityDbMigrateDirectoryInStore<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) directory: IdentityDirectory,
 }
 
-/// Named values required by NookDatabase::migrate_directory.
+/// Named values required by `NookDatabase::migrate_directory`.
 pub(crate) struct IdentityDbMigrateDirectory<'a> {
     pub(crate) directory: IdentityDirectory,
     pub(crate) selection: IdentityMigrationSelection<'a>,
 }
 
-/// Named values required by NookDatabase::write_identity_directory.
+/// Named values required by `NookDatabase::write_identity_directory`.
 pub(crate) struct IdentityDbWriteIdentityDirectory<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) directory: &'a IdentityDirectory,
 }
 
-/// Named values required by NookDatabase::save_protected_local_identity.
+/// Named values required by `NookDatabase::save_protected_local_identity`.
 pub(crate) struct IdentityDbSaveProtectedLocalIdentity<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
     pub(crate) label: &'a str,
 }
 
-/// Named values required by NookDatabase::save_new_protected_local_identity.
+/// Named values required by `NookDatabase::save_new_protected_local_identity`.
 pub(crate) struct IdentityDbSaveNewProtectedLocalIdentity<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
@@ -95,20 +95,20 @@ pub(crate) struct IdentityDbSaveNewProtectedLocalIdentity<'a> {
     pub(crate) label: &'a str,
 }
 
-/// Named values required by NookDatabase::set_identity_member_signing_public_key.
+/// Named values required by `NookDatabase::set_identity_member_signing_public_key`.
 pub(crate) struct IdentityDbSetIdentityMemberSigningPublicKey<'a> {
     pub(crate) identity_id: &'a nook_core::IdentityId,
     pub(crate) app_id: &'a AppId,
     pub(crate) signing_public_key: &'a nook_core::DeviceSigningPublicKey,
 }
 
-/// Named values required by NookDatabase::ensure_local_identity_for_app_key.
+/// Named values required by `NookDatabase::ensure_local_identity_for_app_key`.
 pub(crate) struct IdentityDbEnsureLocalIdentityForAppKey<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) label: &'a str,
 }
 
-/// Named values required by NookDatabase::ensure_local_identity_in_directory.
+/// Named values required by `NookDatabase::ensure_local_identity_in_directory`.
 pub(crate) struct IdentityDbEnsureLocalIdentityInDirectory<'a> {
     pub(crate) directory: IdentityDirectory,
     pub(crate) app_key: &'a nook_core::AppKey,
@@ -119,14 +119,14 @@ pub(crate) struct IdentityDbEnsureLocalIdentityInDirectory<'a> {
 mod directory_write;
 pub(crate) use directory_write::IdentityDirectoryWrite;
 
-/// Named values required by NookDatabase::generate_vault_dek_for_identity.
+/// Named values required by `NookDatabase::generate_vault_dek_for_identity`.
 pub(crate) struct IdentityDbGenerateVaultDekForIdentity<'a> {
     pub(crate) identity_id: &'a nook_core::IdentityId,
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) store_id: nook_core::StoreId,
 }
 
-/// Named values required by NookDatabase::validate_vault_identity_enrollment.
+/// Named values required by `NookDatabase::validate_vault_identity_enrollment`.
 pub(crate) struct IdentityDbValidateVaultIdentityEnrollment<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) store_id: &'a nook_core::StoreId,

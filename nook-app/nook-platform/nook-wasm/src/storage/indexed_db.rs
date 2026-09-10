@@ -102,13 +102,14 @@ pub struct VaultRegistry {
     pub vaults: Vec<VaultRegistryEntry>,
 }
 
-/// Named values required by NookDatabase::secret_search_bucket_key.
+/// Named values required by `NookDatabase::secret_search_bucket_key`.
+#[derive(Clone, Copy)]
 pub(crate) struct SecretSearchBucketKeyRequest<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) bucket: u8,
 }
 
-/// Named values required by NookDatabase::clear_vault_store.
+/// Named values required by `NookDatabase::clear_vault_store`.
 pub(crate) struct ClearVaultStoreRequest<'a> {
     pub(crate) rexie: &'a rexie::Rexie,
     pub(crate) store_name: &'a str,
@@ -121,20 +122,20 @@ pub(crate) enum StoredStringRecord {
     Stored(String),
 }
 
-/// Named values required by NookDatabase::read_string_record.
+/// Named values required by `NookDatabase::read_string_record`.
 pub(crate) struct ReadStringRecordRequest<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) key: &'a str,
     pub(crate) context: &'a str,
 }
 
-/// Named values required by NookDatabase::idb_put_string.
+/// Named values required by `NookDatabase::idb_put_string`.
 pub(crate) struct IdbPutStringRequest<'a> {
     pub(crate) key: &'a str,
     pub(crate) value: &'a str,
 }
 
-/// Named values required by NookDatabase::read_string_preferring.
+/// Named values required by `NookDatabase::read_string_preferring`.
 pub(crate) struct ReadStringPreferringRequest<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) preferred_key: &'a str,
@@ -715,13 +716,14 @@ mod sentinel_genesis_storage_tests {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(test, target_arch = "wasm32"))]
 pub(crate) use local_vault::UpsertRegistryEntryRequest;
 pub(crate) use local_vault::{
     ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SaveVaultBlobRequest,
     SecretSearchBucketMutation, SetLocalVaultLabelRequest,
 };
 
+#[cfg(any(test, target_arch = "wasm32"))]
 pub(crate) use device_identity::SaveWrappedDeviceIdentityRequest;
 
 pub(crate) use sentinel_storage::{

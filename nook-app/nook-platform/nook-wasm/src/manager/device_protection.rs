@@ -522,6 +522,10 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the exported ceremony keeps one atomic passkey setup and rollback path"
+    )]
     pub async fn setup_device_protection_with_passkey_mode(
         &mut self,
         rp_id: &str,

@@ -158,7 +158,8 @@ mod tests {
         ));
     }
 }
-/// Named values required by DriveStorageClient::drive_error.
+/// Named values required by `DriveStorageClient::drive_error`.
+#[derive(Clone, Copy)]
 pub(crate) struct DriveStorageClientDriveError<'a> {
     pub(crate) status: reqwest::StatusCode,
     pub(crate) body: &'a str,

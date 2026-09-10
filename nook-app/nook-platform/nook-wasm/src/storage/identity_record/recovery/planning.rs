@@ -122,6 +122,10 @@ impl RecoveryPlanning<'_> {
             clear_reconciliation: true,
         })
     }
+    #[expect(
+        clippy::too_many_lines,
+        reason = "recovery preparation keeps one ordered validation and persistence sequence"
+    )]
     pub(super) async fn prepare(self) -> Result<RecoveryState, NookError> {
         let store = self.store;
         let target = self.target;

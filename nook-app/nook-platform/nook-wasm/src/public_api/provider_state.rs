@@ -123,6 +123,10 @@ impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProvid
 
 #[wasm_bindgen]
 #[must_use]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "wasm-bindgen requires the exported configuration value to be owned"
+)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> nook_core::OAuthAccessToken {
     config.usable_access_token().into()
 }
@@ -266,7 +270,7 @@ impl NookStagedStorageArgs {
     #[wasm_bindgen(getter)]
     pub fn args(&self) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
         match &self.0 {
-            StagedStorageConnection::Ready(args) => Ok(args.clone().into()),
+            StagedStorageConnection::Ready(args) => Ok(args.clone()),
             StagedStorageConnection::Incomplete => {
                 Err(JsError::new("staged storage is incomplete"))
             }
@@ -318,7 +322,7 @@ impl NookGithubPatHint {
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn local_vault_storage_args() -> NookStorageConnectArgs {
-    StorageConnectArgs::local().into()
+    StorageConnectArgs::local()
 }
 
 #[wasm_bindgen]
@@ -326,7 +330,7 @@ impl NookGithubPatHint {
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authenticated_vault_storage_args(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-    Ok(provider.connection_args()?.into())
+    Ok(provider.connection_args()?)
 }
 
 #[wasm_bindgen]
@@ -337,7 +341,6 @@ impl NookGithubPatHint {
         repository: &nook_core::StoredGithubRepository::Repository(github_repo.to_owned()),
     })
     .project()
-    .into()
 }
 
 #[wasm_bindgen]
@@ -352,13 +355,12 @@ impl NookGithubPatHint {
         alternate_name: &nook_core::StoredOAuthRemoteFileName::Unresolved,
     })
     .project()
-    .into()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_local_storage_args() -> NookStorageConnectArgs {
-    DraftStorageConnection::Local.project().into()
+    DraftStorageConnection::Local.project()
 }
 
 /// Return a masked GitHub PAT hint without exposing the full credential.

@@ -11,13 +11,14 @@ pub(crate) enum PasskeyPrfEvaluation {
     NotEvaluated,
     Evaluated(Vec<u8>),
 }
-/// Named values required by BrowserPasskeyClient::prf_output.
+/// Named values required by `BrowserPasskeyClient::prf_output`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PasskeyPrfRequirement {
     Enabled,
     OutputOnly,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyPrfOutput<'a> {
     pub(crate) credential: &'a PublicKeyCredential,
     pub(crate) requirement: PasskeyPrfRequirement,

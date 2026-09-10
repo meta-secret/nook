@@ -140,21 +140,21 @@ pub enum ExtensionSessionStatus {
     },
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, Tsify)]
 #[serde(untagged)]
 enum SessionDeviceReport {
     Identity(ExtensionSessionDeviceWire),
     #[default]
     Unreported,
 }
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, Tsify)]
 #[serde(untagged)]
 enum SessionProtectionReport {
     Reported(ExtensionSessionDeviceProtectionStatusWire),
     #[default]
     Unreported,
 }
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, Tsify)]
 #[serde(untagged)]
 enum SessionFailureDiagnostic {
     Reported(String),
@@ -162,8 +162,9 @@ enum SessionFailureDiagnostic {
     Unreported,
 }
 /// Unknown browser responses are admitted before any success value is projected.
-#[derive(Deserialize)]
+#[derive(Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
 pub struct ExtensionSessionOperationResponseWire {
     ok: bool,
     #[serde(default)]

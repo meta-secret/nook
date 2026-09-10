@@ -1,5 +1,8 @@
 //! Durable outbox publication states.
-use super::*;
+use super::{
+    BTreeSet, EventDbRemoveOutboxEntry, EventId, EventStorageBytes, NookDatabase, NookError,
+    NookVaultManager,
+};
 
 pub(super) enum OutboxIndexScope {
     Unrestricted,

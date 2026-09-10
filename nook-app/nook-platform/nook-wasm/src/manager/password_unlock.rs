@@ -454,7 +454,7 @@ impl NookVaultManager {
         let records = nook_core::VaultFormatDocument::new(content).deserialize(format)?;
         let mut retained = Vec::with_capacity(records.len());
         for record in records {
-            if !matches!((&record).classify()?, nook_core::VaultMetaRecord::Join(..)) {
+            if !matches!(record.classify()?, nook_core::VaultMetaRecord::Join(..)) {
                 retained.push(record);
             }
         }

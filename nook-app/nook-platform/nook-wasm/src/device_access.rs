@@ -16,7 +16,7 @@ use display_text::NookDeviceAccessTextValue;
 pub use display_text::{NookDeviceAccessText, NookDeviceAccessTextKind};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(test, target_arch = "wasm32"))]
 use nook_core::MemberLabelState;
 use nook_core::{
     AppId, DeviceAccessCredentialKind, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment,

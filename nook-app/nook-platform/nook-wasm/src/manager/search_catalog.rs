@@ -4,6 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use super::session::SessionCatalogAvailability;
 use super::{
     NookError, NookVaultManager, SearchCatalogRestore, SearchCatalogState, Zeroize, wasm_bindgen,
 };
@@ -125,7 +126,7 @@ impl NookVaultManager {
         let store_id = self.vault.store_id.clone();
         if matches!(
             self.vault.catalog_availability(),
-            crate::manager::session::SessionCatalogAvailability::Restore
+            SessionCatalogAvailability::Restore
         ) {
             let crypto = self.vault.crypto.get()?;
             let restored = SearchCatalogRestore::load(&store_id, crypto).await;

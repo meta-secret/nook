@@ -6,7 +6,10 @@ use crate::ProviderDbReadRawSnapshotFromStore;
 #[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record;
 use crate::storage::identity_record::StoredIdentityProtection;
-use nook_core::{DeviceIdentity, NormalizedAuthSnapshot, ProviderCredentialStorageAdmission};
+use nook_core::{
+    DeviceIdentity, NormalizedAuthSnapshot, ProviderCredentialRejection,
+    ProviderCredentialStorageAdmission,
+};
 use rexie::TransactionMode;
 
 use super::{NookError, ProviderSnapshotStore, SCHEMA_KEY, STATE_KEY, STORE};
@@ -35,19 +38,22 @@ impl From<serde_json::Value> for ProviderSnapshotObservation {
         }
     }
 }
-/// Named values required by AuthProviderDatabase::projections_match.
+/// Named values required by `AuthProviderDatabase::projections_match`.
+#[derive(Clone, Copy)]
 pub(crate) struct ProviderDbProjectionsMatch<'a> {
     pub(crate) scoped: &'a ProviderSnapshotObservation,
     pub(crate) legacy: &'a ProviderSnapshotObservation,
 }
 
-/// Named values required by AuthProviderDatabase::require_compatible_legacy_snapshot.
+/// Named values required by `AuthProviderDatabase::require_compatible_legacy_snapshot`.
+#[derive(Clone, Copy)]
 pub(crate) struct ProviderDbRequireCompatibleLegacySnapshot<'a> {
     pub(crate) scoped: &'a ProviderSnapshotObservation,
     pub(crate) legacy: &'a ProviderSnapshotObservation,
 }
 
-/// Named values required by AuthProviderDatabase::legacy_snapshot_belongs_to_identity.
+/// Named values required by `AuthProviderDatabase::legacy_snapshot_belongs_to_identity`.
+#[derive(Clone, Copy)]
 pub(crate) struct ProviderDbLegacySnapshotBelongsToIdentity<'a> {
     pub(crate) identity: &'a DeviceIdentity,
     pub(crate) scoped: &'a ProviderSnapshotObservation,
@@ -195,10 +201,10 @@ impl AuthProviderDatabase {
             let mut snapshot = legacy.snapshot;
             snapshot = snapshot
                 .open_credentials(identity)
-                .map_err(|rejection| rejection.into_cause())?;
+                .map_err(ProviderCredentialRejection::into_cause)?;
             snapshot = snapshot
                 .seal_credentials(identity)
-                .map_err(|rejection| rejection.into_cause())?;
+                .map_err(ProviderCredentialRejection::into_cause)?;
             ProviderSnapshotStore {
                 store: &store,
                 state_key: &state_key,

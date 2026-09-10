@@ -44,7 +44,7 @@ impl NookVaultManager {
                         accounts.push(NookLoginAccount::from(LoginAccountProjection {
                             secret_id: id,
                             login,
-                        }))
+                        }));
                     }
                     mut other => other.zeroize_plaintext(),
                 },

@@ -8,11 +8,13 @@ vi.mock(
   '../../../../nook-web-extension/src/content/autofill/login-passkey-actions',
   () => ({
     RuntimeMessageDeliveryKind: { Unavailable: 'unavailable' },
-    sendAuthenticationOutcomeRuntimeMessage: vi.fn(),
-    sendLoginSaveActionRuntimeMessage: vi.fn(),
-    sendLoginSaveOfferRuntimeMessage: saveMocks.sendOffer,
-    sendLoginSavePendingRuntimeMessage: vi.fn(),
-    sendRuntimeMessageWithoutResponse: vi.fn(),
+    authenticationRuntimeTransport: {
+      sendAuthenticationOutcomeRuntimeMessage: vi.fn(),
+      sendLoginSaveActionRuntimeMessage: vi.fn(),
+      sendLoginSaveOfferRuntimeMessage: saveMocks.sendOffer,
+      sendLoginSavePendingRuntimeMessage: vi.fn(),
+      sendRuntimeMessageWithoutResponse: vi.fn(),
+    },
   }),
 )
 import { loginSaveInteraction } from '../../../../nook-web-extension/src/content/autofill/login-save'

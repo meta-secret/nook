@@ -1,3 +1,4 @@
+use crate::types::NookAppLocale;
 use crate::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch,
@@ -131,14 +132,14 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> crate::types::NookAppLocale {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> NookAppLocale {
     nook_core::SupportedAppLocale::resolve(tags.iter().map(String::as_str))
 }
 
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn supported_app_locale_code(
     locale: NookAppLocaleParse,
-) -> Result<crate::types::NookAppLocale, wasm_bindgen::JsError> {
+) -> Result<NookAppLocale, wasm_bindgen::JsError> {
     match locale {
         NookAppLocaleParse::English => Ok(nook_core::SupportedAppLocale::English),
         NookAppLocaleParse::Russian => Ok(nook_core::SupportedAppLocale::Russian),

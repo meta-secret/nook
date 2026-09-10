@@ -370,7 +370,7 @@ impl NookTotpCode {
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
         StagedRemoteConnection::OAuth(StagedOAuthConnection {
-            configuration: &StoredOAuthFileConfiguration::Configured((&oauth_file).clone()),
+            configuration: &StoredOAuthFileConfiguration::Configured(oauth_file.clone()),
             file_name: &StoredOAuthRemoteFileName::Unresolved,
         })
         .project()?,

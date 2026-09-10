@@ -57,7 +57,7 @@ impl BrowserErrorText {
     }
 }
 
-/// Browser capability admitted by secure-context and WebAuthn support checks.
+/// Browser capability admitted by secure-context and `WebAuthn` support checks.
 pub(crate) struct BrowserPasskeyClient {
     window: web_sys::Window,
 }
@@ -66,82 +66,91 @@ pub(crate) const PASSKEY_UNAVAILABLE: &str = "PASSKEY_UNAVAILABLE";
 pub(crate) const PASSKEY_CEREMONY_NOT_ALLOWED: &str = "PASSKEY_CEREMONY_NOT_ALLOWED";
 pub(crate) const DEFAULT_PASSKEY_LABEL: &str = "Nook device";
 
-/// Named values required by BrowserPasskeyClient::signal_current_user_details.
+/// Named values required by `BrowserPasskeyClient::signal_current_user_details`.
 pub(crate) struct BrowserPasskeySignalCurrentUserDetails<'a> {
     pub(crate) rp_id: &'a str,
     pub(crate) user_handle: &'a [u8],
     pub(crate) passkey_label: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::passkey_label_with_device_id.
+/// Named values required by `BrowserPasskeyClient::passkey_label_with_device_id`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyPasskeyLabelWithDeviceId<'a> {
     pub(crate) passkey_label: &'a str,
     pub(crate) device_id: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::credential_from_promise.
+/// Named values required by `BrowserPasskeyClient::credential_from_promise`.
 pub(crate) struct BrowserPasskeyCredentialFromPromise<'a> {
     pub(crate) method: &'a str,
     pub(crate) promise: js_sys::Promise,
 }
 
-/// Named values required by BrowserPasskeyClient::credential_ceremony_error.
+/// Named values required by `BrowserPasskeyClient::credential_ceremony_error`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyCredentialCeremonyError<'a> {
     pub(crate) method: &'a str,
     pub(crate) error: &'a js_sys::Object,
 }
 
-/// Named values required by BrowserPasskeyClient::credential_ceremony_error_message.
+/// Named values required by `BrowserPasskeyClient::credential_ceremony_error_message`.
 pub(crate) struct BrowserPasskeyCredentialCeremonyErrorMessage<'a> {
     pub(crate) method: &'a str,
     pub(crate) name: BrowserErrorDetail<'a>,
     pub(crate) message: BrowserErrorDetail<'a>,
 }
 
-/// Named values required by BrowserPasskeyClient::js_error_text.
+/// Named values required by `BrowserPasskeyClient::js_error_text`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyJsErrorText<'a> {
     pub(crate) error: &'a js_sys::Object,
     pub(crate) property: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::try_signal_current_user_details.
+/// Named values required by `BrowserPasskeyClient::try_signal_current_user_details`.
 pub(crate) struct BrowserPasskeyTrySignalCurrentUserDetails<'a> {
     pub(crate) rp_id: &'a str,
     pub(crate) user_handle: &'a [u8],
     pub(crate) passkey_label: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::bytes_from_buffer.
+/// Named values required by `BrowserPasskeyClient::bytes_from_buffer`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyBytesFromBuffer<'a> {
     pub(crate) value: &'a js_sys::ArrayBuffer,
     pub(crate) name: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::get_required_object.
+/// Named values required by `BrowserPasskeyClient::get_required_object`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyGetRequiredObject<'a> {
     pub(crate) target: &'a js_sys::Object,
     pub(crate) field: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::get_optional_object.
+/// Named values required by `BrowserPasskeyClient::get_optional_object`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyGetOptionalObject<'a> {
     pub(crate) target: &'a js_sys::Object,
     pub(crate) field: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::get_optional_array.
+/// Named values required by `BrowserPasskeyClient::get_optional_array`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyGetOptionalArray<'a> {
     pub(crate) target: &'a js_sys::Object,
     pub(crate) field: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::get_optional_buffer.
+/// Named values required by `BrowserPasskeyClient::get_optional_buffer`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyGetOptionalBuffer<'a> {
     pub(crate) target: &'a js_sys::Object,
     pub(crate) field: &'a str,
 }
 
-/// Named values required by BrowserPasskeyClient::get_optional_bool.
+/// Named values required by `BrowserPasskeyClient::get_optional_bool`.
+#[derive(Clone, Copy)]
 pub(crate) struct BrowserPasskeyGetOptionalBool<'a> {
     pub(crate) target: &'a js_sys::Object,
     pub(crate) field: &'a str,

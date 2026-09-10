@@ -26,76 +26,78 @@ const STORE_EVENTS: &str = "events";
 const STORE_PROJECTIONS: &str = "projections";
 const STORE_OUTBOX: &str = "outbox";
 
-/// Named values required by NookDatabase::event_key.
+/// Named values required by `NookDatabase::event_key`.
+#[derive(Clone, Copy)]
 pub(crate) struct EventDbEventKey<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) event_id: &'a str,
 }
 
-/// Named values required by NookDatabase::outbox_key.
+/// Named values required by `NookDatabase::outbox_key`.
+#[derive(Clone, Copy)]
 pub(crate) struct EventDbOutboxKey<'a> {
     pub(crate) provider_id: &'a str,
     pub(crate) event_id: &'a str,
 }
 
-/// Named values required by NookDatabase::store_get.
+/// Named values required by `NookDatabase::store_get`.
 pub(crate) struct EventDbStoreGet<'a> {
     pub(crate) store_name: &'a str,
     pub(crate) key: &'a str,
 }
 
-/// Named values required by NookDatabase::vault_put.
+/// Named values required by `NookDatabase::vault_put`.
 pub(crate) struct EventDbVaultPut<'a> {
     pub(crate) key: &'a str,
     pub(crate) value: &'a str,
 }
 
-/// Named values required by NookDatabase::store_put.
+/// Named values required by `NookDatabase::store_put`.
 pub(crate) struct EventDbStorePut<'a> {
     pub(crate) store_name: &'a str,
     pub(crate) key: &'a str,
     pub(crate) value: &'a str,
 }
 
-/// Named values required by NookDatabase::store_delete.
+/// Named values required by `NookDatabase::store_delete`.
 pub(crate) struct EventDbStoreDelete<'a> {
     pub(crate) store_name: &'a str,
     pub(crate) key: &'a str,
 }
 
-/// Named values required by NookDatabase::remove_event_fixture.
+/// Named values required by `NookDatabase::remove_event_fixture`.
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) struct EventDbRemoveEventFixture<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) event_id: &'a str,
 }
 
-/// Named values required by NookDatabase::save_heads.
+/// Named values required by `NookDatabase::save_heads`.
 pub(crate) struct EventDbSaveHeads<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) heads: &'a [String],
 }
 
-/// Named values required by NookDatabase::save_key_epoch.
+/// Named values required by `NookDatabase::save_key_epoch`.
 pub(crate) struct EventDbSaveKeyEpoch<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) epoch: &'a str,
 }
 
-/// Named values required by NookDatabase::load_local_event_store_from_store.
+/// Named values required by `NookDatabase::load_local_event_store_from_store`.
 pub(crate) struct EventDbLoadLocalEventStoreFromStore<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) store_id: &'a str,
 }
 
-/// Named values required by NookDatabase::save_event_bytes.
+/// Named values required by `NookDatabase::save_event_bytes`.
 pub(crate) struct EventDbSaveEventBytes<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) event_id: &'a str,
     pub(crate) bytes: &'a [u8],
 }
 
-/// Named values required by NookDatabase::save_event_bytes_to_store.
+/// Named values required by `NookDatabase::save_event_bytes_to_store`.
 pub(crate) struct EventDbSaveEventBytesToStore<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) store_id: &'a str,
@@ -103,20 +105,20 @@ pub(crate) struct EventDbSaveEventBytesToStore<'a> {
     pub(crate) bytes: &'a [u8],
 }
 
-/// Named values required by NookDatabase::queue_outbox_entry.
+/// Named values required by `NookDatabase::queue_outbox_entry`.
 pub(crate) struct EventDbQueueOutboxEntry<'a> {
     pub(crate) provider_id: &'a str,
     pub(crate) event_id: &'a str,
     pub(crate) bytes: &'a [u8],
 }
 
-/// Named values required by NookDatabase::append_outbox_index.
+/// Named values required by `NookDatabase::append_outbox_index`.
 pub(crate) struct EventDbAppendOutboxIndex<'a> {
     pub(crate) provider_id: &'a str,
     pub(crate) event_id: &'a str,
 }
 
-/// Named values required by NookDatabase::remove_outbox_entry.
+/// Named values required by `NookDatabase::remove_outbox_entry`.
 pub(crate) struct EventDbRemoveOutboxEntry<'a> {
     pub(crate) provider_id: &'a str,
     pub(crate) event_id: &'a str,

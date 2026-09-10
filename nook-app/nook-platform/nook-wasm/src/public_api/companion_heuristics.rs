@@ -93,19 +93,19 @@ impl NookLoginContextObservation {
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
-    (&observation.inner).has_login_context()
+    observation.inner.has_login_context()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
-    (&field.inner).looks_like_username_field()
+    field.inner.looks_like_username_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
-    (&field.inner).looks_like_one_time_code_field()
+    field.inner.looks_like_one_time_code_field()
 }
 
 #[wasm_bindgen]

@@ -8,6 +8,7 @@ use crate::LoadedVaultUnlockRequest;
 use crate::NookDatabase;
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
+use crate::manager::session::VaultKeyMaterial;
 use crate::storage::indexed_db::{SentinelFinalizationJournal, StoredSentinelShareDelivery};
 use nook_core::DeviceId;
 #[cfg(test)]
@@ -399,10 +400,7 @@ impl NookVaultManager {
             .architecture()
             .unwrap_or_else(|_| self.vault.architecture.clone());
         if architecture.vault_type == VaultType::Sentinel {
-            if matches!(
-                self.vault.key_material(),
-                crate::manager::session::VaultKeyMaterial::Unavailable
-            ) {
+            if matches!(self.vault.key_material(), VaultKeyMaterial::Unavailable) {
                 return Err(MultiDeviceError::SentinelCeremonyRequired.into());
             }
             // Session already holds reconstructed keys — hydrate records without

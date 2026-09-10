@@ -222,11 +222,13 @@ pub(crate) use storage::NookDatabase;
 
 pub(crate) use storage::indexed_db::{SecretSearchBucketKeyRequest, VaultSnapshotLookup};
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(test, target_arch = "wasm32"))]
+pub(crate) use storage::indexed_db::SaveVaultBlobRequest;
+#[cfg(any(test, target_arch = "wasm32"))]
 pub(crate) use storage::indexed_db::SaveWrappedDeviceIdentityRequest;
 pub(crate) use storage::indexed_db::{
     IdbPutStringRequest, ImportVaultBlobRequest, ReadStringPreferringRequest,
-    SaveSecretSearchCatalogBucketsRequest, SaveVaultBlobRequest, SetLocalVaultLabelRequest,
+    SaveSecretSearchCatalogBucketsRequest, SetLocalVaultLabelRequest,
 };
 
 pub(crate) use storage::indexed_db::{
@@ -242,7 +244,7 @@ pub(crate) use conversion::{
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use storage::event_db::EventDbRemoveEventFixture;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(test, target_arch = "wasm32"))]
 pub(crate) use storage::event_db::EventDbSaveEventBytesToStore;
 pub(crate) use storage::event_db::{
     EventDbAppendOutboxIndex, EventDbLoadLocalEventStoreFromStore, EventDbQueueOutboxEntry,

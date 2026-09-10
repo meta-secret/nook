@@ -142,10 +142,10 @@ impl DriveEventStore<'_> {
     fn list_event_ids_from_response(body: &DriveEventListResponse) -> Vec<String> {
         let mut ids = Vec::new();
         for row in &body.files {
-            if let DriveEventListRow::File(file) = row {
-                if let ListedEvent::Event(id) = Self::drive_listed_event_id(file) {
-                    ids.push(id);
-                }
+            if let DriveEventListRow::File(file) = row
+                && let ListedEvent::Event(id) = Self::drive_listed_event_id(file)
+            {
+                ids.push(id);
             }
         }
         ids

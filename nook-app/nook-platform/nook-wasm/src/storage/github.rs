@@ -946,7 +946,8 @@ mod tests {
         Ok(())
     }
 }
-/// Named values required by GitHubStorageClient::log_github_api_failure.
+/// Named values required by `GitHubStorageClient::log_github_api_failure`.
+#[derive(Clone, Copy)]
 pub(crate) struct GitHubStorageClientLogGithubApiFailure<'a> {
     pub(crate) operation: &'a str,
     pub(crate) repo: &'a str,
@@ -954,19 +955,22 @@ pub(crate) struct GitHubStorageClientLogGithubApiFailure<'a> {
     pub(crate) status: reqwest::StatusCode,
 }
 
-/// Named values required by GitHubStorageClient::github_username_response.
+/// Named values required by `GitHubStorageClient::github_username_response`.
+#[derive(Clone, Copy)]
 pub(crate) struct GitHubStorageClientGithubUsernameResponse<'a> {
     pub(crate) status: StatusCode,
     pub(crate) text: &'a str,
 }
 
-/// Named values required by GitHubStorageClient::github_repo_check_result.
+/// Named values required by `GitHubStorageClient::github_repo_check_result`.
+#[derive(Clone, Copy)]
 pub(crate) struct GitHubStorageClientGithubRepoCheckResult<'a> {
     pub(crate) repo: &'a str,
     pub(crate) status: StatusCode,
 }
 
-/// Named values required by GitHubStorageClient::github_directory_listing.
+/// Named values required by `GitHubStorageClient::github_directory_listing`.
+#[derive(Clone, Copy)]
 pub(crate) struct GitHubStorageClientGithubDirectoryListing<'a> {
     pub(crate) status: StatusCode,
     pub(crate) text: &'a str,
@@ -974,7 +978,8 @@ pub(crate) struct GitHubStorageClientGithubDirectoryListing<'a> {
     pub(crate) path: &'a str,
 }
 
-/// Named values required by GitHubStorageClient::github_file_response.
+/// Named values required by `GitHubStorageClient::github_file_response`.
+#[derive(Clone, Copy)]
 pub(crate) struct GitHubStorageClientGithubFileResponse<'a> {
     pub(crate) status: StatusCode,
     pub(crate) text: &'a str,
@@ -982,7 +987,8 @@ pub(crate) struct GitHubStorageClientGithubFileResponse<'a> {
     pub(crate) path: &'a str,
 }
 
-/// Named values required by GitHubStorageClient::github_put_response.
+/// Named values required by `GitHubStorageClient::github_put_response`.
+#[derive(Clone, Copy)]
 pub(crate) struct GitHubStorageClientGithubPutResponse<'a> {
     pub(crate) status: StatusCode,
     pub(crate) text: &'a str,

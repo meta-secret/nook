@@ -523,7 +523,8 @@
           )}
           data-testid="google-sign-in-btn"
           disabled={oauthBusy || oauthOriginUnsupported}
-          onclick={() => void oauthActions.signInWithGoogle()}
+          onclick={() =>
+            void new oauthActions.VaultOAuthActions(vault).signInWithGoogle()}
         >
           {#if oauthBusy}
             {vault.t(I18N_KEYS.ProviderSetupGoogleSigningIn)}

@@ -25,15 +25,16 @@ pub(crate) use publication::{PresealedProviderSnapshotPublication, ProviderSnaps
 
 use rexie::{ObjectStore, Rexie, TransactionMode};
 use serde_json::Value;
+use std::ops::Deref;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::AuthProvidersSnapshotData;
-use nook_core::{DeviceIdentity, NormalizedAuthSnapshot};
+use nook_core::{DeviceIdentity, NormalizedAuthSnapshot, ProviderCredentialRejection};
 
 pub(crate) struct AuthProviderDatabase {
     connection: Rexie,
 }
-impl std::ops::Deref for AuthProviderDatabase {
+impl Deref for AuthProviderDatabase {
     type Target = Rexie;
     fn deref(&self) -> &Rexie {
         &self.connection
@@ -45,13 +46,13 @@ const STATE_KEY: &str = "providers";
 const SCHEMA_KEY: &str = "providers-schema";
 const STORAGE_SCHEMA_VERSION: u32 = 1;
 
-/// Named values required by AuthProviderDatabase::read_raw_snapshot_from_store.
+/// Named values required by `AuthProviderDatabase::read_raw_snapshot_from_store`.
 pub(crate) struct ProviderDbReadRawSnapshotFromStore<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) state_key: &'a str,
 }
 
-/// Named values required by AuthProviderDatabase::write_snapshot_at.
+/// Named values required by `AuthProviderDatabase::write_snapshot_at`.
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) struct ProviderDbWriteSnapshotAt<'a> {
     pub(crate) state_key: &'a str,
@@ -203,7 +204,7 @@ impl AuthProviderDatabase {
         let mut snapshot = normalized.snapshot;
         snapshot = snapshot
             .open_credentials(identity)
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(ProviderCredentialRejection::into_cause)?;
         Ok(NormalizedAuthSnapshot {
             snapshot,
             migration: normalized.migration,

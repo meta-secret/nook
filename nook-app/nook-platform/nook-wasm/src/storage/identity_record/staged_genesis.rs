@@ -95,6 +95,10 @@ impl StagedSimpleGenesisInput<'_> {
         }
         Ok(enrolled)
     }
+    #[expect(
+        clippy::too_many_lines,
+        reason = "staged genesis keeps its ordered transaction and rejection mapping together"
+    )]
     pub(crate) async fn begin_or_resume(
         self,
     ) -> Result<

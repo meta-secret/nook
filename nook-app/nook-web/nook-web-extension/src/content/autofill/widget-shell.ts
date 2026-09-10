@@ -1,4 +1,8 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
+  OpenSimpleVaultMessageType,
+  type OpenSimpleVaultMessage,
+} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 
 import {
   type EnrollmentFlowHost,
@@ -479,11 +483,10 @@ class AuthenticationWidgetShell {
       BROWSER_MESSAGE_KEYS.WidgetOpenVault,
     )
     openVaultButton.addEventListener('click', () => {
-      const nookTypedArgs0_0: Parameters<typeof chrome.runtime.sendMessage>[0] =
-        {
-          type: 'nook:open-simple-vault',
-        }
-      void chrome.runtime.sendMessage(nookTypedArgs0_0)
+      const message: OpenSimpleVaultMessage = {
+        type: OpenSimpleVaultMessageType.NookOpenSimpleVault,
+      }
+      void chrome.runtime.sendMessage(message)
     })
 
     body.append(

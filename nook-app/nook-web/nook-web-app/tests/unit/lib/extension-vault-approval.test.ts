@@ -7,6 +7,8 @@ const wasm = vi.hoisted(() => ({
 
 vi.mock('$app-wasm', () => ({
   approve_extension_device: wasm.approveExtensionDevice,
+  classify_vault_recovery_error: () => 'other',
+  VaultRecoveryErrorKind: { Other: 'other' },
 }))
 
 vi.mock('$lib/auth/providers', () => ({

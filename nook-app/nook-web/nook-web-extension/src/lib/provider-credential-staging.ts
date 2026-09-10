@@ -2,8 +2,8 @@ import { err, ok, type Result } from 'neverthrow'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/extension/runtime-messages'
 
-/** Untrusted browser transport, admitted before stored-provider use. */
-export type SerializedStorageProvider = unknown
+/** Structured-clone provider value admitted before stored-provider use. */
+export type SerializedStorageProvider = StorageProvider
 export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
 export type DecodedExtensionStorageProviders = StorageProvider[]
 export type ExtensionStorageProviderIdentities =

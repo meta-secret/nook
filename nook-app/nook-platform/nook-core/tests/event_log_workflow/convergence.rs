@@ -397,7 +397,10 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
             a = outcome.device;
             Ok(outcome.event_id)
         }
-        Err(rejected) => Err(rejected.cause),
+        Err(rejected) => {
+            a = rejected.device;
+            Err(rejected.cause)
+        }
     }?;
     {
         let outcome = push_device_outbox(a, providers);
@@ -458,7 +461,10 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
             local = outcome.device;
             Ok(outcome.event_id)
         }
-        Err(rejected) => Err(rejected.cause),
+        Err(rejected) => {
+            local = rejected.device;
+            Err(rejected.cause)
+        }
     }?;
 
     remote_device.session.heads = vec![shared_head];
@@ -467,7 +473,10 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
             remote_device = outcome.device;
             Ok(outcome.event_id)
         }
-        Err(rejected) => Err(rejected.cause),
+        Err(rejected) => {
+            remote_device = rejected.device;
+            Err(rejected.cause)
+        }
     }?;
     {
         let outcome = push_device_outbox(remote_device, providers);

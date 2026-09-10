@@ -9,7 +9,7 @@ use nook_core::{
     EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId,
     LocalEventStore, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
 };
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(test, target_arch = "wasm32"))]
 use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use std::collections::BTreeSet;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};

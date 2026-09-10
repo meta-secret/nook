@@ -5,6 +5,7 @@
 //! (or refreshes) this device's auth row so device-key unlock works again.
 
 use super::NookVaultManager;
+use super::session::VaultKeyMaterial;
 use crate::BrowserTimestamp;
 use crate::VaultSnapshotLookup;
 #[cfg(all(test, target_arch = "wasm32"))]
@@ -130,10 +131,7 @@ impl NookVaultManager {
             return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
-        if matches!(
-            self.vault.key_material(),
-            crate::manager::session::VaultKeyMaterial::Unavailable
-        ) {
+        if matches!(self.vault.key_material(), VaultKeyMaterial::Unavailable) {
             return Err(NookError::Database(
                 "Vault must be unlocked before adding a password.".to_owned(),
             )
@@ -209,10 +207,7 @@ impl NookVaultManager {
             return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
-        if matches!(
-            self.vault.key_material(),
-            crate::manager::session::VaultKeyMaterial::Unavailable
-        ) {
+        if matches!(self.vault.key_material(), VaultKeyMaterial::Unavailable) {
             return Err(NookError::Database(
                 "Vault must be unlocked before updating a password.".to_owned(),
             )

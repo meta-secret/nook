@@ -5,7 +5,7 @@ import {
 
 /** Browser representation conversion follows canonical Rust octet admission. */
 export class PasskeyBrowserBytes {
-  static fromWire(value: unknown): Uint8Array {
+  static fromWire(value: PasskeyByteMaterial): Uint8Array {
     return new Uint8Array(admit_passkey_byte_material(value))
   }
   static toWire(value: Uint8Array): PasskeyByteMaterial {

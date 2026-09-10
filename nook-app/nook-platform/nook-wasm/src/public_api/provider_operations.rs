@@ -7,7 +7,7 @@ use nook_core::{ActiveVaultScope, LocalProviderSelection, ManagerStoreScopeRef, 
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_wasm_args(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-    Ok(provider.connection_args()?.into())
+    Ok(provider.connection_args()?)
 }
 
 #[wasm_bindgen]

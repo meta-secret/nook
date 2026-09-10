@@ -34,20 +34,21 @@ pub(crate) struct SentinelGenesisShareCatalogEntry {
     pub delivery_json: String,
 }
 
-/// Named values required by NookDatabase::sentinel_genesis_share_key.
+/// Named values required by `NookDatabase::sentinel_genesis_share_key`.
+#[derive(Clone, Copy)]
 pub(crate) struct SentinelDbSentinelGenesisShareKey<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) device_id: &'a str,
 }
 
-/// Named values required by NookDatabase::save_sentinel_genesis_share_delivery.
+/// Named values required by `NookDatabase::save_sentinel_genesis_share_delivery`.
 pub(crate) struct SentinelDbSaveSentinelGenesisShareDelivery<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) device_id: &'a str,
     pub(crate) delivery_json: &'a str,
 }
 
-/// Named values required by NookDatabase::load_sentinel_genesis_share_delivery.
+/// Named values required by `NookDatabase::load_sentinel_genesis_share_delivery`.
 pub(crate) struct SentinelDbLoadSentinelGenesisShareDelivery<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) device_id: &'a str,

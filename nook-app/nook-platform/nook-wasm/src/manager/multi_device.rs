@@ -145,10 +145,7 @@ impl NookVaultManager {
         let mut retained = Vec::with_capacity(records.len());
         for record in records {
             if record.key != auth_id
-                && !matches!(
-                    (&record).classify()?,
-                    nook_core::VaultMetaRecord::Member(..)
-                )
+                && !matches!(record.classify()?, nook_core::VaultMetaRecord::Member(..))
             {
                 retained.push(record);
             }
@@ -261,22 +258,21 @@ impl NookVaultManager {
                 if !self.vault.meta.sentinel_shares.is_empty() {
                     return Err(MultiDeviceError::SentinelGenesisRosterFull.into());
                 }
-                let roster = match VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
-                    records: &records,
-                    members_key: &members_key,
-                }) {
-                    Ok(existing) => VaultMember::roster_add_member(RosterAddMemberRequest {
+                let roster = if let Ok(existing) =
+                    VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+                        records: &records,
+                        members_key: &members_key,
+                    }) {
+                    VaultMember::roster_add_member(RosterAddMemberRequest {
                         roster: existing,
                         member: VaultMember::try_from(join)?,
-                    }),
-                    Err(_) => {
-                        let approver =
-                            VaultMember::member_from_identity(MemberFromIdentityRequest {
-                                identity: &identity,
-                                enrolled_at: &join.requested_at,
-                            });
-                        vec![approver, VaultMember::try_from(join)?]
-                    }
+                    })
+                } else {
+                    let approver = VaultMember::member_from_identity(MemberFromIdentityRequest {
+                        identity: &identity,
+                        enrolled_at: &join.requested_at,
+                    });
+                    vec![approver, VaultMember::try_from(join)?]
                 };
                 let share_records = self.prepare_sentinel_shares(&roster)?;
                 let member_records =
@@ -293,7 +289,7 @@ impl NookVaultManager {
                     label: MemberLabel::from_trusted(String::new()),
                 });
                 if let SentinelShareIssuance::Issued(share_op) =
-                    self.apply_sentinel_share_records(share_records)?
+                    self.apply_sentinel_share_records(&share_records)?
                 {
                     operations.push(share_op);
                 }
@@ -309,7 +305,7 @@ impl NookVaultManager {
         roster: &[nook_core::VaultMember],
     ) -> Result<SentinelShareIssuance, NookError> {
         let records = self.prepare_sentinel_shares(roster)?;
-        self.apply_sentinel_share_records(records)
+        self.apply_sentinel_share_records(&records)
     }
 
     fn prepare_sentinel_shares(
@@ -346,14 +342,14 @@ impl NookVaultManager {
 
     fn apply_sentinel_share_records(
         &mut self,
-        share_records: Vec<nook_core::StoredSecretRecord>,
+        share_records: &[nook_core::StoredSecretRecord],
     ) -> Result<SentinelShareIssuance, NookError> {
         if share_records.is_empty() {
             return Ok(SentinelShareIssuance::Unchanged);
         }
         let policy = self.vault.architecture.sentinel.policy_or_default();
         let mut shares = Vec::with_capacity(share_records.len());
-        for record in &share_records {
+        for record in share_records {
             self.vault.meta.apply_record(record)?;
             let envelope =
                 SentinelShareEnvelope::parse_sentinel_share_envelope(record.value.as_str())?;

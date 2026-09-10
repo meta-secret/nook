@@ -34,7 +34,6 @@ import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
-import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
 import type {
   ExtensionSessionGrantIdentity,
   ExtensionPairingItems,
@@ -82,7 +81,7 @@ type ExtensionEventLogImportRequest = {
   records: ExtensionEventLogRecord[]
 }
 
-export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
+export type SerializedExtensionStorageProviders = StorageProvider[]
 
 /** Owns the browser runtime resources shared by these interactions. */
 class BackgroundVaultRuntime {

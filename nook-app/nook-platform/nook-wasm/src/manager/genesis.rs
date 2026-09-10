@@ -31,15 +31,14 @@ impl NookVaultManager {
         };
         if let ExtensionIdentityPublication::Staged(pending) =
             &self.device.pending_extension_handoff
-        {
-            if matches!(
+            && matches!(
                 &pending.enrollment,
                 PendingExtensionIdentityEnrollment::VaultCreation { .. }
-            ) {
-                self.event_log
-                    .signing_seed
-                    .clone_from(&pending.handoff_signing_seed);
-            }
+            )
+        {
+            self.event_log
+                .signing_seed
+                .clone_from(&pending.handoff_signing_seed);
         }
         if let VaultCreationHandoff::Extension(handoff) = self.pending_vault_creation_handoff() {
             let app_key = self.device_identity()?;

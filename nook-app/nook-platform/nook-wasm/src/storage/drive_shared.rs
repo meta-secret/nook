@@ -473,18 +473,19 @@ mod browser_tests {
         Ok(())
     }
 }
-/// Named values required by DriveStorageClient::shared_drive_error.
+/// Named values required by `DriveStorageClient::shared_drive_error`.
+#[derive(Clone, Copy)]
 pub(crate) struct DriveStorageClientSharedDriveError<'a> {
     pub(crate) status: reqwest::StatusCode,
     pub(crate) body: &'a str,
 }
-/// Named values required by DriveStorageClient::create_folder_projection.
+/// Named values required by `DriveStorageClient::create_folder_projection`.
 pub(crate) struct DriveStorageClientCreateFolderProjection<'a> {
     parsed: DriveFileCreateResponse,
     pub(crate) fallback_name: &'a str,
 }
 
-/// Named values required by DriveStorageClient::verify_folder_projection.
+/// Named values required by `DriveStorageClient::verify_folder_projection`.
 pub(crate) struct DriveStorageClientVerifyFolderProjection {
     parsed: DriveFolderMetadataResponse,
     pub(crate) fallback_id: String,

@@ -1,4 +1,4 @@
-//! CloudKit request schemas. Optional fields preserve CloudKit wire omission.
+//! `CloudKit` request schemas. Optional fields preserve `CloudKit` wire omission.
 use super::ICloudEventStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

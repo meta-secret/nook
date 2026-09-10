@@ -123,7 +123,7 @@ impl EventLogDevice {
             Err(cause) => {
                 return Err(DeviceRejection {
                     device: self,
-                    cause,
+                    cause: VaultError::from(cause),
                 });
             }
         };

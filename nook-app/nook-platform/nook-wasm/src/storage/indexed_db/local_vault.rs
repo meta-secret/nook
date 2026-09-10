@@ -17,7 +17,7 @@ pub(crate) enum ImportVaultLabel<'a> {
     Override(&'a str),
 }
 
-/// Named values required by NookDatabase::upsert_registry_entry.
+/// Named values required by `NookDatabase::upsert_registry_entry`.
 pub(crate) struct UpsertRegistryEntryRequest<'a> {
     pub(crate) registry: &'a mut VaultRegistry,
     pub(crate) store_id: &'a str,
@@ -25,7 +25,7 @@ pub(crate) struct UpsertRegistryEntryRequest<'a> {
     pub(crate) touch_unlock: bool,
 }
 
-/// Named values required by NookDatabase::save_vault_blob.
+/// Named values required by `NookDatabase::save_vault_blob`.
 pub(crate) struct SaveVaultBlobRequest<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) content: &'a str,
@@ -44,19 +44,19 @@ impl SecretSearchBucketMutation {
     }
 }
 
-/// Named values required by NookDatabase::save_secret_search_catalog_buckets.
+/// Named values required by `NookDatabase::save_secret_search_catalog_buckets`.
 pub(crate) struct SaveSecretSearchCatalogBucketsRequest<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) writes: &'a [SecretSearchBucketMutation],
 }
 
-/// Named values required by NookDatabase::set_local_vault_label.
+/// Named values required by `NookDatabase::set_local_vault_label`.
 pub(crate) struct SetLocalVaultLabelRequest<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) label: &'a str,
 }
 
-/// Named values required by NookDatabase::import_vault_blob.
+/// Named values required by `NookDatabase::import_vault_blob`.
 pub(crate) struct ImportVaultBlobRequest<'a> {
     pub(crate) content: &'a str,
     pub(crate) label: ImportVaultLabel<'a>,
