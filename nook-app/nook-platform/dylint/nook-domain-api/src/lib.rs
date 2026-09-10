@@ -9,7 +9,6 @@ extern crate rustc_session;
 extern crate rustc_span;
 
 use clippy_utils::diagnostics::span_lint_and_help;
-use rustc_ast::attr::AttributeExt;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::intravisit::{self, FnKind, Visitor, VisitorExt};
 use rustc_hir::{
@@ -207,7 +206,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         {
             emit_api_diagnostic(cx, item.span, "reachable external crate reexport");
         }
-        if let ItemKind::Impl(implementation) = item.kind
+        if let ItemKind::Impl(implementation) = &item.kind
             && (local_type_is_reachable(cx, cx.tcx.type_of(item.owner_id).instantiate_identity())
                 || (CanonicalNumericConversion {
                     cx,
@@ -217,7 +216,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
             && (ImplementationSurface {
                 cx,
                 impl_id: item.owner_id.def_id,
-                implementation: &implementation,
+                implementation,
             })
             .exposes_reachable_surface()
         {
@@ -227,7 +226,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
             } else if (ImplementationSurface {
                 cx,
                 impl_id: item.owner_id.def_id,
-                implementation: &implementation,
+                implementation,
             })
             .inherited_surface_contains_raw()
             {

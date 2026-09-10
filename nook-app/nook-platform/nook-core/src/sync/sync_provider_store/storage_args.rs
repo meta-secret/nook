@@ -13,10 +13,6 @@ use super::{
     ValidationError, ValidationResult,
 };
 use crate::{DriveBackupName, ProviderOauthPreset};
-use crate::{
-    StoredGithubPat, StoredGithubRepository, StoredOAuthFileConfiguration,
-    StoredOAuthRemoteFileName,
-};
 
 /// Positional connect arguments expected by the current wasm manager boundary:
 /// storage mode, credential/token, and remote reference/repo.

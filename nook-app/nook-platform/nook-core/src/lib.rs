@@ -236,20 +236,19 @@ pub use nook_auth2::{
     IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityLegacyVaultImport,
     IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberSigningUpdate,
     IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection, IdentitySelection,
-    IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
+    IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
     IdentityVaultDekReconciliation, IdentityVaultEventId, IdentityVaultKeyOpening,
     IdentityVaultKeys, LegacyDirectoryBase, LocalIdentityKeyRetirement, MemberDekEnvelope,
     MigratedIdentityDirectory, PreparedLegacyDirectoryMigration, RecoveryRetirement,
-    StagedIdentityRebase,
+    SentinelShareEnvelope, StagedIdentityRebase, VaultMember,
 };
 
 pub use multi_device::{
     AuthEnvelopes, AuthRecordIssuance, ConnectAccessStatus, DeviceEnrollment, DeviceIdentity,
     JoinRequest, JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance, MEMBER_RECORD_PREFIX,
     MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync,
-    SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareEnvelope,
-    SentinelShareOpening, SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord,
-    VaultMetaState, VaultRecordView,
+    SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareOpening,
+    SentinelShareVersion, VaultKeys, VaultMetaRecord, VaultMetaState, VaultRecordView,
 };
 
 pub use nook_event_log::{
@@ -534,7 +533,7 @@ pub use vault_client_policy::{
     VaultPasswordActivity, VaultPasswordPromptState, VaultProviderSyncState, VaultSaveActivity,
     VaultSecretCreationPermission, VaultSelectionState, VaultSessionLockIntent,
     VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest, VaultSyncActivity, VaultSyncChange,
-    VaultSyncConflict, VaultSyncIntent, VaultSyncPermission, VaultSyncTimerStartDecisionRequest,
+    VaultSyncIntent, VaultSyncPermission, VaultSyncTimerStartDecisionRequest,
     VaultSyncTimerTickDecisionRequest, VaultVerificationState,
 };
 

@@ -1,5 +1,4 @@
 //! Declared boundary justification in a lint attribute.
-use rustc_ast::attr::AttributeExt;
 use rustc_hir::Attribute;
 use rustc_span::{Symbol, sym};
 
