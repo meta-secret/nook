@@ -203,7 +203,8 @@ describe('provider save web adapter', () => {
       state,
     ).ensureProviderSaved()
 
-    expect(saved).toBe(false)
+    expect(saved.isErr()).toBe(true)
+    if (saved.isOk()) return
     expect(saved.error.translationKey).toBe(
       I18N_KEYS.AuthStorageLocalFolderChooseErr,
     )

@@ -6,8 +6,9 @@ use crate::{
     EpochMetadataState, EpochPasswordState, EventError, EventInsertStatus, VaultEpochError,
 };
 use nook_auth2::{BuildMembersRecordsRequest, VaultMember};
+use nook_event_log::EventGraphRejection;
 
-use crate::errors::VaultResult;
+use crate::errors::{VaultError, VaultResult};
 use crate::vault_ids::{AuthKeyId, StoreId};
 use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use crate::{
@@ -60,10 +61,11 @@ pub struct VaultEventAppended {
 pub struct VaultEventSessionRejection {
     pub session: VaultEventSession,
     #[source]
-    pub cause: crate::errors::VaultError,
+    pub cause: VaultError,
 }
 impl VaultEventSessionRejection {
-    pub fn into_cause(self) -> crate::errors::VaultError {
+    #[must_use]
+    pub fn into_cause(self) -> VaultError {
         self.cause
     }
 }
@@ -111,6 +113,10 @@ impl VaultEventSession {
         Ok(self.signing.actor_id()?)
     }
 
+    #[expect(
+        clippy::result_large_err,
+        reason = "rejections retain the owned session so callers can recover it"
+    )]
     pub fn set_heads_from_graph(mut self) -> Result<Self, VaultEventSessionRejection> {
         let graph = match self.store.load_graph(&self.store_id) {
             Ok(graph) => graph,
@@ -125,6 +131,10 @@ impl VaultEventSession {
         Ok(self)
     }
 
+    #[expect(
+        clippy::result_large_err,
+        reason = "rejections retain the owned session so callers can recover it"
+    )]
     pub fn append_operations(
         self,
         input: VaultEventAppend<'_>,
@@ -183,7 +193,7 @@ impl VaultEventSession {
                         event,
                         expected_store_id: &self.store_id,
                     })
-                    .map_err(|rejected| rejected.into_cause())?;
+                    .map_err(EventGraphRejection::into_cause)?;
                 if let EventInsertStatus::Quarantined(reason) = inserted.status {
                     return Err(EventError::LocalAppendQuarantined { event_id, reason }.into());
                 }
@@ -223,6 +233,10 @@ impl VaultEventSession {
             raw_numeric_public_api,
             reason = "database boundary: admits persisted event bytes before converting them to EventStorageBytes"
         )
+    )]
+    #[expect(
+        clippy::result_large_err,
+        reason = "rejections retain the owned session so callers can recover it"
     )]
     pub fn union_remote(
         mut self,
@@ -273,18 +287,19 @@ impl VaultEventSession {
         members_key: &crate::SymmetricKey,
     ) -> VaultResult<Sha256Hex> {
         let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
-            records: records,
-            members_key: members_key,
+            records,
+            members_key,
         })?;
         let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: roster,
-            members_key: members_key,
+            roster,
+            members_key,
         })?;
         let json = serde_json::to_string(&member_records)
             .map_err(VaultEpochError::MemberRecordsSerialize)?;
         Ok(Sha256Hex::from_bytes(json.as_bytes()))
     }
 
+    #[must_use]
     pub fn flush_outbox_to_remote(mut self, input: VaultOutboxFlush<'_>) -> VaultOutboxFlushed {
         let VaultOutboxFlush {
             provider_id,
@@ -311,10 +326,14 @@ impl VaultEventSession {
         }
     }
 
-    pub fn rotate_security_epoch<'a>(
+    #[expect(
+        clippy::result_large_err,
+        reason = "rejections retain the owned session so callers can recover it"
+    )]
+    pub fn rotate_security_epoch(
         mut self,
-        input: VaultSecurityEpochRotationInput<'a>,
-    ) -> Result<VaultEpochRotated<'a>, VaultEventSessionRejection> {
+        input: VaultSecurityEpochRotationInput<'_>,
+    ) -> Result<VaultEpochRotated<'_>, VaultEventSessionRejection> {
         let VaultSecurityEpochRotationInput {
             trigger,
             new_keys,

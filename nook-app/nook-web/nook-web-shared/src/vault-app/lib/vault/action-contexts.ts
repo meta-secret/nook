@@ -100,7 +100,10 @@ interface SharedStorageActionsContext {
   t(request: TranslationRequest): string;
 }
 
-type ProviderPersistenceOptions = { readonly replace: boolean };
+type ProviderPersistenceOptions = {
+  readonly replace: boolean;
+  readonly providers?: StorageProvider[];
+};
 
 export type ProviderSyncRequest = {
   readonly providerId: string;

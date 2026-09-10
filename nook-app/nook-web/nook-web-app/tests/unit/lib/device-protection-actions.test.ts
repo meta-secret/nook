@@ -39,7 +39,7 @@ function deviceProtectionState(
     isInitializing: true,
     errorMsg: '',
     deviceAuthorizationInProgress: false,
-    deviceProtectionStatus: DeviceProtectionStatus.PasskeySetup,
+    deviceProtectionStatus: DeviceProtectionStatus.Passkey,
     deviceProtectionLockedStatus: DeviceProtectionStatus.Passkey,
     deviceId: '',
     devicePublicKey: '',

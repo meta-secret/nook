@@ -1,6 +1,8 @@
 //! Commit prepared identity and signing material in transaction order.
 use super::*;
+#[cfg(test)]
 use crate::storage::identity_record::PriorAppAuthorization;
+#[cfg(test)]
 use crate::storage::identity_record::StoredIdentityProtection;
 
 impl PreparedProtectedIdentity<'_> {

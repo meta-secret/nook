@@ -76,7 +76,6 @@ pub enum ProviderSyncFreshness {
 pub struct InvalidDeviceProtectionStatus;
 
 impl DeviceProtectionStatus {
-    #[must_use]
     pub fn from_persisted(value: &str) -> Result<Self, InvalidDeviceProtectionStatus> {
         match value {
             "missing" => Ok(Self::Missing),

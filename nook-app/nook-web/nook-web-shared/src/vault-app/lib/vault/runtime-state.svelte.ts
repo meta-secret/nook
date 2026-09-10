@@ -14,7 +14,6 @@ import {
   provider_label_by_id,
   resolve_error_message,
   translate_with_replacements,
-  type NookAppLocale,
 } from "$app-wasm";
 import {
   activeVaultScope,
@@ -261,7 +260,6 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     const request: Parameters<
       oauthActions.VaultOAuthActions["selectGoogleDriveMode"]
     >[0] = {
-      state: this.completeVaultState(),
       mode,
     };
     new oauthActions.VaultOAuthActions(
@@ -273,7 +271,6 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     const request: Parameters<
       oauthActions.VaultOAuthActions["selectICloudMode"]
     >[0] = {
-      state: this.completeVaultState(),
       mode,
     };
     new oauthActions.VaultOAuthActions(

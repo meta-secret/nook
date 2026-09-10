@@ -3,6 +3,7 @@
 use crate::AuthProviderDatabase;
 use crate::NookDatabase;
 use crate::ProviderDbReadRawSnapshotFromStore;
+#[cfg(test)]
 use crate::storage::identity_record;
 use crate::storage::identity_record::StoredIdentityProtection;
 use nook_core::{DeviceIdentity, NormalizedAuthSnapshot, ProviderCredentialStorageAdmission};

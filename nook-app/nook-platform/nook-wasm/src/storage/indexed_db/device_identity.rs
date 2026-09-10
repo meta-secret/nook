@@ -1,12 +1,17 @@
 use super::StoredStringRecord;
+#[cfg(test)]
+use crate::IdbPutStringRequest;
+#[cfg(test)]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::identity_record;
+#[cfg(test)]
 use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::identity_record::ProtectedLocalIdentity;
+#[cfg(test)]
 use crate::storage::identity_record::RecoveryTarget;
 use crate::storage::identity_record::StoredIdentityProtection;
-use crate::{IdbPutStringRequest, NookDatabase, ReadStringPreferringRequest};
+use crate::{NookDatabase, ReadStringPreferringRequest};
 use nook_core::{AppId, WrappedDeviceIdentity};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::{DeviceIdentityProtection, PasskeyRecordMetadata};
@@ -20,12 +25,14 @@ use super::{
 use nook_core::DeviceProtectionStatus;
 
 /// Named values required by NookDatabase::save_wrapped_device_identity.
+#[allow(dead_code)]
 pub(crate) struct SaveWrappedDeviceIdentityRequest<'a> {
     pub(crate) device_id: &'a str,
     pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
 }
 
 /// Named values required by NookDatabase::put_wrapped_device_identity.
+#[allow(dead_code)]
 pub(crate) struct PutWrappedDeviceIdentityRequest<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) device_id: &'a str,
@@ -33,6 +40,7 @@ pub(crate) struct PutWrappedDeviceIdentityRequest<'a> {
 }
 
 impl NookDatabase {
+    #[allow(dead_code)]
     async fn device_identity_protection_status()
     -> Result<nook_core::DeviceProtectionStatus, NookError> {
         let ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
@@ -193,6 +201,7 @@ impl NookDatabase {
 /// Atomically install a verified wrapped identity after the just-written
 /// ciphertext can be read back.
 impl NookDatabase {
+    #[allow(dead_code)]
     pub(crate) async fn save_wrapped_device_identity(
         request: SaveWrappedDeviceIdentityRequest<'_>,
     ) -> Result<(), NookError> {
@@ -221,6 +230,7 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
+    #[allow(dead_code)]
     pub(crate) async fn put_wrapped_device_identity(
         request: PutWrappedDeviceIdentityRequest<'_>,
     ) -> Result<(), NookError> {

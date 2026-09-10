@@ -132,7 +132,7 @@ impl<'a> VaultContent<'a> {
         Ok(
             VaultMetaState::assess_connect_access(AssessConnectAccessRequest {
                 records: &records,
-                identity: identity,
+                identity,
             })?
             .into(),
         )
@@ -252,6 +252,7 @@ impl<'a> VaultContent<'a> {
 }
 
 impl UnlockedVault {
+    #[must_use]
     pub fn into_material(self) -> UnlockedVaultMaterial {
         UnlockedVaultMaterial {
             meta: self.meta,

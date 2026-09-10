@@ -123,17 +123,20 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
         "the startup shell must remain connected until Svelte mounts"
     );
     let unified_entry = root.read("nook-app/nook-web/nook-web-app/src/main.ts");
-    assert!(unified_entry.contains("mountVaultApp(VaultApplication.UnifiedDevelopment)"));
+    assert!(
+        unified_entry
+            .contains("vaultApplicationEntrypoint.start(VaultApplication.UnifiedDevelopment)")
+    );
     assert!(unified_entry.contains("configureVaultExtensionConnectScopeRuntime()"));
     assert!(!unified_entry.contains("companionWasmReady"));
     for (entry, expected_kind) in [
         (
             "nook-app/nook-web/nook-vault-simple/src/main.ts",
-            "mountVaultApp(VaultApplication.Simple)",
+            "vaultApplicationEntrypoint.start(VaultApplication.Simple)",
         ),
         (
             "nook-app/nook-web/nook-vault-sentinel/src/main.ts",
-            "mountVaultApp(VaultApplication.Sentinel)",
+            "vaultApplicationEntrypoint.start(VaultApplication.Sentinel)",
         ),
     ] {
         assert!(root.read(entry).contains(expected_kind));

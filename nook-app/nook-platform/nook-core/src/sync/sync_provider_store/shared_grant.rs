@@ -15,11 +15,16 @@ pub struct SharedGrantProviderRequest {
 #[derive(Debug, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the typed WASM result preserves the provider's existing wire shape"
+)]
 pub enum SharedGrantProviderOutcome {
     AuthorizationRequired,
     Existing { provider: StorageProviderData },
 }
 impl SharedGrantProviderRequest {
+    #[must_use]
     pub fn select(self) -> SharedGrantProviderOutcome {
         SharedGrantProviderSelection {
             providers: &self.snapshot.providers,

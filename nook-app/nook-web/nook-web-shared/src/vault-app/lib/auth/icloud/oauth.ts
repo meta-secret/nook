@@ -29,7 +29,6 @@ import {
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
 } from "$lib/auth/icloud/config";
-import { browserLogRuntime } from "$lib/runtime/log";
 import {
   CloudKitButtonTheme,
   CloudKitParticipantStatus,
@@ -42,7 +41,6 @@ import {
   cloudKitAuthTokenStore,
   WebAuthTokenLookupKind,
   type CloudKitContainer,
-  type CloudKitAuthErrorDetails,
   type CloudKitConfiguration,
   type CloudKitRecordInfosResponse,
   cloudKitRuntime,
@@ -71,8 +69,6 @@ export {
 
 export { ICLOUD_SIGN_IN_TIMEOUT_MS } from "$lib/auth/icloud/web-auth-wait";
 
-const log = browserLogRuntime.createLogger("icloud-oauth");
-
 export type ICloudOAuthTokens = {
   accessToken: string;
   accountName: ICloudAccountName;
@@ -81,11 +77,6 @@ export type ICloudOAuthTokens = {
 export type ICloudWebAuthTokenRequest = {
   readonly signInTimeoutMs: number;
   readonly clickSignInControl: boolean;
-};
-
-type CloudKitAuthFailureLog = {
-  readonly message: string;
-  readonly details: CloudKitAuthErrorDetails;
 };
 
 type CloudKitRecordPreviewRequest = {

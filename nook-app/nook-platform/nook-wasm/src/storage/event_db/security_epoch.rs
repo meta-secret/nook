@@ -5,8 +5,9 @@
 )]
 //! Transaction-bound persistence for admitted event graphs.
 use crate::NookError;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::storage::indexed_db::StoredStringRecord;
+#[cfg(test)]
 use nook_core::GenesisImportRequest;
 use nook_core::LocalEventBytes;
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
@@ -16,7 +17,6 @@ pub(crate) use requests::{EpochPairAppend, EventAppend, RemoteEventUnion};
 use transaction::{
     AppendKind, EventString, EventTransaction, PersistedEventIds, TransactionEvents,
 };
-
 /// Vault scope only. Admission and commit remain private to each operation.
 #[derive(Clone, Copy)]
 pub(crate) struct VaultEventPersistence<'a> {

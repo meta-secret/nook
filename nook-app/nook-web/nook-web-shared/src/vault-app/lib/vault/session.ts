@@ -99,10 +99,11 @@ export class VaultSessionActions {
     state.sessionExpiredByIdle = false;
     log.info("vault session unlocked");
     void state.publishExtensionEventLogUpdate().then((publication) => {
-      if (publication.isErr())
-        log.warn("extension event-log notification failed", {
-          kind: publication.error.kind,
-        });
+      if (publication.isErr()) {
+        log.warn(
+          `extension event-log notification failed: ${publication.error.kind}`,
+        );
+      }
     });
     return storageOk();
   }

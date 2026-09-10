@@ -53,9 +53,7 @@ export function activeAuthProviderSeedScope(
 }
 
 export enum AuthProviderHookFailure {
-  Unavailable = 'unavailable',
   ReadFailed = 'read-failed',
-  WriteFailed = 'write-failed',
 }
 
 type AuthProviderBrowserHooks = {

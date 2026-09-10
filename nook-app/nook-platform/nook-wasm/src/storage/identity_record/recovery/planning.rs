@@ -6,20 +6,23 @@
 //! Selection of the initiating local identity and surviving protected keys.
 use super::target::{RecoveryScope, RetiredLocalIdentity};
 use super::{RecoveryTarget, RetiredInstallation};
-use crate::storage::identity_record::IdentityDirectoryWrite;
-use crate::storage::identity_record::PriorAppAuthorization;
-use crate::storage::identity_record::SimpleGenesisProgress;
+#[cfg(test)]
+use crate::IdbPutStringRequest;
+use crate::KeyringDbLoadKeyringForStore;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{device_access, identity_record, indexed_db};
-use crate::{IdbPutStringRequest, NookDatabase, NookError, ReadStringPreferringRequest};
+#[cfg(test)]
 use crate::{
     IdentityDbEnsureLocalIdentityForAppKey, IdentityDbGenerateVaultDekForIdentity,
     IdentityDbSaveNewProtectedLocalIdentity, IdentityDbSaveProtectedLocalIdentity,
-    IdentityDbValidateVaultIdentityEnrollment, KeyringDbLoadKeyringForStore,
+    IdentityDbValidateVaultIdentityEnrollment,
 };
+use crate::{NookDatabase, NookError, ReadStringPreferringRequest};
+#[cfg(test)]
 use identity_record::keyring;
 use nook_core::LocalIdentityKeyRetirement;
 use nook_core::LocalIdentityProtection;
+#[cfg(test)]
 use nook_core::MemberLabelState;
 use nook_core::RecoveryRetirement;
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, LocalIdentityKeyring};
@@ -33,7 +36,6 @@ pub(super) struct RecoveryState {
 }
 
 mod directory;
-use directory::RecoveryDirectory;
 
 pub(super) struct RecoveryPlanning<'a> {
     pub(super) store: &'a rexie::Store,

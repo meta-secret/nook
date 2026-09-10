@@ -6,18 +6,24 @@
 //! Admission against the event store held by the handoff transaction.
 use super::ExistingVaultImportCommit;
 use crate::EventDbLoadLocalEventStoreFromStore;
+#[cfg(test)]
 use crate::EventDbSaveEventBytes;
+#[cfg(test)]
 use crate::EventDbSaveEventBytesToStore;
+#[cfg(test)]
+use crate::IdbPutStringRequest;
+#[cfg(test)]
 use crate::storage::{event_db, identity_record};
-use crate::{IdbPutStringRequest, NookDatabase, NookError};
+use crate::{NookDatabase, NookError};
 use nook_core::EventLookup;
+#[cfg(test)]
+use nook_core::IdentityCreation;
+#[cfg(test)]
 use nook_core::MemberLabelState;
+#[cfg(test)]
 pub(crate) use nook_core::StoredSigningSeed;
 use nook_core::{DeviceAuthorization, EpochCheckpoint};
-use nook_core::{
-    DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
-    IdentityVaultKeyOpening,
-};
+use nook_core::{DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityVaultKeyOpening};
 use nook_core::{
     EventGraphAuthorizationProjection, EventGraphDeviceAccess, EventGraphDeviceAccessRequest,
     IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation,
@@ -193,10 +199,13 @@ mod tests {
         IdentityHandoffOperation,
     };
     use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
+    #[cfg(target_arch = "wasm32")]
     use crate::storage;
+    #[cfg(target_arch = "wasm32")]
     use crate::storage::event_db;
     use crate::storage::identity_record;
     use crate::storage::identity_record::{AuthorizerSigningUpdate, HandoffSignerPublication};
+    #[cfg(target_arch = "wasm32")]
     use crate::storage::indexed_db;
     use crate::{
         EventDbSaveEventBytes, EventDbSaveEventBytesToStore, IdbPutStringRequest, NookDatabase,
@@ -548,7 +557,7 @@ mod tests {
             matches!(committed, IdentityHandoffCommitResult::ExistingVaultImported(keys) if keys == events.replacement_keys)
         );
 
-        let mut directory = NookDatabase::load_identity_directory().await?;
+        let directory = NookDatabase::load_identity_directory().await?;
         assert_eq!(
             directory
                 .open_vault_dek(IdentityVaultKeyOpening {

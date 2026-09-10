@@ -4,15 +4,19 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Protection admission and ordered publication inside the caller's identity transaction.
+#[cfg(test)]
 use super as keyring;
 use super::ProtectedLocalIdentitySave;
+#[cfg(test)]
 use super::legacy;
 use super::signing::{
     CheckedIdentitySigningMaterial, IdentitySigningEvidence, IdentitySigningSource,
     LegacySignerProtection, SigningSeedOrigin,
 };
 use crate::IdentityDbEnsureLocalIdentityInDirectory;
+#[cfg(test)]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
+#[cfg(test)]
 use crate::IdentityDbSaveProtectedLocalIdentity;
 use crate::IdentityDbWriteIdentityDirectory;
 use crate::KeyringDbKeyringDeleteKey;
@@ -20,12 +24,18 @@ use crate::KeyringDbKeyringReadString;
 use crate::KeyringDbLoadKeyringForStore;
 use crate::KeyringDbValidateKeyringDirectoryBinding;
 use crate::KeyringDbWriteKeyring;
+#[cfg(test)]
+use crate::storage::identity_record;
+#[cfg(test)]
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::PriorAppAuthorization;
-use crate::storage::identity_record::{self, PENDING_SIMPLE_GENESIS_KEY, recovery};
+use crate::storage::identity_record::{PENDING_SIMPLE_GENESIS_KEY, recovery};
+#[cfg(test)]
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{event_db, indexed_db};
-use crate::{IdbPutStringRequest, NookDatabase, NookError, SaveWrappedDeviceIdentityRequest};
+#[cfg(test)]
+use crate::{IdbPutStringRequest, SaveWrappedDeviceIdentityRequest};
+use crate::{NookDatabase, NookError};
 use nook_core::MemberLabelState;
 use nook_core::{
     AppKey, IdentityDirectory, IdentityId, IdentitySelection, LocalIdentityKeyring,
@@ -214,13 +224,17 @@ mod tests {
     use crate::storage::identity_record;
     use crate::storage::identity_record::{recovery, simple_genesis};
     use crate::storage::{event_db, indexed_db};
-    use nook_core::{AppKey, DeviceSigningPublicKey, LocalIdentityKeyringEntry, SigningIdentity};
+    #[cfg(target_arch = "wasm32")]
+    use nook_core::SigningIdentity;
+    use nook_core::{AppKey, DeviceSigningPublicKey, LocalIdentityKeyringEntry};
     use nook_core::{DirectoryMemberSigningUpdate, IdentityMemberSigningUpdate};
     use rexie::{Rexie, TransactionMode};
 
+    #[cfg(target_arch = "wasm32")]
+    use super::IdentityTransitionAdmission;
     use super::{
-        IdentityTransitionAdmission, ProtectedIdentityPublication, ProtectedIdentitySelection,
-        ProtectedLocalIdentitySave, SigningSeedOrigin, keyring,
+        ProtectedIdentityPublication, ProtectedIdentitySelection, ProtectedLocalIdentitySave,
+        SigningSeedOrigin, keyring,
     };
     use crate::NookError;
     use crate::storage;
@@ -299,7 +313,7 @@ mod tests {
         let store = transaction.store("vault").map_err(|error| {
             NookError::IndexedDb(format!("Prepared test store error: {error:?}"))
         })?;
-        let mut directory = NookDatabase::load_directory_for_write(&store).await?;
+        let directory = NookDatabase::load_directory_for_write(&store).await?;
         let keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
             store: &store,
             directory: &directory,

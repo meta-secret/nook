@@ -150,10 +150,10 @@ impl<'a> KeeperHeaders<'a> {
                 let entry = paired.entry(pair.index).or_default();
                 match pair.component {
                     KeeperCustomPairComponent::Name => {
-                        entry.name = CsvExportColumn::Exported(index)
+                        entry.name = CsvExportColumn::Exported(index);
                     }
                     KeeperCustomPairComponent::Value => {
-                        entry.value = CsvExportColumn::Exported(index)
+                        entry.value = CsvExportColumn::Exported(index);
                     }
                 }
                 continue;

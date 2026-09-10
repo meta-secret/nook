@@ -7,13 +7,17 @@
 use crate::IdentityDbWriteIdentityDirectory;
 use crate::KeyringDbWriteKeyring;
 use crate::NookDatabase;
+use crate::NookError;
+#[cfg(test)]
+use crate::storage;
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::{device_access, event_db, identity_record, indexed_db};
-use crate::{NookError, storage};
+#[cfg(test)]
+use identity_record::keyring;
+use identity_record::simple_genesis;
 use identity_record::{
     IdentityReconciliationStore, LEGACY_IDENTITY_RECORD_KEY, RETIRED_APP_IDS_KEY,
 };
-use identity_record::{keyring, simple_genesis};
 use rexie::{Store, Transaction, TransactionMode};
 mod cleanup;
 mod target;
@@ -296,8 +300,10 @@ impl PreparedLocalIdentityRecovery {
 #[cfg(test)]
 mod tests {
     use super::{RecoveryDeletion, RecoveryMarkerPolicy};
+    #[cfg(target_arch = "wasm32")]
     use crate::storage::identity_record::SimpleGenesisProgress;
     use crate::storage::{device_access, event_db, identity_record, indexed_db};
+    #[cfg(target_arch = "wasm32")]
     use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use identity_record::simple_genesis;
     use wasm_bindgen_test::wasm_bindgen_test;

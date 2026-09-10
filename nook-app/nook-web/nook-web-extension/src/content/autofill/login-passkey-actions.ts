@@ -1,6 +1,5 @@
 import { LiveAuthenticationWorkflowDisposition } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
-import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   FormSubmissionResult,
   PasskeyControlLookupKind,

@@ -310,6 +310,10 @@ impl ProviderSaveRequest {
     }
 
     #[must_use]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the save transition remains one atomic provider update"
+    )]
     pub fn apply(&self) -> ProviderSaveOutcome {
         let request = self;
         let provider_type = request.setup.provider_type(request.storage_mode);

@@ -33,7 +33,7 @@ struct ProviderFieldRead<'a> {
     name: &'a str,
 }
 impl SemanticProviderField<'_> {
-    fn normalize(self, field: ProviderFieldRead<'_>) -> ProviderWireValue {
+    fn normalize(self, field: &mut ProviderFieldRead<'_>) -> ProviderWireValue {
         match field.fields.remove(field.name) {
             Some(Value::Object(object)) if object.contains_key("state") => ProviderWireValue {
                 value: Value::Object(object),
@@ -64,7 +64,7 @@ impl From<Map<String, Value>> for ProviderFields {
 }
 impl ProviderFields {
     fn field(mut self, field: ProviderFieldMigration<'_>) -> Self {
-        let normalized = field.semantic.normalize(ProviderFieldRead {
+        let normalized = field.semantic.normalize(&mut ProviderFieldRead {
             fields: &mut self.fields,
             name: field.name,
         });

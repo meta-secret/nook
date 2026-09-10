@@ -23,10 +23,8 @@ import {
 } from "./password-form-fields";
 import type {
   ControlObservationAssociationRequest,
-  LocalOwnedLoginObservationRootRequest,
   LocalOwnedFormAdjacencyRequest,
   PasskeyControlLookup,
-  PasswordFieldQuery,
   PasswordFormScope,
 } from "./password-form-fields";
 import {
@@ -48,8 +46,6 @@ import {
 } from "./password-form-passkey-only-workflows";
 import {
   type LoginCredentialsFillRequest,
-  LoginCredentialsLookupKind,
-  type LoginCredentialsLookup,
   passwordFormCredentialInteraction,
 } from "./password-form-field-actions";
 import {
@@ -145,6 +141,11 @@ type PageControlObservationRequest = {
   explicitlyLocallyScoped?: boolean;
 };
 
+type CompleteAuthenticationAdvanceControlObservation =
+  AuthenticationAdvanceControlObservation & {
+    readonly submissionMethod: PageControlSubmissionMethod;
+  };
+
 type PasskeyCandidateSafetyRequest = {
   candidate: { control: HTMLElement; explicitlyMarked: boolean };
   observation: PasswordFormObservation;
@@ -213,7 +214,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     authenticationUsername,
     explicitlyLocallyScoped = false,
     semanticSubmitControlCount,
-  }: PageControlObservationRequest): AuthenticationAdvanceControlObservation {
+  }: PageControlObservationRequest): CompleteAuthenticationAdvanceControlObservation {
     const semanticSubmit = control.matches(semanticSubmitControlSelector);
     const controlForm =
       authenticationSubmissionControls.associatedAuthenticationForm(control);
@@ -791,7 +792,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       passwordFieldDiscovery
         .findPasswordFields(new PasswordFormFieldQuery(request).query)
         .includes(passwordField);
-    function formBlocksFill(form: HTMLFormElement): boolean {
+    const formBlocksFill = (form: HTMLFormElement): boolean => {
       return authenticationSubmissionControls.selectedSubmitterBlocksCredentialDisclosure(
         {
           form,
@@ -801,7 +802,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           }),
         },
       );
-    }
+    };
     function passwordFieldBlocksFill(): boolean {
       if (!passwordFieldRemainsEligible()) return true;
       return approvedPasswordForm

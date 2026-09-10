@@ -53,7 +53,7 @@ impl<'a> SafariArchive<'a> {
         } = self.candidates()?;
         let mut failure = ApplePasswordsImportError::MissingPasswordsFile;
         for candidate in candidates {
-            let read = archive.read(candidate)?;
+            let read = archive.read(&candidate)?;
             archive = read.archive;
             let csv = read.csv;
             match ApplePasswordsCsvInput::new(&csv).plan() {
@@ -68,7 +68,7 @@ impl<'a> SafariArchive<'a> {
     }
     fn read(
         mut self,
-        candidate: SafariCsvCandidate,
+        candidate: &SafariCsvCandidate,
     ) -> Result<ReadSafariCandidate<'a>, ApplePasswordsImportError> {
         let file = self
             .archive

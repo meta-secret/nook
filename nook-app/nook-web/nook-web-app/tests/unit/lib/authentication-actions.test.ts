@@ -146,6 +146,10 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
     Taken: 'taken',
   },
   pickerState: {},
+  saveOfferState: {
+    clearActiveOffer: vi.fn(),
+    confirmationActive: false,
+  },
   widgetState: {
     busy: false,
     credentialActuationInFlight: false,

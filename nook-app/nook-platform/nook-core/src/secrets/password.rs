@@ -1,4 +1,3 @@
-use getrandom;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 

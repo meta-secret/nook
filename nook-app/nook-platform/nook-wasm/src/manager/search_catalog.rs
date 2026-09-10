@@ -7,7 +7,9 @@
 use super::{
     NookError, NookVaultManager, SearchCatalogRestore, SearchCatalogState, Zeroize, wasm_bindgen,
 };
-use crate::storage::indexed_db::{self, SecretSearchBucketMutation};
+#[cfg(test)]
+use crate::storage::indexed_db;
+use crate::storage::indexed_db::SecretSearchBucketMutation;
 use crate::{NookDatabase, SaveSecretSearchCatalogBucketsRequest};
 use nook_core::{
     AgeArmoredCiphertext, SearchCatalogBucketPayload, SecretSearchCatalog, SymmetricKey,

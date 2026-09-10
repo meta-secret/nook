@@ -30,6 +30,7 @@ pub struct LoginUnlockAssessment {
     pub passwords: PasswordEntryPresence,
 }
 impl LoginUnlockAssessment {
+    #[must_use]
     pub fn decide(self) -> LoginUnlockDecision {
         let unavailable = match self.access {
             VaultAccessStatus::NeedsEnrollment | VaultAccessStatus::JoinPending => true,

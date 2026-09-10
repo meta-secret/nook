@@ -6,23 +6,33 @@
 //! Atomic identity handoff persistence and authorization checks.
 
 mod existing_vault;
+use crate::NookDatabase;
+#[cfg(test)]
 use crate::manager::PendingExtensionIdentityEnrollment;
 use crate::storage::event_db;
+#[cfg(test)]
 use crate::storage::indexed_db::StoredStringRecord;
-use crate::{IdbPutStringRequest, NookDatabase, manager};
+#[cfg(test)]
+use crate::{IdbPutStringRequest, manager};
 use existing_vault::ExistingVaultHandoff;
+#[cfg(test)]
 use nook_core::MemberLabelState;
+#[cfg(test)]
 pub(crate) use nook_core::StoredSigningSeed;
 use nook_core::{
-    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
-    IdentityCreation, IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
+    DirectoryMemberSigningUpdate, DirectoryVaultEnrollment, IdentityMemberSigningUpdate,
 };
+#[cfg(test)]
+use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 use rexie::TransactionMode;
 
+#[cfg(test)]
 use super as identity_record;
 use super::IDENTITY_DIRECTORY_KEY;
 use super::{AuthorizerMemberSigning, AuthorizerSigningUpdate, HandoffSignerPublication};
-use crate::{NookError, storage};
+use crate::NookError;
+#[cfg(test)]
+use crate::storage;
 
 pub(crate) enum IdentityHandoffOperation<'a> {
     PairedVault(PairedVaultEnrollment<'a>),

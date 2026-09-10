@@ -9,13 +9,10 @@ use super::LocalIdentityRecovery;
 use super::{AuthorizerMemberSigning, AuthorizerSigningUpdate, VaultCreationAuthorityRef};
 use crate::BrowserTimestamp;
 use crate::StoredStringRecord;
-use crate::storage::identity_record::IdentityDirectoryWrite;
-use crate::storage::identity_record::SimpleGenesisProgress;
-use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
+use crate::{IndexedDbUpdate, NookDatabase};
 pub(crate) use nook_core::AppKeyIdentityMembership;
 use nook_core::IsoTimestamp;
 use nook_core::MemberLabelState;
-pub(crate) use nook_core::StoredSigningSeed;
 use nook_core::{
     DirectoryCreationEnrollment, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
     IdentityCreation, IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
@@ -27,8 +24,8 @@ use super::genesis_flow::PendingSimpleGenesisFlow;
 use super::simple_genesis::{
     PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
 };
-use crate::storage::indexed_db::{self, StringUpdateGuard};
-use crate::{NookError, conversion};
+use crate::NookError;
+use crate::storage::indexed_db::StringUpdateGuard;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -231,8 +228,10 @@ mod tests {
     };
 
     use super::super::{SimpleGenesisCompletion, SimpleGenesisEventInput, recovery};
+    use crate::storage::event_db;
     use crate::storage::identity_record;
-    use crate::storage::{event_db, indexed_db};
+    #[cfg(target_arch = "wasm32")]
+    use crate::storage::indexed_db;
     use nook_core::{
         AppKey, AppKeyIdentityMembership, IdentityDirectory, IsoTimestamp, MemberLabelState,
         SigningIdentity, StoredSigningSeed,

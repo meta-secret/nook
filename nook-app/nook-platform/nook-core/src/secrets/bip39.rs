@@ -52,13 +52,15 @@ impl From<Bip39WordSequenceExpectedCount> for usize {
 }
 
 /// Validates a normalized English BIP-39 mnemonic (12 or 24 words).
-/// Named values required by SeedPhraseSecret::suggest_bip39_words.
+/// Named values required by `SeedPhraseSecret::suggest_bip39_words`.
+#[derive(Clone, Copy)]
 pub struct Bip39WordSuggestions<'a> {
     pub prefix: &'a str,
     pub limit: Bip39WordSuggestionLimit,
 }
 
-/// Named values required by SeedPhraseSecret::is_bip39_word_sequence_valid.
+/// Named values required by `SeedPhraseSecret::is_bip39_word_sequence_valid`.
+#[derive(Clone, Copy)]
 pub struct Bip39WordSequence<'a> {
     pub text: &'a str,
     pub expected_word_count: Bip39WordSequenceExpectedCount,
@@ -156,7 +158,6 @@ impl SeedPhraseSecret {
 }
 
 impl SeedPhraseSecret {
-    #[must_use]
     pub fn infer_bip39_mnemonic_length(
         text: &str,
     ) -> Result<Bip39MnemonicWordCount, UnsupportedMnemonicWordCount> {

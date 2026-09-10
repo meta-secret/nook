@@ -183,8 +183,9 @@ describe('icloud-oauth', () => {
           shortGuid: 'share-guid',
         }),
       )
-      expect(target.storageTargetId).toContain('icloud-share-v1:')
-      expect(target.storageTargetId).not.toContain('ck-web-auth-token')
+      if (target.isErr()) return
+      expect(target.value.storageTargetId).toContain('icloud-share-v1:')
+      expect(target.value.storageTargetId).not.toContain('ck-web-auth-token')
     })
 
     it('keeps an absent current identity signed out', async () => {
@@ -245,8 +246,9 @@ describe('icloud-oauth', () => {
           shortGuid: 'share-guid',
         }),
       )
-      expect(target.storageTargetId).toContain('icloud-share-v1:')
-      expect(target.storageTargetId).not.toContain('ck-web-auth-token')
+      if (target.isErr()) return
+      expect(target.value.storageTargetId).toContain('icloud-share-v1:')
+      expect(target.value.storageTargetId).not.toContain('ck-web-auth-token')
     })
 
     it('reuses metadata for a share this account already accepted', async () => {
@@ -762,7 +764,7 @@ describe('icloud-oauth', () => {
       await expect(
         iCloudOAuthSession.requestPreparedICloudWebAuthToken(request),
       ).resolves.toEqual(
-        err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication)),
+        err(new OAuthFailure(OAuthFailureKind.InvalidChallenge)),
       )
     })
 

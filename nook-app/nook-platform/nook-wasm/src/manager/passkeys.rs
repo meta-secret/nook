@@ -557,6 +557,10 @@ impl NookVaultManager {
 
 /// Decode the external JSON message exactly once into the canonical registration request.
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn decode_website_passkey_registration_request(
     json: &str,
 ) -> Result<nook_core::PasskeyRegistrationRequest, JsError> {
@@ -564,6 +568,10 @@ pub fn decode_website_passkey_registration_request(
 }
 /// Decode the external JSON message exactly once into the canonical assertion request.
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn decode_website_passkey_assertion_request(
     json: &str,
 ) -> Result<nook_core::WebsitePasskeyAssertionRequest, JsError> {

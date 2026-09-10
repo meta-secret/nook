@@ -229,11 +229,11 @@ class ExtensionConnectionBrowser {
   extensionConnectRequestFromLocation(
     location: Location,
   ): ExtensionConnectRequestState {
-    if (!this.isExtensionConnectPath(this.browser.location.pathname)) {
+    if (!this.isExtensionConnectPath(location.pathname)) {
       return { kind: ExtensionConnectRequestStateKind.Absent };
     }
 
-    const params = new URLSearchParams(this.browser.location.search);
+    const params = new URLSearchParams(location.search);
     const deviceId = ((v) => (v ? v : ""))(params.get("device_id")?.trim());
     const devicePublicKey = ((v) => (v ? v : ""))(
       params.get("device_public_key")?.trim(),

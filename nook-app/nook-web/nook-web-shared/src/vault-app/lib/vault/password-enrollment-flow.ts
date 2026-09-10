@@ -18,7 +18,6 @@ export {
   findSharedGrantProvider,
   SharedStorageTargetKind,
   shouldFlushSharedDriveGrant,
-  type SharedGrantProviderSelection,
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 import {

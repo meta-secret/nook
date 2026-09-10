@@ -4,10 +4,11 @@ use super::super::event_log::{
 use super::NookVaultManager;
 use crate::NookReplacementConflict;
 use crate::NookSecurityConflict;
+#[cfg(test)]
 use crate::types;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use serde::Serialize;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use wasm_bindgen::JsCast;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 

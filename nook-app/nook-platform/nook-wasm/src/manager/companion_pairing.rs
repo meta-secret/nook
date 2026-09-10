@@ -147,9 +147,8 @@ pub struct NookPrevalidatedCompanionPairingApproval {
 mod tests {
     use super::*;
     use nook_companion_core::{
-        CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingError,
-        CompanionPairingInstallation, CompanionPairingProviderManifestDigest,
-        ExtensionPairingVaultType,
+        CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
+        CompanionPairingProviderManifestDigest, ExtensionPairingVaultType,
     };
     use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope, StorageProviderData};
     use wasm_bindgen_test::wasm_bindgen_test;

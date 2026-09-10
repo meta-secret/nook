@@ -2,7 +2,8 @@ use crate::SecretValue;
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{AppId, AuthKeyId, SecretRecord};
 
-/// Named values required by SecretRecord::filter_secrets.
+/// Named values required by `SecretRecord::filter_secrets`.
+#[derive(Clone, Copy)]
 pub struct SecretRecordFilter<'a> {
     pub records: &'a [SecretRecord],
     pub query: &'a str,

@@ -5,9 +5,13 @@
 )]
 //! Vault-scoped reconciliation marker persistence and guarded cleanup.
 use super::super::indexed_db;
+#[cfg(test)]
+use crate::IdbPutStringRequest;
+use crate::NookError;
 use crate::StoredStringRecord;
-use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
-use crate::{NookError, storage};
+#[cfg(test)]
+use crate::storage;
+use crate::{IndexedDbUpdate, NookDatabase};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
 use nook_core::{AgeArmoredCiphertext, IdentityVaultEventId, StoreId};
 use rexie::TransactionMode;

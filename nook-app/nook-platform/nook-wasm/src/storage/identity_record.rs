@@ -5,9 +5,12 @@ pub(crate) use nook_core::LocalIdentityProtection;
 pub(crate) use nook_core::MemberLabelState;
 use nook_core::MigratedIdentityDirectory;
 
+#[cfg(test)]
+pub(crate) use crate::IdbPutStringRequest;
+pub(crate) use crate::NookDatabase;
 use crate::NookError;
+#[cfg(test)]
 use crate::storage::indexed_db;
-pub(crate) use crate::{IdbPutStringRequest, NookDatabase};
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, MultiDeviceError};
 use nook_core::{
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, IdentityCreation,
@@ -355,7 +358,7 @@ impl NookDatabase {
         let store = transaction.store("vault").map_err(|error| {
             NookError::IndexedDb(format!("Identity setup store error: {error:?}"))
         })?;
-        let mut directory = NookDatabase::load_directory_for_write(&store).await?;
+        let directory = NookDatabase::load_directory_for_write(&store).await?;
         let identity = keyring::ProtectedIdentityPublication {
             store: &store,
             directory,
@@ -389,7 +392,7 @@ impl NookDatabase {
         let store = transaction.store("vault").map_err(|error| {
             NookError::IndexedDb(format!("Identity creation store error: {error:?}"))
         })?;
-        let mut directory = NookDatabase::load_directory_for_write(&store).await?;
+        let directory = NookDatabase::load_directory_for_write(&store).await?;
         let identity = keyring::ProtectedIdentityPublication {
             store: &store,
             directory,
@@ -587,8 +590,11 @@ mod tests {
 
     use crate::identity_record;
     use crate::identity_record::NookIdentityDirectorySelectionKind;
+    #[cfg(target_arch = "wasm32")]
     use crate::storage::event_db;
-    use nook_core::{AppKey, IdentityDirectory, IdentityRecord, IdentitySelection, IsoTimestamp};
+    #[cfg(target_arch = "wasm32")]
+    use nook_core::IsoTimestamp;
+    use nook_core::{AppKey, IdentityDirectory, IdentityRecord, IdentitySelection};
     use nook_core::{IdentityCreation, IdentityVaultKeyOpening};
 
     use super::*;
@@ -753,7 +759,7 @@ mod tests {
         })
         .await?;
 
-        let mut migrated = NookDatabase::load_identity_directory().await?;
+        let migrated = NookDatabase::load_identity_directory().await?;
 
         assert_eq!(migrated.identities().len(), 1);
         assert_eq!(

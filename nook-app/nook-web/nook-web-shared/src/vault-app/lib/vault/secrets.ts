@@ -228,7 +228,6 @@ export class VaultSecretActions {
     json,
     password,
   }: BitwardenVaultImport): Promise<SecretOperationResult<NookImportResult>> {
-    const state = this.state;
     const runPasswordManagerImportArgs: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -249,7 +248,6 @@ export class VaultSecretActions {
   async handleKeePassXcImport({
     csv,
   }: KeePassXcVaultImport): Promise<SecretOperationResult<NookImportResult>> {
-    const state = this.state;
     const runPasswordManagerImportArgs2: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -270,7 +268,6 @@ export class VaultSecretActions {
   async handleLastPassImport({
     csv,
   }: LastPassVaultImport): Promise<SecretOperationResult<NookImportResult>> {
-    const state = this.state;
     const runPasswordManagerImportArgs3: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -291,7 +288,6 @@ export class VaultSecretActions {
   async handleKeeperImport({
     csv,
   }: KeeperVaultImport): Promise<SecretOperationResult<NookImportResult>> {
-    const state = this.state;
     const runPasswordManagerImportArgs4: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -312,7 +308,6 @@ export class VaultSecretActions {
   async handleOnePasswordImport({
     archive,
   }: OnePasswordVaultImport): Promise<SecretOperationResult<NookImportResult>> {
-    const state = this.state;
     const runPasswordManagerImportArgs5: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -335,7 +330,6 @@ export class VaultSecretActions {
   }: ApplePasswordsVaultImport): Promise<
     SecretOperationResult<NookImportResult>
   > {
-    const state = this.state;
     const runPasswordManagerImportArgs6: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -360,7 +354,6 @@ export class VaultSecretActions {
   }: ChromePasswordsVaultImport): Promise<
     SecretOperationResult<NookImportResult>
   > {
-    const state = this.state;
     const runPasswordManagerImportArgs7: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -381,7 +374,6 @@ export class VaultSecretActions {
   async handleDashlaneImport({
     exportBytes,
   }: DashlaneVaultImport): Promise<SecretOperationResult<NookImportResult>> {
-    const state = this.state;
     const runPasswordManagerImportArgs8: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -404,7 +396,6 @@ export class VaultSecretActions {
   }: AuthenticatorMigrationImport): Promise<
     SecretOperationResult<NookImportResult>
   > {
-    const state = this.state;
     const runPasswordManagerImportArgs9: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {
@@ -427,7 +418,6 @@ export class VaultSecretActions {
   async handleProtonPassImport({
     exportBytes,
   }: ProtonPassVaultImport): Promise<SecretOperationResult<NookImportResult>> {
-    const state = this.state;
     const runPasswordManagerImportArgs10: Parameters<
       VaultSecretActions["runPasswordManagerImport"]
     >[0] = {

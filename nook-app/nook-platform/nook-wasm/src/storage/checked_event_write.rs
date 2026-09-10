@@ -8,6 +8,7 @@
 )]
 
 use crate::NookError;
+#[cfg(test)]
 use nook_core::GenesisImportRequest;
 use nook_core::{EventId, VaultEvent};
 

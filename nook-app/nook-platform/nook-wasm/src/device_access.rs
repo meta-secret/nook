@@ -137,6 +137,7 @@ struct LocalAccessProfile {
 }
 
 /// Named values required by NookDeviceVaultAccess::vaults_for_identity.
+#[cfg(test)]
 pub(crate) struct BrowserVaultsForIdentity<'a> {
     pub(crate) vaults: &'a [NookDeviceVaultAccess],
     pub(crate) identity: &'a nook_core::IdentityRecord,
@@ -157,7 +158,7 @@ pub(crate) enum VaultAccessScope<'a> {
 
 pub(crate) struct BrowserVaultAccessRows<'a> {
     pub(crate) registry: Vec<indexed_db::VaultRegistryEntry>,
-    pub(crate) profiles: &'a [LocalAccessProfile],
+    profiles: &'a [LocalAccessProfile],
     pub(crate) identity: VaultAccessScope<'a>,
 }
 
@@ -625,6 +626,10 @@ impl NookDeviceVaultAccess {
 }
 
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub async fn set_device_access_passkey_provider_label(
     credential_fingerprint: String,
     label: String,
@@ -641,7 +646,6 @@ pub async fn set_device_access_passkey_provider_label(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::identity_record::PriorAppAuthorization;
     use nook_core::{AppKey, DeviceId, IdentityRecord, IsoTimestamp};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -974,6 +978,10 @@ mod browser_tests {
 
 /// Numeric WASM enums use a thin exported adapter for receiver behavior.
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn device_access_credential_kind(
     protection: DeviceAccessProtectionKind,
 ) -> DeviceAccessCredentialKind {

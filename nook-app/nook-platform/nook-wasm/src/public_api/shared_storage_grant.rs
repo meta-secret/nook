@@ -2,7 +2,6 @@ use super::wasm_bindgen;
 use crate::DriveStorageClient;
 use crate::DriveStorageClientShareFolderWithEmail;
 use crate::NookGoogleDriveFolder;
-use crate::storage::drive_shared;
 use nook_core::{
     OauthFilePreset, ProviderOauthPreset, SharedStorageGrantCredential, SharedStorageGrantOutcome,
     SharedStorageGrantTarget, SharedStorageTargetHint, StorageProviderType, i18n_keys,

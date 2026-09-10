@@ -513,7 +513,11 @@ export class SyncConflictActions {
           {
             replace: false,
           };
-        await state.persistProviders(persistenceOptions);
+        const persistence = await state.persistProviders(persistenceOptions);
+        if (persistence.isErr()) {
+          state.errorMsg = state.t(persistence.error.translationKey);
+          return;
+        }
       }
       const activeVaultPersistence = await state.syncActiveVaultStoreIdToAuth();
       if (activeVaultPersistence.isErr()) {

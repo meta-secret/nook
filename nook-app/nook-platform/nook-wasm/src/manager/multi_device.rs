@@ -5,24 +5,28 @@
 //! methods are reachable when the vault is in password mode — the
 //! password-mode counterpart is `connect_with_password` (`manager::password`).
 
+use super::NookVaultManager;
+#[cfg(test)]
+use super::VaultCryptoState;
+#[cfg(test)]
 use super::event_log::SecurityEpochRotationFailure;
 use super::verified_access::VerifiedVaultAccessFlow;
-use super::{NookVaultManager, VaultCryptoState};
 use crate::BrowserTimestamp;
 use crate::LoadedVaultUnlockRequest;
 use crate::NookError;
 use crate::conversion::LoadedVault;
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
-use nook_core::{
-    AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MemberLabel, MultiDeviceError,
-    SecretId, SentinelConfiguration, StorageMode, SymmetricKey, VaultMetaState, VaultOperation,
-    VaultType,
-};
+#[cfg(test)]
+use nook_core::AuthKeyId;
 use nook_core::{
     BuildMembersRecordsRequest, MemberFromIdentityRequest, ResolveMemberRosterRequest,
     RosterAddMemberRequest, VaultMember,
 };
 use nook_core::{CreateSentinelShareRecordsForRecipientsRequest, SentinelShareEnvelope};
+use nook_core::{
+    DeviceId, DevicePublicKey, DeviceSigningPublicKey, MemberLabel, MultiDeviceError, SecretId,
+    SentinelConfiguration, StorageMode, SymmetricKey, VaultMetaState, VaultOperation, VaultType,
+};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 

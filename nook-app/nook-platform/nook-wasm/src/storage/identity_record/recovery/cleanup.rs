@@ -5,6 +5,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+#[cfg(test)]
 use crate::storage::indexed_db;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::{NookDatabase, NookError};
@@ -117,6 +118,7 @@ impl LocalIdentityRecovery {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_arch = "wasm32")]
     use crate::storage::identity_record;
     use nook_core::AppKey;
     use wasm_bindgen_test::*;

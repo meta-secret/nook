@@ -44,10 +44,6 @@ interface LocalFolderProviderSync {
   readonly provider: StorageProvider;
 }
 
-interface StagedLocalFolderMultipleVaultsIssue {
-  readonly issue: NookLocalFolderHealth;
-}
-
 type ProviderSyncExecution = ProviderSyncRequest & {};
 
 export enum ProviderSyncOutcome {

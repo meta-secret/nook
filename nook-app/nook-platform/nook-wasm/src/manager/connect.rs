@@ -21,18 +21,20 @@ use crate::NookDatabase;
 use crate::VaultSnapshotLookup;
 use crate::conversion::LoadedVault;
 use crate::manager::device_protection::ExtensionIdentityPublication;
+#[cfg(test)]
 use crate::storage::identity_record::AuthorizerSigningUpdate;
-use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::identity_record::VerifiedPreviousEpoch;
 #[cfg(test)]
 use nook_core::AppKeyIdentityMembership;
+#[cfg(test)]
 use nook_core::MemberLabelState;
-use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
 
-use crate::storage::{event_db, identity_record, indexed_db};
+use crate::storage::identity_record;
+#[cfg(test)]
+use crate::storage::{event_db, indexed_db};
 use crate::{NookError, NookSecretRecord};
 use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use nook_core::{

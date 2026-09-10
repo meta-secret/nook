@@ -220,15 +220,12 @@ pub use vault_api_local::*;
 
 pub(crate) use storage::NookDatabase;
 
-pub(crate) use storage::indexed_db::{
-    ClearVaultStoreRequest, GuardedKeyringEntryRequest, ReadStringRecordRequest,
-    SecretSearchBucketKeyRequest, VaultSnapshotLookup,
-};
+pub(crate) use storage::indexed_db::{SecretSearchBucketKeyRequest, VaultSnapshotLookup};
 
 pub(crate) use storage::indexed_db::{
-    IdbPutStringRequest, ImportVaultBlobRequest, PutWrappedDeviceIdentityRequest,
-    ReadStringPreferringRequest, SaveSecretSearchCatalogBucketsRequest, SaveVaultBlobRequest,
-    SaveWrappedDeviceIdentityRequest, SetLocalVaultLabelRequest, UpsertRegistryEntryRequest,
+    IdbPutStringRequest, ImportVaultBlobRequest, ReadStringPreferringRequest,
+    SaveSecretSearchCatalogBucketsRequest, SaveVaultBlobRequest, SaveWrappedDeviceIdentityRequest,
+    SetLocalVaultLabelRequest,
 };
 
 pub(crate) use storage::indexed_db::{
@@ -240,14 +237,14 @@ pub(crate) use conversion::BrowserTimestamp;
 
 pub(crate) use conversion::{
     LoadedVaultUnlockRequest, SyncResultSessionRequest, VaultMemberProjectionRequest,
-    VaultMemberRecordsRequest,
 };
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) use storage::event_db::EventDbRemoveEventFixture;
 pub(crate) use storage::event_db::{
-    EventDbAppendOutboxIndex, EventDbEventKey, EventDbLoadLocalEventStoreFromStore,
-    EventDbOutboxKey, EventDbQueueOutboxEntry, EventDbRemoveEventFixture, EventDbRemoveOutboxEntry,
-    EventDbSaveEventBytes, EventDbSaveEventBytesToStore, EventDbSaveHeads, EventDbSaveKeyEpoch,
-    EventDbStoreDelete, EventDbStoreGet, EventDbStorePut, EventDbVaultPut,
+    EventDbAppendOutboxIndex, EventDbLoadLocalEventStoreFromStore, EventDbQueueOutboxEntry,
+    EventDbRemoveOutboxEntry, EventDbSaveEventBytes, EventDbSaveEventBytesToStore,
+    EventDbSaveHeads, EventDbSaveKeyEpoch,
 };
 
 pub(crate) use storage::identity_record::{
@@ -260,52 +257,38 @@ pub(crate) use storage::identity_record::{
 };
 
 pub(crate) use storage::identity_record::{
-    KeyringDbEntryForAppIdFromStore, KeyringDbKeyringDeleteKey, KeyringDbKeyringReadString,
-    KeyringDbLoadKeyringForStore, KeyringDbValidateKeyringDirectoryBinding, KeyringDbWriteKeyring,
+    KeyringDbKeyringDeleteKey, KeyringDbKeyringReadString, KeyringDbLoadKeyringForStore,
+    KeyringDbValidateKeyringDirectoryBinding, KeyringDbWriteKeyring,
 };
 
 pub(crate) use storage::indexed_db::{
     SentinelDbLoadSentinelGenesisShareDelivery, SentinelDbSaveSentinelGenesisShareDelivery,
-    SentinelDbSentinelGenesisShareKey,
 };
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use storage::auth_providers::ProviderDbWriteSnapshotAt;
 pub(crate) use storage::auth_providers::{
-    AuthProviderDatabase, ProviderDbLegacySnapshotBelongsToIdentity, ProviderDbProjectionsMatch,
-    ProviderDbReadRawSnapshotFromStore, ProviderDbRequireCompatibleLegacySnapshot,
+    AuthProviderDatabase, ProviderDbLegacySnapshotBelongsToIdentity,
+    ProviderDbReadRawSnapshotFromStore,
 };
 
 pub(crate) use passkey_browser::{
-    BrowserPasskeyBytesFromBuffer, BrowserPasskeyClient, BrowserPasskeyCreationOptions,
-    BrowserPasskeyCreationOptionsStruct, BrowserPasskeyCredentialCeremonyError,
-    BrowserPasskeyCredentialCeremonyErrorMessage, BrowserPasskeyCredentialFromPromise,
-    BrowserPasskeyGetOptionalArray, BrowserPasskeyGetOptionalBool, BrowserPasskeyGetOptionalBuffer,
-    BrowserPasskeyGetOptionalObject, BrowserPasskeyGetRequiredObject, BrowserPasskeyJsErrorText,
-    BrowserPasskeyPasskeyLabelWithDeviceId, BrowserPasskeyPasskeyLabelWithPasskeyHandle,
-    BrowserPasskeyPrfExtension, BrowserPasskeyPrfOutput, BrowserPasskeyRecoveryOptionsStruct,
-    BrowserPasskeyRequestOptions, BrowserPasskeyRequestOptionsStruct,
-    BrowserPasskeySetUint8ArrayField, BrowserPasskeySignalCurrentUserDetails,
-    BrowserPasskeyTrySignalCurrentUserDetails,
+    BrowserPasskeyClient, BrowserPasskeyCreationOptions, BrowserPasskeyGetOptionalArray,
+    BrowserPasskeyGetOptionalObject, BrowserPasskeyGetRequiredObject,
+    BrowserPasskeyPasskeyLabelWithDeviceId, BrowserPasskeyPrfOutput, BrowserPasskeyRequestOptions,
+    BrowserPasskeySignalCurrentUserDetails,
 };
 
 pub(crate) use passkey_observation::BrowserPasskeyObservation;
 
 pub(crate) use storage::github::{
-    GitHubStorageClient, GitHubStorageClientFetchGithubFileAtPath,
-    GitHubStorageClientFetchGithubVault, GitHubStorageClientGithubDirectoryListing,
-    GitHubStorageClientGithubFileResponse, GitHubStorageClientGithubPutResponse,
-    GitHubStorageClientGithubRepoCheckResult, GitHubStorageClientGithubUsernameResponse,
-    GitHubStorageClientLogGithubApiFailure, GitHubStorageClientWriteGithubTextFile,
-    GitHubVaultFile,
+    GitHubStorageClient, GitHubStorageClientFetchGithubVault,
+    GitHubStorageClientWriteGithubTextFile,
 };
 
 pub(crate) use storage::drive::{DriveStorageClient, DriveStorageClientDriveError};
 
-pub(crate) use storage::drive_shared::{
-    DriveStorageClientCreateFolderProjection, DriveStorageClientShareFolderWithEmail,
-    DriveStorageClientSharedDriveError, DriveStorageClientVerifyFolderProjection,
-};
+pub(crate) use storage::drive_shared::DriveStorageClientShareFolderWithEmail;
 
 pub(crate) use storage::extension_state::{
     ExtensionPairingDatabase, ExtensionPairingReconciliation,
@@ -313,22 +296,17 @@ pub(crate) use storage::extension_state::{
 
 pub(crate) use logger::LoggerState;
 
-pub(crate) use storage::identity_record::LegacyIdentityKeyMigration;
-
 pub(crate) use application::ConfiguredVaultApplication;
 
 pub(crate) use storage::session::VaultSessionLock;
 
 pub(crate) use identity_record::{
-    BrowserDirectorySelectionForSession, BrowserIdentityDirectorySnapshotForSession,
     BrowserProviderVaultIdentityObservations,
     BrowserProviderVaultIdentityObservationsFromProjection, BrowserSelectedVaultContextKind,
-    BrowserSelectedVaultCurrentAppGranted,
 };
 
 pub(crate) use device_access::{
-    BrowserDeviceAccessSnapshotForSession, BrowserDeviceAccessSnapshotForSessionWithProtected,
-    BrowserDeviceVaultAccessForIdentity, BrowserVaultAccessRows, BrowserVaultsForIdentity,
+    BrowserDeviceAccessSnapshotForSessionWithProtected, BrowserDeviceVaultAccessForIdentity,
 };
 
 pub(crate) use passkey_browser::PasskeyPrfRequirement;

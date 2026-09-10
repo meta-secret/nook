@@ -25,9 +25,12 @@ pub(in crate::manager) mod handoff_stages;
 mod handoff_transition;
 use crate::storage::device_access;
 use crate::storage::device_access::PasskeyCreationCeremony;
-use crate::storage::{event_db, identity_record};
+#[cfg(test)]
+use crate::storage::event_db;
+use crate::storage::identity_record;
 use crate::{DeviceProtectionDeviceModeState, NookDeviceAccessSnapshotRequest};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
+#[cfg(test)]
 use crate::{passkey_browser, passkey_observation};
 pub use handoff_stages::{
     NookAdoptedExtensionIdentityHandoff, NookCommittedExtensionIdentityHandoff,

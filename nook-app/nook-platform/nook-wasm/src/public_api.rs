@@ -1,22 +1,14 @@
-use self::provider_state::{
-    NookOAuthRemoteConfigurationUpdate, NookOAuthRemoteStorageReference, NookStagedStorageArgs,
-};
-use super::{NookLocalFolderConfig, NookStorageConnectArgs, passkey_browser, wasm_bindgen};
+use super::{NookLocalFolderConfig, NookStorageConnectArgs, wasm_bindgen};
 use crate::BrowserPasskeyRequestOptions;
 use crate::VaultSessionLock;
 use crate::storage::local_folder::LocalFolderHandles;
-use crate::storage::session;
 use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookTotpCode};
-use nook_core::{
-    PasswordGenerationOptions, StorageProviderType, TotpAlgorithm, TotpDigits, TotpPeriod,
-    TotpSecret,
-};
+use nook_core::{PasswordGenerationOptions, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
 use nook_core::{StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection};
 use nook_core::{
-    StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
-    StoredLocalFolderHandle, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
-    StoredOAuthRemoteFileName,
+    StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle, StoredOAuthAccessCredential,
+    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
 };
 use wasm_bindgen::JsError;
 

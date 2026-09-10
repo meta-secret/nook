@@ -9,7 +9,9 @@ use crate::NookDatabase;
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
 use crate::storage::indexed_db::{SentinelFinalizationJournal, StoredSentinelShareDelivery};
-use nook_core::{CreateSentinelShareRecordsRequest, DeviceId, SentinelShareEnvelope};
+use nook_core::DeviceId;
+#[cfg(test)]
+use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use nook_core::{
     MultiDeviceError, SentinelConfiguration, SentinelGenesisPhase, SentinelUnlockSigning, StoreId,
     SymmetricKey, VaultMetaState, VaultType,

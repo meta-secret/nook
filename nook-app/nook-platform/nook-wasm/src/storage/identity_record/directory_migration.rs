@@ -8,11 +8,13 @@ use crate::{
     IdentityDbMigrateDirectory, IdentityDbMigrateDirectoryInStore, IdentityDbPersistPendingGenesis,
     NookDatabase, NookError,
 };
+#[cfg(test)]
 use nook_core::MemberLabelState;
 use nook_core::{
     DirectoryLegacyMigration, IdentityDirectory, LegacyDirectoryBase, MigratedIdentityDirectory,
     MultiDeviceError,
 };
+#[cfg(test)]
 use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 impl NookDatabase {
     pub(super) async fn load_pending_genesis(
@@ -275,6 +277,7 @@ impl NookDatabase {
 #[cfg(test)]
 mod tests {
     use crate::storage::event_db;
+    #[cfg(target_arch = "wasm32")]
     use crate::storage::identity_record::SimpleGenesisProgress;
     use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 

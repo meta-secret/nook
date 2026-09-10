@@ -21,6 +21,7 @@ import {
 } from '../lib/enrollment-messages'
 import {
   RuntimeMessageDeliveryKind,
+  authenticationRuntimeTransport,
   type AuthenticatorBackupAttachResponse,
   type AuthenticatorEnrollmentConfirmResponse,
   type AuthenticatorEnrollmentStageResponse,
@@ -56,34 +57,34 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   sendDecodedRuntimeMessage: <Response>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
-  sendAuthenticationOutcomeRuntimeMessage: typeof import('./autofill/login-passkey-actions').sendAuthenticationOutcomeRuntimeMessage
+  sendAuthenticationOutcomeRuntimeMessage: typeof authenticationRuntimeTransport.sendAuthenticationOutcomeRuntimeMessage
   sendAuthenticatorBackupAttachRuntimeMessage: (
     message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendAuthenticatorBackupAttachRuntimeMessage
+      typeof authenticationRuntimeTransport.sendAuthenticatorBackupAttachRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
   sendAuthenticatorEnrollmentConfirmRuntimeMessage: (
     message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentConfirmRuntimeMessage
+      typeof authenticationRuntimeTransport.sendAuthenticatorEnrollmentConfirmRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentConfirmResponse>>
   sendAuthenticatorEnrollmentStageRuntimeMessage: (
     message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentStageRuntimeMessage
+      typeof authenticationRuntimeTransport.sendAuthenticatorEnrollmentStageRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentStageResponse>>
-  sendAuthenticatorCodeRuntimeMessage: typeof import('./autofill/login-passkey-actions').sendAuthenticatorCodeRuntimeMessage
+  sendAuthenticatorCodeRuntimeMessage: typeof authenticationRuntimeTransport.sendAuthenticatorCodeRuntimeMessage
   sendAuthenticatorOptionsRuntimeMessage: (
     message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendAuthenticatorOptionsRuntimeMessage
+      typeof authenticationRuntimeTransport.sendAuthenticatorOptionsRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>>
   sendAuthenticatorPreviewRuntimeMessage: (
     message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendAuthenticatorPreviewRuntimeMessage
+      typeof authenticationRuntimeTransport.sendAuthenticatorPreviewRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>>
-  sendRuntimeMessageWithoutResponse: typeof import('./autofill/login-passkey-actions').sendRuntimeMessageWithoutResponse
+  sendRuntimeMessageWithoutResponse: typeof authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (
     args: TranslatedMessageWithSubstitutionArgs,

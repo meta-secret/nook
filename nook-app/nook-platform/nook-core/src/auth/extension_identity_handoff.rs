@@ -162,6 +162,7 @@ pub struct ExtensionIdentityHandoffSource<'a> {
     pub signing: &'a SigningIdentity,
 }
 impl ExtensionIdentityHandoffSource<'_> {
+    #[must_use]
     pub fn binding(
         &self,
         request: &ExtensionIdentityHandoffSealRequest,

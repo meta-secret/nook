@@ -62,12 +62,14 @@ pub(super) struct SelectedProtonPassData<'bytes> {
     archive: ProtonPassArchive<'bytes>,
     index: usize,
 }
+#[cfg(test)]
 impl<'bytes> SelectedProtonPassData<'bytes> {
-    #[cfg(test)]
     fn cancel(self) -> ProtonPassArchive<'bytes> {
         self.archive
     }
+}
 
+impl SelectedProtonPassData<'_> {
     pub(super) fn read(mut self) -> Result<Zeroizing<String>, ProtonPassImportError> {
         let mut json = Zeroizing::new(String::new());
         self.archive

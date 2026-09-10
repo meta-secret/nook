@@ -4,6 +4,7 @@ use super::{
     ActivationClock, CompanionPairingCandidateFailure, PairingActivationCandidate,
     PairingActivationStorageAdmission,
 };
+#[cfg(test)]
 use crate::ExtensionPairingDatabase;
 use crate::NookDatabase;
 

@@ -63,7 +63,6 @@ impl PublishedOutboxEvent<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::event_fixture;
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
     impl OutboxFixture {

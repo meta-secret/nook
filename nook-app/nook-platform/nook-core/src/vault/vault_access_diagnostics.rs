@@ -126,7 +126,7 @@ impl VaultAccessDiagnosticRequest<'_> {
         }
         if let DeviceJoinStatus::Pending(_) =
             VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
-                records: records,
+                records,
                 device_id: identity.device_id(),
             })?
         {

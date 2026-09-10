@@ -5,15 +5,18 @@
 )]
 //! Identity persistence must complete before exact-marker cleanup becomes available.
 use super::super as identity_record;
+#[cfg(test)]
 use super::super::super::indexed_db;
 use super::VerifiedPreviousEpoch;
 use super::{
     IdentityReconciliationStore, NookError, PendingIdentityReconciliation,
     PendingIdentityReconciliationProgress,
 };
+#[cfg(test)]
+use crate::IdbPutStringRequest;
+use crate::NookDatabase;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::indexed_db::StoredStringRecord;
-use crate::{IdbPutStringRequest, NookDatabase};
 use identity_record::LegacyVaultIdentityInput;
 use nook_core::DirectoryLegacyVaultImport;
 use nook_core::{

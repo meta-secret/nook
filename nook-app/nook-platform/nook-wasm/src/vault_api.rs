@@ -1,18 +1,25 @@
 use super::{NookSecretRecord, NookVaultManager, wasm_bindgen};
 use crate::AuthProviderDatabase;
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::ConfiguredVaultApplication;
 use crate::ExtensionPairingDatabase;
 use crate::ExtensionPairingReconciliation;
+use crate::NookDatabase;
+#[cfg(all(test, target_arch = "wasm32"))]
+use crate::SetLocalVaultLabelRequest;
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::VaultSnapshotLookup;
 use crate::storage::auth_providers::{
     PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
 };
 use crate::storage::identity_record::StoredIdentityProtection;
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db::VaultUnlockHistory;
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::{auth_providers, extension_state, identity_record};
 use crate::vault_api_local::has_local_vault;
-use crate::{NookDatabase, SetLocalVaultLabelRequest};
 use js_sys::Date;
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::ActiveVaultScope;
 use nook_core::{
     ActiveProviderLoginSetup, AppId, DevicePublicKey, ProviderSaveOutcome, ProviderSaveSetup,

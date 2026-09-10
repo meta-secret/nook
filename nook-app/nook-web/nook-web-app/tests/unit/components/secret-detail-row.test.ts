@@ -12,6 +12,7 @@ import {
   SecretRevealKind,
   type SecretReveal,
 } from '$lib/components/secret-vault-state'
+import { ok } from 'neverthrow'
 
 const vault = {
   t(key: string): string {
@@ -47,7 +48,7 @@ function authenticatorProps(
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
-    onDeleteSecret: vi.fn(async () => {}),
+    onDeleteSecret: vi.fn(async () => ok()),
     onCopyToClipboard: vi.fn(async () => {}),
     onCopySecret: vi.fn(async () => {}),
     vault,
@@ -79,7 +80,7 @@ function renderLogin(item: NookSecretListItem) {
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
-    onDeleteSecret: vi.fn(async () => {}),
+    onDeleteSecret: vi.fn(async () => ok()),
     onCopyToClipboard: vi.fn(async () => {}),
     onCopySecret: vi.fn(async () => {}),
     vault,

@@ -38,6 +38,16 @@ type CloudKitElementLookup =
   | { kind: CloudKitElementLookupKind.Missing }
   | { kind: CloudKitElementLookupKind.Found; element: HTMLElement };
 
+type CloudKitElementDiagnostics = {
+  present: boolean;
+  tag?: string;
+  id?: string;
+  className?: string;
+  role?: string;
+  childElementCount?: number;
+  textLength?: number;
+};
+
 export type CloudKitUserIdentity = {
   userRecordName?: string;
   nameComponents?: { givenName?: string; familyName?: string };
@@ -414,15 +424,9 @@ class CloudKitRuntime {
     };
   }
 
-  private elementDiagnostics(lookup: CloudKitElementLookup): {
-    present: boolean;
-    tag?: string;
-    id?: string;
-    className?: string;
-    role?: string;
-    childElementCount?: number;
-    textLength?: number;
-  } {
+  private elementDiagnostics(
+    lookup: CloudKitElementLookup,
+  ): CloudKitElementDiagnostics {
     if (lookup.kind === CloudKitElementLookupKind.Missing) {
       return { present: false };
     }
@@ -452,9 +456,9 @@ class CloudKitRuntime {
   }
 
   cloudKitSignInControlDiagnostics(): {
-    mount: ReturnType<typeof this.elementDiagnostics>;
-    control: ReturnType<typeof this.elementDiagnostics>;
-    signOutMount: ReturnType<typeof this.elementDiagnostics>;
+    mount: CloudKitElementDiagnostics;
+    control: CloudKitElementDiagnostics;
+    signOutMount: CloudKitElementDiagnostics;
   } {
     const mount = this.cloudKitElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
     const control: CloudKitElementLookup =

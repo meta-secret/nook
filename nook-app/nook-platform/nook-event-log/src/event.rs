@@ -54,6 +54,7 @@ impl fmt::Display for VaultEventSchemaVersion {
 pub struct EncryptedSecretPayload {
     pub id: SecretId,
     #[serde(rename = "type")]
+    #[tsify(type = "SecretTypeWire")]
     pub secret_type: SecretType,
     pub ciphertext: OpaqueCiphertext,
     pub identity_fingerprint: SecretFingerprint,

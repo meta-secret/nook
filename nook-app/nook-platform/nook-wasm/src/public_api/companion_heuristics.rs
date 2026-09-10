@@ -8,8 +8,6 @@ use nook_companion_core::{SentinelVaultMatch, VaultAppBaseSelection};
 use nook_core::AuthenticationControlText;
 use nook_core::AuthenticationPageObservation;
 use nook_core::BackupCodePageText;
-use nook_core::LoginContextObservation;
-use nook_core::PageInputFieldObservation;
 use nook_core::VaultHostObservation;
 use nook_core::VaultHostPolicy;
 use nook_core::{OAuthOriginSupport, OAuthOriginUnsupportedReason, PageInputType};

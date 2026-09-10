@@ -76,7 +76,6 @@ impl SentinelGenesisPhase {
         }
     }
 
-    #[must_use]
     pub const fn complete_delivery(self) -> Result<Self, SentinelDeliveryNotPending> {
         if matches!(self, Self::DeliveringShares) {
             Ok(Self::Complete)

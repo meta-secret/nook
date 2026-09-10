@@ -26,11 +26,17 @@ describe('discovery deadline ownership', () => {
   it('releases a handle produced after timeout instead of publishing it', async () => {
     vi.useFakeTimers()
     const handle = { free: vi.fn() }
-    const operation =
-      Promise.withResolvers<Result<typeof handle, VaultStorageFailure>>()
+    let resolveOperation!: (
+      value: Result<typeof handle, VaultStorageFailure>,
+    ) => void
+    const operation = new Promise<Result<typeof handle, VaultStorageFailure>>(
+      (resolve) => {
+        resolveOperation = resolve
+      },
+    )
     const owner = new VaultDiscoveryTimeout({ timeoutMs: 10 })
     const waiting = owner.waitFor({
-      operation: operation.promise,
+      operation,
       releaseLateValue: (value) => value.free(),
     })
     await vi.advanceTimersByTimeAsync(10)
@@ -38,7 +44,7 @@ describe('discovery deadline ownership', () => {
     expect(outcome.isErr()).toBe(true)
     if (outcome.isErr())
       expect(outcome.error.kind).toBe(VaultStorageFailureKind.TimedOut)
-    operation.resolve(ok(handle))
+    resolveOperation(ok(handle))
     await Promise.resolve()
     expect(handle.free).toHaveBeenCalledOnce()
   })

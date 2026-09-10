@@ -95,6 +95,7 @@ type DeviceProtectionRecoveryState = Pick<
   | "clearUnlockedSession"
   | "clearOauthFile"
   | "clearLocalFolder"
+  | "dismissSuccess"
   | "showSuccess"
   | "t"
 > & {

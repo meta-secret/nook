@@ -302,7 +302,8 @@ impl fmt::Debug for PasskeySecret {
     }
 }
 
-/// Named values required by PasskeySecret::validate_text_field.
+/// Named values required by `PasskeySecret::validate_text_field`.
+#[derive(Clone, Copy)]
 struct PasskeyTextField<'a> {
     name: &'static str,
     value: &'a str,
@@ -310,7 +311,8 @@ struct PasskeyTextField<'a> {
     maximum: usize,
 }
 
-/// Named values required by PasskeySecret::validate_base64url_field.
+/// Named values required by `PasskeySecret::validate_base64url_field`.
+#[derive(Clone, Copy)]
 struct PasskeyEncodedField<'a> {
     name: &'static str,
     encoded: &'a str,

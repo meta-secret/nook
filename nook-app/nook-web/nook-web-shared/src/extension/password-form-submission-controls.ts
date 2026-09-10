@@ -316,7 +316,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     return this.htmlEnumeratedSubmissionMethod(token ? token : "");
   }
 
-  private controlHasNativeSubmitSemantics(control: HTMLElement): boolean {
+  controlHasNativeSubmitSemantics(control: HTMLElement): boolean {
     if (control instanceof HTMLButtonElement) {
       return control.type !== "button" && control.type !== "reset";
     }
@@ -666,7 +666,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
         sourceOrigin,
         formIdentity,
         destinationIdentity,
-        this.controlLabel.bind(this),
+        controlLabel,
         machineIdentity,
       ])
     ) {
@@ -715,7 +715,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
         sourceOrigin,
         formIdentity: formIdentity.trim(),
         destinationIdentity,
-        label: this.controlLabel.bind(this),
+        label: controlLabel,
         machineIdentity,
         submissionMethod: this.controlSubmissionMethod(control),
         submissionDestinationSource:
@@ -728,7 +728,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       sourceOrigin,
       formIdentity,
       destinationIdentity,
-      this.controlLabel.bind(this),
+      controlLabel,
       machineIdentity,
       true,
       passwordFieldDiscovery.isAuthUsernameField(query.usernameField),

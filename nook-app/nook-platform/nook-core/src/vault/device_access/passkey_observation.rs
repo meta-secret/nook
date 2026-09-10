@@ -69,6 +69,7 @@ pub enum AuthenticatorGuidEvidence {
     Reported(String),
 }
 impl AuthenticatorGuidEvidence {
+    #[must_use]
     pub fn is_unreported(&self) -> bool {
         matches!(self, Self::NotReported)
     }
@@ -147,17 +148,13 @@ pub enum PasskeyCreatedAtEvidence {
     },
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(untagged)]
 pub(super) enum PasskeyCreatedAtEvidenceWire {
     Explicit(PasskeyCreatedAtEvidence),
     LegacyTimestamp(IsoTimestamp),
+    #[default]
     LegacyUnavailable,
-}
-impl Default for PasskeyCreatedAtEvidenceWire {
-    fn default() -> Self {
-        Self::LegacyUnavailable
-    }
 }
 impl From<PasskeyCreatedAtEvidenceWire> for PasskeyCreatedAtEvidence {
     fn from(wire: PasskeyCreatedAtEvidenceWire) -> Self {
@@ -180,17 +177,13 @@ pub enum PasskeyLastUsedAtEvidence {
     },
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(untagged)]
 pub(super) enum PasskeyLastUsedAtEvidenceWire {
     Explicit(PasskeyLastUsedAtEvidence),
     LegacyTimestamp(IsoTimestamp),
+    #[default]
     LegacyUnavailable,
-}
-impl Default for PasskeyLastUsedAtEvidenceWire {
-    fn default() -> Self {
-        Self::LegacyUnavailable
-    }
 }
 impl From<PasskeyLastUsedAtEvidenceWire> for PasskeyLastUsedAtEvidence {
     fn from(wire: PasskeyLastUsedAtEvidenceWire) -> Self {

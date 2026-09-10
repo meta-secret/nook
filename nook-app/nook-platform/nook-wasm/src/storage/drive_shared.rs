@@ -6,8 +6,10 @@
 //! files under that parent.
 
 use crate::DriveStorageClient;
+#[cfg(test)]
 use crate::DriveStorageClientDriveError;
 use nook_core::i18n_keys;
+#[cfg(test)]
 use reqwest::Client;
 
 use super::drive::wire::{
@@ -478,12 +480,12 @@ pub(crate) struct DriveStorageClientSharedDriveError<'a> {
 }
 /// Named values required by DriveStorageClient::create_folder_projection.
 pub(crate) struct DriveStorageClientCreateFolderProjection<'a> {
-    pub(crate) parsed: DriveFileCreateResponse,
+    parsed: DriveFileCreateResponse,
     pub(crate) fallback_name: &'a str,
 }
 
 /// Named values required by DriveStorageClient::verify_folder_projection.
 pub(crate) struct DriveStorageClientVerifyFolderProjection {
-    pub(crate) parsed: DriveFolderMetadataResponse,
+    parsed: DriveFolderMetadataResponse,
     pub(crate) fallback_id: String,
 }

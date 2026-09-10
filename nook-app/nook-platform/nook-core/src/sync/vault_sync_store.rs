@@ -10,7 +10,8 @@
 //! only be committed to the same stores. [`VaultSyncFanOut`] applies that
 //! transition sequentially to every remote provider.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::{error, fmt};
 
 use crate::errors::VaultSyncError;
 use crate::vault_sync::{CommonContentHash, VaultSyncAction, VaultSyncComparison};
@@ -106,11 +107,13 @@ impl MemoryVaultStore {
         self.revision.as_ref()
     }
 
+    #[must_use]
     pub fn set_blob(mut self, blob: impl Into<String>) -> Self {
         self.blob = blob.into();
         self
     }
 
+    #[must_use]
     pub fn set_revision(mut self, revision: StoreRevision) -> Self {
         self.revision = revision;
         self
@@ -158,6 +161,7 @@ impl MemoryVaultStore {
     }
 
     /// Resolve a conflict by replacing `remote` with this local store.
+    #[must_use]
     pub fn keep_local(&self, mut remote: Self) -> Self {
         remote.blob.clone_from(&self.blob);
         remote.revision = StoreRevision::Version(remote.revision.next());
@@ -165,6 +169,7 @@ impl MemoryVaultStore {
     }
 
     /// Resolve a conflict by replacing this local store with `remote`.
+    #[must_use]
     pub fn keep_remote(mut self, remote: &Self) -> Self {
         self.blob.clone_from(&remote.blob);
         self.revision.clone_from(&remote.revision);
@@ -185,12 +190,12 @@ pub struct RejectedVaultSync {
     pub remote: MemoryVaultStore,
     pub cause: VaultSyncError,
 }
-impl std::fmt::Display for RejectedVaultSync {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for RejectedVaultSync {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.cause.fmt(f)
     }
 }
-impl std::error::Error for RejectedVaultSync {}
+impl error::Error for RejectedVaultSync {}
 #[derive(Debug)]
 pub struct GuardedVaultWrite {
     pub store: MemoryVaultStore,
@@ -201,12 +206,12 @@ pub struct RejectedVaultWrite {
     pub store: MemoryVaultStore,
     pub cause: VaultSyncError,
 }
-impl std::fmt::Display for RejectedVaultWrite {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for RejectedVaultWrite {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.cause.fmt(f)
     }
 }
-impl std::error::Error for RejectedVaultWrite {}
+impl error::Error for RejectedVaultWrite {}
 
 pub struct VaultSyncPair<'a> {
     local: MemoryVaultStore,
@@ -214,9 +219,11 @@ pub struct VaultSyncPair<'a> {
     last_common_content_hash: CommonContentHash<'a>,
 }
 impl<'a> VaultSyncPair<'a> {
+    #[must_use]
     pub fn new(local: MemoryVaultStore, remote: MemoryVaultStore) -> Self {
         Self::with_common(local, remote, CommonContentHash::Unknown)
     }
+    #[must_use]
     pub fn with_common(
         local: MemoryVaultStore,
         remote: MemoryVaultStore,
@@ -256,10 +263,12 @@ pub struct PreparedVaultSync {
     action: VaultSyncAction,
 }
 impl PreparedVaultSync {
+    #[must_use]
     pub fn action(&self) -> VaultSyncAction {
         self.action
     }
     /// Return inspected stores without committing their prepared transition.
+    #[must_use]
     pub fn cancel(self) -> SyncedVaultStores {
         SyncedVaultStores {
             local: self.local,
@@ -267,6 +276,7 @@ impl PreparedVaultSync {
             action: self.action,
         }
     }
+    #[must_use]
     pub fn commit(self) -> SyncedVaultStores {
         let Self {
             mut local,
@@ -304,21 +314,20 @@ pub struct RejectedVaultFanOut {
     pub stores: VaultSyncFanOut,
     pub cause: VaultSyncError,
 }
-impl std::fmt::Display for RejectedVaultFanOut {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for RejectedVaultFanOut {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.cause.fmt(f)
     }
 }
-impl std::error::Error for RejectedVaultFanOut {}
+impl error::Error for RejectedVaultFanOut {}
 impl VaultSyncFanOut {
+    #[must_use]
     pub fn new(local: MemoryVaultStore, remotes: HashMap<String, MemoryVaultStore>) -> Self {
         Self { local, remotes }
     }
     pub fn run(self) -> Result<CompletedVaultFanOut, RejectedVaultFanOut> {
         let Self { mut local, remotes } = self;
-        let mut pending = remotes
-            .into_iter()
-            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut pending = remotes.into_iter().collect::<BTreeMap<_, _>>();
         let mut completed = HashMap::new();
         let mut actions = Vec::new();
         while let Some((id, remote)) = pending.pop_first() {

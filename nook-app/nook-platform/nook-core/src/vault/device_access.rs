@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::{error, fmt};
 use wasm_bindgen::prelude::wasm_bindgen;
 
+use crate::errors::ValidationError;
 use crate::{DeviceId, IsoTimestamp, StoreId};
 
 mod actions;
@@ -166,7 +167,7 @@ struct VerifiedVaultAccessWire {
     verified_at: IsoTimestamp,
 }
 impl TryFrom<VerifiedVaultAccessWire> for VerifiedVaultAccess {
-    type Error = crate::errors::ValidationError;
+    type Error = ValidationError;
     fn try_from(wire: VerifiedVaultAccessWire) -> Result<Self, Self::Error> {
         Ok(Self {
             device_id: DeviceId::parse(&wire.device_id)?,
@@ -290,6 +291,7 @@ impl DeviceAccessProfile {
         Ok(self)
     }
 
+    #[must_use]
     pub fn record_passkey_created(
         mut self,
         credential_fingerprint: &str,
@@ -318,19 +320,20 @@ impl DeviceAccessProfile {
         self
     }
 
+    #[must_use]
     pub fn record_passkey_used(
         mut self,
         credential_fingerprint: &str,
         observation: PasskeyBrowserObservation,
         now: IsoTimestamp,
     ) -> Self {
-        if let DeviceCredentialProfile::Passkey(mut passkey) = self.credential {
-            if passkey.credential_fingerprint == credential_fingerprint {
-                passkey.last_used_at = PasskeyLastUsedAtEvidence::Known { timestamp: now };
-                passkey.observation = passkey.observation.merge_usage(observation);
-                self.credential = DeviceCredentialProfile::Passkey(passkey);
-                return self;
-            }
+        if let DeviceCredentialProfile::Passkey(mut passkey) = self.credential
+            && passkey.credential_fingerprint == credential_fingerprint
+        {
+            passkey.last_used_at = PasskeyLastUsedAtEvidence::Known { timestamp: now };
+            passkey.observation = passkey.observation.merge_usage(observation);
+            self.credential = DeviceCredentialProfile::Passkey(passkey);
+            return self;
         }
         self.credential = DeviceCredentialProfile::Passkey(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
@@ -341,6 +344,7 @@ impl DeviceAccessProfile {
         self
     }
 
+    #[must_use]
     pub fn record_verified_vault_access(
         mut self,
         device_id: &DeviceId,

@@ -1,9 +1,6 @@
 use super::types::{NookOtpauthPreview, NookTotpCode};
 use super::{NookError, NookSecretFormFields, types, wasm_bindgen};
-use crate::DriveStorageClient;
-use crate::SharedDriveGrantPolicy;
 use js_sys::Date;
-use nook_core::CreditCardFields;
 use nook_core::SecretFormFields;
 use nook_core::{
     AuthenticatorSecret, BackupCodeAttachMode, SecretListItemData, SecretType, SecretTypeFilter,
@@ -384,7 +381,8 @@ mod wasm_tests {
     };
     use nook_core::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, AuthenticatorIssuerHosts,
-        CreditCardSecret, OauthFilePreset, SecretId, SecretValue, StorageProviderType,
+        CreditCardFields, CreditCardSecret, OauthFilePreset, SecretId, SecretValue,
+        StorageProviderType,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 

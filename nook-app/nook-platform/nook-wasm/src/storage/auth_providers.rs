@@ -5,8 +5,11 @@
 //! identity so nothing sensitive is stored in plaintext. Pure snapshot
 //! transforms live in `nook_core`; this module adds the `IndexedDB` I/O and sealing.
 
+#[cfg(test)]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
+#[cfg(test)]
 use crate::storage::identity_record::PriorAppAuthorization;
+#[cfg(test)]
 use nook_core::{
     StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
     StoredOAuthRefreshCredential,
@@ -14,13 +17,16 @@ use nook_core::{
 
 mod publication;
 mod rollback_projection;
-use crate::{IdbPutStringRequest, NookDatabase, NookError};
+use crate::NookError;
+#[cfg(test)]
+use crate::{IdbPutStringRequest, NookDatabase};
 use publication::ProviderSnapshotStore;
 pub(crate) use publication::{PresealedProviderSnapshotPublication, ProviderSnapshotPublication};
 
 use rexie::{ObjectStore, Rexie, TransactionMode};
 use serde_json::Value;
 
+#[cfg(test)]
 use nook_core::AuthProvidersSnapshotData;
 use nook_core::{DeviceIdentity, NormalizedAuthSnapshot};
 

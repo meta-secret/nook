@@ -52,8 +52,7 @@ impl<'a> SecretEpochReencryption<'a> {
             let RecordTypeDeclaration::Secret(secret_type) = record.secret_type else {
                 return Err(VaultEpochError::MissingSecretType {
                     key: record.key.to_string(),
-                }
-                .into());
+                });
             };
             let armored =
                 AgeArmoredCiphertext::from_trusted_armored(record.value.as_str().to_owned());
@@ -132,11 +131,11 @@ impl<'a> MembersCheckpointHash<'a> {
             new_members_key,
         } = self;
         let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
-            records: records,
+            records,
             members_key: old_members_key,
         })?;
         let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: roster,
+            roster,
             members_key: new_members_key,
         })?;
         let json = serde_json::to_string(&member_records)
@@ -190,7 +189,7 @@ impl<'a> VaultMetaRecordRewrap<'a> {
         }
         records.extend(VaultMember::build_members_records(
             BuildMembersRecordsRequest {
-                roster: roster,
+                roster,
                 members_key: &new_keys.members_key,
             },
         )?);

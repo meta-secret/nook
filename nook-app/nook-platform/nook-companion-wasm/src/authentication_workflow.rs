@@ -90,7 +90,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
     AuthenticationWorkflowMatch::authentication_enrollment_workflow_match(
         AuthenticationEnrollmentObservation {
             authenticator_setup_hint: authenticator_setup_hint.into(),
-            backup_codes_copy: backup_codes_copy,
+            backup_codes_copy,
             manual_checkpoint_present: manual_checkpoint_present.into(),
         },
     )

@@ -7,8 +7,12 @@ use crate::storage::indexed_db::StoredStringRecord;
 use nook_core::LocalIdentityProtection;
 
 use crate::NookDatabase;
-use crate::storage::{event_db, indexed_db};
-use crate::{NookError, storage};
+use crate::NookError;
+#[cfg(test)]
+use crate::storage;
+use crate::storage::event_db;
+#[cfg(test)]
+use crate::storage::indexed_db;
 use nook_core::{IdentitySelection, LocalIdentityKeyring};
 use rexie::TransactionMode;
 

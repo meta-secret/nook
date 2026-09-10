@@ -76,6 +76,7 @@ impl AuthProvidersSnapshotData {
 }
 
 impl ActiveVaultProviderRows<'_> {
+    #[must_use]
     pub fn sync(self) -> Vec<StorageProviderData> {
         self.active()
             .into_iter()
@@ -90,6 +91,7 @@ pub enum LocalProviderSelection {
     Selected(Box<StorageProviderData>),
 }
 impl ActiveVaultProviderRows<'_> {
+    #[must_use]
     pub fn local(self) -> LocalProviderSelection {
         for provider in self.active() {
             if provider.provider_type == StorageProviderType::Local {
@@ -500,6 +502,7 @@ pub enum ProviderEventFlushTarget {
     Remote,
 }
 impl StorageProviderData {
+    #[must_use]
     pub fn event_flush_target(&self, vault_store_id: &str) -> ProviderEventFlushTarget {
         if !matches!(&self.store_id, ProviderVaultScope::StoreId(id) if id == vault_store_id) {
             return ProviderEventFlushTarget::OtherVault;
@@ -515,6 +518,7 @@ impl StorageProviderData {
     }
 }
 impl RemoteEventFlushProviderRequest {
+    #[must_use]
     pub fn select(self) -> Vec<StorageProviderData> {
         self.snapshot
             .providers

@@ -4,23 +4,31 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Signing material bound to independently protected local identity entries.
+#[cfg(test)]
 use super as keyring;
+#[cfg(test)]
+use crate::IdbPutStringRequest;
 use crate::IdentityDbWriteIdentityDirectory;
 use crate::KeyringDbKeyringDeleteKey;
 use crate::KeyringDbKeyringReadString;
 use crate::KeyringDbLoadKeyringForStore;
 use crate::KeyringDbWriteKeyring;
+use crate::storage::event_db;
 use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::indexed_db::StoredStringRecord;
-use crate::storage::{self, event_db, identity_record};
-use crate::{IdbPutStringRequest, NookDatabase, NookError};
+#[cfg(test)]
+use crate::storage::{self, identity_record};
+use crate::{NookDatabase, NookError};
+#[cfg(test)]
+use nook_core::LocalIdentityKeyringEntry;
 use nook_core::LocalIdentityProtection;
+#[cfg(test)]
 use nook_core::MemberLabelState;
 use nook_core::ProtectedSigningMaterial;
 use nook_core::{
     AppId, AppKey, DeviceSigningPublicKey, IdentityDirectory, IdentityId, IdentitySelection,
-    IdentitySigningSeedProtection, LocalIdentityKeyring, LocalIdentityKeyringEntry,
-    SigningIdentity, SigningSeedProtection, i18n_keys,
+    IdentitySigningSeedProtection, LocalIdentityKeyring, SigningIdentity, SigningSeedProtection,
+    i18n_keys,
 };
 use nook_core::{DirectoryMemberSigningUpdate, IdentityMemberSigningUpdate};
 use rexie::{Store, TransactionMode};
@@ -354,9 +362,13 @@ impl LocalIdentitySigner<'_> {
 }
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
     use crate::storage;
+    use crate::storage::event_db;
+    #[cfg(target_arch = "wasm32")]
     use crate::storage::identity_record::PriorAppAuthorization;
-    use crate::storage::{event_db, indexed_db};
+    #[cfg(target_arch = "wasm32")]
+    use crate::storage::indexed_db;
     use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use nook_core::{
         AppKey, DeviceSigningPublicKey, IdentityRecord, LocalIdentityKeyringEntry, SigningIdentity,

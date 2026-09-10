@@ -5,14 +5,21 @@ import {
   type PasskeyAssertionRequest,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { extensionWasmRuntime } from './nook-wasm'
-export enum WebsitePasskeyCeremony {
-  Create = 'create',
-  Get = 'get',
-}
+import {
+  WebsitePasskeyCancelMessageType,
+  WebsitePasskeyCeremony,
+  WebsitePasskeyOptionsMessageType,
+  WebsitePasskeyOptionsStatus,
+  WebsitePasskeyPerformMessageType,
+} from './webauthn-message-types'
 
-export enum WebsitePasskeyOptionsMessageType {
-  NookWebsitePasskeyOptions = 'nook:website-passkey-options',
-}
+export {
+  WebsitePasskeyCancelMessageType,
+  WebsitePasskeyCeremony,
+  WebsitePasskeyOptionsMessageType,
+  WebsitePasskeyOptionsStatus,
+  WebsitePasskeyPerformMessageType,
+} from './webauthn-message-types'
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class WebsitePasskeyOptionsMessage {
@@ -112,10 +119,6 @@ export class WebsitePasskeyOptionsMessage {
   }
 }
 
-export enum WebsitePasskeyPerformMessageType {
-  NookWebsitePasskeyPerform = 'nook:website-passkey-perform',
-}
-
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class WebsitePasskeyPerformMessage {
   private constructor() {}
@@ -138,10 +141,6 @@ export class WebsitePasskeyPerformMessage {
           message.payload.credentialId.length > 0))
     )
   }
-}
-
-export enum WebsitePasskeyCancelMessageType {
-  NookWebsitePasskeyCancel = 'nook:website-passkey-cancel',
 }
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
@@ -179,13 +178,6 @@ export type WebsitePasskeyVaultOption = {
   vaultStoreId: string
   vaultName: string
   account?: WebsitePasskeyAccount
-}
-
-export enum WebsitePasskeyOptionsStatus {
-  Unavailable = 'unavailable',
-  Locked = 'locked',
-  Invalid = 'invalid',
-  Ready = 'ready',
 }
 
 export type WebsitePasskeyOptionsResponse =

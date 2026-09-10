@@ -5,10 +5,13 @@
 )]
 //! Identity-scoped persistence and legacy migration for device-access profiles.
 
+#[cfg(test)]
+use crate::IdbPutStringRequest;
 use crate::NookDatabase;
 use crate::storage::identity_record::StoredIdentityProtection;
+#[cfg(test)]
 use crate::storage::{identity_record, indexed_db};
-use crate::{IdbPutStringRequest, IndexedDbFallbackUpdate, IndexedDbMigration, NookError};
+use crate::{IndexedDbFallbackUpdate, IndexedDbMigration, NookError};
 use crate::{StoredStringRecord, StringRecordFallback};
 use nook_core::AppId;
 

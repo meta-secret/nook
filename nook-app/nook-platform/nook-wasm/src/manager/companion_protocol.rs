@@ -43,6 +43,10 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn admit_companion_identity_status(
     request: CompanionIdentityStatusAdmissionRequest,
 ) -> CompanionIdentityStatusAdmission {
@@ -51,6 +55,10 @@ pub fn admit_companion_identity_status(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn admit_companion_handoff_response(
     response: CompanionIdentityHandoffResponse,
 ) -> CompanionHandoffResponseAdmission {

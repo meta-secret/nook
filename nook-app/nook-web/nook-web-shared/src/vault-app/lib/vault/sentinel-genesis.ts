@@ -351,9 +351,7 @@ export class SentinelGenesisActions {
 
   async acceptShareDelivery({
     payload,
-  }: SentinelGenesisShareDelivery): Promise<
-    Result<void, StorageOperationFailure>
-  > {
+  }: SentinelGenesisShareDelivery): Promise<SentinelActionResult<void>> {
     const state = this.state;
     if (state.isVerifying)
       return storageErr(

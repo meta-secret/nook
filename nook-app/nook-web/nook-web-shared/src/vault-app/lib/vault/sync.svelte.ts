@@ -50,7 +50,6 @@ import {
 } from "$lib/vault/sync-operation-state";
 import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
-import { VaultSyncRuntimeActions } from "$lib/vault/sync-runtime";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
 

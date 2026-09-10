@@ -1,9 +1,11 @@
 use super::super::{CeremonyState, NookVaultManager, VaultNameState};
 use super::StoredSentinelGenesisDelivery;
 use crate::NookDatabase;
+#[cfg(test)]
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
 use crate::storage::indexed_db::SentinelFinalizationJournal;
+#[cfg(test)]
 use crate::storage::indexed_db::StoredSentinelShareDelivery;
 
 use crate::{NookError, NookSentinelGenesisFinalizeResult};

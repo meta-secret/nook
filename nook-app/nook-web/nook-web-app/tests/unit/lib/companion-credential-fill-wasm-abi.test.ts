@@ -652,7 +652,7 @@ describe('companion credential-fill WASM ABI', () => {
       expect(maxCount).toBeInstanceOf(CredentialFillObservationCount)
       for (let count = 0; count <= maxCount.value; count += 1) {
         {
-          const receiver = fields.handle
+          const receiver: CredentialFillObservations = fields.handle
           fields = { kind: CredentialFillHandlePhase.Consumed }
           fields = {
             kind: CredentialFillHandlePhase.Owned,
@@ -671,7 +671,7 @@ describe('companion credential-fill WASM ABI', () => {
         result.free()
       }
       {
-        const receiver = fields.handle
+        const receiver: CredentialFillObservations = fields.handle
         fields = { kind: CredentialFillHandlePhase.Consumed }
         fields = {
           kind: CredentialFillHandlePhase.Owned,

@@ -73,6 +73,7 @@ pub struct SentinelPolicyDraftEvaluation {
     pub threshold_choices: Vec<SentinelThreshold>,
 }
 impl SentinelPolicyDraft {
+    #[must_use]
     pub fn evaluate(self) -> SentinelPolicyDraftEvaluation {
         let participant_choices = SentinelParticipantCount::supported_quorums();
         let participants = SentinelParticipantCount::try_from(self.participants).ok();
@@ -110,6 +111,11 @@ pub struct SentinelParticipantDraftValue(f64);
 pub struct SentinelThresholdDraftValue(f64);
 impl TryFrom<SentinelParticipantDraftValue> for SentinelParticipantCount {
     type Error = MultiDeviceError;
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "finite integral browser values are range-checked before conversion"
+    )]
     fn try_from(draft: SentinelParticipantDraftValue) -> Result<Self, Self::Error> {
         let raw = draft.0;
         if !raw.is_finite() || raw.fract() != 0.0 || raw < 0.0 || raw > f64::from(u8::MAX) {
@@ -120,6 +126,11 @@ impl TryFrom<SentinelParticipantDraftValue> for SentinelParticipantCount {
 }
 impl TryFrom<SentinelThresholdDraftValue> for SentinelThreshold {
     type Error = MultiDeviceError;
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "finite integral browser values are range-checked before conversion"
+    )]
     fn try_from(draft: SentinelThresholdDraftValue) -> Result<Self, Self::Error> {
         let raw = draft.0;
         if !raw.is_finite() || raw.fract() != 0.0 || raw < 0.0 || raw > f64::from(u8::MAX) {

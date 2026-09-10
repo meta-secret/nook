@@ -26,6 +26,7 @@ pub struct ProviderCredentialRejection {
 }
 impl ProviderCredentialRejection {
     /// Discard an admitted snapshot at a failed I/O boundary without retaining tokens.
+    #[must_use]
     pub fn into_cause(mut self) -> MultiDeviceError {
         for provider in &mut self.snapshot.providers {
             if let StoredGithubPat::Token(value) = &mut provider.github_pat {
@@ -90,6 +91,7 @@ impl AuthProvidersSnapshotData {
     }
 }
 
+#[derive(Clone, Copy)]
 enum CredentialTransition<'a> {
     Seal(&'a DevicePublicKey),
     Open(&'a DeviceIdentity),
@@ -143,7 +145,7 @@ impl CredentialTransition<'_> {
                             StoredOAuthRefreshCredential::Token(self.project_field(value)?)
                         }
                     },
-                    preset: oauth.preset.clone(),
+                    preset: oauth.preset,
                     expires_at: oauth.expires_at.clone(),
                     file_id: oauth.file_id.clone(),
                     folder_id: oauth.folder_id.clone(),

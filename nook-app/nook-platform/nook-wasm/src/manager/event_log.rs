@@ -1,10 +1,12 @@
 //! Event-log persistence and provider fan-out.
 
+#[cfg(test)]
 use crate::BrowserTimestamp;
 use crate::EventDbSaveHeads;
 use crate::EventDbSaveKeyEpoch;
 use crate::manager::device_protection::ExtensionIdentityPublication;
 use crate::storage::event_db::StoredKeyEpoch;
+#[cfg(test)]
 use crate::storage::identity_record;
 use crate::storage::identity_record::LocalIdentitySigner;
 use crate::storage::identity_record::StoredIdentityProtection;

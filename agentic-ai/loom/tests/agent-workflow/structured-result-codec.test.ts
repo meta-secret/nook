@@ -219,6 +219,30 @@ test('rejects extra fields at the structured output boundary', () => {
   ).toThrow('missing or extra fields');
 });
 
+test('reports the invalid field type at the structured output boundary', () => {
+  const valid = {
+    resultKind: WorkflowResultKind.CortexEvidence,
+    summary: 'Audited.',
+    materializedViewMarkdown: '# Audit\n\nAudited.',
+    findings: [],
+    notesForParent: [],
+    artifacts: [],
+  };
+
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutputNode({
+      ...valid,
+      summary: 123,
+    }),
+  ).toThrow('workflow structured result expected a string');
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutputNode({
+      ...valid,
+      findings: {},
+    }),
+  ).toThrow('workflow findings must be an array');
+});
+
 test('decodes a valid typed task output', () => {
   const output: WorkflowTaskOutput = {
     resultKind: WorkflowResultKind.CortexEvidence,

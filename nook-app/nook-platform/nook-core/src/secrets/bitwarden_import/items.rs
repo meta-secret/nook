@@ -19,7 +19,7 @@ struct BitwardenText(String);
 impl<'de> Deserialize<'de> for BitwardenText {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct TextVisitor;
-        impl<'de> Visitor<'de> for TextVisitor {
+        impl Visitor<'_> for TextVisitor {
             type Value = BitwardenText;
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                 formatter.write_str("Bitwarden text or null")

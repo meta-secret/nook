@@ -8,9 +8,11 @@ use super::{
     PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
     PinnedSimpleGenesisEvent,
 };
+#[cfg(test)]
+use crate::IdbPutStringRequest;
 use crate::StoredStringRecord;
 use crate::storage::identity_record::PendingSimpleGenesisFlow;
-use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
+use crate::{IndexedDbUpdate, NookDatabase};
 use crate::{NookError, storage::indexed_db};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
 use nook_core::StoredSigningSeed;
@@ -277,7 +279,9 @@ mod tests {
         NookError, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
         SimpleGenesisEventInput,
     };
-    use crate::storage::{identity_record, indexed_db};
+    use crate::storage::identity_record;
+    #[cfg(target_arch = "wasm32")]
+    use crate::storage::indexed_db;
     use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use identity_record::{OrdinarySimpleGenesisRequest, genesis_flow::PendingSimpleGenesisFlow};
     use nook_core::{

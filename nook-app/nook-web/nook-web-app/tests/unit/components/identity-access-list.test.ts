@@ -25,7 +25,7 @@ import {
   IdentityKeyInventory,
   IdentityKeyInventoryRowKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-key-inventory'
-import IdentityKeyInventory from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/IdentityKeyInventory.svelte'
+import IdentityKeyInventoryComponent from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/IdentityKeyInventory.svelte'
 import { PasskeyCardSummaryKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
 import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 
@@ -174,7 +174,7 @@ describe('identity key inventory', () => {
       vaults: [],
     }
 
-    const rendered = render(IdentityKeyInventory, {
+    const rendered = render(IdentityKeyInventoryComponent, {
       vault: renderedVault,
       identity,
       view: passkeyView(),

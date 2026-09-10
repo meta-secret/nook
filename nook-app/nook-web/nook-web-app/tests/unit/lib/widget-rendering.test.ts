@@ -1,4 +1,4 @@
-import '../../../../nook-web-extension/src/chrome.d.ts'
+/// <reference types="chrome" />
 
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'

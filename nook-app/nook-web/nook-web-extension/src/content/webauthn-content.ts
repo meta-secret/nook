@@ -13,9 +13,11 @@ import {
   WebsitePasskeyOptionsMessageType,
   WebsitePasskeyOptionsStatus,
   WebsitePasskeyPerformMessageType,
-  type WebsitePasskeyCancelMessage,
-  type WebsitePasskeyOptionsMessage,
-  type WebsitePasskeyPerformMessage,
+} from '../lib/webauthn-message-types'
+import type {
+  WebsitePasskeyCancelMessage,
+  WebsitePasskeyOptionsMessage,
+  WebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
 import {
   PageResponseAction,

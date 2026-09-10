@@ -4,10 +4,12 @@ use super::{NookVaultManager, PendingExtensionIdentityEnrollment, VaultNameState
 use crate::NookError;
 use crate::manager::device_protection::ExtensionIdentityPublication;
 use crate::storage::identity_record;
+#[cfg(test)]
+use crate::storage::identity_record::VaultCreationAuthority;
 use crate::storage::identity_record::{
     AuthorizerSigningUpdate, ExistingVaultEnrollment, HandoffSignerPublication,
     IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
-    VaultCreationAuthority, VaultCreationAuthorityRef,
+    VaultCreationAuthorityRef,
 };
 
 pub(in crate::manager) struct PendingVaultCreationHandoff<'a> {

@@ -1,6 +1,9 @@
 import MarkdownIt from "markdown-it";
 
-const MarkdownItArgs: ConstructorParameters<typeof MarkdownIt>[0] = {
+const MarkdownItArgs: Exclude<
+  ConstructorParameters<typeof MarkdownIt>[0],
+  string | undefined
+> = {
   html: false,
   linkify: true,
   breaks: true,

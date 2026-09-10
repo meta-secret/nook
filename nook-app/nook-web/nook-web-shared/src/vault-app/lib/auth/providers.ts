@@ -60,7 +60,6 @@ import {
   type StoredOAuthTokenExpiry,
   type ProviderVaultScope,
   NookGithubPatHintState,
-  type OAuthAccessToken,
   type DuplicateSyncProvider,
   missing_oauth_access_token,
   type NookVaultManager,

@@ -9,7 +9,9 @@
 use crate::GitHubStorageClient;
 use crate::GitHubStorageClientFetchGithubVault;
 use crate::GitHubStorageClientWriteGithubTextFile;
-use nook_core::{EventId, GenesisImportRequest, VaultEvent};
+use nook_core::EventId;
+#[cfg(test)]
+use nook_core::{GenesisImportRequest, VaultEvent};
 use reqwest::{Client, StatusCode};
 use std::path::Path;
 use std::str;

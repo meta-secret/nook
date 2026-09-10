@@ -28,6 +28,7 @@ import {
 
 import {
   RuntimeMessageDeliveryKind,
+  authenticationRuntimeTransport,
   type AuthenticatorBackupAttachResponse,
   type AuthenticatorOptionsResponse,
   type DecodedRuntimeMessageArgs,
@@ -53,17 +54,17 @@ export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
   ) => Promise<RuntimeMessageDelivery<Response>>
   sendAuthenticatorBackupAttachRuntimeMessage: (
     message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendAuthenticatorBackupAttachRuntimeMessage
+      typeof authenticationRuntimeTransport.sendAuthenticatorBackupAttachRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
   sendAuthenticatorOptionsRuntimeMessage: (
     message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendAuthenticatorOptionsRuntimeMessage
+      typeof authenticationRuntimeTransport.sendAuthenticatorOptionsRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>>
   sendRuntimeMessageWithoutResponse: (
     message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendRuntimeMessageWithoutResponse
+      typeof authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse
     >[0],
   ) => void
   translatedMessage: (key: BrowserMessageKey) => string

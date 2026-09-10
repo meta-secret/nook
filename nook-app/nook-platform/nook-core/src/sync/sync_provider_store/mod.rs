@@ -158,6 +158,10 @@ impl From<OAuthAccessTokenRef<'_>> for OAuthAccessToken {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "state", rename_all = "kebab-case")]
 #[tsify(into_wasm_abi)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the typed WASM result preserves the provider's existing wire shape"
+)]
 pub enum DuplicateSyncProvider {
     Unique,
     Duplicate { provider: StorageProvider },

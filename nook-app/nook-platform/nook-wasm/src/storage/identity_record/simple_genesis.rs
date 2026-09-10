@@ -8,24 +8,19 @@
 use crate::BrowserTimestamp;
 use crate::IdentityDbEnsureLocalIdentityForAppKey;
 use crate::StoredStringRecord;
-use crate::storage::identity_record::IdentityDirectoryWrite;
-use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
-use nook_core::IdentityCreation;
-use nook_core::MemberLabelState;
+use crate::{IndexedDbUpdate, NookDatabase};
 use nook_core::{IsoTimestamp, StoreId};
 mod event;
 mod wire;
-use crate::storage::identity_record;
 pub(crate) use event::SimpleGenesisEventInput;
 
 use std::{cell::RefCell, rc::Rc};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use super::{genesis_flow::PendingSimpleGenesisFlow, staged_genesis::StagedSimpleGenesisIdentity};
-use crate::storage::indexed_db;
+use crate::NookError;
 use crate::storage::indexed_db::StringUpdateGuard;
-use crate::{NookError, conversion};
 
 pub(crate) const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
 
@@ -73,6 +68,7 @@ pub(crate) enum SimpleGenesisProgress {
     Pending(PendingSimpleGenesis),
 }
 impl SimpleGenesisProgress {
+    #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
     pub(crate) fn require_pending(self) -> Result<PendingSimpleGenesis, NookError> {
         match self {
             Self::Pending(pending) => Ok(pending),
@@ -244,8 +240,10 @@ mod tests {
         OrdinarySimpleGenesisRequest, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis,
         PendingSimpleGenesisEvent, PendingSimpleGenesisFlow,
     };
+    use crate::NookError;
     use crate::storage::identity_record;
-    use crate::{NookError, storage::indexed_db};
+    #[cfg(target_arch = "wasm32")]
+    use crate::storage::indexed_db;
     use identity_record::SimpleGenesisCompletion;
     use nook_core::MemberLabelState;
 

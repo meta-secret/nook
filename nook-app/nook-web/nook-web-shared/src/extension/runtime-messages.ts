@@ -173,13 +173,14 @@ export class ExtensionPairingApprovedMessage {
       !RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) ||
       message.type !==
         ExtensionPairingApprovedMessageType.NookExtensionPairingApproved ||
-      typeof (message as { payload?: unknown }).payload !== 'object' ||
-      !(message as { payload?: unknown }).payload
+      !('payload' in message) ||
+      typeof message.payload !== 'object' ||
+      !message.payload
     ) {
       return false
     }
 
-    const payload = (message as { payload: Record<string, unknown> }).payload
+    const payload = message.payload as Record<string, unknown>
     return (
       ExtensionPairingApprovedGrant.is(payload) &&
       ExtensionPairingApprovedMessage.isExtensionEventLogRecords(
@@ -209,12 +210,13 @@ export class ExtensionIdentityHandoffRequestMessage {
       !RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) ||
       message.type !==
         ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest ||
-      typeof (message as { payload?: unknown }).payload !== 'object' ||
-      !(message as { payload?: unknown }).payload
+      !('payload' in message) ||
+      typeof message.payload !== 'object' ||
+      !message.payload
     ) {
       return false
     }
-    const payload = (message as { payload: Record<string, unknown> }).payload
+    const payload = message.payload as Record<string, unknown>
     return (
       typeof payload.recipientPublicKey === 'string' &&
       payload.recipientPublicKey.length > 0 &&
@@ -268,12 +270,13 @@ export class ExtensionPairedVaultUnlockRequestMessage {
     if (
       !RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) ||
       message.type !== type ||
-      typeof (message as { payload?: unknown }).payload !== 'object' ||
-      !(message as { payload?: unknown }).payload
+      !('payload' in message) ||
+      typeof message.payload !== 'object' ||
+      !message.payload
     ) {
       return false
     }
-    const payload = (message as { payload: Record<string, unknown> }).payload
+    const payload = message.payload as Record<string, unknown>
     return (
       typeof payload.requestId === 'string' &&
       payload.requestId.length > 0 &&

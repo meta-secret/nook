@@ -1,9 +1,8 @@
 //! Explicit lifecycle states for ordinary and staged Simple-vault genesis.
 
-use super::{
-    simple_genesis::{PendingSimpleGenesis, PendingSimpleGenesisEvent},
-    staged_genesis::StagedSimpleGenesisIdentity,
-};
+#[cfg(test)]
+use super::simple_genesis::PendingSimpleGenesisEvent;
+use super::{simple_genesis::PendingSimpleGenesis, staged_genesis::StagedSimpleGenesisIdentity};
 use serde::Serialize;
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]

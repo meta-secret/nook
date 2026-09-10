@@ -166,6 +166,7 @@ pub(crate) struct DriveStorageClientDriveError<'a> {
 
 #[derive(Default, Deserialize)]
 #[serde(untagged)]
+#[allow(dead_code)]
 enum DriveEmailDisclosure {
     Address(String),
     #[default]
@@ -173,6 +174,7 @@ enum DriveEmailDisclosure {
 }
 #[derive(Default, Deserialize)]
 #[serde(untagged)]
+#[allow(dead_code)]
 enum DriveAccountObservation {
     Account(DriveAboutUser),
     #[default]

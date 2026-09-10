@@ -458,7 +458,7 @@ impl OnePasswordVaultItem<'_> {
             if username_index == OnePasswordCredentialSource::LoginField(index) {
                 // A single field may intentionally be both designated username and password fallback.
                 if password_index == OnePasswordCredentialSource::LoginField(index) {
-                    password = field.value.clone();
+                    password.clone_from(&field.value);
                 }
                 username = field.value;
             } else if password_index == OnePasswordCredentialSource::LoginField(index) {

@@ -7,7 +7,8 @@ pub struct VaultSecurityRecommendations {
     pub needs_another_device: bool,
 }
 
-/// Named values required by VaultSecurityRecommendations::assess_vault_security.
+/// Named values required by `VaultSecurityRecommendations::assess_vault_security`.
+#[derive(Clone, Copy)]
 pub struct VaultSecurityAssessment {
     pub sync_provider_count: crate::VaultSyncProviderCount,
     pub enrolled_device_count: crate::EnrolledDeviceCount,

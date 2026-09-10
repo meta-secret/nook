@@ -13,7 +13,6 @@ import {
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthProvidersSnapshot,
-  CompanionIdentityStatus,
   NookCompanionExtensionEndpoint,
   NookDiscoveredCompanionExtensionEndpoint,
   StorageProvider,
@@ -114,19 +113,25 @@ export async function withActivatedExtensionIdentity<
     previousDeviceId = activeManager.device_id
     previousProtection = await activeManager.device_protection_status()
   } catch {
-    return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+    return err<never, SessionOperationFailure>(
+      new SessionOperationFailure(SessionOperationFailureKind.Failed),
+    )
   }
   if (
     previousProtection === DeviceProtectionStatus.Unlocked &&
     previousDeviceId !== deviceId
   )
-    return err(new SessionOperationFailure(SessionOperationFailureKind.Locked))
+    return err<never, SessionOperationFailure>(
+      new SessionOperationFailure(SessionOperationFailureKind.Locked),
+    )
   let persistedPreviousDeviceId: string
   try {
     persistedPreviousDeviceId =
       await activeManager.activate_local_identity_for_app_id(deviceId)
   } catch {
-    return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+    return err<never, SessionOperationFailure>(
+      new SessionOperationFailure(SessionOperationFailureKind.Failed),
+    )
   }
   const previousSelection =
     previousProtection === DeviceProtectionStatus.Unlocked
@@ -141,7 +146,7 @@ export async function withActivatedExtensionIdentity<
     try {
       await activeManager.activate_local_identity_for_app_id(previousSelection)
     } catch {
-      return err(
+      return err<never, SessionOperationFailure>(
         new SessionOperationFailure(SessionOperationFailureKind.Failed),
       )
     }

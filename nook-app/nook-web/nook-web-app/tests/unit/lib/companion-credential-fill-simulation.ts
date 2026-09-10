@@ -539,7 +539,7 @@ function planCredentialFillPage({
       const field = resolveSimulatedCredentialField(request)
       switch (field.classification.kind) {
         case CredentialFillFieldClassificationOutcome.Observed: {
-          const receiver = observations.handle
+          const receiver: CredentialFillObservations = observations.handle
           observations = { kind: CredentialFillHandlePhase.Consumed }
           observations = {
             kind: CredentialFillHandlePhase.Owned,

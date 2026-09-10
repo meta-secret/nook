@@ -597,6 +597,10 @@ impl NookSelectedVaultIdentityContextKind {
 }
 
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub async fn load_identity_directory_snapshot()
 -> Result<NookIdentityDirectorySnapshot, wasm_bindgen::JsError> {
     NookIdentityDirectorySnapshot::identity_directory_snapshot_for_session(
@@ -610,6 +614,10 @@ pub async fn load_identity_directory_snapshot()
 }
 
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub async fn select_identity(identity_id: String) -> Result<(), wasm_bindgen::JsError> {
     let identity_id =
         IdentityId::parse(&identity_id).map_err(|error| JsError::new(&error.to_string()))?;
@@ -624,6 +632,10 @@ pub async fn select_identity(identity_id: String) -> Result<(), wasm_bindgen::Js
 }
 
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_bindgen::JsError> {
     let current_app = match NookDatabase::load_wrapped_device_identity()
         .await
@@ -658,10 +670,7 @@ pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_b
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::{
-        AppKey, CurrentVaultReplaceability, DeviceIdentityProtection, IdentityDirectory,
-        IdentityRecord, LocalIdentityKeyring, LocalIdentityKeyringEntry,
-    };
+    use nook_core::{AppKey, IdentityRecord};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]

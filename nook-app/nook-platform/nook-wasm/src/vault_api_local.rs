@@ -1,7 +1,6 @@
-use super::{application, wasm_bindgen};
+use super::wasm_bindgen;
 use crate::ConfiguredVaultApplication;
 use crate::VaultSnapshotLookup;
-use crate::storage::indexed_db;
 use crate::storage::indexed_db::ImportVaultLabel;
 use crate::storage::indexed_db::VaultUnlockHistory;
 use crate::{ImportVaultBlobRequest, NookDatabase, SetLocalVaultLabelRequest};

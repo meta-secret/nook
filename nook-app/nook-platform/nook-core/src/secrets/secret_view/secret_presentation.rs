@@ -22,7 +22,6 @@ pub struct WebsiteHost(pub(crate) String);
 pub struct WebsiteHostError;
 
 impl WebsiteHost {
-    #[must_use]
     pub fn normalize(raw: &str) -> Result<Self, WebsiteHostError> {
         let value = raw.trim();
         if value.is_empty() {

@@ -128,6 +128,7 @@ impl CoseKeyEntries {
             .ok_or(PasskeyAuthenticatorError::InvalidKeyMaterial)
     }
 }
+#[derive(Clone, Copy)]
 pub(crate) enum Es256KeyValidation<'a> {
     PrivateKey,
     CredentialPair(&'a PasskeyPublicKeyCose),

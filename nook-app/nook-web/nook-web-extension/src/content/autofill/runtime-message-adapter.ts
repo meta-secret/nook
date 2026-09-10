@@ -5,7 +5,7 @@ import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/ex
 import {
   type AuthenticationPageObservationView,
   type AuthenticationWorkflowSnapshotMessage,
-  AuthenticationWorkflowSnapshotMessage as AuthenticationWorkflowSnapshotMessageSchema,
+  AuthenticationWorkflowSnapshotIngress,
 } from '../../lib/auth-workflow-messages'
 
 import type {
@@ -170,7 +170,7 @@ class AuthenticationRuntimeTransport {
           const unavailable: Parameters<typeof resolve>[0] = {
             kind: RuntimeMessageDeliveryKind.Unavailable,
           }
-          resolve(this.unavailable.bind(this))
+          resolve(unavailable)
           return
         }
         const delivered: Parameters<typeof resolve>[0] = {
@@ -345,7 +345,7 @@ class AuthenticationRuntimeTransport {
       const { workflow: verdict, loginMatches } = runtimeResponse
       if ('snapshot' in verdict) {
         if (
-          !AuthenticationWorkflowSnapshotMessageSchema.isAuthenticationPageObservationView(
+          !AuthenticationWorkflowSnapshotIngress.isAuthenticationPageObservationView(
             selectedFacts,
           )
         ) {

@@ -6,12 +6,16 @@ enum PriorLocalAuthorizer {
     Authorized(nook_core::AppKey),
 }
 use crate::AuthProviderDatabase;
+#[cfg(test)]
+use crate::IdbPutStringRequest;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::IdentityDbSaveProtectedLocalIdentity;
 use crate::manager::device_protection::ExtensionIdentityPublication;
 #[cfg(test)]
 use crate::manager::session::ExtensionHandoffState;
 use crate::storage::device_access::DeviceAccessProfileKey;
+use crate::storage::identity_record;
+#[cfg(test)]
 use crate::storage::identity_record::AuthorizerSigningUpdate;
 use crate::storage::identity_record::LocalIdentitySigner;
 use crate::storage::identity_record::PreviousLocalSelection;
@@ -19,9 +23,11 @@ use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::SentinelFinalizationJournal;
+#[cfg(test)]
 use crate::storage::indexed_db::StoredStringRecord;
-use crate::storage::{auth_providers, identity_record, indexed_db};
-use crate::{IdbPutStringRequest, NookDatabase, NookError};
+#[cfg(test)]
+use crate::storage::{auth_providers, indexed_db};
+use crate::{NookDatabase, NookError};
 use identity_record::{LocalIdentityRecovery, PendingSimpleGenesis};
 use nook_core::{AppId, IdentityId, i18n_keys};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};

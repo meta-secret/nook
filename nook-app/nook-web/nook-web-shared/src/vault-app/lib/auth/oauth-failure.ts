@@ -1,9 +1,9 @@
-import type { prepare_shared_storage_grant } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
-enum SharedStorageGrantOutcomeKind {
-  Unsupported = "unsupported",
-}
+type UnsupportedSharedStorageGrant = {
+  readonly kind: "unsupported";
+  readonly reasonKey: string;
+};
 
 export enum OAuthFailureKind {
   GoogleConfiguration = "google-configuration",
@@ -81,10 +81,7 @@ export class OAuthFailure {
 /** Preserves the Rust-owned rejection projection without converting it to an exception. */
 export class SharedStorageGrantFailure {
   constructor(
-    private readonly rejection: Extract<
-      Awaited<ReturnType<typeof prepare_shared_storage_grant>>,
-      { kind: SharedStorageGrantOutcomeKind.Unsupported }
-    >,
+    private readonly rejection: UnsupportedSharedStorageGrant,
   ) {}
   get translationKey() {
     return this.rejection.reasonKey;

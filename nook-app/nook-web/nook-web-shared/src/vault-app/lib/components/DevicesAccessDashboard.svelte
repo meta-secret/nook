@@ -713,7 +713,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                     : (() => {
                         const deviceKeyTitleArgs: Parameters<
                           AccessChainPresentation['deviceKeyTitle']
-                        >[0] = { vault, protection: view.protection }
+                        >[0] = { protection: view.protection }
                         return new AccessChainPresentation(
                           vault,
                         ).deviceKeyTitle(deviceKeyTitleArgs)
@@ -732,7 +732,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 identityDescription: (() => {
                   const protectionLabelArgs: Parameters<
                     AccessChainPresentation['protectionLabel']
-                  >[0] = { vault, protection: view.protection }
+                  >[0] = { protection: view.protection }
                   return new AccessChainPresentation(vault).protectionLabel(
                     protectionLabelArgs,
                   )
@@ -740,7 +740,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 identityState: (() => {
                   const identityStateLabelArgs: Parameters<
                     AccessChainPresentation['identityStateLabel']
-                  >[0] = { vault, state: view.identityState }
+                  >[0] = { state: view.identityState }
                   return new AccessChainPresentation(vault).identityStateLabel(
                     identityStateLabelArgs,
                   )
@@ -824,7 +824,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                   (() => {
                     const formatAccessDateArgs: Parameters<
                       AccessChainPresentation['formatAccessDate']
-                    >[0] = { vault, value }
+                    >[0] = { value }
                     return new AccessChainPresentation(vault).formatAccessDate(
                       formatAccessDateArgs,
                     )
@@ -916,7 +916,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                       protectionLabel={(() => {
                         const protectionLabelArgs2: Parameters<
                           AccessChainPresentation['protectionLabel']
-                        >[0] = { vault, protection: view.protection }
+                          >[0] = { protection: view.protection }
                         return new AccessChainPresentation(
                           vault,
                         ).protectionLabel(protectionLabelArgs2)

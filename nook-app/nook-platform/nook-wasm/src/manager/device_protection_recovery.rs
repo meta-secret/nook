@@ -2,14 +2,17 @@
 
 use super::NookVaultManager;
 use crate::AuthProviderDatabase;
+#[cfg(test)]
 use crate::manager::device_protection::ExtensionIdentityPublication;
 #[cfg(test)]
 use crate::manager::session::ExtensionHandoffState;
+#[cfg(test)]
 use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuthority};
 use crate::storage::identity_record::{
     LocalIdentityRecoveryRequest, ProtectedIdentityLookup, ProtectedLocalIdentity,
 };
 use crate::storage::identity_record::{RecoveryTarget, RetiredInstallation};
+#[cfg(test)]
 use crate::storage::{auth_providers, indexed_db};
 use crate::{NookDatabase, NookError};
 use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, DriveEventParent, StorageMode};

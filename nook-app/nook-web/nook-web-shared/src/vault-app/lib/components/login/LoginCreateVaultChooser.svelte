@@ -6,7 +6,6 @@
   } from '$lib/runtime/storage-failure'
   import type {
     LoginCreateVaultChooserProps,
-    SentinelGenesisParticipation,
   } from './login-create-vault-chooser-contract'
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'

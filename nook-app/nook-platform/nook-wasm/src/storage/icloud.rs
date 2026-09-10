@@ -7,12 +7,16 @@
 )]
 
 use reqwest::Client;
-use std::{collections, str};
+#[cfg(test)]
+use std::collections;
+use std::str;
 
 use super::checked_event_write::CheckedEventWrite;
 use crate::NookError;
 use nook_core::{EventId, ICloudEventTarget, ICloudShareRole};
-use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use serde::Deserialize;
+use serde::Serialize;
 
 pub(crate) struct ICloudEventStore<'a> {
     pub(crate) web_auth_token: &'a str,
@@ -22,10 +26,12 @@ pub(crate) struct ICloudEventStore<'a> {
 mod wire;
 use wire::{
     EventIdentity, FieldText, ICloudCreate, ICloudCreateOperation, ICloudCreateRecord,
-    ICloudEventFields, ICloudFieldValue, ICloudLookup, ICloudQuery, ICloudQueryPage, ICloudRecord,
+    ICloudEventFields, ICloudLookup, ICloudQuery, ICloudQueryPage, ICloudRecord,
     ICloudRecordReference, ICloudRecordsResponse, ICloudRequest, ICloudTextField, ICloudZone,
-    QueryCompletion, QueryContinuation, RecordFields, RecordHierarchy, RecordLookup, ZoneSelection,
+    QueryCompletion, QueryContinuation, RecordHierarchy, RecordLookup, ZoneSelection,
 };
+#[cfg(test)]
+use wire::{ICloudFieldValue, RecordFields};
 
 const ICLOUD_CONTAINER_ID: &str = match option_env!("NOOK_ICLOUD_CONTAINER_ID") {
     Some(value) => value,

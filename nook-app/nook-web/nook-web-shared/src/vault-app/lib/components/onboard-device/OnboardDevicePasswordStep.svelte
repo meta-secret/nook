@@ -9,6 +9,7 @@
     type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { PasswordOperationResult } from '$lib/vault/password-unlock'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   let {
@@ -31,7 +32,9 @@
     isGenerating: boolean
     passwordError: string
     open: boolean
-    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
+    onAddPassword: (
+      args: VaultPasswordCreation,
+    ) => Promise<PasswordOperationResult>
     onSelectPasswordEntry: (entryId: PasswordEntryId) => void
   } = $props()
 

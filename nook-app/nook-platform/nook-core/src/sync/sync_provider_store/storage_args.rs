@@ -146,6 +146,7 @@ impl StorageProviderData {
             }
         }
     }
+    #[must_use]
     pub fn replication_capability(&self) -> ProviderReplicationCapability {
         let preset = match &self.oauth_file {
             StoredOAuthFileConfiguration::Configured(config) => {

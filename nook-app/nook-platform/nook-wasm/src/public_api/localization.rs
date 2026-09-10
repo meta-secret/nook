@@ -3,7 +3,6 @@ use crate::{
     NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch,
     NookVaultSecurityRecommendations,
 };
-use nook_core::AuthenticationOutcomeObservation;
 use nook_core::AuthenticationWorkflowMatch;
 use nook_core::VaultSecurityAssessment;
 use nook_core::{AppLocale, VaultRecoveryErrorKind};

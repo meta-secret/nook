@@ -1,8 +1,7 @@
 use super::{NookStorageConnectArgs, wasm_bindgen};
 use nook_core::{
     ActiveProviderCredentialsProjection, ExistingVaultProviderReadiness, GithubPatMask,
-    StorageConnectArgs, StorageProviderType, StoredLocalFolderConfiguration,
-    StoredOAuthFileConfiguration,
+    StorageConnectArgs, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
 };
 use nook_core::{
     DraftStorageConnection, GithubStorageDraft, OAuthRemoteConfigurationUpdate,
@@ -377,6 +376,8 @@ impl NookGithubPatHint {
 #[allow(unused_imports)]
 mod tests {
     use super::*;
+    #[cfg(target_arch = "wasm32")]
+    use nook_core::StorageProviderType;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[cfg(target_arch = "wasm32")]

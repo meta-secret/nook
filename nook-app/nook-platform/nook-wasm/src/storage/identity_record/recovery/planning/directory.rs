@@ -1,7 +1,5 @@
 //! Recovery directory evidence and fail-closed full-reset selection.
 use super::*;
-use crate::storage::identity_record::PriorAppAuthorization;
-use crate::storage::identity_record::RecoveryTarget;
 use crate::{NookDatabase, NookError};
 use nook_core::IdentityDirectory;
 pub(super) struct RecoveryDirectory {

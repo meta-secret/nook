@@ -16,6 +16,7 @@ import {
   ProviderSyncFreshness,
   SentinelVaultUnlockState,
   VaultRecoveryErrorKind,
+  type NookSecretRecord,
   type NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
 } from "$app-wasm";
 
@@ -130,7 +131,10 @@ export class SentinelUnlockActions {
   private async getSentinelUnlockStatus(): Promise<
     SentinelActionResult<SentinelVaultUnlockState>
   > {
-    return this.state.enqueueStorage(async () => {
+    return this.state.enqueueStorage<
+      SentinelVaultUnlockState,
+      StorageOperationFailure
+    >(async () => {
       const manager = this.state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       try {
@@ -406,10 +410,12 @@ export class SentinelUnlockActions {
     state.dismissSuccess();
     state.isVerifying = true;
     try {
-      const rawRecords = await state.enqueueStorage(async () => {
+      const rawRecords = await state.enqueueStorage<
+        NookSecretRecord[],
+        StorageOperationFailure
+      >(async () => {
         const admittedManager = state.admitManager();
-        if (admittedManager.isErr())
-          return this.restoreFinalizationFailure(admittedManager.error);
+        if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
           return storageOk(
             await admittedManager.value.finalize_sentinel_unlock(),

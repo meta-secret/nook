@@ -64,6 +64,7 @@ pub(crate) struct EventDbStoreDelete<'a> {
 }
 
 /// Named values required by NookDatabase::remove_event_fixture.
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) struct EventDbRemoveEventFixture<'a> {
     pub(crate) store_id: &'a str,
     pub(crate) event_id: &'a str,

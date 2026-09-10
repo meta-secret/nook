@@ -46,8 +46,8 @@ impl SimpleIdentityGenesisOperationsInput<'_> {
         }
         let records =
             IdentityRecord::identity_vault_genesis_records(IdentityVaultGenesisRecordsRequest {
-                identity: identity,
-                keys: keys,
+                identity,
+                keys,
                 enrolled_at: created_at,
             })?;
         identity

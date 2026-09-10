@@ -6,6 +6,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+#[cfg(test)]
 use nook_core::GenesisImportRequest;
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::IgnoredAny};

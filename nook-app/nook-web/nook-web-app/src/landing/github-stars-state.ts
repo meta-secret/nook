@@ -50,7 +50,7 @@ export function readCachedGitHubStarCount(
     ) {
       return {
         kind: GitHubStarsCacheLookupKind.Found,
-        count: Number(record.count),
+        count: cached.count,
       }
     }
   } catch {

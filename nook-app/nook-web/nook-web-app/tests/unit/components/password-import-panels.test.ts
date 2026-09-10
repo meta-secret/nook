@@ -7,7 +7,7 @@ import {
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
-import type { NookImportResult } from '$lib/nook'
+import { NookImportResult } from '$app-wasm'
 import type { VaultState } from '$lib/vault.svelte'
 import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
 import DashlaneImportPanel from '$lib/components/DashlaneImportPanel.svelte'
@@ -42,12 +42,14 @@ const vault = {
 } as unknown as VaultState
 
 function importResult(): SecretOperationResult<NookImportResult> {
-  return ok({
-    imported: 2,
-    skippedUnsupported: 1,
-    skippedDuplicates: 3,
-    free: vi.fn(),
-  } as NookImportResult)
+  return ok(
+    Object.assign(Object.create(NookImportResult.prototype), {
+      imported: 2,
+      skippedUnsupported: 1,
+      skippedDuplicates: 3,
+      free: vi.fn(),
+    }),
+  )
 }
 
 describe('KeePassXC import panel', () => {

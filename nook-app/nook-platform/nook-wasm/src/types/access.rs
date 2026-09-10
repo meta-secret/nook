@@ -2,6 +2,7 @@ use super::wasm_bindgen;
 use crate::BrowserPasskeyRequestOptions;
 use crate::passkey_browser;
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions};
+#[cfg(test)]
 use nook_core::MemberLabelState;
 
 #[wasm_bindgen]

@@ -26,6 +26,7 @@ impl From<&str> for OAuthStorageReference {
     }
 }
 impl OAuthStorageReference {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }

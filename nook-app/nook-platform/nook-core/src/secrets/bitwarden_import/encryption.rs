@@ -140,11 +140,9 @@ impl EncryptedBitwardenExport {
                     })?;
                 Ok(CheckedBitwardenKdf::Argon2(params))
             }
-            other => {
-                return Err(BitwardenImportError::encrypted(format!(
-                    "unsupported KDF type {other}."
-                )));
-            }
+            other => Err(BitwardenImportError::encrypted(format!(
+                "unsupported KDF type {other}."
+            ))),
         }
     }
     fn derive_key(&self, password: &str) -> Result<BitwardenEncryptionKey, BitwardenImportError> {

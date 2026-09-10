@@ -7,10 +7,13 @@
 use super::NookVaultManager;
 use crate::BrowserTimestamp;
 use crate::VaultSnapshotLookup;
+#[cfg(test)]
 use crate::storage::indexed_db::ImportVaultLabel;
 use nook_core::ActiveVaultScope;
 
-use crate::{ImportVaultBlobRequest, NookDatabase};
+#[cfg(test)]
+use crate::ImportVaultBlobRequest;
+use crate::NookDatabase;
 
 use crate::{NookError, NookPasswordEntrySummary};
 use nook_core::{

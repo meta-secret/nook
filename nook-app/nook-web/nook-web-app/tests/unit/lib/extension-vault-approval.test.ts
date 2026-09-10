@@ -1,4 +1,4 @@
-import { err, ok } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const wasm = vi.hoisted(() => ({
@@ -51,7 +51,9 @@ function approvalFixture() {
     vaultStoreId: 'store-1',
     export_event_log_records_js: vi.fn(async () => records),
   } as unknown as NookVaultManager
-  const admitManager = vi.fn(() => ok(manager))
+  const admitManager = vi.fn<
+    () => Result<NookVaultManager, VaultStorageFailure>
+  >(() => ok(manager))
   const vault = {
     activeVault: { kind: ActiveVaultKind.Open, storeId: 'store-1' },
     admitManager,
@@ -64,7 +66,7 @@ function approvalFixture() {
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  wasm.approveExtensionDevice.mockResolvedValue()
+  wasm.approveExtensionDevice.mockResolvedValue(undefined)
 })
 
 describe('extension vault approval', () => {

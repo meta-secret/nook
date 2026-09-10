@@ -368,6 +368,7 @@ class ExtensionWasmRuntime {
           `Unsupported extension device protection status: ${deviceStatus}`,
         )
     }
+    throw new Error('Unsupported extension device protection status.')
   }
 
   async extensionSessionDevice(): Promise<ExtensionSessionDeviceState> {

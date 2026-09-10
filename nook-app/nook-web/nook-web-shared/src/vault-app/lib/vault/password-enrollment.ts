@@ -2,9 +2,9 @@ import {
   select_shared_grant_provider,
   should_flush_shared_storage_grant,
   type SharedStorageGrantCredential,
-  type SharedGrantProviderSelection,
+  type SharedGrantProviderOutcome,
 } from "$app-wasm";
-export type { SharedGrantProviderSelection } from "$app-wasm";
+export type { SharedGrantProviderOutcome } from "$app-wasm";
 import {
   oauth_access_token,
   unselectedVaultScope,
@@ -37,7 +37,7 @@ export function findSharedGrantProvider({
   providers,
   preset,
   target,
-}: SharedGrantProviderSearch): SharedGrantProviderSelection {
+}: SharedGrantProviderSearch): SharedGrantProviderOutcome {
   return select_shared_grant_provider({
     snapshot: { providers, activeVaultStoreId: unselectedVaultScope() },
     preset,

@@ -1,11 +1,11 @@
 //! Manager-owned secret transitions behind the one-use handoff handles.
 use super::*;
 use crate::manager::device_protection::ExtensionIdentityPublication;
+use crate::storage::identity_record::AuthorizerSigningUpdate;
 use crate::storage::identity_record::HandoffAuthorization;
-use crate::storage::identity_record::{
-    AuthorizerSigningUpdate, VaultCreationAuthority, VaultCreationAuthorityRef,
-};
 use crate::storage::identity_record::{IdentityHandoffOperation, PairedVaultEnrollment};
+#[cfg(test)]
+use crate::storage::identity_record::{VaultCreationAuthority, VaultCreationAuthorityRef};
 
 struct AuthenticatedHandoffAuthorizer {
     app_key: nook_core::AppKey,

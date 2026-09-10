@@ -264,6 +264,10 @@ impl CredentialFillObservations {
     }
 
     #[must_use]
+    #[expect(
+        clippy::should_implement_trait,
+        reason = "the established wasm-bindgen API exposes add to JavaScript"
+    )]
     pub fn add(mut self, observation: &CredentialFillObservation) -> Self {
         let Ok(fields) = &mut self.inner else {
             return self;

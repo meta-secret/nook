@@ -36,7 +36,8 @@ impl fmt::Debug for CreditCardSecret {
     }
 }
 
-/// Named values required by CreditCardSecret::from_fields.
+/// Named values required by `CreditCardSecret::from_fields`.
+#[derive(Clone, Copy)]
 pub struct CreditCardFields<'a> {
     pub title: &'a str,
     pub cardholder_name: &'a str,
@@ -47,7 +48,8 @@ pub struct CreditCardFields<'a> {
     pub notes: &'a str,
 }
 
-/// Named values required by CreditCardSecret::normalize_expiration.
+/// Named values required by `CreditCardSecret::normalize_expiration`.
+#[derive(Clone, Copy)]
 struct CreditCardExpiration<'a> {
     month_raw: &'a str,
     year_raw: &'a str,

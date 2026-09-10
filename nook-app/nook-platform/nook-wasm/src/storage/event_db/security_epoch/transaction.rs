@@ -6,8 +6,10 @@
 //! Contextual event rows and vault indexes within one live `IndexedDB` transaction.
 use super::VaultEventPersistence;
 use crate::NookDatabase;
+use crate::NookError;
+#[cfg(test)]
+use crate::storage;
 use crate::storage::indexed_db::StoredStringRecord;
-use crate::{NookError, storage};
 use nook_core::{EventId, LocalEventStore};
 use rexie::{Store, Transaction, TransactionMode};
 use std::collections::BTreeSet;

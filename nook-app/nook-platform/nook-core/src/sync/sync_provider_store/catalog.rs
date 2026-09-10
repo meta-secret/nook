@@ -43,6 +43,7 @@ pub struct LocalProviderRowRequest<'a> {
 }
 
 impl StorageProviderData {
+    #[must_use]
     pub fn storage_detail(&self, labels: &ProviderStorageDetailLabels) -> String {
         let provider = self;
         let provider_type = provider.provider_type;

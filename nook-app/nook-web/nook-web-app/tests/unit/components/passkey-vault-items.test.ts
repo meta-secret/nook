@@ -5,6 +5,7 @@ import { SecretType, type NookSecretListItem } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
+import { ok } from 'neverthrow'
 
 const vault = {
   t(key: string): string {
@@ -17,7 +18,7 @@ const vault = {
 
 describe('passkey item discovery', () => {
   test('shows the website ceremony path without a manual credential form', async () => {
-    const onAddSecret = vi.fn(async () => {})
+    const onAddSecret = vi.fn(async () => ok())
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
@@ -49,7 +50,7 @@ describe('passkey item discovery', () => {
       onToggleExpand: vi.fn(),
       onToggleReveal: vi.fn(async () => {}),
       onEditItem: vi.fn(async () => {}),
-      onDeleteSecret: vi.fn(async () => {}),
+      onDeleteSecret: vi.fn(async () => ok()),
       onCopyToClipboard: vi.fn(async () => {}),
       onCopySecret: vi.fn(async () => {}),
       vault,

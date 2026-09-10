@@ -20,7 +20,6 @@
   import type { VaultState } from '$lib/vault.svelte'
   import type {
     SentinelCardStackProperties,
-    SentinelParticipation,
   } from '$lib/components/login/sentinel-card-stack-contract'
   import {
     SentinelGenesisPhase,

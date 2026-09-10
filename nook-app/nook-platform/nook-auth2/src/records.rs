@@ -13,6 +13,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
+#[tsify(type_suffix = "Wire")]
 #[serde(rename_all = "kebab-case")]
 pub enum SecretType {
     Login,
@@ -123,7 +124,7 @@ pub struct StoredSecretRecord {
         skip_serializing_if = "RecordTypeDeclaration::is_undeclared"
     )]
     // Preserve the existing optional scalar TS wire field; the Rust state is explicit.
-    #[tsify(optional, type = "SecretType")]
+    #[tsify(optional, type = "SecretTypeWire")]
     pub secret_type: RecordTypeDeclaration,
     #[serde(rename = "data")]
     pub value: StoredRecordPayload,

@@ -8,12 +8,19 @@
 //! This companion record is deliberately separate from `device_identity_wrapped`.
 //! Corrupt or future descriptive metadata must never block device-key unlock.
 
+#[cfg(test)]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
+use crate::NookError;
+#[cfg(test)]
 use crate::storage::identity_record::PriorAppAuthorization;
+#[cfg(test)]
 use crate::storage::indexed_db::StoredStringRecord;
-use crate::{IdbPutStringRequest, NookDatabase, NookError, SaveWrappedDeviceIdentityRequest};
+#[cfg(test)]
+use crate::{IdbPutStringRequest, NookDatabase, SaveWrappedDeviceIdentityRequest};
 use js_sys::Date;
+#[cfg(test)]
 use nook_core::AuthenticatorGuidEvidence;
+#[cfg(test)]
 use nook_core::DiscardedClientEnvironment;
 use nook_core::IsoTimestamp;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -66,7 +73,7 @@ impl SelectedPasskeyCreation<'_> {
             .update(DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::BestEffort,
                 guard: StringUpdateGuard::WrappedCredentialFingerprint(credential_fingerprint),
-                update: move |mut profile: DeviceAccessProfile| {
+                update: move |profile: DeviceAccessProfile| {
                     profile = profile.record_passkey_created(
                         credential_fingerprint,
                         nook_name,
@@ -108,7 +115,7 @@ impl AppPasskeyCreation<'_> {
                     app_id,
                     expected: credential_fingerprint,
                 },
-                update: move |mut profile: DeviceAccessProfile| {
+                update: move |profile: DeviceAccessProfile| {
                     profile = profile.record_passkey_created(
                         credential_fingerprint,
                         nook_name,
@@ -233,10 +240,12 @@ impl AppPasskeyNameUpdate<'_> {
 mod tests {
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use crate::storage::identity_record;
+    #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use crate::storage::identity_record::PriorAppAuthorization;
     use crate::{
         IdbPutStringRequest, NookDatabase, SaveWrappedDeviceIdentityRequest, StoredStringRecord,
     };
+    #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use futures_util::future;
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use nook_core::AppKey;
@@ -249,13 +258,15 @@ mod tests {
     use rexie::Rexie;
 
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
+    use super::indexed_db;
+    #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use super::{AppPasskeyCreation, DeviceIdentityProtection, PasskeyProtectionInput};
     use super::{
         DEVICE_ACCESS_PROFILE_KEY, DeviceAccessProfile, DeviceAccessProfileDecodeResult,
         DeviceAccessProfileKey, DeviceAccessProfileUpdate, NookError, PasskeyAccessProfile,
         PasskeyBrowserObservation, PasskeyCreatedAtEvidence, PasskeyCreationCeremony,
         PasskeyLastUsedAtEvidence, PasskeyProviderLabelUpdate, PasskeyRecordMetadata,
-        SelectedPasskeyCreation, VerifiedVaultAccessUpdate, WrappedDeviceIdentity, indexed_db,
+        SelectedPasskeyCreation, VerifiedVaultAccessUpdate, WrappedDeviceIdentity,
     };
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 

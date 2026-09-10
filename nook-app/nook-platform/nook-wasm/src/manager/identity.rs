@@ -3,7 +3,9 @@
 use crate::BrowserProviderVaultIdentityObservations;
 use crate::NookDatabase;
 use crate::NookIdentityDirectorySnapshot;
+#[cfg(test)]
 use crate::identity_record;
+#[cfg(test)]
 use crate::storage::event_db;
 use nook_core::{CurrentVaultReplaceability, StoreId};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};

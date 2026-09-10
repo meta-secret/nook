@@ -201,6 +201,10 @@ impl CredentialColumns {
             otp_url: headers.optional(&["otpUrl", "otp_url"]),
         })
     }
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the import row conversion remains one atomic zeroizing operation"
+    )]
     fn convert(
         &self,
         record: &StringRecord,

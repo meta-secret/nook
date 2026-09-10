@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy)]
 pub(crate) enum GitHubRootDiscovery {
     Inspect,
+    #[allow(dead_code)]
     KnownUnavailable,
 }
 #[derive(Debug, PartialEq, Eq)]

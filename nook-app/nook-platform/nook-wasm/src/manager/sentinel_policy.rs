@@ -2,9 +2,9 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use nook_core::{
-    MultiDeviceError, SentinelConfiguration, SentinelVaultUnlockState, VaultMetaState, VaultType,
-};
+#[cfg(test)]
+use nook_core::MultiDeviceError;
+use nook_core::{SentinelConfiguration, SentinelVaultUnlockState, VaultMetaState, VaultType};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]

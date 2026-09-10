@@ -79,19 +79,19 @@ impl NookLoginContextObservation {
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
-    (&observation.inner).has_login_context()
+    observation.inner.has_login_context()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
-    (&field.inner).looks_like_username_field()
+    field.inner.looks_like_username_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
-    (&field.inner).looks_like_one_time_code_field()
+    field.inner.looks_like_one_time_code_field()
 }
 
 #[wasm_bindgen]
@@ -141,9 +141,9 @@ impl NookLoginContextObservation {
 ) -> bool {
     AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity(
         AuthenticationRouteEvidence {
-            source_origin: source_origin,
-            form_identity: form_identity,
-            destination_identity: destination_identity,
+            source_origin,
+            form_identity,
+            destination_identity,
         },
     )
 }
@@ -168,11 +168,11 @@ impl NookLoginContextObservation {
 ) -> bool {
     AuthenticationAdvanceControlObservation::can_activate_authentication_route_control(
         AuthenticationRouteActuation {
-            source_origin: source_origin,
-            form_identity: form_identity,
-            destination_identity: destination_identity,
-            control_label: control_label,
-            control_machine_identity: control_machine_identity,
+            source_origin,
+            form_identity,
+            destination_identity,
+            control_label,
+            control_machine_identity,
             has_concrete_control: (has_concrete_control).into(),
             has_authentication_username: (has_authentication_username).into(),
             has_local_authentication_scope: (has_local_authentication_scope).into(),
@@ -196,7 +196,7 @@ impl NookLoginContextObservation {
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_advance_control_is_safe(
     observation: nook_companion_core::AuthenticationAdvanceControlObservation,
 ) -> bool {
-    (&observation).authentication_advance_control_is_safe()
+    observation.authentication_advance_control_is_safe()
 }
 
 #[wasm_bindgen]
@@ -205,7 +205,7 @@ impl NookLoginContextObservation {
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_passkey_control_candidate_is_safe(
     candidate: nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
 ) -> bool {
-    (&candidate).authentication_passkey_control_candidate_is_safe()
+    candidate.authentication_passkey_control_candidate_is_safe()
 }
 
 #[wasm_bindgen]
@@ -214,7 +214,7 @@ impl NookLoginContextObservation {
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_passkey_control_evidence_is_safe(
     evidence: nook_companion_core::AuthenticationDetailedPasskeyControlObservation,
 ) -> bool {
-    (&evidence).authentication_passkey_control_evidence_is_safe()
+    evidence.authentication_passkey_control_evidence_is_safe()
 }
 
 #[wasm_bindgen]

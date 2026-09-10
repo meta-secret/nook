@@ -454,6 +454,10 @@ impl LoggerState {
 /// filter -> [`IndexedDbLayer`] -> `tracing-web` performance timeline layer,
 /// and stashes a setter so [`log_set_level`] can move the filter at runtime.
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn log_init() {
     LoggerState::log_init()
 }
@@ -491,6 +495,10 @@ impl LoggerState {
 /// Moves the global `tracing` filter and the level used by the web-layer gate.
 /// Entries below this level are neither echoed nor persisted.
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn log_set_level(level: &str) {
     LoggerState::log_set_level(level)
 }
@@ -511,6 +519,10 @@ impl LoggerState {
 /// Return the active log level as a lowercase string.
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn log_get_level() -> String {
     LoggerState::log_get_level()
 }
@@ -524,6 +536,10 @@ impl LoggerState {
 /// the active level; the web layer owns console echo, so nothing is printed
 /// here. Otherwise queued for the next [`log_flush`].
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn log_record(level: &str, scope: &str, message: &str) {
     LoggerState::log_record_entry(LoggerLogRecordEntry {
         level: level,
@@ -534,6 +550,10 @@ pub fn log_record(level: &str, scope: &str, message: &str) {
 }
 
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn log_record_with_data(level: &str, scope: &str, message: &str, data: String) {
     LoggerState::log_record_entry(LoggerLogRecordEntry {
         level: level,
@@ -569,6 +589,10 @@ impl LoggerState {
 /// Flush the in-memory queue to `IndexedDB`. Called on an interval by the web
 /// layer; safe to call concurrently (each call drains the current batch).
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub async fn log_flush() -> Result<(), wasm_bindgen::JsError> {
     LoggerState::log_flush().await
 }
@@ -583,6 +607,10 @@ impl LoggerState {
 /// paginated from the newest end. Returns an array of
 /// `{ ts, level, scope, message, data? }`.
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub async fn log_dump() -> Result<NookLogEntries, wasm_bindgen::JsError> {
     LoggerState::log_dump().await
 }
@@ -605,6 +633,10 @@ impl LoggerState {
         raw_numeric_public_api,
         reason = "FFI boundary: accepts log pagination limits and offsets as JavaScript Number scalars"
     )
+)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub async fn log_dump_page(
     min_level: String,
@@ -647,6 +679,10 @@ impl LoggerState {
         reason = "FFI boundary: projects the persisted log count as a JavaScript Number scalar"
     )
 )]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub async fn log_count() -> Result<u32, wasm_bindgen::JsError> {
     LoggerState::log_count().await
 }
@@ -674,6 +710,10 @@ impl LoggerState {
 
 /// Drop the in-memory queue and clear the persisted log store.
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub async fn log_clear() -> Result<(), wasm_bindgen::JsError> {
     LoggerState::log_clear().await
 }

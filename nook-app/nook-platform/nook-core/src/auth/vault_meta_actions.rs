@@ -454,7 +454,7 @@ impl<'a> SentinelMemberRecordProjection<'a> {
             .collect::<MultiDeviceResult<Vec<_>>>()?;
         roster.sort_by(|left, right| left.auth_id.cmp(&right.auth_id));
         VaultMember::build_members_records(BuildMembersRecordsRequest {
-            roster: roster,
+            roster,
             members_key: self.members_key,
         })
     }

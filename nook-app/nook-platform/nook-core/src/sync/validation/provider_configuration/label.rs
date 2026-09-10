@@ -15,6 +15,7 @@ pub enum ProviderLabel<'a> {
     OAuth(OAuthProviderLabel<'a>),
 }
 impl ProviderLabel<'_> {
+    #[must_use]
     pub fn render(self) -> String {
         match self {
             Self::Local => "This device".to_owned(),
@@ -64,6 +65,7 @@ pub enum ProviderCredentialEvidence<'a> {
     LocalFolder(&'a StoredLocalFolderHandle),
 }
 impl ProviderCredentialEvidence<'_> {
+    #[must_use]
     pub fn readiness(self) -> ProviderCredentialReadiness {
         match self {
             Self::Local => ProviderCredentialReadiness::Ready,
