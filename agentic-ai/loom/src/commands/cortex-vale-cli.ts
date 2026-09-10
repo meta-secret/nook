@@ -9,7 +9,7 @@ if (repoRootArgument === false || cortexRootArgument === false) {
 } else {
   const repoRoot = path.resolve(repoRootArgument);
   const cortexRoot = path.resolve(repoRoot, cortexRootArgument);
-  const result = CortexValeInvocation.runCortexVale({ cortexRoot, repoRoot });
+  const result = new CortexValeInvocation({ cortexRoot, repoRoot }).execute();
   if (result.isErr()) {
     process.stderr.write(result.error.message + '\n');
     process.exitCode = 1;

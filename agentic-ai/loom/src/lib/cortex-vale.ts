@@ -11,11 +11,11 @@ export type RunCortexValeArgs = {
 };
 
 /** Owns the cortex vale invocation registry and its capability transitions. */
+const REQUIRED_VALE_VERSION = 'vale version 3.19.0';
 export class CortexValeInvocation {
-  private constructor() {}
-  private static readonly REQUIRED_VALE_VERSION = 'vale version 3.19.0';
-
-  static runCortexVale(args: RunCortexValeArgs): Result<void, ValeFailure> {
+  constructor(private readonly request: RunCortexValeArgs) {}
+  execute(): Result<void, ValeFailure> {
+    const args = this.request;
     if (!existsSync(args.cortexRoot)) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
@@ -30,7 +30,7 @@ export class CortexValeInvocation {
     const version = HostCommand.run(versionArgs);
     if (
       version.exitCode !== 0 ||
-      version.stdout.trim() !== CortexValeInvocation.REQUIRED_VALE_VERSION
+      version.stdout.trim() !== REQUIRED_VALE_VERSION
     ) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
@@ -45,7 +45,10 @@ export class CortexValeInvocation {
           cortexRoot: args.cortexRoot,
           filePath,
         };
-        return !CortexValeInvocation.isCanonicalKnowledgeGraph(graphArgs);
+        return (
+          new CortexKnowledgeGraphPath(graphArgs).role() ===
+          CortexMarkdownRole.Article
+        );
       });
     if (markdownFiles.length === 0) return ok(undefined);
     const lintArgs: RunCommandArgs = {
@@ -65,10 +68,11 @@ export class CortexValeInvocation {
       message: `Vale Cortex lint failed:\n${lint.stdout || lint.stderr}`,
     });
   }
-
-  static isCanonicalKnowledgeGraph(
-    args: IsCanonicalKnowledgeGraphArgs,
-  ): boolean {
+}
+export class CortexKnowledgeGraphPath {
+  constructor(private readonly request: IsCanonicalKnowledgeGraphArgs) {}
+  role(): CortexMarkdownRole {
+    const args = this.request;
     const relativePath = path
       .relative(args.cortexRoot, args.filePath)
       .split(path.sep)
@@ -78,11 +82,13 @@ export class CortexValeInvocation {
       relativePath === 'k-graph.md' ||
       relativePath === 'INDEX.md'
     ) {
-      return true;
+      return CortexMarkdownRole.KnowledgeGraph;
     }
     return /^(?:gizmo|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/knowledge-graph\.md$/u.test(
       relativePath,
-    );
+    )
+      ? CortexMarkdownRole.KnowledgeGraph
+      : CortexMarkdownRole.Article;
   }
 }
 
@@ -92,3 +98,8 @@ export type IsCanonicalKnowledgeGraphArgs = {
 };
 
 import type { ValeFailure } from './vale-files.ts';
+
+export enum CortexMarkdownRole {
+  KnowledgeGraph = 'knowledgeGraph',
+  Article = 'article',
+}

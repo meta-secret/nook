@@ -135,11 +135,11 @@ export class ChangedCortexDensity {
     }
     let valeAlerts: readonly ValeNativeAlert[] = [];
     if (documents.length > 0) {
-      const lint = ValeFileDiagnostics.runValeFiles({
+      const lint = new ValeFileDiagnostics({
         configPath: path.join(args.repoRoot, '.vale', 'density.ini'),
         files: documents.map((document) => document.absolutePath),
         repoRoot: args.repoRoot,
-      });
+      }).execute();
       if (lint.isErr()) return err(lint.error);
       valeAlerts = lint.value.alerts.filter((alert) => {
         const relativePath = path.relative(args.repoRoot, alert.file);

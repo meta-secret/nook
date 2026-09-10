@@ -69,25 +69,24 @@ type ParseAlertArgs = {
 };
 
 /** Owns the vale file diagnostics registry and its capability transitions. */
+const VALE_ALERT_EXIT_CODE = 1;
+const REQUIRED_VALE_VERSION = 'vale version 3.19.0';
+const JSON_NULL = JSON.parse('null') as UntrustedYamlNode;
 export class ValeFileDiagnostics {
-  private constructor() {}
-  private static readonly VALE_ALERT_EXIT_CODE = 1;
-
-  private static readonly REQUIRED_VALE_VERSION = 'vale version 3.19.0';
-
-  private static readonly JSON_NULL = JSON.parse('null') as UntrustedYamlNode;
-
-  static runValeFiles(
-    args: RunValeFilesArgs,
-  ): Result<ValeFilesResult, ValeFailure> {
-    ValeFileDiagnostics.validateRequest(args);
+  constructor(private readonly request: RunValeFilesArgs) {}
+  execute(): Result<ValeFilesResult, ValeFailure> {
+    const args = this.request;
+    new ValeFileRequest(args).admit();
     const versionArgs: RunCommandArgs = {
       command: 'vale',
       args: ['--version'],
       cwd: args.repoRoot,
     };
     const version = HostCommand.run(versionArgs);
-    if (!ValeFileDiagnostics.isRequiredValeVersion(version)) {
+    if (
+      new ValeVersionOutput(version).admission() ===
+      ValeVersionAdmission.Rejected
+    ) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
         message: 'Vale 3.19.0 is required for exact-file linting.',
@@ -116,21 +115,18 @@ export class ValeFileDiagnostics {
         message: `Vale exact-file lint wrote to stderr: ${output.stderr}`,
       });
     }
-    if (
-      output.exitCode !== 0 &&
-      output.exitCode !== ValeFileDiagnostics.VALE_ALERT_EXIT_CODE
-    ) {
+    if (output.exitCode !== 0 && output.exitCode !== VALE_ALERT_EXIT_CODE) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
         message: `Vale exact-file lint failed with exit code ${output.exitCode}.`,
       });
     }
-    const result = ValeFileDiagnostics.parseValeFilesOutput({
+    const result = new ValeOutputDocument({
       files: args.files,
       stdout: output.stdout,
-    });
+    }).decode();
     const expectedExitCode =
-      result.alerts.length > 0 ? ValeFileDiagnostics.VALE_ALERT_EXIT_CODE : 0;
+      result.alerts.length > 0 ? VALE_ALERT_EXIT_CODE : 0;
     if (output.exitCode !== expectedExitCode) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
@@ -140,19 +136,63 @@ export class ValeFileDiagnostics {
     }
     return ok(result);
   }
+}
+export class ValeFileRequest {
+  constructor(private readonly request: RunValeFilesArgs) {}
+  admit(): Result<void, ValeFailure> {
+    const args = this.request;
+    new ValeRepositoryFile({
+      file: args.configPath,
+      label: 'Vale config',
+      repoRoot: args.repoRoot,
+    }).admit();
+    if (args.files.length === 0) {
+      return err({
+        code: LoomFailureCode.CortexAuditFailed,
+        message: 'Vale exact-file lint requires at least one Markdown file.',
+      });
+    }
+    const files = new Set<string>();
+    for (const file of args.files) {
+      new ValeRepositoryFile({
+        file,
+        label: 'Vale Markdown input',
+        repoRoot: args.repoRoot,
+      }).admit();
+      if (path.extname(file) !== '.md') {
+        return err({
+          code: LoomFailureCode.CortexAuditFailed,
+          message: `Vale exact-file lint input must end in .md: ${file}`,
+        });
+      }
+      if (files.has(file)) {
+        return err({
+          code: LoomFailureCode.CortexAuditFailed,
+          message: `Vale exact-file lint input is duplicated: ${file}`,
+        });
+      }
+      files.add(file);
+    }
 
-  static isRequiredValeVersion(output: CommandOutput): boolean {
-    return (
-      !output.signaled &&
+    return ok(undefined);
+  }
+}
+export class ValeVersionOutput {
+  constructor(private readonly request: CommandOutput) {}
+  admission(): ValeVersionAdmission {
+    const output = this.request;
+    return !output.signaled &&
       output.exitCode === 0 &&
       output.stderr.length === 0 &&
-      output.stdout.trim() === ValeFileDiagnostics.REQUIRED_VALE_VERSION
-    );
+      output.stdout.trim() === REQUIRED_VALE_VERSION
+      ? ValeVersionAdmission.Admitted
+      : ValeVersionAdmission.Rejected;
   }
-
-  static parseValeFilesOutput(
-    args: ParseValeFilesOutputArgs,
-  ): Result<ValeFilesResult, ValeFailure> {
+}
+export class ValeOutputDocument {
+  constructor(private readonly request: ParseValeFilesOutputArgs) {}
+  decode(): Result<ValeFilesResult, ValeFailure> {
+    const args = this.request;
     let parsed: UntrustedYamlNode;
     try {
       parsed = UntrustedYamlBoundary.fromHost(
@@ -188,54 +228,16 @@ export class ValeFileDiagnostics {
       }
       for (const untrustedAlert of untrustedAlerts) {
         const alertArgs: ParseAlertArgs = { file, value: untrustedAlert };
-        alerts.push(ValeFileDiagnostics.parseAlert(alertArgs));
+        alerts.push(new ValeAlertDocument(alertArgs).decode());
       }
     }
     return ok({ alerts });
   }
-
-  private static validateRequest(
-    args: RunValeFilesArgs,
-  ): Result<void, ValeFailure> {
-    ValeFileDiagnostics.validateRepositoryFile({
-      file: args.configPath,
-      label: 'Vale config',
-      repoRoot: args.repoRoot,
-    });
-    if (args.files.length === 0) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: 'Vale exact-file lint requires at least one Markdown file.',
-      });
-    }
-    const files = new Set<string>();
-    for (const file of args.files) {
-      ValeFileDiagnostics.validateRepositoryFile({
-        file,
-        label: 'Vale Markdown input',
-        repoRoot: args.repoRoot,
-      });
-      if (path.extname(file) !== '.md') {
-        return err({
-          code: LoomFailureCode.CortexAuditFailed,
-          message: `Vale exact-file lint input must end in .md: ${file}`,
-        });
-      }
-      if (files.has(file)) {
-        return err({
-          code: LoomFailureCode.CortexAuditFailed,
-          message: `Vale exact-file lint input is duplicated: ${file}`,
-        });
-      }
-      files.add(file);
-    }
-
-    return ok(undefined);
-  }
-
-  private static validateRepositoryFile(
-    args: ValidateRepositoryFileArgs,
-  ): Result<void, ValeFailure> {
+}
+export class ValeRepositoryFile {
+  constructor(private readonly request: ValidateRepositoryFileArgs) {}
+  admit(): Result<void, ValeFailure> {
+    const args = this.request;
     const { file, label, repoRoot } = args;
     if (!path.isAbsolute(repoRoot) || !path.isAbsolute(file)) {
       return err({
@@ -262,7 +264,8 @@ export class ValeFileDiagnostics {
       path.normalize(file) !== file ||
       realRepoRoot !== repoRoot ||
       realFile !== file ||
-      !ValeFileDiagnostics.isInside(insideArgs)
+      new ValeRepositoryContainment(insideArgs).containment() ===
+        ValePathContainment.Outside
     ) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
@@ -280,31 +283,35 @@ export class ValeFileDiagnostics {
       message: `${label} must be a regular file: ${file}`,
     });
   }
-
-  private static isInside(args: IsInsideArgs): boolean {
+}
+export class ValeRepositoryContainment {
+  constructor(private readonly request: IsInsideArgs) {}
+  containment(): ValePathContainment {
+    const args = this.request;
     const relative = path.relative(args.repoRoot, args.candidate);
-    return (
-      relative.length > 0 &&
+    return relative.length > 0 &&
       relative !== '..' &&
       !relative.startsWith(`..${path.sep}`) &&
       !path.isAbsolute(relative)
-    );
+      ? ValePathContainment.Inside
+      : ValePathContainment.Outside;
   }
-
-  private static parseAlert(
-    args: ParseAlertArgs,
-  ): Result<ValeNativeAlert, ValeFailure> {
+}
+export class ValeAlertDocument {
+  constructor(private readonly request: ParseAlertArgs) {}
+  decode(): Result<ValeNativeAlert, ValeFailure> {
+    const args = this.request;
     if (!UntrustedYamlBoundary.isRecord(args.value)) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
         message: `Vale exact-file lint alert must be an object: ${args.file}`,
       });
     }
-    ValeFileDiagnostics.requireExactFields({
+    new ValeExactFields({
       actual: Object.keys(args.value),
       expected: Object.values(ValeAlertField),
       label: 'alert',
-    });
+    }).admit();
     const action = args.value[ValeAlertField.Action] as UntrustedYamlNode;
     const span = args.value[ValeAlertField.Span] as UntrustedYamlNode;
     if (!UntrustedYamlBoundary.isRecord(action)) {
@@ -313,14 +320,14 @@ export class ValeFileDiagnostics {
         message: `Vale exact-file lint alert Action is invalid: ${args.file}`,
       });
     }
-    ValeFileDiagnostics.requireExactFields({
+    new ValeExactFields({
       actual: Object.keys(action),
       expected: Object.values(ValeActionField),
       label: 'alert Action',
-    });
+    }).admit();
     if (
       typeof action[ValeActionField.Name] !== 'string' ||
-      action[ValeActionField.Params] !== ValeFileDiagnostics.JSON_NULL
+      action[ValeActionField.Params] !== JSON_NULL
     ) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
@@ -362,10 +369,7 @@ export class ValeFileDiagnostics {
         message: `Vale exact-file lint alert Message is invalid: ${args.file}`,
       });
     }
-    if (
-      typeof Severity !== 'string' ||
-      !ValeFileDiagnostics.isSeverity(Severity)
-    ) {
+    if (typeof Severity !== 'string' || !this.isSeverity(Severity)) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
         message: `Vale exact-file lint alert Severity is invalid: ${args.file}`,
@@ -390,10 +394,18 @@ export class ValeFileDiagnostics {
       severity: Severity,
     });
   }
-
-  private static requireExactFields(
-    args: RequireExactFieldsArgs,
-  ): Result<void, ValeFailure> {
+  private isSeverity(value: string): value is ValeAlertSeverity {
+    return (
+      value === ValeAlertSeverity.Error ||
+      value === ValeAlertSeverity.Suggestion ||
+      value === ValeAlertSeverity.Warning
+    );
+  }
+}
+export class ValeExactFields {
+  constructor(private readonly request: RequireExactFieldsArgs) {}
+  admit(): Result<void, ValeFailure> {
+    const args = this.request;
     const actual = [...args.actual].sort();
     const expected = [...args.expected].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -404,14 +416,6 @@ export class ValeFileDiagnostics {
     }
 
     return ok(undefined);
-  }
-
-  private static isSeverity(value: string): value is ValeAlertSeverity {
-    return (
-      value === ValeAlertSeverity.Error ||
-      value === ValeAlertSeverity.Suggestion ||
-      value === ValeAlertSeverity.Warning
-    );
   }
 }
 
@@ -425,3 +429,12 @@ export type ValeFailure = {
   readonly code: LoomFailureCode.CortexAuditFailed;
   readonly message: string;
 };
+
+export enum ValeVersionAdmission {
+  Admitted = 'admitted',
+  Rejected = 'rejected',
+}
+export enum ValePathContainment {
+  Inside = 'inside',
+  Outside = 'outside',
+}

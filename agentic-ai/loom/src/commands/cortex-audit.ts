@@ -119,10 +119,10 @@ export class CortexAuditCommand {
 
     const allMarkdownFiles =
       CortexMarkdownInventory.listCortexMarkdownFiles(cortexRoot);
-    const proseLint = CortexValeInvocation.runCortexVale({
+    const proseLint = new CortexValeInvocation({
       cortexRoot,
       repoRoot,
-    });
+    }).execute();
     if (proseLint.isErr()) return err(proseLint.error);
     const brokenLinks: BrokenLink[] = [];
     const densityFindings: DensityFinding[] = [];
@@ -192,11 +192,11 @@ export class CortexAuditCommand {
     );
 
     if (args.request.includeDensityLint && documents.length > 0) {
-      const densityLint = ValeFileDiagnostics.runValeFiles({
+      const densityLint = new ValeFileDiagnostics({
         configPath: path.join(repoRoot, '.vale', 'density.ini'),
         files: documents.map((document) => document.absolutePath),
         repoRoot,
-      });
+      }).execute();
       if (densityLint.isErr()) return err(densityLint.error);
       densityValeAlerts = densityLint.value.alerts;
     }
