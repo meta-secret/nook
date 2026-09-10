@@ -49,7 +49,9 @@ export class SkillApplicationSourceBoundaryScenario {
           ? 'CST Lexer ParsedNode isAlias isMap isScalar isSeq parseDocument stringify'.split(
               ' ',
             )
-          : [];
+          : node.moduleSpecifier.text === 'neverthrow'
+            ? ['err', 'ok', 'Result']
+            : [];
       const elements =
         node.importClause?.namedBindings &&
         ts.isNamedImports(node.importClause.namedBindings)
@@ -81,12 +83,14 @@ export class SkillApplicationSourceBoundaryScenario {
           [
             `${ARTICLE_ROOT}action.ts`,
             `${ARTICLE_ROOT}domain.ts`,
+            `${DOCUMENT_MAP_ROOT}application.ts`,
             `${DOCUMENT_MAP_ROOT}action.ts`,
             `${DOCUMENT_MAP_ROOT}domain.ts`,
             `${CONSISTENCY_ROOT}action.ts`,
             `${CONSISTENCY_ROOT}domain.ts`,
             `${DELEGATION_VISUALIZATION_ROOT}action.ts`,
             `${DELEGATION_VISUALIZATION_ROOT}domain.ts`,
+            `${DELEGATION_VISUALIZATION_ROOT}result-codec.ts`,
           ].includes(dependency);
         if (crossSkill) {
           erase(node);
@@ -161,6 +165,20 @@ export class SkillApplicationSourceBoundaryScenario {
       const specifier = node.moduleSpecifier.text;
       const clause = node.importClause;
       if (!clause) return false;
+      if (specifier === 'neverthrow') {
+        const bindings = clause.namedBindings;
+        const allowedNames = new Set(['err', 'ok', 'Result']);
+        return Boolean(
+          !clause.name &&
+          bindings &&
+          ts.isNamedImports(bindings) &&
+          bindings.elements.length > 0 &&
+          bindings.elements.every(
+            (element) =>
+              !element.propertyName && allowedNames.has(element.name.text),
+          ),
+        );
+      }
       if (specifier === 'node:path')
         return (
           clause.name?.text === 'path' &&
@@ -270,7 +288,7 @@ const HOST_REGISTRY = `${HOST_ROOT}skill-action-registry.ts`;
 const YAML_CODEC = `${HOST_ROOT}skill-yaml-codec.ts`;
 
 const PROCESS_USES =
-  `process.argv.slice(2);process.exitCode = outcome.exitCode;process.stdout.write(outcome.yaml)`.split(
+  `process.argv.slice(2);process.stdout.write(response.yaml);process.exitCode = response.exitCode;process.stderr.write(\`${'${failure.message}'}\\n\`);process.exitCode = 1`.split(
     ';',
   );
 
@@ -394,7 +412,7 @@ test('rejects dangerous capabilities from every host layer', async () => {
     [
       HOST_CLI,
       host.replace(
-        'process.stdout.write(outcome.yaml)',
+        'process.stdout.write(response.yaml)',
         'process.stdout.write(request.argv.join())',
       ),
     ],

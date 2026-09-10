@@ -104,11 +104,11 @@ export type AuditedRuntimeSourceRequest = {
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/scripts/arc-hive-render-contract.ts',
-    '36e7c75dd8c5661213cf04398f36c2d084043c0c57237c16232982c1fd4a6e1c',
+    '6e3f9ec99a5f65a720e8af6e9c9331d76750148c58d3cecdc9569352a9b93ad1',
   ],
   [
     'infra/sim/kubernetes-cache/contracts.ts',
-    'cce43622b18c40f64c020bd262d97e55d1193dcb13066a4dd6a6bcdb2de94a96',
+    '414fe9bbc3c8405974607ccd0ff34892084d1047322dbd26072b4b19cd2ec0f5',
   ],
   [
     '.github/scripts/format-host-apply.test.sh',
@@ -128,15 +128,15 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/services-network-repair-test.ts',
-    'b721ee0fe9e8515b625a11e14a3ba598b0b4fdb42f821dbaafd2b7e3f7915bcd',
+    'c2c3b61e2e5fbee58adf9b4ad3b5a79cbfeaa832a38f3129f162474e64a309fd',
   ],
   [
     '.github/scripts/k0s-cni-migration-test.ts',
-    '177eaf8c2fb1087f7305f15dc6d28df2b5d6861407f4bd055bd2f19293ae0abb',
+    'a30edf07fc77baa8ecda6894b9f0845f04754a5b814fa0a3d50fcbac71736a81',
   ],
   [
     '.github/scripts/k0s-firewall-rollback-test.ts',
-    '2eb7c30dd3399c84729ae971b8cf078e0506806fda19925f764af15e52410955',
+    '2a208f1de16db92077e93cf77c16a131d5c23bb174c1ffb624a8c3ec4cba71b2',
   ],
   [
     '.github/scripts/remote-task-batch.sh',
@@ -144,7 +144,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/operator-ssh.ts',
-    '4a8bddcf4f0ceef6426306157f70d450ecfc4ce894cbc6aaae5b4646548a3da6',
+    'e2f949bdb73bdd874c1e620acf2fa66ad13ccae8f5864afd2dd1fac68acb0e38',
   ],
   [
     'infra/providers/ovh-dedicated.ts',

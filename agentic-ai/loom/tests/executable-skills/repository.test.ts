@@ -342,9 +342,11 @@ test('repository CLI audits one tracked snapshot', async () => {
     'utf8',
   );
   expect(
-    cli.match(/ExecutableSkillRepository\.readTrackedFiles\(repoRoot\)/gu),
+    cli.match(
+      /new ExecutableSkillCheckout\(repoRoot\)\.readTrackedFiles\(\)/gu,
+    ),
   ).toHaveLength(1);
-  expect(cli).toContain('auditExecutableSkillPackageFiles(auditRequest)');
+  expect(cli.match(/new ExecutableSkillRepository\(\{/gu)).toHaveLength(1);
   expect(cli).not.toContain('auditTrackedExecutableSkillPackages');
 });
 

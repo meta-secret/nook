@@ -289,9 +289,7 @@ class CortexArticleBlockSequence {
     block: CortexArticleSemanticBlock,
   ): Result<CortexArticleBlockSequence, CortexArticleRequestDecodeError> {
     const previousLine =
-      this.request.blocks.length > 0
-        ? this.request.blocks[this.request.blocks.length - 1]!.line
-        : 0;
+      this.request.blocks.length > 0 ? this.request.blocks.at(-1)!.line : 0;
     if (block.line <= previousLine) {
       return err(
         new CortexArticleRequestDecodeError({

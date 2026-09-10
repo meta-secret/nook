@@ -193,7 +193,13 @@ export class ExecutableSkillSource {
       this.assertContainedModuleSpecifier(containmentRequest);
     }
     const analysis: ExecutableSkillSourceAnalysis = {
-      moduleSpecifiers: Object.freeze([...moduleSpecifiers]),
+      moduleSpecifiers: Object.freeze(
+        moduleSpecifiers.filter((specifier) =>
+          [...EXECUTABLE_SKILL_RELATIVE_MODULE_PREFIXES].some((prefix) =>
+            specifier.startsWith(prefix),
+          ),
+        ),
+      ),
     };
     return Object.freeze(analysis);
   }
@@ -483,7 +489,12 @@ export class ExecutableSkillSource {
     request: IdentifierCapabilityRequest,
   ): boolean {
     const node = request.node;
-    if (ts.isPartOfTypeNode(node) || this.isInsideTypeQuery(node)) return false;
+    if (
+      ts.isPartOfTypeNode(node) ||
+      this.isInsideQualifiedTypeReference(node) ||
+      this.isInsideTypeQuery(node)
+    )
+      return false;
     if (
       ts.isShorthandPropertyAssignment(node.parent) &&
       node.parent.name === node
@@ -542,6 +553,12 @@ export class ExecutableSkillSource {
       candidate = candidate.parent;
     }
     return false;
+  }
+
+  private isInsideQualifiedTypeReference(node: ts.Identifier): boolean {
+    let candidate: ts.Node = node;
+    while (ts.isQualifiedName(candidate.parent)) candidate = candidate.parent;
+    return ts.isTypeNode(candidate.parent);
   }
 
   private isSyntacticDeclarationName(node: ts.Identifier): boolean {
@@ -862,6 +879,7 @@ export class ExecutableSkillSource {
 
   private isExternalRuntimePackage(specifier: string): boolean {
     return !(
+      EXECUTABLE_SKILL_PURE_RUNTIME_PACKAGES.has(specifier) ||
       [...EXECUTABLE_SKILL_RELATIVE_MODULE_PREFIXES].some((prefix) =>
         specifier.startsWith(prefix),
       ) ||
@@ -912,3 +930,5 @@ export class ExecutableSkillSource {
     );
   }
 }
+
+const EXECUTABLE_SKILL_PURE_RUNTIME_PACKAGES = new Set(['neverthrow', 'zod']);
