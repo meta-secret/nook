@@ -5,22 +5,21 @@ pub struct DirectWasmAliases<'scan> {
     pub first_line: usize,
     pub callable_names: &'scan HashSet<String>,
     pub wasm_type_names: &'scan HashSet<String>,
-    pub wasm_namespace_bindings: &'scan mut HashMap<String, String>,
-    pub wasm_class_bindings: &'scan mut HashMap<String, String>,
-    pub imported_callable_bindings: &'scan mut HashSet<String>,
-    pub lines: &'scan mut Vec<usize>,
+    pub wasm_namespace_bindings: HashMap<String, String>,
+    pub wasm_class_bindings: HashMap<String, String>,
+    pub imported_callable_bindings: HashSet<String>,
+    pub lines: Vec<usize>,
 }
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::javascript_literals::JavaScriptLiteral;
 use crate::wasm_dynamic_aliases::DynamicWasmAliases;
-use crate::wasm_module_sources;
 use crate::wasm_module_sources::WasmModuleSources;
 
 #[allow(clippy::too_many_arguments)]
 impl DirectWasmAliases<'_> {
-    pub fn collect_direct_wasm_aliases_and_bindings(self) {
+    pub fn collect_direct_wasm_aliases_and_bindings(self) -> DirectAliasInventory {
         let Self {
             node,
             source,
@@ -28,10 +27,10 @@ impl DirectWasmAliases<'_> {
             first_line,
             callable_names,
             wasm_type_names,
-            wasm_namespace_bindings,
-            wasm_class_bindings,
-            imported_callable_bindings,
-            lines,
+            mut wasm_namespace_bindings,
+            mut wasm_class_bindings,
+            mut imported_callable_bindings,
+            mut lines,
         } = self;
         if matches!(node.kind(), "import_statement" | "import_alias")
             && let Some((binding, module)) = DirectWasmAliases::import_equals_binding(node, source)
@@ -42,7 +41,12 @@ impl DirectWasmAliases<'_> {
             .is_wasm_callable_source()
         {
             wasm_namespace_bindings.insert(binding, module);
-            return;
+            return DirectAliasInventory {
+                wasm_namespace_bindings,
+                wasm_class_bindings,
+                imported_callable_bindings,
+                lines,
+            };
         }
         if matches!(node.kind(), "import_statement" | "export_statement") {
             if let Some(module) = DirectWasmAliases::module_specifier(node, source) {
@@ -53,7 +57,7 @@ impl DirectWasmAliases<'_> {
                     })
                     .is_wasm_callable_source()
                 {
-                    (DynamicWasmAliases {
+                    wasm_namespace_bindings = (DynamicWasmAliases {
                         node: node,
                         source: source,
                         source_path: source_path,
@@ -61,7 +65,28 @@ impl DirectWasmAliases<'_> {
                         wasm_namespace_bindings: wasm_namespace_bindings,
                     })
                     .collect_namespace_import_bindings();
-                    DirectWasmAliases::collect_default_callable_import(
+                    (imported_callable_bindings, lines) =
+                        DirectWasmAliases::collect_default_callable_import(
+                            node,
+                            source,
+                            source_path,
+                            &module,
+                            first_line,
+                            callable_names,
+                            imported_callable_bindings,
+                            lines,
+                        );
+                    wasm_class_bindings = DynamicWasmAliases::collect_wasm_type_import_bindings(
+                        node,
+                        source,
+                        source_path,
+                        &module,
+                        wasm_type_names,
+                        wasm_class_bindings,
+                    );
+                }
+                (imported_callable_bindings, lines) =
+                    DirectWasmAliases::collect_callable_alias_specifiers(
                         node,
                         source,
                         source_path,
@@ -71,32 +96,23 @@ impl DirectWasmAliases<'_> {
                         imported_callable_bindings,
                         lines,
                     );
-                    DynamicWasmAliases::collect_wasm_type_import_bindings(
-                        node,
-                        source,
-                        source_path,
-                        &module,
-                        wasm_type_names,
-                        wasm_class_bindings,
-                    );
-                }
-                DirectWasmAliases::collect_callable_alias_specifiers(
-                    node,
-                    source,
-                    source_path,
-                    &module,
-                    first_line,
-                    callable_names,
-                    imported_callable_bindings,
-                    lines,
-                );
             }
-            return;
+            return DirectAliasInventory {
+                wasm_namespace_bindings,
+                wasm_class_bindings,
+                imported_callable_bindings,
+                lines,
+            };
         }
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            (DirectWasmAliases {
+            DirectAliasInventory {
+                wasm_namespace_bindings,
+                wasm_class_bindings,
+                imported_callable_bindings,
+                lines,
+            } = (DirectWasmAliases {
                 node: child,
                 source: source,
                 source_path: source_path,
@@ -109,6 +125,12 @@ impl DirectWasmAliases<'_> {
                 lines: lines,
             })
             .collect_direct_wasm_aliases_and_bindings();
+        }
+        DirectAliasInventory {
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            imported_callable_bindings,
+            lines,
         }
     }
 }
@@ -141,22 +163,22 @@ impl DirectWasmAliases<'_> {
         module: &str,
         first_line: usize,
         callable_names: &HashSet<String>,
-        bindings: &mut HashSet<String>,
-        lines: &mut Vec<usize>,
-    ) {
-        let Some(authored_name) = wasm_module_sources::wasm_callable_export_name(
+        mut bindings: HashSet<String>,
+        mut lines: Vec<usize>,
+    ) -> (HashSet<String>, Vec<usize>) {
+        let Some(authored_name) = WasmModuleSources::wasm_callable_export_name(
             module,
             "default",
             source_path,
             callable_names,
         ) else {
-            return;
+            return (bindings, lines);
         };
         let Ok(text) = node.utf8_text(source.as_bytes()) else {
-            return;
+            return (bindings, lines);
         };
         let Some(clause) = text.trim_start().strip_prefix("import ") else {
-            return;
+            return (bindings, lines);
         };
         let binding = clause
             .split_whitespace()
@@ -164,12 +186,13 @@ impl DirectWasmAliases<'_> {
             .unwrap_or_default()
             .trim_end_matches(',');
         if binding.is_empty() || matches!(binding, "type" | "{" | "*") {
-            return;
+            return (bindings, lines);
         }
         bindings.insert(binding.to_owned());
         if binding != authored_name {
             lines.push(first_line + node.start_position().row);
         }
+        (bindings, lines)
     }
 }
 
@@ -193,19 +216,28 @@ impl DirectWasmAliases<'_> {
         module: &str,
         first_line: usize,
         callable_names: &HashSet<String>,
-        imported_callable_bindings: &mut HashSet<String>,
-        lines: &mut Vec<usize>,
-    ) {
+        mut imported_callable_bindings: HashSet<String>,
+        mut lines: Vec<usize>,
+    ) -> (HashSet<String>, Vec<usize>) {
         if matches!(node.kind(), "import_specifier" | "export_specifier")
             && let Some(authored_name_node) = node.child_by_field_name("name")
-            && let Some(authored_name) =
-                (JavaScriptLiteral { node: authored_name_node, source: source }).semantic_javascript_name()
+            && let Some(authored_name) = (JavaScriptLiteral {
+                node: authored_name_node,
+                source: source,
+            })
+            .semantic_javascript_name()
             && callable_names.contains(&authored_name)
             && WasmModuleSources::is_wasm_callable_export(module, &authored_name, source_path)
         {
             let alias = node.child_by_field_name("alias");
             if alias
-                .and_then(|alias| (JavaScriptLiteral { node: alias, source: source }).semantic_javascript_name())
+                .and_then(|alias| {
+                    (JavaScriptLiteral {
+                        node: alias,
+                        source: source,
+                    })
+                    .semantic_javascript_name()
+                })
                 .is_some_and(|alias| alias != authored_name)
             {
                 lines.push(first_line + authored_name_node.start_position().row);
@@ -217,21 +249,31 @@ impl DirectWasmAliases<'_> {
             {
                 imported_callable_bindings.insert(binding_name.to_owned());
             }
-            return;
+            return (imported_callable_bindings, lines);
         }
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            DirectWasmAliases::collect_callable_alias_specifiers(
-                child,
-                source,
-                source_path,
-                module,
-                first_line,
-                callable_names,
-                imported_callable_bindings,
-                lines,
-            );
+            (imported_callable_bindings, lines) =
+                DirectWasmAliases::collect_callable_alias_specifiers(
+                    child,
+                    source,
+                    source_path,
+                    module,
+                    first_line,
+                    callable_names,
+                    imported_callable_bindings,
+                    lines,
+                );
         }
+        (imported_callable_bindings, lines)
     }
+}
+
+#[derive(Default)]
+pub(super) struct DirectAliasInventory {
+    pub(super) wasm_namespace_bindings: HashMap<String, String>,
+    pub(super) wasm_class_bindings: HashMap<String, String>,
+    pub(super) imported_callable_bindings: HashSet<String>,
+    pub(super) lines: Vec<usize>,
 }

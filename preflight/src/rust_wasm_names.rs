@@ -203,17 +203,22 @@ impl RustWasmNames<'_> {
         let mut wasm_namespace_bindings = HashMap::new();
         let mut wasm_class_bindings = HashMap::new();
         let mut wasm_instance_bindings = HashMap::new();
-        (DirectWasmAliases {
+        crate::wasm_direct_aliases::DirectAliasInventory {
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            imported_callable_bindings,
+            lines,
+        } = (DirectWasmAliases {
             node: tree.root_node(),
             source,
             source_path,
             first_line,
             callable_names,
             wasm_type_names,
-            wasm_namespace_bindings: &mut wasm_namespace_bindings,
-            wasm_class_bindings: &mut wasm_class_bindings,
-            imported_callable_bindings: &mut imported_callable_bindings,
-            lines: &mut lines,
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            imported_callable_bindings,
+            lines,
         })
         .collect_direct_wasm_aliases_and_bindings();
         DynamicWasmAliases::collect_dynamic_wasm_aliases_and_bindings(

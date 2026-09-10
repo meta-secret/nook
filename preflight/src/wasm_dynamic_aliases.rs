@@ -3,7 +3,7 @@ pub struct DynamicWasmAliases<'scan> {
     pub source: &'scan str,
     pub source_path: &'scan Path,
     pub module: &'scan str,
-    pub wasm_namespace_bindings: &'scan mut HashMap<String, String>,
+    pub wasm_namespace_bindings: HashMap<String, String>,
 }
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -19,145 +19,14 @@ use crate::wasm_module_sources::WasmModuleSources;
 const WASM_MANAGER_ACCESSOR: &str = "requireManager";
 const WASM_RUNTIME_RECEIVER_PROPERTY: &str = "__nookVault";
 
-impl DynamicWasmAliases<'_> {
-    pub fn collect_namespace_import_bindings(self) {
-        let Self {
-            node,
-            source,
-            source_path,
-            module,
-            wasm_namespace_bindings,
-        } = self;
-        if node.kind() == "namespace_import"
-            && !DynamicWasmAliases::node_is_type_only_import(node, source)
-        {
-            let mut cursor = node.walk();
-            if let Some(binding) = node
-                .named_children(&mut cursor)
-                .find(|child| child.kind() == "identifier")
-                .and_then(|child| child.utf8_text(source.as_bytes()).ok())
-            {
-                wasm_namespace_bindings.insert(binding.to_owned(), module.to_owned());
-            }
-            return;
-        }
-        if node.kind() == "import_specifier"
-            && !DynamicWasmAliases::node_is_type_only_import(node, source)
-            && let Some(imported) = node.child_by_field_name("name")
-            && let Some(imported_name) = (JavaScriptLiteral {
-                node: imported,
-                source: source,
-            })
-            .semantic_javascript_name()
-            && let Some(namespace_source) =
-                WasmModuleSources::wasm_namespace_export_source(module, &imported_name, source_path)
-        {
-            let binding = node.child_by_field_name("alias").unwrap_or(imported);
-            if let Ok(binding_name) = binding.utf8_text(source.as_bytes()) {
-                wasm_namespace_bindings.insert(binding_name.to_owned(), namespace_source);
-            }
-            return;
-        }
-
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            (DynamicWasmAliases {
-                node: child,
-                source,
-                source_path,
-                module,
-                wasm_namespace_bindings,
-            })
-            .collect_namespace_import_bindings();
-        }
-    }
-}
-
-impl DynamicWasmAliases<'_> {
-    pub(super) fn collect_wasm_type_import_bindings(
-        node: tree_sitter::Node<'_>,
-        source: &str,
-        source_path: &Path,
-        module: &str,
-        wasm_type_names: &HashSet<String>,
-        wasm_class_bindings: &mut HashMap<String, String>,
-    ) {
-        if node.kind() == "namespace_import" {
-            let mut cursor = node.walk();
-            if let Some(namespace) = node.named_children(&mut cursor).find_map(|child| {
-                (JavaScriptLiteral {
-                    node: child,
-                    source: source,
-                })
-                .semantic_javascript_name()
-            }) {
-                for wasm_type in wasm_type_names {
-                    if WasmModuleSources::is_wasm_export(module, wasm_type, source_path) {
-                        wasm_class_bindings
-                            .insert(format!("{namespace}.{wasm_type}"), wasm_type.clone());
-                    }
-                }
-            }
-            return;
-        }
-        if node.kind() == "import_specifier"
-            && let Some(imported) = node.child_by_field_name("name")
-            && let Some(imported_name) = (JavaScriptLiteral {
-                node: imported,
-                source: source,
-            })
-            .semantic_javascript_name()
-            && wasm_type_names.contains(&imported_name)
-            && WasmModuleSources::is_wasm_export(module, &imported_name, source_path)
-        {
-            let binding = node.child_by_field_name("alias").unwrap_or(imported);
-            if let Ok(binding_name) = binding.utf8_text(source.as_bytes()) {
-                wasm_class_bindings.insert(binding_name.to_owned(), imported_name);
-            }
-            return;
-        }
-
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            DynamicWasmAliases::collect_wasm_type_import_bindings(
-                child,
-                source,
-                source_path,
-                module,
-                wasm_type_names,
-                wasm_class_bindings,
-            );
-        }
-    }
-}
-
-impl DynamicWasmAliases<'_> {
-    fn node_is_type_only_import(node: tree_sitter::Node<'_>, source: &str) -> bool {
-        if node
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| text.trim_start().starts_with("type "))
-        {
-            return true;
-        }
-        let mut ancestor = node.parent();
-        while let Some(parent) = ancestor {
-            if parent.kind() == "import_statement" {
-                return parent
-                    .utf8_text(source.as_bytes())
-                    .is_ok_and(|text| text.trim_start().starts_with("import type "));
-            }
-            ancestor = parent.parent();
-        }
-        false
-    }
-}
+mod imports;
 
 impl DynamicWasmAliases<'_> {
     fn collect_wasm_runtime_receivers(
         node: tree_sitter::Node<'_>,
         source: &str,
-        receivers: &mut Vec<ScopedBinding>,
-    ) {
+        mut receivers: Vec<ScopedBinding>,
+    ) -> Vec<ScopedBinding> {
         if node.kind() == "variable_declarator"
             && let (Some(binding), Some(value)) = (
                 node.child_by_field_name("name"),
@@ -171,8 +40,10 @@ impl DynamicWasmAliases<'_> {
         }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            DynamicWasmAliases::collect_wasm_runtime_receivers(child, source, receivers);
+            receivers =
+                DynamicWasmAliases::collect_wasm_runtime_receivers(child, source, receivers);
         }
+        receivers
     }
 }
 
@@ -221,7 +92,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(node: tree_sitter::Node<
     called_bindings = WasmInstanceFactories::collect_factory_calls_for_receivers(node, source, &member_alias_receivers, called_bindings);
     scoped_wasm_factories = (WasmInstanceFactories { node, source, wasm_class_bindings, factories: scoped_wasm_factories }).collect_wasm_instance_factories();
     imported_wasm_factories = WasmInstanceFactories::collect_imported_wasm_instance_factories(node, source, source_path, wasm_type_names, &called_bindings, imported_wasm_factories);
-    DynamicWasmAliases::collect_wasm_runtime_receivers(node, source, &mut scoped_wasm_runtime_receivers);
+    scoped_wasm_runtime_receivers = DynamicWasmAliases::collect_wasm_runtime_receivers(node, source, scoped_wasm_runtime_receivers);
     scoped_wasm_instances = WasmInstanceFactories::collect_typed_wasm_instances(node, source, wasm_class_bindings, scoped_wasm_instances);
     (DynamicWasmCallables { node, source, source_path, callable_names, wasm_namespace_bindings, scoped_wasm_namespaces: &mut scoped_wasm_namespaces, bindings: &mut scoped_wasm_callables, lines, first_line }).collect_scoped_dynamic_callable_bindings();
     DynamicWasmAliases::collect_dynamic_wasm_aliases(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &imported_wasm_factories, &scoped_wasm_factories, &scoped_wasm_runtime_receivers, &mut scoped_wasm_namespaces, &mut scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
