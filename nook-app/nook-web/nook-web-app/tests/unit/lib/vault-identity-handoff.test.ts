@@ -54,23 +54,15 @@ class IdentityHandoffFixture {
 
   constructor() {
     const browserWindow = globalThis.window
-    const browserWindowDescriptor = Object.getOwnPropertyDescriptor(
-      globalThis,
-      'window',
-    )
     Reflect.deleteProperty(globalThis, 'window')
     try {
       this.state = new VaultState()
     } finally {
-      Object.defineProperty(
-        globalThis,
-        'window',
-        browserWindowDescriptor ?? {
-          configurable: true,
-          writable: true,
-          value: browserWindow,
-        },
-      )
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        writable: true,
+        value: browserWindow,
+      })
     }
     this.lifecycle = new VaultInitializationActions(this.state)
     this.clearUnlockedSession = vi.spyOn(this.state, 'clearUnlockedSession')
