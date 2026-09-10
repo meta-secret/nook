@@ -7,7 +7,9 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 /// Bare SHA-256 hex digest (64 chars).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
+)]
 #[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct Sha256Hex(String);
@@ -61,12 +63,6 @@ impl AsRef<str> for Sha256Hex {
     }
 }
 
-impl Serialize for Sha256Hex {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
 impl TryFrom<String> for Sha256Hex {
     type Error = ValidationError;
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -75,7 +71,7 @@ impl TryFrom<String> for Sha256Hex {
 }
 
 /// Content-addressed event reference used to version an identity-owned vault DEK.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 pub struct IdentityVaultEventId(String);
 
@@ -110,12 +106,6 @@ impl fmt::Display for IdentityVaultEventId {
 impl AsRef<str> for IdentityVaultEventId {
     fn as_ref(&self) -> &str {
         &self.0
-    }
-}
-
-impl Serialize for IdentityVaultEventId {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
     }
 }
 
@@ -207,7 +197,9 @@ impl TryFrom<String> for DeviceSigningPublicKey {
 }
 
 /// RFC 3339 timestamp string (`created_at`, `enrolled_at`, `requested_at`, ...).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
+)]
 #[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct IsoTimestamp(String);
@@ -249,12 +241,6 @@ impl fmt::Display for IsoTimestamp {
 impl AsRef<str> for IsoTimestamp {
     fn as_ref(&self) -> &str {
         &self.0
-    }
-}
-
-impl Serialize for IsoTimestamp {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
     }
 }
 

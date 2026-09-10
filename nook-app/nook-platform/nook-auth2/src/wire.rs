@@ -3,7 +3,7 @@
 use crate::CompactToken;
 use crate::errors::{ValidationError, ValidationResult};
 use age::x25519::{Identity, Recipient};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::{fmt, mem};
 use zeroize::Zeroize;
 
@@ -13,7 +13,7 @@ pub use metadata::{DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, S
 const AGE_ARMOR_MARKER: &str = "BEGIN AGE ENCRYPTED FILE";
 const HEX_32_BYTE_LEN: usize = 64;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 pub struct SymmetricKey(String);
 
@@ -46,13 +46,9 @@ impl AsRef<str> for SymmetricKey {
     }
 }
 
-impl serde::Serialize for SymmetricKey {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
+)]
 #[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct AgeArmoredCiphertext(String);
@@ -86,13 +82,9 @@ impl AsRef<str> for AgeArmoredCiphertext {
     }
 }
 
-impl serde::Serialize for AgeArmoredCiphertext {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
+)]
 #[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct DevicePublicKey(String);
@@ -126,13 +118,9 @@ impl AsRef<str> for DevicePublicKey {
     }
 }
 
-impl serde::Serialize for DevicePublicKey {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
+)]
 #[tsify(type = "string")]
 #[serde(from = "String")]
 pub struct MemberLabel(String);
@@ -166,13 +154,9 @@ impl AsRef<str> for MemberLabel {
     }
 }
 
-impl serde::Serialize for MemberLabel {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
+)]
 #[tsify(type = "string")]
 #[serde(try_from = "String")]
 pub struct PasswordEntryId(String);
@@ -206,13 +190,9 @@ impl AsRef<str> for PasswordEntryId {
     }
 }
 
-impl serde::Serialize for PasswordEntryId {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
+)]
 #[tsify(type = "string")]
 #[serde(from = "String")]
 pub struct OpaqueCiphertext(String);
@@ -246,13 +226,7 @@ impl AsRef<str> for OpaqueCiphertext {
     }
 }
 
-impl serde::Serialize for OpaqueCiphertext {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct DecryptedPlaintext(String);
 
 impl DecryptedPlaintext {
@@ -284,13 +258,7 @@ impl AsRef<str> for DecryptedPlaintext {
     }
 }
 
-impl serde::Serialize for DecryptedPlaintext {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 pub struct SigningSeedHex(String);
 
@@ -323,12 +291,6 @@ impl AsRef<str> for SigningSeedHex {
     }
 }
 
-impl serde::Serialize for SigningSeedHex {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
 impl DecryptedPlaintext {
     pub fn zeroize_plaintext(&mut self) {
         self.0.zeroize();
@@ -341,7 +303,7 @@ impl Drop for DecryptedPlaintext {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 pub struct DeviceIdentitySecret(String);
 
@@ -377,12 +339,6 @@ impl fmt::Display for DeviceIdentitySecret {
 impl AsRef<str> for DeviceIdentitySecret {
     fn as_ref(&self) -> &str {
         &self.0
-    }
-}
-
-impl Serialize for DeviceIdentitySecret {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
     }
 }
 

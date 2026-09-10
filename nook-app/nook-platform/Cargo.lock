@@ -1952,6 +1952,7 @@ dependencies = [
  "bip39",
  "cbc",
  "ciborium",
+ "coset",
  "csv",
  "ed25519-dalek",
  "flate2",

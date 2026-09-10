@@ -44,6 +44,7 @@ flate2 = { version = "1.1", default-features = false, features = ["rust_backend"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2"] }
 p256 = { version = "0.14.0", features = ["ecdsa", "pkcs8"] }
 ciborium = "0.2.2"
+coset = "0.4.2"
 url = "2.5.8"
 psl = "2.1.189"
 

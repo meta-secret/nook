@@ -5,12 +5,13 @@
 )]
 //! Encoded ceremony data and ES256 credential material.
 use super::{
-    DecodePrivateKey, Digest, ES256_ALGORITHM, Integer, MAX_CHALLENGE_BYTES, MIN_CHALLENGE_BYTES,
+    DecodePrivateKey, Digest, ES256_ALGORITHM, MAX_CHALLENGE_BYTES, MIN_CHALLENGE_BYTES,
     PasskeyAuthenticatorError, PasskeyAuthenticatorResult, PasskeyPrivateKeyPkcs8,
     PasskeyPublicKeyCose, Sec1Point, SecretKey, Serialize, Sha256, ToSec1Point, URL_SAFE_NO_PAD,
     Value, Zeroizing, de, ser,
 };
 use base64::Engine;
+use coset::{CborSerializable, CoseKeyBuilder, iana};
 pub(super) struct CanonicalPasskeyField<'a> {
     pub(super) name: &'static str,
     pub(super) value: &'a str,
@@ -69,26 +70,11 @@ impl CoseEncodedPoint<'_> {
         let y = encoded_point
             .y()
             .ok_or(PasskeyAuthenticatorError::InvalidKeyMaterial)?;
-        let value = Value::Map(vec![
-            (
-                Value::Integer(Integer::from(1)),
-                Value::Integer(Integer::from(2)),
-            ),
-            (
-                Value::Integer(Integer::from(3)),
-                Value::Integer(Integer::from(i64::from(ES256_ALGORITHM))),
-            ),
-            (
-                Value::Integer(Integer::from(-1)),
-                Value::Integer(Integer::from(1)),
-            ),
-            (Value::Integer(Integer::from(-2)), Value::Bytes(x.to_vec())),
-            (Value::Integer(Integer::from(-3)), Value::Bytes(y.to_vec())),
-        ]);
-        let mut bytes = Vec::new();
-        ser::into_writer(&value, &mut bytes)
-            .map_err(|_| PasskeyAuthenticatorError::Serialization)?;
-        Ok(bytes)
+        CoseKeyBuilder::new_ec2_pub_key(iana::EllipticCurve::P_256, x.to_vec(), y.to_vec())
+            .algorithm(iana::Algorithm::ES256)
+            .build()
+            .to_vec()
+            .map_err(|_| PasskeyAuthenticatorError::Serialization)
     }
 }
 pub(super) struct CoseKeyBytes<'a>(pub(super) &'a [u8]);
