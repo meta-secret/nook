@@ -215,11 +215,11 @@ impl VaultAppendGraph<'_> {
             expected_store_id: store_id,
         }) {
             Ok(inserted) => {
-                graph = inserted.graph;
+                *graph = inserted.graph;
                 Ok(inserted.status)
             }
             Err(rejected) => {
-                graph = rejected.graph;
+                *graph = rejected.graph;
                 Err(rejected.cause)
             }
         }? {
@@ -277,11 +277,11 @@ impl VaultAppendGraph<'_> {
                 expected_store_id: store_id,
             }) {
                 Ok(inserted) => {
-                    graph = inserted.graph;
+                    *graph = inserted.graph;
                     Ok(inserted.status)
                 }
                 Err(rejected) => {
-                    graph = rejected.graph;
+                    *graph = rejected.graph;
                     Err(rejected.cause)
                 }
             }? {
@@ -323,7 +323,7 @@ impl PreparedEventAppend<'_, '_> {
         let projections = &transaction.projections;
 
         for EventBytes { event_id, bytes } in entries {
-            let value = String::from_utf8(bytes.to_vec())
+            let value = String::from_utf8(Vec::<u8>::from(bytes))
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             EventString {
                 store: events,

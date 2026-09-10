@@ -19,7 +19,6 @@ use super::{
 };
 use nook_core::DeviceProtectionStatus;
 
-#[cfg(test)]
 /// Named values required by NookDatabase::save_wrapped_device_identity.
 pub(crate) struct SaveWrappedDeviceIdentityRequest<'a> {
     pub(crate) device_id: &'a str,
@@ -193,7 +192,6 @@ impl NookDatabase {
 
 /// Atomically install a verified wrapped identity after the just-written
 /// ciphertext can be read back.
-#[cfg(test)]
 impl NookDatabase {
     pub(crate) async fn save_wrapped_device_identity(
         request: SaveWrappedDeviceIdentityRequest<'_>,

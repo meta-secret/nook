@@ -80,7 +80,7 @@ impl BrowserPasskeyObservation<'_> {
             transports: BrowserPasskeyObservation::registration_transports(&response),
             backup_state: authenticator_data.backup_state(),
             aaguid: authenticator_data.aaguid(),
-            ..client_environment()
+            ..Self::client_environment()
         }
     }
 }
@@ -118,7 +118,7 @@ impl BrowserPasskeyObservation<'_> {
             transports: Vec::new(),
             backup_state: authenticator_data.backup_state(),
             aaguid: AuthenticatorGuidEvidence::NotReported,
-            ..client_environment()
+            ..Self::client_environment()
         }
     }
 }

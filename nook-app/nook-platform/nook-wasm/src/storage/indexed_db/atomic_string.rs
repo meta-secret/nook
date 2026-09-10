@@ -55,6 +55,10 @@ pub(crate) enum StringUpdateResult {
     GuardRejected,
 }
 
+fn always_adopt_fallback(_: &str) -> bool {
+    true
+}
+
 impl NookDatabase {
     pub(crate) async fn idb_update_string<F>(
         request: IndexedDbUpdate<'_, F>,
@@ -67,7 +71,7 @@ impl NookDatabase {
             key: key,
             fallback_key: StringRecordFallback::Disabled,
             guard: guard,
-            can_adopt_fallback: |_| true,
+            can_adopt_fallback: always_adopt_fallback,
             update: update,
         })
         .await
@@ -116,7 +120,9 @@ impl NookDatabase {
                 )
                 .await?
                 {
-                    Some(entry) => (entry.wrapped_app_key().clone(), expected),
+                    StoredIdentityProtection::Protected(entry) => {
+                        (entry.wrapped_app_key().clone(), expected)
+                    }
                     StoredIdentityProtection::Unprotected => {
                         return Ok(StringUpdateResult::GuardRejected);
                     }

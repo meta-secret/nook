@@ -136,7 +136,6 @@ struct LocalAccessProfile {
     profile: device_access::DeviceAccessProfile,
 }
 
-#[wasm_bindgen]
 /// Named values required by NookDeviceVaultAccess::vaults_for_identity.
 pub(crate) struct BrowserVaultsForIdentity<'a> {
     pub(crate) vaults: &'a [NookDeviceVaultAccess],
@@ -162,6 +161,7 @@ pub(crate) struct BrowserVaultAccessRows<'a> {
     pub(crate) identity: VaultAccessScope<'a>,
 }
 
+#[wasm_bindgen]
 impl NookDeviceVaultAccess {
     #[wasm_bindgen(getter, js_name = storeId)]
     pub fn store_id(&self) -> String {
@@ -262,7 +262,6 @@ impl NookDeviceVaultAccess {
     }
 }
 
-#[wasm_bindgen]
 /// Named values required by NookDeviceAccessSnapshot::device_access_snapshot_for_session.
 pub(crate) struct BrowserDeviceAccessSnapshotForSession<'a> {
     pub(crate) session_device_id: &'a str,
@@ -276,6 +275,7 @@ pub(crate) struct BrowserDeviceAccessSnapshotForSessionWithProtected<'a> {
     pub(crate) protected: ProtectedIdentityLookup,
 }
 
+#[wasm_bindgen]
 impl NookDeviceAccessSnapshot {
     #[wasm_bindgen(getter)]
     #[must_use]
@@ -615,9 +615,7 @@ impl NookDeviceVaultAccess {
                 },
                 verified_at: match verified_at {
                     Some(timestamp) => NookDeviceAccessText::from_string(timestamp),
-                    AuthenticatorGuidEvidence::NotReported => {
-                        NookDeviceAccessText(NookDeviceAccessTextValue::Unknown)
-                    }
+                    None => NookDeviceAccessText(NookDeviceAccessTextValue::Unknown),
                 },
             });
         }

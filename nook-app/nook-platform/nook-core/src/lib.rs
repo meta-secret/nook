@@ -303,12 +303,12 @@ pub use sync_provider_store::{
     ProviderSyncedVaultVersion, ProviderVaultScope, ProviderWireMigration,
     RemoteEventFlushProviderRequest, SharedGoogleEnrollmentAudience, SharedGrantProviderSelection,
     StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
-    StorageConnectArgs, StorageProviderData, StoredGithubPat, StoredGithubRepository,
-    StoredGoogleDriveFolder, StoredICloudShareTarget, StoredLocalFolderConfiguration,
-    StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
-    StoredOAuthAccountIdentity, StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
-    StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
-    VaultStorageConnection,
+    StorageConnectArgs, StorageProvider, StorageProviderData, StoredGithubPat,
+    StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
+    StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
+    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+    StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+    StoredOAuthTokenExpiry, VaultStorageConnection,
 };
 pub use validation::{
     ConnectionCredentialValidation, DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME,

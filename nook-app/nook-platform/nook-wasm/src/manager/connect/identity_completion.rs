@@ -70,13 +70,18 @@ impl NookVaultManager {
                 let ordered_event_ids = graph.topological_order()?;
                 let key_epoch_event_id = EventId::parse(&key_epoch)
                     .map_err(|error| NookError::Database(error.to_string()))?;
-                let verified_previous_key_epoch = graph
-                    .get(&key_epoch_event_id)
-                    .map(|event| event.body.key_epoch.clone())
-                    .filter(|previous| previous != &key_epoch_event_id)
-                    .map(|previous| IdentityVaultEventId::parse(previous.as_str()))
-                    .transpose()
-                    .map_err(|error| NookError::Database(error.to_string()))?;
+                let verified_previous_key_epoch = match graph.get(&key_epoch_event_id) {
+                    nook_core::EventLookup::UnknownEvent => None,
+                    nook_core::EventLookup::Recorded(event)
+                        if event.body.key_epoch == key_epoch_event_id =>
+                    {
+                        None
+                    }
+                    nook_core::EventLookup::Recorded(event) => Some(
+                        IdentityVaultEventId::parse(event.body.key_epoch.as_str())
+                            .map_err(|error| NookError::Database(error.to_string()))?,
+                    ),
+                };
                 let committed_event_ids = ordered_event_ids
                     .iter()
                     .map(|event_id| IdentityVaultEventId::parse(event_id.as_str()))

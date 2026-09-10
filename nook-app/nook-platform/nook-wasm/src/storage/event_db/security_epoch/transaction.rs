@@ -9,9 +9,8 @@ use crate::NookDatabase;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::{NookError, storage};
 use nook_core::{EventId, LocalEventStore};
-use rexie::{Rexie, Store, Transaction, TransactionMode};
+use rexie::{Store, Transaction, TransactionMode};
 use std::collections::BTreeSet;
-use std::rc::Rc;
 
 const STORE_EVENTS: &str = "events";
 const STORE_PROJECTIONS: &str = "projections";
@@ -48,7 +47,7 @@ impl AppendKind {
 
 /// The connection stays alive through completion; stores cannot be substituted after admission.
 pub(super) struct EventTransaction {
-    _connection: Rc<Rexie>,
+    _connection: NookDatabase,
     transaction: Transaction,
     pub(super) events: Store,
     pub(super) projections: Store,

@@ -499,7 +499,7 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn assert_website_passkey(
         &mut self,
-        request: nook_core::PasskeyAssertionRequest,
+        request: nook_core::WebsitePasskeyAssertionRequest,
         ceremony_active: &js_sys::Function,
     ) -> Result<NookPasskeyAssertion, JsError> {
         NookVaultManager::ensure_ceremony_active(ceremony_active)?;

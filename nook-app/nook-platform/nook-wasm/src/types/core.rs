@@ -571,21 +571,13 @@ pub struct NookPasskeyAccount {
 
 impl From<nook_core::PasskeySecret> for NookPasskeyAccount {
     fn from(mut value: nook_core::PasskeySecret) -> Self {
-        use zeroize::Zeroize;
-        // Retain only the public picker fields; erase the remaining decrypted material.
-        value.rp_id.zeroize();
-        value.rp_name.zeroize();
-        value.user_handle.zeroize();
-        value.key.zeroize();
-        value.signature_count.zeroize();
-        value.discoverable.zeroize();
-        value.backup_eligible.zeroize();
-        value.backup_state.zeroize();
-        Self {
-            credential_id: value.credential_id,
-            user_name: value.user_name,
-            user_display_name: value.user_display_name,
-        }
+        let account = Self {
+            credential_id: value.credential_id.clone(),
+            user_name: value.user_name.clone(),
+            user_display_name: value.user_display_name.clone(),
+        };
+        value.zeroize_plaintext();
+        account
     }
 }
 

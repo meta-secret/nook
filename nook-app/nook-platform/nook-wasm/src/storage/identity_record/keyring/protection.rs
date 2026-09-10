@@ -143,6 +143,8 @@ impl<'a> ProtectedIdentityPublication<'a> {
             seed_origin,
         } = selection;
         let existing = keyring.entry(&identity_id);
+        let replaces_existing =
+            matches!(&existing, nook_core::LocalIdentityProtection::Protected(_));
         let evidence = IdentitySigningEvidence {
             directory: &self.directory,
             identity_id: &identity_id,
@@ -167,7 +169,7 @@ impl<'a> ProtectedIdentityPublication<'a> {
             signing.seed(),
         )
         .map_err(|error| NookError::Database(error.to_string()))?;
-        if existing.is_some() {
+        if replaces_existing {
             keyring = keyring
                 .replace(entry)
                 .map_err(|error| NookError::Database(error.to_string()))?;

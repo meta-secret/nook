@@ -23,10 +23,6 @@ struct RepositoryResponse<'a> {
     text: &'a str,
     repo: &'a str,
 }
-struct TreeResponse<'a> {
-    status: StatusCode,
-    text: &'a str,
-}
 enum RepositoryDiscovery {
     Missing,
     Loaded(GitHubRepoResponse),
@@ -203,10 +199,7 @@ impl GitHubEventStore<'_> {
             .text()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let TreeDiscovery::Loaded(tree) = Self::github_tree_response(TreeResponse {
-            status: tree_status,
-            text: &tree_text,
-        })?
+        let TreeDiscovery::Loaded(tree) = Self::github_tree_response(tree_status, &tree_text)?
         else {
             return Ok(Vec::new());
         };
@@ -455,42 +448,32 @@ mod tests {
     )]
     fn github_tree_response_projects_missing_errors_truncation_and_entries() {
         assert!(matches!(
-            GitHubEventStore::github_tree_response(TreeResponse {
-                status: StatusCode::NOT_FOUND,
-                text: ""
-            })
-            .unwrap(),
+            GitHubEventStore::github_tree_response(StatusCode::NOT_FOUND, "").unwrap(),
             TreeDiscovery::Missing
         ));
 
-        let unavailable = GitHubEventStore::github_tree_response(TreeResponse {
-            status: StatusCode::BAD_GATEWAY,
-            text: "",
-        });
+        let unavailable = GitHubEventStore::github_tree_response(StatusCode::BAD_GATEWAY, "");
         assert!(matches!(
             unavailable,
             Err(NookError::GitHub(message)) if message.contains(EVENT_LOG_ROOT) && message.contains("502")
         ));
 
-        let malformed = GitHubEventStore::github_tree_response(TreeResponse {
-            status: StatusCode::OK,
-            text: "not-json",
-        });
+        let malformed = GitHubEventStore::github_tree_response(StatusCode::OK, "not-json");
         assert!(matches!(malformed, Err(NookError::Serialization(_))));
 
-        let truncated = GitHubEventStore::github_tree_response(TreeResponse {
-            status: StatusCode::OK,
-            text: r#"{"truncated":true,"tree":[]}"#,
-        });
+        let truncated = GitHubEventStore::github_tree_response(
+            StatusCode::OK,
+            r#"{"truncated":true,"tree":[]}"#,
+        );
         assert!(matches!(
             truncated,
             Err(NookError::GitHub(message)) if message.contains("truncated")
         ));
 
-        let TreeDiscovery::Loaded(tree) = GitHubEventStore::github_tree_response(TreeResponse {
-            status: StatusCode::OK,
-            text: r#"{"truncated":false,"tree":[{"path":"event.yaml","type":"blob"}]}"#,
-        })
+        let TreeDiscovery::Loaded(tree) = GitHubEventStore::github_tree_response(
+            StatusCode::OK,
+            r#"{"truncated":false,"tree":[{"path":"event.yaml","type":"blob"}]}"#,
+        )
         .unwrap() else {
             panic!("complete tree response must decode")
         };

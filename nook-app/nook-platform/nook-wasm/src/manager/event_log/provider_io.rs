@@ -23,7 +23,7 @@ use std::collections::BTreeSet;
 
 use super::{
     DriveEventStore, EventId, GitHubEventStore, ICloudEventStore, NookError, NookVaultManager,
-    VaultOperation, iso_timestamp,
+    VaultOperation,
 };
 
 impl NookError {

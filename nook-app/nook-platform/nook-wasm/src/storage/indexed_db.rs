@@ -28,7 +28,7 @@
 //!   not contain plaintext key material.
 mod atomic_string;
 mod device_identity;
-use atomic_string::{
+pub(crate) use atomic_string::{
     GuardedKeyringEntryRequest, IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate,
     StringRecordFallback, StringUpdateGuard, StringUpdateResult,
 };

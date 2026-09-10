@@ -63,6 +63,6 @@ RUN --mount=type=bind,source=.,target=/meta-secret/nook,readonly \
     && cp -a "$WORKSPACE" /tmp/nook-policy-workspace \
     && WORKSPACE=/tmp/nook-policy-workspace \
     && export CARGO_HOME=/tmp/nook-policy-cargo \
-    && cargo-deny --manifest-path "$WORKSPACE/Cargo.toml" --log-level error check --hide-inclusion-graph \
+    && cargo-deny --manifest-path "$WORKSPACE/Cargo.toml" --config /meta-secret/nook/deny.toml --log-level error check --hide-inclusion-graph \
     && cd "$WORKSPACE" \
     && cargo-audit audit --quiet

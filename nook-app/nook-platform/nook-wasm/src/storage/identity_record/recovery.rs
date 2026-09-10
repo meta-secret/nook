@@ -15,9 +15,7 @@ use identity_record::{
     IdentityReconciliationStore, LEGACY_IDENTITY_RECORD_KEY, RETIRED_APP_IDS_KEY,
 };
 use identity_record::{keyring, simple_genesis};
-use rexie::Rexie;
 use rexie::{Store, Transaction, TransactionMode};
-use std::rc::Rc;
 mod cleanup;
 mod target;
 pub(crate) use target::{RecoveryTarget, RetiredInstallation};
@@ -52,7 +50,7 @@ struct RecoveryDeletion {
 /// use nook_wasm::storage::identity_record::recovery::PreparedLocalIdentityRecovery;
 /// ```
 struct PreparedLocalIdentityRecovery {
-    _connection: Rc<Rexie>,
+    _connection: NookDatabase,
     transaction: Transaction,
     store: Store,
     state: RecoveryState,

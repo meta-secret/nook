@@ -1,9 +1,10 @@
 //! Thin WASM exports for portable auth-companion heuristics and host policy.
 
 use crate::{NookAuthenticationPageObservation, NookAuthenticationPageObservations};
-use nook_companion_core::{BrowserOAuthLocation, BrowserOAuthLocationEvidence};
+use nook_companion_core::{
+    AuthenticationAdvanceControlObservation, BrowserOAuthLocation, BrowserOAuthLocationEvidence,
+};
 use nook_companion_core::{SentinelVaultMatch, VaultAppBaseSelection};
-use nook_core::AuthenticationAdvanceControlObservation;
 use nook_core::AuthenticationControlText;
 use nook_core::AuthenticationPageObservation;
 use nook_core::BackupCodePageText;
@@ -155,7 +156,9 @@ pub fn authentication_form_observation_priority(
 pub fn authentication_page_observations_are_valid(
     observations: &NookAuthenticationPageObservations,
 ) -> bool {
-    nook_core::authentication_page_observations_are_valid(observations.as_core())
+    AuthenticationPageObservation::authentication_page_observations_are_valid(
+        observations.as_core(),
+    )
 }
 
 #[wasm_bindgen]
