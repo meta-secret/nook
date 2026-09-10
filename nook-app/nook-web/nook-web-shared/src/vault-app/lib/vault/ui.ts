@@ -210,8 +210,6 @@ export class VaultWorkspaceActions {
     state.errorMsg = "";
     state.dismissSuccess();
     state.isSaving = true;
-    state.stopIdleSessionTracking();
-    state.stopVaultSync();
     try {
       const supported = browserDataLifecycle.requireLocalDataRecoverySupport();
       if (supported.isErr()) {
@@ -224,6 +222,8 @@ export class VaultWorkspaceActions {
         return;
       }
       await state.waitForStorageChain();
+      state.stopIdleSessionTracking();
+      state.stopVaultSync();
       state.localDataDeletionStarted = true;
       const deletion = await browserDataLifecycle.deleteLocalBrowserData(
         async () => {

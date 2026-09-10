@@ -1,10 +1,4 @@
 <script lang="ts">
-  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
-  type SentinelParticipation = {
-    readonly payload: string
-    readonly participantLabel: string
-  }
-
   import { I18N_KEYS, type I18nKey } from '../../../../generated/i18n-keys'
   import {
     ArrowLeft,
@@ -24,13 +18,14 @@
   import { Button } from '$lib/components/ui/button'
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
+  import type {
+    SentinelCardStackProperties,
+    SentinelParticipation,
+  } from '$lib/components/login/sentinel-card-stack-contract'
   import {
     SentinelGenesisPhase,
     evaluate_sentinel_policy_draft,
     sentinel_genesis_phase_translation_key,
-    type NookSentinelGenesisDelivery,
-    type NookSentinelGenesisParticipantStatus,
-    type StartSentinelGenesisArgs,
   } from '$app-wasm'
 
   let {
@@ -52,28 +47,7 @@
     onAddParticipant,
     onFinalize,
     onCompleteDelivery,
-  }: {
-    vault: VaultState
-    name: string
-    participantCount: number
-    threshold: number
-    status: SentinelGenesisPhase
-    request: string
-    participantResponse?: string
-    participants: NookSentinelGenesisParticipantStatus[]
-    deliveries: NookSentinelGenesisDelivery[]
-    isBusy: boolean
-    initiatorFingerprint: string
-    initiatorKeyLoading: boolean
-    onPrepareInitiator: () => void | Promise<void>
-    onBack: () => void
-    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
-    onAddParticipant: (
-      args: SentinelParticipation,
-    ) => Promise<SentinelActionResult<void>>
-    onFinalize: () => Promise<SentinelActionResult<void>>
-    onCompleteDelivery: () => Promise<SentinelActionResult<void>>
-  } = $props()
+  }: SentinelCardStackProperties = $props()
 
   let response = $state('')
   let loadedParticipantResponse = $state('')
