@@ -1,11 +1,11 @@
-use nook_auth2::{
-    DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
-    IdentityVaultKeyOpening,
-};
 use nook_auth2::MemberLabelState;
 use nook_auth2::{
     AgeArmoredCiphertext, AppKey, IdentityDirectory, IdentityVaultDekEpoch,
     IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, StoreId, VaultKeys,
+};
+use nook_auth2::{
+    DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
+    IdentityVaultKeyOpening,
 };
 
 fn envelopes_for(
