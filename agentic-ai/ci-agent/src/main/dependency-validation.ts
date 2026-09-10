@@ -51,7 +51,14 @@ export class DependencyFixWithValidationEnvironment<T> {
         snapshot: prepared.value,
         environment,
       }).execute();
-      outcome = await operation(environment);
+      const operated = await ResultAsync.fromPromise(
+        operation(environment),
+        (): CiFailure => ({
+          kind: CiFailureKind.Dependency,
+          message: "Isolated dependency validation rejected",
+        }),
+      );
+      outcome = operated.isErr() ? err(operated.error) : operated.value;
     }
     new AgentRuntimeRestoreHostEnvironment({
       snapshot: hostEnvironment,

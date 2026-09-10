@@ -1,4 +1,5 @@
 import { err, ok, type Result } from 'neverthrow';
+import type { output as ZodOutput } from 'zod';
 import {
   CortexArticleSemanticKind,
   CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
@@ -54,9 +55,14 @@ export class CortexArticleTransport {
         }),
       );
     }
-    let transport: unknown;
+    let envelope: ReturnType<
+      typeof CORTEX_ARTICLE_REQUEST_ENVELOPE_SCHEMA.safeParse
+    >;
     try {
-      transport = JSON.parse(serialized);
+      envelope = CORTEX_ARTICLE_REQUEST_ENVELOPE_SCHEMA.safeParse(
+        JSON.parse(serialized),
+        { reportInput: true },
+      );
     } catch {
       return err(
         new CortexArticleRequestDecodeError({
@@ -65,10 +71,6 @@ export class CortexArticleTransport {
         }),
       );
     }
-    const envelope = CORTEX_ARTICLE_REQUEST_ENVELOPE_SCHEMA.safeParse(
-      transport,
-      { reportInput: true },
-    );
     if (!envelope.success) {
       return err(
         new CortexArticleSchemaFailure({
@@ -112,9 +114,13 @@ export class CortexArticleTransport {
         }),
       );
     }
-    let transport: unknown;
+    let envelope: ReturnType<
+      typeof CORTEX_ARTICLE_RESULT_ENVELOPE_SCHEMA.safeParse
+    >;
     try {
-      transport = JSON.parse(serialized);
+      envelope = CORTEX_ARTICLE_RESULT_ENVELOPE_SCHEMA.safeParse(
+        JSON.parse(serialized),
+      );
     } catch {
       return err(
         new CortexArticleRequestDecodeError({
@@ -123,7 +129,6 @@ export class CortexArticleTransport {
         }),
       );
     }
-    const envelope = CORTEX_ARTICLE_RESULT_ENVELOPE_SCHEMA.safeParse(transport);
     if (!envelope.success)
       return err(
         new CortexArticleRequestDecodeError({
@@ -156,7 +161,10 @@ export class CortexArticleTransport {
         }).error(),
       );
     }
-    let blocks = new CortexArticleBlockSequence(request.path);
+    let blocks = new CortexArticleBlockSequence({
+      documentPath: request.path,
+      blocks: [],
+    });
     for (const [index, candidate] of envelope.data.blocks.entries()) {
       const block = this.decodeBlock({
         path: `${request.path}.blocks[${index}]`,
@@ -230,7 +238,7 @@ export class CortexArticleTransport {
   }
 
   private decodeFinding(
-    transport: unknown,
+    transport: CortexArticleFindingTransport,
   ): Result<CortexArticleFinding, CortexArticleRequestDecodeError> {
     const finding = CORTEX_ARTICLE_FINDING_SCHEMA.safeParse(transport);
     if (!finding.success)
@@ -275,44 +283,56 @@ class CortexArticleDocumentSequence {
 }
 
 class CortexArticleBlockSequence {
-  constructor(
-    private readonly documentPath: string,
-    private readonly blocks: readonly CortexArticleSemanticBlock[] = [],
-  ) {}
+  constructor(private readonly request: CortexArticleBlockSequenceRequest) {}
 
   append(
     block: CortexArticleSemanticBlock,
   ): Result<CortexArticleBlockSequence, CortexArticleRequestDecodeError> {
     const previousLine =
-      this.blocks.length > 0 ? this.blocks[this.blocks.length - 1]!.line : 0;
+      this.request.blocks.length > 0
+        ? this.request.blocks[this.request.blocks.length - 1]!.line
+        : 0;
     if (block.line <= previousLine) {
       return err(
         new CortexArticleRequestDecodeError({
           kind: CortexArticleRequestFailureKind.NonmonotonicLine,
-          path: `${this.documentPath}.blocks[${this.blocks.length}].line`,
+          path: `${this.request.documentPath}.blocks[${this.request.blocks.length}].line`,
         }),
       );
     }
     return ok(
-      new CortexArticleBlockSequence(this.documentPath, [
-        ...this.blocks,
-        block,
-      ]),
+      new CortexArticleBlockSequence({
+        documentPath: this.request.documentPath,
+        blocks: [...this.request.blocks, block],
+      }),
     );
   }
 
   values(): readonly CortexArticleSemanticBlock[] {
-    return this.blocks;
+    return this.request.blocks;
   }
 }
 
 type DecodeDocumentRequest = {
   readonly path: string;
-  readonly transport: unknown;
+  readonly transport: CortexArticleDocumentTransport;
 };
 type DecodeBlockRequest = {
   readonly path: string;
-  readonly transport: unknown;
+  readonly transport: CortexArticleBlockTransport;
+};
+type CortexArticleDocumentTransport = ZodOutput<
+  typeof CORTEX_ARTICLE_REQUEST_ENVELOPE_SCHEMA
+>['documents'][number];
+type CortexArticleBlockTransport = ZodOutput<
+  typeof CORTEX_ARTICLE_DOCUMENT_ENVELOPE_SCHEMA
+>['blocks'][number];
+type CortexArticleFindingTransport = ZodOutput<
+  typeof CORTEX_ARTICLE_RESULT_ENVELOPE_SCHEMA
+>['findings'][number];
+type CortexArticleBlockSequenceRequest = {
+  readonly documentPath: string;
+  readonly blocks: readonly CortexArticleSemanticBlock[];
 };
 const UTF8_ENCODER = new TextEncoder();
 

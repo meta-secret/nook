@@ -169,15 +169,21 @@ const CORTEX_ASSESSMENTS = {
     StructuralFindingCategory.KnowledgeGraph,
   ),
 };
-function uniqueFindingIds(
-  assessments: readonly z.infer<ReturnType<typeof findingAssessment>>[],
-): boolean {
-  const ids = assessments.flatMap((assessment) =>
-    assessment.kind === StructuralAssessmentKind.Findings
-      ? assessment.findings.map((finding) => finding.findingId)
-      : [],
-  );
-  return new Set(ids).size === ids.length;
+class StructuralFindingAssessmentSequence {
+  constructor(
+    private readonly assessments: readonly z.infer<
+      ReturnType<typeof findingAssessment>
+    >[],
+  ) {}
+
+  hasUniqueFindingIds(): boolean {
+    const ids = this.assessments.flatMap((assessment) =>
+      assessment.kind === StructuralAssessmentKind.Findings
+        ? assessment.findings.map((finding) => finding.findingId)
+        : [],
+    );
+    return new Set(ids).size === ids.length;
+  }
 }
 const CODE_CONTINUATION = z
   .strictObject(
@@ -197,14 +203,14 @@ const CODE_CONTINUATION = z
   )
   .refine(
     (value) =>
-      uniqueFindingIds([
+      new StructuralFindingAssessmentSequence([
         value.architectureFindings,
         value.designFindings,
         value.codeQualityFindings,
         value.typeSafetyFindings,
         value.testFindings,
         value.dependencyDirectionFindings,
-      ]),
+      ]).hasUniqueFindingIds(),
     'structural finding identifiers must be unique',
   );
 const CORTEX_CONTINUATION = z
@@ -224,14 +230,14 @@ const CORTEX_CONTINUATION = z
   )
   .refine(
     (value) =>
-      uniqueFindingIds([
+      new StructuralFindingAssessmentSequence([
         value.conflicts,
         value.obsoleteClaims,
         value.historicalClaims,
         value.duplications,
         value.complexityFindings,
         value.knowledgeGraphImpacts,
-      ]),
+      ]).hasUniqueFindingIds(),
     'structural finding identifiers must be unique',
   );
 const SYNTHESIS_CONTINUATION = z.strictObject(

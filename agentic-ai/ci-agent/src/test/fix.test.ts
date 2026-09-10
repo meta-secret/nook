@@ -167,6 +167,36 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
   }
 });
 
+test("validation rejection restores the host environment and removes isolation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "nook-validation-test-"));
+  const bin = join(root, "bin");
+  await mkdir(bin);
+  const realDocker = join(bin, "docker");
+  await writeFile(realDocker, "#!/bin/sh\nexit 0\n");
+  await chmod(realDocker, 0o700);
+  const hostEnvironment: NodeJS.ProcessEnv = {
+    PATH: bin,
+    HOME: join(root, "home"),
+    NOOK_GITHUB_PAT: "github",
+  };
+  const originalEnvironment = { ...hostEnvironment };
+  let isolatedHome = "";
+  try {
+    const outcome = await new DependencyFixWithValidationEnvironment({
+      environment: hostEnvironment,
+      operation: async (environment) => {
+        isolatedHome = environment.HOME!;
+        throw new Error("runner rejected");
+      },
+    }).execute();
+    assertFailure(outcome, /Isolated dependency validation rejected/);
+    assert.deepEqual(hostEnvironment, originalEnvironment);
+    await assert.rejects(readFile(isolatedHome), { code: "ENOENT" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("networked fetch steps materialize manifests before offline compilation", async () => {
   const repo = resolve(import.meta.dirname, "../../../..");
   for (const path of [

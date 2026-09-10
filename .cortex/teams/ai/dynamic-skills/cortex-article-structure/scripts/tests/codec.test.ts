@@ -216,7 +216,7 @@ test('rejects duplicate documents and nonmonotonic source lines', () => {
       (outcome) => {
         expect(outcome).toHaveProperty(
           'message',
-          'Duplicate Cortex article document path',
+          'Duplicate Cortex article document path.',
         );
       },
     );
@@ -246,7 +246,7 @@ test('rejects duplicate documents and nonmonotonic source lines', () => {
       (outcome) => {
         expect(outcome).toHaveProperty(
           'message',
-          'Cortex article block lines must be strictly ordered',
+          'Cortex article block lines must be strictly ordered.',
         );
       },
     );
@@ -296,7 +296,7 @@ test('bounds heading diagnostic details', () => {
       (outcome) => {
         expect(outcome).toHaveProperty(
           'message',
-          'Invalid Cortex article heading block',
+          'Invalid Cortex article heading block.',
         );
       },
     );
@@ -349,7 +349,7 @@ test('bounds paths, source lines, codes, and finding messages', () => {
       (outcome) => {
         expect(outcome).toHaveProperty(
           'message',
-          'Invalid Cortex article document',
+          'Invalid Cortex article document.',
         );
       },
     );
@@ -370,7 +370,7 @@ test('rejects control characters in request and result paths', () => {
         (outcome) => {
           expect(outcome).toHaveProperty(
             'message',
-            'Invalid Cortex article document',
+            'Invalid Cortex article document.',
           );
         },
       );
@@ -389,7 +389,7 @@ test('rejects control characters in request and result paths', () => {
         (outcome) => {
           expect(outcome).toHaveProperty(
             'message',
-            'Invalid Cortex article finding',
+            'Invalid Cortex article finding.',
           );
         },
       );
@@ -407,7 +407,7 @@ test('enforces serialized request and result byte limits', () => {
       (outcome) => {
         expect(outcome).toHaveProperty(
           'message',
-          'Cortex article request exceeds its byte bound',
+          'Cortex article request exceeds its byte bound.',
         );
       },
     );
@@ -421,7 +421,7 @@ test('enforces serialized request and result byte limits', () => {
       (outcome) => {
         expect(outcome).toHaveProperty(
           'message',
-          'Cortex article result exceeds its byte bound',
+          'Cortex article result exceeds its byte bound.',
         );
       },
     );
@@ -452,7 +452,7 @@ test('rejects requests whose possible findings exceed result capacity', () => {
       (outcome) => {
         expect(outcome).toHaveProperty(
           'message',
-          'Cortex article request result budget exceeds its bound',
+          'Cortex article request result budget exceeds its bound.',
         );
       },
     );
