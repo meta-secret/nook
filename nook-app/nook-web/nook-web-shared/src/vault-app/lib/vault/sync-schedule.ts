@@ -1,21 +1,38 @@
+enum VaultSyncIntervalPhase {
+  Scheduled = 'scheduled',
+  Stopped = 'stopped',
+}
+
+type VaultSyncInterval =
+  | {
+      readonly kind: VaultSyncIntervalPhase.Scheduled
+      readonly timer: ReturnType<typeof setInterval>
+    }
+  | { readonly kind: VaultSyncIntervalPhase.Stopped }
+
+type VaultSyncScheduleRequest = {
+  readonly callback: () => void
+  readonly intervalMs: number
+}
+
 /** Only a scheduled browser interval owns cancellation. Rust still admits every tick. */
 export class ActiveVaultSyncSchedule {
-  private active = true;
-  private readonly timer: ReturnType<typeof setInterval>;
-  private constructor(request: { callback: () => void; intervalMs: number }) {
-    this.timer = setInterval(() => {
-      if (this.active) request.callback();
-    }, request.intervalMs);
+  private interval: VaultSyncInterval
+
+  constructor(request: VaultSyncScheduleRequest) {
+    this.interval = {
+      kind: VaultSyncIntervalPhase.Scheduled,
+      timer: setInterval(() => {
+        if (this.interval.kind === VaultSyncIntervalPhase.Scheduled)
+          request.callback()
+      }, request.intervalMs),
+    }
   }
-  static start(request: {
-    callback: () => void;
-    intervalMs: number;
-  }): ActiveVaultSyncSchedule {
-    return new ActiveVaultSyncSchedule(request);
-  }
+
   stop(): void {
-    if (!this.active) return;
-    this.active = false;
-    clearInterval(this.timer);
+    const interval = this.interval
+    this.interval = { kind: VaultSyncIntervalPhase.Stopped }
+    if (interval.kind === VaultSyncIntervalPhase.Scheduled)
+      clearInterval(interval.timer)
   }
 }
