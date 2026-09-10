@@ -4,7 +4,9 @@ import {
   ValeOutputDocument,
 } from '../src/lib/vale-files.ts';
 import assert from 'node:assert/strict';
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
+import { ok } from 'neverthrow';
+import { HostCommand } from '../src/lib/run.ts';
 
 import {
   mkdtempSync,
@@ -352,6 +354,14 @@ test('rejects an in-repository path through a symlinked ancestor', () => {
   const outside = realpathSync(
     mkdtempSync(path.join(REAL_TEMP_DIRECTORY, 'vale-outside-')),
   );
+  const command = spyOn(HostCommand.prototype, 'execute').mockReturnValue(
+    ok({
+      exitCode: 0,
+      signaled: false,
+      stdout: 'vale version 3.19.0',
+      stderr: '',
+    }),
+  );
   try {
     const configPath = path.join(repoRoot, '.vale.ini');
     const outsideMarkdown = path.join(outside, 'article.md');
@@ -368,7 +378,9 @@ test('rejects an in-repository path through a symlinked ancestor', () => {
         .execute()
         .isErr(),
     ).toBe(true);
+    expect(command).not.toHaveBeenCalled();
   } finally {
+    command.mockRestore();
     rmSync(repoRoot, { force: true, recursive: true });
     rmSync(outside, { force: true, recursive: true });
   }
@@ -450,5 +462,113 @@ test('fails closed on invalid JSON and native alert schema', () => {
         .decode()
         .isErr(),
     ).toBe(true);
+  }
+});
+
+test('returns decoded Vale alerts without nesting the Result', () => {
+  const command = spyOn(HostCommand.prototype, 'execute');
+  try {
+    for (const stdout of [
+      '{}',
+      ValeFilesScenario.valeReportJson({ alert: VALID_NATIVE_ALERT }),
+    ]) {
+      command.mockReturnValueOnce(
+        ok({
+          exitCode: 0,
+          signaled: false,
+          stdout: 'vale version 3.19.0',
+          stderr: '',
+        }),
+      );
+      command.mockReturnValueOnce(
+        ok({
+          exitCode: stdout === '{}' ? 0 : 1,
+          signaled: false,
+          stdout,
+          stderr: '',
+        }),
+      );
+      const result = new ValeFileDiagnostics({
+        configPath: CONFIG_PATH,
+        files: [INVALID_FIXTURE],
+        repoRoot: REPOSITORY_ROOT,
+      }).execute();
+      assert(result.isOk());
+      expect(result.value.alerts).toEqual(
+        stdout === '{}'
+          ? []
+          : [
+              {
+                check: 'Nook.CortexNavigation',
+                file: INVALID_FIXTURE,
+                line: 3,
+                match: 'Relationships',
+                message: 'Navigation is prohibited.',
+                severity: ValeAlertSeverity.Error,
+              },
+            ],
+      );
+    }
+  } finally {
+    command.mockRestore();
+  }
+});
+
+test('propagates malformed Vale output as a decoding failure', () => {
+  const command = spyOn(HostCommand.prototype, 'execute');
+  try {
+    command.mockReturnValueOnce(
+      ok({
+        exitCode: 0,
+        signaled: false,
+        stdout: 'vale version 3.19.0',
+        stderr: '',
+      }),
+    );
+    command.mockReturnValueOnce(
+      ok({ exitCode: 0, signaled: false, stdout: '{', stderr: '' }),
+    );
+    const result = new ValeFileDiagnostics({
+      configPath: CONFIG_PATH,
+      files: [VALID_FIXTURE],
+      repoRoot: REPOSITORY_ROOT,
+    }).execute();
+    assert(result.isErr());
+    expect(result.error.message).toContain('returned invalid JSON');
+  } finally {
+    command.mockRestore();
+  }
+});
+
+test('rejects invalid requests and external config before starting Vale', () => {
+  const outside = realpathSync(
+    mkdtempSync(path.join(REAL_TEMP_DIRECTORY, 'vale-admission-')),
+  );
+  const command = spyOn(HostCommand.prototype, 'execute').mockReturnValue(
+    ok({
+      exitCode: 0,
+      signaled: false,
+      stdout: 'vale version 3.19.0',
+      stderr: '',
+    }),
+  );
+  try {
+    const externalConfig = path.join(outside, '.vale.ini');
+    writeFileSync(externalConfig, 'StylesPath = .vale/styles\n');
+    for (const request of [
+      { configPath: CONFIG_PATH, files: [] },
+      { configPath: CONFIG_PATH, files: [VALID_FIXTURE, VALID_FIXTURE] },
+      { configPath: externalConfig, files: [VALID_FIXTURE] },
+    ]) {
+      const result = new ValeFileDiagnostics({
+        ...request,
+        repoRoot: REPOSITORY_ROOT,
+      }).execute();
+      assert(result.isErr());
+    }
+    expect(command).not.toHaveBeenCalled();
+  } finally {
+    command.mockRestore();
+    rmSync(outside, { force: true, recursive: true });
   }
 });

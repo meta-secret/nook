@@ -60,7 +60,8 @@ export class ValeFileDiagnostics {
   constructor(private readonly request: RunValeFilesArgs) {}
   execute(): Result<ValeFilesResult, ValeFailure> {
     const args = this.request;
-    new ValeFileRequest(args).admit();
+    const admission = new ValeFileRequest(args).admit();
+    if (admission.isErr()) return err(admission.error);
     const versionArgs: RunCommandArgs = {
       command: 'vale',
       args: ['--version'],
@@ -109,10 +110,12 @@ export class ValeFileDiagnostics {
         message: `Vale exact-file lint failed with exit code ${output.exitCode}.`,
       });
     }
-    const result = new ValeOutputDocument({
+    const decoded = new ValeOutputDocument({
       files: args.files,
       stdout: output.stdout,
     }).decode();
+    if (decoded.isErr()) return err(decoded.error);
+    const result = decoded.value;
     const expectedExitCode =
       result.alerts.length > 0 ? VALE_ALERT_EXIT_CODE : 0;
     if (output.exitCode !== expectedExitCode) {
@@ -122,18 +125,19 @@ export class ValeFileDiagnostics {
           'Vale exact-file lint exit code did not match its native alerts.',
       });
     }
-    return ok(result);
+    return decoded;
   }
 }
 export class ValeFileRequest {
   constructor(private readonly request: RunValeFilesArgs) {}
   admit(): Result<void, ValeFailure> {
     const args = this.request;
-    new ValeRepositoryFile({
+    const config = new ValeRepositoryFile({
       file: args.configPath,
       label: 'Vale config',
       repoRoot: args.repoRoot,
     }).admit();
+    if (config.isErr()) return err(config.error);
     if (args.files.length === 0) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
@@ -142,11 +146,12 @@ export class ValeFileRequest {
     }
     const files = new Set<string>();
     for (const file of args.files) {
-      new ValeRepositoryFile({
+      const input = new ValeRepositoryFile({
         file,
         label: 'Vale Markdown input',
         repoRoot: args.repoRoot,
       }).admit();
+      if (input.isErr()) return err(input.error);
       if (path.extname(file) !== '.md') {
         return err({
           code: LoomFailureCode.CortexAuditFailed,
