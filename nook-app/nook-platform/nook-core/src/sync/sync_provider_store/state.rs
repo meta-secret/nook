@@ -14,23 +14,7 @@ pub enum StoredOAuthRefreshCredential {
 
 impl StoredOAuthRefreshCredential {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::Token(value),
-            None => Self::NotIssued,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::NotIssued => None,
-            Self::Token(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::NotIssued => None,
             Self::Token(value) => Some(value),
@@ -49,23 +33,7 @@ pub enum StoredOAuthAccessCredential {
 
 impl StoredOAuthAccessCredential {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::AccessToken(value),
-            None => Self::SignedOut,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::SignedOut => None,
-            Self::AccessToken(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::SignedOut => None,
             Self::AccessToken(value) => Some(value),
@@ -84,23 +52,7 @@ pub enum StoredOAuthTokenExpiry {
 
 impl StoredOAuthTokenExpiry {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::ExpiresAt(value),
-            None => Self::Unknown,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unknown => None,
-            Self::ExpiresAt(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unknown => None,
             Self::ExpiresAt(value) => Some(value),
@@ -119,23 +71,7 @@ pub enum StoredOAuthRemoteFileId {
 
 impl StoredOAuthRemoteFileId {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::FileId(value),
-            None => Self::Unresolved,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unresolved => None,
-            Self::FileId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unresolved => None,
             Self::FileId(value) => Some(value),
@@ -154,23 +90,7 @@ pub enum StoredOAuthRemoteFileName {
 
 impl StoredOAuthRemoteFileName {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::FileName(value),
-            None => Self::Unresolved,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unresolved => None,
-            Self::FileName(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unresolved => None,
             Self::FileName(value) => Some(value),
@@ -189,23 +109,7 @@ pub enum StoredOAuthAccountIdentity {
 
 impl StoredOAuthAccountIdentity {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::Email(value),
-            None => Self::Unknown,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unknown => None,
-            Self::Email(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unknown => None,
             Self::Email(value) => Some(value),
@@ -224,23 +128,7 @@ pub enum StoredGoogleDriveFolder {
 
 impl StoredGoogleDriveFolder {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::FolderId(value),
-            None => Self::Root,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Root => None,
-            Self::FolderId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Root => None,
             Self::FolderId(value) => Some(value),
@@ -259,23 +147,7 @@ pub enum StoredICloudShareTarget {
 
 impl StoredICloudShareTarget {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::SharedTarget(value),
-            None => Self::Personal,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Personal => None,
-            Self::SharedTarget(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Personal => None,
             Self::SharedTarget(value) => Some(value),
@@ -294,23 +166,7 @@ pub enum StoredLocalFolderDirectory {
 
 impl StoredLocalFolderDirectory {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::DirectoryName(value),
-            None => Self::Unnamed,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unnamed => None,
-            Self::DirectoryName(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unnamed => None,
             Self::DirectoryName(value) => Some(value),
@@ -329,23 +185,7 @@ pub enum StoredLocalFolderHandle {
 
 impl StoredLocalFolderHandle {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::HandleId(value),
-            None => Self::Unbound,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unbound => None,
-            Self::HandleId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unbound => None,
             Self::HandleId(value) => Some(value),
@@ -364,23 +204,7 @@ pub enum StoredGithubPat {
 
 impl StoredGithubPat {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::Token(value),
-            None => Self::Missing,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Missing => None,
-            Self::Token(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Missing => None,
             Self::Token(value) => Some(value),
@@ -399,23 +223,7 @@ pub enum StoredGithubRepository {
 
 impl StoredGithubRepository {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::Repository(value),
-            None => Self::DefaultRepository,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::DefaultRepository => None,
-            Self::Repository(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::DefaultRepository => None,
             Self::Repository(value) => Some(value),
@@ -434,23 +242,7 @@ pub enum ProviderVaultScope {
 
 impl ProviderVaultScope {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::StoreId(value),
-            None => Self::Unscoped,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unscoped => None,
-            Self::StoreId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unscoped => None,
             Self::StoreId(value) => Some(value),
@@ -469,23 +261,7 @@ pub enum ActiveVaultScope {
 
 impl ActiveVaultScope {
     #[must_use]
-    pub fn from_option(value: Option<String>) -> Self {
-        match value {
-            Some(value) => Self::StoreId(value),
-            None => Self::Unselected,
-        }
-    }
-
-    #[must_use]
     pub fn as_deref(&self) -> Option<&str> {
-        match self {
-            Self::Unselected => None,
-            Self::StoreId(value) => Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<String> {
         match self {
             Self::Unselected => None,
             Self::StoreId(value) => Some(value),
@@ -510,14 +286,6 @@ impl StoredOAuthFileConfiguration {
 
     #[must_use]
     pub fn as_ref(&self) -> Option<&OAuthFileConfig> {
-        match self {
-            Self::NotApplicable => None,
-            Self::Configured(config) => Some(config),
-        }
-    }
-
-    #[must_use]
-    pub fn into_option(self) -> Option<OAuthFileConfig> {
         match self {
             Self::NotApplicable => None,
             Self::Configured(config) => Some(config),

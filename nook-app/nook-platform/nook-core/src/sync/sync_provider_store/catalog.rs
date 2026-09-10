@@ -248,7 +248,10 @@ impl AuthProvidersSnapshotData {
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            store_id: ProviderVaultScope::from_option(store_id),
+            store_id: match store_id {
+                Some(id) => ProviderVaultScope::StoreId(id),
+                None => ProviderVaultScope::Unscoped,
+            },
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: created_at.to_owned(),
         };
@@ -284,7 +287,7 @@ mod tests {
     struct OAuthCatalogFixture<'a> {
         id: &'a str,
         preset: OauthFilePreset,
-        file_id: Option<&'a str>,
+        file_id: StoredOAuthRemoteFileId,
         file_name: &'a str,
     }
 
@@ -371,7 +374,7 @@ mod tests {
                 oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                     preset,
                     access_token: StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
-                    file_id: StoredOAuthRemoteFileId::from_option(file_id.map(str::to_owned)),
+                    file_id,
                     file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
                     ..OAuthFileConfigData::default()
                 }),
@@ -538,7 +541,7 @@ mod tests {
         let mut private = OAuthCatalogFixture {
             id: "drive-private",
             preset: OauthFilePreset::GoogleDrive,
-            file_id: None,
+            file_id: StoredOAuthRemoteFileId::Unresolved,
             file_name: "events",
         }
         .build();
@@ -551,7 +554,7 @@ mod tests {
         let mut shared = OAuthCatalogFixture {
             id: "drive-shared",
             preset: OauthFilePreset::GoogleDrive,
-            file_id: None,
+            file_id: StoredOAuthRemoteFileId::Unresolved,
             file_name: "events",
         }
         .build();
@@ -639,7 +642,7 @@ mod tests {
             (OAuthCatalogFixture {
                 id: "icloud",
                 preset: OauthFilePreset::ICloud,
-                file_id: None,
+                file_id: StoredOAuthRemoteFileId::Unresolved,
                 file_name: " "
             }
             .build())

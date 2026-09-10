@@ -348,7 +348,7 @@ mod tests {
         fn oauth(
             id: &str,
             preset: OauthFilePreset,
-            file_id: Option<&str>,
+            file_id: StoredOAuthRemoteFileId,
             file_name: &str,
         ) -> Self {
             Self {
@@ -363,7 +363,7 @@ mod tests {
                         access_token: StoredOAuthAccessCredential::AccessToken(
                             " token ".to_owned(),
                         ),
-                        file_id: StoredOAuthRemoteFileId::from_option(file_id.map(str::to_owned)),
+                        file_id,
                         file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
                         ..OAuthFileConfigData::default()
                     }),
@@ -397,7 +397,7 @@ mod tests {
         let drive = ProviderEnrollmentFixture::oauth(
             "drive",
             OauthFilePreset::GoogleDrive,
-            Some("file-123"),
+            StoredOAuthRemoteFileId::FileId("file-123".to_owned()),
             "nook.yaml",
         )
         .provider;
@@ -497,14 +497,14 @@ mod tests {
         let private = ProviderEnrollmentFixture::oauth(
             "private",
             OauthFilePreset::GoogleDrive,
-            Some("private-file"),
+            StoredOAuthRemoteFileId::FileId("private-file".to_owned()),
             "nook.yaml",
         )
         .provider;
         let mut other = ProviderEnrollmentFixture::oauth(
             "other",
             OauthFilePreset::GoogleDrive,
-            Some("other-file"),
+            StoredOAuthRemoteFileId::FileId("other-file".to_owned()),
             "nook.yaml",
         )
         .provider;
@@ -517,7 +517,7 @@ mod tests {
         let mut matching = ProviderEnrollmentFixture::oauth(
             "matching",
             OauthFilePreset::GoogleDrive,
-            Some("matching-file"),
+            StoredOAuthRemoteFileId::FileId("matching-file".to_owned()),
             "nook.yaml",
         )
         .provider;
@@ -563,8 +563,12 @@ mod tests {
     fn admitted_selection_retains_original_request_until_consuming_construction()
     -> anyhow::Result<()> {
         use std::ptr;
-        let fixture =
-            ProviderEnrollmentFixture::oauth("drive", OauthFilePreset::GoogleDrive, None, "events");
+        let fixture = ProviderEnrollmentFixture::oauth(
+            "drive",
+            OauthFilePreset::GoogleDrive,
+            StoredOAuthRemoteFileId::Unresolved,
+            "events",
+        );
         let architecture = VaultArchitecture {
             replication_type: ReplicationType::Shared,
             ..VaultArchitecture::default()
@@ -631,9 +635,13 @@ mod tests {
 
     #[test]
     fn explicit_and_persisted_targets_keep_distinct_whitespace_rules() -> anyhow::Result<()> {
-        let mut provider =
-            ProviderEnrollmentFixture::oauth("drive", OauthFilePreset::GoogleDrive, None, "events")
-                .provider;
+        let mut provider = ProviderEnrollmentFixture::oauth(
+            "drive",
+            OauthFilePreset::GoogleDrive,
+            StoredOAuthRemoteFileId::Unresolved,
+            "events",
+        )
+        .provider;
         (match &mut provider.oauth_file {
             StoredOAuthFileConfiguration::Configured(config) => Some(config),
             StoredOAuthFileConfiguration::NotApplicable => None,
@@ -696,9 +704,13 @@ mod tests {
     #[test]
     fn grant_selection_skips_unusable_credentials_and_compares_exact_targets() -> anyhow::Result<()>
     {
-        let mut first =
-            ProviderEnrollmentFixture::oauth("first", OauthFilePreset::GoogleDrive, None, "events")
-                .provider;
+        let mut first = ProviderEnrollmentFixture::oauth(
+            "first",
+            OauthFilePreset::GoogleDrive,
+            StoredOAuthRemoteFileId::Unresolved,
+            "events",
+        )
+        .provider;
         let config = (match &mut first.oauth_file {
             StoredOAuthFileConfiguration::Configured(config) => Some(config),
             StoredOAuthFileConfiguration::NotApplicable => None,

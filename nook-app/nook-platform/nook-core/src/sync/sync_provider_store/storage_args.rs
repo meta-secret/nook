@@ -458,7 +458,7 @@ mod tests {
         fn oauth_provider(
             id: &str,
             preset: OauthFilePreset,
-            file_id: Option<&str>,
+            file_id: StoredOAuthRemoteFileId,
             file_name: &str,
         ) -> StorageProviderData {
             StorageProviderData {
@@ -470,7 +470,7 @@ mod tests {
                 oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                     preset,
                     access_token: StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
-                    file_id: StoredOAuthRemoteFileId::from_option(file_id.map(str::to_owned)),
+                    file_id,
                     file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
                     ..OAuthFileConfigData::default()
                 }),
@@ -497,7 +497,7 @@ mod tests {
             (StorageProviderData::oauth_provider(
                 "drive",
                 OauthFilePreset::GoogleDrive,
-                Some(" file-1 "),
+                StoredOAuthRemoteFileId::FileId(" file-1 ".to_owned()),
                 " events ",
             ))
             .connection_args()?,
@@ -519,7 +519,7 @@ mod tests {
         let mut provider = StorageProviderData::oauth_provider(
             "drive",
             OauthFilePreset::GoogleDrive,
-            None,
+            StoredOAuthRemoteFileId::Unresolved,
             "events",
         );
         let oauth = (match &mut provider.oauth_file {
@@ -639,7 +639,7 @@ mod tests {
         let drive = StorageProviderData::oauth_provider(
             "drive",
             OauthFilePreset::GoogleDrive,
-            None,
+            StoredOAuthRemoteFileId::Unresolved,
             "events",
         );
         let capability = (drive).validate_replication(ReplicationType::Shared)?;
@@ -658,7 +658,7 @@ mod tests {
             StorageProviderData::oauth_provider(
                 "drive",
                 OauthFilePreset::GoogleDrive,
-                None,
+                StoredOAuthRemoteFileId::Unresolved,
                 "events",
             ),
         ];
@@ -691,7 +691,7 @@ mod tests {
         let mut icloud = StorageProviderData::oauth_provider(
             "icloud",
             OauthFilePreset::ICloud,
-            None,
+            StoredOAuthRemoteFileId::Unresolved,
             "nook-events",
         );
         let oauth = (match &mut icloud.oauth_file {
@@ -732,7 +732,7 @@ mod tests {
         let mut icloud = StorageProviderData::oauth_provider(
             "icloud",
             OauthFilePreset::ICloud,
-            None,
+            StoredOAuthRemoteFileId::Unresolved,
             "nook-events",
         );
         let oauth = (match &mut icloud.oauth_file {
