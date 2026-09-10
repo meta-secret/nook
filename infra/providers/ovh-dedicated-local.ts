@@ -27,10 +27,13 @@ export class OvhLocalFile {
     try { return ok(await readFile(this.path, "utf8")); }
     catch { return err(new OvhFailure(OvhFailureKind.Filesystem, "Unable to read OVH local file")); }
   }
-  async presence(): Promise<OvhPathPresence> {
-    // Existing inventory semantics treat unavailable paths as absent.
-    try { await stat(this.path); return OvhPathPresence.Present; }
-    catch { return OvhPathPresence.Absent; }
+  async presence(): Promise<Result<OvhPathPresence, OvhFailure>> {
+    try { await stat(this.path); return ok(OvhPathPresence.Present); }
+    catch (cause) {
+      if (cause instanceof Error && "code" in cause && cause.code === "ENOENT")
+        return ok(OvhPathPresence.Absent);
+      return err(new OvhFailure(OvhFailureKind.Filesystem, "Unable to inspect OVH local file"));
+    }
   }
   async writePrivate(content: string): Promise<Result<void, OvhFailure>> {
     try { await writeFile(this.path, content, { mode: 0o600 }); return ok(); }
@@ -43,7 +46,9 @@ export class OvhRecoveryMarkerStore {
   private path(hostname: string): string { return resolve(this.paths.recoveryRoot(), `${hostname}.json`); }
   async load(request: RecoveryRequest): Promise<Result<RecoveryMarkerState, OvhFailure>> {
     const file = new OvhLocalFile(this.path(request.hostname));
-    if (await file.presence() === OvhPathPresence.Absent) return ok({ status: RecoveryMarkerStatus.Absent });
+    const presence = await file.presence();
+    if (presence.isErr()) return err(presence.error);
+    if (presence.value === OvhPathPresence.Absent) return ok({ status: RecoveryMarkerStatus.Absent });
     const source = await file.read();
     if (source.isErr()) return err(source.error);
     const marker = new OvhDocument(source.value).recoveryMarker();
@@ -104,14 +109,18 @@ export class OvhHostIdentityStore {
     const publicKeyPath = `${privateKeyPath}.pub`;
     const prepared = await this.prepareDirectory(directory);
     if (prepared.isErr()) return err(prepared.error);
-    if (await new OvhLocalFile(privateKeyPath).presence() === OvhPathPresence.Absent) {
+    const privateKeyPresence = await new OvhLocalFile(privateKeyPath).presence();
+    if (privateKeyPresence.isErr()) return err(privateKeyPresence.error);
+    if (privateKeyPresence.value === OvhPathPresence.Absent) {
       if (input.allowCreate === HostIdentityCreation.Existing)
         return err(new OvhFailure(OvhFailureKind.Identity,
           `missing trusted SSH host identity for ${input.hostname}; restore it or explicitly reinstall the server`));
       const generated = await new OvhHostKeyCommand(["-q", "-t", "ed25519", "-N", "", "-C", `nook-host:${input.hostname}`, "-f", privateKeyPath]).execute();
       if (generated.isErr()) return err(generated.error);
     }
-    if (await new OvhLocalFile(publicKeyPath).presence() === OvhPathPresence.Absent) {
+    const publicKeyPresence = await new OvhLocalFile(publicKeyPath).presence();
+    if (publicKeyPresence.isErr()) return err(publicKeyPresence.error);
+    if (publicKeyPresence.value === OvhPathPresence.Absent) {
       const publicKey = await new OvhHostKeyCommand(["-y", "-f", privateKeyPath]).execute();
       if (publicKey.isErr()) return err(publicKey.error);
       const written = await new OvhLocalFile(publicKeyPath).writePrivate(`${publicKey.value}\n`);

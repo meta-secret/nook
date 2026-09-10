@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { ok } from "neverthrow";
 import {
   OvhRecoveryMarkerObservation,
@@ -14,8 +15,20 @@ import {
   ReinstallDecision,
   ReinstallAuthorization,
 } from "./ovh-dedicated";
+import { OvhFailureKind } from "./ovh-dedicated-failure";
+import { OvhLocalFile, OvhPathPresence } from "./ovh-dedicated-local";
 
 describe("OVH dedicated provider", () => {
+  test("distinguishes a missing local path from a failed lookup", async () => {
+    const missingPath = resolve(process.cwd(), `.nook-missing-${crypto.randomUUID()}`);
+    const missing = await new OvhLocalFile(missingPath).presence();
+    expect(missing).toEqual(ok(OvhPathPresence.Absent));
+
+    const failed = await new OvhLocalFile("/dev/null/child").presence();
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) expect(failed.error.kind).toBe(OvhFailureKind.Filesystem);
+  });
+
   test("signs the canonical OVH request material", () => {
     const input = {
       applicationSecret: "secret",
