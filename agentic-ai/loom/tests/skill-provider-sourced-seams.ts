@@ -148,7 +148,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/providers/ovh-dedicated.ts',
-    '82bb56a284546337e64c39d2205d674ecddaf830bcbc85075132092c1569665e',
+    'b0313dcc087492bdeb5c47a2a5dc9f76bcc7199a8dadfaab308582cc56f18caa',
   ],
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
