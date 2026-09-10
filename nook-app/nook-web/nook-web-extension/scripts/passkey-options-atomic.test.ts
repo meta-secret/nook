@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow'
 import { describe, expect, mock, test } from 'bun:test'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import type { WebsitePasskeyOptionsDependencies } from '../src/background/service-worker/passkey-operations'
@@ -46,10 +47,10 @@ describe('website passkey options', () => {
       { ok: true, accounts: [{ credentialId: '' }] },
     ]
     const sendSessionMessage = mock(() =>
-      Promise.resolve(sessionResponses.shift()),
+      Promise.resolve(ok(sessionResponses.shift())),
     )
     const dependencies: WebsitePasskeyOptionsDependencies = {
-      ensureExtensionSessionDocument: mock(() => Promise.resolve()),
+      ensureExtensionSessionDocument: mock(() => Promise.resolve(ok(undefined))),
       isAuthorizedWebsiteSender: mock(() => true),
       isUnlockedSessionStatus: mock(() => true),
       passkeyPairingGrants: mock(() =>
@@ -74,21 +75,20 @@ describe('website passkey options', () => {
       })),
       sendSessionMessage,
     }
-    const args: Parameters<
-      typeof websitePasskeyRequests.websitePasskeyOptions
-    >[0] = {
-      message: {
-        type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions,
-        payload: {
-          requestId: 'atomic-passkey-request',
-          ceremony: WebsitePasskeyCeremony.Get,
-          requestJson: '{}',
-          expiresAt: Date.now() + 60_000,
+    const args: Parameters<typeof websitePasskeyRequests.websitePasskeyOptions>[0] =
+      {
+        message: {
+          type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions,
+          payload: {
+            requestId: 'atomic-passkey-request',
+            ceremony: WebsitePasskeyCeremony.Get,
+            requestJson: '{}',
+            expiresAt: Date.now() + 60_000,
+          },
         },
-      },
-      sender: { id: 'nook-extension', tab: { id: 42 } },
-      dependencies,
-    }
+        sender: { id: 'nook-extension', tab: { id: 42 } },
+        dependencies,
+      }
 
     await expect(
       websitePasskeyRequests.websitePasskeyOptions(args),
@@ -101,10 +101,8 @@ describe('website passkey options', () => {
   })
 
   test('classifies unavailable passkey lookup as closed passkey evidence', async () => {
-    const {
-      MatchingPasskeyAvailabilityKind,
-      passkeyAccountCountForClassification,
-    } = await import('../src/background/service-worker/passkey-operations')
+    const { MatchingPasskeyAvailabilityKind, passkeyAccountCountForClassification } =
+      await import('../src/background/service-worker/passkey-operations')
     const args: Parameters<typeof passkeyAccountCountForClassification>[0] = {
       needsPasskeyLookup: true,
       availability: { kind: MatchingPasskeyAvailabilityKind.Unavailable },

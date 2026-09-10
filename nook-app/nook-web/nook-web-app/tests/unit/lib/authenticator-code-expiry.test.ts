@@ -1,3 +1,4 @@
+import { err, ok } from 'neverthrow'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../../../nook-web-extension/src/offscreen/session-request-adapter'
 import { ExtensionSessionMessageType } from '../../../../nook-web-extension/src/offscreen/session-message-dispatch'
@@ -7,13 +8,10 @@ const mocks = vi.hoisted(() => ({
   sendSessionMessage: vi.fn(),
 }))
 
-vi.mock(
-  '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm',
-  () => ({
-    current_code_from_otpauth_uri: mocks.currentCode,
-    preview_otpauth_uri: vi.fn(),
-  }),
-)
+vi.mock('../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm', () => ({
+  current_code_from_otpauth_uri: mocks.currentCode,
+  preview_otpauth_uri: vi.fn(),
+}))
 
 vi.mock(
   '../../../../nook-web-extension/src/background/service-worker/pairing-identity',
@@ -24,7 +22,11 @@ vi.mock(
   }),
 )
 
-import { stagedAuthenticatorCodeFromSession } from '../../../../nook-web-extension/src/background/service-worker/authenticator-session-adapter'
+import {
+  extensionAuthenticatorSession,
+  AuthenticatorSessionFailure,
+  AuthenticatorSessionFailureKind,
+} from '../../../../nook-web-extension/src/background/service-worker/authenticator-session-adapter'
 import { handleAuthenticatorEnrollmentMessage } from '../../../../nook-web-extension/src/offscreen/authenticator-enrollment-session'
 
 declare global {
@@ -43,63 +45,72 @@ describe('authenticator code expiry transport', () => {
       expiresAtUnixSeconds: 1_725_000_030,
       free,
     })
-    const request: Parameters<typeof handleAuthenticatorEnrollmentMessage>[0] =
-      {
-        message: {
-          type: ExtensionSessionMessageType.AuthenticatorEnrollCode,
-          payload: {
-            otpauthUri:
-              'otpauth://totp/Nook:person@example.test?secret=JBSWY3DPEHPK3PXP',
-            queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-          },
+    const request: Parameters<typeof handleAuthenticatorEnrollmentMessage>[0] = {
+      message: {
+        type: ExtensionSessionMessageType.AuthenticatorEnrollCode,
+        payload: {
+          otpauthUri:
+            'otpauth://totp/Nook:person@example.test?secret=JBSWY3DPEHPK3PXP',
+          queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
         },
-        dependencies: {
-          ensureWasm: vi.fn(),
-          getManager: vi.fn(),
-          extensionVaultGrant: vi.fn(),
-        },
-      }
+      },
+      dependencies: {
+        ensureWasm: vi.fn(),
+        getManager: vi.fn(),
+        extensionVaultGrant: vi.fn(),
+      },
+    }
 
-    await expect(
-      handleAuthenticatorEnrollmentMessage(request),
-    ).resolves.toEqual({
-      ok: true,
-      code: '123456',
-      expiresAt: 1_725_000_030_000,
-    })
+    await expect(handleAuthenticatorEnrollmentMessage(request)).resolves.toEqual(
+      ok({
+        ok: true,
+        code: '123456',
+        expiresAt: 1_725_000_030_000,
+      }),
+    )
     expect(free).toHaveBeenCalledOnce()
   })
 
   test('keeps expiry on the staged-code service-worker response', async () => {
     const expiresAt = Date.now() + 30_000
-    mocks.sendSessionMessage.mockResolvedValue({
-      ok: true,
-      code: '123456',
-      expiresAt,
-    })
+    mocks.sendSessionMessage.mockResolvedValue(
+      ok({
+        ok: true,
+        code: '123456',
+        expiresAt,
+      }),
+    )
 
     await expect(
-      stagedAuthenticatorCodeFromSession(
+      extensionAuthenticatorSession.stagedAuthenticatorCodeFromSession(
         'otpauth://totp/Nook:person@example.test?secret=JBSWY3DPEHPK3PXP',
       ),
-    ).resolves.toEqual({
-      ok: true,
-      code: '123456',
-      expiresAt,
-    })
+    ).resolves.toEqual(
+      ok({
+        ok: true,
+        code: '123456',
+        expiresAt,
+      }),
+    )
   })
 
   test('rejects an expired staged code at the service-worker boundary', async () => {
-    mocks.sendSessionMessage.mockResolvedValue({
-      ok: true,
-      code: '123456',
-      expiresAt: Date.now() - 1,
-    })
+    mocks.sendSessionMessage.mockResolvedValue(
+      ok({
+        ok: true,
+        code: '123456',
+        expiresAt: Date.now() - 1,
+      }),
+    )
 
     await expect(
-      stagedAuthenticatorCodeFromSession(
+      extensionAuthenticatorSession.stagedAuthenticatorCodeFromSession(
         'otpauth://totp/Nook:person@example.test?secret=JBSWY3DPEHPK3PXP',
       ),
-    ).rejects.toThrow('Extension session returned an invalid staged code.')
+    ).resolves.toEqual(
+      err(
+        new AuthenticatorSessionFailure(AuthenticatorSessionFailureKind.ExpiredCode),
+      ),
+    )
   })
 })

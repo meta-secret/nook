@@ -1,3 +1,8 @@
+import {
+  ExtensionSessionTransportFailure,
+  ExtensionSessionTransportFailureKind,
+} from '../src/background/service-worker/session-document'
+import { err, ok } from 'neverthrow'
 import { OpenSimpleVaultMessageType } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { describe, expect, mock, test } from 'bun:test'
 import {
@@ -34,10 +39,7 @@ await companionWasmReady
 const started = new AccountPickerAuthorizationLifecycle('opening')
   .begin_cleanup('cleanup')
   .into_lifecycle()
-const rejectedTransition = started.complete_cleanup(
-  'stale',
-  CleanupEvidence.Full,
-)
+const rejectedTransition = started.complete_cleanup('stale', CleanupEvidence.Full)
 const rejectedCleanup = rejectedTransition.outcome()
 const pendingTransition = rejectedTransition
   .into_lifecycle()
@@ -54,11 +56,9 @@ completedTransition.into_lifecycle().free()
 const unusedAsyncDependency = mock(() =>
   Promise.reject(new Error('unused routing test dependency')),
 )
-const ensureExtensionSessionDocument = mock(() => Promise.resolve())
+const ensureExtensionSessionDocument = mock(() => Promise.resolve(ok(undefined)))
 const openCompanionLauncher = mock(() => Promise.resolve())
-const accountPickerAuthorizationCleanupPending = mock(() =>
-  Promise.resolve(false),
-)
+const accountPickerAuthorizationCleanupPending = mock(() => Promise.resolve(false))
 const beginAccountPickerAuthorizationCleanup = mock(() =>
   Promise.resolve({
     authorizationGeneration: 'epoch-1',
@@ -79,7 +79,15 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
   clearStagedAuthenticatorEnrollments,
-  closeExtensionSessionDocument: unusedAsyncDependency,
+  closeExtensionSessionDocument: mock(() =>
+    Promise.resolve(
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.ClosureFailed,
+        ),
+      ),
+    ),
+  ),
   completeAccountPickerAuthorizationCleanup,
   ensureExtensionSessionDocument,
   extensionSessionDocument: 'offscreen/session.html',
@@ -209,7 +217,7 @@ describe('service worker routing', () => {
       },
       closeExtensionSessionDocument: () => {
         events.push('session-closed')
-        return Promise.resolve()
+        return Promise.resolve(ok(undefined))
       },
       completeAccountPickerAuthorizationCleanup: (generation) => {
         events.push(`authorization-restored-${generation}`)
@@ -258,9 +266,8 @@ describe('service worker routing', () => {
       const dependencies: ExtensionLifecycleRoutingDependencies = {
         ...lifecycleDependencies,
         clearPendingAccountPickers: () => Promise.resolve(),
-        closeExtensionSessionDocument: () => Promise.resolve(),
-        completeAccountPickerAuthorizationCleanup: () =>
-          Promise.resolve(outcome),
+        closeExtensionSessionDocument: () => Promise.resolve(ok(undefined)),
+        completeAccountPickerAuthorizationCleanup: () => Promise.resolve(outcome),
         isExtensionSessionEnsureMessage: () => false,
         isExtensionSessionLockMessage: () => true,
       }
@@ -282,7 +289,7 @@ describe('service worker routing', () => {
   )
 
   test('closes the session when authorization initialization fails', async () => {
-    const closeSession = mock(() => Promise.resolve())
+    const closeSession = mock(() => Promise.resolve(ok(undefined)))
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
       beginAccountPickerAuthorizationCleanup: () =>
@@ -331,12 +338,14 @@ describe('service worker routing', () => {
         })
       },
     }
-    const { recoverInterruptedAuthorizationCleanup } =
-      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const {
+      recoverInterruptedAuthorizationCleanup,
+      AuthorizationCleanupFailureKind,
+    } = await import('../src/background/service-worker/extension-lifecycle-routing')
 
     await expect(
       recoverInterruptedAuthorizationCleanup(dependencies),
-    ).rejects.toThrow('authorization cleanup marker lookup failed')
+    ).resolves.toEqual(err([AuthorizationCleanupFailureKind.MarkerLookupFailed]))
     expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
     const rejectedDependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
@@ -345,7 +354,7 @@ describe('service worker routing', () => {
     }
     await expect(
       recoverInterruptedAuthorizationCleanup(rejectedDependencies),
-    ).rejects.toThrow('authorization cleanup rejected')
+    ).resolves.toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
   })
 
   test.each([
@@ -369,7 +378,7 @@ describe('service worker routing', () => {
       },
       closeExtensionSessionDocument: () => {
         events.push('session-closed')
-        return Promise.resolve()
+        return Promise.resolve(ok(undefined))
       },
       importLocalEventLogUpdate: () => {
         events.push('revocation-reconciled')
@@ -425,7 +434,7 @@ describe('service worker routing', () => {
     { ok: false as const, reason: LocalEventLogUpdateFailure.VaultNotPaired },
   ])('preserves the warm session for %j', async (response) => {
     const events: string[] = []
-    const closeSession = mock(() => Promise.resolve())
+    const closeSession = mock(() => Promise.resolve(ok(undefined)))
     const clearPickers = mock(() => Promise.resolve())
     const clearEnrollments = mock(() => {})
     const dependencies: ExtensionLifecycleRoutingDependencies = {
@@ -662,21 +671,29 @@ class VaultLaunchCompletion {
   readonly operation: Promise<void>
   complete: () => void = () => {}
   constructor() {
-    this.operation = new Promise((resolve) => { this.complete = resolve })
+    this.operation = new Promise((resolve) => {
+      this.complete = resolve
+    })
   }
 }
 
 describe('Simple Vault launch routing', () => {
   test('keeps the channel open and responds only after launch completes', async () => {
-    const { routeExtensionLifecycleMessage } = await import('../src/background/service-worker/extension-lifecycle-routing')
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
     const launch = new VaultLaunchCompletion()
     const sendResponse = mock(() => {})
-    expect(routeExtensionLifecycleMessage({
-      dependencies: { ...lifecycleDependencies, openSimpleVault: () => launch.operation },
-      message: { type: OpenSimpleVaultMessageType.NookOpenSimpleVault },
-      sender: { id: 'nook-extension' },
-      sendResponse,
-    })).toBe(true)
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies: {
+          ...lifecycleDependencies,
+          openSimpleVault: () => launch.operation,
+        },
+        message: { type: OpenSimpleVaultMessageType.NookOpenSimpleVault },
+        sender: { id: 'nook-extension' },
+        sendResponse,
+      }),
+    ).toBe(true)
     await flushResponses()
     expect(sendResponse).not.toHaveBeenCalled()
     launch.complete()
@@ -686,17 +703,26 @@ describe('Simple Vault launch routing', () => {
   })
 
   test('reports launch rejection without an early success response', async () => {
-    const { routeExtensionLifecycleMessage } = await import('../src/background/service-worker/extension-lifecycle-routing')
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
     const sendResponse = mock(() => {})
-    expect(routeExtensionLifecycleMessage({
-      dependencies: { ...lifecycleDependencies, openSimpleVault: () => Promise.reject('launch unavailable') },
-      message: { type: OpenSimpleVaultMessageType.NookOpenSimpleVault },
-      sender: { id: 'nook-extension' },
-      sendResponse,
-    })).toBe(true)
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies: {
+          ...lifecycleDependencies,
+          openSimpleVault: () => Promise.reject('launch unavailable'),
+        },
+        message: { type: OpenSimpleVaultMessageType.NookOpenSimpleVault },
+        sender: { id: 'nook-extension' },
+        sendResponse,
+      }),
+    ).toBe(true)
     expect(sendResponse).not.toHaveBeenCalled()
     await flushResponses()
     expect(sendResponse).toHaveBeenCalledTimes(1)
-    expect(sendResponse).toHaveBeenCalledWith({ ok: false, reason: 'launcher-failed' })
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'launcher-failed',
+    })
   })
 })

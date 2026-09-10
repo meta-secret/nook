@@ -72,8 +72,7 @@ type ImportDecodedApprovedPairingArgs = {
 }
 
 export type PairingImportResult =
-  | { ok: true; eventCount: number }
-  | { ok: false; reason: string }
+  { ok: true; eventCount: number } | { ok: false; reason: string }
 
 async function importDecodedApprovedPairing(
   args: ImportDecodedApprovedPairingArgs,
@@ -104,7 +103,9 @@ async function importDecodedApprovedPairing(
     if (!imported.accessGranted) {
       return { ok: false, reason: 'event-log-access-not-granted' }
     }
-    await extensionSessionLifecycle.ensureExtensionSessionDocument()
+    const openedSession =
+      await extensionSessionLifecycle.ensureExtensionSessionDocument()
+    if (openedSession.isErr()) return openedSession.error.response
     const pairingItemsArgs: Parameters<
       typeof pairingPolicy.extensionPairingGrantStorageItems
     >[0] = { grant: grantApproval, imported }
@@ -119,14 +120,30 @@ async function importDecodedApprovedPairing(
         type: ExtensionSessionMessageType.MigrateAuthProviders,
         payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
       }
-      await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_1)
+      const migration =
+        await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_1)
+      if (migration.isErr()) {
+        await restorePairingStorage({
+          previous: previousPairingState,
+          written: pairingItems,
+        })
+        return migration.error.response
+      }
       const nookTypedArgs0_2: Parameters<
         typeof extensionPairingIdentity.sendSessionMessage
       >[0] = {
         type: ExtensionSessionMessageType.Reset,
         payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
       }
-      await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_2)
+      const reset =
+        await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_2)
+      if (reset.isErr()) {
+        await restorePairingStorage({
+          previous: previousPairingState,
+          written: pairingItems,
+        })
+        return reset.error.response
+      }
       // Snapshot before scrubbing so lazy extension IPC cannot observe
       // emptied credential fields mid-handoff.
       const importMessage: {
@@ -153,11 +170,19 @@ async function importDecodedApprovedPairing(
         },
       }
       new ProviderCredentialBuffer(providers).clear()
-      const sessionImport = await new ProviderCredentialBuffer(
+      const importDelivery = await new ProviderCredentialBuffer(
         importMessage.payload.providers,
       ).runWithCleanup(() =>
         extensionPairingIdentity.sendSessionMessage(importMessage),
       )
+      if (importDelivery.isErr()) {
+        await restorePairingStorage({
+          previous: previousPairingState,
+          written: pairingItems,
+        })
+        return importDelivery.error.response
+      }
+      const sessionImport = importDelivery.value
       if (
         !sessionImport ||
         typeof sessionImport !== 'object' ||

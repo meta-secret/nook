@@ -1,3 +1,8 @@
+import { err, ok, type Result } from 'neverthrow'
+import type {
+  ExtensionSessionTransportFailure,
+  ExtensionSessionTransportResult,
+} from './session-document'
 import {
   ExtensionIdentityHandoffRequestMessageType,
   type BeginExtensionPairingMessage,
@@ -40,10 +45,7 @@ import type {
   LegacyPairingStorageItems,
   StoredExtensionPairingGrant,
 } from '../pairing-grants'
-import {
-  extensionPairingGrantPolicyReady,
-  setupStorageKey,
-} from '../pairing-grants'
+import { extensionPairingGrantPolicyReady, setupStorageKey } from '../pairing-grants'
 import { backgroundVaultRuntime } from '../vault-runtime'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
@@ -76,11 +78,6 @@ type CurrentPairedVaultPresenceArgs = {
 
 type CompanionUnlockedPresenceShape = {
   app_key: CompanionUnlockedAppKey
-}
-
-type ExtensionSessionStatusResponse = {
-  ok?: unknown
-  status?: unknown
 }
 
 export { ExtensionSessionStatusAvailability }
@@ -157,18 +154,14 @@ class ExtensionPairingIdentity {
     if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
     const bytes = new Uint8Array(16)
     crypto.getRandomValues(bytes)
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
-      '',
-    )
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
   }
 
   private pendingIdentityHandoffStorageKey(nonce: string): string {
     return `nook.extension.identity-handoff.${nonce}`
   }
 
-  private isPendingIdentityHandoff(
-    value: unknown,
-  ): value is PendingIdentityHandoff {
+  private isPendingIdentityHandoff(value: unknown): value is PendingIdentityHandoff {
     return (
       !!value &&
       typeof value === 'object' &&
@@ -257,10 +250,7 @@ class ExtensionPairingIdentity {
     )
     url.searchParams.set('device_id', device.deviceId)
     url.searchParams.set('device_public_key', device.devicePublicKey)
-    url.searchParams.set(
-      'device_signing_public_key',
-      device.deviceSigningPublicKey,
-    )
+    url.searchParams.set('device_signing_public_key', device.deviceSigningPublicKey)
     url.searchParams.set('extension_id', chrome.runtime.id)
     url.searchParams.set('device_label', device.deviceLabel)
     url.searchParams.set('nonce', nonce)
@@ -279,9 +269,12 @@ class ExtensionPairingIdentity {
     void chrome.tabs.create(nookTypedArgs0_2)
   }
 
-  async sendSessionMessage(message: unknown): Promise<unknown> {
+  async sendSessionMessage(
+    message: unknown,
+  ): Promise<ExtensionSessionTransportResult<unknown>> {
     const document = await extensionSessionLifecycle.openSessionDocument()
-    return document.sendMessage(message)
+    if (document.isErr()) return err(document.error)
+    return document.value.sendMessage(message)
   }
 
   async createIdentityHandoff(
@@ -313,9 +306,11 @@ class ExtensionPairingIdentity {
         return { ok: false, reason: 'extension-identity-handoff-not-issued' }
       }
       await this.removeSessionStorage(key)
-      await extensionSessionLifecycle.ensureExtensionSessionDocument()
+
       const nookTypedArgs0_3 = identityHandoffSessionRequest(message)
-      const response = await this.sendSessionMessage(nookTypedArgs0_3)
+      const delivery = await this.sendSessionMessage(nookTypedArgs0_3)
+      if (delivery.isErr()) return delivery.error.response
+      const response = delivery.value
       if (
         !!response &&
         typeof response === 'object' &&
@@ -325,9 +320,7 @@ class ExtensionPairingIdentity {
         typeof response.envelope === 'string'
       ) {
         const nextNonce = this.randomNonce()
-        const nookTypedArgs0_4: Parameters<
-          typeof this.issueIdentityHandoff
-        >[0] = {
+        const nookTypedArgs0_4: Parameters<typeof this.issueIdentityHandoff>[0] = {
           nonce: nextNonce,
           pending,
         }
@@ -345,36 +338,40 @@ class ExtensionPairingIdentity {
   private async currentPairedVaultPresence({
     vaultStoreId,
     nonce,
-  }: CurrentPairedVaultPresenceArgs): Promise<CompanionExtensionPresence> {
+  }: CurrentPairedVaultPresenceArgs): Promise<
+    Result<CompanionExtensionPresence, ExtensionSessionTransportFailure>
+  > {
     const pairingPolicy = await extensionPairingGrantPolicyReady
     const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
     const stored = await this.getPairingStorage()
     const grant = stored[key]
     if (!pairingPolicy.isStoredExtensionPairingGrant(grant)) {
-      return { kind: 'unavailable' }
+      return ok({ kind: 'unavailable' })
     }
     const selected = pairingPolicy.selectedPairingGrant(stored)
     const currentGrant = selected.kind === 'selected' ? selected.grant : grant
-    await extensionSessionLifecycle.ensureExtensionSessionDocument()
+
     const statusRequest: Parameters<typeof this.sendSessionMessage>[0] = {
       type: 'nook:extension-session-status',
       payload: {
         queue: extensionSessionProbeDeadline(Date.now() + 5_000),
       },
     }
-    const statusResponse = await this.sendSessionMessage(statusRequest)
+    const delivery = await this.sendSessionMessage(statusRequest)
+    if (delivery.isErr()) return err(delivery.error)
+    const statusResponse = delivery.value
     if (
       this.websiteSessionStatusTransport(statusResponse) !==
       ExtensionSessionStatusAvailability.Unlocked
     ) {
-      return {
+      return ok({
         kind: 'locked',
         vault_type: currentGrant.vaultType,
         vault_store_id: currentGrant.vaultStoreId,
         vault_name: currentGrant.vaultName,
-      }
+      })
     }
-    return {
+    return ok({
       kind: 'unlocked',
       vault_type: currentGrant.vaultType,
       vault_store_id: currentGrant.vaultStoreId,
@@ -390,7 +387,7 @@ class ExtensionPairingIdentity {
         nonce,
         scopes: currentGrant.scopes,
       },
-    }
+    })
   }
 
   async createPairedIdentityHandoff(
@@ -405,11 +402,9 @@ class ExtensionPairingIdentity {
         status: Reflect.get(transaction, 'status'),
         observedAt: Date.now(),
       } satisfies CompanionIdentityStatusAdmissionRequest
-      const admission = Reflect.apply(
-        admit_companion_identity_status,
-        globalThis,
-        [admissionRequest],
-      )
+      const admission = Reflect.apply(admit_companion_identity_status, globalThis, [
+        admissionRequest,
+      ])
       if (
         admission.kind !== 'accepted' ||
         admission.transaction.status.status !== 'unlocked'
@@ -420,19 +415,21 @@ class ExtensionPairingIdentity {
         vaultStoreId: admission.transaction.discovery.request.vaultStoreId,
         nonce: admission.transaction.status.app_key.nonce,
       }
-      const presence =
-        await this.currentPairedVaultPresence(currentPresenceArgs)
-      await extensionSessionLifecycle.ensureExtensionSessionDocument()
+      const presence = await this.currentPairedVaultPresence(currentPresenceArgs)
+      if (presence.isErr()) return presence.error.response
+
       const authorization = {
         request: message.payload,
         observedAt: Date.now(),
-        presence,
+        presence: presence.value,
       }
       const sessionRequest: CompanionIdentityHandoffSessionTransportRequest = {
         type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
         payload: { authorization },
       }
-      const response = await this.sendSessionMessage(sessionRequest)
+      const delivery = await this.sendSessionMessage(sessionRequest)
+      if (delivery.isErr()) return delivery.error.response
+      const response = delivery.value
       if (
         !!response &&
         typeof response === 'object' &&
@@ -469,13 +466,13 @@ class ExtensionPairingIdentity {
     await companionWasmReady
     const observation = message.payload
     const discover = async (presence: CompanionExtensionPresence) => {
-      await extensionSessionLifecycle.ensureExtensionSessionDocument()
-      const sessionRequest: CompanionIdentityDiscoverySessionTransportRequest =
-        {
-          type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
-          payload: { presence, discovery: observation },
-        }
-      const response = await this.sendSessionMessage(sessionRequest)
+      const sessionRequest: CompanionIdentityDiscoverySessionTransportRequest = {
+        type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
+        payload: { presence, discovery: observation },
+      }
+      const delivery = await this.sendSessionMessage(sessionRequest)
+      if (delivery.isErr()) return delivery.error.response
+      const response = delivery.value
       if (
         !!response &&
         typeof response === 'object' &&
@@ -528,14 +525,15 @@ class ExtensionPairingIdentity {
         return await discover(unavailablePresence)
       }
 
-      await extensionSessionLifecycle.ensureExtensionSessionDocument()
       const nookTypedArgs0_5: Parameters<typeof this.sendSessionMessage>[0] = {
         type: 'nook:extension-session-status',
         payload: {
           queue: extensionSessionProbeDeadline(Date.now() + 5_000),
         },
       }
-      const statusResponse = await this.sendSessionMessage(nookTypedArgs0_5)
+      const statusDelivery = await this.sendSessionMessage(nookTypedArgs0_5)
+      if (statusDelivery.isErr()) return statusDelivery.error.response
+      const statusResponse = statusDelivery.value
       if (
         this.websiteSessionStatusTransport(statusResponse) !==
         ExtensionSessionStatusAvailability.Unlocked
@@ -591,15 +589,15 @@ class ExtensionPairingIdentity {
       }
     }
 
-    await extensionSessionLifecycle.ensureExtensionSessionDocument()
     const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
     const nookTypedArgs0_7: Parameters<typeof this.sendSessionMessage>[0] = {
       type: 'nook:extension-session-status',
       payload: { queue: extensionSessionInteractiveDeadline(queueExpiresAt) },
     }
-    const statusResponse = (await this.sendSessionMessage(
-      nookTypedArgs0_7,
-    )) as ExtensionSessionStatusResponse
+    const statusDelivery = await this.sendSessionMessage(nookTypedArgs0_7)
+    if (statusDelivery.isErr())
+      return { ...statusDelivery.error.response, requestId, vaultStoreId }
+    const statusResponse = statusDelivery.value
     if (!extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse)) {
       await extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.Default,
@@ -615,8 +613,7 @@ class ExtensionPairingIdentity {
       !!message &&
       typeof message === 'object' &&
       'type' in message &&
-      message.type ===
-        HasPairingApprovedTypeResultType.NookExtensionPairingApproved
+      message.type === HasPairingApprovedTypeResultType.NookExtensionPairingApproved
     )
   }
 
@@ -625,13 +622,10 @@ class ExtensionPairingIdentity {
     await backgroundVaultRuntime.persistExtensionPairingItems(items)
   }
 
-  private legacyPairingStorageKeys(
-    stored: LegacyPairingStorageItems,
-  ): string[] {
+  private legacyPairingStorageKeys(stored: LegacyPairingStorageItems): string[] {
     return Object.keys(stored).filter(
       (key) =>
-        key === setupStorageKey ||
-        key.startsWith('nook:extension-pairing-grant:'),
+        key === setupStorageKey || key.startsWith('nook:extension-pairing-grant:'),
     )
   }
 
@@ -642,8 +636,9 @@ class ExtensionPairingIdentity {
         if (chrome.runtime.lastError) {
           reject(
             new Error(
-              ((...[v = 'Unable to read legacy extension pairing state.']) =>
-                v)(chrome.runtime.lastError.message),
+              ((...[v = 'Unable to read legacy extension pairing state.']) => v)(
+                chrome.runtime.lastError.message,
+              ),
             ),
           )
           return
@@ -653,17 +648,16 @@ class ExtensionPairingIdentity {
     })
   }
 
-  private removeLegacyPairingStorage(
-    keys: LegacyPairingStorageKeys,
-  ): Promise<void> {
+  private removeLegacyPairingStorage(keys: LegacyPairingStorageKeys): Promise<void> {
     // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.local.remove(keys, () => {
         if (chrome.runtime.lastError) {
           reject(
             new Error(
-              ((...[v = 'Unable to remove legacy extension pairing state.']) =>
-                v)(chrome.runtime.lastError.message),
+              ((...[v = 'Unable to remove legacy extension pairing state.']) => v)(
+                chrome.runtime.lastError.message,
+              ),
             ),
           )
           return
@@ -674,9 +668,7 @@ class ExtensionPairingIdentity {
   }
 
   ensureLegacyPairingMigration(): Promise<void> {
-    if (
-      this.legacyPairingMigration.kind === LegacyPairingMigrationKind.Running
-    ) {
+    if (this.legacyPairingMigration.kind === LegacyPairingMigrationKind.Running) {
       return this.legacyPairingMigration.operation
     }
     const operation = (async () => {
@@ -742,9 +734,7 @@ class ExtensionPairingIdentity {
       requestJson,
     }
     const parsed =
-      await WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(
-        parseArgs,
-      )
+      await WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(parseArgs)
     if (parsed.kind === WebsitePasskeyRequestParseKind.Rejected) {
       return { kind: WebsitePasskeyRequestContextKind.Rejected }
     }
@@ -832,9 +822,7 @@ class ExtensionPairingIdentity {
     forbiddenReason,
     openLockedCompanion,
   }: WebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
-    const nookTypedArgs0_8: Parameters<
-      typeof this.isAuthorizedWebsiteSender
-    >[0] = {
+    const nookTypedArgs0_8: Parameters<typeof this.isAuthorizedWebsiteSender>[0] = {
       sender,
       origin,
     }
@@ -850,7 +838,7 @@ class ExtensionPairingIdentity {
         },
       }
     }
-    await extensionSessionLifecycle.ensureExtensionSessionDocument()
+
     const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
     const queue = openLockedCompanion
       ? extensionSessionInteractiveDeadline(queueExpiresAt)
@@ -859,7 +847,9 @@ class ExtensionPairingIdentity {
       type: 'nook:extension-session-status',
       payload: { queue },
     }
-    const status = await this.sendSessionMessage(nookTypedArgs0_9)
+    const statusDelivery = await this.sendSessionMessage(nookTypedArgs0_9)
+    if (statusDelivery.isErr()) return { response: statusDelivery.error.response }
+    const status = statusDelivery.value
     await companionWasmReady
     const sessionStatus = this.websiteSessionStatusTransport(status)
     if (openLockedCompanion) {

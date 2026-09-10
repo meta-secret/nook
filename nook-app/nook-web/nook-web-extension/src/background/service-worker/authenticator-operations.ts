@@ -18,15 +18,7 @@ import {
 } from './account-pickers'
 import { extensionPairingIdentity } from './pairing-identity'
 import { AUTHENTICATOR_PICKER_TTL_MS } from './account-pickers'
-import { extensionSessionLifecycle } from './session-lifecycle'
-import {
-  attachAuthenticatorBackupCodesFromSession,
-  authenticatorCodeFromSession,
-  authenticatorPreviewFromSession,
-  confirmAuthenticatorEnrollment,
-  selectedAuthenticatorPageAcknowledged,
-  stagedAuthenticatorCodeFromSession,
-} from './authenticator-session-adapter'
+import { extensionAuthenticatorSession } from './authenticator-session-adapter'
 
 type AuthenticatorFailureResponse = { ok: false; reason: string }
 
@@ -214,13 +206,11 @@ class AuthenticatorEnrollmentOperations {
       accountPickerAuthorizationCleanupPending,
       accountPickerAuthorizationGeneration,
       accountPickerAuthorizationIsCurrent,
-      authenticatorAccounts: accountPickerSessions.authenticatorAccounts.bind(
-        accountPickerSessions,
+      authenticatorAccounts:
+        accountPickerSessions.authenticatorAccounts.bind(accountPickerSessions),
+      availableWebsiteGrants: extensionPairingIdentity.availableWebsiteGrants.bind(
+        extensionPairingIdentity,
       ),
-      availableWebsiteGrants:
-        extensionPairingIdentity.availableWebsiteGrants.bind(
-          extensionPairingIdentity,
-        ),
     }
   }
 
@@ -262,9 +252,11 @@ class AuthenticatorEnrollmentOperations {
       grants: access.grants,
       query: '',
     }
-    const accounts = await resolvedDependencies.authenticatorAccounts(
+    const accountList = await resolvedDependencies.authenticatorAccounts(
       authenticatorAccountsArgs,
     )
+    if (accountList.isErr()) return accountList.error.response
+    const accounts = accountList.value
     if (
       !resolvedDependencies.accountPickerAuthorizationIsCurrent(
         authorizationGeneration,
@@ -298,11 +290,7 @@ class AuthenticatorEnrollmentOperations {
     const access =
       await extensionPairingIdentity.availableWebsiteGrants(nookTypedArgs0_1)
     if ('response' in access) return access.response
-    if (
-      !sender.tab ||
-      !('id' in sender.tab) ||
-      typeof sender.tab.id !== 'number'
-    ) {
+    if (!sender.tab || !('id' in sender.tab) || typeof sender.tab.id !== 'number') {
       return { ok: false, reason: 'authenticator-picker-tab-missing' }
     }
 
@@ -397,10 +385,8 @@ class AuthenticatorEnrollmentOperations {
       return { ok: false, reason: 'authenticator-picker-expired' }
     }
     const { request, authorizationGeneration } = loaded
-    const grants = (
-      await extensionPairingIdentity.passwordPairingGrants()
-    ).filter((grant) =>
-      request.allowedVaultStoreIds.includes(grant.vaultStoreId),
+    const grants = (await extensionPairingIdentity.passwordPairingGrants()).filter(
+      (grant) => request.allowedVaultStoreIds.includes(grant.vaultStoreId),
     )
     const nookTypedArgs0_1: Parameters<
       typeof accountPickerSessions.authenticatorAccounts
@@ -408,8 +394,10 @@ class AuthenticatorEnrollmentOperations {
       grants,
       query: message.payload.query,
     }
-    const accounts =
+    const accountList =
       await accountPickerSessions.authenticatorAccounts(nookTypedArgs0_1)
+    if (accountList.isErr()) return accountList.error.response
+    const accounts = accountList.value
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
       return { ok: false, reason: 'authenticator-picker-expired' }
     }
@@ -432,10 +420,8 @@ class AuthenticatorEnrollmentOperations {
       return { ok: false, reason: 'authenticator-picker-expired' }
     }
     const { request, authorizationGeneration } = loaded
-    const grants = (
-      await extensionPairingIdentity.passwordPairingGrants()
-    ).filter((grant) =>
-      request.allowedVaultStoreIds.includes(grant.vaultStoreId),
+    const grants = (await extensionPairingIdentity.passwordPairingGrants()).filter(
+      (grant) => request.allowedVaultStoreIds.includes(grant.vaultStoreId),
     )
     const nookTypedArgs0_2: Parameters<
       typeof accountPickerSessions.authenticatorAccounts
@@ -443,8 +429,10 @@ class AuthenticatorEnrollmentOperations {
       grants,
       query: '',
     }
-    const accounts =
+    const accountList =
       await accountPickerSessions.authenticatorAccounts(nookTypedArgs0_2)
+    if (accountList.isErr()) return accountList.error.response
+    const accounts = accountList.value
     const selected = accounts.find(
       (account) =>
         account.vaultStoreId === message.payload.vaultStoreId &&
@@ -456,9 +444,9 @@ class AuthenticatorEnrollmentOperations {
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
       return { ok: false, reason: 'authenticator-picker-expired' }
     }
-    try {
+    {
       const acknowledgeArgs: Parameters<
-        typeof selectedAuthenticatorPageAcknowledged
+        typeof extensionAuthenticatorSession.selectedAuthenticatorPageAcknowledged
       >[0] = {
         tabId: request.tabId,
         frameId: request.frameId,
@@ -468,11 +456,11 @@ class AuthenticatorEnrollmentOperations {
         secretId: selected.secretId,
         authorizationGeneration,
       }
-      if (!(await selectedAuthenticatorPageAcknowledged(acknowledgeArgs))) {
-        return { ok: false, reason: 'authenticator-picker-page-unavailable' }
-      }
-    } catch {
-      return { ok: false, reason: 'authenticator-picker-page-unavailable' }
+      const acknowledged =
+        await extensionAuthenticatorSession.selectedAuthenticatorPageAcknowledged(
+          acknowledgeArgs,
+        )
+      if (acknowledged.isErr()) return acknowledged.error.response
     }
     await accountPickerSessions.removeAuthenticatorPicker(request.requestId)
     return { ok: true }
@@ -497,13 +485,12 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: request.origin,
     }
-    const websiteFrame: Parameters<
-      typeof AccountPickerPageTarget.matchesSender
-    >[0] = {
-      tabId: request.tabId,
-      frameId: request.frameId,
-      sender,
-    }
+    const websiteFrame: Parameters<typeof AccountPickerPageTarget.matchesSender>[0] =
+      {
+        tabId: request.tabId,
+        frameId: request.frameId,
+        sender,
+      }
     if (
       !accountPickerSessions.isAuthenticatorPickerSender(sender) &&
       (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookNamedArgs0_0) ||
@@ -564,11 +551,16 @@ class AuthenticatorEnrollmentOperations {
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
       return { ok: false, reason: 'authenticator-locked' }
     }
-    const sessionArgs: Parameters<typeof authenticatorCodeFromSession>[0] = {
+    const sessionArgs: Parameters<
+      typeof extensionAuthenticatorSession.authenticatorCodeFromSession
+    >[0] = {
       grant: access.grant,
       secretId: message.payload.secretId,
     }
-    const response = await authenticatorCodeFromSession(sessionArgs)
+    const sessionResponse =
+      await extensionAuthenticatorSession.authenticatorCodeFromSession(sessionArgs)
+    if (sessionResponse.isErr()) return sessionResponse.error.response
+    const response = sessionResponse.value
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
       if (response.ok) response.code = ''
       return { ok: false, reason: 'authenticator-locked' }
@@ -596,11 +588,14 @@ class AuthenticatorEnrollmentOperations {
         status: WebsiteAuthenticatorResponseStatus.Unavailable,
       }
     }
-    await extensionSessionLifecycle.ensureExtensionSessionDocument()
-    try {
-      const response = await authenticatorPreviewFromSession(
-        message.payload.otpauthUri,
-      )
+
+    {
+      const sessionResponse =
+        await extensionAuthenticatorSession.authenticatorPreviewFromSession(
+          message.payload.otpauthUri,
+        )
+      if (sessionResponse.isErr()) return sessionResponse.error.response
+      const response = sessionResponse.value
       const firstGrant = grants[0]!
       return {
         ok: true,
@@ -609,8 +604,6 @@ class AuthenticatorEnrollmentOperations {
         vaultStoreId: firstGrant.vaultStoreId,
         vaultName: firstGrant.vaultName,
       }
-    } catch {
-      return { ok: false, reason: 'authenticator-preview-invalid' }
     }
   }
 
@@ -665,9 +658,7 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (
-      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_10)
-    ) {
+    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_10)) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
     const grant = (await extensionPairingIdentity.passwordPairingGrants()).find(
@@ -712,15 +703,11 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (
-      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_12)
-    ) {
+    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_12)) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
     this.purgeExpiredStagedEnrollments()
-    const staged = this.stagedAuthenticatorEnrollments.get(
-      message.payload.stageId,
-    )
+    const staged = this.stagedAuthenticatorEnrollments.get(message.payload.stageId)
     if (!staged || staged.origin !== message.payload.origin) {
       return { ok: false, reason: 'authenticator-stage-missing' }
     }
@@ -732,18 +719,19 @@ class AuthenticatorEnrollmentOperations {
       this.clearStagedEnrollment(message.payload.stageId)
       return { ok: false, reason: 'authenticator-locked' }
     }
-    await extensionSessionLifecycle.ensureExtensionSessionDocument()
-    try {
-      const response = await stagedAuthenticatorCodeFromSession(
-        staged.otpauthUri,
-      )
+
+    {
+      const sessionResponse =
+        await extensionAuthenticatorSession.stagedAuthenticatorCodeFromSession(
+          staged.otpauthUri,
+        )
+      if (sessionResponse.isErr()) return sessionResponse.error.response
+      const response = sessionResponse.value
       return this.authenticatorEnrollmentAuthorizationIsCurrent(
         staged.authorizationGeneration,
       )
         ? response
         : { ok: false, reason: 'authenticator-locked' }
-    } catch {
-      return { ok: false, reason: 'authenticator-code-failed' }
     }
   }
 
@@ -757,15 +745,11 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (
-      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_14)
-    ) {
+    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_14)) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
     this.purgeExpiredStagedEnrollments()
-    const staged = this.stagedAuthenticatorEnrollments.get(
-      message.payload.stageId,
-    )
+    const staged = this.stagedAuthenticatorEnrollments.get(message.payload.stageId)
     if (
       !staged ||
       staged.origin !== message.payload.origin ||
@@ -807,20 +791,24 @@ class AuthenticatorEnrollmentOperations {
       return { ok: false, reason: 'authenticator-locked' }
     }
     try {
-      const confirmArgs: Parameters<typeof confirmAuthenticatorEnrollment>[0] =
-        {
-          grant: access.grant,
-          otpauthUri: staged.otpauthUri,
-          origin: message.payload.origin,
-        }
-      const response = await confirmAuthenticatorEnrollment(confirmArgs)
+      const confirmArgs: Parameters<
+        typeof extensionAuthenticatorSession.confirmAuthenticatorEnrollment
+      >[0] = {
+        grant: access.grant,
+        otpauthUri: staged.otpauthUri,
+        origin: message.payload.origin,
+      }
+      const sessionResponse =
+        await extensionAuthenticatorSession.confirmAuthenticatorEnrollment(
+          confirmArgs,
+        )
+      if (sessionResponse.isErr()) return sessionResponse.error.response
+      const response = sessionResponse.value
       return this.authenticatorEnrollmentAuthorizationIsCurrent(
         staged.authorizationGeneration,
       )
         ? response
         : { ok: false, reason: 'authenticator-locked' }
-    } catch {
-      return { ok: false, reason: 'authenticator-enroll-failed' }
     } finally {
       this.clearStagedEnrollment(message.payload.stageId)
     }
@@ -838,14 +826,10 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (
-      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_17)
-    ) {
+    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_17)) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
-    const staged = this.stagedAuthenticatorEnrollments.get(
-      message.payload.stageId,
-    )
+    const staged = this.stagedAuthenticatorEnrollments.get(message.payload.stageId)
     if (staged && staged.origin === message.payload.origin) {
       this.clearStagedEnrollment(message.payload.stageId)
     }
@@ -862,9 +846,7 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (
-      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_18)
-    ) {
+    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_18)) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
     this.purgeExpiredStagedEnrollments()
@@ -917,17 +899,21 @@ class AuthenticatorEnrollmentOperations {
         await accountPickerSessions.authorizedWebsiteGrant(nookTypedArgs0_5)
       if ('response' in access) return access.response
       const attachArgs: Parameters<
-        typeof attachAuthenticatorBackupCodesFromSession
+        typeof extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession
       >[0] = {
         grant: access.grant,
         secretId: message.payload.secretId,
         codes,
         mode: message.payload.mode,
       }
-      const pending = attachAuthenticatorBackupCodesFromSession(attachArgs)
+      const pending =
+        extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession(
+          attachArgs,
+        )
       codes.fill('')
       const response = await pending
-      if (!response.ok) return response
+      if (response.isErr()) return response.error.response
+      if (!response.value.ok) return response.value
       return { ok: true }
     } finally {
       codes.fill('')

@@ -1,3 +1,8 @@
+import { err, ok } from 'neverthrow'
+import {
+  ExtensionSessionTransportFailure,
+  ExtensionSessionTransportFailureKind,
+} from '../src/background/service-worker/session-document'
 import { describe, expect, mock, test } from 'bun:test'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import { extensionSessionProbeDeadline } from '../src/offscreen/session-request-adapter'
@@ -34,9 +39,7 @@ describe('login account listing failure handling', () => {
         ],
       },
     ]
-    const interactiveSendMessage = mock(() =>
-      Promise.resolve(responses.shift()),
-    )
+    const interactiveSendMessage = mock(() => Promise.resolve(ok(responses.shift())))
     const interactiveRequest: Parameters<
       typeof accountPickerSessions.loginAccountsForOrigin
     >[0] = {
@@ -59,7 +62,13 @@ describe('login account listing failure handling', () => {
     expect(interactiveSendMessage).toHaveBeenCalledTimes(2)
 
     const unavailableSendMessage = mock(() =>
-      Promise.reject(new Error('extension session unavailable')),
+      Promise.resolve(
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
+      ),
     )
     const unavailableRequest: Parameters<
       typeof accountPickerSessions.loginAccountsForOrigin
@@ -73,7 +82,7 @@ describe('login account listing failure handling', () => {
     ).resolves.toEqual([])
 
     const passiveSendMessage = mock(() =>
-      Promise.resolve({ ok: false, reason: 'session-list-failed' }),
+      Promise.resolve(ok({ ok: false, reason: 'session-list-failed' })),
     )
     const passiveRequest: Parameters<
       typeof accountPickerSessions.loginAccountAvailabilityForOrigin
@@ -97,18 +106,26 @@ describe('login account listing failure handling', () => {
       await import('../src/background/service-worker/account-pickers')
     const grants = [grant('failed-vault'), grant('healthy-vault')]
     const interactiveSendMessage = mock()
-      .mockRejectedValueOnce(new Error('extension session unavailable'))
-      .mockResolvedValueOnce({
-        ok: true,
-        accounts: [
-          {
-            secretId: 'login-1',
-            username: 'person@example.test',
-            websiteUrl: 'https://example.test/login',
-            websiteHost: 'example.test',
-          },
-        ],
-      })
+      .mockResolvedValueOnce(
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        ok({
+          ok: true,
+          accounts: [
+            {
+              secretId: 'login-1',
+              username: 'person@example.test',
+              websiteUrl: 'https://example.test/login',
+              websiteHost: 'example.test',
+            },
+          ],
+        }),
+      )
     const interactiveRequest: Parameters<
       typeof accountPickerSessions.loginAccountsForOrigin
     >[0] = {
@@ -131,7 +148,13 @@ describe('login account listing failure handling', () => {
     expect(interactiveSendMessage).toHaveBeenCalledTimes(2)
 
     const passiveSendMessage = mock(() =>
-      Promise.reject(new Error('extension session unavailable')),
+      Promise.resolve(
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
+      ),
     )
     const passiveRequest: Parameters<
       typeof accountPickerSessions.loginAccountAvailabilityForOrigin
@@ -160,10 +183,12 @@ describe('login account listing failure handling', () => {
       origin: 'https://example.test',
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
       sendMessage: mock(() =>
-        Promise.resolve({
-          ok: true,
-          accounts: [{ secretId: 'login-1' }],
-        }),
+        Promise.resolve(
+          ok({
+            ok: true,
+            accounts: [{ secretId: 'login-1' }],
+          }),
+        ),
       ),
     }
     await expect(

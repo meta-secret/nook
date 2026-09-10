@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow'
 import { describe, expect, mock, test } from 'bun:test'
 import { WebsiteAuthenticatorResponseStatus } from '../src/lib/login-fill-messages'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
@@ -28,8 +29,7 @@ type LoginAccountAvailabilityRequest = {
   }
 }
 
-type LoginAccountAvailabilityResponse =
-  { ok: true; accounts: [] } | { ok: false }
+type LoginAccountAvailabilityResponse = { ok: true; accounts: [] } | { ok: false }
 
 describe('websiteLoginOptions', () => {
   test('opens one trusted pairing surface when Continue finds no password-filling grant', async () => {
@@ -44,9 +44,7 @@ describe('websiteLoginOptions', () => {
         status: WebsiteAuthenticatorResponseStatus.Unavailable,
       },
     }
-    const availableWebsiteGrants = mock(() =>
-      Promise.resolve(grantAccessResponse),
-    )
+    const availableWebsiteGrants = mock(() => Promise.resolve(grantAccessResponse))
     const passiveAvailableWebsiteGrants = mock(() =>
       Promise.resolve(grantAccessResponse),
     )
@@ -79,12 +77,8 @@ describe('websiteLoginOptions', () => {
       },
     )
     const dependencies = {
-      accountPickerAuthorizationCleanupPending: mock(() =>
-        Promise.resolve(false),
-      ),
-      accountPickerAuthorizationGeneration: mock(() =>
-        Promise.resolve('epoch-1'),
-      ),
+      accountPickerAuthorizationCleanupPending: mock(() => Promise.resolve(false)),
+      accountPickerAuthorizationGeneration: mock(() => Promise.resolve('epoch-1')),
       accountPickerAuthorizationIsCurrent: mock(() => true),
       availableWebsiteGrants,
       passiveAvailableWebsiteGrants,
@@ -169,7 +163,7 @@ describe('websiteLoginOptions', () => {
     expect(failedPassiveResponse).toEqual({ kind: 'unavailable' })
 
     const failedSessionList = mock(() =>
-      Promise.resolve({ ok: false, reason: 'session-list-failed' }),
+      Promise.resolve(ok({ ok: false, reason: 'session-list-failed' })),
     )
     const failedListRequest: Parameters<
       typeof loginAccountAvailabilityForOrigin
@@ -191,17 +185,15 @@ describe('websiteLoginOptions', () => {
       loginAccountAvailabilityForOrigin(failedListRequest),
     ).resolves.toEqual({ ok: false })
 
-    const interactiveResponse = await accountPickerSessions.websiteLoginOptions(
-      {
-        message: { payload: { origin: 'https://example.test' } },
-        sender: {
-          id: 'nook-extension',
-          url: 'https://example.test/login',
-          tab: { id: 42 },
-        },
-        dependencies,
+    const interactiveResponse = await accountPickerSessions.websiteLoginOptions({
+      message: { payload: { origin: 'https://example.test' } },
+      sender: {
+        id: 'nook-extension',
+        url: 'https://example.test/login',
+        tab: { id: 42 },
       },
-    )
+      dependencies,
+    })
     expect(interactiveResponse).toEqual({
       ok: true,
       status: 'ready',
@@ -243,12 +235,8 @@ describe('websiteLoginOptions', () => {
     let currentChecks = 0
     const authorizationIsCurrent = mock(() => ++currentChecks === 1)
     const authorization = {
-      accountPickerAuthorizationCleanupPending: mock(() =>
-        Promise.resolve(false),
-      ),
-      accountPickerAuthorizationGeneration: mock(() =>
-        Promise.resolve('epoch-1'),
-      ),
+      accountPickerAuthorizationCleanupPending: mock(() => Promise.resolve(false)),
+      accountPickerAuthorizationGeneration: mock(() => Promise.resolve('epoch-1')),
       accountPickerAuthorizationIsCurrent: authorizationIsCurrent,
     }
     const sender = { id: 'nook-extension' }
@@ -259,9 +247,7 @@ describe('websiteLoginOptions', () => {
       dependencies: {
         ...authorization,
         availableWebsiteGrants: mock(() => Promise.resolve({ grants: [] })),
-        passiveAvailableWebsiteGrants: mock(() =>
-          Promise.resolve({ grants: [] }),
-        ),
+        passiveAvailableWebsiteGrants: mock(() => Promise.resolve({ grants: [] })),
         loginAccountsForOrigin: mock(() => Promise.resolve([])),
         loginAccountAvailabilityForOrigin: mock(() =>
           Promise.resolve({ ok: true as const, accounts: [] }),
@@ -281,7 +267,7 @@ describe('websiteLoginOptions', () => {
       dependencies: {
         ...authorization,
         availableWebsiteGrants: mock(() => Promise.resolve({ grants: [] })),
-        authenticatorAccounts: mock(() => Promise.resolve([])),
+        authenticatorAccounts: mock(() => Promise.resolve(ok([]))),
       },
     })
     expect(authenticatorResponse).toEqual({

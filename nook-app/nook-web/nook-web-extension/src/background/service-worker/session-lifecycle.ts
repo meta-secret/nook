@@ -1,73 +1,15 @@
+import {
+  ExtensionSessionDocumentOwner,
+  type ExtensionSessionTransportResult,
+  type ExtensionSessionTransport,
+} from './session-document'
+export { extensionSessionDocument } from './session-document'
 import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 
-export const extensionSessionDocument = 'offscreen/session.html'
-
 export const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
-
-enum ExtensionSessionDocumentStateKind {
-  Closed = 'closed',
-  Creating = 'creating',
-  Open = 'open',
-  Closing = 'closing',
-}
-type ExtensionSessionDocumentState =
-  | { kind: ExtensionSessionDocumentStateKind.Closed }
-  | {
-      kind: ExtensionSessionDocumentStateKind.Creating
-      operation: Promise<OpenExtensionSessionDocument>
-    }
-  | {
-      kind: ExtensionSessionDocumentStateKind.Open
-      document: OpenExtensionSessionDocument
-    }
-  | {
-      kind: ExtensionSessionDocumentStateKind.Closing
-      operation: Promise<void>
-    }
-
-/** The sending capability exists only after browser document creation completes. */
-export interface ExtensionSessionTransport {
-  sendMessage(message: unknown): Promise<unknown>
-}
-
-class OpenExtensionSessionDocument {
-  private active = true
-  private constructor() {}
-  static async create(): Promise<OpenExtensionSessionDocument> {
-    try {
-      await chrome.offscreen.createDocument({
-        url: extensionSessionDocument,
-        reasons: ['WORKERS'],
-        justification:
-          'Keep a user-authorized extension device identity in memory for a 15-minute session.',
-      })
-    } catch (error) {
-      if (!String(error).includes('single offscreen')) throw error
-    }
-    return new OpenExtensionSessionDocument()
-  }
-  sendMessage(message: unknown): Promise<unknown> {
-    if (!this.active)
-      return Promise.reject(new Error('Extension session document closed'))
-    // eslint-disable-next-line max-params -- Promise owns this executor.
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(message, (response) => {
-        const error = chrome.runtime.lastError?.message
-        if (!this.active) reject(new Error('Extension session document closed'))
-        else if (error) reject(new Error(error))
-        else resolve(response)
-      })
-    })
-  }
-  close(): Promise<void> {
-    if (!this.active) return Promise.resolve()
-    this.active = false
-    return chrome.offscreen.closeDocument()
-  }
-}
 
 type AuthenticationSurfaceNotification = {
   type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
@@ -82,69 +24,23 @@ type AuthenticationSurfaceDeliveryRequest = {
 
 /** Owns the browser runtime resources shared by these interactions. */
 class ExtensionSessionLifecycle {
-  private extensionSessionDocumentState: ExtensionSessionDocumentState = {
-    kind: ExtensionSessionDocumentStateKind.Closed,
-  }
-  async ensureExtensionSessionDocument(): Promise<void> {
-    await this.openSessionDocument()
+  private readonly document = new ExtensionSessionDocumentOwner()
+
+  async ensureExtensionSessionDocument(): Promise<
+    ExtensionSessionTransportResult<void>
+  > {
+    const opened = await this.document.open()
+    return opened.map(() => {})
   }
 
-  async openSessionDocument(): Promise<ExtensionSessionTransport> {
-    const state = this.extensionSessionDocumentState
-    if (state.kind === ExtensionSessionDocumentStateKind.Closing) {
-      await state.operation
-      return this.openSessionDocument()
-    }
-    if (state.kind === ExtensionSessionDocumentStateKind.Open)
-      return state.document
-    if (state.kind === ExtensionSessionDocumentStateKind.Creating)
-      return state.operation
-    const operation = OpenExtensionSessionDocument.create().then((document) => {
-      if (
-        this.extensionSessionDocumentState.kind ===
-          ExtensionSessionDocumentStateKind.Creating &&
-        this.extensionSessionDocumentState.operation === operation
-      ) {
-        this.extensionSessionDocumentState = {
-          kind: ExtensionSessionDocumentStateKind.Open,
-          document,
-        }
-      }
-      return document
-    })
-    this.extensionSessionDocumentState = {
-      kind: ExtensionSessionDocumentStateKind.Creating,
-      operation,
-    }
-    return operation
+  openSessionDocument(): Promise<
+    ExtensionSessionTransportResult<ExtensionSessionTransport>
+  > {
+    return this.document.open()
   }
 
-  closeExtensionSessionDocument(): Promise<void> {
-    const state = this.extensionSessionDocumentState
-    if (state.kind === ExtensionSessionDocumentStateKind.Closed)
-      return Promise.resolve()
-    if (state.kind === ExtensionSessionDocumentStateKind.Closing)
-      return state.operation
-    const closure = (
-      state.kind === ExtensionSessionDocumentStateKind.Creating
-        ? state.operation.then((document) => document.close())
-        : state.document.close()
-    ).finally(() => {
-      if (
-        this.extensionSessionDocumentState.kind ===
-          ExtensionSessionDocumentStateKind.Closing &&
-        this.extensionSessionDocumentState.operation === closure
-      ) {
-        this.extensionSessionDocumentState = {
-          kind: ExtensionSessionDocumentStateKind.Closed,
-        }
-      }
-    })
-    this.extensionSessionDocumentState = {
-      kind: ExtensionSessionDocumentStateKind.Closing,
-      operation: closure,
-    }
-    return closure
+  closeExtensionSessionDocument(): Promise<ExtensionSessionTransportResult<void>> {
+    return this.document.close()
   }
 
   isUnlockedSessionStatus(status: unknown): boolean {
@@ -237,9 +133,7 @@ class ExtensionSessionLifecycle {
     return this.notifyAuthenticationSurfaces(args)
   }
 
-  async openCompanionLauncher(
-    intent: OpenCompanionLauncherIntent,
-  ): Promise<void> {
+  async openCompanionLauncher(intent: OpenCompanionLauncherIntent): Promise<void> {
     const popupUrl = chrome.runtime.getURL('popup/index.html')
     const launcherUrl =
       intent === OpenCompanionLauncherIntent.Pair

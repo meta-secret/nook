@@ -18,7 +18,7 @@ import {
 } from '../../offscreen/session-request-adapter'
 import {
   decode_website_passkey_account_list,
-  passkeyCeremonyResponseFromSession,
+  SessionPasskeyResponse,
   WebsitePasskeyAccountListKind,
 } from './passkey-session-adapter'
 import {
@@ -94,6 +94,9 @@ type CancelWebsitePasskeyArgs = {
 }
 
 /** Owns the browser runtime resources shared by these interactions. */
+type WebsitePasskeyCancellation =
+  { readonly ok: true } | { readonly ok: false; readonly reason: string }
+
 class WebsitePasskeyRequests {
   private get websitePasskeyOptionsDependencies(): WebsitePasskeyOptionsDependencies {
     return {
@@ -122,10 +125,7 @@ class WebsitePasskeyRequests {
   }
 
   private pendingWebsitePasskeyRequests = new Set<string>()
-  private passkeyRequestKey({
-    sender,
-    requestId,
-  }: PasskeyRequestKeyArgs): string {
+  private passkeyRequestKey({ sender, requestId }: PasskeyRequestKeyArgs): string {
     return `${((...[v = -1]) => v)(sender.tab?.id)}:${((v) => (v ? v : 0))(sender.frameId)}:${requestId}`
   }
 
@@ -147,19 +147,16 @@ class WebsitePasskeyRequests {
     if (grants.length === 0) {
       return { kind: MatchingPasskeyAvailabilityKind.Ready, accountCount: 0 }
     }
-    try {
-      await extensionSessionLifecycle.ensureExtensionSessionDocument()
-    } catch {
-      return unavailable
-    }
     const nookTypedArgs0_0: Parameters<
       typeof extensionPairingIdentity.sendSessionMessage
     >[0] = {
       type: 'nook:extension-session-status',
       payload: { queue: extensionSessionProbeDeadline(queueExpiresAt) },
     }
-    const status =
+    const delivery =
       await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_0)
+    if (delivery.isErr()) return unavailable
+    const status = delivery.value
     if (
       !status ||
       typeof status !== 'object' ||
@@ -180,8 +177,10 @@ class WebsitePasskeyRequests {
           queue: extensionSessionProbeDeadline(queueExpiresAt),
         },
       }
-      const response =
+      const delivery =
         await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_1)
+      if (delivery.isErr()) return unavailable
+      const response = delivery.value
       const accountList = decode_website_passkey_account_list(response)
       if (
         accountList.kind !== WebsitePasskeyAccountListKind.Ready ||
@@ -210,10 +209,7 @@ class WebsitePasskeyRequests {
       return await Promise.race([
         this.matchingPasskeyAvailabilityForOrigin(nookTypedArgs0_0),
         new Promise<MatchingPasskeyAvailability>((resolve) => {
-          setTimeout(
-            () => resolve(unavailable),
-            PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS,
-          )
+          setTimeout(() => resolve(unavailable), PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS)
         }),
       ])
     } catch {
@@ -234,8 +230,7 @@ class WebsitePasskeyRequests {
       ceremony: message.payload.ceremony,
       requestJson: message.payload.requestJson,
     }
-    const context =
-      await resolvedDependencies.requestOriginAndRpId(nookTypedArgs0_2)
+    const context = await resolvedDependencies.requestOriginAndRpId(nookTypedArgs0_2)
     if (context.kind === WebsitePasskeyRequestContextKind.Rejected) {
       return { ok: false, reason: 'passkey-forbidden-origin' }
     }
@@ -255,7 +250,8 @@ class WebsitePasskeyRequests {
         status: WebsitePasskeyOptionsStatus.Unavailable,
         options: [],
       }
-    await resolvedDependencies.ensureExtensionSessionDocument()
+    const session = await resolvedDependencies.ensureExtensionSessionDocument()
+    if (session.isErr()) return session.error.response
     const nookTypedArgs0_3: Parameters<
       typeof extensionPairingIdentity.sendSessionMessage
     >[0] = {
@@ -264,8 +260,9 @@ class WebsitePasskeyRequests {
         queue: extensionSessionProbeDeadline(message.payload.expiresAt),
       },
     }
-    const status =
-      await resolvedDependencies.sendSessionMessage(nookTypedArgs0_3)
+    const delivery = await resolvedDependencies.sendSessionMessage(nookTypedArgs0_3)
+    if (delivery.isErr()) return delivery.error.response
+    const status = delivery.value
     if (
       !status ||
       typeof status !== 'object' ||
@@ -300,8 +297,10 @@ class WebsitePasskeyRequests {
           queue: extensionSessionProbeDeadline(message.payload.expiresAt),
         },
       }
-      const response =
+      const delivery =
         await resolvedDependencies.sendSessionMessage(nookTypedArgs0_4)
+      if (delivery.isErr()) return delivery.error.response
+      const response = delivery.value
       const accountList = decode_website_passkey_account_list(response)
       if (
         accountList.kind !== WebsitePasskeyAccountListKind.Ready ||
@@ -362,14 +361,12 @@ class WebsitePasskeyRequests {
     }
     this.pendingWebsitePasskeyRequests.add(key)
     try {
-      const grant = (
-        await extensionPairingIdentity.passkeyPairingGrants()
-      ).find(
+      const grant = (await extensionPairingIdentity.passkeyPairingGrants()).find(
         (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
       )
       if (!grant) return { ok: false, reason: 'passkey-vault-not-granted' }
-      const credentialSelection: WebsitePasskeyCredentialSelection = message
-        .payload.credentialId
+      const credentialSelection: WebsitePasskeyCredentialSelection = message.payload
+        .credentialId
         ? {
             kind: WebsitePasskeyCredentialSelectionKind.Selected,
             credentialId: message.payload.credentialId,
@@ -379,7 +376,7 @@ class WebsitePasskeyRequests {
         request: context.request,
         credentialSelection,
       }
-      await extensionSessionLifecycle.ensureExtensionSessionDocument()
+
       const nookTypedArgs0_7: Parameters<
         typeof extensionPairingIdentity.sendSessionMessage
       >[0] = {
@@ -394,14 +391,14 @@ class WebsitePasskeyRequests {
             WebsitePasskeyOptionsMessageSchema.websitePasskeyRequestJson(
               requestJsonArgs,
             ),
-          queue: extensionSessionPasskeyCeremonyDeadline(
-            message.payload.expiresAt,
-          ),
+          queue: extensionSessionPasskeyCeremonyDeadline(message.payload.expiresAt),
         },
       }
-      return passkeyCeremonyResponseFromSession(
-        await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_7),
-      )
+      const delivery =
+        await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_7)
+      if (delivery.isErr()) return delivery.error.response
+      const response = new SessionPasskeyResponse(delivery.value).decode()
+      return response.isOk() ? response.value : { ok: false, reason: response.error }
     } finally {
       this.pendingWebsitePasskeyRequests.delete(key)
     }
@@ -410,14 +407,14 @@ class WebsitePasskeyRequests {
   async cancelWebsitePasskey({
     message,
     sender,
-  }: CancelWebsitePasskeyArgs): Promise<{ ok: true }> {
+  }: CancelWebsitePasskeyArgs): Promise<WebsitePasskeyCancellation> {
     const nookTypedArgs0_2: Parameters<typeof this.passkeyRequestKey>[0] = {
       sender,
       requestId: message.payload.requestId,
     }
     const key = this.passkeyRequestKey(nookTypedArgs0_2)
     if (!this.pendingWebsitePasskeyRequests.has(key)) return { ok: true }
-    await extensionSessionLifecycle.ensureExtensionSessionDocument()
+
     const nookTypedArgs0_8: Parameters<
       typeof extensionPairingIdentity.sendSessionMessage
     >[0] = {
@@ -427,7 +424,9 @@ class WebsitePasskeyRequests {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_8)
+    const delivery =
+      await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_8)
+    if (delivery.isErr()) return delivery.error.response
     return { ok: true }
   }
 }
