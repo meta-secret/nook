@@ -32,6 +32,13 @@ pub struct DeviceIsEnrolledRequest<'a> {
     pub identity: &'a DeviceIdentity,
 }
 
+/// A device has either requested enrollment or has no pending request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeviceJoinStatus {
+    Pending(JoinRequest),
+    NotRequested,
+}
+
 /// Named values required by VaultMetaState::pending_join_for_device.
 pub struct PendingJoinForDeviceRequest<'a> {
     pub records: &'a [StoredSecretRecord],
@@ -111,11 +118,14 @@ impl VaultMetaState {
 impl VaultMetaState {
     pub fn pending_join_for_device(
         request: PendingJoinForDeviceRequest<'_>,
-    ) -> MultiDeviceResult<Option<JoinRequest>> {
+    ) -> MultiDeviceResult<DeviceJoinStatus> {
         let PendingJoinForDeviceRequest { records, device_id } = request;
         VaultRecordView::new(records)
             .list_join_requests()
-            .map(|joins| joins.into_iter().find(|join| join.device_id == *device_id))
+            .map(|joins| match joins.into_iter().find(|join| join.device_id == *device_id) {
+                Some(join) => DeviceJoinStatus::Pending(join),
+                None => DeviceJoinStatus::NotRequested,
+            })
     }
 }
 
@@ -152,11 +162,13 @@ mod tests {
         records: &mut Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,
     ) -> anyhow::Result<()> {
-        let join = VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+        let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
             records: records,
             device_id: joiner.device_id(),
-        })?
-        .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
+        })? {
+            DeviceJoinStatus::Pending(join) => join,
+            DeviceJoinStatus::NotRequested => return Err(io::Error::other("pending join fixture must exist").into()),
+        };
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,

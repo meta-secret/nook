@@ -1,6 +1,11 @@
 //! First-class Identity: passkeys, app-key members, and identity-owned vault DEKs.
 mod legacy;
 
+enum CommittedVaultKeys {
+    Opened(VaultKeys),
+    VaultNotCreated,
+}
+
 use std::fmt;
 
 use crate::errors::{MultiDeviceError, MultiDeviceResult, ValidationError, ValidationResult};
@@ -282,7 +287,7 @@ impl IdentityRecord {
     fn existing_vault_keys(
         &self,
         request: &IdentityVaultKeyOpening<'_>,
-    ) -> MultiDeviceResult<Option<VaultKeys>> {
+    ) -> MultiDeviceResult<CommittedVaultKeys> {
         let IdentityVaultKeyOpening { app_key, store_id } = request;
         let member = self
             .members
@@ -298,14 +303,14 @@ impl IdentityRecord {
             ));
         }
         let Some(vault_dek) = self.vault_dek(&store_id) else {
-            return Ok(None);
+            return Ok(CommittedVaultKeys::VaultNotCreated);
         };
         let IdentityVaultAppEnvelopes::Granted { secrets, members } =
             vault_dek.app_envelopes(app_key.app_id())
         else {
             return Err(MultiDeviceError::IdentityEnrollmentRequired);
         };
-        Ok(Some(VaultKeys {
+        Ok(CommittedVaultKeys::Opened(VaultKeys {
             secrets_key: app_key.decrypt_envelope(&secrets.envelope)?,
             members_key: app_key.decrypt_envelope(&members.envelope)?,
         }))
@@ -315,8 +320,10 @@ impl IdentityRecord {
         &self,
         request: IdentityVaultKeyOpening<'_>,
     ) -> MultiDeviceResult<VaultKeys> {
-        self.existing_vault_keys(&request)?
-            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)
+        match self.existing_vault_keys(&request)? {
+            CommittedVaultKeys::Opened(keys) => Ok(keys),
+            CommittedVaultKeys::VaultNotCreated => Err(MultiDeviceError::IdentityEnrollmentRequired),
+        }
     }
 
     pub fn open_or_generate_vault_dek(
@@ -324,11 +331,11 @@ impl IdentityRecord {
         request: IdentityVaultKeyOpening<'_>,
     ) -> Result<IdentityVaultKeys, IdentityRecordRejection> {
         match self.existing_vault_keys(&request) {
-            Ok(Some(keys)) => Ok(IdentityVaultKeys {
+            Ok(CommittedVaultKeys::Opened(keys)) => Ok(IdentityVaultKeys {
                 identity: self,
                 keys,
             }),
-            Ok(None) => self.generate_vault_dek(request.store_id),
+            Ok(CommittedVaultKeys::VaultNotCreated) => self.generate_vault_dek(request.store_id),
             Err(cause) => Err(IdentityRecordRejection {
                 identity: self,
                 cause,

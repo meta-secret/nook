@@ -12,7 +12,7 @@
 //! private device material, or decrypted secret values.
 
 use crate::{EpochPasswordState, EventId, ProjectionEpoch};
-use nook_auth2::{PendingJoinForDeviceRequest, VaultMetaState};
+use nook_auth2::{DeviceJoinStatus, PendingJoinForDeviceRequest, VaultMetaState};
 use nook_event_log::GenesisImportRequest;
 
 use crate::errors::VaultResult;
@@ -125,11 +125,10 @@ impl VaultAccessDiagnosticRequest<'_> {
         ) {
             return Ok(VaultKeyAccessDiagnosticStatus::UnsupportedEpoch);
         }
-        if VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+        if let DeviceJoinStatus::Pending(_) = VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
             records: records,
             device_id: identity.device_id(),
         })?
-        .is_some()
         {
             return Ok(VaultKeyAccessDiagnosticStatus::JoinPending);
         }

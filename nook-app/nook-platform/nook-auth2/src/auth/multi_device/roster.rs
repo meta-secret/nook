@@ -363,6 +363,7 @@ impl VaultMember {
 #[cfg(test)]
 mod tests {
     use std::io;
+    use crate::DeviceJoinStatus;
 
     use super::*;
     use crate::auth::multi_device::{
@@ -401,11 +402,13 @@ mod tests {
         records: &mut Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,
     ) -> anyhow::Result<()> {
-        let join = VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+        let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
             records: records,
             device_id: joiner.device_id(),
-        })?
-        .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
+        })? {
+            DeviceJoinStatus::Pending(join) => join,
+            DeviceJoinStatus::NotRequested => return Err(io::Error::other("pending join fixture must exist").into()),
+        };
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,

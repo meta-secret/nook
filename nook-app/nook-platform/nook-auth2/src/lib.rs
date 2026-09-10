@@ -85,7 +85,7 @@ pub use nook_authenticator_domain::PasskeyDeviceProtectionMode;
 pub mod multi_device_api {
     pub use crate::auth::multi_device::{
         AppKey, AuthEnvelopes, AuthRecordIssuance, ConnectAccessStatus, DeviceEnrollment,
-        DeviceIdentity, JoinRequest, JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance,
+        DeviceIdentity, DeviceJoinStatus, JoinRequest, JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance,
         MEMBER_RECORD_PREFIX, MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX,
         SelfRosterSync, SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareEnvelope,
         SentinelShareOpening, SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord,

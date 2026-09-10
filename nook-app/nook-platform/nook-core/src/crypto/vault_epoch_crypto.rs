@@ -248,6 +248,7 @@ mod tests {
     use crate::{EpochMetadataState, EpochPasswordState, SecretType, VaultMetaState};
 
     use std::io;
+    use nook_auth2::DeviceJoinStatus;
 
     use super::*;
     use crate::{
@@ -349,11 +350,13 @@ mod tests {
             },
         )?);
         records.push(JoinRequestIssuance::new(&joiner, "2026-06-28T00:01:00Z").issue()?);
-        let join = VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+        let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
             records: &records,
             device_id: joiner.device_id(),
-        })?
-        .ok_or_else(|| io::Error::other("join request must exist"))?;
+        })? {
+            DeviceJoinStatus::Pending(join) => join,
+            DeviceJoinStatus::NotRequested => return Err(io::Error::other("join request must exist").into()),
+        };
         let (joiner_auth, join_key, member_records) = JoinRequestApproval::new(
             &old_keys.secrets_key,
             &old_keys.members_key,
