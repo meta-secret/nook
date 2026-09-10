@@ -40,8 +40,9 @@ mod tests {
     use crate::event::{VaultEvent, VaultEventBody, VaultEventSchemaVersion};
     use crate::test_support::{actor, public_key, signing_key as key, store};
     use crate::{
-        AgeArmoredCiphertext, DevicePublicKey, EpochCheckpoint, EventResult, MemberLabel,
-        VaultOperation,
+        AgeArmoredCiphertext, DevicePublicKey, EpochCheckpoint, EpochMetadataState,
+        EpochPasswordState, EventError, EventGraphRejection, EventResult, MemberLabel,
+        ProjectionIntegrity, VaultOperation,
     };
     use nook_auth2::{DeviceId, PasswordEntryId, Sha256Hex};
     #[test]
@@ -261,6 +262,112 @@ mod tests {
             EpochCheckpoint::Committed(checkpoint_id)
         );
         assert!(graph.heads().contains(&request_id));
+        Ok(())
+    }
+
+    #[test]
+    fn projection_integrity_prioritizes_schema_and_conflict_states() -> EventResult<()> {
+        let mut projection = VaultProjection::default();
+        assert_eq!(projection.integrity(), ProjectionIntegrity::Resolved);
+
+        let secret_id = ProjectionFixtures::sid("secret_conflicted");
+        projection.replacement_conflicts.insert(
+            secret_id.clone(),
+            crate::SecretReplacementConflict {
+                old_secret_id: secret_id,
+                candidates: BTreeMap::new(),
+            },
+        );
+        assert_eq!(
+            projection.integrity(),
+            ProjectionIntegrity::BlockingConflicts
+        );
+
+        projection.unresolved_schema = true;
+        assert_eq!(
+            projection.integrity(),
+            ProjectionIntegrity::UnresolvedSchema
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_epoch_checkpoints_are_not_a_current_checkpoint() -> EventResult<()> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = {
+            let prepared = ProjectionFixtures::genesis(graph, &signing_key)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
+        let rotation = ProjectionFixtures::signed_operation(
+            &signing_key,
+            vec![genesis_id],
+            VaultOperation::PasswordRemoved {
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
+            },
+        )?;
+        let rotation_id = rotation.id()?;
+        graph = graph
+            .insert(crate::EventGraphInsert {
+                event: rotation,
+                expected_store_id: STORE,
+            })
+            .map_err(EventGraphRejection::into_cause)?
+            .graph;
+
+        let first = VaultEvent::sign(
+            VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store()?,
+                actor_id: actor(&signing_key)?,
+                actor_signing_public_key: public_key(&signing_key),
+                parents: vec![rotation_id.clone()],
+                created_at: ProjectionFixtures::ts("2026-06-28T00:00:01Z"),
+                key_epoch: rotation_id.clone(),
+                operations: vec![VaultOperation::EpochCheckpoint {
+                    secrets: Vec::new(),
+                    members_checkpoint_hash: Sha256Hex::from_trusted("1".repeat(64)),
+                    rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
+                    password_entries: EpochPasswordState::Replace(Vec::new()),
+                }],
+            },
+            &signing_key,
+        )?;
+        let second = VaultEvent::sign(
+            VaultEventBody {
+                created_at: ProjectionFixtures::ts("2026-06-28T00:00:02Z"),
+                operations: vec![VaultOperation::EpochCheckpoint {
+                    secrets: Vec::new(),
+                    members_checkpoint_hash: Sha256Hex::from_trusted("2".repeat(64)),
+                    rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
+                    password_entries: EpochPasswordState::Replace(Vec::new()),
+                }],
+                ..first.body.clone()
+            },
+            &signing_key,
+        )?;
+        graph = graph
+            .insert(crate::EventGraphInsert {
+                event: first,
+                expected_store_id: STORE,
+            })
+            .map_err(EventGraphRejection::into_cause)?
+            .graph;
+        graph = graph
+            .insert(crate::EventGraphInsert {
+                event: second,
+                expected_store_id: STORE,
+            })
+            .map_err(EventGraphRejection::into_cause)?
+            .graph;
+
+        assert!(matches!(
+            graph.current_epoch_checkpoint(),
+            Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "multiple concurrent epoch checkpoints remain"
+            })
+        ));
         Ok(())
     }
 }

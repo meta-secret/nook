@@ -169,4 +169,29 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn append_input_rejects_a_signer_for_another_actor() -> anyhow::Result<()> {
+        let (signing, _) = SigningIdentity::generate()?;
+        let (other, _) = SigningIdentity::generate()?;
+        let store_id = StoreId::parse("store_testtoken11")?;
+        let epoch = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        let created_at = IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned());
+        let other_actor = other.actor_id()?;
+
+        assert!(matches!(
+            AppendEventInput {
+                store_id: &store_id,
+                actor_id: &other_actor,
+                signing_identity: &signing,
+                parents: Vec::new(),
+                key_epoch: &epoch,
+                created_at: &created_at,
+                operations: vec![VaultOperation::VaultCleared],
+            }
+            .build(),
+            Err(EventError::ActorSigningKeyMismatch { .. })
+        ));
+        Ok(())
+    }
 }

@@ -849,6 +849,10 @@ mod tests {
             graph.topological_order(),
             Err(EventError::MultipleGenesisRoots)
         ));
+        assert!(matches!(
+            graph.replacement_evidence(),
+            EventGraphReplacementEvidence::Unavailable
+        ));
         Ok(())
     }
 
@@ -887,6 +891,71 @@ mod tests {
             match graph.insert(crate::EventGraphInsert { event: checkpoint, expected_store_id: STORE_STR }) { Ok(inserted) => { graph = inserted.graph; Ok(inserted.status) }, Err(rejected) => { graph = rejected.graph; Err(rejected.cause) } }?,
             EventInsertStatus::Quarantined(reason)
                 if reason.contains("parent must be one security rotation trigger")
+        ));
+        assert!(matches!(
+            graph.replacement_evidence(),
+            EventGraphReplacementEvidence::Unavailable
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn replacement_evidence_tracks_graph_completeness() -> anyhow::Result<()> {
+        let unknown = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        let graph = EventGraph::new();
+        assert!(matches!(
+            graph.replacement_evidence(),
+            EventGraphReplacementEvidence::Unavailable
+        ));
+        assert!(matches!(graph.get(&unknown), EventLookup::UnknownEvent));
+        assert_eq!(graph.events().count(), 0);
+        assert_eq!(
+            graph.classify_vault_architecture(),
+            EventGraphVaultArchitecture::Simple
+        );
+
+        let root_key = signing_key();
+        let genesis = genesis_event(&root_key)?;
+        let genesis_id = genesis.id()?;
+        let graph = graph
+            .insert(EventGraphInsert {
+                event: genesis,
+                expected_store_id: STORE_STR,
+            })
+            .map_err(EventGraphRejection::into_cause)?
+            .graph;
+        assert!(matches!(
+            graph.replacement_evidence(),
+            EventGraphReplacementEvidence::GenesisOnly(event) if event.id()? == genesis_id
+        ));
+        assert!(matches!(graph.get(&genesis_id), EventLookup::Recorded(_)));
+
+        let child = signed_child(vec![genesis_id], "secret_replacement_evidence", &root_key)?;
+        let child_id = child.id()?;
+        let graph = graph
+            .insert(EventGraphInsert {
+                event: child,
+                expected_store_id: STORE_STR,
+            })
+            .map_err(EventGraphRejection::into_cause)?
+            .graph;
+        assert!(matches!(
+            graph.replacement_evidence(),
+            EventGraphReplacementEvidence::Established(event) if event.body.parents.is_empty()
+        ));
+        assert!(graph.contains(&child_id));
+
+        let pending = signed_child(vec![unknown], "secret_pending_evidence", &root_key)?;
+        let pending_graph = EventGraph::new()
+            .insert(EventGraphInsert {
+                event: pending,
+                expected_store_id: STORE_STR,
+            })
+            .map_err(EventGraphRejection::into_cause)?
+            .graph;
+        assert!(matches!(
+            pending_graph.replacement_evidence(),
+            EventGraphReplacementEvidence::Unavailable
         ));
         Ok(())
     }

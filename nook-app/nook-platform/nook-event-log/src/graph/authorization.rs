@@ -207,7 +207,9 @@ mod tests {
         VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key, store};
-    use crate::{EventId, EventInsertStatus, EventResult, GenesisImportRequest};
+    use crate::{
+        EventGraphRejection, EventId, EventInsertStatus, EventResult, GenesisImportRequest,
+    };
     use ed25519_dalek::SigningKey;
     use nook_auth2::{
         AgeArmoredCiphertext, DeviceId, DevicePublicKey, IsoTimestamp, MemberLabel,
@@ -758,6 +760,50 @@ mod tests {
             }?,
             EventInsertStatus::Applied
         );
+        Ok(())
+    }
+
+    #[test]
+    fn graph_admission_fails_closed_for_corrupt_or_invalid_envelopes() -> anyhow::Result<()> {
+        let first_key = signing_key();
+        let second_key = signing_key();
+        let incoming = genesis_event(&first_key)?;
+        let incoming_id = incoming.id()?;
+        let mut corrupt_graph = EventGraph::new();
+        corrupt_graph
+            .events
+            .insert(incoming_id.clone(), genesis_event(&second_key)?);
+
+        let inserted = corrupt_graph
+            .insert(crate::EventGraphInsert {
+                event: incoming,
+                expected_store_id: STORE_STR,
+            })
+            .map_err(EventGraphRejection::into_cause)?;
+        assert!(matches!(
+            inserted.status,
+            EventInsertStatus::Quarantined(reason) if reason == "hash mismatch at event path"
+        ));
+        assert!(inserted.graph.quarantined().contains_key(&incoming_id));
+
+        let rejected = EventGraph::new()
+            .insert(crate::EventGraphInsert {
+                event: genesis_event(&first_key)?,
+                expected_store_id: "store_otherid0001",
+            })
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("wrong-store event must be rejected"))?;
+        assert!(rejected.graph.is_empty());
+        assert!(matches!(
+            rejected.into_cause(),
+            EventError::EventStoreIdMismatch { .. }
+        ));
+
+        let unknown = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        assert!(matches!(
+            EventGraph::new().classify_event_quarantine(&unknown),
+            Err(EventError::MissingEvent { .. })
+        ));
         Ok(())
     }
 }

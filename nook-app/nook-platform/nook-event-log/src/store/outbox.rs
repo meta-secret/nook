@@ -51,6 +51,7 @@ impl LocalEventStore {
 mod tests {
     use super::*;
     use crate::{EventError, EventResult};
+    use std::collections::BTreeSet;
 
     #[test]
     fn outbox_queue_and_dequeue() -> EventResult<()> {
@@ -92,6 +93,20 @@ mod tests {
 
         assert_eq!(removed.removal, LocalOutboxRemovalResult::NotQueued);
         assert!(removed.store.pending_outbox("github").is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn missing_event_ids_excludes_locally_stored_events() -> EventResult<()> {
+        let stored = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        let missing = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+        let local = LocalEventStore::new().put_event(crate::LocalEventWrite {
+            event_id: stored.clone(),
+            bytes: EventStorageBytes::from(b"stored".to_vec()),
+        });
+        let remote = BTreeSet::from([stored, missing.clone()]);
+
+        assert_eq!(local.missing_event_ids(&remote), vec![missing]);
         Ok(())
     }
 }

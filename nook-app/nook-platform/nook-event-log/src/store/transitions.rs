@@ -49,3 +49,21 @@ impl LocalEventStoreRejection {
         self.cause
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejected_store_transition_returns_its_typed_cause() {
+        let rejection = LocalEventStoreRejection {
+            store: LocalEventStore::new(),
+            cause: EventError::MissingEventParents,
+        };
+
+        assert!(matches!(
+            rejection.into_cause(),
+            EventError::MissingEventParents
+        ));
+    }
+}

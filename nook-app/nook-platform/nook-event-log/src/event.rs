@@ -881,6 +881,14 @@ mod tests {
             VaultEvent::parse_event_storage_bytes(&yaml.as_bytes().to_vec().into())?.id()?,
             event.id()?
         );
+        assert!(matches!(
+            VaultEvent::parse_event_storage_bytes(&vec![0xff].into()),
+            Err(EventError::ParseStoredEvent(_))
+        ));
+        assert!(matches!(
+            VaultEvent::parse_remote_event_storage_bytes(&b"not event yaml".to_vec().into()),
+            Err(EventError::ParseRemoteEvent(_))
+        ));
         Ok(())
     }
 
