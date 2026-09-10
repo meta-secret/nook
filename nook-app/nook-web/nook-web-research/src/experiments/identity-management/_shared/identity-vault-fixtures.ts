@@ -202,8 +202,12 @@ class IdentityVaultFixtures {
   }
 }
 
-export const identityVaultFixtures = new IdentityVaultFixtures({
+const identityVaultFixturesContext: IdentityVaultFixturesContext = {
   identities,
   vaults,
   accessGrants,
-})
+}
+
+export const identityVaultFixtures = new IdentityVaultFixtures(
+  identityVaultFixturesContext,
+)

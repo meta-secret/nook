@@ -139,20 +139,21 @@ every route it carries, as aligned columns and box-drawn ASCII.
     const here = new GraphView(graph)
       .hereDevices()
       .map((device) => device.shortId)
+    const summaryColumns: Parameters<typeof GraphMap.columns>[0] = {
+      cells: [
+        `passkeys ${graph.passkeys.length}`,
+        `device keys ${graph.devices.length}`,
+        `vaults ${graph.vaults.length}`,
+      ],
+      widths: [14, 17, 12],
+    }
 
     return {
       id: 0,
       prompt: '',
       lines: [
         `nook keys · ${graph.label}`,
-        GraphMap.columns({
-          cells: [
-            `passkeys ${graph.passkeys.length}`,
-            `device keys ${graph.devices.length}`,
-            `vaults ${graph.vaults.length}`,
-          ],
-          widths: [14, 17, 12],
-        }),
+        GraphMap.columns(summaryColumns),
         `here ${here.length > 0 ? here.join(' ') : '—  no device key'}`,
         '',
         'ls · id <id> · opens <id> · here · map · help · clear',
@@ -163,12 +164,13 @@ every route it carries, as aligned columns and box-drawn ASCII.
   function passkeyMatches({ graph, query }: PasskeyMatchesArgs): Match[] {
     return graph.passkeys
       .filter((passkey) => {
-        return hits({
+        const textMatch: AccessTerminalTextMatch = {
           query,
           shortId: passkey.shortId,
           id: passkey.id,
           label: passkey.label,
-        })
+        }
+        return hits(textMatch)
       })
       .map((passkey) => ({
         kind: NodeKind.Passkey,
@@ -181,12 +183,13 @@ every route it carries, as aligned columns and box-drawn ASCII.
   function deviceMatches({ graph, query }: DeviceMatchesArgs): Match[] {
     return graph.devices
       .filter((device) => {
-        return hits({
+        const textMatch: AccessTerminalTextMatch = {
           query,
           shortId: device.shortId,
           id: device.id,
           label: device.label,
-        })
+        }
+        return hits(textMatch)
       })
       .map((device) => ({
         kind: NodeKind.Device,
@@ -199,12 +202,13 @@ every route it carries, as aligned columns and box-drawn ASCII.
   function vaultMatches({ graph, query }: VaultMatchesArgs): Match[] {
     return graph.vaults
       .filter((vault) => {
-        return hits({
+        const textMatch: AccessTerminalTextMatch = {
           query,
           shortId: vault.shortId,
           id: vault.id,
           label: vault.label,
-        })
+        }
+        return hits(textMatch)
       })
       .map((vault) => ({
         kind: NodeKind.Vault,
@@ -230,15 +234,21 @@ every route it carries, as aligned columns and box-drawn ASCII.
     return graph.passkeys
       .filter((passkey) => passkey.id === passkeyId)
       .flatMap((passkey) => {
+        const passkeyDevicesRequest: Parameters<
+          GraphView['devicesForPasskey']
+        >[0] = {
+          passkeyId: passkey.id,
+        }
         return new GraphView(graph)
-          .devicesForPasskey({
-            passkeyId: passkey.id,
-          })
+          .devicesForPasskey(passkeyDevicesRequest)
           .flatMap((device) => {
+            const deviceVaultsRequest: Parameters<
+              GraphView['vaultsForDevice']
+            >[0] = {
+              deviceId: device.id,
+            }
             return new GraphView(graph)
-              .vaultsForDevice({
-                deviceId: device.id,
-              })
+              .vaultsForDevice(deviceVaultsRequest)
               .map((vault) => ({
                 passkey: passkey.shortId,
                 device: device.shortId,
@@ -281,14 +291,15 @@ every route it carries, as aligned columns and box-drawn ASCII.
   function routeLines(routes: TerminalRoutes): string[] {
     if (routes.length === 0) return ['  —  no route']
     return routes.map((route) => {
-      return GraphMap.columns({
+      const routeColumns: Parameters<typeof GraphMap.columns>[0] = {
         cells: [
           `  ${route.passkey} ──> ${route.device} ──> ${route.vault}`,
           route.store,
           route.reach,
         ],
         widths: [34, 18, 10],
-      })
+      }
+      return GraphMap.columns(routeColumns)
     })
   }
 
@@ -296,6 +307,20 @@ every route it carries, as aligned columns and box-drawn ASCII.
     return graph.passkeys
       .filter((passkey) => passkey.id === id)
       .flatMap((passkey) => {
+        const passkeyDevicesRequest: Parameters<
+          GraphView['devicesForPasskey']
+        >[0] = {
+          passkeyId: passkey.id,
+        }
+        const passkeyVaultsRequest: Parameters<
+          GraphView['vaultsForPasskey']
+        >[0] = {
+          passkeyId: passkey.id,
+        }
+        const routesRequest: RoutesFromPasskeyArgs = {
+          graph,
+          passkeyId: passkey.id,
+        }
         const nookNamedArgument21: Parameters<typeof GraphMap.columns>[0] = {
           cells: ['passkey', passkey.shortId, passkey.label],
           widths: [9, 9, 24],
@@ -313,9 +338,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
           cells: [
             'unlocks',
             new GraphView(graph)
-              .devicesForPasskey({
-                passkeyId: passkey.id,
-              })
+              .devicesForPasskey(passkeyDevicesRequest)
               .map((device) => device.shortId)
               .join('  '),
           ],
@@ -326,9 +349,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
           cells: [
             'opens',
             new GraphView(graph)
-              .vaultsForPasskey({
-                passkeyId: passkey.id,
-              })
+              .vaultsForPasskey(passkeyVaultsRequest)
               .map((vault) => vault.shortId)
               .join('  '),
           ],
@@ -342,12 +363,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
           GraphMap.columns(nookNamedArgument24),
           GraphMap.columns(nookNamedArgument26),
           '',
-          ...routeLines(
-            routesFromPasskey({
-              graph,
-              passkeyId: passkey.id,
-            }),
-          ),
+          ...routeLines(routesFromPasskey(routesRequest)),
         ]
       })
   }
@@ -356,6 +372,18 @@ every route it carries, as aligned columns and box-drawn ASCII.
     return graph.devices
       .filter((device) => device.id === id)
       .flatMap((device) => {
+        const deviceHereRequest: Parameters<GraphView['isHere']>[0] = {
+          device,
+        }
+        const deviceVaultsRequest: Parameters<GraphView['vaultsForDevice']>[0] =
+          {
+            deviceId: device.id,
+          }
+        const devicePasskeysRequest: Parameters<
+          GraphView['passkeysForDevice']
+        >[0] = {
+          device,
+        }
         const nookNamedArgument29: Parameters<typeof GraphMap.columns>[0] = {
           cells: ['device', device.shortId, device.label],
           widths: [9, 9, 24],
@@ -368,11 +396,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
         const nookNamedArgument31: Parameters<typeof GraphMap.columns>[0] = {
           cells: [
             'here',
-            new GraphView(graph).isHere({
-              device,
-            })
-              ? 'yes'
-              : 'no',
+            new GraphView(graph).isHere(deviceHereRequest) ? 'yes' : 'no',
           ],
           widths: [9, 24],
         }
@@ -384,12 +408,10 @@ every route it carries, as aligned columns and box-drawn ASCII.
           '',
           ...routeLines(
             new GraphView(graph)
-              .vaultsForDevice({
-                deviceId: device.id,
-              })
+              .vaultsForDevice(deviceVaultsRequest)
               .flatMap((vault) => {
                 return new GraphView(graph)
-                  .passkeysForDevice({ device })
+                  .passkeysForDevice(devicePasskeysRequest)
                   .map((passkey) => ({
                     passkey: passkey.shortId,
                     device: device.shortId,
@@ -413,6 +435,16 @@ every route it carries, as aligned columns and box-drawn ASCII.
         }
         const routes = new VaultRouteProjection(routeProjectionRequest).routes
         const stores = new Set(routes.map((route) => route.store))
+        const vaultOpenabilityRequest: Parameters<
+          GraphView['openableHere']
+        >[0] = {
+          vault,
+        }
+        const vaultPasskeysRequest: Parameters<
+          GraphView['passkeysForVault']
+        >[0] = {
+          vault,
+        }
         const nookNamedArgument36: Parameters<typeof GraphMap.columns>[0] = {
           cells: ['vault', vault.shortId, vault.label],
           widths: [9, 9, 24],
@@ -425,9 +457,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
         const nookNamedArgument38: Parameters<typeof GraphMap.columns>[0] = {
           cells: [
             'here',
-            new GraphView(graph).openableHere({
-              vault,
-            })
+            new GraphView(graph).openableHere(vaultOpenabilityRequest)
               ? 'opens'
               : 'locked',
           ],
@@ -438,9 +468,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
           cells: [
             'routes',
             `${
-              new GraphView(graph).passkeysForVault({
-                vault,
-              }).length
+              new GraphView(graph).passkeysForVault(vaultPasskeysRequest).length
             }`,
             'managers',
             `${stores.size}`,
@@ -459,47 +487,59 @@ every route it carries, as aligned columns and box-drawn ASCII.
   }
 
   function reportFor({ graph, match }: ReportForArgs): string[] {
-    if (match.kind === NodeKind.Passkey)
-      return passkeyReport({
+    if (match.kind === NodeKind.Passkey) {
+      const reportRequest: PasskeyReportArgs = {
         graph,
         id: match.id,
-      })
+      }
+      return passkeyReport(reportRequest)
+    }
 
-    if (match.kind === NodeKind.Device)
-      return deviceReport({
+    if (match.kind === NodeKind.Device) {
+      const reportRequest: DeviceReportArgs = {
         graph,
         id: match.id,
-      })
+      }
+      return deviceReport(reportRequest)
+    }
 
-    return vaultReport({
+    const reportRequest: VaultReportArgs = {
       graph,
       id: match.id,
-    })
+    }
+    return vaultReport(reportRequest)
   }
 
   function matchLines(matches: TerminalMatches): string[] {
     return matches.map((match) => {
-      return GraphMap.columns({
+      const matchColumns: Parameters<typeof GraphMap.columns>[0] = {
         cells: [
           `  ${match.shortId}`,
           GraphView.kindLabel(match.kind),
           match.label,
         ],
         widths: [10, 12, 24],
-      })
+      }
+      return GraphMap.columns(matchColumns)
     })
   }
 
   function listPasskeys(graph: KeyGraph): string[] {
+    const headingColumns: Parameters<typeof GraphMap.columns>[0] = {
+      cells: ['  id', 'manager', 'reach', 'unlocks', 'opens'],
+      widths: [10, 18, 12, 10, 8],
+    }
     return [
       'passkeys',
-      GraphMap.columns({
-        cells: ['  id', 'manager', 'reach', 'unlocks', 'opens'],
-        widths: [10, 18, 12, 10, 8],
-      }),
+      GraphMap.columns(headingColumns),
       ...graph.passkeys.map((passkey) => {
         const nookNamedArgument48: Parameters<
           GraphView['devicesForPasskey']
+        >[0] = {
+          passkeyId: passkey.id,
+        }
+        const passkeyVaultsRequest: Parameters<
+          GraphView['vaultsForPasskey']
         >[0] = {
           passkeyId: passkey.id,
         }
@@ -511,9 +551,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
             reachWord(passkey),
             `${new GraphView(graph).devicesForPasskey(nookNamedArgument48).length}`,
             `${
-              new GraphView(graph).vaultsForPasskey({
-                passkeyId: passkey.id,
-              }).length
+              new GraphView(graph).vaultsForPasskey(passkeyVaultsRequest).length
             }`,
           ],
           widths: [10, 18, 12, 10, 8],
@@ -524,12 +562,13 @@ every route it carries, as aligned columns and box-drawn ASCII.
   }
 
   function listDevices(graph: KeyGraph): string[] {
+    const headingColumns: Parameters<typeof GraphMap.columns>[0] = {
+      cells: ['  id', 'platform', 'here', 'passkeys', 'vaults'],
+      widths: [10, 18, 8, 18, 8],
+    }
     return [
       'device keys',
-      GraphMap.columns({
-        cells: ['  id', 'platform', 'here', 'passkeys', 'vaults'],
-        widths: [10, 18, 8, 18, 8],
-      }),
+      GraphMap.columns(headingColumns),
       ...graph.devices.map((device) => {
         const nookNamedArgument52: Parameters<GraphView['isHere']>[0] = {
           device,
@@ -539,6 +578,10 @@ every route it carries, as aligned columns and box-drawn ASCII.
         >[0] = {
           device,
         }
+        const deviceVaultsRequest: Parameters<GraphView['vaultsForDevice']>[0] =
+          {
+            deviceId: device.id,
+          }
 
         const nookNamedArgument51: Parameters<typeof GraphMap.columns>[0] = {
           cells: [
@@ -550,9 +593,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
               .map((passkey) => passkey.shortId)
               .join(' '),
             `${
-              new GraphView(graph).vaultsForDevice({
-                deviceId: device.id,
-              }).length
+              new GraphView(graph).vaultsForDevice(deviceVaultsRequest).length
             }`,
           ],
           widths: [10, 18, 8, 18, 8],
@@ -563,15 +604,21 @@ every route it carries, as aligned columns and box-drawn ASCII.
   }
 
   function listVaults(graph: KeyGraph): string[] {
+    const headingColumns: Parameters<typeof GraphMap.columns>[0] = {
+      cells: ['  id', 'name', 'secrets', 'passkeys', 'here'],
+      widths: [10, 16, 10, 25, 8],
+    }
     return [
       'vaults',
-      GraphMap.columns({
-        cells: ['  id', 'name', 'secrets', 'passkeys', 'here'],
-        widths: [10, 16, 10, 25, 8],
-      }),
+      GraphMap.columns(headingColumns),
       ...graph.vaults.map((vault) => {
         const nookNamedArgument57: Parameters<
           GraphView['passkeysForVault']
+        >[0] = {
+          vault,
+        }
+        const vaultOpenabilityRequest: Parameters<
+          GraphView['openableHere']
         >[0] = {
           vault,
         }
@@ -585,9 +632,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
               .passkeysForVault(nookNamedArgument57)
               .map((passkey) => passkey.shortId)
               .join(' '),
-            new GraphView(graph).openableHere({
-              vault,
-            })
+            new GraphView(graph).openableHere(vaultOpenabilityRequest)
               ? 'opens'
               : 'locked',
           ],
@@ -605,9 +650,12 @@ every route it carries, as aligned columns and box-drawn ASCII.
       .map((passkey) => passkey.shortId)
     const open = graph.vaults
       .filter((vault) => {
-        return new GraphView(graph).openableHere({
+        const vaultOpenabilityRequest: Parameters<
+          GraphView['openableHere']
+        >[0] = {
           vault,
-        })
+        }
+        return new GraphView(graph).openableHere(vaultOpenabilityRequest)
       })
       .map((vault) => vault.shortId)
     const nookNamedArgument60: Parameters<typeof GraphMap.columns>[0] = {
@@ -623,14 +671,15 @@ every route it carries, as aligned columns and box-drawn ASCII.
       cells: ['present', usable.length > 0 ? usable.join('  ') : '—'],
       widths: [10, 30],
     }
+    const openVaultsColumns: Parameters<typeof GraphMap.columns>[0] = {
+      cells: ['opens', open.length > 0 ? open.join('  ') : '—'],
+      widths: [10, 30],
+    }
 
     return [
       GraphMap.columns(nookNamedArgument60),
       GraphMap.columns(nookNamedArgument61),
-      GraphMap.columns({
-        cells: ['opens', open.length > 0 ? open.join('  ') : '—'],
-        widths: [10, 30],
-      }),
+      GraphMap.columns(openVaultsColumns),
     ]
   }
 
@@ -655,6 +704,10 @@ every route it carries, as aligned columns and box-drawn ASCII.
       cells: ['  map', 'the whole graph, drawn'],
       widths: [16, 40],
     }
+    const clearHelpColumns: Parameters<typeof GraphMap.columns>[0] = {
+      cells: ['  clear', 'wipe the transcript'],
+      widths: [16, 40],
+    }
 
     return [
       GraphMap.columns(nookNamedArgument89),
@@ -662,10 +715,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
       GraphMap.columns(nookNamedArgument91),
       GraphMap.columns(nookNamedArgument92),
       GraphMap.columns(nookNamedArgument93),
-      GraphMap.columns({
-        cells: ['  clear', 'wipe the transcript'],
-        widths: [16, 40],
-      }),
+      GraphMap.columns(clearHelpColumns),
     ]
   }
 
@@ -678,88 +728,80 @@ every route it carries, as aligned columns and box-drawn ASCII.
       graph,
       query,
     }
+    const vaultMatchesRequest: VaultMatchesArgs = {
+      graph,
+      query,
+    }
 
     return [
       ...passkeyMatches(nookNamedArgument95),
       ...deviceMatches(nookNamedArgument96),
-      ...vaultMatches({
-        graph,
-        query,
-      }),
+      ...vaultMatches(vaultMatchesRequest),
     ]
   }
 
   function idCommand({ graph, query }: IdCommandArgs): string[] {
-    if (query.length === 0)
-      return [
-        'id <id>',
-        ...matchLines(
-          lookup({
-            graph,
-            query: '',
-          }),
-        ),
-      ]
+    if (query.length === 0) {
+      const lookupRequest: AccessTerminalGraphLookup = {
+        graph,
+        query: '',
+      }
+      return ['id <id>', ...matchLines(lookup(lookupRequest))]
+    }
 
-    const matches = lookup({ graph, query })
+    const lookupRequest: AccessTerminalGraphLookup = { graph, query }
+    const matches = lookup(lookupRequest)
     if (matches.length === 0) {
+      const allMatchesRequest: AccessTerminalGraphLookup = {
+        graph,
+        query: '',
+      }
       return [
         `no match  ${query}`,
         '',
-        ...matchLines(
-          lookup({
-            graph,
-            query: '',
-          }),
-        ),
+        ...matchLines(lookup(allMatchesRequest)),
       ]
     }
     if (matches.length > 1) {
       return [`${matches.length} matches  ${query}`, '', ...matchLines(matches)]
     }
     return matches.flatMap((match) => {
-      return reportFor({
+      const reportRequest: ReportForArgs = {
         graph,
         match,
-      })
+      }
+      return reportFor(reportRequest)
     })
   }
 
   function opensCommand({ graph, query }: OpensCommandArgs): string[] {
     if (query.length === 0) {
-      return [
-        'opens <id>',
-        '',
-        ...matchLines(
-          vaultMatches({
-            graph,
-            query: '',
-          }),
-        ),
-      ]
+      const allVaultsRequest: VaultMatchesArgs = {
+        graph,
+        query: '',
+      }
+      return ['opens <id>', '', ...matchLines(vaultMatches(allVaultsRequest))]
     }
 
-    const matches = vaultMatches({
-      graph,
-      query,
-    })
+    const vaultLookupRequest: VaultMatchesArgs = { graph, query }
+    const matches = vaultMatches(vaultLookupRequest)
     if (matches.length === 0) {
+      const allVaultsRequest: VaultMatchesArgs = {
+        graph,
+        query: '',
+      }
       return [
         `no vault  ${query}`,
         '',
-        ...matchLines(
-          vaultMatches({
-            graph,
-            query: '',
-          }),
-        ),
+        ...matchLines(vaultMatches(allVaultsRequest)),
       ]
     }
     return matches.flatMap((match) => {
-      return vaultReport({
+      const reportRequest: VaultReportArgs = {
         graph,
         id: match.id,
-      })
+      }
+      return vaultReport(reportRequest)
     })
   }
 
@@ -790,23 +832,29 @@ every route it carries, as aligned columns and box-drawn ASCII.
     }
     if (command === 'help') return helpLines()
 
-    if (verb === 'id' || verb === 'show')
-      return idCommand({
+    if (verb === 'id' || verb === 'show') {
+      const request: IdCommandArgs = {
         graph,
         query: argument,
-      })
+      }
+      return idCommand(request)
+    }
 
-    if (verb === 'opens')
-      return opensCommand({
+    if (verb === 'opens') {
+      const request: OpensCommandArgs = {
         graph,
         query: argument,
-      })
+      }
+      return opensCommand(request)
+    }
 
-    if (verb.length === 6)
-      return idCommand({
+    if (verb.length === 6) {
+      const request: IdCommandArgs = {
         graph,
         query: verb,
-      })
+      }
+      return idCommand(request)
+    }
     return [`unknown  ${command}`, '', ...helpLines()]
   }
 
@@ -833,15 +881,13 @@ every route it carries, as aligned columns and box-drawn ASCII.
       return
     }
 
+    const outputRequest: OutputForArgs = { graph, command }
     transcript = [
       ...transcript,
       {
         id: nextId,
         prompt: command,
-        lines: outputFor({
-          graph,
-          command,
-        }),
+        lines: outputFor(outputRequest),
       },
     ]
     nextId += 1
@@ -891,7 +937,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
       history = []
       historyIndex = 0
       nextId = 1
-      transcript = [banner(graphById(next))]
+      transcript = [banner(GraphView.graphById(next))]
     }}
   />
 
@@ -913,7 +959,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
             class={`size-1.5 rounded-full ${graph.here.kind === HereKind.Prepared ? 'bg-[#e0a458]' : 'bg-[#5d5340]'}`}
             aria-hidden="true"
           ></span>
-          {#each hereDevices(graph) as device (device.id)}
+          {#each new GraphView(graph).hereDevices() as device (device.id)}
             <span class="tracking-[0.16em] text-[#e0a458]">
               {device.shortId}
             </span>

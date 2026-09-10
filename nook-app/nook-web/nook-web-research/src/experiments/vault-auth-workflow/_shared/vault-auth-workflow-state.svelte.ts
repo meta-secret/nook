@@ -21,6 +21,16 @@ export interface SentinelLaunch {
   vaultName: string
 }
 
+interface SelectedVaultPathRequest {
+  name: string
+  path: SelectedVaultPathKind
+}
+
+export interface VaultAuthTransition {
+  previous: VaultAuthPresentation
+  next: VaultAuthPresentation
+}
+
 export enum VaultAuthExperimentStage {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Auth = 'auth',
@@ -44,7 +54,8 @@ export class AwaitingVaultKind {
     return new AwaitingVaultKind(name)
   }
   choose(path: SelectedVaultPathKind): SelectedVaultPath {
-    return SelectedVaultPath.select({ name: this.name, path })
+    const request: SelectedVaultPathRequest = { name: this.name, path }
+    return SelectedVaultPath.select(request)
   }
   back(): AwaitingVaultName {
     return new AwaitingVaultName()
@@ -55,14 +66,11 @@ export class SelectedVaultPath {
   readonly step = 2
   private readonly name: string
   readonly path: SelectedVaultPathKind
-  private constructor(request: { name: string; path: SelectedVaultPathKind }) {
+  private constructor(request: SelectedVaultPathRequest) {
     this.name = request.name
     this.path = request.path
   }
-  static select(request: {
-    name: string
-    path: SelectedVaultPathKind
-  }): SelectedVaultPath {
+  static select(request: SelectedVaultPathRequest): SelectedVaultPath {
     // Admission retains the existing presentation requirement before path choice.
     AwaitingVaultKind.admitName(request.name)
     return new SelectedVaultPath(request)
@@ -113,10 +121,7 @@ export class VaultAuthWorkflowState {
   get path(): VaultPath {
     return this.current.path
   }
-  transition(request: {
-    previous: VaultAuthPresentation
-    next: VaultAuthPresentation
-  }): void {
+  transition(request: VaultAuthTransition): void {
     if (this.current !== request.previous) return
     this.current = request.next
   }

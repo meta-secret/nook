@@ -128,7 +128,7 @@ export class KeyTerminalReport {
     return passkey.reach === Reach.Here ? 'here' : 'elsewhere'
   }
 
-  private routeHere({ graph, passkeyId, vault }: RouteHereArgs) {
+  private routeHere({ passkeyId, vault }: RouteHereArgs) {
     const graph = this.graph
     return new KeyGraphView(graph)
       .hereDevices()
@@ -139,7 +139,7 @@ export class KeyTerminalReport {
       )
   }
 
-  private routeWord({ graph, passkeyId, vault }: RouteWordArgs): string {
+  private routeWord({ passkeyId, vault }: RouteWordArgs): string {
     const graph = this.graph
     const nookNamedArgument118: Parameters<KeyTerminalReport['routeHere']>[0] =
       {
@@ -164,7 +164,7 @@ export class KeyTerminalReport {
     return index === count - 1 ? '└─' : '├─'
   }
 
-  private vaultBlock({ graph, vault }: VaultBlockArgs): string[] {
+  private vaultBlock({ vault }: VaultBlockArgs): string[] {
     const graph = this.graph
     const nookNamedArgument120: Parameters<KeyGraphView['openableHere']>[0] = {
       vault,
@@ -323,7 +323,7 @@ export class KeyTerminalReport {
     ]
   }
 
-  private otherDeviceLines({ graph, device }: OtherDeviceLinesArgs): string[] {
+  private otherDeviceLines({ device }: OtherDeviceLinesArgs): string[] {
     const graph = this.graph
     const nookNamedArgument134: Parameters<
       typeof KeyTerminalReport.columns
@@ -361,7 +361,7 @@ export class KeyTerminalReport {
     ]
   }
 
-  private passkeyLines({ graph, passkey }: PasskeyLinesArgs): string[] {
+  private passkeyLines({ passkey }: PasskeyLinesArgs): string[] {
     const graph = this.graph
     const nookNamedArgument138: Parameters<
       KeyGraphView['vaultsForPasskey']
@@ -610,7 +610,6 @@ export class KeyTerminalReport {
   }
 
   opening(): Block[] {
-    const graph = this.graph
     return [this.banner(), { id: 1, prompt: 'map', lines: this.mapLines() }]
   }
 
@@ -628,7 +627,7 @@ export class KeyTerminalReport {
     )
   }
 
-  private lookup({ graph, query }: KeyAccessTerminalGraphLookup): Match[] {
+  private lookup({ query }: KeyAccessTerminalGraphLookup): Match[] {
     const graph = this.graph
     return [
       ...graph.passkeys
@@ -688,7 +687,7 @@ export class KeyTerminalReport {
     ]
   }
 
-  private kindWord({ graph, match }: KindWordArgs): string {
+  private kindWord({ match }: KindWordArgs): string {
     const graph = this.graph
     if (match.kind !== NodeKind.Device)
       return KeyGraphView.kindLabel(match.kind)
@@ -705,8 +704,7 @@ export class KeyTerminalReport {
       : 'other device'
   }
 
-  private matchLines({ graph, matches }: MatchLinesArgs): string[] {
-    const graph = this.graph
+  private matchLines({ matches }: MatchLinesArgs): string[] {
     return matches.map((match) => {
       const nookNamedArgument168: Parameters<KeyTerminalReport['kindWord']>[0] =
         {
@@ -774,7 +772,7 @@ export class KeyTerminalReport {
     ]
   }
 
-  private reportFor({ graph, match }: ReportForArgs): string[] {
+  private reportFor({ match }: ReportForArgs): string[] {
     const graph = this.graph
     if (match.kind === NodeKind.Passkey) {
       return graph.passkeys
@@ -817,8 +815,7 @@ export class KeyTerminalReport {
       })
   }
 
-  private idCommand({ graph, query }: IdCommandArgs): string[] {
-    const graph = this.graph
+  private idCommand({ query }: IdCommandArgs): string[] {
     if (query.length === 0) return ['id <id>', '', ...this.indexLines()]
     const nookNamedArgument177: Parameters<KeyTerminalReport['lookup']>[0] = {
       query,
@@ -849,8 +846,7 @@ export class KeyTerminalReport {
     })
   }
 
-  outputFor({ graph, command }: OutputForArgs): string[] {
-    const graph = this.graph
+  outputFor({ command }: OutputForArgs): string[] {
     const [verb, ...rest] = command.split(' ')
     const argument = rest.join(' ')
     if (command === 'map') return this.mapLines()

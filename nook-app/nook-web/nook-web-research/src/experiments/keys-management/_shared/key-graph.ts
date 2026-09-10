@@ -355,31 +355,31 @@ export class KeyGraphView {
     return match ? match : tangle
   }
 
-  devicesForPasskey({ graph, passkeyId }: DevicesForPasskeyArgs): Device[] {
+  devicesForPasskey({ passkeyId }: DevicesForPasskeyArgs): Device[] {
     const graph = this.graph
     return graph.devices.filter((device) =>
       device.passkeyIds.includes(passkeyId),
     )
   }
 
-  passkeysForDevice({ graph, device }: PasskeysForDeviceArgs): Passkey[] {
+  passkeysForDevice({ device }: PasskeysForDeviceArgs): Passkey[] {
     const graph = this.graph
     return graph.passkeys.filter((passkey) =>
       device.passkeyIds.includes(passkey.id),
     )
   }
 
-  devicesForVault({ graph, vault }: DevicesForVaultArgs): Device[] {
+  devicesForVault({ vault }: DevicesForVaultArgs): Device[] {
     const graph = this.graph
     return graph.devices.filter((device) => vault.deviceIds.includes(device.id))
   }
 
-  vaultsForDevice({ graph, deviceId }: VaultsForDeviceArgs): Vault[] {
+  vaultsForDevice({ deviceId }: VaultsForDeviceArgs): Vault[] {
     const graph = this.graph
     return graph.vaults.filter((vault) => vault.deviceIds.includes(deviceId))
   }
 
-  vaultsForPasskey({ graph, passkeyId }: VaultsForPasskeyArgs): Vault[] {
+  vaultsForPasskey({ passkeyId }: VaultsForPasskeyArgs): Vault[] {
     const graph = this.graph
     const nookNamedArgs0_0: Parameters<KeyGraphView['devicesForPasskey']>[0] = {
       passkeyId,
@@ -392,7 +392,7 @@ export class KeyGraphView {
     )
   }
 
-  passkeysForVault({ graph, vault }: PasskeysForVaultArgs): Passkey[] {
+  passkeysForVault({ vault }: PasskeysForVaultArgs): Passkey[] {
     const graph = this.graph
     const nookNamedArgs0_1: Parameters<KeyGraphView['devicesForVault']>[0] = {
       vault,
@@ -410,15 +410,14 @@ export class KeyGraphView {
     return graph.devices.filter((device) => device.id === id)
   }
 
-  isHere({ graph, device }: IsHereArgs): boolean {
+  isHere({ device }: IsHereArgs): boolean {
     const graph = this.graph
     return (
       graph.here.kind === HereKind.Prepared && graph.here.deviceId === device.id
     )
   }
 
-  openableHere({ graph, vault }: OpenableHereArgs): boolean {
-    const graph = this.graph
+  openableHere({ vault }: OpenableHereArgs): boolean {
     return this.hereDevices().some((device) =>
       vault.deviceIds.includes(device.id),
     )
@@ -434,7 +433,7 @@ export class KeyGraphView {
     return kind === NodeKind.Device ? 'Device key' : 'Vault'
   }
 
-  highlightFor({ graph, node }: HighlightForArgs): Highlight {
+  highlightFor({ node }: HighlightForArgs): Highlight {
     const graph = this.graph
     if (node.kind === NodeKind.Passkey) {
       const nookNamedArgs0_2: Parameters<KeyGraphView['devicesForPasskey']>[0] =

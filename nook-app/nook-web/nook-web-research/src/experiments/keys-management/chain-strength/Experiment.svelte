@@ -327,7 +327,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   />
 
   <section class="mx-auto max-w-3xl px-5 pt-28 pb-20 sm:px-8 sm:pt-24">
-    {#each hereDevices(graph) as device (device.id)}
+    {#each new KeyGraphView(graph).hereDevices() as device (device.id)}
       {@const deviceSelection: Parameters<typeof isSelected>[0] = {
         kind: NodeKind.Device,
         id: device.id,
@@ -398,8 +398,9 @@ get a quiet footer: they exist, and that is all this browser can say about them.
           kind: NodeKind.Passkey,
           id: passkey.id,
         }}
-        {@const vaultLookup: Parameters<typeof vaultsForPasskey>[0] = {
-          graph,
+        {@const vaultLookup: Parameters<
+          KeyGraphView['vaultsForPasskey']
+        >[0] = {
           passkeyId: passkey.id,
         }}
         {@const chosen = isSelected(passkeySelection)}
@@ -407,7 +408,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
           <button
             type="button"
             aria-pressed={chosen}
-            aria-label={`Passkey ${passkey.shortId} in ${storeLabel(passkey.store)}`}
+            aria-label={`Passkey ${passkey.shortId} in ${KeyGraphView.storeLabel(passkey.store)}`}
             class={`flex h-full w-full items-center gap-2.5 rounded-r-md rounded-l-full border bg-[#fffdf7] py-2 pr-3 pl-2 text-left transition motion-reduce:transition-none ${chosenEdge(chosen)}`}
             onclick={() => pick(passkeySelection)}
           >
@@ -423,7 +424,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
             </span>
             <span class="min-w-0 flex-1">
               <span class="block truncate text-[11px] text-[#1a1815]/60">
-                {storeLabel(passkey.store)}
+                {KeyGraphView.storeLabel(passkey.store)}
               </span>
               <span
                 class="mt-0.5 block font-mono text-[15px] tracking-[0.08em]"
@@ -451,7 +452,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                 <span class="sr-only">{vaultCount(passkey)}</span>
                 <VaultIcon class="size-2.5" aria-hidden="true" />
                 <span class="{CAPS} text-[9px]" aria-hidden="true">
-                  {vaultsForPasskey(vaultLookup).length}
+                  {new KeyGraphView(graph).vaultsForPasskey(vaultLookup).length}
                 </span>
               </span>
             </span>

@@ -720,6 +720,10 @@ class ResearchIdentityBridge {
   }
 }
 
-export const researchIdentityBridge = new ResearchIdentityBridge({
+const researchIdentityBridgeContext: ResearchIdentityBridgeContext = {
   identityVaultFixtures,
-})
+}
+
+export const researchIdentityBridge = new ResearchIdentityBridge(
+  researchIdentityBridgeContext,
+)

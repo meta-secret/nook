@@ -11,6 +11,7 @@
     VaultAuthWorkflowState,
     Presence,
     type SentinelLaunch,
+    type VaultAuthTransition,
     SentinelUi,
     VaultPath,
   } from './vault-auth-workflow-state.svelte'
@@ -32,31 +33,53 @@
   }
   const continueAfterName = () => {
     const previous = workflow.phase
-    if (previous instanceof AwaitingVaultName && vaultName.trim())
-      workflow.transition({ previous, next: previous.respond(vaultName) })
+    if (previous instanceof AwaitingVaultName && vaultName.trim()) {
+      const transition: VaultAuthTransition = {
+        previous,
+        next: previous.respond(vaultName),
+      }
+      workflow.transition(transition)
+    }
   }
   const chooseSimple = () => {
     const previous = workflow.phase
-    if (previous instanceof AwaitingVaultKind)
-      workflow.transition({ previous, next: previous.choose(VaultPath.Simple) })
+    if (previous instanceof AwaitingVaultKind) {
+      const transition: VaultAuthTransition = {
+        previous,
+        next: previous.choose(VaultPath.Simple),
+      }
+      workflow.transition(transition)
+    }
   }
   const chooseSentinel = () => {
     const previous = workflow.phase
-    if (previous instanceof AwaitingVaultKind)
-      workflow.transition({
+    if (previous instanceof AwaitingVaultKind) {
+      const transition: VaultAuthTransition = {
         previous,
         next: previous.choose(VaultPath.Sentinel),
-      })
+      }
+      workflow.transition(transition)
+    }
   }
   const goBack = () => {
     const previous = workflow.phase
-    if ('back' in previous)
-      workflow.transition({ previous, next: previous.back() })
+    if ('back' in previous) {
+      const transition: VaultAuthTransition = {
+        previous,
+        next: previous.back(),
+      }
+      workflow.transition(transition)
+    }
   }
   const identifyExisting = () => {
     const previous = workflow.phase
-    if (previous instanceof AwaitingExistingVault)
-      workflow.transition({ previous, next: previous.identify() })
+    if (previous instanceof AwaitingExistingVault) {
+      const transition: VaultAuthTransition = {
+        previous,
+        next: previous.identify(),
+      }
+      workflow.transition(transition)
+    }
   }
   const openCardStack = () => {
     const launch: SentinelLaunch = {
