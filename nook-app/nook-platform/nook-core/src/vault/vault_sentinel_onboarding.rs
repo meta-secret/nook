@@ -213,12 +213,12 @@ mod tests {
                 .starts_with("sentinel_share:")
         );
         assert_eq!(
-            accepted.provider_snapshot.providers[0]
-                .oauth_file
-                .as_ref()
-                .ok_or_else(|| IoError::other("provider OAuth fixture must exist"))?
-                .access_token,
-            StoredOAuthAccessCredential::AccessToken("member-secret-token".to_owned())
+            (match &accepted.provider_snapshot.providers[0].oauth_file {
+                StoredOAuthFileConfiguration::Configured(config) => &config.access_token,
+                StoredOAuthFileConfiguration::NotApplicable =>
+                    return Err(IoError::other("provider OAuth fixture must exist").into()),
+            }),
+            &StoredOAuthAccessCredential::AccessToken("member-secret-token".to_owned())
         );
         Ok(())
     }

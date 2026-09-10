@@ -1,5 +1,6 @@
 //! Structural issuance admission followed by recipient encryption.
 use super::{OnboardingDelivery, SentinelOnboardingPackage, SentinelOnboardingVersion};
+use crate::ProviderVaultScope;
 use crate::{
     AuthProvidersSnapshotData, MultiDeviceError, SentinelGenesisRequest,
     SentinelGenesisShareDelivery, StorageProviderType,
@@ -76,7 +77,7 @@ impl AuthProvidersSnapshotData {
         if matches!(
             provider.provider_type,
             StorageProviderType::Local | StorageProviderType::LocalFolder
-        ) || provider.store_id.as_deref() != Some(store_id)
+        ) || !matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if id == store_id)
         {
             return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         }

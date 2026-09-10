@@ -8,6 +8,7 @@ use nook_companion_core::{
     ExtensionConnectScope,
 };
 use nook_core::VaultEvent;
+use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{
     AuthEnvelopes, AuthProvidersSnapshotData, DeviceIdentity, EventId, EventStorageBytes,
     SigningIdentity, StoreId, SymmetricKey, VaultApplication, VaultType,
@@ -274,10 +275,9 @@ impl CurrentActivationBinding<'_> {
         {
             return Err(CompanionPairingCandidateFailure::ManagerBinding);
         }
-        if self.providers.active_vault_store_id.as_deref()
-            != Some(self.approval.vault_store_id.as_str())
+        if !matches!(&self.providers.active_vault_store_id, ActiveVaultScope::StoreId(id) if id == self.approval.vault_store_id.as_str())
             || self.providers.providers.iter().any(|provider| {
-                provider.store_id.as_deref() != Some(self.approval.vault_store_id.as_str())
+                !matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if id == self.approval.vault_store_id.as_str())
             })
             || (!self
                 .approval

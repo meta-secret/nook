@@ -7,6 +7,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::ActiveVaultScope;
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey, Sha256Hex,
     StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthRefreshCredential,
@@ -321,7 +322,7 @@ impl AuthProvidersSnapshotData {
             if let StoredGithubPat::Token(token) = &provider.github_pat {
                 ProviderCredentialField::authenticate(token, identity)?;
             }
-            if let Some(oauth) = provider.oauth_file.as_ref() {
+            if let StoredOAuthFileConfiguration::Configured(oauth) = &provider.oauth_file {
                 if let StoredOAuthAccessCredential::AccessToken(token) = &oauth.access_token {
                     ProviderCredentialField::authenticate(token, identity)?;
                 }
@@ -348,20 +349,29 @@ impl AuthProvidersSnapshotData {
     #[must_use]
     pub fn credential_storage_admission(&self) -> ProviderCredentialStorageAdmission {
         let compatible = self.providers.iter().all(|provider| {
-            provider
-                .github_pat
-                .as_deref()
-                .is_none_or(ProviderCredentialField::allows_storage)
-                && provider.oauth_file.as_ref().is_none_or(|oauth| {
-                    oauth
-                        .access_token
-                        .as_deref()
-                        .is_none_or(ProviderCredentialField::allows_storage)
-                        && oauth
-                            .refresh_token
-                            .as_deref()
-                            .is_none_or(ProviderCredentialField::allows_storage)
-                })
+            let github = match &provider.github_pat {
+                StoredGithubPat::Missing => true,
+                StoredGithubPat::Token(token) => ProviderCredentialField::allows_storage(token),
+            };
+            github
+                && match &provider.oauth_file {
+                    StoredOAuthFileConfiguration::NotApplicable => true,
+                    StoredOAuthFileConfiguration::Configured(oauth) => {
+                        let access = match &oauth.access_token {
+                            StoredOAuthAccessCredential::SignedOut => true,
+                            StoredOAuthAccessCredential::AccessToken(token) => {
+                                ProviderCredentialField::allows_storage(token)
+                            }
+                        };
+                        access
+                            && match &oauth.refresh_token {
+                                StoredOAuthRefreshCredential::NotIssued => true,
+                                StoredOAuthRefreshCredential::Token(token) => {
+                                    ProviderCredentialField::allows_storage(token)
+                                }
+                            }
+                    }
+                }
         });
         if compatible {
             ProviderCredentialStorageAdmission::MarkerCompatible
@@ -554,10 +564,10 @@ mod tests {
         snapshot = snapshot
             .seal_credentials(&identity)
             .map_err(|rejection| rejection.into_cause())?;
-        let oauth = snapshot.providers[0]
-            .oauth_file
-            .as_ref()
-            .ok_or_else(|| io::Error::other("test as_ref value must exist"))?;
+        let StoredOAuthFileConfiguration::Configured(oauth) = &snapshot.providers[0].oauth_file
+        else {
+            return Err((io::Error::other("test as_ref value must exist")).into());
+        };
         let StoredOAuthAccessCredential::AccessToken(stored_access) = &oauth.access_token else {
             return Err(io::Error::other("sealed access token must be present").into());
         };
@@ -573,10 +583,11 @@ mod tests {
         opened = opened
             .open_credentials(&identity)
             .map_err(|rejection| rejection.into_cause())?;
-        let opened_oauth = opened.providers[0]
-            .oauth_file
-            .as_ref()
-            .ok_or_else(|| io::Error::other("test as_ref value must exist"))?;
+        let StoredOAuthFileConfiguration::Configured(opened_oauth) =
+            &opened.providers[0].oauth_file
+        else {
+            return Err((io::Error::other("test as_ref value must exist")).into());
+        };
         assert_eq!(
             opened_oauth.access_token,
             StoredOAuthAccessCredential::AccessToken(access.to_owned())
@@ -636,10 +647,11 @@ mod tests {
             refresh: "invalid plaintext refresh",
         });
         let oauth = (match &mut snapshot.providers[0].oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Some(config),
-            StoredOAuthFileConfiguration::NotApplicable => None,
-        })
-        .ok_or_else(|| io::Error::other("test as_mut value must exist"))?;
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(io::Error::other("test as_mut value must exist"))
+            }
+        })?;
         let StoredOAuthAccessCredential::AccessToken(access_token) = &mut oauth.access_token else {
             return Err(io::Error::other("plaintext access token must be present").into());
         };
@@ -787,10 +799,11 @@ mod tests {
             .seal_credentials(&identity)
             .map_err(|rejection| rejection.into_cause())?;
         let oauth = (match &mut snapshot.providers[0].oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Some(config),
-            StoredOAuthFileConfiguration::NotApplicable => None,
-        })
-        .ok_or_else(|| io::Error::other("OAuth fixture is required"))?;
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(io::Error::other("OAuth fixture is required"))
+            }
+        })?;
         oauth.refresh_token = StoredOAuthRefreshCredential::Token(AGE_ARMOR_MARKER.to_owned());
         let sealed = snapshot.clone();
         snapshot = ExpectedCredentialFailure::AnyError
@@ -811,7 +824,7 @@ mod tests {
                 "repo",
                 "now",
             )],
-            active_vault_store_id: crate::ActiveVaultScope::Unselected,
+            active_vault_store_id: ActiveVaultScope::Unselected,
         };
         assert_eq!(
             original.credential_opening_evidence(&identity)?,

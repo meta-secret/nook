@@ -1,6 +1,10 @@
 use super::{NookProviderSelection, wasm_bindgen};
 use crate::{NookEnrollmentProvider, NookProviderReplicationCapability, NookVaultArchitecture};
-use nook_core::ProviderEnrollmentRequest;
+use nook_core::StoredOAuthFileConfiguration;
+use nook_core::{
+    EnrollmentAudience, ProviderEnrollmentRequest, SharedGoogleEnrollmentAudience,
+    SharedStorageTargetSelection,
+};
 use nook_core::{
     GoogleOAuthTokenInput, ICloudOAuthTokenInput, ICloudShareRole, ICloudSharedTarget,
     OAuthFileConfigData, ProviderOauthPreset, VaultArchitecture,
@@ -158,11 +162,12 @@ pub fn provider_replication_capability(
 pub fn provider_oauth_preset_for_provider(
     provider: nook_core::StorageProviderData,
 ) -> nook_core::ProviderOauthPreset {
-    provider
-        .oauth_file
-        .map_or(ProviderOauthPreset::NotApplicable, |oauth| {
+    match provider.oauth_file {
+        StoredOAuthFileConfiguration::Configured(oauth) => {
             ProviderOauthPreset::Preset(oauth.preset)
-        })
+        }
+        StoredOAuthFileConfiguration::NotApplicable => ProviderOauthPreset::NotApplicable,
+    }
 }
 
 #[wasm_bindgen]
@@ -238,8 +243,7 @@ pub fn enrollment_provider_for_architecture(
         ProviderEnrollmentRequest {
             provider: &provider,
             architecture: &architecture,
-            shared_joiner_identity: None,
-            shared_storage_target_id: None,
+            audience: EnrollmentAudience::Personal,
         }
         .build()?,
     ))
@@ -258,8 +262,10 @@ pub fn enrollment_shared_provider_for_architecture(
         ProviderEnrollmentRequest {
             provider: &provider,
             architecture: &architecture,
-            shared_joiner_identity: Some(shared_joiner_identity),
-            shared_storage_target_id: Some(shared_storage_target_id),
+            audience: EnrollmentAudience::SharedGoogle(SharedGoogleEnrollmentAudience {
+                joiner_identity: shared_joiner_identity,
+                target: SharedStorageTargetSelection::Existing(shared_storage_target_id.to_owned()),
+            }),
         }
         .build()?,
     ))
@@ -277,8 +283,9 @@ pub fn enrollment_icloud_shared_provider_for_architecture(
         ProviderEnrollmentRequest {
             provider: &provider,
             architecture: &architecture,
-            shared_joiner_identity: None,
-            shared_storage_target_id: Some(shared_storage_target_id),
+            audience: EnrollmentAudience::SharedICloud(SharedStorageTargetSelection::Existing(
+                shared_storage_target_id.to_owned(),
+            )),
         }
         .build()?,
     ))

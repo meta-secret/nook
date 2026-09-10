@@ -6,6 +6,10 @@
 //! transforms live in `nook_core`; this module adds the `IndexedDB` I/O and sealing.
 
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
+use nook_core::{
+    StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
+    StoredOAuthRefreshCredential,
+};
 
 mod publication;
 mod rollback_projection;
@@ -384,10 +388,9 @@ mod wasm_idb_tests {
         )
         .await?;
         let stored = NormalizedAuthSnapshot::from(raw).snapshot;
-        let stored_pat = stored.providers[0]
-            .github_pat
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("sealed githubPat missing from snapshot"))?;
+        let StoredGithubPat::Token(stored_pat) = &stored.providers[0].github_pat else {
+            return Err((anyhow::anyhow!("sealed githubPat missing from snapshot")).into());
+        };
         assert_eq!(
             ProviderCredentialEncoding::observe(stored_pat),
             ProviderCredentialEncoding::ArmorMarked
@@ -410,7 +413,7 @@ mod wasm_idb_tests {
         let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
         assert_eq!(
             loaded.snapshot.providers[0].github_pat,
-            nook_core::StoredGithubPat::Token((pat).to_owned())
+            StoredGithubPat::Token((pat).to_owned())
         );
         Ok(())
     }
@@ -450,9 +453,8 @@ mod wasm_idb_tests {
                 .await?
                 .snapshot
                 .providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_first_remote")
+                .github_pat,
+            StoredGithubPat::Token("github_pat_first_remote".to_owned())
         );
         assert!(AuthProviderDatabase::projections_match(
             ProviderDbProjectionsMatch {
@@ -538,18 +540,16 @@ mod wasm_idb_tests {
                 .await?
                 .snapshot
                 .providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_first")
+                .github_pat,
+            StoredGithubPat::Token("github_pat_first".to_owned())
         );
         assert_eq!(
             AuthProviderDatabase::load_auth_providers(&second)
                 .await?
                 .snapshot
                 .providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_second")
+                .github_pat,
+            StoredGithubPat::Token("github_pat_second".to_owned())
         );
         assert_ne!(
             AuthProviderDatabase::state_key_for_app_id(first.app_id()),
@@ -577,7 +577,7 @@ mod wasm_idb_tests {
             .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
             rollback.providers[0].github_pat,
-            nook_core::StoredGithubPat::Token(("github_pat_legacy_first").to_owned())
+            StoredGithubPat::Token(("github_pat_legacy_first").to_owned())
         );
         ProviderSnapshotPublication {
             identity: &second,
@@ -591,18 +591,16 @@ mod wasm_idb_tests {
                 .await?
                 .snapshot
                 .providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_legacy_first")
+                .github_pat,
+            StoredGithubPat::Token("github_pat_legacy_first".to_owned())
         );
         assert_eq!(
             AuthProviderDatabase::load_auth_providers(&second)
                 .await?
                 .snapshot
                 .providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_second")
+                .github_pat,
+            StoredGithubPat::Token("github_pat_second".to_owned())
         );
         Ok(())
     }
@@ -638,9 +636,8 @@ mod wasm_idb_tests {
                 .await?
                 .snapshot
                 .providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_newer")
+                .github_pat,
+            StoredGithubPat::Token("github_pat_newer".to_owned())
         );
         let mut rollback =
             NormalizedAuthSnapshot::from(AuthProviderDatabase::read_raw_snapshot().await?).snapshot;
@@ -649,7 +646,7 @@ mod wasm_idb_tests {
             .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
             rollback.providers[0].github_pat,
-            nook_core::StoredGithubPat::Token(("github_pat_newer").to_owned())
+            StoredGithubPat::Token(("github_pat_newer").to_owned())
         );
         AuthProviderDatabase::clear_auth_providers_db().await?;
         Ok(())
@@ -681,9 +678,8 @@ mod wasm_idb_tests {
                 .await?
                 .snapshot
                 .providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_scoped_newer")
+                .github_pat,
+            StoredGithubPat::Token("github_pat_scoped_newer".to_owned())
         );
         AuthProviderDatabase::clear_auth_providers_db().await?;
         Ok(())
@@ -756,16 +752,15 @@ mod wasm_idb_tests {
             .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
             rollback.providers[0].github_pat,
-            nook_core::StoredGithubPat::Token(("github_pat_locked_legacy").to_owned())
+            StoredGithubPat::Token(("github_pat_locked_legacy").to_owned())
         );
         assert_eq!(
             AuthProviderDatabase::load_auth_providers(&first)
                 .await?
                 .snapshot
                 .providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_locked_legacy")
+                .github_pat,
+            StoredGithubPat::Token("github_pat_locked_legacy".to_owned())
         );
         AuthProviderDatabase::clear_auth_providers_db().await?;
         NookDatabase::clear_keyring_for_test().await?;
@@ -810,9 +805,8 @@ mod wasm_idb_tests {
                 .await?
                 .snapshot
                 .providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_scoped_newer")
+                .github_pat,
+            StoredGithubPat::Token("github_pat_scoped_newer".to_owned())
         );
         AuthProviderDatabase::clear_auth_providers_db().await?;
         NookDatabase::clear_keyring_for_test().await?;
@@ -946,18 +940,16 @@ mod wasm_idb_tests {
         )
         .await?;
         let stored = NormalizedAuthSnapshot::from(raw).snapshot;
-        let oauth = stored.providers[0]
-            .oauth_file
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("stored OAuth configuration missing"))?;
-        let stored_access = oauth
-            .access_token
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("sealed accessToken missing from snapshot"))?;
-        let stored_refresh = oauth
-            .refresh_token
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("sealed refreshToken missing from snapshot"))?;
+        let StoredOAuthFileConfiguration::Configured(oauth) = &stored.providers[0].oauth_file
+        else {
+            return Err((anyhow::anyhow!("stored OAuth configuration missing")).into());
+        };
+        let StoredOAuthAccessCredential::AccessToken(stored_access) = &oauth.access_token else {
+            return Err((anyhow::anyhow!("sealed accessToken missing from snapshot")).into());
+        };
+        let StoredOAuthRefreshCredential::Token(stored_refresh) = &oauth.refresh_token else {
+            return Err((anyhow::anyhow!("sealed refreshToken missing from snapshot")).into());
+        };
         assert_eq!(
             ProviderCredentialEncoding::observe(stored_access),
             ProviderCredentialEncoding::ArmorMarked
@@ -970,17 +962,18 @@ mod wasm_idb_tests {
         assert!(!stored_refresh.contains(refresh));
 
         let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
-        let loaded_oauth = loaded.snapshot.providers[0]
-            .oauth_file
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("loaded oauth_file configuration missing"))?;
+        let StoredOAuthFileConfiguration::Configured(loaded_oauth) =
+            &loaded.snapshot.providers[0].oauth_file
+        else {
+            return Err((anyhow::anyhow!("loaded oauth_file configuration missing")).into());
+        };
         assert_eq!(
             loaded_oauth.access_token,
-            nook_core::StoredOAuthAccessCredential::AccessToken((access).to_owned())
+            StoredOAuthAccessCredential::AccessToken((access).to_owned())
         );
         assert_eq!(
             loaded_oauth.refresh_token,
-            nook_core::StoredOAuthRefreshCredential::Token((refresh).to_owned())
+            StoredOAuthRefreshCredential::Token((refresh).to_owned())
         );
         Ok(())
     }

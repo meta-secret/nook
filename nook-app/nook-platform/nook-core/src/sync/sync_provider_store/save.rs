@@ -5,6 +5,10 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::{
+    ActiveVaultScope, LocalProviderSelection, ProviderLabel, StoredOAuthAccessCredential,
+    StoredOAuthRefreshCredential,
+};
+use crate::{
     DuplicateCandidatePolicy, DuplicateSyncProvider, ProviderSelection, StoredOAuthRemoteFileId,
 };
 use crate::{DuplicateProviderSelection, LocalProviderRowRequest};
@@ -136,7 +140,7 @@ impl ProviderSaveRequest {
         match provider_type {
             StorageProviderType::Local => Ok(request.provider_defaults(ProviderRowDefaults {
                 provider_type,
-                label: crate::ProviderLabel::Local.render(),
+                label: ProviderLabel::Local.render(),
             })),
             StorageProviderType::Github => {
                 let requested = request.github_repo.trim();
@@ -147,7 +151,7 @@ impl ProviderSaveRequest {
                 };
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
-                    label: crate::ProviderLabel::Github(&StoredGithubRepository::Repository(
+                    label: ProviderLabel::Github(&StoredGithubRepository::Repository(
                         repo.to_owned(),
                     ))
                     .render(),
@@ -170,7 +174,7 @@ impl ProviderSaveRequest {
                 oauth.file_name = StoredOAuthRemoteFileName::FileName(drive_file.clone());
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
-                    label: crate::ProviderLabel::OAuth(crate::OAuthProviderLabel {
+                    label: ProviderLabel::OAuth(crate::OAuthProviderLabel {
                         preset: request.oauth_preset,
                         file_name: &StoredOAuthRemoteFileName::FileName(drive_file.clone()),
                     })
@@ -188,7 +192,7 @@ impl ProviderSaveRequest {
                 };
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
-                    label: crate::ProviderLabel::LocalFolder(&folder.directory_name).render(),
+                    label: ProviderLabel::LocalFolder(&folder.directory_name).render(),
                 });
                 provider.local_folder = request.local_folder.clone();
                 Ok(provider)
@@ -345,13 +349,13 @@ impl ProviderSaveRequest {
             }
         } else if request.setup.is_new()
             && provider_type == StorageProviderType::Local
-            && matches!(local_provider, crate::LocalProviderSelection::Unseeded)
+            && matches!(local_provider, LocalProviderSelection::Unseeded)
         {
             providers.push(request.provider_defaults(ProviderRowDefaults {
                 provider_type: StorageProviderType::Local,
-                label: crate::ProviderLabel::Local.render(),
+                label: ProviderLabel::Local.render(),
             }));
-        } else if let crate::LocalProviderSelection::Selected(local_provider) = local_provider {
+        } else if let LocalProviderSelection::Selected(local_provider) = local_provider {
             for provider in &mut providers {
                 if provider.id == local_provider.id {
                     provider.store_id = request.provider_store_id.clone();
@@ -365,7 +369,7 @@ impl ProviderSaveRequest {
             let crate::LocalProviderRowOutcome {
                 snapshot: seeded, ..
             } = snapshot.ensure_local_row(LocalProviderRowRequest {
-                active_store_id: &crate::ActiveVaultScope::StoreId(store_id.clone()),
+                active_store_id: &ActiveVaultScope::StoreId(store_id.clone()),
                 new_id: &request.new_provider_id,
                 created_at: &request.created_at,
             });
@@ -429,6 +433,7 @@ mod tests {
         StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
         StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
     };
+    use crate::{StoredGithubPat, StoredGithubRepository};
 
     use super::{ActiveOAuthMerge, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
     use crate::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData};
@@ -474,15 +479,15 @@ mod tests {
         assert_eq!(provider.label, "GitHub · owner/repo");
         assert_eq!(
             provider.github_pat,
-            crate::StoredGithubPat::Token(("pat").to_owned())
+            StoredGithubPat::Token(("pat").to_owned())
         );
         assert_eq!(
             provider.github_repo,
-            crate::StoredGithubRepository::Repository(("owner/repo").to_owned())
+            StoredGithubRepository::Repository(("owner/repo").to_owned())
         );
         assert_eq!(
             provider.store_id,
-            crate::ProviderVaultScope::StoreId(("vault-1").to_owned())
+            ProviderVaultScope::StoreId(("vault-1").to_owned())
         );
         Ok(())
     }
@@ -524,7 +529,7 @@ mod tests {
         assert_eq!(snapshot.providers[1].id, "provider-new");
         assert_eq!(
             snapshot.providers[1].store_id,
-            crate::ProviderVaultScope::StoreId(("vault-1").to_owned())
+            ProviderVaultScope::StoreId(("vault-1").to_owned())
         );
         Ok(())
     }
@@ -559,7 +564,7 @@ mod tests {
         );
         assert_eq!(
             snapshot.providers[0].store_id,
-            crate::ProviderVaultScope::StoreId(("vault-1").to_owned())
+            ProviderVaultScope::StoreId(("vault-1").to_owned())
         );
         Ok(())
     }
@@ -584,27 +589,30 @@ mod tests {
         else {
             return Err("expected saved OAuth provider outcome");
         };
-        let persisted = snapshot.providers[0]
-            .oauth_file
-            .as_ref()
-            .ok_or("expected persisted OAuth config")?;
+        let StoredOAuthFileConfiguration::Configured(persisted) = &snapshot.providers[0].oauth_file
+        else {
+            return Err("expected persisted OAuth config");
+        };
         assert_eq!(
             persisted.access_token,
-            crate::StoredOAuthAccessCredential::AccessToken(("fresh-access").to_owned())
+            StoredOAuthAccessCredential::AccessToken(("fresh-access").to_owned())
         );
         assert_eq!(
             persisted.file_id,
-            crate::StoredOAuthRemoteFileId::FileId(("remote-file").to_owned())
+            StoredOAuthRemoteFileId::FileId(("remote-file").to_owned())
         );
         assert_eq!(
             persisted.folder_id,
-            crate::StoredGoogleDriveFolder::FolderId(("folder").to_owned())
+            StoredGoogleDriveFolder::FolderId(("folder").to_owned())
         );
         assert_eq!(
             persisted.refresh_token,
             StoredOAuthRefreshCredential::NotIssued
         );
-        assert_eq!(oauth_file.as_ref().as_ref(), Some(persisted));
+        assert_eq!(
+            *oauth_file,
+            StoredOAuthFileConfiguration::Configured(persisted.clone())
+        );
         Ok(())
     }
 
@@ -629,7 +637,7 @@ mod tests {
         .merge();
         assert_eq!(
             merged.access_token,
-            crate::StoredOAuthAccessCredential::AccessToken(("persisted-token").to_owned())
+            StoredOAuthAccessCredential::AccessToken(("persisted-token").to_owned())
         );
     }
 
@@ -652,7 +660,7 @@ mod tests {
         .merge();
         assert_eq!(
             merged.refresh_token,
-            crate::StoredOAuthRefreshCredential::Token(("persisted-refresh").to_owned())
+            StoredOAuthRefreshCredential::Token(("persisted-refresh").to_owned())
         );
     }
 
@@ -675,7 +683,7 @@ mod tests {
         .merge();
         assert_eq!(
             merged.file_name,
-            crate::StoredOAuthRemoteFileName::FileName(("discovered.yaml").to_owned())
+            StoredOAuthRemoteFileName::FileName(("discovered.yaml").to_owned())
         );
 
         let blank_active = OAuthFileConfigData {
@@ -690,7 +698,7 @@ mod tests {
         .merge();
         assert_eq!(
             fallback.file_name,
-            crate::StoredOAuthRemoteFileName::FileName(("fallback.yaml").to_owned())
+            StoredOAuthRemoteFileName::FileName(("fallback.yaml").to_owned())
         );
     }
 

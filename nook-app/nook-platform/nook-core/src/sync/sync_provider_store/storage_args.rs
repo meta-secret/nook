@@ -13,6 +13,10 @@ use super::{
     ValidationError, ValidationResult,
 };
 use crate::{DriveBackupName, ProviderOauthPreset};
+use crate::{
+    StoredGithubPat, StoredGithubRepository, StoredOAuthFileConfiguration,
+    StoredOAuthRemoteFileName,
+};
 
 /// Positional connect arguments expected by the current wasm manager boundary:
 /// storage mode, credential/token, and remote reference/repo.
@@ -223,7 +227,7 @@ mod tests {
         VaultStorageConnection,
     };
     use crate::{
-        EnrollmentProvider, LocalFolderConfigData, ProviderEnrollmentRequest,
+        EnrollmentAudience, EnrollmentProvider, LocalFolderConfigData, ProviderEnrollmentRequest,
         ProviderSyncCheckpoint, SharedEnrollmentProvider, VaultArchitecture,
     };
     use crate::{
@@ -334,20 +338,22 @@ mod tests {
             "events",
         );
         let oauth = (match &mut provider.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Some(config),
-            StoredOAuthFileConfiguration::NotApplicable => None,
-        })
-        .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(io::Error::other("OAuth config must exist"))
+            }
+        })?;
         oauth.drive_mode = GoogleDriveMode::Shared;
         assert_eq!(
             provider.connection_args(),
             Err(ValidationError::SharedStorageTargetRequired)
         );
         (match &mut provider.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Some(config),
-            StoredOAuthFileConfiguration::NotApplicable => None,
-        })
-        .ok_or_else(|| io::Error::other("OAuth config must exist"))?
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(io::Error::other("OAuth config must exist"))
+            }
+        })?
         .folder_id = StoredGoogleDriveFolder::FolderId("folder-1".to_owned());
         assert_eq!(provider.connection_args()?.repo, "shared:folder-1\tevents");
         Ok(())
@@ -355,12 +361,15 @@ mod tests {
 
     #[test]
     fn draft_and_vault_storage_choose_the_correct_precedence() -> anyhow::Result<()> {
+        let credential = StoredOAuthAccessCredential::AccessToken(" token ".to_owned());
+        let file_name = StoredOAuthRemoteFileName::FileName(" ".to_owned());
+        let alternate_name = StoredOAuthRemoteFileName::FileName(" repo-fallback ".to_owned());
         let oauth = DraftStorageConnection::OAuth(OAuthStorageDraft {
             preset: OauthFilePreset::ICloud,
-            credential: &StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
+            credential: &credential,
             remote_reference: OAuthRemoteStorageReference::Resolved(" file-id ".into()),
-            file_name: &StoredOAuthRemoteFileName::FileName(" ".to_owned()),
-            alternate_name: &StoredOAuthRemoteFileName::FileName(" repo-fallback ".to_owned()),
+            file_name: &file_name,
+            alternate_name: &alternate_name,
         });
         assert_eq!(
             oauth.project(),
@@ -464,10 +473,11 @@ mod tests {
             "nook-events",
         );
         let oauth = (match &mut icloud.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Some(config),
-            StoredOAuthFileConfiguration::NotApplicable => None,
-        })
-        .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(io::Error::other("OAuth config must exist"))
+            }
+        })?;
         oauth.icloud_mode = ICloudMode::Private;
         assert!(
             (icloud)
@@ -479,10 +489,11 @@ mod tests {
             Err(ValidationError::SharedStorageTargetRequired)
         );
         let oauth = (match &mut icloud.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Some(config),
-            StoredOAuthFileConfiguration::NotApplicable => None,
-        })
-        .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(io::Error::other("OAuth config must exist"))
+            }
+        })?;
         oauth.icloud_mode = ICloudMode::Shared;
         oauth.icloud_share_target =
             StoredICloudShareTarget::SharedTarget("not-a-cloudkit-share-target".to_owned());
@@ -505,10 +516,11 @@ mod tests {
             "nook-events",
         );
         let oauth = (match &mut icloud.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Some(config),
-            StoredOAuthFileConfiguration::NotApplicable => None,
-        })
-        .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(io::Error::other("OAuth config must exist"))
+            }
+        })?;
         oauth.icloud_mode = ICloudMode::Shared;
         oauth.icloud_share_target = StoredICloudShareTarget::SharedTarget(target.clone());
 
@@ -516,8 +528,7 @@ mod tests {
             ProviderEnrollmentRequest {
                 provider: &icloud,
                 architecture: &VaultArchitecture::default(),
-                shared_joiner_identity: None,
-                shared_storage_target_id: None
+                audience: EnrollmentAudience::Personal
             }
             .build()?,
             EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(target.clone()))
@@ -537,16 +548,16 @@ mod tests {
         );
         assert_eq!(
             StagedRemoteConnection::Github(StagedGithubConnection {
-                credential: &crate::StoredGithubPat::Token(("  ").to_owned()),
-                repository: &crate::StoredGithubRepository::DefaultRepository
+                credential: &StoredGithubPat::Token(("  ").to_owned()),
+                repository: &StoredGithubRepository::DefaultRepository
             })
             .project()?,
             StagedStorageConnection::Incomplete
         );
         assert_eq!(
             StagedRemoteConnection::Github(StagedGithubConnection {
-                credential: &crate::StoredGithubPat::Token((" pat ").to_owned()),
-                repository: &crate::StoredGithubRepository::Repository((" owner/repo ").to_owned())
+                credential: &StoredGithubPat::Token((" pat ").to_owned()),
+                repository: &StoredGithubRepository::Repository((" owner/repo ").to_owned())
             })
             .project()?
             .ready()?
@@ -563,8 +574,8 @@ mod tests {
         };
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &crate::StoredOAuthFileConfiguration::Configured((&oauth).clone()),
-                file_name: &crate::StoredOAuthRemoteFileName::FileName(("draft-name").to_owned())
+                configuration: &StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                file_name: &StoredOAuthRemoteFileName::FileName(("draft-name").to_owned())
             })
             .project()?
             .ready()?
@@ -575,10 +586,8 @@ mod tests {
         oauth.folder_id = StoredGoogleDriveFolder::FolderId("shared-folder".to_owned());
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &crate::StoredOAuthFileConfiguration::Configured((&oauth).clone()),
-                file_name: &crate::StoredOAuthRemoteFileName::FileName(
-                    ("ignored-draft-name").to_owned()
-                )
+                configuration: &StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                file_name: &StoredOAuthRemoteFileName::FileName(("ignored-draft-name").to_owned())
             })
             .project()?
             .ready()?
@@ -599,8 +608,8 @@ mod tests {
             assert_eq!(draft.pat, pat);
             assert_eq!(draft.repo, repo);
             let staged = StagedRemoteConnection::Github(StagedGithubConnection {
-                credential: &crate::StoredGithubPat::Token((pat).to_owned()),
-                repository: &crate::StoredGithubRepository::Repository((repo).to_owned()),
+                credential: &StoredGithubPat::Token((pat).to_owned()),
+                repository: &StoredGithubRepository::Repository((repo).to_owned()),
             })
             .project()?;
             if pat.trim().is_empty() {
@@ -612,8 +621,8 @@ mod tests {
             }
         }
         let staged = StagedRemoteConnection::Github(StagedGithubConnection {
-            credential: &crate::StoredGithubPat::Token(("pat").to_owned()),
-            repository: &crate::StoredGithubRepository::DefaultRepository,
+            credential: &StoredGithubPat::Token(("pat").to_owned()),
+            repository: &StoredGithubRepository::DefaultRepository,
         })
         .project()?
         .ready()?;
@@ -633,8 +642,8 @@ mod tests {
         let before = oauth.clone();
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &crate::StoredOAuthFileConfiguration::Configured((&oauth).clone()),
-                file_name: &crate::StoredOAuthRemoteFileName::Unresolved
+                configuration: &StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                file_name: &StoredOAuthRemoteFileName::Unresolved
             })
             .project()?,
             StagedStorageConnection::Incomplete
@@ -644,8 +653,8 @@ mod tests {
         let before = oauth.clone();
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &crate::StoredOAuthFileConfiguration::Configured((&oauth).clone()),
-                file_name: &crate::StoredOAuthRemoteFileName::Unresolved
+                configuration: &StoredOAuthFileConfiguration::Configured((&oauth).clone()),
+                file_name: &StoredOAuthRemoteFileName::Unresolved
             })
             .project(),
             Err(ValidationError::SharedStorageTargetRequired)

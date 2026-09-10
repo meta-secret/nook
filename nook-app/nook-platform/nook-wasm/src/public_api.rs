@@ -13,6 +13,11 @@ use nook_core::{
     TotpSecret,
 };
 use nook_core::{StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection};
+use nook_core::{
+    StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
+    StoredLocalFolderHandle, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
+    StoredOAuthRemoteFileName,
+};
 use wasm_bindgen::JsError;
 
 mod localization;
@@ -266,8 +271,16 @@ pub fn is_vault_password_recommended_length(password: &str) -> bool {
 #[wasm_bindgen]
 #[must_use]
 pub fn has_github_credentials(pat: &str) -> bool {
-    nook_core::ProviderCredentialEvidence::Github(&nook_core::StoredGithubPat::Token(
-        pat.to_owned(),
+    nook_core::ProviderCredentialEvidence::Github(&StoredGithubPat::Token(pat.to_owned()))
+        .readiness()
+        == nook_core::ProviderCredentialReadiness::Ready
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn has_oauth_credentials(access_token: &str) -> bool {
+    nook_core::ProviderCredentialEvidence::OAuth(&StoredOAuthAccessCredential::AccessToken(
+        access_token.to_owned(),
     ))
     .readiness()
         == nook_core::ProviderCredentialReadiness::Ready
@@ -275,20 +288,10 @@ pub fn has_github_credentials(pat: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn has_oauth_credentials(access_token: &str) -> bool {
-    nook_core::ProviderCredentialEvidence::OAuth(
-        &nook_core::StoredOAuthAccessCredential::AccessToken(access_token.to_owned()),
-    )
-    .readiness()
-        == nook_core::ProviderCredentialReadiness::Ready
-}
-
-#[wasm_bindgen]
-#[must_use]
 pub fn has_local_folder_credentials(handle_id: &str) -> bool {
-    nook_core::ProviderCredentialEvidence::LocalFolder(
-        &nook_core::StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
-    )
+    nook_core::ProviderCredentialEvidence::LocalFolder(&StoredLocalFolderHandle::HandleId(
+        handle_id.to_owned(),
+    ))
     .readiness()
         == nook_core::ProviderCredentialReadiness::Ready
 }
@@ -361,8 +364,8 @@ pub fn staged_github_remote_storage_args(
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
         StagedRemoteConnection::Github(StagedGithubConnection {
-            credential: &nook_core::StoredGithubPat::Token((github_pat).to_owned()),
-            repository: &nook_core::StoredGithubRepository::Repository((github_repo).to_owned()),
+            credential: &StoredGithubPat::Token((github_pat).to_owned()),
+            repository: &StoredGithubRepository::Repository((github_repo).to_owned()),
         })
         .project()?,
     ))
@@ -375,10 +378,8 @@ pub fn staged_oauth_remote_storage_args(
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
         StagedRemoteConnection::OAuth(StagedOAuthConnection {
-            configuration: &nook_core::StoredOAuthFileConfiguration::Configured(
-                (&oauth_file).clone(),
-            ),
-            file_name: &nook_core::StoredOAuthRemoteFileName::Unresolved,
+            configuration: &StoredOAuthFileConfiguration::Configured((&oauth_file).clone()),
+            file_name: &StoredOAuthRemoteFileName::Unresolved,
         })
         .project()?,
     ))
@@ -451,7 +452,7 @@ mod browser_tests {
                 drive_mode: GoogleDriveMode::Shared,
                 ..Default::default()
             }),
-            local_folder: nook_core::StoredLocalFolderConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-01-01T00:00:00Z".into(),
@@ -705,14 +706,20 @@ mod browser_tests {
             StoredOAuthFileConfiguration::NotApplicable,
         )
         .unwrap();
-        assert!(google.access_token.as_deref().is_some());
+        assert!(matches!(
+            google.access_token,
+            StoredOAuthAccessCredential::AccessToken(_)
+        ));
         let icloud = icloud_oauth_tokens_to_config(
             "access-token",
             StoredOAuthAccountIdentity::Email("alice@example.test".into()),
             StoredOAuthFileConfiguration::NotApplicable,
         )
         .unwrap();
-        assert!(icloud.access_token.as_deref().is_some());
+        assert!(matches!(
+            icloud.access_token,
+            StoredOAuthAccessCredential::AccessToken(_)
+        ));
 
         let github_enrollment =
             enrollment_provider_for_architecture(provider.clone(), &architecture).unwrap();

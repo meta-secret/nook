@@ -15,6 +15,7 @@ use crate::ProviderDbReadRawSnapshotFromStore;
 use crate::ProviderDbWriteSnapshotAt;
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::NormalizedAuthSnapshot;
+use nook_core::{ActiveVaultScope, StoredGithubPat};
 use nook_core::{
     AppId, AuthProvidersSnapshotData, DeviceIdentity, ProviderCredentialStorageAdmission,
 };
@@ -294,6 +295,7 @@ mod tests {
     use crate::NookError;
     use crate::storage::{identity_record, indexed_db};
     use nook_core::ProviderVaultScope;
+    use nook_core::StoredGithubPat;
     use nook_core::{
         AGE_ARMOR_MARKER, ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity,
         NormalizedAuthSnapshot, ProviderCredentialStorageAdmission, StorageProviderData,
@@ -621,11 +623,11 @@ mod tests {
         let second_loaded = AuthProviderDatabase::load_auth_providers(&second).await?;
         assert_eq!(
             first_loaded.snapshot.providers[0].github_pat,
-            nook_core::StoredGithubPat::Token(("github_pat_first_new").to_owned())
+            StoredGithubPat::Token(("github_pat_first_new").to_owned())
         );
         assert_eq!(
             second_loaded.snapshot.providers[0].github_pat,
-            nook_core::StoredGithubPat::Token(("github_pat_second").to_owned())
+            StoredGithubPat::Token(("github_pat_second").to_owned())
         );
         Ok(())
     }
@@ -698,7 +700,7 @@ mod tests {
         assert_eq!(provider_ids, vec!["gh-incoming", "gh-retained"]);
         assert_eq!(
             stored.active_vault_store_id,
-            nook_core::ActiveVaultScope::StoreId(("store-incoming").to_owned())
+            ActiveVaultScope::StoreId(("store-incoming").to_owned())
         );
         assert_eq!(
             stored.credential_storage_admission(),
@@ -753,10 +755,8 @@ mod tests {
         )
         .await?;
         assert_eq!(
-            NormalizedAuthSnapshot::from(raw).snapshot.providers[0]
-                .github_pat
-                .as_deref(),
-            Some("github_pat_plaintext")
+            NormalizedAuthSnapshot::from(raw).snapshot.providers[0].github_pat,
+            StoredGithubPat::Token("github_pat_plaintext".to_owned())
         );
         Ok(())
     }
@@ -817,7 +817,7 @@ mod tests {
         assert_eq!(stored.providers[0].id, "gh-retained");
         assert_eq!(
             stored.active_vault_store_id,
-            nook_core::ActiveVaultScope::StoreId(("store-incoming").to_owned())
+            ActiveVaultScope::StoreId(("store-incoming").to_owned())
         );
         Ok(())
     }

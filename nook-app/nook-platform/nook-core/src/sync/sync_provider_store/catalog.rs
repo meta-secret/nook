@@ -4,6 +4,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
+use crate::ProviderLabel;
 use crate::{
     ActiveVaultScope, DuplicateSyncProvider, ProviderId, ProviderSyncCheckpoint,
     StoredICloudShareTarget, StoredLocalFolderDirectory, StoredOAuthAccessCredential,
@@ -321,7 +322,7 @@ impl AuthProvidersSnapshotData {
         let local = StorageProviderData {
             id: new_id.to_owned(),
             provider_type: StorageProviderType::Local,
-            label: crate::ProviderLabel::Local.render(),
+            label: ProviderLabel::Local.render(),
             github_pat: StoredGithubPat::Missing,
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
@@ -607,10 +608,11 @@ mod tests {
         }
         .build();
         (match &mut private.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Some(config),
-            StoredOAuthFileConfiguration::NotApplicable => None,
-        })
-        .ok_or_else(|| IoError::other("private OAuth config must exist"))?
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(IoError::other("private OAuth config must exist"))
+            }
+        })?
         .drive_mode = GoogleDriveMode::Private;
         let mut shared = OAuthCatalogFixture {
             id: "drive-shared",
@@ -620,10 +622,11 @@ mod tests {
         }
         .build();
         let shared_oauth = (match &mut shared.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Some(config),
-            StoredOAuthFileConfiguration::NotApplicable => None,
-        })
-        .ok_or_else(|| IoError::other("shared OAuth config must exist"))?;
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(IoError::other("shared OAuth config must exist"))
+            }
+        })?;
         shared_oauth.drive_mode = GoogleDriveMode::Shared;
         shared_oauth.folder_id = StoredGoogleDriveFolder::FolderId("folder-team".to_owned());
         let providers = vec![private.clone(), shared.clone()];
@@ -795,7 +798,7 @@ mod tests {
             if change == LocalProviderRowChange::Inserted {
                 assert_eq!(
                     next.providers[0].store_id,
-                    crate::ProviderVaultScope::StoreId(("vault-2").to_owned())
+                    ProviderVaultScope::StoreId(("vault-2").to_owned())
                 );
                 assert_eq!(next.providers[1], existing.providers[0]);
             } else {

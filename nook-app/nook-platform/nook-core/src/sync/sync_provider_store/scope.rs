@@ -251,8 +251,8 @@ mod tests {
                 .providers
                 .iter()
                 .find(|provider| provider.id == "replacement-a")
-                .and_then(|provider| provider.store_id.as_deref()),
-            Some("store-a")
+                .map(|provider| &provider.store_id),
+            Some(&ProviderVaultScope::StoreId("store-a".to_owned()))
         );
         assert!(
             replaced
@@ -452,7 +452,7 @@ mod tests {
         );
         assert_eq!(
             replaced.active_vault_store_id,
-            crate::ActiveVaultScope::StoreId(("vault").to_owned())
+            ActiveVaultScope::StoreId(("vault").to_owned())
         );
         assert_eq!(existing, before_existing);
         assert_eq!(incoming, before_incoming);

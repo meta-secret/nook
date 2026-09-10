@@ -195,8 +195,8 @@ mod tests {
         }
         .accept()?;
         assert_eq!(
-            accepted.provider_snapshot.active_vault_store_id.as_deref(),
-            Some(fixture.delivery.store_id.as_str())
+            accepted.provider_snapshot.active_vault_store_id,
+            ActiveVaultScope::StoreId(fixture.delivery.store_id.as_str().to_owned())
         );
         Ok(())
     }

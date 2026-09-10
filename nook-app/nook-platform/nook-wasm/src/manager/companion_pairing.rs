@@ -4,6 +4,7 @@ use nook_companion_core::{
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
     ConsumedCompanionPairingAuthority, ExtensionConnectScope,
 };
+use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -99,9 +100,9 @@ impl NookCompanionPairingApprovalAuthority {
         {
             return Err(CompanionPairingFailure::InstallationMismatch);
         }
-        if providers.active_vault_store_id.as_deref() != Some(approval.vault_store_id.as_str())
+        if !matches!(&providers.active_vault_store_id, ActiveVaultScope::StoreId(id) if id == approval.vault_store_id.as_str())
             || providers.providers.iter().any(|provider| {
-                provider.store_id.as_deref() != Some(approval.vault_store_id.as_str())
+                !matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if id == approval.vault_store_id.as_str())
             })
             || (!approval
                 .request
@@ -314,7 +315,7 @@ mod tests {
                 .map_err(|error| anyhow::anyhow!("unexpected rejection: {error:?}"))?;
             assert_eq!(
                 admitted.providers.active_vault_store_id,
-                nook_core::ActiveVaultScope::StoreId(("store-1").to_owned())
+                ActiveVaultScope::StoreId(("store-1").to_owned())
             );
             assert_eq!(
                 admitted.providers.providers.len(),

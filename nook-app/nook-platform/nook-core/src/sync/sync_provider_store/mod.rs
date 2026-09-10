@@ -51,7 +51,10 @@ pub use catalog::{
     DuplicateCandidatePolicy, DuplicateProviderSelection, LocalProviderRowChange,
     LocalProviderRowOutcome, LocalProviderRowRequest,
 };
-pub use enrollment::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
+pub use enrollment::{
+    EnrollmentAudience, ProviderEnrollmentRequest, SharedGoogleEnrollmentAudience,
+    SharedGrantProviderSelection,
+};
 pub use oauth::{
     GoogleOAuthTokenInput, ICloudOAuthTokenInput, OAuthRemoteConfigurationUpdate,
     OAuthRemoteStorageReference, OAuthStorageReference,
@@ -179,9 +182,12 @@ impl OAuthFileConfigData {
 
     #[must_use]
     pub fn usable_access_token(&self) -> OAuthAccessTokenRef<'_> {
-        match self.access_token.as_deref().map(str::trim) {
-            Some(token) if !token.is_empty() => OAuthAccessTokenRef::Available(token),
-            _ => OAuthAccessTokenRef::Missing,
+        match &self.access_token {
+            StoredOAuthAccessCredential::AccessToken(token) if !token.trim().is_empty() => {
+                OAuthAccessTokenRef::Available(token.trim())
+            }
+            StoredOAuthAccessCredential::AccessToken(_)
+            | StoredOAuthAccessCredential::SignedOut => OAuthAccessTokenRef::Missing,
         }
     }
 }
