@@ -334,7 +334,7 @@ unless reaper_source.include?('const tokenPath = "/run/kubernetes/token"') &&
        reaper_source.include?('const reaperTokenPath = "/run/reaper-auth/token"') &&
        reaper_source.include?("async reconcileNeo4jPolicy()") &&
        reaper_source.include?('"hive-observer-egress"') &&
-       reaper_source.include?("resourceVersion: policy.metadata.resourceVersion") &&
+       reaper_source.include?("resourceVersion: input.policy.metadata.resourceVersion") &&
        reaper_source.include?("error.status !== 409") &&
        reaper_source.include?("Bun.sleep(10_000)")
   raise "Hive reaper controller must reload credentials and reject stale policy writes"

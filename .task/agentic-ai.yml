@@ -181,7 +181,7 @@ tasks:
 
   loom:pre-push:
     desc: Run the default pre-push request; its host formatter includes Loom.
-    deps: [loom:install, ":tooling:install"]
+    deps: [loom:install, tooling:install]
     vars:
       CONFIG: '{{default "" .CONFIG}}'
       PR: '{{default "" .PR}}'
