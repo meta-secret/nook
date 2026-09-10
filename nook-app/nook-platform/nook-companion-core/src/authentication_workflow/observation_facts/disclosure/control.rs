@@ -291,6 +291,56 @@ impl VersionedAuthenticationDisclosureControlObservation {
     }
 }
 
+/// Optional versioned evidence dedicated to exceptional disclosure-control classification.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(tag = "kind", content = "observations", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationCredentialDisclosureControlObservation {
+    #[default]
+    Absent,
+    Observed(Vec<VersionedAuthenticationDisclosureControlObservation>),
+}
+
+impl AuthenticationCredentialDisclosureControlObservation {
+    pub(in crate::authentication_workflow::observation_facts) fn is_collection_bounded(
+        &self,
+    ) -> bool {
+        matches!(self, Self::Absent)
+            || matches!(self, Self::Observed(observations)
+                if !observations.is_empty()
+                    && observations.len() <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize)
+    }
+
+    pub(in crate::authentication_workflow::observation_facts) fn supported_observations_are_bounded(
+        &self,
+    ) -> bool {
+        self.is_collection_bounded()
+            && (matches!(self, Self::Absent)
+                || matches!(self, Self::Observed(observations)
+                if observations.iter().all(|observation| {
+                    matches!(
+                        observation.classify(),
+                        AuthenticationDisclosureControlDecision::UnsupportedVersion
+                    ) || observation.is_bounded()
+                })))
+    }
+
+    pub(in crate::authentication_workflow::observation_facts) fn first_unsupported_version(
+        &self,
+    ) -> Option<AuthenticationDisclosureObservationSchemaVersion> {
+        let Self::Observed(observations) = self else {
+            return None;
+        };
+        observations.iter().find_map(|observation| {
+            matches!(
+                observation.classify(),
+                AuthenticationDisclosureControlDecision::UnsupportedVersion
+            )
+            .then_some(observation.schema_version())
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

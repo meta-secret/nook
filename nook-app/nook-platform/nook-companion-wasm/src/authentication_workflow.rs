@@ -93,6 +93,28 @@ pub fn classify_companion_authentication_workflow_facts(
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn current_companion_authentication_page_observation_facts(
+    request: nook_companion_core::CurrentAuthenticationPageObservationFactsRequest,
+) -> nook_companion_core::CurrentAuthenticationPageObservationFactsWire {
+    nook_companion_core::CurrentAuthenticationPageObservationFactsWire::new(request)
+}
+
+#[wasm_bindgen]
+pub fn classify_versioned_companion_authentication_workflow_facts(
+    input: wasm_bindgen::JsValue,
+) -> Result<
+    nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome,
+    wasm_bindgen::JsError,
+> {
+    let input = serde_wasm_bindgen::from_value::<
+        nook_companion_core::VersionedAuthenticationPageObservationFactsBatch,
+    >(input)
+    .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+    Ok(input.classify())
+}
+
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompanionAuthenticationWorkflowMatchKind {
     NoMatch,
@@ -123,30 +145,156 @@ pub fn companion_authentication_workflow_match_kind(
 mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
+    struct AuthenticationWorkflowMatchKindScenario;
+
+    impl AuthenticationWorkflowMatchKindScenario {
+        fn js_error(error: impl std::fmt::Debug) -> wasm_bindgen::JsValue {
+            wasm_bindgen::JsValue::from_str(&format!("{error:?}"))
+        }
+
+        fn assert_every_core_variant_has_a_stable_abi_kind() {
+            for (workflow_match, expected) in [
+                (
+                    nook_companion_core::AuthenticationWorkflowMatch::NoMatch,
+                    super::CompanionAuthenticationWorkflowMatchKind::NoMatch,
+                ),
+                (
+                    nook_companion_core::AuthenticationWorkflowMatch::Rejected,
+                    super::CompanionAuthenticationWorkflowMatchKind::Rejected,
+                ),
+                (
+                    super::authentication_enrollment_workflow_match(
+                        true,
+                        "Save these recovery codes",
+                        false,
+                    ),
+                    super::CompanionAuthenticationWorkflowMatchKind::Matched,
+                ),
+            ] {
+                assert_eq!(
+                    super::companion_authentication_workflow_match_kind(workflow_match),
+                    expected
+                );
+            }
+        }
+
+        fn current() -> nook_companion_core::VersionedAuthenticationPageObservationFacts {
+            let current =
+                super::current_companion_authentication_page_observation_facts(
+                    nook_companion_core::CurrentAuthenticationPageObservationFactsRequest {
+                        facts: nook_companion_core::AuthenticationPageObservationFacts::default()
+                            .into(),
+                        credential_disclosure_control:
+                            nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
+                    },
+                );
+            current.into()
+        }
+
+        fn classify(
+            observation: nook_companion_core::VersionedAuthenticationPageObservationFacts,
+        ) -> Result<
+            nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome,
+            wasm_bindgen::JsValue,
+        > {
+            super::classify_versioned_companion_authentication_workflow_facts(
+                serde_wasm_bindgen::to_value(
+                    &nook_companion_core::VersionedAuthenticationPageObservationFactsBatch {
+                        observations: vec![observation],
+                    },
+                )
+                .map_err(Self::js_error)?,
+            )
+            .map_err(Self::js_error)
+        }
+
+        fn assert_classified_outcome() -> Result<(), wasm_bindgen::JsValue> {
+            let result = Self::classify(Self::current())?;
+            assert_eq!(
+                result,
+                nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome::Classified(
+                    nook_companion_core::AuthenticationWorkflowMatch::NoMatch,
+                )
+            );
+            assert_eq!(
+                serde_json::to_value(result).map_err(Self::js_error)?,
+                serde_json::json!({
+                    "kind": "classified",
+                    "value": { "kind": "no-match" }
+                })
+            );
+            Ok(())
+        }
+
+        fn assert_page_version_outcome() -> Result<(), wasm_bindgen::JsValue> {
+            let mut future_wire = serde_json::to_value(Self::current()).map_err(Self::js_error)?;
+            let serde_json::Value::Object(fields) = &mut future_wire else {
+                return Err(wasm_bindgen::JsValue::from_str(
+                    "versioned page observation must encode as an object",
+                ));
+            };
+            fields.insert("schemaVersion".to_owned(), serde_json::json!(2));
+            fields.remove("credentialDisclosureControl");
+            let future = serde_json::from_value(future_wire).map_err(Self::js_error)?;
+            let result = Self::classify(future)?;
+            assert_eq!(
+                serde_json::to_value(result).map_err(Self::js_error)?,
+                serde_json::json!({
+                    "kind": "unsupported-version",
+                    "value": {
+                        "schema": "page-facts",
+                        "version": 2
+                    }
+                })
+            );
+            Ok(())
+        }
+
+        fn assert_disclosure_version_outcome() -> Result<(), wasm_bindgen::JsValue> {
+            let mut nested_wire = serde_json::to_value(Self::current()).map_err(Self::js_error)?;
+            let serde_json::Value::Object(fields) = &mut nested_wire else {
+                return Err(wasm_bindgen::JsValue::from_str(
+                    "versioned page observation must encode as an object",
+                ));
+            };
+            fields.insert(
+                "credentialDisclosureControl".to_owned(),
+                serde_json::json!({
+                    "kind": "observed",
+                    "observations": [{"schemaVersion": 2}]
+                }),
+            );
+            let nested = serde_json::from_value(nested_wire).map_err(Self::js_error)?;
+            let result = Self::classify(nested)?;
+            assert_eq!(
+                serde_json::to_value(result).map_err(Self::js_error)?,
+                serde_json::json!({
+                    "kind": "unsupported-version",
+                    "value": {
+                        "schema": "disclosure-control",
+                        "version": 2
+                    }
+                })
+            );
+            Ok(())
+        }
+
+        fn assert_versioned_transport_preserves_typed_outcome() -> Result<(), wasm_bindgen::JsValue>
+        {
+            Self::assert_classified_outcome()?;
+            Self::assert_page_version_outcome()?;
+            Self::assert_disclosure_version_outcome()
+        }
+    }
+
     #[wasm_bindgen_test]
     fn match_kind_preserves_every_closed_workflow_variant() {
-        for (workflow_match, expected) in [
-            (
-                nook_companion_core::AuthenticationWorkflowMatch::NoMatch,
-                super::CompanionAuthenticationWorkflowMatchKind::NoMatch,
-            ),
-            (
-                nook_companion_core::AuthenticationWorkflowMatch::Rejected,
-                super::CompanionAuthenticationWorkflowMatchKind::Rejected,
-            ),
-            (
-                super::authentication_enrollment_workflow_match(
-                    true,
-                    "Save these recovery codes",
-                    false,
-                ),
-                super::CompanionAuthenticationWorkflowMatchKind::Matched,
-            ),
-        ] {
-            assert_eq!(
-                super::companion_authentication_workflow_match_kind(workflow_match),
-                expected
-            );
-        }
+        AuthenticationWorkflowMatchKindScenario::assert_every_core_variant_has_a_stable_abi_kind();
+    }
+
+    #[wasm_bindgen_test]
+    fn versioned_transport_preserves_its_typed_outcome() -> Result<(), wasm_bindgen::JsValue> {
+        AuthenticationWorkflowMatchKindScenario::assert_versioned_transport_preserves_typed_outcome(
+        )
     }
 }

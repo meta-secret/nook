@@ -6,6 +6,7 @@
 
 mod candidate_selection;
 mod enrollment;
+mod match_result;
 mod observation_binding;
 mod observation_facts;
 mod observation_validation;
@@ -17,6 +18,7 @@ pub use candidate_selection::{
     classify_authentication_workflow_candidates,
 };
 pub use enrollment::authentication_enrollment_workflow_match;
+pub use match_result::{AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshotError};
 pub use observation_binding::{
     AuthenticationObservationBindingError, AuthenticationObservationBindingToken,
     authentication_page_observation_facts_match_binding,
@@ -25,15 +27,24 @@ pub use observation_binding::{
 pub use observation_facts::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
-    AuthenticationCeremonyObservationFacts, AuthenticationCredentialSubmissionFacts,
-    AuthenticationCredentialSubmissionObservation, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationCeremonyObservationFacts, AuthenticationCredentialDisclosureControlObservation,
+    AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
+    AuthenticationDetailedAdvanceControlObservation,
     AuthenticationDetailedPasskeyControlCandidateObservation,
     AuthenticationDetailedPasskeyControlObservation, AuthenticationDisclosureControlDecision,
     AuthenticationDisclosureObservationSchemaVersion, AuthenticationFieldObservationFacts,
     AuthenticationImplicitSubmitActuationObservation, AuthenticationPageObservationFacts,
-    AuthenticationPageObservationFactsBatch, AuthenticationPasskeyAccountAvailability,
-    AuthenticationPasskeyControlObservation, CurrentAuthenticationDisclosureControlRequest,
+    AuthenticationPageObservationFactsBatch,
+    AuthenticationPageObservationFactsClassificationOutcome,
+    AuthenticationPageObservationFactsSchemaVersion,
+    AuthenticationPageObservationFactsUnsupportedSchemaVersion,
+    AuthenticationPasskeyAccountAvailability, AuthenticationPasskeyControlObservation,
+    CurrentAuthenticationDisclosureControlRequest,
+    CurrentAuthenticationPageObservationFactsRequest,
+    CurrentAuthenticationPageObservationFactsWire,
+    CurrentAuthenticationPageObservationFactsWireFacts,
     VersionedAuthenticationDisclosureControlObservation,
+    VersionedAuthenticationPageObservationFacts, VersionedAuthenticationPageObservationFactsBatch,
     authentication_page_observation_facts_priority,
     authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe,
@@ -194,40 +205,11 @@ pub struct AuthenticationWorkflowSnapshot {
     pub observation_index: AuthenticationWorkflowObservationIndex,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", content = "snapshot", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum AuthenticationWorkflowMatch {
-    NoMatch,
-    Rejected,
-    Matched(AuthenticationWorkflowSnapshot),
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationPageObservations {
     pub observations: Vec<AuthenticationPageObservation>,
-}
-
-impl AuthenticationWorkflowMatch {
-    pub const fn snapshot(
-        self,
-    ) -> Result<AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError> {
-        match self {
-            Self::NoMatch => Err(AuthenticationWorkflowSnapshotError::NotDetected),
-            Self::Rejected => Err(AuthenticationWorkflowSnapshotError::Rejected),
-            Self::Matched(snapshot) => Ok(snapshot),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum AuthenticationWorkflowSnapshotError {
-    #[error("authentication workflow was not detected")]
-    NotDetected,
-    #[error("authentication workflow observations were rejected")]
-    Rejected,
 }
 
 impl AuthenticationWorkflowSnapshot {
