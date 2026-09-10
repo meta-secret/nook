@@ -39,7 +39,10 @@ mod tests {
     use super::*;
     use crate::event::{VaultEvent, VaultEventBody, VaultEventSchemaVersion};
     use crate::test_support::{actor, public_key, signing_key as key, store};
-    use crate::{AgeArmoredCiphertext, DevicePublicKey, EventResult, MemberLabel, VaultOperation};
+    use crate::{
+        AgeArmoredCiphertext, DevicePublicKey, EpochCheckpoint, EventResult, MemberLabel,
+        VaultOperation,
+    };
     use nook_auth2::{DeviceId, PasswordEntryId, Sha256Hex};
     #[test]
     fn concurrent_security_rotations_surface_conflict() -> EventResult<()> {
