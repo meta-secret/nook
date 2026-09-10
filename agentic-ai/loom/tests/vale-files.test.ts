@@ -255,16 +255,21 @@ test('pins Vale 3.19 structural boundaries for residual Markdown checks', () => 
       line,
     })),
   );
+  const articleResult = CortexMarkdownArticle.from({
+    documents: [
+      {
+        absolutePath: TABLE_CAPABILITIES_FIXTURE,
+        relativePath: '.cortex/vale-capability-tables.md',
+        content: readFileSync(TABLE_CAPABILITIES_FIXTURE, 'utf8'),
+      },
+    ],
+  }).execute();
+  assert(articleResult.isOk());
   expect(
-    CortexMarkdownArticle.audit({
-      documents: [
-        {
-          absolutePath: TABLE_CAPABILITIES_FIXTURE,
-          relativePath: '.cortex/vale-capability-tables.md',
-          content: readFileSync(TABLE_CAPABILITIES_FIXTURE, 'utf8'),
-        },
-      ],
-    }).map((finding) => ({ code: finding.code, line: finding.line })),
+    articleResult.value.map((finding) => ({
+      code: finding.code,
+      line: finding.line,
+    })),
   ).toEqual(
     [3, 7].map((line) => ({
       code: CortexArticleFindingCode.MarkdownTable,

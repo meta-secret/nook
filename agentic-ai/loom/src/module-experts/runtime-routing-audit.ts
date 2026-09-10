@@ -74,8 +74,11 @@ export class ModuleExpertRuntimeRouting {
     );
     const names: string[] = [];
     const visit = (node: ts.Node): void => {
-      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-        names[names.length] = node.expression.text;
+      if (ts.isCallExpression(node)) {
+        const expression = node.expression;
+        if (ts.isIdentifier(expression)) names[names.length] = expression.text;
+        if (ts.isPropertyAccessExpression(expression))
+          names[names.length] = expression.name.text;
       }
       ts.forEachChild(node, visit);
     };

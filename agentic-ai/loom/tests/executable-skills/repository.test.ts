@@ -46,7 +46,7 @@ export class ExecutableSkillsRepositoryScenario {
     ].map((path) => ({ mode: '100644', path }));
   }
 
-  static packageFixture(overrides?: FixtureOverrides): Promise<string> {
+  static packageFixture(overrides: FixtureOverrides = {}): Promise<string> {
     return new ExecutableSkillsRepositoryScenario(overrides).execute();
   }
 

@@ -91,7 +91,7 @@ export class DelegationRunFinalization {
 
   private static readonly MAX_FINALIZATION_REQUEST_BYTES = 262_144;
 
-  private static readonly DELEGATION_RUN_RESULT_SCHEMA_VERSION = '1.0.0';
+  static readonly DELEGATION_RUN_RESULT_SCHEMA_VERSION = '1.0.0';
 
   static decodeDelegationFinalizationRequest(
     serialized: string,

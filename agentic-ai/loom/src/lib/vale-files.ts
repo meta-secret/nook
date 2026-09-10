@@ -296,7 +296,7 @@ export class ValeRepositoryContainment {
 const VALE_ALERT_SCHEMA = z.strictObject({
   Action: z.strictObject({
     Name: z.string(),
-    Params: z.custom(YamlNullBoundary.matches),
+    Params: z.custom<UntrustedYamlNode>().refine(YamlNullBoundary.matches),
   }),
   Span: z.tuple([z.int().positive(), z.int().positive()]),
   Check: z.string().min(1),
@@ -313,13 +313,14 @@ export class ValeAlertDocument {
   decode(): Result<ValeNativeAlert, ValeFailure> {
     const decoded = VALE_ALERT_SCHEMA.safeParse(this.request.value);
     if (!decoded.success) {
-      const issue = decoded.error.issues[0];
-      const fieldPresent = Boolean(issue && issue.path.length > 0);
-      const field = fieldPresent ? issue!.path[0] : false;
+      const [issue] = decoded.error.issues;
+      const issuePath = issue?.path ?? [];
+      const fieldPresent = issuePath.length > 0;
+      const field = issuePath[0] ?? false;
       const label =
         field === 'Description' || field === 'Link' || field === 'Match'
           ? 'text fields'
-          : field === 'Action' && issue.path.length > 1
+          : field === 'Action' && issuePath.length > 1
             ? 'Action shape'
             : String(field);
       const message =

@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 
 import {
   AgentAttemptParentKind,
@@ -125,9 +126,10 @@ test('requires typed child authorizations for a module development plan', () => 
 
   const output =
     AgentWorkflowStructuredResultCodecScenario.moduleDevelopmentPlanOutput();
-  expect(
+  assert.deepEqual(
     WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(output)),
-  ).toEqual(output);
+    output,
+  );
 });
 
 test('rejects missing, duplicate, or invalid module expert authorizations', () => {
@@ -255,7 +257,7 @@ test('decodes a valid typed task output', () => {
   const decoded = WorkflowResultSchema.decodeWorkflowTaskOutput(
     JSON.stringify(output),
   );
-  expect(decoded).toEqual(output);
+  assert.deepEqual(decoded, output);
 });
 
 test('decodes complete module expert continuation data', () => {
@@ -270,9 +272,10 @@ test('decodes complete module expert continuation data', () => {
       AgentWorkflowStructuredResultCodecScenario.moduleExpertContinuation(),
   };
 
-  expect(
+  assert.deepEqual(
     WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(output)),
-  ).toEqual(output);
+    output,
+  );
 });
 
 test('rejects module expert prose without complete continuation data', () => {

@@ -231,7 +231,7 @@ export class GitHubActionAttemptPages {
               message: `GitHub Actions attempt ${runId}:${attempt} was not returned`,
             });
           }
-          const validationRequest: ActionAttemptRequestedValidationRequest = {
+          const validationRequest: ActionAttemptSourceVerificationRequest = {
             repoRoot: request.repoRoot,
             runId,
             attempt,

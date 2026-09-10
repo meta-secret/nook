@@ -432,9 +432,9 @@ test('preserves visible container prose while rejecting its nested GFM table', (
     message:
       'Rendered Markdown table in .cortex/nested-table.md is prohibited; use an enclosed structured list.',
   });
-  expect(
-    findings.map((findings) => findings.map((finding) => finding.code)),
-  ).not.toContain(CortexArticleFindingCode.EmptyArticle);
+  expect(findings.map((finding) => finding.code)).not.toContain(
+    CortexArticleFindingCode.EmptyArticle,
+  );
 });
 
 test('does not count a link definition as article content', () => {

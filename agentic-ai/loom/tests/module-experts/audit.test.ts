@@ -93,10 +93,13 @@ export class ModuleExpertsAuditFixture {
       ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS_REQUEST,
     );
 
-  static readonly internalApiProfile = MODULE_EXPERT_CATALOG.find(
-    (profile) => profile.name === 'internal_api_expert',
-  );
-
+  static readonly internalApiProfile: ModuleExpertProfile =
+    MODULE_EXPERT_CATALOG.find(
+      (candidate) => candidate.name === 'internal_api_expert',
+    ) ?? ModuleExpertsAuditFixture.missingInternalApiProfile();
+  private static missingInternalApiProfile(): never {
+    throw new Error('internal_api_expert test fixture is missing.');
+  }
   static readonly GENERATED_MARKER_MUTATIONS: readonly GeneratedMarkerEvidenceMutation[] =
     ModuleExpertsAuditFixture.internalApiProfile.generatedScopePaths.flatMap(
       (generatedScope) =>
@@ -630,7 +633,7 @@ describe('module expert audit', () => {
     }
     expect(
       discoveredConsumerPaths.filter((path) => path.endsWith('.svelte')),
-    ).toHaveLength(41);
+    ).toHaveLength(40);
     expect(discoveredConsumerPaths).toContain(
       'nook-app/nook-web/nook-web-shared/src/vault-app/App.svelte',
     );

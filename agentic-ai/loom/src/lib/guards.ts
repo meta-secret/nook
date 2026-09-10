@@ -2,6 +2,7 @@
 export class UntrustedYamlBoundary {
   private constructor(private readonly value: UntrustedYamlNode) {}
   static fromJson(value: UntrustedYamlNode): UntrustedYamlNode {
+    if (Object.prototype.toString.call(value) === '[object Null]') return value;
     if (
       typeof value === 'string' ||
       typeof value === 'number' ||
@@ -58,7 +59,15 @@ export class UntrustedYamlBoundary {
  * results.
  */
 export type UntrustedYamlNode =
-  string | number | boolean | readonly UntrustedYamlNode[] | UntrustedYamlMap;
+  | string
+  | number
+  | boolean
+  | JsonTransportNull
+  | readonly UntrustedYamlNode[]
+  | UntrustedYamlMap;
+
+/** The host's concrete empty scalar without exporting it to domain APIs. */
+type JsonTransportNull = Exclude<ReturnType<URLSearchParams['get']>, string>;
 
 /** Untrusted object map from YAML/JSON. */
 export type UntrustedYamlMap = {

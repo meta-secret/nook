@@ -50,7 +50,9 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   );
   const actionPaths = allPaths;
   const symlinkPaths = new Set(
-    tracked.filter((file) => file.mode === '120000').map((file) => file.path),
+    tracked.value
+      .filter((file) => file.mode === '120000')
+      .map((file) => file.path),
   );
   const configPathSet = new Set(configPaths);
   const actionSources = new Map<string, string>();
@@ -79,7 +81,9 @@ test('only the Loom semantic adapter reaches the provider', async () => {
     SkillProviderConfigBoundaryScenario.actionRuntimePaths(actionGraph);
   const scriptGraph: ConfigurationScriptGraph = {
     executablePaths: new Set(
-      tracked.filter((file) => file.mode === '100755').map((file) => file.path),
+      tracked.value
+        .filter((file) => file.mode === '100755')
+        .map((file) => file.path),
     ),
     roots: configPaths.filter(
       (path) =>

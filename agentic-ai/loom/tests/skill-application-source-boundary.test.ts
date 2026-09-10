@@ -326,7 +326,7 @@ test('all tracked executable application sources pass the AST capability gate', 
         requiredDirectory,
       ).toBe(true);
     }
-    for (const file of trackedFiles.filter(
+    for (const file of trackedFiles.value.filter(
       (candidate) =>
         candidate.path === `${skillRoot}/SKILL.md` ||
         candidate.path.startsWith(`${root}/`),

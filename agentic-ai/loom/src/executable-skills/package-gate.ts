@@ -68,7 +68,8 @@ export class ExecutableSkillPackageGate {
       const diagnostic = { findings };
       return err({ message: JSON.stringify(diagnostic) });
     }
-    const [runner = (value) => this.runCommand(value)] = [request.runner];
+    const runner: ExecutableSkillCommandRunner =
+      request.runner ?? ((commandRequest) => this.runCommand(commandRequest));
     const arguments_ = this.commandArguments(request.action);
     if (request.action === 'install') {
       const commandRequest: ExecutableSkillCommandRequest = {

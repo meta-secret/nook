@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 
 import {
   AgentAttemptParentKind,
@@ -373,9 +374,10 @@ test('decodes dedicated structural plan and evidence unions', () => {
     StructuralExpertsResultCodecScenario.coherenceSynthesis(),
   ];
   for (const output of outputs) {
-    expect(
+    assert.deepEqual(
       WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(output)),
-    ).toEqual(output);
+      output,
+    );
   }
   const serializedPlan = JSON.stringify(
     StructuralExpertsResultCodecScenario.structuralPlan(),

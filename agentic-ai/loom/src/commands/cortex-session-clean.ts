@@ -43,14 +43,16 @@ export class CortexSessionDirectory {
   }
 
   clean(): Result<CortexSessionCleanReport, CortexSessionFailure> {
-    return this.inspect().andThen((inspection) =>
-      inspection.sessionClean
-        ? ok({ sessionClean: true })
-        : err({
-            kind: CortexSessionFailureKind.ActiveMemory,
-            message: `PR readiness requires removing temporary Cortex session memory: ${inspection.activeEntry}`,
-          }),
-    );
+    return this.inspect().andThen((inspection) => {
+      if (inspection.sessionClean) {
+        const report: CortexSessionCleanReport = { sessionClean: true };
+        return ok(report);
+      }
+      return err({
+        kind: CortexSessionFailureKind.ActiveMemory,
+        message: `PR readiness requires removing temporary Cortex session memory: ${inspection.activeEntry}`,
+      });
+    });
   }
 
   private firstNonDirectoryEntry(
