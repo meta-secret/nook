@@ -1,6 +1,5 @@
 //! Causal event DAG: parent validation, ancestry, heads, and pending events.
 
-use crate::GenesisImportRequest;
 mod authorization;
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
@@ -312,12 +311,12 @@ impl EventGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::EventResult;
     use crate::event::{
         EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
         VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key, store};
+    use crate::{EventResult, GenesisImportRequest};
     use ed25519_dalek::SigningKey;
     use nook_auth2::{IsoTimestamp, OpaqueCiphertext, SecretId, Sha256Hex};
 

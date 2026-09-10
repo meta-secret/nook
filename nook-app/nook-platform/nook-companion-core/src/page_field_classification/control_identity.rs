@@ -69,7 +69,7 @@ impl AuthenticationControlIdentity<'_> {
             .unwrap_or_default()
             .split('/')
             .filter(|segment| !segment.is_empty())
-            .map(expand_identity_text)
+            .map(|segment| AuthenticationControlText::new(segment).expand_identity_text())
             .collect::<Vec<_>>();
         let is_version = |segment: &str| {
             segment

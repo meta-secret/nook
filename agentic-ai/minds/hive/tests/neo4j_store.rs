@@ -1,3 +1,8 @@
+#![allow(
+    clippy::absolute_paths,
+    reason = "integration-test submodules identify model contracts explicitly"
+)]
+
 use std::env;
 
 use anyhow::Context;

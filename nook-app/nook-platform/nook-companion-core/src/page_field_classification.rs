@@ -4,7 +4,6 @@
 //! which identity strings count as username, OTP, passkey, or manual-checkpoint
 //! signals used to build authentication workflow observations in the host.
 
-use crate::ControlDestinationEvidence;
 use control_identity::AuthenticationControlIdentity as ControlIdentity;
 use form_identity::{
     AuthenticationRouteIdentity as RouteIdentity, CredentialDestination, DestinationPolicy,
@@ -31,7 +30,9 @@ pub use authentication_advance_control::{
     PageControlActionability, PageControlOwnership, PageControlSemantics,
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
-pub use destination_identity::{CanonicalControlDestination, InvalidControlDestination};
+pub use destination_identity::{
+    CanonicalControlDestination, ControlDestinationEvidence, InvalidControlDestination,
+};
 
 pub(super) use passkey::PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS;
 

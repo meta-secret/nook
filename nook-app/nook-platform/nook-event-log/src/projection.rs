@@ -13,7 +13,7 @@ use crate::EventLookup;
 use crate::canonical::EventId;
 use crate::epoch::{EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch};
 use crate::graph::EventGraph;
-use crate::{ConcurrentEpochRotations, GenesisImportRequest, VaultEvent, VaultOperation};
+use crate::{ConcurrentEpochRotations, VaultOperation};
 use crate::{EventError, EventResult};
 use crate::{PasswordUnlockEntry, SecretFingerprint};
 use nook_auth2::StoredSecretRecord;
@@ -328,7 +328,8 @@ mod tests {
     };
     use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
     use crate::{
-        AgeArmoredCiphertext, DevicePublicKey, EventResult, MemberLabel, SecretFingerprint,
+        AgeArmoredCiphertext, DevicePublicKey, EventResult, GenesisImportRequest, MemberLabel,
+        SecretFingerprint,
     };
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;

@@ -5,7 +5,6 @@
 )]
 
 use super::{LocalEventStore, RemoteEventLogClassification};
-use crate::GenesisImportRequest;
 use crate::LocalEventBytes;
 use crate::{EventError, EventId, EventResult, EventStorageBytes, StoreId, VaultEvent};
 use std::collections::BTreeSet;
@@ -250,7 +249,10 @@ impl LocalEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Ed25519Signature, GenesisImportPayload, IsoTimestamp, Sha256Hex, test_support};
+    use crate::{
+        Ed25519Signature, GenesisImportPayload, GenesisImportRequest, IsoTimestamp, Sha256Hex,
+        test_support,
+    };
 
     const STORE: &str = "store_testtoken11";
 

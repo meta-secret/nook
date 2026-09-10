@@ -942,7 +942,7 @@ end
 
 unless hive_dockerfile.include?("COPY --from=nook-formatter") &&
        hive_dockerfile.include?("/opt/nook-formatter/") &&
-       hive_taskfile.scan('--build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"').length == 8 &&
+       hive_taskfile.scan('--build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"').length == 9 &&
        hive_workflow.scan(".github/formatting/**").length == 2 &&
        infra_taskfile.include?(".github/formatting")
   raise "Hive runtime must bake and track the canonical external formatter bundle"

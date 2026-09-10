@@ -1,7 +1,6 @@
 //! Validation for bounded authentication observation envelopes.
 
 use super::AuthenticationPageObservation;
-use crate::AuthenticationWorkflowMatch;
 
 pub const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT: u32 = 100;
 pub const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS: usize = 20;

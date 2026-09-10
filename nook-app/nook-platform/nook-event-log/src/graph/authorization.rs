@@ -1,11 +1,10 @@
-use crate::GenesisImportRequest;
 use std::collections::{BTreeMap, BTreeSet};
 
 mod membership;
 use nook_auth2::{AuthKeyId, DeviceSigningPublicKey};
 
 use super::{EventGraph, EventGraphRejection, VaultEvent};
-use crate::event::{VaultEventSchemaVersion, VaultOperation};
+use crate::event::VaultOperation;
 use crate::signing::SigningIdentity;
 use crate::{
     EpochCheckpointRequirement, EventError, EventId, EventResult, SecurityRotationTrigger,
@@ -205,7 +204,7 @@ mod tests {
         VaultEventBody, VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key, store};
-    use crate::{EventId, EventInsertStatus, EventResult};
+    use crate::{EventId, EventInsertStatus, EventResult, GenesisImportRequest};
     use ed25519_dalek::SigningKey;
     use nook_auth2::{
         AgeArmoredCiphertext, DeviceId, DevicePublicKey, IsoTimestamp, MemberLabel,

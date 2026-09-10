@@ -6,10 +6,7 @@ use crate::page_field_classification::{
     PageControlActionability, PageControlOwnership, PageControlSemantics,
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
-use crate::{
-    AuthenticationFieldCount, AuthenticationSemanticSubmitControlCount,
-    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-};
+use crate::{AuthenticationFieldCount, AuthenticationSemanticSubmitControlCount};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use url::Url;

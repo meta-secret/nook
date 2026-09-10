@@ -6,7 +6,6 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::GenesisImportRequest;
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
 use crate::graph::{EventGraph, EventInsertStatus};
@@ -144,7 +143,7 @@ mod tests {
     use crate::graph::EventInsertStatus;
     use crate::signing::SigningIdentity;
     use crate::test_support::signing_key;
-    use crate::{EventResult, SecretFingerprint};
+    use crate::{EventResult, GenesisImportRequest, SecretFingerprint};
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
     use nook_auth2::{DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, Sha256Hex};

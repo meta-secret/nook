@@ -29,7 +29,7 @@ impl TryFrom<u32> for ExtensionSessionDeviceProtectionStatusWire {
             reason = "serialization boundary: admits the existing numeric wire representation"
         )
     )]
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+    fn try_from(value: u32) -> Result<Self, String> {
         match value {
             0 => Ok(Self::Loading),
             1 => Ok(Self::Missing),

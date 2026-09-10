@@ -47,6 +47,12 @@ impl From<u32> for AuthenticationFieldCount {
 #[tsify(type = "number")]
 pub struct AuthenticationSemanticSubmitControlCount(u32);
 
+impl AuthenticationSemanticSubmitControlCount {
+    pub(crate) const fn is_nonzero(self) -> bool {
+        self.0 != 0
+    }
+}
+
 impl From<u32> for AuthenticationSemanticSubmitControlCount {
     fn from(value: u32) -> Self {
         Self(value)

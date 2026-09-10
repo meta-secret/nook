@@ -6,7 +6,6 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::GenesisImportRequest;
 use crate::LocalEventBytes;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -235,8 +234,8 @@ mod tests {
     use crate::test_support;
     use crate::{
         DeviceSigningPublicKey, EpochMetadataState, EpochPasswordState, EventError,
-        GenesisImportPayload, IsoTimestamp, PasswordEntryId, Sha256Hex, SigningIdentity, StoreId,
-        VaultEventBody, VaultEventSchemaVersion,
+        GenesisImportPayload, GenesisImportRequest, IsoTimestamp, PasswordEntryId, Sha256Hex,
+        SigningIdentity, StoreId, VaultEventBody, VaultEventSchemaVersion,
     };
     use ed25519_dalek::SigningKey;
 
