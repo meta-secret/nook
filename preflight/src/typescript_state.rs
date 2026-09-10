@@ -1,3 +1,5 @@
+use crate::typescript_discriminants::DiscriminantName;
+use crate::typescript_discriminants::EnumContext;
 pub struct TypeScriptApplicationState<'scan> {
     pub root: &'scan Path,
 }
@@ -7,7 +9,6 @@ use std::io;
 use std::path::Path;
 
 use crate::Violation;
-use crate::typescript_state::TypeScriptApplicationState;
 
 mod language_dispatch;
 mod literal_nodes;
@@ -405,26 +406,23 @@ impl TypeScriptApplicationState<'_> {
             let left = node.child_by_field_name("left");
             let right = node.child_by_field_name("right");
             if left.zip(right).is_some_and(|(left, right)| {
-                let (literal, discriminant) =
-                    if let crate::typescript_discriminants::DiscriminantName::Recognized(
+                let (literal, discriminant) = if let DiscriminantName::Recognized(discriminant) =
+                    TypeScriptApplicationState::discriminant_name(left, source)
+                {
+                    (
+                        TypeScriptApplicationState::string_literal_value(right, source),
                         discriminant,
-                    ) = TypeScriptApplicationState::discriminant_name(left, source)
-                    {
-                        (
-                            TypeScriptApplicationState::string_literal_value(right, source),
-                            discriminant,
-                        )
-                    } else if let crate::typescript_discriminants::DiscriminantName::Recognized(
+                    )
+                } else if let DiscriminantName::Recognized(discriminant) =
+                    TypeScriptApplicationState::discriminant_name(right, source)
+                {
+                    (
+                        TypeScriptApplicationState::string_literal_value(left, source),
                         discriminant,
-                    ) = TypeScriptApplicationState::discriminant_name(right, source)
-                    {
-                        (
-                            TypeScriptApplicationState::string_literal_value(left, source),
-                            discriminant,
-                        )
-                    } else {
-                        return false;
-                    };
+                    )
+                } else {
+                    return false;
+                };
                 let literal_nodes::LiteralValue::Text(value) = literal else {
                     return false;
                 };
@@ -483,7 +481,7 @@ impl TypeScriptApplicationState<'_> {
             && let Some(value) = node.child_by_field_name("value")
             && let literal_nodes::LiteralValue::Text(literal) =
                 TypeScriptApplicationState::string_literal_value(value, source)
-            && let crate::typescript_discriminants::EnumContext::Named(enum_name) =
+            && let EnumContext::Named(enum_name) =
                 TypeScriptApplicationState::enclosing_enum_name(node, source)
         {
             values

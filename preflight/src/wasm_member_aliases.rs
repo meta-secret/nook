@@ -1,3 +1,6 @@
+use crate::javascript_literals::JavaScriptLiteralFailure;
+use crate::javascript_scopes::BindingProvenance;
+use crate::wasm_dynamic_aliases::AliasResolutionFailure;
 pub struct WasmMemberAliases<'scan> {
     pub binding: tree_sitter::Node<'scan>,
     pub value: tree_sitter::Node<'scan>,
@@ -48,7 +51,7 @@ impl WasmMemberAliases<'_> {
                 let Some(value) = values.get(&index).copied() else {
                     continue;
                 };
-                if let Some(callable) = WasmMemberAliases::wasm_callable_member_name(
+                if let Ok(callable) = WasmMemberAliases::wasm_callable_member_name(
                     value,
                     source,
                     source_path,
@@ -71,11 +74,9 @@ impl WasmMemberAliases<'_> {
                             .lines
                             .push(first_line + binding.start_position().row);
                     }
-                    if let Ok(scoped) = ScopedBinding::scoped_binding(
-                        binding,
-                        source,
-                        crate::javascript_scopes::BindingProvenance::Callable,
-                    ) {
+                    if let Ok(scoped) =
+                        ScopedBinding::scoped_binding(binding, source, BindingProvenance::Callable)
+                    {
                         inventory.callables.push(scoped);
                     }
                 }
@@ -93,7 +94,7 @@ impl WasmMemberAliases<'_> {
         } {
             return (inventory, AliasDescent::Complete);
         }
-        if let Some(module) = DynamicWasmAliases::wasm_module_specifier(
+        if let Ok(module) = DynamicWasmAliases::wasm_module_specifier(
             value,
             source,
             source_path,
@@ -110,7 +111,7 @@ impl WasmMemberAliases<'_> {
             );
             return (inventory, AliasDescent::Complete);
         }
-        let Some(wasm_type) = WasmMemberAliases::wasm_receiver_type(
+        let Ok(wasm_type) = WasmMemberAliases::wasm_receiver_type(
             value,
             source,
             source_path,
@@ -173,11 +174,9 @@ impl CallableAliasInventory {
             {
                 self.lines.push(first_line + property.start_position().row);
             }
-            if let Ok(scoped) = ScopedBinding::scoped_binding(
-                binding,
-                source,
-                crate::javascript_scopes::BindingProvenance::Callable,
-            ) {
+            if let Ok(scoped) =
+                ScopedBinding::scoped_binding(binding, source, BindingProvenance::Callable)
+            {
                 self.callables.push(scoped);
             }
             found = true;
@@ -266,7 +265,7 @@ impl CallableAliasInventory {
         let Some(binding_name_node) = binding_name_node else {
             return self;
         };
-        let Some(callable_name) = WasmMemberAliases::wasm_callable_member_name(
+        let Ok(callable_name) = WasmMemberAliases::wasm_callable_member_name(
             value,
             source,
             source_path,
@@ -293,11 +292,9 @@ impl CallableAliasInventory {
                 .push(first_line + binding_name_node.start_position().row);
         }
         if binding.kind() == "identifier" {
-            if let Ok(scoped) = ScopedBinding::scoped_binding(
-                binding,
-                source,
-                crate::javascript_scopes::BindingProvenance::Callable,
-            ) {
+            if let Ok(scoped) =
+                ScopedBinding::scoped_binding(binding, source, BindingProvenance::Callable)
+            {
                 self.callables.push(scoped);
             } else {
                 self.imported.insert(binding_name);
@@ -332,7 +329,7 @@ pub(super) fn collect_type_pattern_aliases(mut self, pattern: tree_sitter::Node<
             continue;
         };
         if binding_name != method_name { self.lines.push(first_line + method_node.start_position().row); }
-        if let Ok(scoped) = ScopedBinding::scoped_binding(binding, source, crate::javascript_scopes::BindingProvenance::Callable) {
+        if let Ok(scoped) = ScopedBinding::scoped_binding(binding, source, BindingProvenance::Callable) {
             self.callables.push(scoped);
         } else {
             self.imported.insert(binding_name);
@@ -373,7 +370,7 @@ pub(super) fn collect_object_literal_aliases(mut self, object: tree_sitter::Node
             wasm_instance_bindings,
             scoped_wasm_namespaces,
             scoped_wasm_instances,
-        )
+        ).ok()
         .or_else(|| {
             let name = (JavaScriptLiteral { node: value, source: source }).semantic_javascript_name().ok()?;
             ((self.imported.contains(&name)
@@ -390,7 +387,7 @@ pub(super) fn collect_object_literal_aliases(mut self, object: tree_sitter::Node
                 .filter(|parent| parent.kind() == "variable_declarator")
                 .and_then(|parent| parent.child_by_field_name("name"))
                 && let Ok(owner_name) = (JavaScriptLiteral { node: owner, source: source }).semantic_javascript_name()
-                && let Ok(mut scoped) = ScopedBinding::scoped_binding(owner, source, crate::javascript_scopes::BindingProvenance::Callable)
+                && let Ok(mut scoped) = ScopedBinding::scoped_binding(owner, source, BindingProvenance::Callable)
             {
                 scoped.name = format!("{owner_name}.{property_name}");
                 self.callables.push(scoped);
@@ -458,18 +455,18 @@ impl CallableAliasInventory {
 #[allow(clippy::too_many_arguments)]
 #[rustfmt::skip]
 impl WasmMemberAliases<'_> {
-fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_path: &Path, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding]) -> Option<String> {
+fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_path: &Path, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding]) -> Result<String, MemberResolutionFailure> {
     let mut value = DynamicWasmAliases::unwrap_transparent_expression(value);
     if value.kind() == "sequence_expression" {
         let mut cursor = value.walk();
         return value.named_children(&mut cursor).last().and_then(|result| {
-            WasmMemberAliases::wasm_callable_member_name(result, source, source_path, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, scoped_wasm_namespaces, scoped_wasm_instances)
-        });
+            WasmMemberAliases::wasm_callable_member_name(result, source, source_path, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, scoped_wasm_namespaces, scoped_wasm_instances).ok()
+        }).ok_or(MemberResolutionFailure::UnknownCallable);
     }
     if value.kind() == "assignment_expression" {
         return value.child_by_field_name("right").and_then(|result| {
-            WasmMemberAliases::wasm_callable_member_name(result, source, source_path, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, scoped_wasm_namespaces, scoped_wasm_instances)
-        });
+            WasmMemberAliases::wasm_callable_member_name(result, source, source_path, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, scoped_wasm_namespaces, scoped_wasm_instances).ok()
+        }).ok_or(MemberResolutionFailure::UnknownCallable);
     }
     if matches!(value.kind(), "ternary_expression" | "binary_expression") {
         let mut cursor = value.walk();
@@ -486,8 +483,8 @@ fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_
                 wasm_instance_bindings,
                 scoped_wasm_namespaces,
                 scoped_wasm_instances,
-            )
-        });
+            ).ok()
+        }).ok_or(MemberResolutionFailure::UnknownCallable);
     }
     if value.kind() == "call_expression"
         && let Some(function) = value.child_by_field_name("function")
@@ -505,15 +502,15 @@ fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_
         value = DynamicWasmAliases::unwrap_transparent_expression(bound);
     }
     if !matches!(value.kind(), "member_expression" | "subscript_expression") {
-        return None;
+        return Err(MemberResolutionFailure::NotMember);
     }
-    let namespace = DynamicWasmAliases::unwrap_transparent_expression(value.child_by_field_name("object")?);
+    let namespace = DynamicWasmAliases::unwrap_transparent_expression(value.child_by_field_name("object").ok_or(MemberResolutionFailure::MissingReceiver)?);
     let property = value
         .child_by_field_name("property")
-        .or_else(|| value.child_by_field_name("index"))?;
-    let callable_name = (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name().ok()?;
+        .or_else(|| value.child_by_field_name("index")).ok_or(MemberResolutionFailure::MissingName)?;
+    let callable_name = (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name().map_err(MemberResolutionFailure::Literal)?;
     let direct_module = DynamicWasmAliases::loaded_module_specifier(namespace, source);
-    let namespace_name = namespace.utf8_text(source.as_bytes()).ok();
+    let namespace_name = namespace.utf8_text(source.as_bytes()).map_err(|_| AliasResolutionFailure::InvalidSource);
     let receiver_type = WasmMemberAliases::wasm_receiver_type(
         namespace,
         source,
@@ -527,14 +524,10 @@ fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_
         scoped_wasm_instances,
     );
     let recorded_module = namespace_name.and_then(|name| {
-        if ScopedBinding::root_binding_is_visible(namespace, name, source) {
-            wasm_namespace_bindings.get(name).cloned()
-        } else {
-            None
-        }
-        .or_else(|| DynamicWasmAliases::scoped_wasm_module_visible(namespace, name, source, scoped_wasm_namespaces))
+        if ScopedBinding::root_binding_is_visible(namespace, name, source) && let Some(module) = wasm_namespace_bindings.get(name) { return Ok(module.clone()); }
+        DynamicWasmAliases::scoped_wasm_module_visible(namespace, name, source, scoped_wasm_namespaces)
     });
-    let is_callable = receiver_type.as_ref().is_some_and(|wasm_type| {
+    let is_callable = receiver_type.as_ref().is_ok_and(|wasm_type| {
         wasm_types
             .methods
             .get(wasm_type)
@@ -542,11 +535,11 @@ fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_
     }) || direct_module
         .as_ref()
         .or(recorded_module.as_ref())
-        .is_some_and(|module| {
+        .is_ok_and(|module| {
             callable_names.contains(&callable_name)
                 && WasmModuleSources::is_wasm_callable_export(module, &callable_name, source_path)
         });
-    is_callable.then_some(callable_name)
+    if is_callable { Ok(callable_name) } else { Err(MemberResolutionFailure::UnknownCallable) }
 }
 }
 
@@ -563,11 +556,11 @@ impl WasmMemberAliases<'_> {
         wasm_types: &WasmTypeInventory,
         scoped_wasm_namespaces: &[ScopedBinding],
         scoped_wasm_instances: &[ScopedBinding],
-    ) -> Option<String> {
+    ) -> Result<String, MemberResolutionFailure> {
         let receiver = DynamicWasmAliases::unwrap_transparent_expression(receiver);
         if receiver.kind() == "new_expression"
             && let Some(constructor) = receiver.child_by_field_name("constructor")
-            && let Some(wasm_type) = DynamicWasmAliases::constructor_wasm_class(
+            && let Ok(wasm_type) = DynamicWasmAliases::constructor_wasm_class(
                 constructor,
                 source,
                 wasm_class_bindings,
@@ -576,7 +569,7 @@ impl WasmMemberAliases<'_> {
                 wasm_type_names,
             )
         {
-            return Some(wasm_type);
+            return Ok(wasm_type);
         }
         if receiver.kind() == "call_expression"
             && let Some(function) = receiver.child_by_field_name("function")
@@ -603,13 +596,13 @@ impl WasmMemberAliases<'_> {
                 wasm_namespace_bindings,
                 scoped_wasm_namespaces,
             )
-            .is_some_and(|module| {
+            .is_ok_and(|module| {
                 WasmModuleSources::is_wasm_callable_export(&module, &name, source_path)
             })
             && let Some(returned) = wasm_types.free_returns.get(&name)
             && wasm_type_names.contains(returned)
         {
-            return Some(returned.clone());
+            return Ok(returned.clone());
         }
         if receiver.kind() == "call_expression"
             && let Some(function) = receiver.child_by_field_name("function")
@@ -618,7 +611,7 @@ impl WasmMemberAliases<'_> {
                 "member_expression" | "subscript_expression"
             )
             && let Some(object) = function.child_by_field_name("object")
-            && let Some(owner) = WasmMemberAliases::wasm_receiver_type(
+            && let Ok(owner) = WasmMemberAliases::wasm_receiver_type(
                 object,
                 source,
                 source_path,
@@ -644,7 +637,7 @@ impl WasmMemberAliases<'_> {
             && let Some(returned) = wasm_types.returns.get(&(owner, method))
             && wasm_type_names.contains(returned)
         {
-            return Some(returned.clone());
+            return Ok(returned.clone());
         }
         let receiver_name = receiver.utf8_text(source.as_bytes()).ok();
         receiver_name
@@ -655,6 +648,7 @@ impl WasmMemberAliases<'_> {
                     source,
                     scoped_wasm_instances,
                 )
+                .ok()
                 .or_else(|| {
                     ScopedBinding::root_binding_is_visible(receiver, name, source)
                         .then(|| {
@@ -675,7 +669,9 @@ impl WasmMemberAliases<'_> {
                     wasm_namespace_bindings,
                     scoped_wasm_namespaces,
                 )
+                .ok()
             })
+            .ok_or(MemberResolutionFailure::UnknownReceiver)
     }
 }
 
@@ -687,25 +683,28 @@ impl WasmMemberAliases<'_> {
         wasm_type_names: &HashSet<String>,
         wasm_namespace_bindings: &HashMap<String, String>,
         scoped_wasm_namespaces: &[ScopedBinding],
-    ) -> Option<String> {
+    ) -> Result<String, MemberResolutionFailure> {
         if !matches!(
             expression.kind(),
             "member_expression" | "subscript_expression"
         ) {
-            return None;
+            return Err(MemberResolutionFailure::UnknownReceiver);
         }
-        let namespace = expression.child_by_field_name("object")?;
+        let namespace = expression
+            .child_by_field_name("object")
+            .ok_or(MemberResolutionFailure::MissingReceiver)?;
         let type_node = expression
             .child_by_field_name("property")
-            .or_else(|| expression.child_by_field_name("index"))?;
+            .or_else(|| expression.child_by_field_name("index"))
+            .ok_or(MemberResolutionFailure::MissingName)?;
         let wasm_type = (JavaScriptLiteral {
             node: type_node,
             source: source,
         })
         .semantic_javascript_name()
-        .ok()?;
+        .map_err(MemberResolutionFailure::Literal)?;
         if !wasm_type_names.contains(&wasm_type) {
-            return None;
+            return Err(MemberResolutionFailure::UnknownReceiver);
         }
         let module = DynamicWasmAliases::wasm_module_specifier(
             namespace,
@@ -713,8 +712,13 @@ impl WasmMemberAliases<'_> {
             source_path,
             wasm_namespace_bindings,
             scoped_wasm_namespaces,
-        )?;
-        WasmModuleSources::is_wasm_export(&module, &wasm_type, source_path).then_some(wasm_type)
+        )
+        .map_err(MemberResolutionFailure::Alias)?;
+        if WasmModuleSources::is_wasm_export(&module, &wasm_type, source_path) {
+            Ok(wasm_type)
+        } else {
+            Err(MemberResolutionFailure::UnknownReceiver)
+        }
     }
 }
 
@@ -737,4 +741,15 @@ impl From<bool> for AliasDescent {
             Self::Descend
         }
     }
+}
+
+#[derive(Debug)]
+pub(super) enum MemberResolutionFailure {
+    NotMember,
+    MissingReceiver,
+    MissingName,
+    UnknownCallable,
+    UnknownReceiver,
+    Literal(JavaScriptLiteralFailure),
+    Alias(AliasResolutionFailure),
 }

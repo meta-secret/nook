@@ -1,3 +1,6 @@
+use crate::javascript_literals::JavaScriptLiteralFailure;
+use crate::javascript_scopes::BindingProvenance;
+use crate::javascript_scopes::ScopeAdmissionFailure;
 pub struct DynamicWasmCallables<'scan> {
     pub node: tree_sitter::Node<'scan>,
     pub source: &'scan str,
@@ -89,7 +92,7 @@ impl ScopedCallableInventory {
         if pattern.kind() != "object_pattern" {
             return self;
         }
-        let Some(module) = DynamicWasmAliases::wasm_module_specifier(
+        let Ok(module) = DynamicWasmAliases::wasm_module_specifier(
             value,
             source,
             source_path,
@@ -137,7 +140,7 @@ impl ScopedCallableInventory {
         }
         let Some(module) = function
             .child_by_field_name("object")
-            .and_then(|receiver| DynamicWasmAliases::loaded_module_specifier(receiver, source))
+            .and_then(|receiver| DynamicWasmAliases::loaded_module_specifier(receiver, source).ok())
             .filter(|module| {
                 (WasmModuleSources {
                     module,
@@ -175,7 +178,7 @@ impl ScopedCallableInventory {
                     && let Ok(namespace) = DynamicWasmCallables::scoped_parameter_binding(
                         pattern,
                         source,
-                        crate::javascript_scopes::BindingProvenance::Module(module.clone()),
+                        BindingProvenance::Module(module.clone()),
                     )
                 {
                     self.scoped_wasm_namespaces.push(namespace);
@@ -238,14 +241,10 @@ impl ScopedCallableInventory {
                 DynamicWasmCallables::scoped_parameter_binding(
                     binding,
                     context.source,
-                    crate::javascript_scopes::BindingProvenance::Callable,
+                    BindingProvenance::Callable,
                 )
             } else {
-                ScopedBinding::scoped_binding(
-                    binding,
-                    context.source,
-                    crate::javascript_scopes::BindingProvenance::Callable,
-                )
+                ScopedBinding::scoped_binding(binding, context.source, BindingProvenance::Callable)
             };
             if let Ok(scoped) = scoped {
                 self.bindings.push(scoped);
@@ -285,11 +284,11 @@ impl DynamicWasmCallables<'_> {
     fn scoped_parameter_binding(
         binding: tree_sitter::Node<'_>,
         source: &str,
-        provenance: crate::javascript_scopes::BindingProvenance,
-    ) -> Result<ScopedBinding, crate::javascript_scopes::ScopeAdmissionFailure> {
+        provenance: BindingProvenance,
+    ) -> Result<ScopedBinding, ScopeAdmissionFailure> {
         let name = binding
             .utf8_text(source.as_bytes())
-            .map_err(|_| crate::javascript_scopes::ScopeAdmissionFailure::InvalidSource)?
+            .map_err(|_| ScopeAdmissionFailure::InvalidSource)?
             .to_owned();
         let mut ancestor = binding.parent();
         while let Some(function) = ancestor {
@@ -299,7 +298,7 @@ impl DynamicWasmCallables<'_> {
             ) {
                 let body = function
                     .child_by_field_name("body")
-                    .ok_or(crate::javascript_scopes::ScopeAdmissionFailure::MissingFunctionBody)?;
+                    .ok_or(ScopeAdmissionFailure::MissingFunctionBody)?;
                 return Ok(ScopedBinding {
                     name,
                     scope_start: body.start_byte(),
@@ -310,7 +309,7 @@ impl DynamicWasmCallables<'_> {
             }
             ancestor = function.parent();
         }
-        Err(crate::javascript_scopes::ScopeAdmissionFailure::NoEnclosingScope)
+        Err(ScopeAdmissionFailure::NoEnclosingScope)
     }
 }
 
@@ -318,11 +317,11 @@ impl DynamicWasmCallables<'_> {
     fn member_name(
         node: tree_sitter::Node<'_>,
         source: &str,
-    ) -> Result<String, crate::javascript_literals::JavaScriptLiteralFailure> {
+    ) -> Result<String, JavaScriptLiteralFailure> {
         let property = node
             .child_by_field_name("property")
             .or_else(|| node.child_by_field_name("index"))
-            .ok_or(crate::javascript_literals::JavaScriptLiteralFailure::MissingCallableName)?;
+            .ok_or(JavaScriptLiteralFailure::MissingCallableName)?;
         (JavaScriptLiteral {
             node: property,
             source,

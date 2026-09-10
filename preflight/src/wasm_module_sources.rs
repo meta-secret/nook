@@ -1,3 +1,4 @@
+use crate::javascript_literals::JavaScriptLiteralFailure;
 mod traversal;
 use traversal::ModuleTraversal;
 pub struct WasmModuleSources<'scan> {
@@ -75,7 +76,7 @@ impl WasmModuleSources<'_> {
         exported_name: &str,
         source_path: &Path,
         callable_names: &HashSet<String>,
-    ) -> Option<String> {
+    ) -> Result<String, ExportResolutionFailure> {
         ModuleTraversal::default()
             .callable(module, exported_name, source_path, callable_names)
             .1
@@ -95,7 +96,7 @@ impl WasmModuleSources<'_> {
         module: &str,
         exported_name: &str,
         source_path: &Path,
-    ) -> Option<String> {
+    ) -> Result<String, ExportResolutionFailure> {
         ModuleTraversal::default()
             .namespace(module, exported_name, source_path)
             .1
@@ -108,7 +109,7 @@ impl WasmModuleSources<'_> {
         exported_name: &str,
         source_path: &Path,
         wasm_type_names: &HashSet<String>,
-    ) -> Option<String> {
+    ) -> Result<String, ExportResolutionFailure> {
         ModuleTraversal::default()
             .factory(module, exported_name, source_path, wasm_type_names)
             .1
@@ -120,8 +121,8 @@ impl WasmModuleSources<'_> {
         path: &Path,
         exported_name: &str,
         wasm_type_names: &HashSet<String>,
-    ) -> Option<String> {
-        let source = fs::read_to_string(path).ok()?;
+    ) -> Result<String, ExportResolutionFailure> {
+        let source = fs::read_to_string(path).map_err(ExportResolutionFailure::SourceRead)?;
         let language = if path
             .extension()
             .and_then(OsStr::to_str)
@@ -132,8 +133,12 @@ impl WasmModuleSources<'_> {
             tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
         };
         let mut parser = tree_sitter::Parser::new();
-        parser.set_language(&language).ok()?;
-        let tree = parser.parse(&source, None)?;
+        parser
+            .set_language(&language)
+            .map_err(ExportResolutionFailure::Language)?;
+        let tree = parser
+            .parse(&source, None)
+            .ok_or(ExportResolutionFailure::ParseUnavailable)?;
         let mut imported_bindings = HashMap::new();
         imported_bindings = WasmModuleSources::collect_imported_bindings(
             tree.root_node(),
@@ -153,7 +158,7 @@ impl WasmModuleSources<'_> {
 
 #[rustfmt::skip]
 impl WasmModuleSources<'_> {
-fn find_factory_return_type(node: tree_sitter::Node<'_>, source: &str, source_path: &Path, exported_name: &str, wasm_type_names: &HashSet<String>, imported_bindings: &HashMap<String, (String, String)>) -> Option<String> {
+fn find_factory_return_type(node: tree_sitter::Node<'_>, source: &str, source_path: &Path, exported_name: &str, wasm_type_names: &HashSet<String>, imported_bindings: &HashMap<String, (String, String)>) -> Result<String, ExportResolutionFailure> {
     if exported_name == "default"
         && node.kind() == "export_statement"
         && node
@@ -177,7 +182,7 @@ fn find_factory_return_type(node: tree_sitter::Node<'_>, source: &str, source_pa
             | "function_expression"
             | "generator_function"
             | "arrow_function"
-    ) && (WasmModuleSources::callable_name(node, source).is_some_and(|name| name == exported_name)
+    ) && (WasmModuleSources::callable_name(node, source).is_ok_and(|name| name == exported_name)
         || (exported_name == "default"
             && node.parent().is_some_and(|parent| {
                 parent.kind() == "export_statement"
@@ -187,19 +192,19 @@ fn find_factory_return_type(node: tree_sitter::Node<'_>, source: &str, source_pa
             })))
         && let Some(wasm_type) = node
             .child_by_field_name("return_type")
-            .and_then(|return_type| WasmModuleSources::referenced_wasm_type(return_type, source, source_path, wasm_type_names, imported_bindings))
-            .or_else(|| node.child_by_field_name("body").and_then(|body| WasmModuleSources::inferred_factory_wasm_type(crate::wasm_module_sources::FactoryReturnTraversal { node: body, value_context: if body.kind() != "statement_block" { FactoryValueContext::Returned } else { FactoryValueContext::Expression }, source, source_path, wasm_type_names, imports: imported_bindings })))
+            .and_then(|return_type| WasmModuleSources::referenced_wasm_type(return_type, source, source_path, wasm_type_names, imported_bindings).ok())
+            .or_else(|| node.child_by_field_name("body").and_then(|body| WasmModuleSources::inferred_factory_wasm_type(crate::wasm_module_sources::FactoryReturnTraversal { node: body, value_context: if body.kind() != "statement_block" { FactoryValueContext::Returned } else { FactoryValueContext::Expression }, source, source_path, wasm_type_names, imports: imported_bindings }).ok()))
     {
-        return Some(wasm_type);
+        return Ok(wasm_type);
     }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor).find_map(|child| WasmModuleSources::find_factory_return_type(child, source, source_path, exported_name, wasm_type_names, imported_bindings))
+    node.named_children(&mut cursor).find_map(|child| WasmModuleSources::find_factory_return_type(child, source, source_path, exported_name, wasm_type_names, imported_bindings).ok()).ok_or(ExportResolutionFailure::NoMatchingFactory)
 }
 }
 
 #[rustfmt::skip]
 impl WasmModuleSources<'_> {
-fn inferred_factory_wasm_type(request: FactoryReturnTraversal<'_>) -> Option<String> {
+fn inferred_factory_wasm_type(request: FactoryReturnTraversal<'_>) -> Result<String, ExportResolutionFailure> {
 let FactoryReturnTraversal { node, value_context, source, source_path, wasm_type_names, imports } = request;
 
     if matches!(value_context, FactoryValueContext::Returned)
@@ -209,7 +214,7 @@ let FactoryReturnTraversal { node, value_context, source, source_path, wasm_type
         && wasm_type_names.contains(imported)
         && WasmModuleSources::is_wasm_export(module, imported, source_path)
     {
-        return Some(imported.clone());
+        return Ok(imported.clone());
     }
     if matches!(
         node.kind(),
@@ -219,15 +224,18 @@ let FactoryReturnTraversal { node, value_context, source, source_path, wasm_type
             | "generator_function"
             | "arrow_function"
     ) {
-        return None;
+        return Err(ExportResolutionFailure::NoMatchingFactory);
     }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor).find_map(|child| WasmModuleSources::inferred_factory_wasm_type(crate::wasm_module_sources::FactoryReturnTraversal { node: child, value_context: if matches!(value_context, FactoryValueContext::Returned) || node.kind() == "return_statement" { FactoryValueContext::Returned } else { FactoryValueContext::Expression }, source, source_path, wasm_type_names, imports }))
+    node.named_children(&mut cursor).find_map(|child| WasmModuleSources::inferred_factory_wasm_type(crate::wasm_module_sources::FactoryReturnTraversal { node: child, value_context: if matches!(value_context, FactoryValueContext::Returned) || node.kind() == "return_statement" { FactoryValueContext::Returned } else { FactoryValueContext::Expression }, source, source_path, wasm_type_names, imports }).ok()).ok_or(ExportResolutionFailure::NoMatchingFactory)
 }
 }
 
 impl WasmModuleSources<'_> {
-    fn callable_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+    fn callable_name(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> Result<String, ExportResolutionFailure> {
         node.child_by_field_name("name")
             .and_then(|name| {
                 (JavaScriptLiteral {
@@ -251,6 +259,7 @@ impl WasmModuleSources<'_> {
                         .ok()
                     })
             })
+            .ok_or(ExportResolutionFailure::MissingCallableName)
     }
 }
 
@@ -261,8 +270,11 @@ impl WasmModuleSources<'_> {
         source_path: &Path,
         wasm_type_names: &HashSet<String>,
         imported_bindings: &HashMap<String, (String, String)>,
-    ) -> Option<String> {
-        let annotation = node.utf8_text(source.as_bytes()).ok()?.trim();
+    ) -> Result<String, ExportResolutionFailure> {
+        let annotation = node
+            .utf8_text(source.as_bytes())
+            .map_err(|_| ExportResolutionFailure::InvalidSource)?
+            .trim();
         let actual = annotation.strip_prefix(':').unwrap_or(annotation).trim();
         let local_name = actual
             .strip_prefix("Promise<")
@@ -272,17 +284,21 @@ impl WasmModuleSources<'_> {
         if let Some((module, imported_name)) = imported_bindings.get(local_name) {
             return (wasm_type_names.contains(imported_name)
                 && WasmModuleSources::is_wasm_export(module, imported_name, source_path))
-            .then(|| imported_name.clone());
+            .then(|| imported_name.clone())
+            .ok_or(ExportResolutionFailure::UnrecognizedType);
         }
         wasm_type_names
             .contains(local_name)
             .then(|| local_name.to_owned())
+            .ok_or(ExportResolutionFailure::UnrecognizedType)
     }
 }
 
 impl WasmModuleSources<'_> {
-    fn local_forwarded_exports(path: &Path) -> Option<Vec<ForwardedExport>> {
-        let source = fs::read_to_string(path).ok()?;
+    fn local_forwarded_exports(
+        path: &Path,
+    ) -> Result<Vec<ForwardedExport>, ExportResolutionFailure> {
+        let source = fs::read_to_string(path).map_err(ExportResolutionFailure::SourceRead)?;
         let language = if path
             .extension()
             .and_then(OsStr::to_str)
@@ -293,8 +309,12 @@ impl WasmModuleSources<'_> {
             tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
         };
         let mut parser = tree_sitter::Parser::new();
-        parser.set_language(&language).ok()?;
-        let tree = parser.parse(&source, None)?;
+        parser
+            .set_language(&language)
+            .map_err(ExportResolutionFailure::Language)?;
+        let tree = parser
+            .parse(&source, None)
+            .ok_or(ExportResolutionFailure::ParseUnavailable)?;
         let mut imported_bindings = HashMap::new();
         imported_bindings = WasmModuleSources::collect_imported_bindings(
             tree.root_node(),
@@ -308,7 +328,7 @@ impl WasmModuleSources<'_> {
             &imported_bindings,
             exports,
         );
-        Some(exports)
+        Ok(exports)
     }
 }
 
@@ -326,14 +346,14 @@ fn collect_imported_bindings(node: tree_sitter::Node<'_>, source: &str, mut bind
     if node.kind() == "variable_declarator"
         && let Some(local) = node.child_by_field_name("name").and_then(|binding| (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name().ok())
         && node.child_by_field_name("name").is_some_and(ScopedBinding::declaration_is_in_program_scope)
-        && let Some(module) = node.child_by_field_name("value").and_then(|value| WasmModuleSources::required_module(value, source))
+        && let Some(module) = node.child_by_field_name("value").and_then(|value| WasmModuleSources::required_module(value, source).ok())
     {
         bindings.insert(local, (module, "*".to_owned()));
         return bindings;
     }
     if node.kind() == "variable_declarator"
         && let (Some(local), Some(value)) = (node.child_by_field_name("name").and_then(|binding| (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name().ok()), node.child_by_field_name("value"))
-        && let Some(ForwardedExport::Named { imported, module, .. }) = WasmModuleSources::forwarded_namespace_member(local.clone(), value, source, &bindings)
+        && let Some(ForwardedExport::Named { imported, module, .. }) = WasmModuleSources::forwarded_namespace_member(local.clone(), value, source, &bindings).ok()
     {
         bindings.insert(local, (module, imported));
         return bindings;
@@ -440,13 +460,13 @@ fn collect_export_statement(node: tree_sitter::Node<'_>, source: &str, imported_
     let mut saw_specifier = false;
     if node.utf8_text(source.as_bytes()).is_ok_and(|text| text.trim_start().starts_with("export = "))
         && let Some(value) = node.named_child(0)
-        && let Some(module) = WasmModuleSources::forwarded_namespace_identifier(value, source, imported_bindings)
+        && let Ok(module) = WasmModuleSources::forwarded_namespace_identifier(value, source, imported_bindings)
     {
         exports.push(ForwardedExport::All { module });
         return exports;
     }
     if let Some(module) = &direct_module
-        && let Some(exported) = WasmModuleSources::namespace_export_name(node, source)
+        && let Ok(exported) = WasmModuleSources::namespace_export_name(node, source)
     {
         exports.push(ForwardedExport::Namespace { exported, module: module.clone() });
         return exports;
@@ -532,6 +552,7 @@ impl WasmModuleSources<'_> {
                         source,
                         imports,
                     )
+                    .ok()
                 })
                 .into_iter()
                 .collect();
@@ -559,6 +580,7 @@ impl WasmModuleSources<'_> {
                     source,
                     imports,
                 )
+                .ok()
             })
             .collect()
     }
@@ -570,20 +592,24 @@ impl WasmModuleSources<'_> {
         value: tree_sitter::Node<'_>,
         source: &str,
         imports: &HashMap<String, (String, String)>,
-    ) -> Option<ForwardedExport> {
-        let namespace = value.child_by_field_name("object")?;
+    ) -> Result<ForwardedExport, ExportResolutionFailure> {
+        let namespace = value
+            .child_by_field_name("object")
+            .ok_or(ExportResolutionFailure::MissingMember)?;
         let namespace_name = (JavaScriptLiteral {
             node: namespace,
             source: source,
         })
         .semantic_javascript_name()
-        .ok()?;
+        .map_err(ExportResolutionFailure::Literal)?;
         if !ScopedBinding::root_binding_is_visible(namespace, &namespace_name, source) {
-            return None;
+            return Err(ExportResolutionFailure::UnrecognizedNamespace);
         }
-        let (module, imported_namespace) = imports.get(&namespace_name)?;
+        let (module, imported_namespace) = imports
+            .get(&namespace_name)
+            .ok_or(ExportResolutionFailure::UnboundImport)?;
         if imported_namespace != "*" {
-            return None;
+            return Err(ExportResolutionFailure::UnrecognizedNamespace);
         }
         let imported = value
             .child_by_field_name("property")
@@ -595,8 +621,9 @@ impl WasmModuleSources<'_> {
                 })
                 .semantic_javascript_name()
                 .ok()
-            })?;
-        Some(ForwardedExport::Named {
+            })
+            .ok_or(ExportResolutionFailure::MissingMember)?;
+        Ok(ForwardedExport::Named {
             exported,
             imported,
             module: module.clone(),
@@ -605,14 +632,25 @@ impl WasmModuleSources<'_> {
 }
 
 impl WasmModuleSources<'_> {
-    fn namespace_export_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-        let text = node.utf8_text(source.as_bytes()).ok()?.trim_start();
-        if !text.starts_with("export * as ") {
-            return None;
+    fn namespace_export_name(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> Result<String, ExportResolutionFailure> {
+        let text = node
+            .utf8_text(source.as_bytes())
+            .map_err(|_| ExportResolutionFailure::InvalidSource)?
+            .trim_start();
+        let remainder = text
+            .strip_prefix("export * as ")
+            .ok_or(ExportResolutionFailure::UnrecognizedNamespace)?;
+        let exported = remainder
+            .split_whitespace()
+            .next()
+            .ok_or(ExportResolutionFailure::MissingExportName)?;
+        if exported.is_empty() {
+            return Err(ExportResolutionFailure::MissingExportName);
         }
-        let remainder = text.strip_prefix("export * as ")?;
-        let exported = remainder.split_whitespace().next()?;
-        (!exported.is_empty()).then(|| exported.to_owned())
+        Ok(exported.to_owned())
     }
 }
 
@@ -632,21 +670,21 @@ fn collect_commonjs_export(node: tree_sitter::Node<'_>, source: &str, imported_b
         if right.kind() == "object" {
             let mut cursor = right.walk();
             exports.extend(right.named_children(&mut cursor).filter_map(|property| {
-                WasmModuleSources::forwarded_commonjs_object_property(property, source, imported_bindings)
+                WasmModuleSources::forwarded_commonjs_object_property(property, source, imported_bindings).ok()
             }));
-        } else if let Some((module, imported)) = WasmModuleSources::forwarded_member(right, source, imported_bindings) {
+        } else if let Ok(ForwardedMember { module, imported }) = WasmModuleSources::forwarded_member(right, source, imported_bindings) {
             exports.push(ForwardedExport::Named { exported: "default".to_owned(), imported, module });
-        } else if let Some(module) = WasmModuleSources::required_module(right, source) {
+        } else if let Ok(module) = WasmModuleSources::required_module(right, source) {
             exports.push(ForwardedExport::All { module });
-        } else if let Some(module) = WasmModuleSources::forwarded_namespace_identifier(right, source, imported_bindings) {
+        } else if let Ok(module) = WasmModuleSources::forwarded_namespace_identifier(right, source, imported_bindings) {
             exports.push(ForwardedExport::All { module });
         }
         return exports;
     }
-    let Some(exported) = WasmModuleSources::commonjs_named_export(left, source) else {
+    let Ok(exported) = WasmModuleSources::commonjs_named_export(left, source) else {
         return exports;
     };
-    let Some((module, imported)) = node.child_by_field_name("right").and_then(|right| WasmModuleSources::forwarded_member(right, source, imported_bindings))
+    let Some(ForwardedMember { module, imported }) = node.child_by_field_name("right").and_then(|right| WasmModuleSources::forwarded_member(right, source, imported_bindings).ok())
     else {
         return exports;
     };
@@ -657,10 +695,11 @@ exports
 
 #[rustfmt::skip]
 impl WasmModuleSources<'_> {
-fn forwarded_namespace_identifier(node: tree_sitter::Node<'_>, source: &str, imports: &HashMap<String, (String, String)>) -> Option<String> {
-    let name = (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name().ok()?;
-    let (module, imported) = imports.get(&name)?;
-    (imported == "*" && ScopedBinding::root_binding_is_visible(node, &name, source)).then(|| module.clone())
+fn forwarded_namespace_identifier(node: tree_sitter::Node<'_>, source: &str, imports: &HashMap<String, (String, String)>) -> Result<String, ExportResolutionFailure> {
+    let name = (JavaScriptLiteral { node, source }).semantic_javascript_name().map_err(ExportResolutionFailure::Literal)?;
+    let (module, imported) = imports.get(&name).ok_or(ExportResolutionFailure::UnboundImport)?;
+    if imported != "*" || !ScopedBinding::root_binding_is_visible(node, &name, source) { return Err(ExportResolutionFailure::UnrecognizedNamespace); }
+    Ok(module.clone())
 }
 }
 
@@ -669,7 +708,7 @@ impl WasmModuleSources<'_> {
         property: tree_sitter::Node<'_>,
         source: &str,
         imports: &HashMap<String, (String, String)>,
-    ) -> Option<ForwardedExport> {
+    ) -> Result<ForwardedExport, ExportResolutionFailure> {
         if matches!(
             property.kind(),
             "shorthand_property_identifier" | "shorthand_property_identifier_pattern"
@@ -679,9 +718,11 @@ impl WasmModuleSources<'_> {
                 source: source,
             })
             .semantic_javascript_name()
-            .ok()?;
-            let (module, imported) = imports.get(&exported)?;
-            return Some(ForwardedExport::Named {
+            .map_err(ExportResolutionFailure::Literal)?;
+            let (module, imported) = imports
+                .get(&exported)
+                .ok_or(ExportResolutionFailure::UnboundImport)?;
+            return Ok(ForwardedExport::Named {
                 exported,
                 imported: imported.clone(),
                 module: module.clone(),
@@ -689,12 +730,16 @@ impl WasmModuleSources<'_> {
         }
         WasmModuleSources::forwarded_namespace_member(
             (JavaScriptLiteral {
-                node: property.child_by_field_name("key")?,
+                node: property
+                    .child_by_field_name("key")
+                    .ok_or(ExportResolutionFailure::MissingMember)?,
                 source: source,
             })
             .semantic_javascript_name()
-            .ok()?,
-            property.child_by_field_name("value")?,
+            .map_err(ExportResolutionFailure::Literal)?,
+            property
+                .child_by_field_name("value")
+                .ok_or(ExportResolutionFailure::MissingMember)?,
             source,
             imports,
         )
@@ -706,103 +751,133 @@ impl WasmModuleSources<'_> {
         node: tree_sitter::Node<'_>,
         source: &str,
         imported_bindings: &HashMap<String, (String, String)>,
-    ) -> Option<(String, String)> {
-        WasmModuleSources::required_member(node, source).or_else(|| {
-            let object = node.child_by_field_name("object")?;
-            let name = (JavaScriptLiteral {
-                node: object,
-                source: source,
-            })
-            .semantic_javascript_name()
-            .ok()?;
-            if !ScopedBinding::root_binding_is_visible(object, &name, source) {
-                return None;
-            }
-            let (module, namespace) = imported_bindings.get(&name)?;
-            (namespace == "*").then(|| {
-                let imported = node
-                    .child_by_field_name("property")
-                    .or_else(|| node.child_by_field_name("index"))
-                    .and_then(|property| {
-                        (JavaScriptLiteral {
-                            node: property,
-                            source: source,
-                        })
-                        .semantic_javascript_name()
-                        .ok()
-                    })?;
-                Some((module.clone(), imported))
-            })?
+    ) -> Result<ForwardedMember, ExportResolutionFailure> {
+        if let Ok(member) = Self::required_member(node, source) {
+            return Ok(member);
+        }
+        let object = node
+            .child_by_field_name("object")
+            .ok_or(ExportResolutionFailure::MissingMember)?;
+        let name = (JavaScriptLiteral {
+            node: object,
+            source,
+        })
+        .semantic_javascript_name()
+        .map_err(ExportResolutionFailure::Literal)?;
+        if !ScopedBinding::root_binding_is_visible(object, &name, source) {
+            return Err(ExportResolutionFailure::UnrecognizedNamespace);
+        }
+        let (module, namespace) = imported_bindings
+            .get(&name)
+            .ok_or(ExportResolutionFailure::UnboundImport)?;
+        if namespace != "*" {
+            return Err(ExportResolutionFailure::UnrecognizedNamespace);
+        }
+        let property = node
+            .child_by_field_name("property")
+            .or_else(|| node.child_by_field_name("index"))
+            .ok_or(ExportResolutionFailure::MissingMember)?;
+        let imported = (JavaScriptLiteral {
+            node: property,
+            source,
+        })
+        .semantic_javascript_name()
+        .map_err(ExportResolutionFailure::Literal)?;
+        Ok(ForwardedMember {
+            module: module.clone(),
+            imported,
         })
     }
 }
 
 impl WasmModuleSources<'_> {
-    fn commonjs_named_export(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+    fn commonjs_named_export(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> Result<String, ExportResolutionFailure> {
         if !matches!(node.kind(), "member_expression" | "subscript_expression") {
-            return None;
+            return Err(ExportResolutionFailure::MissingMember);
         }
-        let object = node.child_by_field_name("object")?;
-        let object_text = object.utf8_text(source.as_bytes()).ok()?.trim();
+        let object = node
+            .child_by_field_name("object")
+            .ok_or(ExportResolutionFailure::MissingMember)?;
+        let object_text = object
+            .utf8_text(source.as_bytes())
+            .map_err(|_| ExportResolutionFailure::InvalidSource)?
+            .trim();
         if !matches!(object_text, "exports" | "module.exports") {
-            return None;
+            return Err(ExportResolutionFailure::UnrecognizedNamespace);
         }
-        node.child_by_field_name("property")
-            .or_else(|| node.child_by_field_name("index"))
-            .and_then(|property| {
-                (JavaScriptLiteral {
-                    node: property,
-                    source: source,
-                })
-                .semantic_javascript_name()
-                .ok()
-            })
-    }
-}
-
-impl WasmModuleSources<'_> {
-    fn required_member(node: tree_sitter::Node<'_>, source: &str) -> Option<(String, String)> {
-        if !matches!(node.kind(), "member_expression" | "subscript_expression") {
-            return None;
-        }
-        let object = node.child_by_field_name("object")?;
-        let module = WasmModuleSources::required_module(object, source)?;
-        let imported = node
+        let property = node
             .child_by_field_name("property")
             .or_else(|| node.child_by_field_name("index"))
-            .and_then(|property| {
-                (JavaScriptLiteral {
-                    node: property,
-                    source: source,
-                })
-                .semantic_javascript_name()
-                .ok()
-            })?;
-        Some((module, imported))
+            .ok_or(ExportResolutionFailure::MissingMember)?;
+        (JavaScriptLiteral {
+            node: property,
+            source,
+        })
+        .semantic_javascript_name()
+        .map_err(ExportResolutionFailure::Literal)
     }
 }
 
 impl WasmModuleSources<'_> {
-    fn required_module(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-        let function = node.child_by_field_name("function")?;
+    fn required_member(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> Result<ForwardedMember, ExportResolutionFailure> {
+        if !matches!(node.kind(), "member_expression" | "subscript_expression") {
+            return Err(ExportResolutionFailure::MissingMember);
+        }
+        let object = node
+            .child_by_field_name("object")
+            .ok_or(ExportResolutionFailure::MissingMember)?;
+        let module = Self::required_module(object, source)?;
+        let property = node
+            .child_by_field_name("property")
+            .or_else(|| node.child_by_field_name("index"))
+            .ok_or(ExportResolutionFailure::MissingMember)?;
+        let imported = (JavaScriptLiteral {
+            node: property,
+            source,
+        })
+        .semantic_javascript_name()
+        .map_err(ExportResolutionFailure::Literal)?;
+        Ok(ForwardedMember { module, imported })
+    }
+}
+
+impl WasmModuleSources<'_> {
+    fn required_module(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> Result<String, ExportResolutionFailure> {
+        let function = node
+            .child_by_field_name("function")
+            .ok_or(ExportResolutionFailure::NotRequireCall)?;
         if node.kind() != "call_expression"
             || !function
                 .utf8_text(source.as_bytes())
                 .is_ok_and(|name| name == "require")
             || !ScopedBinding::root_binding_is_visible(function, "require", source)
         {
-            return None;
+            return Err(ExportResolutionFailure::NotRequireCall);
         }
-        let arguments = node.child_by_field_name("arguments")?;
+        let arguments = node
+            .child_by_field_name("arguments")
+            .ok_or(ExportResolutionFailure::MissingMember)?;
         let mut cursor = arguments.walk();
-        arguments.named_children(&mut cursor).find_map(|argument| {
-            (JavaScriptLiteral {
+        for argument in arguments.named_children(&mut cursor) {
+            if let Ok(module) = (JavaScriptLiteral {
                 node: argument,
                 source,
             })
             .static_javascript_string()
-            .ok()
-        })
+            {
+                return Ok(module);
+            }
+        }
+        Err(ExportResolutionFailure::MissingModuleSpecifier)
     }
 }
 
@@ -821,4 +896,30 @@ struct FactoryReturnTraversal<'a> {
     source_path: &'a Path,
     wasm_type_names: &'a HashSet<String>,
     imports: &'a HashMap<String, (String, String)>,
+}
+
+#[derive(Debug)]
+pub(super) enum ExportResolutionFailure {
+    SourceRead(std::io::Error),
+    Language(tree_sitter::LanguageError),
+    ParseUnavailable,
+    InvalidSource,
+    Literal(JavaScriptLiteralFailure),
+    NoMatchingFactory,
+    MissingCallableName,
+    UnrecognizedType,
+    MissingMember,
+    UnrecognizedNamespace,
+    UnboundImport,
+    MissingExportName,
+    NotRequireCall,
+    MissingModuleSpecifier,
+    NoMatchingExport,
+    RepeatedExport,
+    Module(local_resolution::ModuleResolutionFailure),
+}
+
+struct ForwardedMember {
+    module: String,
+    imported: String,
 }

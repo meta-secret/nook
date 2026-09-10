@@ -1,3 +1,7 @@
+use crate::javascript_literals::JavaScriptLiteralFailure;
+use crate::javascript_scopes::BindingProvenance;
+use crate::javascript_scopes::ScopeAdmissionFailure;
+mod resolution;
 pub struct DynamicWasmAliases<'scan> {
     pub node: tree_sitter::Node<'scan>,
     pub source: &'scan str,
@@ -34,11 +38,8 @@ impl DynamicWasmAliases<'_> {
             )
             && binding.kind() == "identifier"
             && DynamicWasmAliases::trusted_runtime_receiver(value, source)
-            && let Ok(receiver) = ScopedBinding::scoped_binding(
-                binding,
-                source,
-                crate::javascript_scopes::BindingProvenance::Callable,
-            )
+            && let Ok(receiver) =
+                ScopedBinding::scoped_binding(binding, source, BindingProvenance::Callable)
         {
             receivers.push(receiver);
         }
@@ -252,7 +253,7 @@ impl DynamicScopeInventory {
         let binding = DynamicWasmAliases::unwrap_transparent_expression(binding);
         let value = DynamicWasmAliases::unwrap_transparent_expression(value);
         if binding.kind() == "identifier"
-            && let Some(module) = DynamicWasmAliases::loaded_module_specifier(value, source)
+            && let Ok(module) = DynamicWasmAliases::loaded_module_specifier(value, source)
             && WasmModuleSources::is_wasm_callable_export(&module, "default", source_path)
             && let Ok(name) = (JavaScriptLiteral {
                 node: binding,
@@ -263,18 +264,16 @@ impl DynamicScopeInventory {
             self.callable
                 .lines
                 .push(first_line + binding.start_position().row);
-            if let Ok(scoped) = ScopedBinding::scoped_binding(
-                binding,
-                source,
-                crate::javascript_scopes::BindingProvenance::Callable,
-            ) {
+            if let Ok(scoped) =
+                ScopedBinding::scoped_binding(binding, source, BindingProvenance::Callable)
+            {
                 self.callable.callables.push(scoped);
             } else {
                 self.callable.imported.insert(name);
             }
             return (self, AliasDescent::Complete);
         }
-        if let Some(namespace) = DynamicWasmAliases::dynamic_namespace_binding(
+        if let Ok(namespace) = DynamicWasmAliases::dynamic_namespace_binding(
             binding,
             value,
             source,
@@ -284,7 +283,7 @@ impl DynamicScopeInventory {
         ) {
             self.namespaces.push(namespace);
         }
-        if let Some(instance) = DynamicWasmAliases::wasm_instance_binding(
+        if let Ok(instance) = DynamicWasmAliases::wasm_instance_binding(
             binding,
             value,
             source,
@@ -394,7 +393,7 @@ fn collect_factory_result_member_alias(mut self, binding: tree_sitter::Node<'_>,
     let Ok(factory_name) = (JavaScriptLiteral { node: function, source: source }).callable_expression_name() else {
         return (self, AliasDescent::Descend);
     };
-    let wasm_type = function.utf8_text(source.as_bytes()).ok().filter(|_| DynamicWasmAliases::callable_binding_is_visible(function, source)).and_then(|name| factories.get(name).cloned()).or_else(|| DynamicWasmAliases::scoped_wasm_type_visible(function, &factory_name, source, scoped_factories));
+    let wasm_type = function.utf8_text(source.as_bytes()).ok().filter(|_| DynamicWasmAliases::callable_binding_is_visible(function, source)).and_then(|name| factories.get(name).cloned()).or_else(|| DynamicWasmAliases::scoped_wasm_type_visible(function, &factory_name, source, scoped_factories).ok());
     let Some(callable) = wasm_type
         .and_then(|owner| wasm_types.methods.get(&owner))
         .and_then(|methods| {
@@ -410,310 +409,12 @@ fn collect_factory_result_member_alias(mut self, binding: tree_sitter::Node<'_>,
     if binding_name != callable {
         self.lines.push(first_line + binding_node.start_position().row);
     }
-    if let Ok(scoped) = ScopedBinding::scoped_binding(binding_node, source, crate::javascript_scopes::BindingProvenance::Callable) {
+    if let Ok(scoped) = ScopedBinding::scoped_binding(binding_node, source, BindingProvenance::Callable) {
         self.callables.push(scoped);
     } else {
         self.imported.insert(binding_name);
     }
     (self, AliasDescent::Complete)
-}
-}
-
-impl DynamicWasmAliases<'_> {
-    fn dynamic_namespace_binding(
-        binding: tree_sitter::Node<'_>,
-        value: tree_sitter::Node<'_>,
-        source: &str,
-        source_path: &Path,
-        wasm_namespace_bindings: &HashMap<String, String>,
-        scoped_wasm_namespaces: &[ScopedBinding],
-    ) -> Option<ScopedBinding> {
-        let reference = binding;
-        let binding = DynamicWasmAliases::declared_binding(binding, source).unwrap_or(binding);
-        if binding.kind() == "identifier"
-            && let Some(module) = DynamicWasmAliases::wasm_module_specifier(
-                value,
-                source,
-                source_path,
-                wasm_namespace_bindings,
-                scoped_wasm_namespaces,
-            )
-        {
-            let mut scoped = ScopedBinding::scoped_binding(
-                binding,
-                source,
-                crate::javascript_scopes::BindingProvenance::Module(module),
-            )
-            .ok()?;
-            if let crate::javascript_scopes::Invocation::CompletesAt(invocation_end) =
-                ScopedBinding::deferred_invocation_end(reference, &scoped, source)
-            {
-                scoped.declaration_end = invocation_end;
-            }
-            return Some(scoped);
-        }
-        None
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-#[rustfmt::skip]
-impl DynamicWasmAliases<'_> {
-fn wasm_instance_binding(binding: tree_sitter::Node<'_>, value: tree_sitter::Node<'_>, source: &str, source_path: &Path, wasm_types: &WasmTypeInventory, wasm_class_bindings: &HashMap<String, String>, wasm_namespace_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], wasm_type_names: &HashSet<String>, wasm_instance_factories: &HashMap<String, String>, scoped_wasm_factories: &[ScopedBinding], scoped_wasm_runtime_receivers: &[ScopedBinding], wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_instances: &[ScopedBinding]) -> Option<ScopedBinding> {
-    let reference = binding;
-    let binding = DynamicWasmAliases::declared_binding(binding, source).unwrap_or(binding);
-    if !matches!(
-        binding.kind(),
-        "identifier" | "member_expression" | "subscript_expression"
-    ) {
-        return None;
-    }
-    if let Some(wasm_type) = DynamicWasmAliases::value_is_wasm_instance(value, source, source_path, wasm_types, wasm_class_bindings, wasm_namespace_bindings, scoped_wasm_namespaces, wasm_type_names, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, wasm_instance_bindings, scoped_wasm_instances) {
-        let mut scoped = ScopedBinding::scoped_binding(binding, source, crate::javascript_scopes::BindingProvenance::Class(wasm_type)).ok()?;
-        if let crate::javascript_scopes::Invocation::CompletesAt(invocation_end) = ScopedBinding::deferred_invocation_end(reference, &scoped, source) {
-            scoped.declaration_end = invocation_end;
-        }
-        return Some(scoped);
-    }
-    None
-}
-}
-
-impl DynamicWasmAliases<'_> {
-    fn declared_binding<'a>(
-        reference: tree_sitter::Node<'a>,
-        source: &str,
-    ) -> Option<tree_sitter::Node<'a>> {
-        if reference.kind() != "identifier" {
-            return None;
-        }
-        let name = (JavaScriptLiteral {
-            node: reference,
-            source: source,
-        })
-        .semantic_javascript_name()
-        .ok()?;
-        let mut root = reference;
-        while let Some(parent) = root.parent() {
-            root = parent;
-        }
-        DynamicWasmAliases::find_declared_binding(root, reference, &name, source)
-    }
-}
-
-impl DynamicWasmAliases<'_> {
-    fn find_declared_binding<'a>(
-        node: tree_sitter::Node<'a>,
-        reference: tree_sitter::Node<'_>,
-        name: &str,
-        source: &str,
-    ) -> Option<tree_sitter::Node<'a>> {
-        if node.kind() == "variable_declarator"
-            && let Some(binding) = node.child_by_field_name("name")
-            && (JavaScriptLiteral {
-                node: binding,
-                source: source,
-            })
-            .semantic_javascript_name()
-            .ok()
-            .as_deref()
-                == Some(name)
-            && let Ok(scoped) = ScopedBinding::scoped_binding(
-                binding,
-                source,
-                crate::javascript_scopes::BindingProvenance::Callable,
-            )
-            && ScopedBinding::deferred_assignment_executes(reference, &scoped, source)
-            && ScopedBinding::scoped_binding_is_visible(reference, name, source, &[scoped])
-        {
-            return Some(binding);
-        }
-        let mut cursor = node.walk();
-        node.named_children(&mut cursor).find_map(|child| {
-            DynamicWasmAliases::find_declared_binding(child, reference, name, source)
-        })
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-#[rustfmt::skip]
-impl DynamicWasmAliases<'_> {
-fn value_is_wasm_instance(value: tree_sitter::Node<'_>, source: &str, source_path: &Path, wasm_types: &WasmTypeInventory, wasm_class_bindings: &HashMap<String, String>, wasm_namespace_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], wasm_type_names: &HashSet<String>, wasm_instance_factories: &HashMap<String, String>, scoped_wasm_factories: &[ScopedBinding], scoped_wasm_runtime_receivers: &[ScopedBinding], wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_instances: &[ScopedBinding]) -> Option<String> {
-    let value = DynamicWasmAliases::unwrap_transparent_expression(value);
-    if value.kind() == "identifier"
-        && let Ok(name) = value.utf8_text(source.as_bytes())
-    {
-        if let Some(wasm_type) =
-            DynamicWasmAliases::scoped_wasm_type_visible(value, name, source, scoped_wasm_instances)
-        {
-            return Some(wasm_type);
-        }
-        if ScopedBinding::root_binding_is_visible(value, name, source)
-            && let Some(wasm_type) = wasm_instance_bindings.get(name)
-        {
-            return Some(wasm_type.clone());
-        }
-    }
-    if value.kind() == "new_expression"
-        && let Some(constructor) = value.child_by_field_name("constructor")
-        && let Some(wasm_type) = DynamicWasmAliases::constructor_wasm_class(
-            constructor,
-            source,
-            wasm_class_bindings,
-            wasm_namespace_bindings,
-            scoped_wasm_namespaces,
-            wasm_type_names,
-        )
-    {
-        return Some(wasm_type);
-    }
-    if value.kind() == "call_expression"
-        && let Some(function) = value.child_by_field_name("function")
-        && let Ok(name) = (JavaScriptLiteral { node: function, source: source }).callable_expression_name()
-    {
-        if matches!(
-            function.kind(),
-            "member_expression" | "subscript_expression"
-        ) && let Some(object) = function.child_by_field_name("object")
-            && DynamicWasmAliases::wasm_module_specifier(object, source, source_path, wasm_namespace_bindings, scoped_wasm_namespaces).is_some_and(|module| WasmModuleSources::is_wasm_callable_export(&module, &name, source_path))
-            && let Some(wasm_type) = wasm_types.free_returns.get(&name)
-        {
-            return Some(wasm_type.clone());
-        }
-        if DynamicWasmAliases::callable_binding_is_visible(function, source)
-            && let Ok(full_name) = function.utf8_text(source.as_bytes())
-            && let Some(wasm_type) = wasm_instance_factories.get(full_name)
-        {
-            return Some(wasm_type.clone());
-        }
-        if name == WASM_MANAGER_ACCESSOR
-            && DynamicWasmAliases::wasm_runtime_accessor_receiver_is_visible(
-                function,
-                source,
-                scoped_wasm_runtime_receivers,
-            )
-        {
-            return Some("NookVaultManager".to_owned());
-        }
-        if let Some(wasm_type) =
-            DynamicWasmAliases::scoped_wasm_type_visible(function, &name, source, scoped_wasm_factories)
-        {
-            return Some(wasm_type);
-        }
-        if ScopedBinding::root_binding_is_visible(function, &name, source)
-            && let Some(wasm_type) = wasm_instance_factories.get(&name)
-        {
-            return Some(wasm_type.clone());
-        }
-    }
-    if value.kind() == "await_expression" {
-        let mut cursor = value.walk();
-        return value.named_children(&mut cursor).find_map(|child| DynamicWasmAliases::value_is_wasm_instance(child, source, source_path, wasm_types, wasm_class_bindings, wasm_namespace_bindings, scoped_wasm_namespaces, wasm_type_names, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, wasm_instance_bindings, scoped_wasm_instances));
-    }
-    None
-}
-}
-
-impl DynamicWasmAliases<'_> {
-    pub(super) fn constructor_wasm_class(
-        constructor: tree_sitter::Node<'_>,
-        source: &str,
-        wasm_class_bindings: &HashMap<String, String>,
-        wasm_namespace_bindings: &HashMap<String, String>,
-        scoped_wasm_namespaces: &[ScopedBinding],
-        wasm_type_names: &HashSet<String>,
-    ) -> Option<String> {
-        if constructor.kind() == "identifier" {
-            let name = constructor.utf8_text(source.as_bytes()).ok()?;
-            if ScopedBinding::root_binding_is_visible(constructor, name, source)
-                && let Some(wasm_type) = wasm_class_bindings.get(name)
-            {
-                return Some(wasm_type.clone());
-            }
-            let mut root = constructor;
-            while let Some(parent) = root.parent() {
-                root = parent;
-            }
-            return DynamicWasmAliases::copied_wasm_class(
-                root,
-                constructor,
-                name,
-                source,
-                wasm_class_bindings,
-                wasm_namespace_bindings,
-                scoped_wasm_namespaces,
-                wasm_type_names,
-            );
-        }
-        if constructor.kind() != "member_expression" {
-            return None;
-        }
-        let namespace = constructor.child_by_field_name("object")?;
-        let class_name = constructor
-            .child_by_field_name("property")
-            .and_then(|property| {
-                (JavaScriptLiteral {
-                    node: property,
-                    source: source,
-                })
-                .semantic_javascript_name()
-                .ok()
-            })?;
-        let namespace_name = namespace.utf8_text(source.as_bytes()).ok()?;
-        let namespace_is_wasm = (wasm_namespace_bindings.contains_key(namespace_name)
-            && ScopedBinding::root_binding_is_visible(namespace, namespace_name, source))
-            || DynamicWasmAliases::scoped_wasm_module_visible(
-                namespace,
-                namespace_name,
-                source,
-                scoped_wasm_namespaces,
-            )
-            .is_some();
-        (namespace_is_wasm && wasm_type_names.contains(&class_name)).then_some(class_name)
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-#[rustfmt::skip]
-impl DynamicWasmAliases<'_> {
-fn copied_wasm_class(node: tree_sitter::Node<'_>, reference: tree_sitter::Node<'_>, name: &str, source: &str, classes: &HashMap<String, String>, namespaces: &HashMap<String, String>, scoped_namespaces: &[ScopedBinding], wasm_type_names: &HashSet<String>) -> Option<String> {
-    if node.kind() == "variable_declarator"
-        && let (Some(pattern), Some(namespace)) = (node.child_by_field_name("name"), node.child_by_field_name("value"))
-        && pattern.kind() == "object_pattern"
-        && let Ok(namespace_name) = (JavaScriptLiteral { node: namespace, source: source }).semantic_javascript_name()
-        && ((namespaces.contains_key(&namespace_name) && ScopedBinding::root_binding_is_visible(namespace, &namespace_name, source)) || DynamicWasmAliases::scoped_wasm_module_visible(namespace, &namespace_name, source, scoped_namespaces).is_some())
-    {
-        let mut cursor = pattern.walk();
-        if let Some(wasm_type) = pattern.named_children(&mut cursor).find_map(|pair| {
-            let key = pair.child_by_field_name("key").and_then(|key| (JavaScriptLiteral { node: key, source: source }).semantic_javascript_name().ok())?;
-            let alias = pair.child_by_field_name("value").and_then(|value| (JavaScriptLiteral { node: value, source: source }).semantic_javascript_name().ok())?;
-            (alias == name && wasm_type_names.contains(&key)).then_some(key)
-        }) {
-            return Some(wasm_type);
-        }
-    }
-    if matches!(node.kind(), "variable_declarator" | "assignment_expression")
-        && let (Some(binding), Some(value)) = (
-            node.child_by_field_name("name")
-                .or_else(|| node.child_by_field_name("left")),
-            node.child_by_field_name("value")
-                .or_else(|| node.child_by_field_name("right")),
-        )
-        && (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name().ok().as_deref() == Some(name)
-        && let Ok(source_name) = (JavaScriptLiteral { node: value, source: source }).semantic_javascript_name()
-        && ScopedBinding::root_binding_is_visible(value, &source_name, source)
-        && let Some(wasm_type) = classes.get(&source_name)
-        && let Ok(mut scoped) = ScopedBinding::scoped_binding(binding, source, crate::javascript_scopes::BindingProvenance::Class(wasm_type.clone()))
-        && {
-            scoped.declaration_end = node.end_byte();
-            true
-        }
-        && ScopedBinding::scoped_binding_is_visible(reference, name, source, &[scoped])
-    {
-        return Some(wasm_type.clone());
-    }
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor).find_map(|child| DynamicWasmAliases::copied_wasm_class(child, reference, name, source, classes, namespaces, scoped_namespaces, wasm_type_names))
 }
 }
 
@@ -766,78 +467,6 @@ impl DynamicWasmAliases<'_> {
 }
 
 impl DynamicWasmAliases<'_> {
-    pub(super) fn wasm_module_specifier(
-        value: tree_sitter::Node<'_>,
-        source: &str,
-        source_path: &Path,
-        wasm_namespace_bindings: &HashMap<String, String>,
-        scoped_wasm_namespaces: &[ScopedBinding],
-    ) -> Option<String> {
-        if let Some(module) = DynamicWasmAliases::loaded_module_specifier(value, source)
-            && (WasmModuleSources {
-                module: &module,
-                source_path,
-            })
-            .is_wasm_callable_source()
-        {
-            return Some(module);
-        }
-        let name = value.utf8_text(source.as_bytes()).ok()?;
-        if ScopedBinding::root_binding_is_visible(value, name, source)
-            && let Some(module) = wasm_namespace_bindings.get(name)
-        {
-            return Some(module.clone());
-        }
-        DynamicWasmAliases::scoped_wasm_module_visible(value, name, source, scoped_wasm_namespaces)
-    }
-}
-
-impl DynamicWasmAliases<'_> {
-    pub(super) fn loaded_module_specifier(
-        node: tree_sitter::Node<'_>,
-        source: &str,
-    ) -> Option<String> {
-        if node.kind() == "call_expression"
-            && let Some(function) = node.child_by_field_name("function")
-            && (function.kind() == "import"
-                || (function
-                    .utf8_text(source.as_bytes())
-                    .is_ok_and(|name| name == "require")
-                    && ScopedBinding::root_binding_is_visible(function, "require", source)))
-        {
-            let arguments = node.child_by_field_name("arguments")?;
-            let mut cursor = arguments.walk();
-            return arguments
-                .named_children(&mut cursor)
-                .find(|argument| matches!(argument.kind(), "string" | "template_string"))
-                .and_then(|argument| {
-                    (JavaScriptLiteral {
-                        node: argument,
-                        source,
-                    })
-                    .static_javascript_string()
-                    .ok()
-                });
-        }
-
-        if matches!(
-            node.kind(),
-            "await_expression"
-                | "parenthesized_expression"
-                | "as_expression"
-                | "satisfies_expression"
-        ) {
-            let mut cursor = node.walk();
-            return node
-                .named_children(&mut cursor)
-                .find_map(|child| DynamicWasmAliases::loaded_module_specifier(child, source));
-        }
-
-        None
-    }
-}
-
-impl DynamicWasmAliases<'_> {
     fn callable_binding_is_visible(function: tree_sitter::Node<'_>, source: &str) -> bool {
         let binding = if function.kind() == "identifier" {
             function
@@ -855,42 +484,6 @@ impl DynamicWasmAliases<'_> {
         binding
             .utf8_text(source.as_bytes())
             .is_ok_and(|name| ScopedBinding::root_binding_is_visible(binding, name, source))
-    }
-}
-
-impl DynamicWasmAliases<'_> {
-    pub(super) fn scoped_wasm_type_visible(
-        reference: tree_sitter::Node<'_>,
-        name: &str,
-        source: &str,
-        bindings: &[ScopedBinding],
-    ) -> Option<String> {
-        match ScopedBinding::visible_scoped_binding(reference, name, source, bindings) {
-            crate::javascript_scopes::VisibleBinding::Visible(binding) => match &binding.provenance
-            {
-                crate::javascript_scopes::BindingProvenance::Class(name) => Some(name.clone()),
-                _ => None,
-            },
-            crate::javascript_scopes::VisibleBinding::OutsideScope => None,
-        }
-    }
-}
-
-impl DynamicWasmAliases<'_> {
-    pub(super) fn scoped_wasm_module_visible(
-        reference: tree_sitter::Node<'_>,
-        name: &str,
-        source: &str,
-        bindings: &[ScopedBinding],
-    ) -> Option<String> {
-        match ScopedBinding::visible_scoped_binding(reference, name, source, bindings) {
-            crate::javascript_scopes::VisibleBinding::Visible(binding) => match &binding.provenance
-            {
-                crate::javascript_scopes::BindingProvenance::Module(module) => Some(module.clone()),
-                _ => None,
-            },
-            crate::javascript_scopes::VisibleBinding::OutsideScope => None,
-        }
     }
 }
 
@@ -950,4 +543,20 @@ pub(super) struct DynamicAliasInventory {
     pub(super) wasm_instance_bindings: HashMap<String, String>,
     pub(super) imported_callable_bindings: HashSet<String>,
     pub(super) lines: Vec<usize>,
+}
+
+#[derive(Debug)]
+pub(super) enum AliasResolutionFailure {
+    UnsupportedBinding,
+    UnresolvedBinding,
+    UnknownInstance,
+    UnsupportedConstructor,
+    InvalidSource,
+    MissingMember,
+    UnknownClass,
+    MissingModuleArgument,
+    NotModuleLoad,
+    WrongBindingProvenance,
+    Scope(ScopeAdmissionFailure),
+    Literal(JavaScriptLiteralFailure),
 }

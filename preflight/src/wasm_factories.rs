@@ -1,3 +1,5 @@
+use crate::javascript_literals::JavaScriptLiteralFailure;
+use crate::javascript_scopes::BindingProvenance;
 pub struct WasmInstanceFactories<'scan> {
     pub node: tree_sitter::Node<'scan>,
     pub source: &'scan str,
@@ -40,12 +42,8 @@ impl WasmInstanceFactories<'_> {
                 WasmInstanceFactories::inferred_wasm_class(node, source, wasm_class_bindings).ok()
             })
             && let Ok(binding) = WasmInstanceFactories::callable_declaration_binding(node)
-            && let Some(mut factory) = ScopedBinding::scoped_binding(
-                binding,
-                source,
-                crate::javascript_scopes::BindingProvenance::Class(wasm_type),
-            )
-            .ok()
+            && let Ok(mut factory) =
+                ScopedBinding::scoped_binding(binding, source, BindingProvenance::Class(wasm_type))
         {
             if matches!(
                 node.kind(),
@@ -118,7 +116,7 @@ pub(super) fn collect_typed_wasm_instances(node: tree_sitter::Node<'_>, source: 
         })
         && let Ok(text) = annotation.utf8_text(source.as_bytes())
         && let Some(wasm_type) = classes.get(text.trim().trim_start_matches(':').trim())
-        && let Ok(mut scoped) = ScopedBinding::scoped_binding(binding, source, crate::javascript_scopes::BindingProvenance::Class(wasm_type.clone()))
+        && let Ok(mut scoped) = ScopedBinding::scoped_binding(binding, source, BindingProvenance::Class(wasm_type.clone()))
     {
         if node.kind() == "public_field_definition"
             && let Ok(name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
@@ -160,7 +158,7 @@ impl WasmInstanceFactories<'_> {
         {
             if let Ok(local) = WasmInstanceFactories::default_import_binding(node, source)
                 && called_bindings.contains(&local)
-                && let Some(wasm_type) = WasmModuleSources::wasm_factory_return_type(
+                && let Ok(wasm_type) = WasmModuleSources::wasm_factory_return_type(
                     &module,
                     "default",
                     source_path,
@@ -245,7 +243,7 @@ impl WasmInstanceFactories<'_> {
                 .filter(|called| called.starts_with(&format!("{local}.")))
             {
                 let imported = called.trim_start_matches(&format!("{local}."));
-                if let Some(wasm_type) = WasmModuleSources::wasm_factory_return_type(
+                if let Ok(wasm_type) = WasmModuleSources::wasm_factory_return_type(
                     module,
                     imported,
                     source_path,
@@ -272,7 +270,7 @@ impl WasmInstanceFactories<'_> {
             })
             .semantic_javascript_name()
                 && called_bindings.contains(&local_name)
-                && let Some(wasm_type) = WasmModuleSources::wasm_factory_return_type(
+                && let Ok(wasm_type) = WasmModuleSources::wasm_factory_return_type(
                     module,
                     &imported_name,
                     source_path,
@@ -514,5 +512,5 @@ enum FactoryResolutionFailure {
     InvalidSource,
     NotDefaultImport,
     NotInvocation,
-    Literal(crate::javascript_literals::JavaScriptLiteralFailure),
+    Literal(JavaScriptLiteralFailure),
 }

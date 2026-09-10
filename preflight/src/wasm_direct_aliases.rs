@@ -1,3 +1,4 @@
+use crate::javascript_literals::JavaScriptLiteralFailure;
 pub struct DirectWasmAliases<'scan> {
     pub node: tree_sitter::Node<'scan>,
     pub source: &'scan str,
@@ -179,7 +180,7 @@ impl DirectWasmAliases<'_> {
         mut bindings: HashSet<String>,
         mut lines: Vec<usize>,
     ) -> (HashSet<String>, Vec<usize>) {
-        let Some(authored_name) = WasmModuleSources::wasm_callable_export_name(
+        let Ok(authored_name) = WasmModuleSources::wasm_callable_export_name(
             module,
             "default",
             source_path,
@@ -310,5 +311,5 @@ enum ImportSyntaxFailure {
     NotRequire,
     UnterminatedRequire,
     MissingModule,
-    Literal(crate::javascript_literals::JavaScriptLiteralFailure),
+    Literal(JavaScriptLiteralFailure),
 }

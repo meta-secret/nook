@@ -30,7 +30,7 @@ impl DynamicWasmAliases<'_> {
                 source: source,
             })
             .semantic_javascript_name()
-            && let Some(namespace_source) =
+            && let Ok(namespace_source) =
                 WasmModuleSources::wasm_namespace_export_source(module, &imported_name, source_path)
         {
             let binding = node.child_by_field_name("alias").unwrap_or(imported);
