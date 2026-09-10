@@ -152,8 +152,8 @@ impl ScopedBinding {
         reference: tree_sitter::Node<'_>,
         name: &str,
         source: &str,
-        bindings: &mut [ScopedBinding],
-    ) -> bool {
+        mut bindings: Vec<ScopedBinding>,
+    ) -> (Vec<ScopedBinding>, BindingInvalidation) {
         if let Some(binding) = bindings.iter_mut().find(|binding| {
             binding.name == name
                 && binding.declaration_end <= reference.start_byte()
@@ -163,9 +163,9 @@ impl ScopedBinding {
         }) && ScopedBinding::reassignment_is_unconditional(reference, binding)
         {
             binding.scope_end = reference.start_byte();
-            return true;
+            return (bindings, BindingInvalidation::Invalidated);
         }
-        false
+        (bindings, BindingInvalidation::Retained)
     }
 }
 
@@ -508,7 +508,13 @@ impl ScopedBinding {
             ) && binding.scope_start < function.start_byte()
                 && function
                     .child_by_field_name("name")
-                    .and_then(|node| (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name())
+                    .and_then(|node| {
+                        (JavaScriptLiteral {
+                            node: node,
+                            source: source,
+                        })
+                        .semantic_javascript_name()
+                    })
                     .is_some()
             {
                 return Some(function);
@@ -521,9 +527,13 @@ impl ScopedBinding {
 
 impl ScopedBinding {
     fn deferred_function_call_end(function: tree_sitter::Node<'_>, source: &str) -> Option<usize> {
-        let name = function
-            .child_by_field_name("name")
-            .and_then(|node| (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name())?;
+        let name = function.child_by_field_name("name").and_then(|node| {
+            (JavaScriptLiteral {
+                node: node,
+                source: source,
+            })
+            .semantic_javascript_name()
+        })?;
         let mut root = function;
         while let Some(parent) = root.parent() {
             root = parent;
@@ -542,7 +552,13 @@ impl ScopedBinding {
         if node.kind() == "call_expression"
             && node.start_byte() >= after
             && let Some(callee) = node.child_by_field_name("function")
-            && (JavaScriptLiteral { node: callee, source: source }).semantic_javascript_name().as_deref() == Some(name)
+            && (JavaScriptLiteral {
+                node: callee,
+                source: source,
+            })
+            .semantic_javascript_name()
+            .as_deref()
+                == Some(name)
             && ScopedBinding::root_binding_is_visible(callee, name, source)
         {
             return Some(node.end_byte());
@@ -554,3 +570,8 @@ impl ScopedBinding {
     }
 }
 use crate::javascript_literals::JavaScriptLiteral;
+
+pub(super) enum BindingInvalidation {
+    Retained,
+    Invalidated,
+}

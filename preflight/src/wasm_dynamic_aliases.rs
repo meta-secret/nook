@@ -13,7 +13,7 @@ use crate::javascript_scopes::ScopedBinding;
 use crate::wasm_dynamic_callables::DynamicWasmCallables;
 use crate::wasm_factories::WasmInstanceFactories;
 use crate::wasm_inventory::WasmTypeInventory;
-use crate::wasm_member_aliases::WasmMemberAliases;
+use crate::wasm_member_aliases::{AliasDescent, CallableAliasInventory, WasmMemberAliases};
 use crate::wasm_module_sources::WasmModuleSources;
 
 const WASM_MANAGER_ACCESSOR: &str = "requireManager";
@@ -81,110 +81,153 @@ impl DynamicWasmAliases<'_> {
 #[allow(clippy::too_many_lines)]
 #[rustfmt::skip]
 impl DynamicWasmAliases<'_> {
-pub(super) fn collect_dynamic_wasm_aliases_and_bindings(node: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &mut HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &mut HashMap<String, String>, imported_callable_bindings: &mut HashSet<String>, lines: &mut Vec<usize>) {
-    let (mut scoped_wasm_namespaces, mut scoped_wasm_instances) = (Vec::new(), Vec::new());
-    let (mut scoped_wasm_callables, mut scoped_wasm_runtime_receivers) = (Vec::new(), Vec::new());
-    let mut scoped_wasm_factories = Vec::new();
-    let mut imported_wasm_factories = HashMap::new();
-    let mut member_alias_receivers = HashSet::new();
-    let mut called_bindings = HashSet::new();
-    member_alias_receivers = WasmInstanceFactories::collect_member_alias_receiver_names(node, source, callable_names, member_alias_receivers);
-    called_bindings = WasmInstanceFactories::collect_factory_calls_for_receivers(node, source, &member_alias_receivers, called_bindings);
-    scoped_wasm_factories = (WasmInstanceFactories { node, source, wasm_class_bindings, factories: scoped_wasm_factories }).collect_wasm_instance_factories();
-    imported_wasm_factories = WasmInstanceFactories::collect_imported_wasm_instance_factories(node, source, source_path, wasm_type_names, &called_bindings, imported_wasm_factories);
-    scoped_wasm_runtime_receivers = DynamicWasmAliases::collect_wasm_runtime_receivers(node, source, scoped_wasm_runtime_receivers);
-    scoped_wasm_instances = WasmInstanceFactories::collect_typed_wasm_instances(node, source, wasm_class_bindings, scoped_wasm_instances);
-    (DynamicWasmCallables { node, source, source_path, callable_names, wasm_namespace_bindings, scoped_wasm_namespaces: &mut scoped_wasm_namespaces, bindings: &mut scoped_wasm_callables, lines, first_line }).collect_scoped_dynamic_callable_bindings();
-    DynamicWasmAliases::collect_dynamic_wasm_aliases(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &imported_wasm_factories, &scoped_wasm_factories, &scoped_wasm_runtime_receivers, &mut scoped_wasm_namespaces, &mut scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
-    WasmMemberAliases::collect_object_literal_aliases_in_tree(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &scoped_wasm_namespaces, &scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
-    DynamicWasmAliases::collect_dynamic_wasm_aliases(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &imported_wasm_factories, &scoped_wasm_factories, &scoped_wasm_runtime_receivers, &mut scoped_wasm_namespaces, &mut scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
+pub(super) fn collect_dynamic_wasm_aliases_and_bindings(node: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: HashMap<String, String>, imported_callable_bindings: HashSet<String>, lines: Vec<usize>) -> DynamicAliasInventory {
+    let member_alias_receivers = WasmInstanceFactories::collect_member_alias_receiver_names(node, source, callable_names, HashSet::new());
+    let called_bindings = WasmInstanceFactories::collect_factory_calls_for_receivers(node, source, &member_alias_receivers, HashSet::new());
+    let scoped_wasm_factories = (WasmInstanceFactories { node, source, wasm_class_bindings, factories: Vec::new() }).collect_wasm_instance_factories();
+    let imported_wasm_factories = WasmInstanceFactories::collect_imported_wasm_instance_factories(node, source, source_path, wasm_type_names, &called_bindings, HashMap::new());
+    let scoped_wasm_runtime_receivers = DynamicWasmAliases::collect_wasm_runtime_receivers(node, source, Vec::new());
+    let scoped_wasm_instances = WasmInstanceFactories::collect_typed_wasm_instances(node, source, wasm_class_bindings, Vec::new());
+    let scoped = (DynamicWasmCallables { node, source, source_path, callable_names, wasm_namespace_bindings: &wasm_namespace_bindings, state: crate::wasm_dynamic_callables::ScopedCallableInventory { lines, ..Default::default() }, first_line }).collect_scoped_dynamic_callable_bindings();
+    let mut scopes = DynamicScopeInventory { namespaces: scoped.scoped_wasm_namespaces, instances: scoped_wasm_instances, callable: CallableAliasInventory { callables: scoped.bindings, imported: imported_callable_bindings, lines: scoped.lines } };
+    let traversal = DynamicAliasTraversal { node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings: &wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings: &wasm_instance_bindings, wasm_instance_factories: &imported_wasm_factories, scoped_wasm_factories: &scoped_wasm_factories, scoped_wasm_runtime_receivers: &scoped_wasm_runtime_receivers };
+    scopes = scopes.collect(traversal);
+    scopes.callable = scopes.callable.collect_object_literal_aliases_in_tree(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, &wasm_namespace_bindings, wasm_class_bindings, &wasm_instance_bindings, &scopes.namespaces, &scopes.instances);
+    scopes = scopes.collect(traversal);
+    DynamicAliasInventory { wasm_namespace_bindings, wasm_instance_bindings, imported_callable_bindings: scopes.callable.imported, lines: scopes.callable.lines }
 }
 }
 
-#[allow(clippy::too_many_arguments)]
-#[rustfmt::skip]
-impl DynamicWasmAliases<'_> {
-fn collect_dynamic_wasm_aliases(node: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &mut HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &mut HashMap<String, String>, wasm_instance_factories: &HashMap<String, String>, scoped_wasm_factories: &[ScopedBinding], scoped_wasm_runtime_receivers: &[ScopedBinding], scoped_wasm_namespaces: &mut Vec<ScopedBinding>, scoped_wasm_instances: &mut Vec<ScopedBinding>, scoped_wasm_callables: &mut Vec<ScopedBinding>, imported_callable_bindings: &mut HashSet<String>, lines: &mut Vec<usize>) {
-    if matches!(
-        node.kind(),
-        "assignment_expression" | "augmented_assignment_expression"
-    ) && let (Some(binding), Some(value)) = (
-        node.child_by_field_name("left"),
-        node.child_by_field_name("right"),
-    ) {
-        if !node.utf8_text(source.as_bytes()).is_ok_and(|text| text.contains("||=") || text.contains("??=")) {
-            DynamicWasmAliases::invalidate_reassigned_wasm_binding(binding, source, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings);
+#[derive(Default)]
+struct DynamicScopeInventory {
+    namespaces: Vec<ScopedBinding>,
+    instances: Vec<ScopedBinding>,
+    callable: CallableAliasInventory,
+}
+impl DynamicScopeInventory {
+    fn collect(mut self, request: DynamicAliasTraversal<'_>) -> Self {
+        let DynamicAliasTraversal {
+            node,
+            source,
+            source_path,
+            first_line,
+            callable_names,
+            wasm_type_names,
+            wasm_types,
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            wasm_instance_bindings,
+            wasm_instance_factories,
+            scoped_wasm_factories,
+            scoped_wasm_runtime_receivers,
+        } = request;
+        if matches!(
+            node.kind(),
+            "assignment_expression" | "augmented_assignment_expression"
+        ) && let (Some(binding), Some(value)) = (
+            node.child_by_field_name("left"),
+            node.child_by_field_name("right"),
+        ) {
+            if !node
+                .utf8_text(source.as_bytes())
+                .is_ok_and(|text| text.contains("||=") || text.contains("??="))
+            {
+                self = self.invalidate(binding, source);
+            }
+            (self, _) = self.observe(BindingAliasObservation {
+                binding,
+                value,
+                source,
+                source_path,
+                first_line,
+                callable_names,
+                wasm_type_names,
+                wasm_types,
+                wasm_namespace_bindings,
+                wasm_class_bindings,
+                wasm_instance_bindings,
+                wasm_instance_factories,
+                scoped_wasm_factories,
+                scoped_wasm_runtime_receivers,
+            });
         }
-        DynamicWasmAliases::collect_binding_aliases(crate::wasm_dynamic_aliases::BindingAliasObservation { binding, value, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines });
+        if matches!(
+            node.kind(),
+            "variable_declarator"
+                | "public_field_definition"
+                | "required_parameter"
+                | "optional_parameter"
+        ) && let (Some(binding), Some(value)) = (
+            node.child_by_field_name("name")
+                .or_else(|| node.child_by_field_name("pattern")),
+            node.child_by_field_name("value"),
+        ) {
+            let descent;
+            (self, descent) = self.observe(BindingAliasObservation {
+                binding,
+                value,
+                source,
+                source_path,
+                first_line,
+                callable_names,
+                wasm_type_names,
+                wasm_types,
+                wasm_namespace_bindings,
+                wasm_class_bindings,
+                wasm_instance_bindings,
+                wasm_instance_factories,
+                scoped_wasm_factories,
+                scoped_wasm_runtime_receivers,
+            });
+            if matches!(descent, AliasDescent::Complete) {
+                return self;
+            }
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            self = self.collect(DynamicAliasTraversal {
+                node: child,
+                ..request
+            });
+        }
+        self
     }
-
-    if matches!(
-        node.kind(),
-        "variable_declarator"
-            | "public_field_definition"
-            | "required_parameter"
-            | "optional_parameter"
-    ) && let (Some(binding), Some(value)) = (
-        node.child_by_field_name("name")
-            .or_else(|| node.child_by_field_name("pattern")),
-        node.child_by_field_name("value"),
-    ) && DynamicWasmAliases::collect_binding_aliases(crate::wasm_dynamic_aliases::BindingAliasObservation { binding, value, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines }) {
-        return;
-    }
-
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        DynamicWasmAliases::collect_dynamic_wasm_aliases(child, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines);
-    }
-}
-}
-
-impl DynamicWasmAliases<'_> {
-    fn invalidate_reassigned_wasm_binding(
-        binding: tree_sitter::Node<'_>,
-        source: &str,
-        scoped_wasm_namespaces: &mut [ScopedBinding],
-        scoped_wasm_instances: &mut [ScopedBinding],
-        scoped_wasm_callables: &mut [ScopedBinding],
-        imported_callable_bindings: &mut HashSet<String>,
-    ) {
+    fn invalidate(mut self, binding: tree_sitter::Node<'_>, source: &str) -> Self {
         let binding = DynamicWasmAliases::unwrap_transparent_expression(binding);
         if !matches!(
             binding.kind(),
             "identifier" | "member_expression" | "subscript_expression"
         ) {
-            return;
+            return self;
         }
         let Ok(name) = binding.utf8_text(source.as_bytes()) else {
-            return;
+            return self;
         };
-        ScopedBinding::invalidate_visible_scoped_binding(
+        (self.namespaces, _) = ScopedBinding::invalidate_visible_scoped_binding(
             binding,
             name,
             source,
-            scoped_wasm_namespaces,
+            self.namespaces,
         );
-        ScopedBinding::invalidate_visible_scoped_binding(
+        (self.instances, _) =
+            ScopedBinding::invalidate_visible_scoped_binding(binding, name, source, self.instances);
+        let invalidated;
+        (self.callable.callables, invalidated) = ScopedBinding::invalidate_visible_scoped_binding(
             binding,
             name,
             source,
-            scoped_wasm_instances,
+            self.callable.callables,
         );
-        if ScopedBinding::invalidate_visible_scoped_binding(
-            binding,
-            name,
-            source,
-            scoped_wasm_callables,
+        if matches!(
+            invalidated,
+            crate::javascript_scopes::BindingInvalidation::Invalidated
         ) && binding.kind() == "identifier"
         {
-            imported_callable_bindings.remove(name);
+            self.callable.imported.remove(name);
         }
+        self
     }
-}
-
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-impl DynamicWasmAliases<'_> {
-    fn collect_binding_aliases(request: BindingAliasObservation<'_>) -> bool {
+    fn observe(mut self, request: BindingAliasObservation<'_>) -> (Self, AliasDescent) {
         let BindingAliasObservation {
             binding,
             value,
@@ -200,13 +243,7 @@ impl DynamicWasmAliases<'_> {
             wasm_instance_factories,
             scoped_wasm_factories,
             scoped_wasm_runtime_receivers,
-            scoped_wasm_namespaces,
-            scoped_wasm_instances,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-            lines,
         } = request;
-
         let binding = DynamicWasmAliases::unwrap_transparent_expression(binding);
         let value = DynamicWasmAliases::unwrap_transparent_expression(value);
         if binding.kind() == "identifier"
@@ -214,29 +251,31 @@ impl DynamicWasmAliases<'_> {
             && WasmModuleSources::is_wasm_callable_export(&module, "default", source_path)
             && let Some(name) = (JavaScriptLiteral {
                 node: binding,
-                source: source,
+                source,
             })
             .semantic_javascript_name()
         {
-            lines.push(first_line + binding.start_position().row);
+            self.callable
+                .lines
+                .push(first_line + binding.start_position().row);
             if let Some(scoped) = ScopedBinding::scoped_binding(binding, source, None, None) {
-                scoped_wasm_callables.push(scoped);
+                self.callable.callables.push(scoped);
             } else {
-                imported_callable_bindings.insert(name);
+                self.callable.imported.insert(name);
             }
-            return true;
+            return (self, AliasDescent::Complete);
         }
-        if let Some(namespace_binding) = DynamicWasmAliases::dynamic_namespace_binding(
+        if let Some(namespace) = DynamicWasmAliases::dynamic_namespace_binding(
             binding,
             value,
             source,
             source_path,
             wasm_namespace_bindings,
-            scoped_wasm_namespaces,
+            &self.namespaces,
         ) {
-            scoped_wasm_namespaces.push(namespace_binding);
+            self.namespaces.push(namespace);
         }
-        if let Some(instance_binding) = DynamicWasmAliases::wasm_instance_binding(
+        if let Some(instance) = DynamicWasmAliases::wasm_instance_binding(
             binding,
             value,
             source,
@@ -244,17 +283,18 @@ impl DynamicWasmAliases<'_> {
             wasm_types,
             wasm_class_bindings,
             wasm_namespace_bindings,
-            scoped_wasm_namespaces,
+            &self.namespaces,
             wasm_type_names,
             wasm_instance_factories,
             scoped_wasm_factories,
             scoped_wasm_runtime_receivers,
             wasm_instance_bindings,
-            scoped_wasm_instances,
+            &self.instances,
         ) {
-            scoped_wasm_instances.push(instance_binding);
+            self.instances.push(instance);
         }
-        if (WasmMemberAliases {
+        let descent;
+        (self.callable, descent) = (WasmMemberAliases {
             binding,
             value,
             source,
@@ -266,17 +306,16 @@ impl DynamicWasmAliases<'_> {
             wasm_namespace_bindings,
             wasm_class_bindings,
             wasm_instance_bindings,
-            scoped_wasm_namespaces,
-            scoped_wasm_instances,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-            lines,
+            scoped_wasm_namespaces: &self.namespaces,
+            scoped_wasm_instances: &self.instances,
+            inventory: self.callable,
         })
-        .collect_destructuring_aliases()
-        {
-            return true;
+        .collect_destructuring_aliases();
+        if matches!(descent, AliasDescent::Complete) {
+            return (self, descent);
         }
-        if DynamicWasmAliases::collect_factory_result_member_alias(
+        let descent;
+        (self.callable, descent) = self.callable.collect_factory_result_member_alias(
             binding,
             value,
             source,
@@ -284,13 +323,11 @@ impl DynamicWasmAliases<'_> {
             wasm_types,
             wasm_instance_factories,
             scoped_wasm_factories,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-            lines,
-        ) {
-            return true;
+        );
+        if matches!(descent, AliasDescent::Complete) {
+            return (self, descent);
         }
-        WasmMemberAliases::collect_namespace_member_alias(
+        self.callable = self.callable.collect_namespace_member_alias(
             binding,
             value,
             source,
@@ -302,44 +339,51 @@ impl DynamicWasmAliases<'_> {
             wasm_namespace_bindings,
             wasm_class_bindings,
             wasm_instance_bindings,
-            scoped_wasm_namespaces,
-            scoped_wasm_instances,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-            lines,
+            &self.namespaces,
+            &self.instances,
         );
-        DynamicWasmAliases::collect_named_callable_copy_alias(
-            binding,
-            value,
-            source,
-            first_line,
-            imported_callable_bindings,
-            scoped_wasm_callables,
-            lines,
-        );
-        false
+        self.callable = self
+            .callable
+            .collect_named_callable_copy_alias(binding, value, source, first_line);
+        (self, AliasDescent::Descend)
     }
+}
+#[derive(Clone, Copy)]
+struct DynamicAliasTraversal<'a> {
+    node: tree_sitter::Node<'a>,
+    source: &'a str,
+    source_path: &'a Path,
+    first_line: usize,
+    callable_names: &'a HashSet<String>,
+    wasm_type_names: &'a HashSet<String>,
+    wasm_types: &'a WasmTypeInventory,
+    wasm_namespace_bindings: &'a HashMap<String, String>,
+    wasm_class_bindings: &'a HashMap<String, String>,
+    wasm_instance_bindings: &'a HashMap<String, String>,
+    wasm_instance_factories: &'a HashMap<String, String>,
+    scoped_wasm_factories: &'a [ScopedBinding],
+    scoped_wasm_runtime_receivers: &'a [ScopedBinding],
 }
 
 #[allow(clippy::too_many_arguments)]
 #[rustfmt::skip]
-impl DynamicWasmAliases<'_> {
-fn collect_factory_result_member_alias(binding: tree_sitter::Node<'_>, value: tree_sitter::Node<'_>, source: &str, first_line: usize, wasm_types: &WasmTypeInventory, factories: &HashMap<String, String>, scoped_factories: &[ScopedBinding], scoped_callables: &mut Vec<ScopedBinding>, root_callables: &mut HashSet<String>, lines: &mut Vec<usize>) -> bool {
+impl CallableAliasInventory {
+fn collect_factory_result_member_alias(mut self, binding: tree_sitter::Node<'_>, value: tree_sitter::Node<'_>, source: &str, first_line: usize, wasm_types: &WasmTypeInventory, factories: &HashMap<String, String>, scoped_factories: &[ScopedBinding],) -> (Self, AliasDescent) {
     if !matches!(value.kind(), "member_expression" | "subscript_expression") {
-        return false;
+        return (self, AliasDescent::Descend);
     }
     let Some(receiver) = value.child_by_field_name("object") else {
-        return false;
+        return (self, AliasDescent::Descend);
     };
     let receiver = DynamicWasmAliases::unwrap_transparent_expression(receiver);
     if receiver.kind() != "call_expression" {
-        return false;
+        return (self, AliasDescent::Descend);
     }
     let Some(function) = receiver.child_by_field_name("function") else {
-        return false;
+        return (self, AliasDescent::Descend);
     };
     let Some(factory_name) = (JavaScriptLiteral { node: function, source: source }).callable_expression_name() else {
-        return false;
+        return (self, AliasDescent::Descend);
     };
     let wasm_type = function.utf8_text(source.as_bytes()).ok().filter(|_| DynamicWasmAliases::callable_binding_is_visible(function, source)).and_then(|name| factories.get(name).cloned()).or_else(|| DynamicWasmAliases::scoped_wasm_type_visible(function, &factory_name, source, scoped_factories));
     let Some(callable) = wasm_type
@@ -348,21 +392,21 @@ fn collect_factory_result_member_alias(binding: tree_sitter::Node<'_>, value: tr
             value.child_by_field_name("property").or_else(|| value.child_by_field_name("index")).and_then(|property| (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()).filter(|name| methods.contains(name))
         })
     else {
-        return false;
+        return (self, AliasDescent::Descend);
     };
     let binding_node = binding.child_by_field_name("property").or_else(|| binding.child_by_field_name("index")).unwrap_or(binding);
     let Some(binding_name) = (JavaScriptLiteral { node: binding_node, source: source }).semantic_javascript_name() else {
-        return false;
+        return (self, AliasDescent::Descend);
     };
     if binding_name != callable {
-        lines.push(first_line + binding_node.start_position().row);
+        self.lines.push(first_line + binding_node.start_position().row);
     }
     if let Some(scoped) = ScopedBinding::scoped_binding(binding_node, source, None, None) {
-        scoped_callables.push(scoped);
+        self.callables.push(scoped);
     } else {
-        root_callables.insert(binding_name);
+        self.imported.insert(binding_name);
     }
-    true
+    (self, AliasDescent::Complete)
 }
 }
 
@@ -816,42 +860,37 @@ impl DynamicWasmAliases<'_> {
     }
 }
 
-impl DynamicWasmAliases<'_> {
+impl CallableAliasInventory {
     fn collect_named_callable_copy_alias(
+        mut self,
         binding: tree_sitter::Node<'_>,
         value: tree_sitter::Node<'_>,
         source: &str,
         first_line: usize,
-        imported_callable_bindings: &mut HashSet<String>,
-        scoped_wasm_callables: &[ScopedBinding],
-        lines: &mut Vec<usize>,
-    ) {
+    ) -> Self {
         if binding.kind() != "identifier" || value.kind() != "identifier" {
-            return;
+            return self;
         }
         let Ok(source_name) = value.utf8_text(source.as_bytes()) else {
-            return;
+            return self;
         };
-        let is_root_callable = imported_callable_bindings.contains(source_name)
+        let is_root_callable = self.imported.contains(source_name)
             && ScopedBinding::root_binding_is_visible(value, source_name, source);
-        let is_scoped_callable = ScopedBinding::scoped_binding_is_visible(
-            value,
-            source_name,
-            source,
-            scoped_wasm_callables,
-        );
+        let is_scoped_callable =
+            ScopedBinding::scoped_binding_is_visible(value, source_name, source, &self.callables);
         if !is_root_callable && !is_scoped_callable {
-            return;
+            return self;
         }
         let Ok(binding_name) = binding.utf8_text(source.as_bytes()) else {
-            return;
+            return self;
         };
         if binding_name != source_name {
-            lines.push(first_line + binding.start_position().row);
+            self.lines.push(first_line + binding.start_position().row);
         }
         if ScopedBinding::declaration_is_in_program_scope(binding) {
-            imported_callable_bindings.insert(binding_name.to_owned());
+            self.imported.insert(binding_name.to_owned());
         }
+        self
     }
 }
 
@@ -870,9 +909,11 @@ struct BindingAliasObservation<'a> {
     wasm_instance_factories: &'a HashMap<String, String>,
     scoped_wasm_factories: &'a [ScopedBinding],
     scoped_wasm_runtime_receivers: &'a [ScopedBinding],
-    scoped_wasm_namespaces: &'a mut Vec<ScopedBinding>,
-    scoped_wasm_instances: &'a mut Vec<ScopedBinding>,
-    scoped_wasm_callables: &'a mut Vec<ScopedBinding>,
-    imported_callable_bindings: &'a mut HashSet<String>,
-    lines: &'a mut Vec<usize>,
+}
+
+pub(super) struct DynamicAliasInventory {
+    pub(super) wasm_namespace_bindings: HashMap<String, String>,
+    pub(super) wasm_instance_bindings: HashMap<String, String>,
+    pub(super) imported_callable_bindings: HashSet<String>,
+    pub(super) lines: Vec<usize>,
 }

@@ -56,7 +56,7 @@ impl DynamicWasmAliases<'_> {
 }
 
 impl DynamicWasmAliases<'_> {
-    pub(super) fn collect_wasm_type_import_bindings(
+    pub(crate) fn collect_wasm_type_import_bindings(
         node: tree_sitter::Node<'_>,
         source: &str,
         source_path: &Path,

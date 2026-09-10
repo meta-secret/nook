@@ -221,7 +221,12 @@ impl RustWasmNames<'_> {
             lines,
         })
         .collect_direct_wasm_aliases_and_bindings();
-        DynamicWasmAliases::collect_dynamic_wasm_aliases_and_bindings(
+        crate::wasm_dynamic_aliases::DynamicAliasInventory {
+            wasm_namespace_bindings,
+            wasm_instance_bindings,
+            imported_callable_bindings,
+            lines,
+        } = DynamicWasmAliases::collect_dynamic_wasm_aliases_and_bindings(
             tree.root_node(),
             source,
             source_path,
@@ -229,11 +234,11 @@ impl RustWasmNames<'_> {
             callable_names,
             wasm_type_names,
             wasm_types,
-            &mut wasm_namespace_bindings,
+            wasm_namespace_bindings,
             &wasm_class_bindings,
-            &mut wasm_instance_bindings,
-            &mut imported_callable_bindings,
-            &mut lines,
+            wasm_instance_bindings,
+            imported_callable_bindings,
+            lines,
         );
         lines = (LocalWasmReexports {
             node: tree.root_node(),

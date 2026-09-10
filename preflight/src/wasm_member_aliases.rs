@@ -12,9 +12,7 @@ pub struct WasmMemberAliases<'scan> {
     pub wasm_instance_bindings: &'scan HashMap<String, String>,
     pub scoped_wasm_namespaces: &'scan [ScopedBinding],
     pub scoped_wasm_instances: &'scan [ScopedBinding],
-    pub scoped_wasm_callables: &'scan mut Vec<ScopedBinding>,
-    pub imported_callable_bindings: &'scan mut HashSet<String>,
-    pub lines: &'scan mut Vec<usize>,
+    pub inventory: CallableAliasInventory,
 }
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -27,7 +25,7 @@ use crate::wasm_module_sources::WasmModuleSources;
 
 #[allow(clippy::too_many_arguments)]
 impl WasmMemberAliases<'_> {
-    pub fn collect_destructuring_aliases(self) -> bool {
+    pub fn collect_destructuring_aliases(self) -> (CallableAliasInventory, AliasDescent) {
         let Self {
             binding,
             value,
@@ -42,9 +40,7 @@ impl WasmMemberAliases<'_> {
             wasm_instance_bindings,
             scoped_wasm_namespaces,
             scoped_wasm_instances,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-            lines,
+            mut inventory,
         } = self;
         if binding.kind() == "array_pattern" && value.kind() == "array" {
             let values = WasmMemberAliases::array_elements(value);
@@ -64,32 +60,35 @@ impl WasmMemberAliases<'_> {
                     wasm_instance_bindings,
                     scoped_wasm_namespaces,
                     scoped_wasm_instances,
-                ) && let Some(name) =
-                    (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
+                ) && let Some(name) = (JavaScriptLiteral {
+                    node: binding,
+                    source: source,
+                })
+                .semantic_javascript_name()
                 {
                     if name != callable {
-                        lines.push(first_line + binding.start_position().row);
+                        inventory
+                            .lines
+                            .push(first_line + binding.start_position().row);
                     }
                     if let Some(scoped) = ScopedBinding::scoped_binding(binding, source, None, None)
                     {
-                        scoped_wasm_callables.push(scoped);
+                        inventory.callables.push(scoped);
                     }
                 }
             }
-            return true;
+            return (inventory, AliasDescent::Complete);
         }
         if binding.kind() != "object_pattern" {
-            return false;
+            return (inventory, AliasDescent::Descend);
         }
-        if WasmMemberAliases::collect_tracked_object_pattern_aliases(
-            binding,
-            value,
-            source,
-            first_line,
-            scoped_wasm_callables,
-            lines,
-        ) {
-            return true;
+        if {
+            let matched;
+            (inventory, matched) = inventory
+                .collect_tracked_object_pattern_aliases(binding, value, source, first_line);
+            matches!(matched, AliasDescent::Complete)
+        } {
+            return (inventory, AliasDescent::Complete);
         }
         if let Some(module) = DynamicWasmAliases::wasm_module_specifier(
             value,
@@ -98,17 +97,15 @@ impl WasmMemberAliases<'_> {
             wasm_namespace_bindings,
             scoped_wasm_namespaces,
         ) {
-            WasmMemberAliases::collect_object_pattern_aliases(
+            inventory = inventory.collect_object_pattern_aliases(
                 binding,
                 source,
                 first_line,
                 callable_names,
                 &module,
                 source_path,
-                imported_callable_bindings,
-                lines,
             );
-            return true;
+            return (inventory, AliasDescent::Complete);
         }
         let Some(wasm_type) = WasmMemberAliases::wasm_receiver_type(
             value,
@@ -122,33 +119,28 @@ impl WasmMemberAliases<'_> {
             scoped_wasm_namespaces,
             scoped_wasm_instances,
         ) else {
-            return false;
+            return (inventory, AliasDescent::Descend);
         };
-        WasmMemberAliases::collect_type_pattern_aliases(
-            binding,
-            source,
-            first_line,
-            &wasm_type,
-            wasm_types,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-            lines,
-        );
-        true
+        inventory = inventory
+            .collect_type_pattern_aliases(binding, source, first_line, &wasm_type, wasm_types);
+        (inventory, AliasDescent::Complete)
     }
 }
 
-impl WasmMemberAliases<'_> {
+impl CallableAliasInventory {
     fn collect_tracked_object_pattern_aliases(
+        mut self,
         pattern: tree_sitter::Node<'_>,
         value: tree_sitter::Node<'_>,
         source: &str,
         first_line: usize,
-        callables: &mut Vec<ScopedBinding>,
-        lines: &mut Vec<usize>,
-    ) -> bool {
-        let Some(owner) = (JavaScriptLiteral { node: value, source: source }).semantic_javascript_name() else {
-            return false;
+    ) -> (Self, AliasDescent) {
+        let Some(owner) = (JavaScriptLiteral {
+            node: value,
+            source: source,
+        })
+        .semantic_javascript_name() else {
+            return (self, AliasDescent::Descend);
         };
         let mut found = false;
         let mut cursor = pattern.walk();
@@ -156,26 +148,34 @@ impl WasmMemberAliases<'_> {
             let Some(property) = pair.child_by_field_name("key") else {
                 continue;
             };
-            let Some(property_name) = (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()
-            else {
+            let Some(property_name) = (JavaScriptLiteral {
+                node: property,
+                source: source,
+            })
+            .semantic_javascript_name() else {
                 continue;
             };
             let full_name = format!("{owner}.{property_name}");
-            if !ScopedBinding::scoped_binding_is_visible(value, &full_name, source, callables) {
+            if !ScopedBinding::scoped_binding_is_visible(value, &full_name, source, &self.callables)
+            {
                 continue;
             }
             let binding = pair.child_by_field_name("value").unwrap_or(property);
-            if (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
-                .is_some_and(|name| name != property_name)
+            if (JavaScriptLiteral {
+                node: binding,
+                source: source,
+            })
+            .semantic_javascript_name()
+            .is_some_and(|name| name != property_name)
             {
-                lines.push(first_line + property.start_position().row);
+                self.lines.push(first_line + property.start_position().row);
             }
             if let Some(scoped) = ScopedBinding::scoped_binding(binding, source, None, None) {
-                callables.push(scoped);
+                self.callables.push(scoped);
             }
             found = true;
         }
-        found
+        (self, AliasDescent::from(found))
     }
 }
 
@@ -194,38 +194,47 @@ impl WasmMemberAliases<'_> {
 }
 
 #[allow(clippy::too_many_arguments)]
-impl WasmMemberAliases<'_> {
+impl CallableAliasInventory {
     pub(super) fn collect_object_pattern_aliases(
+        mut self,
         pattern: tree_sitter::Node<'_>,
         source: &str,
         first_line: usize,
         callable_names: &HashSet<String>,
         module: &str,
         source_path: &Path,
-        _imported_callable_bindings: &mut HashSet<String>,
-        lines: &mut Vec<usize>,
-    ) {
+    ) -> Self {
         let mut cursor = pattern.walk();
         for child in pattern.named_children(&mut cursor) {
             if child.kind() == "pair_pattern"
                 && let Some(authored_name) = child.child_by_field_name("key")
-                && let Some(name) =
-                    (JavaScriptLiteral { node: authored_name, source: source }).semantic_javascript_name()
+                && let Some(name) = (JavaScriptLiteral {
+                    node: authored_name,
+                    source: source,
+                })
+                .semantic_javascript_name()
                 && callable_names.contains(&name)
                 && WasmModuleSources::is_wasm_callable_export(module, &name, source_path)
                 && let Some(binding) = child.child_by_field_name("value")
-                && (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
-                    .is_some_and(|binding_name| binding_name != name)
+                && (JavaScriptLiteral {
+                    node: binding,
+                    source: source,
+                })
+                .semantic_javascript_name()
+                .is_some_and(|binding_name| binding_name != name)
             {
-                lines.push(first_line + authored_name.start_position().row);
+                self.lines
+                    .push(first_line + authored_name.start_position().row);
             }
         }
+        self
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-impl WasmMemberAliases<'_> {
+impl CallableAliasInventory {
     pub(super) fn collect_namespace_member_alias(
+        mut self,
         binding: tree_sitter::Node<'_>,
         value: tree_sitter::Node<'_>,
         source: &str,
@@ -239,10 +248,7 @@ impl WasmMemberAliases<'_> {
         wasm_instance_bindings: &HashMap<String, String>,
         scoped_wasm_namespaces: &[ScopedBinding],
         scoped_wasm_instances: &[ScopedBinding],
-        scoped_wasm_callables: &mut Vec<ScopedBinding>,
-        imported_callable_bindings: &mut HashSet<String>,
-        lines: &mut Vec<usize>,
-    ) {
+    ) -> Self {
         let value = DynamicWasmAliases::unwrap_transparent_expression(value);
         let binding_name_node = match binding.kind() {
             "identifier" | "property_identifier" | "private_property_identifier" => Some(binding),
@@ -251,7 +257,7 @@ impl WasmMemberAliases<'_> {
             _ => None,
         };
         let Some(binding_name_node) = binding_name_node else {
-            return;
+            return self;
         };
         let Some(callable_name) = WasmMemberAliases::wasm_callable_member_name(
             value,
@@ -266,32 +272,36 @@ impl WasmMemberAliases<'_> {
             scoped_wasm_namespaces,
             scoped_wasm_instances,
         ) else {
-            return;
+            return self;
         };
-        let Some(binding_name) =
-            (JavaScriptLiteral { node: binding_name_node, source: source }).semantic_javascript_name()
-        else {
-            return;
+        let Some(binding_name) = (JavaScriptLiteral {
+            node: binding_name_node,
+            source: source,
+        })
+        .semantic_javascript_name() else {
+            return self;
         };
         if binding_name != callable_name {
-            lines.push(first_line + binding_name_node.start_position().row);
+            self.lines
+                .push(first_line + binding_name_node.start_position().row);
         }
         if binding.kind() == "identifier" {
             if let Some(scoped) = ScopedBinding::scoped_binding(binding, source, None, None) {
-                scoped_wasm_callables.push(scoped);
+                self.callables.push(scoped);
             } else {
-                imported_callable_bindings.insert(binding_name);
+                self.imported.insert(binding_name);
             }
         }
+        self
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 #[rustfmt::skip]
-impl WasmMemberAliases<'_> {
-pub(super) fn collect_type_pattern_aliases(pattern: tree_sitter::Node<'_>, source: &str, first_line: usize, wasm_type: &str, wasm_types: &WasmTypeInventory, scoped_callable_bindings: &mut Vec<ScopedBinding>, imported_callable_bindings: &mut HashSet<String>, lines: &mut Vec<usize>) {
+impl CallableAliasInventory {
+pub(super) fn collect_type_pattern_aliases(mut self, pattern: tree_sitter::Node<'_>, source: &str, first_line: usize, wasm_type: &str, wasm_types: &WasmTypeInventory,) -> Self {
     let Some(methods) = wasm_types.methods.get(wasm_type) else {
-        return;
+        return self;
     };
     let mut cursor = pattern.walk();
     for child in pattern.named_children(&mut cursor) {
@@ -310,20 +320,21 @@ pub(super) fn collect_type_pattern_aliases(pattern: tree_sitter::Node<'_>, sourc
         let Some(binding_name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name() else {
             continue;
         };
-        if binding_name != method_name { lines.push(first_line + method_node.start_position().row); }
+        if binding_name != method_name { self.lines.push(first_line + method_node.start_position().row); }
         if let Some(scoped) = ScopedBinding::scoped_binding(binding, source, None, None) {
-            scoped_callable_bindings.push(scoped);
+            self.callables.push(scoped);
         } else {
-            imported_callable_bindings.insert(binding_name);
+            self.imported.insert(binding_name);
         }
     }
+self
 }
 }
 
 #[allow(clippy::too_many_arguments)]
 #[rustfmt::skip]
-impl WasmMemberAliases<'_> {
-pub(super) fn collect_object_literal_aliases(object: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding], scoped_wasm_callables: &mut Vec<ScopedBinding>, imported_callable_bindings: &HashSet<String>, lines: &mut Vec<usize>) {
+impl CallableAliasInventory {
+pub(super) fn collect_object_literal_aliases(mut self, object: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding],) -> Self {
     let mut cursor = object.walk();
     for child in object.named_children(&mut cursor) {
         let pair = (child.kind() == "pair").then(|| {
@@ -354,14 +365,14 @@ pub(super) fn collect_object_literal_aliases(object: tree_sitter::Node<'_>, sour
         )
         .or_else(|| {
             let name = (JavaScriptLiteral { node: value, source: source }).semantic_javascript_name()?;
-            ((imported_callable_bindings.contains(&name)
+            ((self.imported.contains(&name)
                 && ScopedBinding::root_binding_is_visible(value, &name, source))
-                || ScopedBinding::scoped_binding_is_visible(value, &name, source, scoped_wasm_callables))
+                || ScopedBinding::scoped_binding_is_visible(value, &name, source, &self.callables))
             .then_some(name)
         });
         if let Some(callable_name) = callable_name {
             if property_name != callable_name {
-                lines.push(first_line + key.start_position().row);
+                self.lines.push(first_line + key.start_position().row);
             }
             if let Some(owner) = object
                 .parent()
@@ -371,16 +382,18 @@ pub(super) fn collect_object_literal_aliases(object: tree_sitter::Node<'_>, sour
                 && let Some(mut scoped) = ScopedBinding::scoped_binding(owner, source, None, None)
             {
                 scoped.name = format!("{owner_name}.{property_name}");
-                scoped_wasm_callables.push(scoped);
+                self.callables.push(scoped);
             }
         }
     }
+self
 }
 }
 
 #[allow(clippy::too_many_arguments)]
-impl WasmMemberAliases<'_> {
+impl CallableAliasInventory {
     pub(super) fn collect_object_literal_aliases_in_tree(
+        mut self,
         node: tree_sitter::Node<'_>,
         source: &str,
         source_path: &Path,
@@ -393,12 +406,9 @@ impl WasmMemberAliases<'_> {
         wasm_instance_bindings: &HashMap<String, String>,
         scoped_wasm_namespaces: &[ScopedBinding],
         scoped_wasm_instances: &[ScopedBinding],
-        scoped_wasm_callables: &mut Vec<ScopedBinding>,
-        imported_callable_bindings: &HashSet<String>,
-        lines: &mut Vec<usize>,
-    ) {
+    ) -> Self {
         if node.kind() == "object" {
-            WasmMemberAliases::collect_object_literal_aliases(
+            self = self.collect_object_literal_aliases(
                 node,
                 source,
                 source_path,
@@ -411,14 +421,11 @@ impl WasmMemberAliases<'_> {
                 wasm_instance_bindings,
                 scoped_wasm_namespaces,
                 scoped_wasm_instances,
-                scoped_wasm_callables,
-                imported_callable_bindings,
-                lines,
             );
         }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            WasmMemberAliases::collect_object_literal_aliases_in_tree(
+            self = self.collect_object_literal_aliases_in_tree(
                 child,
                 source,
                 source_path,
@@ -431,11 +438,9 @@ impl WasmMemberAliases<'_> {
                 wasm_instance_bindings,
                 scoped_wasm_namespaces,
                 scoped_wasm_instances,
-                scoped_wasm_callables,
-                imported_callable_bindings,
-                lines,
             );
         }
+        self
     }
 }
 
@@ -572,7 +577,13 @@ impl WasmMemberAliases<'_> {
             && let Some(name) = function
                 .child_by_field_name("property")
                 .or_else(|| function.child_by_field_name("index"))
-                .and_then(|node| (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name())
+                .and_then(|node| {
+                    (JavaScriptLiteral {
+                        node: node,
+                        source: source,
+                    })
+                    .semantic_javascript_name()
+                })
             && DynamicWasmAliases::wasm_module_specifier(
                 object,
                 source,
@@ -610,7 +621,13 @@ impl WasmMemberAliases<'_> {
             && let Some(method) = function
                 .child_by_field_name("property")
                 .or_else(|| function.child_by_field_name("index"))
-                .and_then(|node| (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name())
+                .and_then(|node| {
+                    (JavaScriptLiteral {
+                        node: node,
+                        source: source,
+                    })
+                    .semantic_javascript_name()
+                })
             && let Some(returned) = wasm_types.returns.get(&(owner, method))
             && wasm_type_names.contains(returned)
         {
@@ -668,7 +685,11 @@ impl WasmMemberAliases<'_> {
         let type_node = expression
             .child_by_field_name("property")
             .or_else(|| expression.child_by_field_name("index"))?;
-        let wasm_type = (JavaScriptLiteral { node: type_node, source: source }).semantic_javascript_name()?;
+        let wasm_type = (JavaScriptLiteral {
+            node: type_node,
+            source: source,
+        })
+        .semantic_javascript_name()?;
         if !wasm_type_names.contains(&wasm_type) {
             return None;
         }
@@ -680,5 +701,26 @@ impl WasmMemberAliases<'_> {
             scoped_wasm_namespaces,
         )?;
         WasmModuleSources::is_wasm_export(&module, &wasm_type, source_path).then_some(wasm_type)
+    }
+}
+
+#[derive(Default)]
+pub(super) struct CallableAliasInventory {
+    pub(super) callables: Vec<ScopedBinding>,
+    pub(super) imported: HashSet<String>,
+    pub(super) lines: Vec<usize>,
+}
+#[derive(Clone, Copy)]
+pub(super) enum AliasDescent {
+    Descend,
+    Complete,
+}
+impl From<bool> for AliasDescent {
+    fn from(matched: bool) -> Self {
+        if matched {
+            Self::Complete
+        } else {
+            Self::Descend
+        }
     }
 }

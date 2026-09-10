@@ -4,9 +4,7 @@ pub struct DynamicWasmCallables<'scan> {
     pub source_path: &'scan Path,
     pub callable_names: &'scan HashSet<String>,
     pub wasm_namespace_bindings: &'scan HashMap<String, String>,
-    pub scoped_wasm_namespaces: &'scan mut Vec<ScopedBinding>,
-    pub bindings: &'scan mut Vec<ScopedBinding>,
-    pub lines: &'scan mut Vec<usize>,
+    pub state: ScopedCallableInventory,
     pub first_line: usize,
 }
 use std::collections::{HashMap, HashSet};
@@ -17,74 +15,68 @@ use crate::javascript_scopes::ScopedBinding;
 use crate::wasm_dynamic_aliases::DynamicWasmAliases;
 use crate::wasm_module_sources::WasmModuleSources;
 
-#[allow(clippy::too_many_arguments)]
 impl DynamicWasmCallables<'_> {
-    pub fn collect_scoped_dynamic_callable_bindings(self) {
+    pub fn collect_scoped_dynamic_callable_bindings(self) -> ScopedCallableInventory {
         let Self {
             node,
             source,
             source_path,
             callable_names,
             wasm_namespace_bindings,
-            scoped_wasm_namespaces,
-            bindings,
-            lines,
+            mut state,
             first_line,
         } = self;
-        DynamicWasmCallables::collect_assigned_pattern(
+        state = state.collect_assigned_pattern(
             node,
             source,
             source_path,
             callable_names,
             wasm_namespace_bindings,
-            scoped_wasm_namespaces,
-            bindings,
-            lines,
             first_line,
         );
-        DynamicWasmCallables::collect_import_callback_pattern(
+        state = state.collect_import_callback_pattern(
             node,
             source,
             source_path,
             callable_names,
-            scoped_wasm_namespaces,
-            bindings,
-            lines,
             first_line,
         );
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            (DynamicWasmCallables {
+            state = (DynamicWasmCallables {
                 node: child,
                 source,
                 source_path,
                 callable_names,
                 wasm_namespace_bindings,
-                scoped_wasm_namespaces,
-                bindings,
-                lines,
+                state,
                 first_line,
             })
             .collect_scoped_dynamic_callable_bindings();
         }
+        state
     }
+}
+#[derive(Default)]
+pub(super) struct ScopedCallableInventory {
+    pub(super) scoped_wasm_namespaces: Vec<ScopedBinding>,
+    pub(super) bindings: Vec<ScopedBinding>,
+    pub(super) lines: Vec<usize>,
 }
 
 #[allow(clippy::too_many_arguments)]
-impl DynamicWasmCallables<'_> {
+impl ScopedCallableInventory {
     fn collect_assigned_pattern(
+        mut self,
         node: tree_sitter::Node<'_>,
         source: &str,
         source_path: &Path,
         callable_names: &HashSet<String>,
         wasm_namespace_bindings: &HashMap<String, String>,
-        scoped_wasm_namespaces: &[ScopedBinding],
-        bindings: &mut Vec<ScopedBinding>,
-        lines: &mut Vec<usize>,
         first_line: usize,
-    ) {
+    ) -> Self {
         if !matches!(node.kind(), "variable_declarator" | "assignment_expression") {
-            return;
+            return self;
         }
         let (Some(pattern), Some(value)) = (
             node.child_by_field_name("name")
@@ -92,19 +84,19 @@ impl DynamicWasmCallables<'_> {
             node.child_by_field_name("value")
                 .or_else(|| node.child_by_field_name("right")),
         ) else {
-            return;
+            return self;
         };
         if pattern.kind() != "object_pattern" {
-            return;
+            return self;
         }
         let Some(module) = DynamicWasmAliases::wasm_module_specifier(
             value,
             source,
             source_path,
             wasm_namespace_bindings,
-            scoped_wasm_namespaces,
+            &self.scoped_wasm_namespaces,
         ) else {
-            return;
+            return self;
         };
         let context = PatternContext {
             source,
@@ -114,34 +106,33 @@ impl DynamicWasmCallables<'_> {
             first_line,
             binding: BindingContext::Declaration,
         };
-        DynamicWasmCallables::record_callable_pattern_bindings(pattern, &context, bindings, lines);
+        self = self.record_callable_pattern_bindings(pattern, &context);
+        self
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-impl DynamicWasmCallables<'_> {
+impl ScopedCallableInventory {
     fn collect_import_callback_pattern(
+        mut self,
         node: tree_sitter::Node<'_>,
         source: &str,
         source_path: &Path,
         callable_names: &HashSet<String>,
-        scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
-        bindings: &mut Vec<ScopedBinding>,
-        lines: &mut Vec<usize>,
         first_line: usize,
-    ) {
+    ) -> Self {
         if node.kind() != "call_expression" {
-            return;
+            return self;
         }
         let Some(function) = node.child_by_field_name("function") else {
-            return;
+            return self;
         };
         if !matches!(
             function.kind(),
             "member_expression" | "subscript_expression"
         ) || DynamicWasmCallables::member_name(function, source).as_deref() != Some("then")
         {
-            return;
+            return self;
         }
         let Some(module) = function
             .child_by_field_name("object")
@@ -154,10 +145,10 @@ impl DynamicWasmCallables<'_> {
                 .is_wasm_callable_source()
             })
         else {
-            return;
+            return self;
         };
         let Some(arguments) = node.child_by_field_name("arguments") else {
-            return;
+            return self;
         };
         let context = PatternContext {
             source,
@@ -178,9 +169,7 @@ impl DynamicWasmCallables<'_> {
                     .child_by_field_name("pattern")
                     .unwrap_or(parameter);
                 if pattern.kind() == "object_pattern" {
-                    DynamicWasmCallables::record_callable_pattern_bindings(
-                        pattern, &context, bindings, lines,
-                    );
+                    self = self.record_callable_pattern_bindings(pattern, &context);
                 } else if pattern.kind() == "identifier"
                     && let Some(namespace) = DynamicWasmCallables::scoped_parameter_binding(
                         pattern,
@@ -188,10 +177,11 @@ impl DynamicWasmCallables<'_> {
                         Some(module.clone()),
                     )
                 {
-                    scoped_wasm_namespaces.push(namespace);
+                    self.scoped_wasm_namespaces.push(namespace);
                 }
             }
         }
+        self
     }
 }
 
@@ -204,22 +194,23 @@ struct PatternContext<'a> {
     binding: BindingContext,
 }
 
-impl DynamicWasmCallables<'_> {
+impl ScopedCallableInventory {
     fn record_callable_pattern_bindings(
+        mut self,
         pattern: tree_sitter::Node<'_>,
         context: &PatternContext<'_>,
-        bindings: &mut Vec<ScopedBinding>,
-        lines: &mut Vec<usize>,
-    ) {
+    ) -> Self {
         let mut cursor = pattern.walk();
         for child in pattern.named_children(&mut cursor) {
             let (authored, binding) = DynamicWasmCallables::pattern_pair(child);
             let (Some(authored), Some(binding)) = (authored, binding) else {
                 continue;
             };
-            let Some(authored_name) =
-                (JavaScriptLiteral { node: authored, source: context.source }).semantic_javascript_name()
-            else {
+            let Some(authored_name) = (JavaScriptLiteral {
+                node: authored,
+                source: context.source,
+            })
+            .semantic_javascript_name() else {
                 continue;
             };
             if !context.callable_names.contains(&authored_name)
@@ -231,10 +222,15 @@ impl DynamicWasmCallables<'_> {
             {
                 continue;
             }
-            if (JavaScriptLiteral { node: binding, source: context.source }).semantic_javascript_name()
-                .is_some_and(|binding_name| binding_name != authored_name)
+            if (JavaScriptLiteral {
+                node: binding,
+                source: context.source,
+            })
+            .semantic_javascript_name()
+            .is_some_and(|binding_name| binding_name != authored_name)
             {
-                lines.push(context.first_line + authored.start_position().row);
+                self.lines
+                    .push(context.first_line + authored.start_position().row);
             }
             let scoped = if matches!(context.binding, BindingContext::Parameter) {
                 DynamicWasmCallables::scoped_parameter_binding(binding, context.source, None)
@@ -242,9 +238,10 @@ impl DynamicWasmCallables<'_> {
                 ScopedBinding::scoped_binding(binding, context.source, None, None)
             };
             if let Some(scoped) = scoped {
-                bindings.push(scoped);
+                self.bindings.push(scoped);
             }
         }
+        self
     }
 }
 
@@ -303,7 +300,13 @@ impl DynamicWasmCallables<'_> {
     fn member_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
         node.child_by_field_name("property")
             .or_else(|| node.child_by_field_name("index"))
-            .and_then(|property| (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name())
+            .and_then(|property| {
+                (JavaScriptLiteral {
+                    node: property,
+                    source: source,
+                })
+                .semantic_javascript_name()
+            })
     }
 }
 
