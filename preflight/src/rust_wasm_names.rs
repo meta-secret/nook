@@ -230,12 +230,12 @@ impl RustWasmNames<'_> {
             &mut imported_callable_bindings,
             &mut lines,
         );
-        (LocalWasmReexports {
+        lines = (LocalWasmReexports {
             node: tree.root_node(),
             source,
             first_line,
             imported_callable_bindings: &imported_callable_bindings,
-            lines: &mut lines,
+            lines,
         })
         .collect_local_wasm_reexport_aliases();
         lines.sort_unstable();

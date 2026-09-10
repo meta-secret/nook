@@ -2,7 +2,7 @@ pub struct WasmInstanceFactories<'scan> {
     pub node: tree_sitter::Node<'scan>,
     pub source: &'scan str,
     pub wasm_class_bindings: &'scan HashMap<String, String>,
-    pub factories: &'scan mut Vec<ScopedBinding>,
+    pub factories: Vec<ScopedBinding>,
 }
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -12,12 +12,12 @@ use crate::javascript_scopes::ScopedBinding;
 use crate::wasm_module_sources::WasmModuleSources;
 
 impl WasmInstanceFactories<'_> {
-    pub fn collect_wasm_instance_factories(self) {
+    pub fn collect_wasm_instance_factories(self) -> Vec<ScopedBinding> {
         let Self {
             node,
             source,
             wasm_class_bindings,
-            factories,
+            mut factories,
         } = self;
         if matches!(
             node.kind(),
@@ -56,7 +56,7 @@ impl WasmInstanceFactories<'_> {
         }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            (WasmInstanceFactories {
+            factories = (WasmInstanceFactories {
                 node: child,
                 source: source,
                 wasm_class_bindings: wasm_class_bindings,
@@ -64,6 +64,7 @@ impl WasmInstanceFactories<'_> {
             })
             .collect_wasm_instance_factories();
         }
+        factories
     }
 }
 
@@ -111,7 +112,7 @@ fn constructed_wasm_class(node: tree_sitter::Node<'_>, source: &str, classes: &H
 
 #[rustfmt::skip]
 impl WasmInstanceFactories<'_> {
-pub(super) fn collect_typed_wasm_instances(node: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>, instances: &mut Vec<ScopedBinding>) {
+pub(super) fn collect_typed_wasm_instances(node: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>, mut instances: Vec<ScopedBinding>) -> Vec<ScopedBinding> {
     if matches!(node.kind(), "required_parameter" | "optional_parameter" | "public_field_definition")
         && let Some(binding) = node.child_by_field_name("name").or_else(|| node.child_by_field_name("pattern"))
         && let Some(annotation) = node.child_by_field_name("type").or_else(|| {
@@ -136,8 +137,9 @@ pub(super) fn collect_typed_wasm_instances(node: tree_sitter::Node<'_>, source: 
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        WasmInstanceFactories::collect_typed_wasm_instances(child, source, classes, instances);
+        instances = WasmInstanceFactories::collect_typed_wasm_instances(child, source, classes, instances);
     }
+instances
 }
 }
 
@@ -148,8 +150,8 @@ impl WasmInstanceFactories<'_> {
         source_path: &Path,
         wasm_type_names: &HashSet<String>,
         called_bindings: &HashSet<String>,
-        factories: &mut HashMap<String, String>,
-    ) {
+        mut factories: HashMap<String, String>,
+    ) -> HashMap<String, String> {
         if node.kind() == "import_statement"
             && let Some(module) = node.child_by_field_name("source").and_then(|source_node| {
                 (JavaScriptLiteral {
@@ -170,7 +172,7 @@ impl WasmInstanceFactories<'_> {
             {
                 factories.insert(local, wasm_type);
             }
-            WasmInstanceFactories::collect_imported_factory_specifiers(
+            factories = WasmInstanceFactories::collect_imported_factory_specifiers(
                 node,
                 source,
                 source_path,
@@ -179,11 +181,11 @@ impl WasmInstanceFactories<'_> {
                 called_bindings,
                 factories,
             );
-            return;
+            return factories;
         }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            WasmInstanceFactories::collect_imported_wasm_instance_factories(
+            factories = WasmInstanceFactories::collect_imported_wasm_instance_factories(
                 child,
                 source,
                 source_path,
@@ -192,6 +194,7 @@ impl WasmInstanceFactories<'_> {
                 factories,
             );
         }
+        factories
     }
 }
 
@@ -216,12 +219,16 @@ impl WasmInstanceFactories<'_> {
         module: &str,
         wasm_type_names: &HashSet<String>,
         called_bindings: &HashSet<String>,
-        factories: &mut HashMap<String, String>,
-    ) {
+        mut factories: HashMap<String, String>,
+    ) -> HashMap<String, String> {
         if node.kind() == "namespace_import"
-            && let Some(local) = node
-                .named_child(0)
-                .and_then(|child| (JavaScriptLiteral { node: child, source: source }).semantic_javascript_name())
+            && let Some(local) = node.named_child(0).and_then(|child| {
+                (JavaScriptLiteral {
+                    node: child,
+                    source: source,
+                })
+                .semantic_javascript_name()
+            })
         {
             for called in called_bindings
                 .iter()
@@ -237,17 +244,23 @@ impl WasmInstanceFactories<'_> {
                     factories.insert(called.clone(), wasm_type);
                 }
             }
-            return;
+            return factories;
         }
         if node.kind() == "import_specifier"
             && !WasmInstanceFactories::node_is_type_only_import(node, source)
             && let Some(imported_node) = node.child_by_field_name("name")
-            && let Some(imported_name) =
-                (JavaScriptLiteral { node: imported_node, source: source }).semantic_javascript_name()
+            && let Some(imported_name) = (JavaScriptLiteral {
+                node: imported_node,
+                source: source,
+            })
+            .semantic_javascript_name()
         {
             let local_node = node.child_by_field_name("alias").unwrap_or(imported_node);
-            if let Some(local_name) =
-                (JavaScriptLiteral { node: local_node, source: source }).semantic_javascript_name()
+            if let Some(local_name) = (JavaScriptLiteral {
+                node: local_node,
+                source: source,
+            })
+            .semantic_javascript_name()
                 && called_bindings.contains(&local_name)
                 && let Some(wasm_type) = WasmModuleSources::wasm_factory_return_type(
                     module,
@@ -258,11 +271,11 @@ impl WasmInstanceFactories<'_> {
             {
                 factories.insert(local_name, wasm_type);
             }
-            return;
+            return factories;
         }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            WasmInstanceFactories::collect_imported_factory_specifiers(
+            factories = WasmInstanceFactories::collect_imported_factory_specifiers(
                 child,
                 source,
                 source_path,
@@ -272,6 +285,7 @@ impl WasmInstanceFactories<'_> {
                 factories,
             );
         }
+        factories
     }
 }
 
@@ -280,8 +294,8 @@ impl WasmInstanceFactories<'_> {
         node: tree_sitter::Node<'_>,
         source: &str,
         callable_names: &HashSet<String>,
-        receivers: &mut HashSet<String>,
-    ) {
+        mut receivers: HashSet<String>,
+    ) -> HashSet<String> {
         if matches!(node.kind(), "variable_declarator" | "assignment_expression")
             && let Some(value) = node
                 .child_by_field_name("value")
@@ -293,22 +307,30 @@ impl WasmInstanceFactories<'_> {
             && let Some(property) = value
                 .child_by_field_name("property")
                 .or_else(|| value.child_by_field_name("index"))
-            && let Some(callable_name) =
-                (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()
+            && let Some(callable_name) = (JavaScriptLiteral {
+                node: property,
+                source: source,
+            })
+            .semantic_javascript_name()
             && callable_names.contains(&callable_name)
-            && let Some(receiver_name) = (JavaScriptLiteral { node: object, source: source }).semantic_javascript_name()
+            && let Some(receiver_name) = (JavaScriptLiteral {
+                node: object,
+                source: source,
+            })
+            .semantic_javascript_name()
         {
             receivers.insert(receiver_name);
         }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            WasmInstanceFactories::collect_member_alias_receiver_names(
+            receivers = WasmInstanceFactories::collect_member_alias_receiver_names(
                 child,
                 source,
                 callable_names,
                 receivers,
             );
         }
+        receivers
     }
 }
 
@@ -317,8 +339,8 @@ impl WasmInstanceFactories<'_> {
         node: tree_sitter::Node<'_>,
         source: &str,
         receivers: &HashSet<String>,
-        called_bindings: &mut HashSet<String>,
-    ) {
+        mut called_bindings: HashSet<String>,
+    ) -> HashSet<String> {
         if matches!(node.kind(), "member_expression" | "subscript_expression")
             && let Some(object) = node.child_by_field_name("object")
             && let Some(factory_name) = WasmInstanceFactories::called_identifier(object, source)
@@ -329,7 +351,11 @@ impl WasmInstanceFactories<'_> {
             && let Some(binding) = node
                 .child_by_field_name("name")
                 .or_else(|| node.child_by_field_name("left"))
-            && let Some(binding_name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
+            && let Some(binding_name) = (JavaScriptLiteral {
+                node: binding,
+                source: source,
+            })
+            .semantic_javascript_name()
             && receivers.contains(&binding_name)
             && let Some(value) = node
                 .child_by_field_name("value")
@@ -340,13 +366,14 @@ impl WasmInstanceFactories<'_> {
         }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            WasmInstanceFactories::collect_factory_calls_for_receivers(
+            called_bindings = WasmInstanceFactories::collect_factory_calls_for_receivers(
                 child,
                 source,
                 receivers,
                 called_bindings,
             );
         }
+        called_bindings
     }
 }
 

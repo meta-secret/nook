@@ -3,34 +3,34 @@ pub struct LocalWasmReexports<'scan> {
     pub source: &'scan str,
     pub first_line: usize,
     pub imported_callable_bindings: &'scan HashSet<String>,
-    pub lines: &'scan mut Vec<usize>,
+    pub lines: Vec<usize>,
 }
 use std::collections::HashSet;
 
 use crate::javascript_literals::JavaScriptLiteral;
 
 impl LocalWasmReexports<'_> {
-    pub fn collect_local_wasm_reexport_aliases(self) {
+    pub fn collect_local_wasm_reexport_aliases(self) -> Vec<usize> {
         let Self {
             node,
             source,
             first_line,
             imported_callable_bindings,
-            lines,
+            mut lines,
         } = self;
         if node.kind() == "export_statement" && node.child_by_field_name("source").is_none() {
-            LocalWasmReexports::collect_local_callable_alias_specifiers(
+            lines = LocalWasmReexports::collect_local_callable_alias_specifiers(
                 node,
                 source,
                 first_line,
                 imported_callable_bindings,
                 lines,
             );
-            return;
+            return lines;
         }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            (LocalWasmReexports {
+            lines = (LocalWasmReexports {
                 node: child,
                 source: source,
                 first_line: first_line,
@@ -39,6 +39,7 @@ impl LocalWasmReexports<'_> {
             })
             .collect_local_wasm_reexport_aliases();
         }
+        lines
     }
 }
 
@@ -48,23 +49,30 @@ impl LocalWasmReexports<'_> {
         source: &str,
         first_line: usize,
         imported_callable_bindings: &HashSet<String>,
-        lines: &mut Vec<usize>,
-    ) {
+        mut lines: Vec<usize>,
+    ) -> Vec<usize> {
         if node.kind() == "export_specifier"
             && let Some(local_name) = node.child_by_field_name("name")
             && let Some(alias) = node.child_by_field_name("alias")
-            && let Some(local_name_text) =
-                (JavaScriptLiteral { node: local_name, source: source }).semantic_javascript_name()
+            && let Some(local_name_text) = (JavaScriptLiteral {
+                node: local_name,
+                source: source,
+            })
+            .semantic_javascript_name()
             && imported_callable_bindings.contains(&local_name_text)
-            && (JavaScriptLiteral { node: alias, source: source }).semantic_javascript_name()
-                .is_some_and(|alias_text| alias_text != local_name_text)
+            && (JavaScriptLiteral {
+                node: alias,
+                source: source,
+            })
+            .semantic_javascript_name()
+            .is_some_and(|alias_text| alias_text != local_name_text)
         {
             lines.push(first_line + local_name.start_position().row);
-            return;
+            return lines;
         }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            LocalWasmReexports::collect_local_callable_alias_specifiers(
+            lines = LocalWasmReexports::collect_local_callable_alias_specifiers(
                 child,
                 source,
                 first_line,
@@ -72,5 +80,6 @@ impl LocalWasmReexports<'_> {
                 lines,
             );
         }
+        lines
     }
 }
