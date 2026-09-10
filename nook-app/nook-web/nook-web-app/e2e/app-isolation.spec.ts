@@ -104,7 +104,13 @@ test('exposes only the project capability and rejects the opposite vault type', 
     const current = manager.vaultArchitecture
     const Architecture = current.constructor
     const oppositeArchitecture = simpleApp
-      ? Architecture.sentinel(current.device_mode, current.replication_type, 2, 3, 0)
+      ? Architecture.sentinel(
+          current.device_mode,
+          current.replication_type,
+          2,
+          3,
+          0,
+        )
       : Architecture.simple(current.device_mode, current.replication_type)
     try {
       manager.set_vault_architecture(oppositeArchitecture)
@@ -116,7 +122,9 @@ test('exposes only the project capability and rejects the opposite vault type', 
       current.free()
     }
   }, isSimple)
-  expect(error).toContain(I18N_KEYS.ErrorsValidationVaultApplicationTypeMismatch)
+  expect(error).toContain(
+    I18N_KEYS.ErrorsValidationVaultApplicationTypeMismatch,
+  )
 })
 
 test('keeps extension routing and local session behavior app-specific', async ({
@@ -128,7 +136,9 @@ test('keeps extension routing and local session behavior app-specific', async ({
   expect(extensionResponse.status()).toBe(isSimple ? 200 : 404)
 
   if (!isSimple) {
-    await expect(page.getByTestId('approve-extension-device-btn')).toHaveCount(0)
+    await expect(page.getByTestId('approve-extension-device-btn')).toHaveCount(
+      0,
+    )
     return
   }
 
@@ -139,7 +149,9 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await extensionContext.addInitScript(installMockPasskeyRuntime)
   const extensionPage = await extensionContext.newPage()
   await extensionPage.goto(new URL(page.url()).origin)
-  await expect(extensionPage.getByTestId('login-create-vault-chooser')).toBeVisible({
+  await expect(
+    extensionPage.getByTestId('login-create-vault-chooser'),
+  ).toBeVisible({
     timeout: UI_TIMEOUT_MS * 2,
   })
   await createLocalVaultOnLogin(extensionPage, 'Isolated extension device')
@@ -154,7 +166,12 @@ test('keeps extension routing and local session behavior app-specific', async ({
     const deviceId = manager.device_id
     const devicePublicKey = manager.device_public_key
     const deviceSigningPublicKey = await manager.device_signing_public_key_js()
-    return { ok: true as const, deviceId, devicePublicKey, deviceSigningPublicKey }
+    return {
+      ok: true as const,
+      deviceId,
+      devicePublicKey,
+      deviceSigningPublicKey,
+    }
   })
   await extensionContext.close()
   if (!extensionDevice.ok) expect.fail(extensionDevice.error)
@@ -192,7 +209,9 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await page.getByTestId('approve-extension-device-btn').click()
   await expect(
     page.getByTestId('extension-connect-consent').getByRole('alert'),
-  ).toContainText('The extension did not accept the Simple Vault pairing grant.')
+  ).toContainText(
+    'The extension did not accept the Simple Vault pairing grant.',
+  )
   await expect(page.getByTestId('extension-connect-approved')).toHaveCount(0)
 
   await page.getByTestId('header-lock-vault-btn').click()

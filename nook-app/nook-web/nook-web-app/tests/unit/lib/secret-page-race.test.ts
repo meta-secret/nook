@@ -111,10 +111,12 @@ describe('loadSecretPage', () => {
     pagination.resolve(paginatedPage.page)
     await paginationRequest
 
-    expect(manager.query_prepared_secret_page_js.mock.calls[1]?.[0]).toBe('vault')
-    expect(manager.query_prepared_secret_page_js.mock.calls[1]?.slice(2)).toEqual([
-      25, 25,
-    ])
+    expect(manager.query_prepared_secret_page_js.mock.calls[1]?.[0]).toBe(
+      'vault',
+    )
+    expect(
+      manager.query_prepared_secret_page_js.mock.calls[1]?.slice(2),
+    ).toEqual([25, 25])
     expect(state.secrets).toEqual([refreshedPage.record])
     expect(state.secretPageOffset).toBe(25)
     expect(paginatedPage.record.free).toHaveBeenCalledOnce()

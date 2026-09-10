@@ -49,7 +49,9 @@ class GenesisFinalizationFixture {
   readonly failure = new Error('genesis finalization rejected')
   readonly manager = {
     finalize_sentinel_genesis: vi.fn().mockRejectedValue(this.failure),
-    sentinel_genesis_status: vi.fn((): NookSentinelGenesisStatus => this.status),
+    sentinel_genesis_status: vi.fn(
+      (): NookSentinelGenesisStatus => this.status,
+    ),
     start_sentinel_genesis: vi.fn().mockRejectedValue(this.failure),
   }
   readonly state = {
@@ -81,14 +83,18 @@ class GenesisFinalizationFixture {
 
   async reject(): Promise<void> {
     await expect(
-      new SentinelGenesisActions(this.state as unknown as VaultState).finalize(),
+      new SentinelGenesisActions(
+        this.state as unknown as VaultState,
+      ).finalize(),
     ).resolves.toEqual(err(new NativeVaultStorageFailure(this.failure)))
     expect(this.manager.sentinel_genesis_status).toHaveBeenCalledOnce()
     expect(this.previousParticipant.free).toHaveBeenCalledOnce()
     expect(this.status.free).toHaveBeenCalledOnce()
     expect(this.currentParticipant.free).not.toHaveBeenCalled()
     expect(this.state.sentinelGenesisPhase).toBe(this.status.phase)
-    expect(this.state.sentinelGenesisParticipants).toBe(this.status.participants)
+    expect(this.state.sentinelGenesisParticipants).toBe(
+      this.status.participants,
+    )
     expect(this.state.sentinelGenesisParticipantCount).toBe(
       this.status.participants.length,
     )
@@ -141,7 +147,9 @@ describe('Sentinel genesis finalization projection', () => {
     fixture.retain(SentinelGenesisPhase.CollectingParticipants)
     await fixture.reject()
     const view = fixture.renderDashboard(SentinelDashboard.CardStack)
-    const button = view.getByTestId('sentinel-genesis-finalize') as HTMLButtonElement
+    const button = view.getByTestId(
+      'sentinel-genesis-finalize',
+    ) as HTMLButtonElement
     expect(button.disabled).toBe(true)
     expect(view.getByTestId('sentinel-genesis-participant-fields')).toBeTruthy()
     fixture.expectNoAutomaticAction()
@@ -153,7 +161,9 @@ describe('Sentinel genesis finalization projection', () => {
     fixture.retain(SentinelGenesisPhase.ReadyToFinalize)
     await fixture.reject()
     const view = fixture.renderDashboard(SentinelDashboard.CardStack)
-    const button = view.getByTestId('sentinel-genesis-finalize') as HTMLButtonElement
+    const button = view.getByTestId(
+      'sentinel-genesis-finalize',
+    ) as HTMLButtonElement
     expect(button.disabled).toBe(false)
     fixture.expectNoAutomaticAction()
     await fireEvent.click(button)
@@ -166,17 +176,26 @@ describe('Sentinel genesis finalization projection', () => {
     await fixture.reject()
     const view = fixture.renderDashboard(SentinelDashboard.CardStack)
     expect(view.queryAllByTestId('sentinel-genesis-finalize')).toHaveLength(0)
-    expect(view.queryAllByTestId('sentinel-genesis-ceremony-step')).toHaveLength(0)
+    expect(
+      view.queryAllByTestId('sentinel-genesis-ceremony-step'),
+    ).toHaveLength(0)
     fixture.expectNoAutomaticAction()
-    await fireEvent.click(view.getByTestId('sentinel-onboarding-continue-policy'))
+    await fireEvent.click(
+      view.getByTestId('sentinel-onboarding-continue-policy'),
+    )
     expect(fixture.start).not.toHaveBeenCalled()
-    await fireEvent.click(view.getByTestId('sentinel-onboarding-continue-devices'))
+    await fireEvent.click(
+      view.getByTestId('sentinel-onboarding-continue-devices'),
+    )
     expect(fixture.start).toHaveBeenCalledOnce()
     expect(fixture.finalizeAction).not.toHaveBeenCalled()
     view.unmount()
   })
 
-  for (const surface of [SentinelDashboard.CardStack, SentinelDashboard.Terminal]) {
+  for (const surface of [
+    SentinelDashboard.CardStack,
+    SentinelDashboard.Terminal,
+  ]) {
     test(`${surface} preserves explicit completion after read failure and removes it after confirmed absence`, async () => {
       const fixture = new GenesisFinalizationFixture()
       fixture.status.phase = SentinelGenesisPhase.AwaitingCompletionCheck
@@ -189,10 +208,12 @@ describe('Sentinel genesis finalization projection', () => {
       expect(button.textContent).toContain(
         I18N_KEYS.LoginSentinelGenesisPhaseAwaitingCompletionCheck,
       )
-      expect(view.queryAllByTestId('sentinel-genesis-request-output')).toHaveLength(
-        0,
-      )
-      expect(view.queryAllByTestId('sentinel-genesis-copy-request')).toHaveLength(0)
+      expect(
+        view.queryAllByTestId('sentinel-genesis-request-output'),
+      ).toHaveLength(0)
+      expect(
+        view.queryAllByTestId('sentinel-genesis-copy-request'),
+      ).toHaveLength(0)
       fixture.expectNoAutomaticAction()
       await fireEvent.click(button)
       expect(fixture.finalizeAction).toHaveBeenCalledOnce()
@@ -220,9 +241,13 @@ describe('Sentinel genesis finalization projection', () => {
       expect(fixture.manager.start_sentinel_genesis).not.toHaveBeenCalled()
       expect(fixture.manager.finalize_sentinel_genesis).toHaveBeenCalledTimes(3)
       if (surface === SentinelDashboard.CardStack) {
-        expect(view.getByTestId('sentinel-onboarding-continue-policy')).toBeTruthy()
+        expect(
+          view.getByTestId('sentinel-onboarding-continue-policy'),
+        ).toBeTruthy()
       } else {
-        expect(view.getByTestId('sentinel-genesis-participant-count')).toBeTruthy()
+        expect(
+          view.getByTestId('sentinel-genesis-participant-count'),
+        ).toBeTruthy()
       }
       view.unmount()
     })
@@ -235,9 +260,9 @@ describe('Sentinel genesis finalization projection', () => {
         args: { label: 'Genesis fixture', participantCount: 3, threshold: 2 },
       }
       await expect(
-        new SentinelGenesisActions(fixture.state as unknown as VaultState).start(
-          request,
-        ),
+        new SentinelGenesisActions(
+          fixture.state as unknown as VaultState,
+        ).start(request),
       ).resolves.toEqual(err(new NativeVaultStorageFailure(fixture.failure)))
       expect(fixture.manager.sentinel_genesis_status).toHaveBeenCalledOnce()
       expect(fixture.state.sentinelGenesisPhase).toBe(

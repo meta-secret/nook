@@ -112,9 +112,7 @@ export enum DefaultableExamplePresence {
 }
 
 export type ExampleOperation =
-  | AgentStatsOperation
-  | PrLandOperation
-  | ExampleOperationMarker.FamilyRoot;
+  AgentStatsOperation | PrLandOperation | ExampleOperationMarker.FamilyRoot;
 
 export type PrePushExampleDocument = {
   readonly prePush: PrePushRequest;

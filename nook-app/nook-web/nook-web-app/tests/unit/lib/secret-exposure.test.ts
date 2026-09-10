@@ -26,7 +26,9 @@ describe('secret exposure lifecycle', () => {
 
     expect(load).toHaveBeenCalledOnce()
     expect(
-      records.isOk() ? records.value['secret-1']?.primaryCredential : records.error,
+      records.isOk()
+        ? records.value['secret-1']?.primaryCredential
+        : records.error,
     ).toBe('credential')
   })
 

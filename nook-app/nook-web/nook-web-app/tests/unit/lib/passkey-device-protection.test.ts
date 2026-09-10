@@ -17,7 +17,9 @@ describe('passkeyCeremonyOutcome', () => {
       passkeyCeremonyOutcome(new Error('PASSKEY_PRF_UNAVAILABLE: missing')),
     ).toBe(PasskeyCeremonyOutcome.PrfUnavailable)
     expect(
-      passkeyCeremonyOutcome(new Error('PASSKEY_CEREMONY_NOT_ALLOWED: cancelled')),
+      passkeyCeremonyOutcome(
+        new Error('PASSKEY_CEREMONY_NOT_ALLOWED: cancelled'),
+      ),
     ).toBe(PasskeyCeremonyOutcome.CeremonyNotAllowed)
   })
 

@@ -226,18 +226,22 @@ describe('companion credential-fill WASM ABI', () => {
                 expect(assignments).toHaveLength(1)
                 const assignment = assignments[0]!
                 expect(assignment).toBeInstanceOf(CredentialFillAssignment)
-                expect(assignment.credential).toBe(classifierCase.expectedCredential)
+                expect(assignment.credential).toBe(
+                  classifierCase.expectedCredential,
+                )
               } finally {
                 for (const assignment of assignments) assignment.free()
               }
             } finally {
-              if (plan.kind === CredentialFillHandlePhase.Owned) plan.handle.free()
+              if (plan.kind === CredentialFillHandlePhase.Owned)
+                plan.handle.free()
             }
           } finally {
             result.free()
           }
         } finally {
-          if (fields.kind === CredentialFillHandlePhase.Owned) fields.handle.free()
+          if (fields.kind === CredentialFillHandlePhase.Owned)
+            fields.handle.free()
         }
       } finally {
         observation.free()
@@ -411,7 +415,8 @@ describe('companion credential-fill WASM ABI', () => {
             result.free()
           }
         } finally {
-          if (fields.kind === CredentialFillHandlePhase.Owned) fields.handle.free()
+          if (fields.kind === CredentialFillHandlePhase.Owned)
+            fields.handle.free()
         }
       } finally {
         observation.free()
@@ -560,7 +565,8 @@ describe('companion credential-fill WASM ABI', () => {
     const newPasswordIndex = CredentialFillFieldIndex.one()
     const oneTimeCodeIndex = CredentialFillFieldIndex.two()
     const newPassword = CredentialFillObservation.new_password(newPasswordIndex)
-    const oneTimeCode = CredentialFillObservation.one_time_code(oneTimeCodeIndex)
+    const oneTimeCode =
+      CredentialFillObservation.one_time_code(oneTimeCodeIndex)
     let newPasswordFields: CredentialFillObservationLifetime = {
       kind: CredentialFillHandlePhase.Owned,
       handle: new CredentialFillObservations(),
@@ -592,7 +598,9 @@ describe('companion credential-fill WASM ABI', () => {
       )
       try {
         expect(newPasswordResult).toBeInstanceOf(CredentialFillResult)
-        expect(newPasswordResult.kind).toBe(CredentialFillPlanningOutcome.Rejected)
+        expect(newPasswordResult.kind).toBe(
+          CredentialFillPlanningOutcome.Rejected,
+        )
         expect(newPasswordResult.rejection()).toBe(
           CredentialFillRejection.NewPasswordFieldPresent,
         )
@@ -601,7 +609,9 @@ describe('companion credential-fill WASM ABI', () => {
         )
         try {
           expect(oneTimeCodeResult).toBeInstanceOf(CredentialFillResult)
-          expect(oneTimeCodeResult.kind).toBe(CredentialFillPlanningOutcome.Rejected)
+          expect(oneTimeCodeResult.kind).toBe(
+            CredentialFillPlanningOutcome.Rejected,
+          )
           expect(oneTimeCodeResult.rejection()).toBe(
             CredentialFillRejection.OneTimeCodeFieldPresent,
           )

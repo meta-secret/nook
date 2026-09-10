@@ -4,9 +4,7 @@ import {
   GitHubValidationRequest,
 } from '../src/lib/agent-stats-github-jobs.ts';
 import { describe, expect, test } from 'bun:test';
-import {
-  type ActionJobsRequestedValidationRequest,
-} from '../src/lib/agent-stats-github-api.ts';
+import { type ActionJobsRequestedValidationRequest } from '../src/lib/agent-stats-github-api.ts';
 import { ReviewFindingBody } from '../src/lib/agent-stats-github-review.ts';
 
 describe('agent stats GitHub classification', () => {

@@ -46,7 +46,9 @@ export function unselectedAuthProviderSeedScope(): AuthProviderSeedScope {
   return { kind: AuthProviderSeedScopeKind.Unselected }
 }
 
-export function activeAuthProviderSeedScope(storeId: string): AuthProviderSeedScope {
+export function activeAuthProviderSeedScope(
+  storeId: string,
+): AuthProviderSeedScope {
   return { kind: AuthProviderSeedScopeKind.ActiveVault, storeId }
 }
 
@@ -164,7 +166,9 @@ export async function appendAuthProviders(
           const store = tx.objectStore('auth')
           const getRequest = store.get('providers')
           getRequest.onerror = () =>
-            reject(((v) => (v ? v : new Error('idb read failed')))(getRequest.error))
+            reject(
+              ((v) => (v ? v : new Error('idb read failed')))(getRequest.error),
+            )
           getRequest.onsuccess = () => {
             const rawSnapshot = getRequest.result as unknown
             const snapshot =
@@ -186,7 +190,9 @@ export async function appendAuthProviders(
             const putRequest = store.put(snapshot, 'providers')
             putRequest.onerror = () =>
               reject(
-                ((v) => (v ? v : new Error('idb write failed')))(putRequest.error),
+                ((v) => (v ? v : new Error('idb write failed')))(
+                  putRequest.error,
+                ),
               )
           }
           tx.oncomplete = () => {
@@ -409,7 +415,10 @@ async function activeAuthProviderStateKey(page: Page): Promise<string> {
           value: appId ? `providers:${appId}` : 'providers',
         }
       } catch {
-        return { ok: false as const, error: 'Native device identity read failed' }
+        return {
+          ok: false as const,
+          error: 'Native device identity read failed',
+        }
       }
     })
   })

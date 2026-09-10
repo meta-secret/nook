@@ -66,7 +66,9 @@
     if (draft.kind !== OAuthFileDraftKind.Configured) return 'private'
     return draft.config.iCloudMode
   })
-  const isSharedGoogleDrive = $derived(!isICloud && googleDriveMode === 'shared')
+  const isSharedGoogleDrive = $derived(
+    !isICloud && googleDriveMode === 'shared',
+  )
   const isSharedICloud = $derived(isICloud && iCloudMode === 'shared')
   const isSharedProvider = $derived(isSharedGoogleDrive || isSharedICloud)
   const oauthSignedIn = $derived(
@@ -89,7 +91,9 @@
   )
   const oauthAccount = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? new OAuthFilePresentation(vault.oauthFileDraft.config).oauthAccountLabel()
+      ? new OAuthFilePresentation(
+          vault.oauthFileDraft.config,
+        ).oauthAccountLabel()
       : '',
   )
   const oauthBusy = $derived(
@@ -167,7 +171,9 @@
     try {
       const actions = new oauthActions.VaultOAuthActions(vault)
       const connection = isSharedICloud
-        ? await actions.useICloudSharedProvider({ shareReference: sharedFolderRef })
+        ? await actions.useICloudSharedProvider({
+            shareReference: sharedFolderRef,
+          })
         : await actions.useGoogleSharedFolder({ folderRef: sharedFolderRef })
       if (connection.isErr()) {
         vault.errorMsg = vault.t(connection.error.translationKey)
@@ -366,7 +372,8 @@
           <button
             type="button"
             role="radio"
-            aria-checked={(isICloud ? iCloudMode : googleDriveMode) === 'private'}
+            aria-checked={(isICloud ? iCloudMode : googleDriveMode) ===
+              'private'}
             class="flex gap-2.5 px-3 py-3 text-left transition-colors {(isICloud
               ? iCloudMode
               : googleDriveMode) === 'private'
@@ -401,7 +408,8 @@
           <button
             type="button"
             role="radio"
-            aria-checked={(isICloud ? iCloudMode : googleDriveMode) === 'shared'}
+            aria-checked={(isICloud ? iCloudMode : googleDriveMode) ===
+              'shared'}
             class="flex gap-2.5 border-t border-border/40 px-3 py-3 text-left transition-colors sm:border-t-0 sm:border-l {(isICloud
               ? iCloudMode
               : googleDriveMode) === 'shared'
@@ -484,7 +492,9 @@
             <div
               class={cn(
                 (() => {
-                  const buttonVariantsArgs: Parameters<typeof buttonVariants>[0] = {
+                  const buttonVariantsArgs: Parameters<
+                    typeof buttonVariants
+                  >[0] = {
                     variant: 'default',
                     size: 'sm',
                   }
@@ -502,10 +512,11 @@
           type="button"
           class={cn(
             (() => {
-              const buttonVariantsArgs2: Parameters<typeof buttonVariants>[0] = {
-                variant: 'default',
-                size: 'sm',
-              }
+              const buttonVariantsArgs2: Parameters<typeof buttonVariants>[0] =
+                {
+                  variant: 'default',
+                  size: 'sm',
+                }
               return buttonVariants(buttonVariantsArgs2)
             })(),
             'w-full sm:w-auto',
@@ -545,7 +556,9 @@
       {#if oauthSignedIn}
         <p
           class="text-xs text-muted-foreground"
-          data-testid={isICloud ? 'icloud-account-status' : 'google-account-status'}
+          data-testid={isICloud
+            ? 'icloud-account-status'
+            : 'google-account-status'}
         >
           {isICloud
             ? (() => {
@@ -553,7 +566,8 @@
                   key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
                   replacements: {
                     account:
-                      oauthAccount || vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
+                      oauthAccount ||
+                      vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
                   },
                 }
                 return vault.t(translationRequest2)
@@ -563,7 +577,8 @@
                   key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
                   replacements: {
                     account:
-                      oauthAccount || vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
+                      oauthAccount ||
+                      vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
                   },
                 }
                 return vault.t(translationRequest3)

@@ -1,18 +1,12 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import {
-    ChevronDown,
-    Eye,
-    EyeOff,
-    KeyRound,
-    RefreshCw,
-  } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { SecretType, type PasswordGenerationOptions } from "$lib/nook";
-  import type { VaultState } from "$lib/vault.svelte";
-  import MarkdownEditor from "../MarkdownEditor.svelte";
-  import SeedPhraseGrid from "../SeedPhraseGrid.svelte";
-  import type { SecretFormState } from "./secret-form-state.svelte";
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { ChevronDown, Eye, EyeOff, KeyRound, RefreshCw } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
+  import { SecretType, type PasswordGenerationOptions } from '$lib/nook'
+  import type { VaultState } from '$lib/vault.svelte'
+  import MarkdownEditor from '../MarkdownEditor.svelte'
+  import SeedPhraseGrid from '../SeedPhraseGrid.svelte'
+  import type { SecretFormState } from './secret-form-state.svelte'
 
   let {
     vault,
@@ -20,39 +14,39 @@
     selectedType,
     onGeneratePassword,
   }: {
-    vault: VaultState;
-    state: SecretFormState;
-    selectedType: SecretType;
-    onGeneratePassword: (options: PasswordGenerationOptions) => string;
-  } = $props();
+    vault: VaultState
+    state: SecretFormState
+    selectedType: SecretType
+    onGeneratePassword: (options: PasswordGenerationOptions) => string
+  } = $props()
 
   /** Must match `FILE_ATTACHMENT_MAX_BYTES` in nook-core. */
-  const FILE_ATTACHMENT_MAX_BYTES = 1_048_576;
+  const FILE_ATTACHMENT_MAX_BYTES = 1_048_576
 
   function bytesToBase64(bytes: Uint8Array): string {
-    let binary = "";
-    const chunk = 0x8000;
+    let binary = ''
+    const chunk = 0x8000
     for (let offset = 0; offset < bytes.length; offset += chunk) {
-      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk));
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk))
     }
-    return btoa(binary);
+    return btoa(binary)
   }
 
   function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
   async function handleFileSelected(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    state.fileInputError = "";
-    if (!file) return;
+    const input = event.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    state.fileInputError = ''
+    if (!file) return
     if (file.size === 0) {
-      state.fileInputError = vault.t(I18N_KEYS.AddSecretFileEmpty);
-      input.value = "";
-      return;
+      state.fileInputError = vault.t(I18N_KEYS.AddSecretFileEmpty)
+      input.value = ''
+      return
     }
     if (file.size > FILE_ATTACHMENT_MAX_BYTES) {
       const translationRequest: Parameters<typeof vault.t>[0] = {
@@ -60,18 +54,18 @@
         replacements: {
           max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
         },
-      };
-      state.fileInputError = vault.t(translationRequest);
-      input.value = "";
-      return;
+      }
+      state.fileInputError = vault.t(translationRequest)
+      input.value = ''
+      return
     }
-    const buffer = new Uint8Array(await file.arrayBuffer());
-    state.fileName = file.name;
-    state.fileMimeType = file.type || "application/octet-stream";
-    state.fileSizeBytes = buffer.byteLength;
-    state.fileContentBase64 = bytesToBase64(buffer);
+    const buffer = new Uint8Array(await file.arrayBuffer())
+    state.fileName = file.name
+    state.fileMimeType = file.type || 'application/octet-stream'
+    state.fileSizeBytes = buffer.byteLength
+    state.fileContentBase64 = bytesToBase64(buffer)
     if (!state.fileTitle.trim()) {
-      state.fileTitle = file.name;
+      state.fileTitle = file.name
     }
   }
 
@@ -83,8 +77,8 @@
       uppercase: state.generationUppercase,
       numbers: state.generationNumbers,
       symbols: state.generationSymbols,
-    };
-    state.password = onGeneratePassword(onGeneratePasswordArgs);
+    }
+    state.password = onGeneratePassword(onGeneratePasswordArgs)
   }
 </script>
 
@@ -144,7 +138,7 @@
       <div class="relative">
         <input
           id="secret-value"
-          type={state.showPasswordValue ? "text" : "password"}
+          type={state.showPasswordValue ? 'text' : 'password'}
           data-testid="secret-value"
           bind:value={state.password}
           autocomplete="new-password"
@@ -398,7 +392,7 @@
     <div class="relative">
       <input
         id="credit-card-number"
-        type={state.showCardNumber ? "text" : "password"}
+        type={state.showCardNumber ? 'text' : 'password'}
         data-testid="credit-card-number"
         bind:value={state.cardNumber}
         placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderCardNumber)}
@@ -464,7 +458,7 @@
       <div class="relative">
         <input
           id="credit-card-cvv"
-          type={state.showCvv ? "text" : "password"}
+          type={state.showCvv ? 'text' : 'password'}
           data-testid="credit-card-cvv"
           bind:value={state.cardCvv}
           placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderCvv)}
@@ -535,8 +529,8 @@
           replacements: {
             max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
           },
-        };
-        return vault.t(translationRequest2);
+        }
+        return vault.t(translationRequest2)
       })()}
     </p>
     {#if state.fileInputError}

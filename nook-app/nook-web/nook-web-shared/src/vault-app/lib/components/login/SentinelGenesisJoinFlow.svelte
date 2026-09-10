@@ -31,7 +31,9 @@
     onRememberRequest?: (
       requestPayload: string,
     ) => Promise<SentinelActionResult<void>>
-    onReceiveShare?: (sharePayload: string) => Promise<SentinelActionResult<void>>
+    onReceiveShare?: (
+      sharePayload: string,
+    ) => Promise<SentinelActionResult<void>>
     onAcceptOnboardingPackage?: (packageJson: string) => void | Promise<void>
     onFinishSentinelInvitation?: () => void
   } = $props()
@@ -98,9 +100,8 @@
       }
       generatedParticipantResponse = response.value
       try {
-        generatedParticipantFingerprint = sentinel_genesis_participant_fingerprint(
-          generatedParticipantResponse,
-        )
+        generatedParticipantFingerprint =
+          sentinel_genesis_participant_fingerprint(generatedParticipantResponse)
       } catch {
         generatedParticipantResponse = ''
         generatedParticipantFingerprint = ''
@@ -136,9 +137,8 @@
       }
       generatedParticipantResponse = response.value
       try {
-        generatedParticipantFingerprint = sentinel_genesis_participant_fingerprint(
-          generatedParticipantResponse,
-        )
+        generatedParticipantFingerprint =
+          sentinel_genesis_participant_fingerprint(generatedParticipantResponse)
       } catch {
         generatedParticipantResponse = ''
         generatedParticipantFingerprint = ''
@@ -207,7 +207,8 @@
         class="mt-4 w-full sm:w-auto"
         data-testid="sentinel-accept-onboarding"
         disabled={isBusy || actionBusy}
-        onclick={() => void onAcceptOnboardingPackage?.(sentinelOnboardingPackage)}
+        onclick={() =>
+          void onAcceptOnboardingPackage?.(sentinelOnboardingPackage)}
       >
         <ShieldCheck class="size-4" />
         {vault.t(I18N_KEYS.LoginSentinelOnboardingMemberAction)}
@@ -244,7 +245,9 @@
               data-testid="sentinel-genesis-generated-fingerprint"
             >
               {vault.t(I18N_KEYS.LoginSentinelGenesisFingerprint)}:
-              <code class="text-foreground">{generatedParticipantFingerprint}</code>
+              <code class="text-foreground"
+                >{generatedParticipantFingerprint}</code
+              >
             </p>
           {/if}
           <Button
@@ -320,7 +323,9 @@
         id="sentinel-participant-request"
         class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
         data-testid="sentinel-genesis-join-request-input"
-        placeholder={vault.t(I18N_KEYS.LoginSentinelGenesisJoinRequestPlaceholder)}
+        placeholder={vault.t(
+          I18N_KEYS.LoginSentinelGenesisJoinRequestPlaceholder,
+        )}
         bind:value={sessionParticipantRequest}
         disabled={isBusy || actionBusy}></textarea>
       <Button
@@ -376,7 +381,9 @@
         id="sentinel-received-share"
         class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
         data-testid="sentinel-genesis-receive-share-input"
-        placeholder={vault.t(I18N_KEYS.LoginSentinelGenesisReceiveSharePlaceholder)}
+        placeholder={vault.t(
+          I18N_KEYS.LoginSentinelGenesisReceiveSharePlaceholder,
+        )}
         bind:value={participantShare}
         disabled={isBusy || actionBusy}></textarea>
       <Button

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     ChevronDown,
     ChevronLeft,
@@ -7,21 +7,21 @@
     HardDrive,
     Plus,
     Settings2,
-  } from "@lucide/svelte";
-  import ProviderPicker from "$lib/components/ProviderPicker.svelte";
+  } from '@lucide/svelte'
+  import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import type {
     ProviderSetupRequest,
     StorageProvider,
-  } from "$lib/auth/providers";
+  } from '$lib/auth/providers'
   import {
     GITHUB_PROVIDER_TYPE,
     localizedProviderStorageDetail,
     localizeProviderLabel,
-  } from "$lib/auth/providers";
-  import { SentinelGenesisPhase } from "$app-wasm";
+  } from '$lib/auth/providers'
+  import { SentinelGenesisPhase } from '$app-wasm'
 
-  import type { VaultState } from "$lib/vault.svelte";
-  import { LoginProviderManagementVariant } from "./login-provider-management-state";
+  import type { VaultState } from '$lib/vault.svelte'
+  import { LoginProviderManagementVariant } from './login-provider-management-state'
 
   let {
     vault,
@@ -36,33 +36,33 @@
     onRemoveProvider,
     onBeginAddProvider,
   }: {
-    vault: VaultState;
-    providers: StorageProvider[];
-    variant?: LoginProviderManagementVariant;
-    isVerifying: boolean;
-    isInitializing: boolean;
-    open?: boolean;
-    addingProvider?: boolean;
-    onBeginSetup?: (request: ProviderSetupRequest) => void;
-    onCancelAddProvider?: () => void;
-    onRemoveProvider?: (id: string) => void | Promise<void>;
-    onBeginAddProvider?: () => void;
-  } = $props();
+    vault: VaultState
+    providers: StorageProvider[]
+    variant?: LoginProviderManagementVariant
+    isVerifying: boolean
+    isInitializing: boolean
+    open?: boolean
+    addingProvider?: boolean
+    onBeginSetup?: (request: ProviderSetupRequest) => void
+    onCancelAddProvider?: () => void
+    onRemoveProvider?: (id: string) => void | Promise<void>
+    onBeginAddProvider?: () => void
+  } = $props()
 
-  const isSetup = $derived(variant === LoginProviderManagementVariant.Setup);
+  const isSetup = $derived(variant === LoginProviderManagementVariant.Setup)
 
   function confirmRemoveProvider(provider: StorageProvider) {
-    if (!onRemoveProvider) return;
+    if (!onRemoveProvider) return
     const tArgs: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.AuthStorageConfirmRemove,
       replacements: {
         label: provider.label,
-        signedOutNote: "",
+        signedOutNote: '',
       },
-    };
-    const ok = confirm(vault.t(tArgs));
+    }
+    const ok = confirm(vault.t(tArgs))
     if (ok) {
-      void onRemoveProvider(provider.id);
+      void onRemoveProvider(provider.id)
     }
   }
 </script>
@@ -122,7 +122,7 @@
       data-testid="login-manage-providers-toggle"
       disabled={isVerifying || isInitializing}
       onclick={() => {
-        open = !open;
+        open = !open
       }}
     >
       <Settings2 class="size-5 shrink-0 text-muted-foreground" />
@@ -171,8 +171,8 @@
                   {(() => {
                     const localizeProviderLabelArgs: Parameters<
                       typeof localizeProviderLabel
-                    >[0] = { label: provider.label, t: vault.t };
-                    return localizeProviderLabel(localizeProviderLabelArgs);
+                    >[0] = { label: provider.label, t: vault.t }
+                    return localizeProviderLabel(localizeProviderLabelArgs)
                   })()}
                 </div>
                 <div
@@ -182,10 +182,10 @@
                   {(() => {
                     const localizedProviderStorageDetailRequest: Parameters<
                       typeof localizedProviderStorageDetail
-                    >[0] = { provider, t: vault.t };
+                    >[0] = { provider, t: vault.t }
                     return localizedProviderStorageDetail(
                       localizedProviderStorageDetailRequest,
-                    );
+                    )
                   })()}
                 </div>
               </div>

@@ -124,7 +124,9 @@ class QueuedSessionOperation<T> implements QueuedOperation {
     if (expiry.kind === SessionOperationExpiryKind.None) return
     const remaining = expiry.expiresAt - Date.now()
     if (remaining <= 0) {
-      this.cancel(new SessionOperationFailure(SessionOperationFailureKind.Expired))
+      this.cancel(
+        new SessionOperationFailure(SessionOperationFailureKind.Expired),
+      )
       return
     }
     this.state = {
@@ -166,7 +168,9 @@ class QueuedSessionOperation<T> implements QueuedOperation {
       expiry.kind === SessionOperationExpiryKind.Deadline &&
       expiry.expiresAt <= Date.now()
     ) {
-      this.cancel(new SessionOperationFailure(SessionOperationFailureKind.Expired))
+      this.cancel(
+        new SessionOperationFailure(SessionOperationFailureKind.Expired),
+      )
       return
     }
     this.clearTimer(this.state.timer)
@@ -260,7 +264,11 @@ export class SessionOperationQueue {
     if (this.drainState === QueueDrainKind.Running) return
     this.drainState = QueueDrainKind.Running
     try {
-      for (let entry = this.entries.shift(); entry; entry = this.entries.shift()) {
+      for (
+        let entry = this.entries.shift();
+        entry;
+        entry = this.entries.shift()
+      ) {
         await entry.run()
       }
     } finally {

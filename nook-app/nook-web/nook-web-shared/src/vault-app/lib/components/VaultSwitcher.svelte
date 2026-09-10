@@ -231,8 +231,9 @@
         closeMenu()
         return
       }
-      const anchor = new VaultSwitcherAnchor(trigger.element.getBoundingClientRect())
-        .placement
+      const anchor = new VaultSwitcherAnchor(
+        trigger.element.getBoundingClientRect(),
+      ).placement
       placement = {
         kind: VaultSwitcherMenuPlacementKind.Open,
         top: anchor.top,

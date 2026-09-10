@@ -162,7 +162,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     const nextIdentity = directoryLoadState.view.identities.find(
       (entry) => entry.identityId === identityId,
     )
-    if (nextIdentity?.localAccess !== NookIdentityLocalAccessKind.CurrentBrowser) {
+    if (
+      nextIdentity?.localAccess !== NookIdentityLocalAccessKind.CurrentBrowser
+    ) {
       selectedRepresentation = DevicesAccessRepresentationKind.List
     }
     resetSelectedVaultForIdentity()
@@ -224,7 +226,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
         name,
       )
     } catch (failure) {
-      vault.errorMsg = vault.t(new NativeVaultStorageFailure(failure).translationKey)
+      vault.errorMsg = vault.t(
+        new NativeVaultStorageFailure(failure).translationKey,
+      )
       return false
     }
     return (await reloadSnapshots()) === DashboardLoadKind.Ready
@@ -271,16 +275,21 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     try {
       manager.value.cancel_local_identity_creation()
     } catch (failure) {
-      vault.errorMsg = vault.t(new NativeVaultStorageFailure(failure).translationKey)
+      vault.errorMsg = vault.t(
+        new NativeVaultStorageFailure(failure).translationKey,
+      )
       return
     }
     identityCreationPending = false
     identityCreationCleanupRequested = false
     identityCreationOpen = false
     try {
-      vault.deviceProtectionStatus = await manager.value.device_protection_status()
+      vault.deviceProtectionStatus =
+        await manager.value.device_protection_status()
     } catch (failure) {
-      vault.errorMsg = vault.t(new NativeVaultStorageFailure(failure).translationKey)
+      vault.errorMsg = vault.t(
+        new NativeVaultStorageFailure(failure).translationKey,
+      )
       return
     }
     vault.dismissError()
@@ -339,9 +348,12 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       return
     }
     try {
-      vault.deviceProtectionStatus = await manager.value.device_protection_status()
+      vault.deviceProtectionStatus =
+        await manager.value.device_protection_status()
     } catch (failure) {
-      vault.errorMsg = vault.t(new NativeVaultStorageFailure(failure).translationKey)
+      vault.errorMsg = vault.t(
+        new NativeVaultStorageFailure(failure).translationKey,
+      )
       return
     }
     vault.deviceId = ''
@@ -367,7 +379,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     if (untrack(() => loadState.kind) !== DashboardLoadKind.Ready) {
       loadState = { kind: DashboardLoadKind.Loading }
     }
-    if (untrack(() => directoryLoadState.kind) !== IdentityDirectoryLoadKind.Ready) {
+    if (
+      untrack(() => directoryLoadState.kind) !== IdentityDirectoryLoadKind.Ready
+    ) {
       directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading }
     }
     const manager = vault.admitManager()
@@ -533,7 +547,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
         onAddIdentity={() => void beginAddIdentity()}
       />
 
-      <div class="min-w-0 border-t border-border pt-8 md:border-t-0 md:pt-0 md:pl-8">
+      <div
+        class="min-w-0 border-t border-border pt-8 md:border-t-0 md:pt-0 md:pl-8"
+      >
         {#if identityCreationOpen}
           <div data-testid="devices-access-add-identity-flow">
             <div class="flex justify-end">
@@ -567,7 +583,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
             <h2 class="mt-4 text-lg font-semibold text-foreground">
               {vault.t(I18N_KEYS.DevicesAccessNoIdentities)}
             </h2>
-            <p class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+            <p
+              class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
+            >
               {vault.t(I18N_KEYS.DevicesAccessNoIdentitiesDescription)}
             </p>
           </div>
@@ -580,7 +598,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
             <h2 class="mt-4 text-lg font-semibold text-foreground">
               {vault.t(I18N_KEYS.DevicesAccessNoSessionIdentity)}
             </h2>
-            <p class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+            <p
+              class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
+            >
               {vault.t(I18N_KEYS.DevicesAccessNoSessionIdentityDescription)}
             </p>
           </div>
@@ -593,7 +613,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 <Button
                   type="button"
                   variant="ghost"
-                  onclick={() => (vault.devicesAccessIdentityProtectionOpen = false)}
+                  onclick={() =>
+                    (vault.devicesAccessIdentityProtectionOpen = false)}
                 >
                   {vault.t(I18N_KEYS.CommonCancel)}
                 </Button>
@@ -631,7 +652,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 <Button
                   type="button"
                   class="mt-3"
-                  onclick={() => (vault.devicesAccessIdentityProtectionOpen = true)}
+                  onclick={() =>
+                    (vault.devicesAccessIdentityProtectionOpen = true)}
                   data-testid="devices-access-unlock-identity"
                 >
                   {vault.t(I18N_KEYS.DevicesAccessUnlockIdentity)}
@@ -670,7 +692,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 <p
                   class="mt-2 max-w-[64ch] text-sm leading-relaxed text-muted-foreground"
                 >
-                  {vault.t(I18N_KEYS.DevicesAccessOtherIdentityEvidenceUnavailable)}
+                  {vault.t(
+                    I18N_KEYS.DevicesAccessOtherIdentityEvidenceUnavailable,
+                  )}
                 </p>
               </div>
             {:else if selectedRepresentation === DevicesAccessRepresentationKind.Graph}
@@ -685,7 +709,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
               {@const selectedVaultIsVerified = selectedVaultView.verified}
               {@const selectedVaultName = selectedVaultView.label}
               {@const selectedVaultExists =
-                selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected}
+                selectedVault.kind ===
+                IdentityBridgeVaultSelectionKind.Selected}
               {@const deviceIdentifier = view.deviceId.displayText(() =>
                 vault.t(I18N_KEYS.DevicesAccessUnknown),
               )}
@@ -707,9 +732,13 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 protectionStage: vault.t(
                   I18N_KEYS.DevicesAccessBridgeProtectionEvidence,
                 ),
-                deviceStage: vault.t(I18N_KEYS.DevicesAccessBridgeDeviceEvidence),
+                deviceStage: vault.t(
+                  I18N_KEYS.DevicesAccessBridgeDeviceEvidence,
+                ),
                 identityStage: companionIdentity
-                  ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext)
+                  ? vault.t(
+                      I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext,
+                    )
                   : vault.t(I18N_KEYS.DevicesAccessBridgeDistributedIdentity),
                 vaultStage: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrants),
                 selectedVaultStage: vault.t(
@@ -722,17 +751,21 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                         const deviceKeyTitleArgs: Parameters<
                           AccessChainPresentation['deviceKeyTitle']
                         >[0] = { vault, protection: view.protection }
-                        return new AccessChainPresentation(vault).deviceKeyTitle(
-                          deviceKeyTitleArgs,
-                        )
+                        return new AccessChainPresentation(
+                          vault,
+                        ).deviceKeyTitle(deviceKeyTitleArgs)
                       })(),
                 currentIdentity: identityTitle,
                 selectedIdentity: companionIdentity
-                  ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext)
+                  ? vault.t(
+                      I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext,
+                    )
                   : vault.t(I18N_KEYS.DevicesAccessBridgeSelectedIdentity),
                 vaultGrant: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrant),
                 deviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice),
-                oneDeviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeOneDeviceKey),
+                oneDeviceKey: vault.t(
+                  I18N_KEYS.DevicesAccessBridgeOneDeviceKey,
+                ),
                 identityDescription: (() => {
                   const protectionLabelArgs: Parameters<
                     AccessChainPresentation['protectionLabel']
@@ -767,7 +800,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                   I18N_KEYS.DevicesAccessLastSuccessfulUse,
                 ),
                 verifiedStatus: vault.t(I18N_KEYS.DevicesAccessRouteVerified),
-                unverifiedStatus: vault.t(I18N_KEYS.DevicesAccessRouteUnverified),
+                unverifiedStatus: vault.t(
+                  I18N_KEYS.DevicesAccessRouteUnverified,
+                ),
                 noAuthorizedIdentity: vault.t(
                   I18N_KEYS.DevicesAccessBridgeNoAuthorized,
                 ),
@@ -833,7 +868,10 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                   })(),
                 unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
               } satisfies IdentityBridgeCopy}
-              <div class="mt-8" data-testid="devices-access-relationship-details">
+              <div
+                class="mt-8"
+                data-testid="devices-access-relationship-details"
+              >
                 <div class="flex min-w-0 flex-col gap-6">
                   <IdentityBridgeNavigation
                     {vault}
@@ -847,7 +885,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                   <div class="min-w-0">
                     <div class="mb-6">
                       <p class="access-micro-label text-primary">
-                        {selectedPerspective === IdentityBridgePerspective.Identities
+                        {selectedPerspective ===
+                        IdentityBridgePerspective.Identities
                           ? vault.t(I18N_KEYS.DevicesAccessBridgeIdentityView)
                           : vault.t(I18N_KEYS.DevicesAccessBridgeVaultView)}
                       </p>
@@ -886,13 +925,16 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                             return vault.t(tArgs6)
                           })()}
                         {:else}
-                          {vault.t(I18N_KEYS.DevicesAccessBridgeNoSelectedVault)}
+                          {vault.t(
+                            I18N_KEYS.DevicesAccessBridgeNoSelectedVault,
+                          )}
                         {/if}
                       </h2>
                       <p
                         class="mt-3 max-w-[72ch] text-sm leading-relaxed text-pretty text-muted-foreground"
                       >
-                        {selectedPerspective === IdentityBridgePerspective.Identities
+                        {selectedPerspective ===
+                        IdentityBridgePerspective.Identities
                           ? vault.t(I18N_KEYS.DevicesAccessBridgeIdentityLede)
                           : selectedVaultExists
                             ? vault.t(I18N_KEYS.DevicesAccessBridgeVaultLede)
@@ -912,9 +954,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                         const protectionLabelArgs2: Parameters<
                           AccessChainPresentation['protectionLabel']
                         >[0] = { vault, protection: view.protection }
-                        return new AccessChainPresentation(vault).protectionLabel(
-                          protectionLabelArgs2,
-                        )
+                        return new AccessChainPresentation(
+                          vault,
+                        ).protectionLabel(protectionLabelArgs2)
                       })()}
                       deviceIconKind={view.protection ===
                       DeviceAccessProtectionKind.PasskeyStandard
@@ -925,7 +967,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                           : IdentityBridgeDeviceIconKind.Browser}
                       vaults={view.vaults}
                       copy={bridgeCopy}
-                      graphLabel={vault.t(I18N_KEYS.DevicesAccessBridgeGraphLabel)}
+                      graphLabel={vault.t(
+                        I18N_KEYS.DevicesAccessBridgeGraphLabel,
+                      )}
                       controlsLabel={vault.t(
                         I18N_KEYS.DevicesAccessBridgeGraphControls,
                       )}

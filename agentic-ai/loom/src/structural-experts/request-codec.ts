@@ -338,8 +338,7 @@ export type StructuralSynthesisInvocationRequest =
   };
 
 export type StructuralExpertInvocationRequest =
-  | StructuralEvidenceInvocationRequest
-  | StructuralSynthesisInvocationRequest;
+  StructuralEvidenceInvocationRequest | StructuralSynthesisInvocationRequest;
 
 type DecodeCommonStructuralFieldsRequest = {
   readonly expert: string;

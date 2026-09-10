@@ -56,7 +56,9 @@ async function restorePairingStorage(
   const { previous, written } = args
   const touchedKeys = Object.keys(written)
   const restore: ExtensionPairingItems = Object.fromEntries(
-    touchedKeys.filter((key) => key in previous).map((key) => [key, previous[key]]),
+    touchedKeys
+      .filter((key) => key in previous)
+      .map((key) => [key, previous[key]]),
   )
   const addedKeys = touchedKeys.filter((key) => !(key in previous))
   const reconcileArgs: Parameters<typeof reconcilePairingStorage>[0] = {
@@ -111,7 +113,8 @@ async function importDecodedApprovedPairing(
     >[0] = { grant: grantApproval, imported }
     const pairingItems =
       pairingPolicy.extensionPairingGrantStorageItems(pairingItemsArgs)
-    const previousPairingState = await extensionPairingIdentity.getPairingStorage()
+    const previousPairingState =
+      await extensionPairingIdentity.getPairingStorage()
     await extensionPairingIdentity.setPairingStorage(pairingItems)
     try {
       const nookTypedArgs0_1: Parameters<
@@ -228,9 +231,9 @@ export async function importApprovedPairing(
         backgroundVaultRuntime,
       ),
     }
-    const stagingOperation = new ProviderCredentialBuffer(sourceProviders).stage(
-      stagingArgs,
-    )
+    const stagingOperation = new ProviderCredentialBuffer(
+      sourceProviders,
+    ).stage(stagingArgs)
     new ProviderCredentialBuffer(sourceProviders).clear()
     message.payload.providers = []
     const staging = await stagingOperation
@@ -281,26 +284,28 @@ type LocalEventLogUpdateDependencies = {
 export function importLocalEventLogUpdate(
   request: ImportLocalEventLogUpdateArgs,
 ): Promise<LocalEventLogUpdateResult> {
-  const delegated: Parameters<typeof importLocalEventLogUpdateWithDependencies>[0] =
-    {
-      ...request,
-      ensureSession: extensionSessionLifecycle.ensureExtensionSessionDocument.bind(
+  const delegated: Parameters<
+    typeof importLocalEventLogUpdateWithDependencies
+  >[0] = {
+    ...request,
+    ensureSession:
+      extensionSessionLifecycle.ensureExtensionSessionDocument.bind(
         extensionSessionLifecycle,
       ),
-      persistPairingStorage: extensionPairingIdentity.setPairingStorage.bind(
-        extensionPairingIdentity,
-      ),
-      loadPairingStorage: extensionPairingIdentity.getPairingStorage.bind(
-        extensionPairingIdentity,
-      ),
-      pairingPolicyReady: extensionPairingGrantPolicyReady,
-      importEventLog: backgroundVaultRuntime.importExtensionEventLog.bind(
-        backgroundVaultRuntime,
-      ),
-      sendSession: extensionPairingIdentity.sendSessionMessage.bind(
-        extensionPairingIdentity,
-      ),
-    }
+    persistPairingStorage: extensionPairingIdentity.setPairingStorage.bind(
+      extensionPairingIdentity,
+    ),
+    loadPairingStorage: extensionPairingIdentity.getPairingStorage.bind(
+      extensionPairingIdentity,
+    ),
+    pairingPolicyReady: extensionPairingGrantPolicyReady,
+    importEventLog: backgroundVaultRuntime.importExtensionEventLog.bind(
+      backgroundVaultRuntime,
+    ),
+    sendSession: extensionPairingIdentity.sendSessionMessage.bind(
+      extensionPairingIdentity,
+    ),
+  }
   return importLocalEventLogUpdateWithDependencies(delegated)
 }
 
@@ -364,7 +369,10 @@ export async function importLocalEventLogUpdateWithDependencies({
         setup.kind === 'ready' ? { [setupStorageKey]: setup.setup } : {}
       const reconcileArgs: Parameters<typeof reconcilePairingStorage>[0] = {
         items,
-        removedKeys: [key, ...(setup.kind === 'ready' ? [] : [setupStorageKey])],
+        removedKeys: [
+          key,
+          ...(setup.kind === 'ready' ? [] : [setupStorageKey]),
+        ],
       }
       await reconcilePairingStorage(reconcileArgs)
       return {

@@ -29,8 +29,7 @@ type RejectedModuleDeliveryCliOutput = {
 };
 
 type ModuleDeliveryCliOutput =
-  | AcceptedModuleDeliveryCliOutput
-  | RejectedModuleDeliveryCliOutput;
+  AcceptedModuleDeliveryCliOutput | RejectedModuleDeliveryCliOutput;
 
 export class ModuleDeliveryCli {
   private constructor(private readonly request: ModuleDeliveryCliArguments) {}

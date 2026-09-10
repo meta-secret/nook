@@ -163,7 +163,9 @@
     sentinelParticipantResponsePending?: boolean
     sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
-    onAcceptSentinelOnboardingPackage?: (packageJson: string) => void | Promise<void>
+    onAcceptSentinelOnboardingPackage?: (
+      packageJson: string,
+    ) => void | Promise<void>
   } = $props()
 
   let enrollmentPanelOpen = $state(false)
@@ -183,7 +185,9 @@
   let devicesAccessHost = $state<DevicesAccessHostMount>({
     kind: DevicesAccessHostMountKind.Unmounted,
   })
-  let devicesAccessNudgePreference = $state(DevicesAccessNudgePreference.Visible)
+  let devicesAccessNudgePreference = $state(
+    DevicesAccessNudgePreference.Visible,
+  )
   const devicesAccessNudgeStorageKey = 'nook.devices-access.nudge-dismissed.v1'
 
   function dismissDevicesAccessNudge(): void {
@@ -220,7 +224,9 @@
 
   async function focusIdentityContextWhenAvailable(): Promise<void> {
     for (let frame = 0; frame < 30; frame += 1) {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      )
 
       const activeElement = document.activeElement
       if (
@@ -230,7 +236,9 @@
         return
       }
 
-      if (document.querySelector('[data-testid="login-vault-identity-loading"]')) {
+      if (
+        document.querySelector('[data-testid="login-vault-identity-loading"]')
+      ) {
         continue
       }
       const remountedButton = document.querySelector<HTMLButtonElement>(
@@ -252,7 +260,9 @@
         ? currentRoute.route
         : WorkspaceRoute.Vault
     devicesAccessTrigger = trigger
-    const navigation = new WorkspaceLocation(WorkspaceRoute.DevicesAccess).navigate()
+    const navigation = new WorkspaceLocation(
+      WorkspaceRoute.DevicesAccess,
+    ).navigate()
     if (navigation.isErr()) {
       vault.errorMsg = vault.t(navigation.error.translationKey)
       return
@@ -263,13 +273,17 @@
     >[0] = {
       route: WorkspaceRoute.DevicesAccess,
     }
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(applyWorkspaceRouteArgs)
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
+      applyWorkspaceRouteArgs,
+    )
     await tick()
     focusHostButton('devices-access-back')
   }
 
   async function closeDevicesAccess(): Promise<void> {
-    const navigation = new WorkspaceLocation(devicesAccessReturnRoute).navigate()
+    const navigation = new WorkspaceLocation(
+      devicesAccessReturnRoute,
+    ).navigate()
     if (navigation.isErr()) {
       vault.errorMsg = vault.t(navigation.error.translationKey)
       return
@@ -280,7 +294,9 @@
     >[0] = {
       route: devicesAccessReturnRoute,
     }
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(applyWorkspaceRouteArgs2)
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
+      applyWorkspaceRouteArgs2,
+    )
     await tick()
     const testId =
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
@@ -319,7 +335,9 @@
     if (!prefillEnrollmentCode) return ''
     const label = peek_enrollment_entry_label(prefillEnrollmentCode)
     try {
-      return label.state === NookEnrollmentEntryLabelState.Labeled ? label.value : ''
+      return label.state === NookEnrollmentEntryLabelState.Labeled
+        ? label.value
+        : ''
     } finally {
       label.free()
     }
@@ -329,7 +347,8 @@
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
   function setupIs(type: StorageProviderType): boolean {
     return (
-      loginSetup.kind === LoginSetupKind.Active && loginSetup.providerType === type
+      loginSetup.kind === LoginSetupKind.Active &&
+      loginSetup.providerType === type
     )
   }
   const showVaultPicker = $derived(
@@ -504,7 +523,8 @@
             variant="outline"
             class="min-h-11"
             data-testid="devices-access-nudge-review"
-            onclick={() => void openDevicesAccess(DevicesAccessTriggerKind.Nudge)}
+            onclick={() =>
+              void openDevicesAccess(DevicesAccessTriggerKind.Nudge)}
           >
             {vault.t(I18N_KEYS.DevicesAccessReviewAction)}
           </Button>
@@ -558,7 +578,10 @@
         {usesExtensionDeviceIdentity}
         {onCreateDeviceVault}
         {onStartSentinelGenesis}
-        onAddSentinelGenesisParticipantResponse={({ payload, participantLabel }) => {
+        onAddSentinelGenesisParticipantResponse={({
+          payload,
+          participantLabel,
+        }) => {
           const participantRequest: Parameters<
             sentinelGenesisActions.SentinelGenesisActions['addParticipantResponse']
           >[0] = {
@@ -659,7 +682,9 @@
       >
         <CardHeader class="border-b border-border/60 px-6 pb-4 pt-5">
           <div class="space-y-1">
-            <CardTitle class="text-lg font-semibold tracking-tight text-foreground">
+            <CardTitle
+              class="text-lg font-semibold tracking-tight text-foreground"
+            >
               {#if showVaultPicker}
                 {vault.t(I18N_KEYS.LoginVaultPickerTitle)}
               {:else if showLocalUnlock}
@@ -795,7 +820,8 @@
                       state={vault.remoteVaultRecoveryState}
                       isBusy={isVerifying}
                       onRecover={() => vault.confirmRecoverRemoteVault()}
-                      onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
+                      onCreateFresh={() =>
+                        vault.confirmCreateFreshRemoteVault()}
                       onDismiss={() => {
                         const cleared = vault.clearRemoteVaultRecovery()
                         if (cleared.isErr())
@@ -815,7 +841,11 @@
                 onConnect={onUnlock}
               />
             {:else}
-              <form novalidate onsubmit={handleFirstConnectSubmit} class="space-y-4">
+              <form
+                novalidate
+                onsubmit={handleFirstConnectSubmit}
+                class="space-y-4"
+              >
                 <ProviderSetupFields {vault} {onCancelSetup} />
                 <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
                   <Button

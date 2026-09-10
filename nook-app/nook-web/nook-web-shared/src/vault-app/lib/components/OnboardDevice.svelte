@@ -108,9 +108,13 @@
     loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
-    onIssueCode: (args: EnrollmentCodeIssue) => Promise<EnrollmentCodeIssueResult>
+    onIssueCode: (
+      args: EnrollmentCodeIssue,
+    ) => Promise<EnrollmentCodeIssueResult>
     onClearCode: () => void
-    onAddPassword: (args: VaultPasswordCreation) => Promise<PasswordOperationResult>
+    onAddPassword: (
+      args: VaultPasswordCreation,
+    ) => Promise<PasswordOperationResult>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (request: ProviderSetupRequest) => void
@@ -128,11 +132,14 @@
       ),
     ),
   )
-  const hasCompatibleSyncProviders = $derived(compatibleSyncProviders.length > 0)
+  const hasCompatibleSyncProviders = $derived(
+    compatibleSyncProviders.length > 0,
+  )
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
   function setupIs(type: StorageProviderType): boolean {
     return (
-      loginSetup.kind === LoginSetupKind.Active && loginSetup.providerType === type
+      loginSetup.kind === LoginSetupKind.Active &&
+      loginSetup.providerType === type
     )
   }
   const addingProvider = $derived(addProviderOpen || showSetup)
@@ -150,7 +157,9 @@
     ((v) => (v ? v : 0))(vault.vaultArchitecture.sentinel_ready_participants),
   )
   const sentinelRequiredParticipants = $derived(
-    ((v) => (v ? v : 0))(vault.vaultArchitecture.sentinel_required_participants),
+    ((v) => (v ? v : 0))(
+      vault.vaultArchitecture.sentinel_required_participants,
+    ),
   )
 
   let selectedProviderIdState = $state<ProviderSelection>({
@@ -207,7 +216,10 @@
   })
   const derivedOnboardingType = $derived(
     selectedProvider.kind === ResolvedOnboardingProviderKind.Available
-      ? provider_onboarding_type(selectedProvider.provider, vault.vaultArchitecture)
+      ? provider_onboarding_type(
+          selectedProvider.provider,
+          vault.vaultArchitecture,
+        )
       : vault_architecture_onboarding_type(vault.vaultArchitecture),
   )
   const usesSharedProviderGrant = $derived(
@@ -226,7 +238,9 @@
   const requiresSharedJoinerIdentity = $derived(
     usesSharedProviderGrant &&
       selectedProvider.kind === ResolvedOnboardingProviderKind.Available &&
-      !new StorageProviderPresentation(selectedProvider.provider).isICloudProvider(),
+      !new StorageProviderPresentation(
+        selectedProvider.provider,
+      ).isICloudProvider(),
   )
   const selectedPassword = $derived.by((): ResolvedOnboardingPassword => {
     const entry = passwordEntries.find(
@@ -239,7 +253,9 @@
   const hasPasswordSelection = $derived(
     selectedPassword.kind === ResolvedOnboardingPasswordKind.Available,
   )
-  const wizardReady = $derived(hasPasswordSelection && hasCompatibleSyncProviders)
+  const wizardReady = $derived(
+    hasPasswordSelection && hasCompatibleSyncProviders,
+  )
   const enrollmentLink = $derived.by(() => {
     if (!enrollmentCode) return ''
     const enrollmentLinkRequest: Parameters<
@@ -295,7 +311,9 @@
                   const localizeProviderLabelArgs: Parameters<
                     typeof localizeProviderLabel
                   >[0] = {
-                    label: ((v) => (v ? v : ''))(compatibleSyncProviders[0]?.label),
+                    label: ((v) => (v ? v : ''))(
+                      compatibleSyncProviders[0]?.label,
+                    ),
                     t: vault.t,
                   }
                   return localizeProviderLabel(localizeProviderLabelArgs)
@@ -447,7 +465,8 @@
               type="button"
               class="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
               data-testid="cancel-add-provider-btn"
-              onclick={() => (showSetup ? onCancelSetup() : onCancelAddProvider?.())}
+              onclick={() =>
+                showSetup ? onCancelSetup() : onCancelAddProvider?.()}
             >
               <ChevronLeft class="size-3.5" />
               {vault.t(I18N_KEYS.OnboardingBackToSaved)}
@@ -586,7 +605,9 @@
                   >
                     {vault.t(providerCapabilityLabelKey(provider))}
                     {#if !compatible}
-                      · {vault.t(I18N_KEYS.ProviderPickerUnsupportedCurrentVault)}
+                      · {vault.t(
+                        I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
+                      )}
                     {/if}
                   </div>
                 </div>
@@ -652,7 +673,8 @@
               for="onboard-password"
               class="text-xs font-medium text-foreground"
             >
-              {selectedPassword.kind === ResolvedOnboardingPasswordKind.Available
+              {selectedPassword.kind ===
+              ResolvedOnboardingPasswordKind.Available
                 ? (() => {
                     const tArgs8: Parameters<typeof vault.t>[0] = {
                       key: I18N_KEYS.VaultPasswordsPasswordFor,

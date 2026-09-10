@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookManualProviderSyncState,
     type NookManualProviderSync,
-  } from "$app-wasm";
+  } from '$app-wasm'
   import {
     ShieldCheck,
     RefreshCw,
@@ -12,18 +12,18 @@
     Plus,
     ChevronLeft,
     Trash2,
-  } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
-  import ProviderPicker from "$lib/components/ProviderPicker.svelte";
-  import ProviderSetupFields from "$lib/components/ProviderSetupFields.svelte";
-  import OAuthProviderSetupWizard from "$lib/components/OAuthProviderSetupWizard.svelte";
-  import GitHubProviderSetupWizard from "$lib/components/GitHubProviderSetupWizard.svelte";
-  import LocalFolderProviderSetupWizard from "$lib/components/LocalFolderProviderSetupWizard.svelte";
+  } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
+  import ProviderPicker from '$lib/components/ProviderPicker.svelte'
+  import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
+  import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
+  import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
+  import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import type {
     ProviderSetupRequest,
     StorageProvider,
     StorageProviderType,
-  } from "$lib/auth/providers";
+  } from '$lib/auth/providers'
   import {
     DEFAULT_GITHUB_REPO,
     GITHUB_PROVIDER_TYPE,
@@ -33,20 +33,20 @@
     localizeProviderLabel,
     oauthAccessToken,
     OAUTH_FILE_PROVIDER_TYPE,
-  } from "$lib/auth/providers";
-  import type { VaultState } from "$lib/vault.svelte";
+  } from '$lib/auth/providers'
+  import type { VaultState } from '$lib/vault.svelte'
   import {
     providerCapabilityLabelKey,
     provider_supports_replication,
-  } from "$lib/vault/architecture-model";
-  import { ProviderSyncStatusView } from "$lib/auth/provider-sync-status";
+  } from '$lib/vault/architecture-model'
+  import { ProviderSyncStatusView } from '$lib/auth/provider-sync-status'
   import {
     LocalFolderDraftKind,
     LoginSetupKind,
     OAuthFileDraftKind,
     OAuthSetupPresetKind,
     type LoginSetup,
-  } from "$lib/vault/state/provider.svelte";
+  } from '$lib/vault/state/provider.svelte'
 
   let {
     vault,
@@ -57,7 +57,7 @@
     addProviderOpen = false,
     embedded = false,
     loginSetup,
-    githubPat = $bindable(""),
+    githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     onReconnect,
     onSyncProvider,
@@ -67,37 +67,37 @@
     onCancelSetup,
     onRemoveProvider,
   }: {
-    vault: VaultState;
-    syncProviders: StorageProvider[];
-    manualProviderSync: NookManualProviderSync;
-    isVerifying: boolean;
-    isInitializing: boolean;
-    addProviderOpen?: boolean;
-    embedded?: boolean;
-    loginSetup: LoginSetup;
-    githubPat: string;
-    githubRepo: string;
-    onReconnect: () => void | Promise<void>;
-    onSyncProvider?: (id: string) => void | Promise<void>;
-    onBeginAddProvider?: () => void;
-    onCancelAddProvider?: () => void;
-    onBeginSetup: (request: ProviderSetupRequest) => void;
-    onCancelSetup: () => void;
-    onRemoveProvider?: (id: string) => void | Promise<void>;
-  } = $props();
+    vault: VaultState
+    syncProviders: StorageProvider[]
+    manualProviderSync: NookManualProviderSync
+    isVerifying: boolean
+    isInitializing: boolean
+    addProviderOpen?: boolean
+    embedded?: boolean
+    loginSetup: LoginSetup
+    githubPat: string
+    githubRepo: string
+    onReconnect: () => void | Promise<void>
+    onSyncProvider?: (id: string) => void | Promise<void>
+    onBeginAddProvider?: () => void
+    onCancelAddProvider?: () => void
+    onBeginSetup: (request: ProviderSetupRequest) => void
+    onCancelSetup: () => void
+    onRemoveProvider?: (id: string) => void | Promise<void>
+  } = $props()
 
   function confirmRemoveProvider(provider: StorageProvider) {
-    if (!onRemoveProvider) return;
+    if (!onRemoveProvider) return
     const tArgs: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.AuthStorageConfirmRemove,
       replacements: {
         label: provider.label,
-        signedOutNote: "",
+        signedOutNote: '',
       },
-    };
-    const ok = confirm(vault.t(tArgs));
+    }
+    const ok = confirm(vault.t(tArgs))
     if (ok) {
-      void onRemoveProvider(provider.id);
+      void onRemoveProvider(provider.id)
     }
   }
 
@@ -111,37 +111,37 @@
         lastSynced: vault.t(I18N_KEYS.AuthStorageLastSynced),
         notSyncedYet: vault.t(I18N_KEYS.AuthStorageNotSyncedYet),
       },
-    };
-    return new ProviderSyncStatusView(formatProviderSyncStatusArgs).text;
+    }
+    return new ProviderSyncStatusView(formatProviderSyncStatusArgs).text
   }
 
-  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active);
-  const addingProvider = $derived(addProviderOpen || showSetup);
+  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
+  const addingProvider = $derived(addProviderOpen || showSetup)
   function setupIs(type: StorageProviderType): boolean {
     return (
       loginSetup.kind === LoginSetupKind.Active &&
       loginSetup.providerType === type
-    );
+    )
   }
   const setupCanConnect = $derived(
-    setupIs("local") ||
-      (setupIs("local-folder") &&
+    setupIs('local') ||
+      (setupIs('local-folder') &&
         vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
         new LocalFolderPresentation(
           vault.localFolderDraft.config,
         ).localFolderHandle().kind === LocalFolderHandleKind.Selected) ||
-      (setupIs("oauth-file") &&
+      (setupIs('oauth-file') &&
         vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        oauthAccessToken(vault.oauthFileDraft.config).kind === "available") ||
-      (setupIs("github") && Boolean(githubPat.trim())),
-  );
+        oauthAccessToken(vault.oauthFileDraft.config).kind === 'available') ||
+      (setupIs('github') && Boolean(githubPat.trim())),
+  )
   const oauthPreset = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? vault.oauthFileDraft.config.preset
       : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
         ? vault.oauthSetupSelection.preset
-        : "google-drive",
-  );
+        : 'google-drive',
+  )
 </script>
 
 <div class="w-full animate-in fade-in duration-300 space-y-4">
@@ -166,16 +166,16 @@
               const tArgs2: Parameters<typeof vault.t>[0] = {
                 key: I18N_KEYS.AuthStorageConnectToType,
                 replacements: {
-                  type: setupIs("github")
+                  type: setupIs('github')
                     ? vault.t(I18N_KEYS.AuthStorageGithub)
-                    : setupIs("oauth-file")
+                    : setupIs('oauth-file')
                       ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
-                      : setupIs("local-folder")
+                      : setupIs('local-folder')
                         ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
                         : vault.t(I18N_KEYS.AuthStorageThisDevice),
                 },
-              };
-              return vault.t(tArgs2);
+              }
+              return vault.t(tArgs2)
             })()}
           {:else}
             {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
@@ -200,13 +200,13 @@
     <form
       novalidate
       onsubmit={(e) => {
-        e.preventDefault();
-        void onReconnect();
+        e.preventDefault()
+        void onReconnect()
       }}
       class="space-y-4"
     >
       {#if showSetup}
-        {#if setupIs("oauth-file")}
+        {#if setupIs('oauth-file')}
           <OAuthProviderSetupWizard
             {vault}
             bind:githubRepo
@@ -217,7 +217,7 @@
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if setupIs("github")}
+        {:else if setupIs('github')}
           <GitHubProviderSetupWizard
             {vault}
             bind:githubPat
@@ -228,7 +228,7 @@
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if setupIs("local-folder")}
+        {:else if setupIs('local-folder')}
           <LocalFolderProviderSetupWizard
             {vault}
             idPrefix="settings"
@@ -303,10 +303,10 @@
                         {(() => {
                           const localizeProviderLabelArgs: Parameters<
                             typeof localizeProviderLabel
-                          >[0] = { label: provider.label, t: vault.t };
+                          >[0] = { label: provider.label, t: vault.t }
                           return localizeProviderLabel(
                             localizeProviderLabelArgs,
-                          );
+                          )
                         })()}
                       </span>
                       <span
@@ -315,10 +315,10 @@
                         {(() => {
                           const localizedProviderStorageDetailRequest: Parameters<
                             typeof localizedProviderStorageDetail
-                          >[0] = { provider, t: vault.t };
+                          >[0] = { provider, t: vault.t }
                           return localizedProviderStorageDetail(
                             localizedProviderStorageDetailRequest,
-                          );
+                          )
                         })()}
                       </span>
                       <span
@@ -381,10 +381,8 @@
                       aria-label="{vault.t(I18N_KEYS.CommonRemove)} {(() => {
                         const localizeProviderLabelArgs2: Parameters<
                           typeof localizeProviderLabel
-                        >[0] = { label: provider.label, t: vault.t };
-                        return localizeProviderLabel(
-                          localizeProviderLabelArgs2,
-                        );
+                        >[0] = { label: provider.label, t: vault.t }
+                        return localizeProviderLabel(localizeProviderLabelArgs2)
                       })()}"
                       data-testid="remove-provider-{provider.id}"
                       disabled={isVerifying || isInitializing}
@@ -410,7 +408,7 @@
         </fieldset>
       {/if}
 
-      {#if showSetup && setupIs("local")}
+      {#if showSetup && setupIs('local')}
         <div
           class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
         >

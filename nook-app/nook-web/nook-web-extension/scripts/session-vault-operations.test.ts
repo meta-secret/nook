@@ -341,8 +341,11 @@ class CompanionVaultDiscoveryScenario {
 
   constructor(private readonly openOutcome: CompanionVaultOpenOutcome) {}
 
-  private async openVault(...args: [string, string, string, string]): Promise<void> {
-    const [vaultStoreId, deviceId, devicePublicKey, deviceSigningPublicKey] = args
+  private async openVault(
+    ...args: [string, string, string, string]
+  ): Promise<void> {
+    const [vaultStoreId, deviceId, devicePublicKey, deviceSigningPublicKey] =
+      args
     this.operationOrder.push(
       `open:${vaultStoreId}:${deviceId}:${devicePublicKey}:${deviceSigningPublicKey}`,
     )
@@ -367,7 +370,9 @@ class CompanionVaultDiscoveryScenario {
       endpoint: this.endpoint,
       presence: this.presence,
     }
-    const companionDiscovery = new CompanionVaultDiscovery(companionDiscoveryArgs)
+    const companionDiscovery = new CompanionVaultDiscovery(
+      companionDiscoveryArgs,
+    )
     return companionDiscovery.discover(this.discovery)
   }
 }
@@ -399,6 +404,8 @@ describe('companion discovery vault restoration', () => {
     await expect(scenario.discover()).resolves.toEqual(
       err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
-    expect(scenario.operationOrder).toEqual(['open:vault:device:public:signing'])
+    expect(scenario.operationOrder).toEqual([
+      'open:vault:device:public:signing',
+    ])
   })
 })

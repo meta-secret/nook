@@ -61,14 +61,18 @@ test.describe('devices and access dashboard', () => {
     await expect(dashboard).toBeVisible()
     await expect(page.getByTestId('devices-access-no-identities')).toBeVisible()
     await expect(page.getByTestId('devices-access-chain')).toHaveCount(0)
-    await expect(page.getByTestId('devices-access-prepare-browser')).toHaveCount(0)
+    await expect(
+      page.getByTestId('devices-access-prepare-browser'),
+    ).toHaveCount(0)
     const addIdentity = page.getByTestId('devices-access-add-identity')
     await expect(addIdentity).toBeEnabled()
     const generationBeforeAdd = await page.evaluate(() =>
       localStorage.getItem('nook-local-data-storage-generation'),
     )
     await addIdentity.click()
-    await expect(page.getByTestId('devices-access-add-identity-flow')).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-add-identity-flow'),
+    ).toBeVisible()
     expect(
       await page.evaluate(() =>
         localStorage.getItem('nook-local-data-storage-generation'),
@@ -93,7 +97,9 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-key-inventory')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('devices-access-identity-option')).toHaveCount(1)
+    await expect(
+      page.getByTestId('devices-access-identity-option'),
+    ).toHaveCount(1)
     await page.getByTestId('devices-access-back').click()
     await expect(page.getByTestId('login-devices-access')).toBeFocused()
 
@@ -123,8 +129,12 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-passkey-card')).toContainText(
       'Passkey ID',
     )
-    await expect(bridge.getByRole('article', { name: /App: App/ })).toBeVisible()
-    await expect(bridge.getByRole('article', { name: /Vault access/ })).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /App: App/ }),
+    ).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /Vault access/ }),
+    ).toBeVisible()
     await expect(page.getByText('Inspect access evidence')).toHaveCount(0)
     await expect(page.getByText('What your browser reported')).toHaveCount(0)
   })
@@ -160,7 +170,9 @@ test.describe('devices and access dashboard', () => {
     const listView = page.getByTestId('devices-access-layout-list')
     const graphView = page.getByTestId('devices-access-layout-graph')
     await expect(identityRail).toBeVisible()
-    await expect(page.getByTestId('devices-access-identity-option')).toHaveCount(1)
+    await expect(
+      page.getByTestId('devices-access-identity-option'),
+    ).toHaveCount(1)
     await expect(keyInventory).toBeVisible()
     await expect(keyRows).toHaveCount(1)
     await expect(keyRows.nth(0)).toHaveAttribute('data-kind', 'protector')
@@ -210,7 +222,9 @@ test.describe('devices and access dashboard', () => {
     expect(browseBottom).toBeLessThan(headingTop)
 
     const bridge = page.getByTestId('devices-access-chain')
-    await expect(bridge.getByRole('article', { name: /App: App/ })).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /App: App/ }),
+    ).toBeVisible()
 
     await page.getByTestId('devices-access-perspective-vaults').click()
     await listView.click()
@@ -259,12 +273,16 @@ test.describe('devices and access dashboard', () => {
       .getByTestId('device-protection-label-input')
       .fill('Cancelled identity passkey')
     await page.getByTestId('device-protection-setup-btn').click()
-    await expect(page.getByTestId('devices-access-add-identity-flow')).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-add-identity-flow'),
+    ).toBeVisible()
     await expect(page.getByTestId('device-protection-error')).toBeVisible()
     await expect(identityOptions).toHaveCount(1)
     expect(
       await page.evaluate(() =>
-        ((v) => (v ? v : ''))(sessionStorage.getItem('nook_vault_session_locked')),
+        ((v) => (v ? v : ''))(
+          sessionStorage.getItem('nook_vault_session_locked'),
+        ),
       ),
     ).toBe('')
     await page.evaluate(() => {
@@ -286,14 +304,16 @@ test.describe('devices and access dashboard', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     expect(
-      await page.evaluate(() => sessionStorage.getItem('nook_vault_session_locked')),
+      await page.evaluate(() =>
+        sessionStorage.getItem('nook_vault_session_locked'),
+      ),
     ).toBe('true')
     const personalIdentity = identityOptions.filter({ hasText: 'Personal' })
     const workIdentity = identityOptions.filter({ hasText: 'Identity 2' })
     await expect(workIdentity).toHaveAttribute('data-selected', 'true')
-    await expect(page.getByTestId('devices-access-key-inventory')).toContainText(
-      'PIN or passphrase',
-    )
+    await expect(
+      page.getByTestId('devices-access-key-inventory'),
+    ).toContainText('PIN or passphrase')
 
     await personalIdentity.click()
     const generationBeforeActivation = await page.evaluate(() =>
@@ -371,17 +391,17 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-identity-protection-flow'),
     ).toHaveCount(0)
-    await expect(page.getByTestId('devices-access-key-inventory')).toContainText(
-      'Passkey',
-    )
+    await expect(
+      page.getByTestId('devices-access-key-inventory'),
+    ).toContainText('Passkey')
     await page.getByTestId('devices-access-rename-passkey').click()
     await page
       .getByTestId('devices-access-passkey-name-input')
       .fill('Must stay with Personal')
     await workIdentity.click()
-    await expect(page.getByTestId('devices-access-passkey-name-input')).toHaveCount(
-      0,
-    )
+    await expect(
+      page.getByTestId('devices-access-passkey-name-input'),
+    ).toHaveCount(0)
     await expect(
       page.getByTestId('login-gate').getByTestId('devices-access-dashboard'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -415,7 +435,9 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-key-inventory')).toBeVisible()
   })
 
-  test('walks the access chain from passkey to app to vaults', async ({ page }) => {
+  test('walks the access chain from passkey to app to vaults', async ({
+    page,
+  }) => {
     await connectLocalVault(page)
     await expect(page.getByTestId('devices-access-nudge')).toHaveCount(0)
     await addVaultPassword(
@@ -448,9 +470,9 @@ test.describe('devices and access dashboard', () => {
     ).toHaveCount(0)
 
     await page.getByTestId('devices-access-layout-graph').click()
-    await expect(page.getByTestId('devices-access-identity-state')).toContainText(
-      'Identity unlocked',
-    )
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity unlocked')
     await expect(page.getByTestId('devices-access-chain')).toContainText(
       'Passkey · recoverable identity',
     )
@@ -470,14 +492,18 @@ test.describe('devices and access dashboard', () => {
     await expect(bridge).toContainText('Identity')
     await expect(bridge).toContainText('Vaults')
     await expect(bridge.locator('.svelte-flow__edge')).not.toHaveCount(0)
-    await expect(bridge.getByRole('article', { name: /App: App/ })).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /App: App/ }),
+    ).toBeVisible()
     await expect(page.getByTestId('devices-access-passkey-card')).toBeVisible()
     await expect(
       bridge.getByRole('article', {
         name: /Identity.*Identity unlocked/,
       }),
     ).toBeVisible()
-    await expect(bridge.getByRole('article', { name: /Vault access/ })).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /Vault access/ }),
+    ).toBeVisible()
     const strengthVaults = page.getByTestId('devices-access-strength-vaults')
     await expect(strengthVaults).toHaveCount(1)
     await expect(strengthVaults).toContainText('Verified way in')
@@ -511,7 +537,9 @@ test.describe('devices and access dashboard', () => {
     await expect
       .poll(() =>
         bridge.evaluate((element) => {
-          const protection = element.querySelector('article[aria-label*="Passkey"]')
+          const protection = element.querySelector(
+            'article[aria-label*="Passkey"]',
+          )
           if (!(protection instanceof HTMLElement)) return false
 
           const bridgeBounds = element.getBoundingClientRect()
@@ -549,14 +577,16 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByText('What your browser reported')).toHaveCount(0)
 
     await expect(strengthVaults).toContainText('Verified way in')
-    await expect(bridge.getByRole('article', { name: /Vault access/ })).toHaveCount(
-      1,
-    )
+    await expect(
+      bridge.getByRole('article', { name: /Vault access/ }),
+    ).toHaveCount(1)
     await page.getByTestId('devices-access-back').click()
     await expect(page.getByTestId('header-devices-access-btn')).toBeFocused()
   })
 
-  test('keeps the localized graph inside a narrow viewport', async ({ page }) => {
+  test('keeps the localized graph inside a narrow viewport', async ({
+    page,
+  }) => {
     await connectLocalVault(page)
     await page.getByTestId('header-devices-access-btn').click()
     await openRelationshipGraph(page)
@@ -605,11 +635,17 @@ test.describe('devices and access dashboard', () => {
 
     const inventory = page.getByTestId('devices-access-key-inventory')
     await expect(inventory).toContainText('PIN or passphrase')
-    await expect(page.getByTestId('devices-access-rename-passkey')).toHaveCount(0)
-    await expect(page.getByTestId('devices-access-credential-id')).toHaveCount(0)
+    await expect(page.getByTestId('devices-access-rename-passkey')).toHaveCount(
+      0,
+    )
+    await expect(page.getByTestId('devices-access-credential-id')).toHaveCount(
+      0,
+    )
   })
 
-  test('does not classify an unnamed passkey as user-named', async ({ page }) => {
+  test('does not classify an unnamed passkey as user-named', async ({
+    page,
+  }) => {
     await connectLocalVault(page)
     const preparationFailure = await page.evaluate((unknownTextKind) => {
       if (!('__nookVault' in window)) {
@@ -678,11 +714,15 @@ test.describe('devices and access dashboard', () => {
     await expect(inventory).toContainText('Unnamed passkey', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('devices-access-rename-passkey')).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-rename-passkey'),
+    ).toBeVisible()
     await expect(page.getByText('What your browser reported')).toHaveCount(0)
   })
 
-  test('attributes a companion session to its paired device', async ({ page }) => {
+  test('attributes a companion session to its paired device', async ({
+    page,
+  }) => {
     await connectLocalVault(page)
     const preparationFailure = await page.evaluate((companionProtection) => {
       if (!('__nookVault' in window)) {
@@ -756,10 +796,9 @@ test.describe('devices and access dashboard', () => {
     await connectLocalVault(page)
     await page.getByTestId('header-devices-access-btn').click()
     await openRelationshipGraph(page)
-    await expect(page.getByTestId('devices-access-strength-vaults')).toContainText(
-      'Test vault',
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
+    await expect(
+      page.getByTestId('devices-access-strength-vaults'),
+    ).toContainText('Test vault', { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
     // Enter recovery through the same locked-state UI as production. This
     // quiesces the active vault before its protected identity is forgotten.
@@ -820,11 +859,17 @@ test.describe('devices and access dashboard', () => {
           timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
         })
       }
-      await expect(page.getByTestId('devices-access-no-identities')).toBeVisible({
+      await expect(
+        page.getByTestId('devices-access-no-identities'),
+      ).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
-      await expect(page.getByTestId('devices-access-add-identity')).toBeEnabled()
-      await expect(page.getByTestId('devices-access-prepare-browser')).toHaveCount(0)
+      await expect(
+        page.getByTestId('devices-access-add-identity'),
+      ).toBeEnabled()
+      await expect(
+        page.getByTestId('devices-access-prepare-browser'),
+      ).toHaveCount(0)
     } finally {
       // Recovery intentionally disposes the active WASM identity. Its logs
       // were attached above while IndexedDB was still readable; always leave
@@ -839,7 +884,9 @@ test.describe('devices and access dashboard', () => {
     await connectLocalVault(page)
     await page.getByTestId('header-devices-access-btn').click()
     await openRelationshipGraph(page)
-    await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(1, {
+    await expect(
+      page.getByTestId('devices-access-strength-vaults'),
+    ).toHaveCount(1, {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
@@ -901,7 +948,9 @@ test.describe('devices and access dashboard', () => {
 
     const chain = page.getByTestId('devices-access-chain')
     await expect(chain).toContainText('0 vaults')
-    await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(0)
+    await expect(
+      page.getByTestId('devices-access-strength-vaults'),
+    ).toHaveCount(0)
     await expect(page.getByRole('heading', { name: /0 vaults/ })).toBeVisible()
 
     await expect(chain).not.toContainText('Verified way in')
@@ -924,29 +973,26 @@ test.describe('devices and access dashboard', () => {
     await expect(bridge).toContainText('Passkey · recoverable identity', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('devices-access-identity-state')).toContainText(
-      'Identity unlocked',
-      {
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      },
-    )
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity unlocked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await page.getByTestId('header-lock-vault-btn').click()
     // Locking from /devices-access keeps that URL, so login opens Access directly.
     await expect(page).toHaveURL(/\/devices-access$/)
     await openRelationshipGraph(page)
-    await expect(page.getByTestId('devices-access-identity-state')).toContainText(
-      'Identity locked',
-      {
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      },
-    )
-    await expect(page.getByTestId('devices-access-identity-card')).toHaveAttribute(
-      'data-identity-state',
-      'Locked',
-    )
-    await expect(page.getByTestId('devices-access-strength-vaults')).toContainText(
-      'Verified way in',
-    )
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity locked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByTestId('devices-access-identity-card'),
+    ).toHaveAttribute('data-identity-state', 'Locked')
+    await expect(
+      page.getByTestId('devices-access-strength-vaults'),
+    ).toContainText('Verified way in')
     await expect(page.getByText('Inspect access evidence')).toHaveCount(0)
   })
 })

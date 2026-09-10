@@ -125,7 +125,10 @@ class WebsitePasskeyRequests {
   }
 
   private pendingWebsitePasskeyRequests = new Set<string>()
-  private passkeyRequestKey({ sender, requestId }: PasskeyRequestKeyArgs): string {
+  private passkeyRequestKey({
+    sender,
+    requestId,
+  }: PasskeyRequestKeyArgs): string {
     return `${((...[v = -1]) => v)(sender.tab?.id)}:${((v) => (v ? v : 0))(sender.frameId)}:${requestId}`
   }
 
@@ -209,7 +212,10 @@ class WebsitePasskeyRequests {
       return await Promise.race([
         this.matchingPasskeyAvailabilityForOrigin(nookTypedArgs0_0),
         new Promise<MatchingPasskeyAvailability>((resolve) => {
-          setTimeout(() => resolve(unavailable), PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS)
+          setTimeout(
+            () => resolve(unavailable),
+            PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS,
+          )
         }),
       ])
     } catch {
@@ -230,7 +236,8 @@ class WebsitePasskeyRequests {
       ceremony: message.payload.ceremony,
       requestJson: message.payload.requestJson,
     }
-    const context = await resolvedDependencies.requestOriginAndRpId(nookTypedArgs0_2)
+    const context =
+      await resolvedDependencies.requestOriginAndRpId(nookTypedArgs0_2)
     if (context.kind === WebsitePasskeyRequestContextKind.Rejected) {
       return { ok: false, reason: 'passkey-forbidden-origin' }
     }
@@ -260,7 +267,8 @@ class WebsitePasskeyRequests {
         queue: extensionSessionProbeDeadline(message.payload.expiresAt),
       },
     }
-    const delivery = await resolvedDependencies.sendSessionMessage(nookTypedArgs0_3)
+    const delivery =
+      await resolvedDependencies.sendSessionMessage(nookTypedArgs0_3)
     if (delivery.isErr()) return delivery.error.response
     const status = delivery.value
     if (
@@ -361,12 +369,14 @@ class WebsitePasskeyRequests {
     }
     this.pendingWebsitePasskeyRequests.add(key)
     try {
-      const grant = (await extensionPairingIdentity.passkeyPairingGrants()).find(
+      const grant = (
+        await extensionPairingIdentity.passkeyPairingGrants()
+      ).find(
         (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
       )
       if (!grant) return { ok: false, reason: 'passkey-vault-not-granted' }
-      const credentialSelection: WebsitePasskeyCredentialSelection = message.payload
-        .credentialId
+      const credentialSelection: WebsitePasskeyCredentialSelection = message
+        .payload.credentialId
         ? {
             kind: WebsitePasskeyCredentialSelectionKind.Selected,
             credentialId: message.payload.credentialId,
@@ -391,14 +401,18 @@ class WebsitePasskeyRequests {
             WebsitePasskeyOptionsMessageSchema.websitePasskeyRequestJson(
               requestJsonArgs,
             ),
-          queue: extensionSessionPasskeyCeremonyDeadline(message.payload.expiresAt),
+          queue: extensionSessionPasskeyCeremonyDeadline(
+            message.payload.expiresAt,
+          ),
         },
       }
       const delivery =
         await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_7)
       if (delivery.isErr()) return delivery.error.response
       const response = new SessionPasskeyResponse(delivery.value).decode()
-      return response.isOk() ? response.value : { ok: false, reason: response.error }
+      return response.isOk()
+        ? response.value
+        : { ok: false, reason: response.error }
     } finally {
       this.pendingWebsitePasskeyRequests.delete(key)
     }

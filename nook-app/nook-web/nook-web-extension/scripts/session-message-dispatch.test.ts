@@ -31,7 +31,9 @@ async function decodeProviders(providers: StorageProvider[]) {
 
 describe('ExtensionSessionMessageDispatcher', () => {
   test('routes grant authority through runtime ingress and the owned queue', async () => {
-    type RuntimeListener = Parameters<typeof chrome.runtime.onMessage.addListener>[0]
+    type RuntimeListener = Parameters<
+      typeof chrome.runtime.onMessage.addListener
+    >[0]
     const registered = Promise.withResolvers<RuntimeListener>()
     const blocked = Promise.withResolvers<void>()
     const started = Promise.withResolvers<void>()
@@ -46,12 +48,15 @@ describe('ExtensionSessionMessageDispatcher', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { classifySessionGrantAuthority } = await import(
-      '../src/offscreen/session-operations'
-    )
+    const { classifySessionGrantAuthority } =
+      await import('../src/offscreen/session-operations')
     const manager = {
       classify_extension_grant_authority: (stored: string, vault: string) => {
-        expect(events).toEqual(['block-started', 'block-finished', 'interactive'])
+        expect(events).toEqual([
+          'block-started',
+          'block-finished',
+          'interactive',
+        ])
         expect(stored).toBe('{}')
         expect(vault).toBe('vault')
         events.push('classified')
@@ -61,9 +66,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const stagedPayloads: { stored_json: string }[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders,
       handleMessage: async (message) => {
         if (message.type === ExtensionSessionMessageType.MigrateAuthProviders) {
@@ -79,7 +92,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
         }
         if (message.type !== ExtensionSessionMessageType.ClassifyGrantAuthority)
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         stagedPayloads.push(message.payload)
         return ok(
@@ -196,7 +211,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     })
-    expect(malformedProvider.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+    expect(malformedProvider.kind).toBe(
+      ExtensionSessionRequestParseKind.Invalid,
+    )
 
     const malformedEvent = await parseExtensionSessionRequest({
       type: ExtensionSessionMessageType.UpdateVault,
@@ -286,9 +303,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders,
       handleMessage: async (message) =>
         ok({
@@ -420,13 +445,22 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders,
       handleMessage: async (message) => {
         handledTypes.push(message.type)
-        if (message.type === ExtensionSessionMessageType.CreatePin) await blocker
+        if (message.type === ExtensionSessionMessageType.CreatePin)
+          await blocker
         return ok({ ok: true })
       },
     })
@@ -506,9 +540,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders,
       handleMessage: async () => {
         handled = true
@@ -522,7 +564,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
 
     expect(response).toEqual(
-      err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      err(
+        new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+      ),
     )
     expect(handled).toBe(false)
     expect(payload.providers).toEqual([])
@@ -537,9 +581,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders,
       handleMessage: async () => {
         handled = true
@@ -569,15 +621,27 @@ describe('ExtensionSessionMessageDispatcher', () => {
     let handledGithubPat = ''
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders,
       handleMessage: async (message) => {
         const handledProviders = messagePayload(message).providers
         if (Array.isArray(handledProviders)) {
           const provider = handledProviders[0]
-          if (provider && typeof provider === 'object' && 'githubPat' in provider) {
+          if (
+            provider &&
+            typeof provider === 'object' &&
+            'githubPat' in provider
+          ) {
             handledGithubPat = String(provider.githubPat)
           }
         }
@@ -606,9 +670,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -666,9 +738,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ] as StorageProvider[]
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -723,9 +803,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders: async () => stagedProviders,
       handleMessage: async (message) => {
         handledTypes.push(message.type)
@@ -780,9 +868,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -847,9 +943,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     } as typeof chrome
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       handleCompanionIdentityHandoff: async () =>
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       decodeProviders,
       handleMessage: async () => ok({ ok: true }),
     })

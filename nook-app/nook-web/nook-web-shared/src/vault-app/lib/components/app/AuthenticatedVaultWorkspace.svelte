@@ -142,7 +142,9 @@
   })
 
   async function closeDevicesAccess() {
-    const navigation = new WorkspaceLocation(devicesAccessReturnRoute).navigate()
+    const navigation = new WorkspaceLocation(
+      devicesAccessReturnRoute,
+    ).navigate()
     if (navigation.isErr()) {
       vault.errorMsg = vault.t(navigation.error.translationKey)
       return
@@ -155,7 +157,9 @@
     new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeApplication)
     await tick()
     document
-      .querySelector<HTMLButtonElement>('[data-testid="header-devices-access-btn"]')
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="header-devices-access-btn"]',
+      )
       ?.focus()
   }
 
@@ -194,7 +198,8 @@
           {vault}
           {needsSyncProvider}
           {needsAnotherDevice}
-          onAddSyncProvider={() => vault.openAdmin(AdminAccordionSection.Storage)}
+          onAddSyncProvider={() =>
+            vault.openAdmin(AdminAccordionSection.Storage)}
           onAddDevice={() => {
             const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
               section: SettingsSection.Onboard,
@@ -205,7 +210,10 @@
         />
       {/if}
       {#if vault.settingsOpen && vault.settingsSection === SettingsSection.DevicesAccess}
-        <DevicesAccessDashboard {vault} onBack={() => void closeDevicesAccess()} />
+        <DevicesAccessDashboard
+          {vault}
+          onBack={() => void closeDevicesAccess()}
+        />
       {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin
           {vault}
@@ -239,11 +247,13 @@
           }}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(setupRequest) => vault.beginProviderSetup(setupRequest)}
+          onBeginSetup={(setupRequest) =>
+            vault.beginProviderSetup(setupRequest)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onRemoveProvider={async (id) => {
             const removed = await vault.removeProvider(id)
-            if (removed.isErr()) vault.errorMsg = vault.t(removed.error.translationKey)
+            if (removed.isErr())
+              vault.errorMsg = vault.t(removed.error.translationKey)
           }}
           onAddPassword={(passwordRequest) =>
             vault.addVaultPassword(passwordRequest)}
@@ -253,9 +263,13 @@
           onIssueCode={({ entryId, password }) => {
             const provider = vault.syncProviders[0]
             if (!provider) {
-              throw new Error(vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr))
+              throw new Error(
+                vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr),
+              )
             }
-            const issueRequest: Parameters<typeof vault.issueEnrollmentCode>[0] = {
+            const issueRequest: Parameters<
+              typeof vault.issueEnrollmentCode
+            >[0] = {
               entryId,
               password,
               providerId: provider.id,
@@ -268,11 +282,14 @@
           onImportKeePassXc={(csv) => vault.handleKeePassXcImport(csv)}
           onImportLastPass={(csv) => vault.handleLastPassImport(csv)}
           onImportKeeper={(csv) => vault.handleKeeperImport(csv)}
-          onImportOnePassword={(archive) => vault.handleOnePasswordImport(archive)}
+          onImportOnePassword={(archive) =>
+            vault.handleOnePasswordImport(archive)}
           onImportApplePasswords={(exportBytes) =>
             vault.handleApplePasswordsImport(exportBytes)}
-          onImportChromePasswords={(csv) => vault.handleChromePasswordsImport(csv)}
-          onImportDashlane={(exportBytes) => vault.handleDashlaneImport(exportBytes)}
+          onImportChromePasswords={(csv) =>
+            vault.handleChromePasswordsImport(csv)}
+          onImportDashlane={(exportBytes) =>
+            vault.handleDashlaneImport(exportBytes)}
           onImportGoogleAuthenticator={(migrationUris) =>
             vault.handleGoogleAuthenticatorImport(migrationUris)}
           onImportProtonPass={(exportBytes) =>
@@ -292,13 +309,15 @@
           loginSetup={vault.loginSetup}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
-          onIssueCode={(issueRequest) => vault.issueEnrollmentCode(issueRequest)}
+          onIssueCode={(issueRequest) =>
+            vault.issueEnrollmentCode(issueRequest)}
           onClearCode={() => vault.clearEnrollmentCode()}
           onAddPassword={(passwordRequest) =>
             vault.addVaultPassword(passwordRequest)}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(setupRequest) => vault.beginProviderSetup(setupRequest)}
+          onBeginSetup={(setupRequest) =>
+            vault.beginProviderSetup(setupRequest)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onConnectProvider={onSettingsReconnect}
         />
@@ -331,10 +350,11 @@
                 vault.errorMsg = vault.t(synchronized.error.translationKey)
             }}
             onOpenDevicesSettings={() => {
-              const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
-                section: SettingsSection.Storage,
-                accordion: SettingsAccordionSection.Devices,
-              }
+              const settingsRequest: Parameters<typeof vault.openSettings>[0] =
+                {
+                  section: SettingsSection.Storage,
+                  accordion: SettingsAccordionSection.Devices,
+                }
               vault.openSettings(settingsRequest)
             }}
           />
@@ -347,7 +367,8 @@
               editRestriction={vault.editRestriction}
               secrets={vault.secrets}
               onAddModeChange={setAddMode}
-              onAddSecret={(secretRequest) => vault.handleAddSecret(secretRequest)}
+              onAddSecret={(secretRequest) =>
+                vault.handleAddSecret(secretRequest)}
               onReplaceSecret={(secretRequest) =>
                 vault.handleReplaceSecret(secretRequest)}
               onDeleteSecret={(id) => vault.handleDeleteSecret(id)}

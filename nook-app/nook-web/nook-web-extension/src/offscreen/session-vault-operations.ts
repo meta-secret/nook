@@ -56,9 +56,10 @@ const importExtensionVaultDependencies: ImportExtensionVaultDependencies = {
   createRecords: (records) => NookExternalEventLogRecords.from_array(records),
 }
 
-export type ImportExtensionVaultWithDependenciesArgs = ImportExtensionVaultArgs & {
-  dependencies: ImportExtensionVaultDependencies
-}
+export type ImportExtensionVaultWithDependenciesArgs =
+  ImportExtensionVaultArgs & {
+    dependencies: ImportExtensionVaultDependencies
+  }
 
 export type OpenPasskeyVaultRequest = {
   activeManager: NookVaultManager
@@ -140,7 +141,9 @@ export async function withActivatedExtensionIdentity<
     try {
       await activeManager.activate_local_identity_for_app_id(previousSelection)
     } catch {
-      return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
     }
   }
   return outcome
@@ -225,7 +228,9 @@ export async function importExtensionVaultWithDependencies({
           }
           return ok({ ok: true, status })
         } catch {
-          return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+          return err(
+            new SessionOperationFailure(SessionOperationFailureKind.Failed),
+          )
         }
       }
       const activationArgs: ActivatedExtensionIdentityOperation<
@@ -276,7 +281,9 @@ export class CompanionVaultDiscovery {
     Result<NookDiscoveredCompanionExtensionEndpoint, SessionOperationFailure>
   > {
     if (this.use !== CompanionDiscoveryUse.Pending)
-      return err(new SessionOperationFailure(SessionOperationFailureKind.Consumed))
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Consumed),
+      )
     this.use = CompanionDiscoveryUse.Consumed
     const { activeManager, endpoint, presence } = this.args
     try {
@@ -296,7 +303,9 @@ export class CompanionVaultDiscovery {
       }
     } catch (error) {
       endpoint.endpoint.free()
-      return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
     }
     try {
       return ok(
@@ -305,7 +314,9 @@ export class CompanionVaultDiscovery {
           : endpoint.endpoint.rediscover(discovery),
       )
     } catch {
-      return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
     }
   }
 }
@@ -337,7 +348,9 @@ export async function flushPasskeyEventToProviders({
       }),
     )
     if (deliveries.some((delivery) => delivery.status === 'rejected'))
-      return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
     return ok(undefined)
   } catch {
     return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))

@@ -84,7 +84,10 @@ type GeneratedExtensionSessionNonImportRequest = Exclude<
 >
 type ExtensionSessionImportTransportRequest = {
   type: GeneratedExtensionSessionImportRequest['type']
-  payload: Omit<GeneratedExtensionSessionImportRequest['payload'], 'providers'> & {
+  payload: Omit<
+    GeneratedExtensionSessionImportRequest['payload'],
+    'providers'
+  > & {
     providers: SerializedStorageProvider[]
   }
 }
@@ -150,13 +153,15 @@ export type ExtensionSessionNonImportRequest = Exclude<
 >
 type ExtensionSessionImportRequest = {
   type: TypedExtensionSessionImportRequest['type']
-  payload: Omit<GeneratedExtensionSessionImportRequest['payload'], 'providers'> & {
+  payload: Omit<
+    GeneratedExtensionSessionImportRequest['payload'],
+    'providers'
+  > & {
     providers: StorageProvider[]
   }
 }
 export type ExtensionSessionRequest =
-  | ExtensionSessionNonImportRequest
-  | ExtensionSessionImportRequest
+  ExtensionSessionNonImportRequest | ExtensionSessionImportRequest
 
 export enum ExtensionSessionRequestParseKind {
   Invalid = 'invalid',
@@ -348,11 +353,12 @@ export function stageExtensionSessionSensitiveRequest(
     }
     setExtensionSessionSensitiveValue(clearedValueArgs)
   }
-  const replacementArgs: ReplaceExtensionSessionRequestPayloadArgs<typeof request> =
-    {
-      request,
-      payload: stagedPayload,
-    }
+  const replacementArgs: ReplaceExtensionSessionRequestPayloadArgs<
+    typeof request
+  > = {
+    request,
+    payload: stagedPayload,
+  }
   return {
     kind: ExtensionSessionSensitiveStageKind.Staged,
     request: replaceExtensionSessionRequestPayload(replacementArgs),

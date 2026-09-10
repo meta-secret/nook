@@ -397,8 +397,7 @@ export type StructuralSynthesisPreauthorization =
   };
 
 export type StructuralExpertAuthorization =
-  | StructuralEvidenceAuthorization
-  | StructuralSynthesisPreauthorization;
+  StructuralEvidenceAuthorization | StructuralSynthesisPreauthorization;
 
 export enum StructuralFindingCategory {
   Architecture = 'architecture',
@@ -672,8 +671,7 @@ export type UnavailableMaterializedView = {
 };
 
 export type MaterializedViewReference =
-  | RecordedMaterializedView
-  | UnavailableMaterializedView;
+  RecordedMaterializedView | UnavailableMaterializedView;
 
 export enum AgentAttemptParentKind {
   WorkflowRoot = 'workflow-root',

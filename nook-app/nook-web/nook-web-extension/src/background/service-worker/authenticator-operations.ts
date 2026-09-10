@@ -206,11 +206,13 @@ class AuthenticatorEnrollmentOperations {
       accountPickerAuthorizationCleanupPending,
       accountPickerAuthorizationGeneration,
       accountPickerAuthorizationIsCurrent,
-      authenticatorAccounts:
-        accountPickerSessions.authenticatorAccounts.bind(accountPickerSessions),
-      availableWebsiteGrants: extensionPairingIdentity.availableWebsiteGrants.bind(
-        extensionPairingIdentity,
+      authenticatorAccounts: accountPickerSessions.authenticatorAccounts.bind(
+        accountPickerSessions,
       ),
+      availableWebsiteGrants:
+        extensionPairingIdentity.availableWebsiteGrants.bind(
+          extensionPairingIdentity,
+        ),
     }
   }
 
@@ -290,7 +292,11 @@ class AuthenticatorEnrollmentOperations {
     const access =
       await extensionPairingIdentity.availableWebsiteGrants(nookTypedArgs0_1)
     if ('response' in access) return access.response
-    if (!sender.tab || !('id' in sender.tab) || typeof sender.tab.id !== 'number') {
+    if (
+      !sender.tab ||
+      !('id' in sender.tab) ||
+      typeof sender.tab.id !== 'number'
+    ) {
       return { ok: false, reason: 'authenticator-picker-tab-missing' }
     }
 
@@ -385,8 +391,10 @@ class AuthenticatorEnrollmentOperations {
       return { ok: false, reason: 'authenticator-picker-expired' }
     }
     const { request, authorizationGeneration } = loaded
-    const grants = (await extensionPairingIdentity.passwordPairingGrants()).filter(
-      (grant) => request.allowedVaultStoreIds.includes(grant.vaultStoreId),
+    const grants = (
+      await extensionPairingIdentity.passwordPairingGrants()
+    ).filter((grant) =>
+      request.allowedVaultStoreIds.includes(grant.vaultStoreId),
     )
     const nookTypedArgs0_1: Parameters<
       typeof accountPickerSessions.authenticatorAccounts
@@ -420,8 +428,10 @@ class AuthenticatorEnrollmentOperations {
       return { ok: false, reason: 'authenticator-picker-expired' }
     }
     const { request, authorizationGeneration } = loaded
-    const grants = (await extensionPairingIdentity.passwordPairingGrants()).filter(
-      (grant) => request.allowedVaultStoreIds.includes(grant.vaultStoreId),
+    const grants = (
+      await extensionPairingIdentity.passwordPairingGrants()
+    ).filter((grant) =>
+      request.allowedVaultStoreIds.includes(grant.vaultStoreId),
     )
     const nookTypedArgs0_2: Parameters<
       typeof accountPickerSessions.authenticatorAccounts
@@ -485,12 +495,13 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: request.origin,
     }
-    const websiteFrame: Parameters<typeof AccountPickerPageTarget.matchesSender>[0] =
-      {
-        tabId: request.tabId,
-        frameId: request.frameId,
-        sender,
-      }
+    const websiteFrame: Parameters<
+      typeof AccountPickerPageTarget.matchesSender
+    >[0] = {
+      tabId: request.tabId,
+      frameId: request.frameId,
+      sender,
+    }
     if (
       !accountPickerSessions.isAuthenticatorPickerSender(sender) &&
       (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookNamedArgs0_0) ||
@@ -558,7 +569,9 @@ class AuthenticatorEnrollmentOperations {
       secretId: message.payload.secretId,
     }
     const sessionResponse =
-      await extensionAuthenticatorSession.authenticatorCodeFromSession(sessionArgs)
+      await extensionAuthenticatorSession.authenticatorCodeFromSession(
+        sessionArgs,
+      )
     if (sessionResponse.isErr()) return sessionResponse.error.response
     const response = sessionResponse.value
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
@@ -658,7 +671,9 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_10)) {
+    if (
+      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_10)
+    ) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
     const grant = (await extensionPairingIdentity.passwordPairingGrants()).find(
@@ -703,11 +718,15 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_12)) {
+    if (
+      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_12)
+    ) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
     this.purgeExpiredStagedEnrollments()
-    const staged = this.stagedAuthenticatorEnrollments.get(message.payload.stageId)
+    const staged = this.stagedAuthenticatorEnrollments.get(
+      message.payload.stageId,
+    )
     if (!staged || staged.origin !== message.payload.origin) {
       return { ok: false, reason: 'authenticator-stage-missing' }
     }
@@ -745,11 +764,15 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_14)) {
+    if (
+      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_14)
+    ) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
     this.purgeExpiredStagedEnrollments()
-    const staged = this.stagedAuthenticatorEnrollments.get(message.payload.stageId)
+    const staged = this.stagedAuthenticatorEnrollments.get(
+      message.payload.stageId,
+    )
     if (
       !staged ||
       staged.origin !== message.payload.origin ||
@@ -826,10 +849,14 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_17)) {
+    if (
+      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_17)
+    ) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
-    const staged = this.stagedAuthenticatorEnrollments.get(message.payload.stageId)
+    const staged = this.stagedAuthenticatorEnrollments.get(
+      message.payload.stageId,
+    )
     if (staged && staged.origin === message.payload.origin) {
       this.clearStagedEnrollment(message.payload.stageId)
     }
@@ -846,7 +873,9 @@ class AuthenticatorEnrollmentOperations {
       sender,
       origin: message.payload.origin,
     }
-    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_18)) {
+    if (
+      !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_18)
+    ) {
       return { ok: false, reason: 'authenticator-forbidden-origin' }
     }
     this.purgeExpiredStagedEnrollments()

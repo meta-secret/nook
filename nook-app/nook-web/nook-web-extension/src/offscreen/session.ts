@@ -140,7 +140,9 @@ async function getManager(): Promise<NookVaultManager> {
   return manager
 }
 
-async function deviceResult(activeManager: NookVaultManager): Promise<DeviceResult> {
+async function deviceResult(
+  activeManager: NookVaultManager,
+): Promise<DeviceResult> {
   return {
     deviceId: activeManager.device_id,
     devicePublicKey: activeManager.device_public_key,
@@ -176,9 +178,10 @@ function scheduleSessionExpiry(generation: number): void {
         sessionMessageDispatcher.replaceOperations(
           new SessionOperationFailure(SessionOperationFailureKind.Locked),
         )
-        const expiryMessage: Parameters<typeof chrome.runtime.sendMessage>[0] = {
-          type: ExtensionSessionLifecycleMessageType.Expired,
-        }
+        const expiryMessage: Parameters<typeof chrome.runtime.sendMessage>[0] =
+          {
+            type: ExtensionSessionLifecycleMessageType.Expired,
+          }
         void chrome.runtime.sendMessage(expiryMessage)
       },
     }),
@@ -233,9 +236,12 @@ async function handleCompanionIdentityHandoff(
 ) {
   try {
     if (
-      companionEndpointAvailability.kind !== CompanionEndpointAvailabilityKind.Active
+      companionEndpointAvailability.kind !==
+      CompanionEndpointAvailabilityKind.Active
     ) {
-      return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
     }
     const endpoint = companionEndpointAvailability.endpoint
     companionEndpointAvailability = {
@@ -253,7 +259,9 @@ async function handleCompanionIdentityHandoff(
         )
       const renewal = renewSessionExpiry(generation)
       if (renewal.isErr())
-        return err(new SessionOperationFailure(SessionOperationFailureKind.Locked))
+        return err(
+          new SessionOperationFailure(SessionOperationFailureKind.Locked),
+        )
       return ok({ ok: true, response })
     } finally {
       if (!consumed) endpoint.free()
@@ -281,7 +289,9 @@ async function handleCompanionIdentityDiscovery(
           }
         : {
             kind: CompanionDiscoveryEndpointKind.Initial,
-            endpoint: new NookCompanionExtensionEndpoint(message.payload.presence),
+            endpoint: new NookCompanionExtensionEndpoint(
+              message.payload.presence,
+            ),
           }
 
     try {
@@ -295,7 +305,9 @@ async function handleCompanionIdentityDiscovery(
         endpoint,
         presence,
       }
-      const companionDiscovery = new CompanionVaultDiscovery(companionDiscoveryArgs)
+      const companionDiscovery = new CompanionVaultDiscovery(
+        companionDiscoveryArgs,
+      )
       const discoveryResult = await companionDiscovery.discover(discovery)
       if (discoveryResult.isErr()) return err(discoveryResult.error)
       const discovered = discoveryResult.value
@@ -308,7 +320,9 @@ async function handleCompanionIdentityDiscovery(
       return ok({ ok: true, status })
     } catch (error) {
       releaseCompanionEndpoint()
-      return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
     }
   } catch {
     return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
@@ -323,12 +337,13 @@ type ExtensionSessionResponse = SessionSuccess<
   | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
 >
 
-const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> = {
-  handleMessage,
-  handleCompanionIdentityDiscovery,
-  handleCompanionIdentityHandoff,
-  decodeProviders: async (providers) => {
-    return admit_extension_storage_providers(providers)
-  },
-}
+const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
+  {
+    handleMessage,
+    handleCompanionIdentityDiscovery,
+    handleCompanionIdentityHandoff,
+    decodeProviders: async (providers) => {
+      return admit_extension_storage_providers(providers)
+    },
+  }
 const sessionMessageDispatcher = new ListeningExtensionSession(dispatchContext)

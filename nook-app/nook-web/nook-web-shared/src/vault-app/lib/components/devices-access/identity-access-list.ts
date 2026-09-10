@@ -74,9 +74,7 @@ export class IdentityAccessPresentation {
         },
       };
       cards.push(passkeyCard);
-    } else if (
-      view.protection === DeviceAccessProtectionKind.PinOrPassphrase
-    ) {
+    } else if (view.protection === DeviceAccessProtectionKind.PinOrPassphrase) {
       const pinCard: IdentityAccessCard = {
         key: "pin",
         kind: IdentityAccessKeyKind.PinOrPassphrase,

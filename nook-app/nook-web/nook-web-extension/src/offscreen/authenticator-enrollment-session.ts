@@ -32,7 +32,9 @@ type AuthenticatorEnrollmentMessage = Extract<
 type AuthenticatorEnrollmentSessionDependencies = {
   ensureWasm: () => ReturnType<typeof initNookWasm>
   getManager: () => Promise<NookVaultManager>
-  extensionVaultGrant: (payload: ExtensionVaultGrantPayload) => ExtensionVaultGrant
+  extensionVaultGrant: (
+    payload: ExtensionVaultGrantPayload,
+  ) => ExtensionVaultGrant
 }
 
 type AuthenticatorEnrollmentMessageHandlingRequest = {
@@ -50,7 +52,9 @@ export async function handleAuthenticatorEnrollmentMessage({
         const payload = message.payload
         if (typeof payload.otpauthUri !== 'string') {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         await dependencies.ensureWasm()
@@ -75,7 +79,9 @@ export async function handleAuthenticatorEnrollmentMessage({
         const payload = message.payload
         if (typeof payload.otpauthUri !== 'string') {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         await dependencies.ensureWasm()
@@ -98,7 +104,9 @@ export async function handleAuthenticatorEnrollmentMessage({
           typeof payload.origin !== 'string'
         ) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const activeManager = await dependencies.getManager()
@@ -130,7 +138,9 @@ export async function handleAuthenticatorEnrollmentMessage({
           !payload.codes.every((code) => typeof code === 'string')
         ) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const activeManager = await dependencies.getManager()
@@ -149,18 +159,23 @@ export async function handleAuthenticatorEnrollmentMessage({
         try {
           if (!attachResult.backupCodesVerified) {
             return err(
-              new SessionOperationFailure(SessionOperationFailureKind.Verification),
+              new SessionOperationFailure(
+                SessionOperationFailureKind.Verification,
+              ),
             )
           }
           if (!attachResult.reviewed_input_persisted) {
             return err(
-              new SessionOperationFailure(SessionOperationFailureKind.Verification),
+              new SessionOperationFailure(
+                SessionOperationFailureKind.Verification,
+              ),
             )
           }
-          const flushArgs: Parameters<typeof flushPasskeyEventToProviders>[0] = {
-            activeManager,
-            vaultStoreId: grant.vaultStoreId,
-          }
+          const flushArgs: Parameters<typeof flushPasskeyEventToProviders>[0] =
+            {
+              activeManager,
+              vaultStoreId: grant.vaultStoreId,
+            }
           const admission3 = await flushPasskeyEventToProviders(flushArgs)
           if (admission3.isErr()) return err(admission3.error)
           return ok({

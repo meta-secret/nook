@@ -359,7 +359,10 @@ export function installGoogleTokenClient(token: string) {
     accounts: {
       oauth2: {
         initTokenClient: (config: {
-          callback: (response: { access_token: string; expires_in: number }) => void
+          callback: (response: {
+            access_token: string
+            expires_in: number
+          }) => void
         }) => ({
           requestAccessToken: () => {
             config.callback({ access_token: token, expires_in: 3600 })
@@ -385,19 +388,25 @@ export async function installGoogleOAuthMock(
       body: gisMockBody,
     })
   })
-  await page.route('https://www.googleapis.com/drive/v3/about**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        user: { emailAddress: 'e2e-user@example.com' },
-      }),
-    })
-  })
+  await page.route(
+    'https://www.googleapis.com/drive/v3/about**',
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: { emailAddress: 'e2e-user@example.com' },
+        }),
+      })
+    },
+  )
   await page.evaluate(installGoogleTokenClient, accessToken)
 }
 
-export async function waitForVaultUnlocked(page: Page, timeout = UI_TIMEOUT_MS) {
+export async function waitForVaultUnlocked(
+  page: Page,
+  timeout = UI_TIMEOUT_MS,
+) {
   try {
     await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout })
   } catch (error) {

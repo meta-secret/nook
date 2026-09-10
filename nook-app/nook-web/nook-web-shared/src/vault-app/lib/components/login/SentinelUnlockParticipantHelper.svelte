@@ -74,7 +74,9 @@
         return
       }
       const selectedStoreId = selectedDelivery.storeId
-      if (!deliveries.some((delivery) => delivery.storeId === selectedStoreId)) {
+      if (
+        !deliveries.some((delivery) => delivery.storeId === selectedStoreId)
+      ) {
         const firstDelivery = deliveries[0]
         selectedDelivery = firstDelivery
           ? {
@@ -124,7 +126,9 @@
       copied = true
       setTimeout(() => (copied = false), 1500)
     } catch {
-      vault.errorMsg = vault.t(I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed)
+      vault.errorMsg = vault.t(
+        I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed,
+      )
     }
   }
 </script>
@@ -150,7 +154,9 @@
     </button>
 
     {#if open}
-      <div class="space-y-4 rounded-md border border-border/60 bg-background/40 p-3">
+      <div
+        class="space-y-4 rounded-md border border-border/60 bg-background/40 p-3"
+      >
         <p class="text-sm leading-snug text-pretty text-muted-foreground">
           {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockHelpDescription)}
         </p>
@@ -180,7 +186,8 @@
             </label>
             <Select.Root
               type="single"
-              value={selectedDelivery.kind === GenesisDeliverySelectionKind.Selected
+              value={selectedDelivery.kind ===
+              GenesisDeliverySelectionKind.Selected
                 ? selectedDelivery.storeId
                 : GenesisDeliverySelectionKind.NotSelected}
               onValueChange={(value) => {
@@ -241,7 +248,8 @@
               data-testid="sentinel-unlock-create-response-btn"
               disabled={disabled ||
                 actionBusy ||
-                selectedDelivery.kind !== GenesisDeliverySelectionKind.Selected ||
+                selectedDelivery.kind !==
+                  GenesisDeliverySelectionKind.Selected ||
                 !request.trim()}
               onclick={() => void createResponse()}
             >
@@ -290,7 +298,9 @@
                   <Copy class="size-4" />
                   {copied
                     ? vault.t(I18N_KEYS.ArchitectureModesSentinelCeremonyCopied)
-                    : vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockCopyResponse)}
+                    : vault.t(
+                        I18N_KEYS.ArchitectureModesSentinelUnlockCopyResponse,
+                      )}
                 </Button>
               </div>
             </div>

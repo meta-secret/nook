@@ -178,15 +178,13 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
     'infra/tasks/kubernetes-tools.yml',
     'infra/tasks/k0s-worker-restore.yml',
     'infra/tasks/mesh.yml',
-  ].map(
-    (sourcePath): AuditedSourceSeam => ({
-      digest: false,
-      marker: '/etc/os-release',
-      sourcePath,
-      specifier: '/etc/os-release',
-      targetPath: '/etc/os-release',
-    }),
-  ),
+  ].map((sourcePath): AuditedSourceSeam => ({
+    digest: false,
+    marker: '/etc/os-release',
+    sourcePath,
+    specifier: '/etc/os-release',
+    targetPath: '/etc/os-release',
+  })),
   {
     digest: 'd0414467deac76fd3d5ba4b36a2de6ee4813f7a99bbb6db83b4ef58d3a0cb0bd',
     marker: '$HIVE_TASK_DIR/prepare-sccache-context.sh',

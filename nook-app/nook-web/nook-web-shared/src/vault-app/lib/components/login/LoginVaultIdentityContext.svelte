@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { NookSelectedVaultIdentityContextKind } from "$app-wasm";
-  import { Fingerprint, RefreshCw } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
-  import type { VaultState } from "$lib/vault.svelte";
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { NookSelectedVaultIdentityContextKind } from '$app-wasm'
+  import { Fingerprint, RefreshCw } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
+  import type { VaultState } from '$lib/vault.svelte'
   import {
     LoginVaultIdentityContextKind,
     type LoginVaultIdentityContext,
-  } from "./login-vault-identity-context";
+  } from './login-vault-identity-context'
 
   let {
     vault,
@@ -15,11 +15,11 @@
     deviceKeysCapable,
     onReviewIdentities,
   }: {
-    vault: VaultState;
-    context: LoginVaultIdentityContext;
-    deviceKeysCapable: boolean;
-    onReviewIdentities: () => void | Promise<void>;
-  } = $props();
+    vault: VaultState
+    context: LoginVaultIdentityContext
+    deviceKeysCapable: boolean
+    onReviewIdentities: () => void | Promise<void>
+  } = $props()
 
   const showReviewAction = $derived(
     context.kind === LoginVaultIdentityContextKind.Failed ||
@@ -29,21 +29,21 @@
       (context.kind ===
         NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
         !deviceKeysCapable),
-  );
+  )
   const currentIdentityGuidance = $derived.by(() => {
     if (
       context.kind !== NookSelectedVaultIdentityContextKind.LinkedWithCurrent
     ) {
-      return "";
+      return ''
     }
     const translationArgs: Parameters<typeof vault.t>[0] = {
       key: deviceKeysCapable
         ? I18N_KEYS.LoginIdentityContextCurrentUsesKeys
         : I18N_KEYS.LoginIdentityContextCurrentKeysUnavailable,
       replacements: { identity: context.currentIdentity.label },
-    };
-    return vault.t(translationArgs);
-  });
+    }
+    return vault.t(translationArgs)
+  })
 </script>
 
 <section

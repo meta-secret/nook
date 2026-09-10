@@ -50,7 +50,8 @@ export const AUTHENTICATOR_PICKER_TTL_MS = 5 * 60 * 1000
 
 export const LOGIN_PICKER_TTL_MS = 5 * 60 * 1000
 
-const AUTHENTICATOR_PICKER_STORAGE_PREFIX = 'nook.extension.authenticator-picker.'
+const AUTHENTICATOR_PICKER_STORAGE_PREFIX =
+  'nook.extension.authenticator-picker.'
 
 const LOGIN_PICKER_STORAGE_PREFIX = 'nook.extension.login-picker.'
 
@@ -141,7 +142,9 @@ export class AccountPickerPageTarget {
 
 type AccountPickerSurfaceRemovalArgs = [number, () => void]
 
-type RemoveAccountPickerSurface = (...args: AccountPickerSurfaceRemovalArgs) => void
+type RemoveAccountPickerSurface = (
+  ...args: AccountPickerSurfaceRemovalArgs
+) => void
 
 export type PersistedAccountPickerCleanupPlan = {
   storageKeys: string[]
@@ -255,15 +258,17 @@ class AccountPickerSessions {
       accountPickerAuthorizationCleanupPending,
       accountPickerAuthorizationGeneration,
       accountPickerAuthorizationIsCurrent,
-      availableWebsiteGrants: extensionPairingIdentity.availableWebsiteGrants.bind(
-        extensionPairingIdentity,
-      ),
+      availableWebsiteGrants:
+        extensionPairingIdentity.availableWebsiteGrants.bind(
+          extensionPairingIdentity,
+        ),
       passiveAvailableWebsiteGrants:
         extensionPairingIdentity.passiveAvailableWebsiteGrants.bind(
           extensionPairingIdentity,
         ),
-      loginAccountsForOrigin:
-        accountPickerSessions.loginAccountsForOrigin.bind(accountPickerSessions),
+      loginAccountsForOrigin: accountPickerSessions.loginAccountsForOrigin.bind(
+        accountPickerSessions,
+      ),
       loginAccountAvailabilityForOrigin:
         accountPickerSessions.loginAccountAvailabilityForOrigin.bind(
           accountPickerSessions,
@@ -275,13 +280,18 @@ class AccountPickerSessions {
     }
   }
 
-  private pendingAuthenticatorPickers = new Map<string, PendingAuthenticatorPicker>()
+  private pendingAuthenticatorPickers = new Map<
+    string,
+    PendingAuthenticatorPicker
+  >()
   private pendingLoginPickers = new Map<string, PendingLoginPicker>()
   emptyAccountPickerSurface(): AccountPickerSurface {
     return { kind: AccountPickerSurfaceKind.None }
   }
 
-  async closeAccountPickerSurface(surface: AccountPickerSurface): Promise<void> {
+  async closeAccountPickerSurface(
+    surface: AccountPickerSurface,
+  ): Promise<void> {
     if (surface.kind === AccountPickerSurfaceKind.Window) {
       const windows = chrome.windows as typeof chrome.windows & {
         remove?: (windowId: number) => Promise<void>
@@ -368,11 +378,15 @@ class AccountPickerSessions {
       await extensionPairingIdentity.getAllSessionStorage(),
     )
     await Promise.allSettled(
-      plan.cancellations.map((delivery) => AccountPickerPageTarget.send(delivery)),
+      plan.cancellations.map((delivery) =>
+        AccountPickerPageTarget.send(delivery),
+      ),
     )
     const removals = await Promise.allSettled(
       plan.storageKeys.map(
-        extensionPairingIdentity.removeSessionStorage.bind(extensionPairingIdentity),
+        extensionPairingIdentity.removeSessionStorage.bind(
+          extensionPairingIdentity,
+        ),
       ),
     )
     if (removals.some((result) => result.status === 'rejected')) {
@@ -382,9 +396,11 @@ class AccountPickerSessions {
 
   private async closeVisibleAccountPickerSurfaces(): Promise<void> {
     const pickerSurfaceQuery: Parameters<typeof chrome.tabs.query>[0] = {}
-    const pickerSurfaceTabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
-      chrome.tabs.query(pickerSurfaceQuery, resolve)
-    })
+    const pickerSurfaceTabs = await new Promise<chrome.tabs.Tab[]>(
+      (resolve) => {
+        chrome.tabs.query(pickerSurfaceQuery, resolve)
+      },
+    )
     const pickerSurfaceTabIds = pickerSurfaceTabs.flatMap((tab) => {
       if (
         !('id' in tab) ||
@@ -433,7 +449,9 @@ class AccountPickerSessions {
     const memoryCancellations =
       this.takePendingAccountPickerMemoryCleanup(memoryCleanupArgs)
     const memoryDelivery = Promise.allSettled(
-      memoryCancellations.map((delivery) => AccountPickerPageTarget.send(delivery)),
+      memoryCancellations.map((delivery) =>
+        AccountPickerPageTarget.send(delivery),
+      ),
     )
     const cleanup = await Promise.allSettled([
       this.clearPersistedAccountPickers(),
@@ -544,7 +562,9 @@ class AccountPickerSessions {
     let request = this.pendingAuthenticatorPickers.get(requestId)
     if (!request) {
       const key = this.authenticatorPickerStorageKey(requestId)
-      const stored = (await extensionPairingIdentity.getSessionStorage(key))[key]
+      const stored = (await extensionPairingIdentity.getSessionStorage(key))[
+        key
+      ]
       if (
         !this.isPendingAuthenticatorPicker(stored) ||
         stored.requestId !== requestId
@@ -817,7 +837,8 @@ class AccountPickerSessions {
     if ('response' in access) {
       if (
         access.response.ok &&
-        access.response.status === WebsiteAuthenticatorResponseStatus.Unavailable &&
+        access.response.status ===
+          WebsiteAuthenticatorResponseStatus.Unavailable &&
         openUnavailableCompanion
       ) {
         resolvedDependencies.openCompanionLauncherBestEffort(
@@ -829,11 +850,13 @@ class AccountPickerSessions {
 
     let accounts: WebsiteLoginAccountOption[]
     if (openUnavailableCompanion) {
-      const accountRequest: Parameters<typeof this.loginAccountsForOrigin>[0] = {
-        grants: access.grants,
-        origin: message.payload.origin,
-      }
-      accounts = await resolvedDependencies.loginAccountsForOrigin(accountRequest)
+      const accountRequest: Parameters<typeof this.loginAccountsForOrigin>[0] =
+        {
+          grants: access.grants,
+          origin: message.payload.origin,
+        }
+      accounts =
+        await resolvedDependencies.loginAccountsForOrigin(accountRequest)
     } else {
       const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
       const accountRequest: LoginAccountAvailabilityForOriginArgs = {
@@ -842,7 +865,9 @@ class AccountPickerSessions {
         queue: extensionSessionProbeDeadline(queueExpiresAt),
       }
       const availability =
-        await resolvedDependencies.loginAccountAvailabilityForOrigin(accountRequest)
+        await resolvedDependencies.loginAccountAvailabilityForOrigin(
+          accountRequest,
+        )
       if (!availability.ok) {
         return { ok: false, reason: 'login-options-unavailable' }
       }
@@ -944,8 +969,13 @@ class AccountPickerSessions {
     let request = this.pendingLoginPickers.get(requestId)
     if (!request) {
       const key = this.loginPickerStorageKey(requestId)
-      const stored = (await extensionPairingIdentity.getSessionStorage(key))[key]
-      if (!this.isPendingLoginPicker(stored) || stored.requestId !== requestId) {
+      const stored = (await extensionPairingIdentity.getSessionStorage(key))[
+        key
+      ]
+      if (
+        !this.isPendingLoginPicker(stored) ||
+        stored.requestId !== requestId
+      ) {
         if (stored) await extensionPairingIdentity.removeSessionStorage(key)
         return { kind: LoginPickerLoadKind.Unavailable }
       }

@@ -197,7 +197,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       request,
     }
     const clearPending = () => {
-      if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) return
+      if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared)
+        return
       clearExtensionSessionSensitiveRequest(payloadResidency.request)
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
@@ -246,13 +247,14 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
       )
     }
-    const providerCandidate: SerializedExtensionStorageProviders = payload.providers
+    const providerCandidate: SerializedExtensionStorageProviders =
+      payload.providers
     const stagingArgs: Parameters<ProviderCredentialBuffer['stage']>[0] = {
       decode: this.context.decodeProviders,
     }
-    const stagingOperation = new ProviderCredentialBuffer(providerCandidate).stage(
-      stagingArgs,
-    )
+    const stagingOperation = new ProviderCredentialBuffer(
+      providerCandidate,
+    ).stage(stagingArgs)
     let stagingOwnership = StagingOwnership.Queue
     const clearQueuedStaging = () => {
       if (stagingOwnership !== StagingOwnership.Queue) return
@@ -283,7 +285,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         if (staging.isErr()) {
           stagingOwnership = StagingOwnership.Cleared
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         if (staging.value.length === 0) {
@@ -389,11 +393,17 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     const sensitiveStage = stageExtensionSessionSensitiveRequest(message)
     if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
       return Promise.resolve(
-        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
       )
     }
     if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged) {
-      const nookNamedArgs0_4: Parameters<typeof this.enqueueSensitiveMessage>[0] = {
+      const nookNamedArgs0_4: Parameters<
+        typeof this.enqueueSensitiveMessage
+      >[0] = {
         request: sensitiveStage.request,
         priority,
         expiresAt:
@@ -417,7 +427,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
             : priority === SessionOperationPriority.Interactive
               ? {
                   kind: SessionOperationExpiryKind.Deadline,
-                  expiresAt: Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
+                  expiresAt:
+                    Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
                 }
               : { kind: SessionOperationExpiryKind.None },
         cleanup: { kind: SessionOperationCleanupKind.None },

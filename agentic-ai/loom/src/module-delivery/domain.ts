@@ -4,8 +4,7 @@ import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 2;
 export type ModuleDeliveryPlanInputVersion =
-  | 1
-  | typeof MODULE_DELIVERY_PLAN_VERSION;
+  1 | typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
 export const MAX_MODULE_DELIVERY_CONCURRENCY = 16;
 export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
@@ -269,8 +268,7 @@ export type IntegratedDependenciesBaseline = {
 };
 
 export type ModuleDeliveryBaseline =
-  | SourceCommitBaseline
-  | IntegratedDependenciesBaseline;
+  SourceCommitBaseline | IntegratedDependenciesBaseline;
 
 export type ModuleDeliveryResourceClaims = {
   readonly read: readonly string[];
@@ -408,8 +406,7 @@ export type LegacyWriteModuleDeliveryNode = LegacyModuleDeliveryNodeFields & {
 };
 
 export type LegacyModuleDeliveryNode =
-  | LegacyReadOnlyModuleDeliveryNode
-  | LegacyWriteModuleDeliveryNode;
+  LegacyReadOnlyModuleDeliveryNode | LegacyWriteModuleDeliveryNode;
 
 export type LegacyModuleDeliveryPlan = {
   readonly version: 1;
@@ -424,18 +421,14 @@ export type LegacyModuleDeliveryPlan = {
 };
 
 export type ReadOnlyModuleDeliveryNode =
-  | LegacyReadOnlyModuleDeliveryNode
-  | ModuleDeliveryReadOnlyNodeV2;
+  LegacyReadOnlyModuleDeliveryNode | ModuleDeliveryReadOnlyNodeV2;
 export type WriteModuleDeliveryNode =
-  | LegacyWriteModuleDeliveryNode
-  | ModuleDeliveryWriteNodeV2;
+  LegacyWriteModuleDeliveryNode | ModuleDeliveryWriteNodeV2;
 export type ModuleDeliveryNode =
-  | LegacyModuleDeliveryNode
-  | ModuleDeliveryNodeV2;
+  LegacyModuleDeliveryNode | ModuleDeliveryNodeV2;
 
 export type ModuleDeliveryPlanInput =
-  | LegacyModuleDeliveryPlan
-  | ModuleDeliveryPlanV2;
+  LegacyModuleDeliveryPlan | ModuleDeliveryPlanV2;
 
 export type ModuleDeliveryPlan = ModuleDeliveryPlanInput;
 
@@ -491,8 +484,7 @@ export type RejectedCompatibleModuleDeliveryPlan = {
 };
 
 export type CompatibleModuleDeliveryPlanDecode =
-  | DecodedCompatibleModuleDeliveryPlan
-  | RejectedCompatibleModuleDeliveryPlan;
+  DecodedCompatibleModuleDeliveryPlan | RejectedCompatibleModuleDeliveryPlan;
 
 export type ValidatedModuleDeliveryPlan = {
   readonly status: ModuleDeliveryValidationStatus.Accepted;
@@ -523,5 +515,4 @@ export type RejectedModuleDeliveryPlan = {
 };
 
 export type ModuleDeliveryPlanValidation =
-  | ValidatedModuleDeliveryPlan
-  | RejectedModuleDeliveryPlan;
+  ValidatedModuleDeliveryPlan | RejectedModuleDeliveryPlan;

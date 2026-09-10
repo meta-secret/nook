@@ -1,92 +1,92 @@
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
-} from '$lib/runtime/storage-failure'
+} from "$lib/runtime/storage-failure";
 import type {
   SecretOperationResult,
   SecretOperationFailure,
-} from '$lib/vault/secret-operation-failure'
+} from "$lib/vault/secret-operation-failure";
 type TextVaultImport = {
-  readonly file: File
-  readonly isSaving: boolean
+  readonly file: File;
+  readonly isSaving: boolean;
   readonly onImport: (
     text: string,
-  ) => Promise<SecretOperationResult<NookImportResult>>
-}
+  ) => Promise<SecretOperationResult<NookImportResult>>;
+};
 
 type BinaryVaultImport = {
-  readonly file: File
-  readonly isSaving: boolean
+  readonly file: File;
+  readonly isSaving: boolean;
   readonly onImport: (
     bytes: Uint8Array,
-  ) => Promise<SecretOperationResult<NookImportResult>>
-}
+  ) => Promise<SecretOperationResult<NookImportResult>>;
+};
 
-import type { NookImportResult } from '$lib/nook'
-import type { VaultState } from '$lib/vault.svelte'
+import type { NookImportResult } from "$lib/nook";
+import type { VaultState } from "$lib/vault.svelte";
 
 export type ImportPanelProps<ImportSource> = {
-  vault: VaultState
-  isSaving: boolean
+  vault: VaultState;
+  isSaving: boolean;
   onImport: (
     source: ImportSource,
-  ) => Promise<SecretOperationResult<NookImportResult>>
-  embedded?: boolean
-}
+  ) => Promise<SecretOperationResult<NookImportResult>>;
+  embedded?: boolean;
+};
 
 export enum ImportAttemptKind {
-  Skipped = 'skipped',
-  Completed = 'completed',
-  Failed = 'failed',
+  Skipped = "skipped",
+  Completed = "completed",
+  Failed = "failed",
 }
 
 export type ImportAttempt =
   | { kind: ImportAttemptKind.Skipped }
   | { kind: ImportAttemptKind.Completed; result: NookImportResult }
-  | { kind: ImportAttemptKind.Failed; error: SecretOperationFailure }
+  | { kind: ImportAttemptKind.Failed; error: SecretOperationFailure };
 
 export class TextVaultFileImport {
   constructor(private readonly request: TextVaultImport) {}
   async execute(): Promise<ImportAttempt> {
-    const { file, isSaving, onImport } = this.request
-    if (isSaving) return { kind: ImportAttemptKind.Skipped }
-    let content: string
+    const { file, isSaving, onImport } = this.request;
+    if (isSaving) return { kind: ImportAttemptKind.Skipped };
+    let content: string;
     try {
-      content = await file.text()
+      content = await file.text();
     } catch {
       return {
         kind: ImportAttemptKind.Failed,
         error: new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
-      }
+      };
     }
 
-    const result = await onImport(content)
+    const result = await onImport(content);
     return result.isOk()
       ? { kind: ImportAttemptKind.Completed, result: result.value }
-      : { kind: ImportAttemptKind.Failed, error: result.error }
+      : { kind: ImportAttemptKind.Failed, error: result.error };
   }
 }
 export class BinaryVaultFileImport {
   constructor(private readonly request: BinaryVaultImport) {}
   async execute(): Promise<ImportAttempt> {
-    const { file, isSaving, onImport } = this.request
-    if (isSaving) return { kind: ImportAttemptKind.Skipped }
-    let content: Uint8Array
+    const { file, isSaving, onImport } = this.request;
+    if (isSaving) return { kind: ImportAttemptKind.Skipped };
+    let content: Uint8Array;
     try {
-      content = new Uint8Array(await file.arrayBuffer())
+      content = new Uint8Array(await file.arrayBuffer());
     } catch {
       return {
         kind: ImportAttemptKind.Failed,
         error: new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
-      }
+      };
     }
     try {
-      const result = await onImport(content)
+      const result = await onImport(content);
       return result.isOk()
         ? { kind: ImportAttemptKind.Completed, result: result.value }
-        : { kind: ImportAttemptKind.Failed, error: result.error }
+        : { kind: ImportAttemptKind.Failed, error: result.error };
     } finally {
-      content.fill(0)
+      content.fill(0);
     }
   }
 }

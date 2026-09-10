@@ -184,7 +184,9 @@ describe('provider save web adapter', () => {
     const state = providerState(GITHUB_PROVIDER_TYPE)
     state.providers = [githubProvider()]
 
-    const saved = await new ProviderPersistenceActions(state).ensureProviderSaved()
+    const saved = await new ProviderPersistenceActions(
+      state,
+    ).ensureProviderSaved()
 
     expect(saved.isErr()).toBe(true)
     if (saved.isOk()) return
@@ -197,7 +199,9 @@ describe('provider save web adapter', () => {
   test('maps a missing local folder to translated state', async () => {
     const state = providerState(LOCAL_FOLDER_PROVIDER_TYPE)
 
-    const saved = await new ProviderPersistenceActions(state).ensureProviderSaved()
+    const saved = await new ProviderPersistenceActions(
+      state,
+    ).ensureProviderSaved()
 
     expect(saved).toBe(false)
     expect(saved.error.translationKey).toBe(
@@ -209,7 +213,9 @@ describe('provider save web adapter', () => {
   test('applies and persists a successful provider snapshot', async () => {
     const state = providerState(GITHUB_PROVIDER_TYPE)
 
-    const saved = await new ProviderPersistenceActions(state).ensureProviderSaved()
+    const saved = await new ProviderPersistenceActions(
+      state,
+    ).ensureProviderSaved()
 
     expect(saved.isOk()).toBe(true)
     expect(state.persistProviders).toHaveBeenCalledWith(

@@ -73,12 +73,18 @@
     isBusy: boolean
     passwordError: string
     enrollmentCode: string
-    onAddPassword: (args: VaultPasswordCreation) => Promise<PasswordOperationResult>
+    onAddPassword: (
+      args: VaultPasswordCreation,
+    ) => Promise<PasswordOperationResult>
     onUpdatePassword: (
       args: VaultPasswordEntryUpdate,
     ) => Promise<PasswordOperationResult>
-    onRemovePassword: (entryId: PasswordEntryId) => Promise<PasswordOperationResult>
-    onIssueCode: (args: EnrollmentCodeIssue) => Promise<EnrollmentCodeIssueResult>
+    onRemovePassword: (
+      entryId: PasswordEntryId,
+    ) => Promise<PasswordOperationResult>
+    onIssueCode: (
+      args: EnrollmentCodeIssue,
+    ) => Promise<EnrollmentCodeIssueResult>
     onClearCode: () => void
     embedded?: boolean
     allowIssueCode?: boolean
@@ -616,11 +622,15 @@
         >
           <p class="text-xs text-muted-foreground text-pretty">
             {vault.t(I18N_KEYS.VaultPasswordsIssueDescPrefix)}<span
-              class="font-medium text-foreground">{activeEntry.entry.label}</span
+              class="font-medium text-foreground"
+              >{activeEntry.entry.label}</span
             >{vault.t(I18N_KEYS.VaultPasswordsIssueDescSuffix)}
           </p>
           <div class="space-y-1.5">
-            <label for="issue-pw" class="text-sm font-medium text-muted-foreground">
+            <label
+              for="issue-pw"
+              class="text-sm font-medium text-muted-foreground"
+            >
               {(() => {
                 const tArgs4: Parameters<typeof vault.t>[0] = {
                   key: I18N_KEYS.VaultPasswordsPasswordFor,
@@ -646,7 +656,12 @@
             </p>
           {/if}
           <div class="flex items-center justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onclick={closePanel}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onclick={closePanel}
+            >
               {vault.t(I18N_KEYS.CommonCancel)}
             </Button>
             <Button

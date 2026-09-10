@@ -54,7 +54,7 @@ export class SkillProviderShellCommandScenario {
     input: readonly ShellWord[],
   ): readonly ShellWord[] {
     const words = [...input];
-    for (let index = 0; index < words.length; ) {
+    for (let index = 0; index < words.length;) {
       const [word = false] = words.slice(index);
       if (word === false) break;
       if (ASSIGNMENT.test(word.value)) {
@@ -72,7 +72,7 @@ export class SkillProviderShellCommandScenario {
   }
 
   static hasLeadingStdinRedirection(words: readonly ShellWord[]): boolean {
-    for (let index = 0; index < words.length; ) {
+    for (let index = 0; index < words.length;) {
       const word = words[index] as ShellWord;
       if (ASSIGNMENT.test(word.value)) {
         index += 1;

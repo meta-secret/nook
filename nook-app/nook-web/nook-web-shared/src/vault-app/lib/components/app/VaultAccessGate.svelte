@@ -138,9 +138,10 @@
         onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelParticipantKey}
         onCreateSentinelGenesisParticipantResponse={onCreateSentinelParticipantResponse}
         onRemoveProvider={async (id) => {
-            const removed = await vault.removeProvider(id)
-            if (removed.isErr()) vault.errorMsg = vault.t(removed.error.translationKey)
-          }}
+          const removed = await vault.removeProvider(id)
+          if (removed.isErr())
+            vault.errorMsg = vault.t(removed.error.translationKey)
+        }}
       />
       <VaultStatusBar
         {vault}

@@ -33,7 +33,9 @@ describe('google-oauth', () => {
       config: expired.value,
       skewMs: 60_000,
     }
-    expect(googleOAuthSession.isOAuthAccessTokenExpired(expiryAssessment)).toBe(true)
+    expect(googleOAuthSession.isOAuthAccessTokenExpired(expiryAssessment)).toBe(
+      true,
+    )
   })
 
   it('settles concurrent token requests independently by scope', async () => {
@@ -75,7 +77,8 @@ describe('google-oauth', () => {
       scope: GoogleDriveOAuthScope.AppData,
       prompt: GoogleOAuthPrompt.Default,
     }
-    const appdataToken = googleOAuthSession.requestGoogleAccessToken(appDataRequest)
+    const appdataToken =
+      googleOAuthSession.requestGoogleAccessToken(appDataRequest)
     const sharedScope = `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`
     const sharedRequest: GoogleAccessTokenRequest = {
       scope: GoogleDriveOAuthScope.Shared,

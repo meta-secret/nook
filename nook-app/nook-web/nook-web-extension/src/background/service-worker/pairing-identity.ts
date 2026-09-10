@@ -45,7 +45,10 @@ import type {
   LegacyPairingStorageItems,
   StoredExtensionPairingGrant,
 } from '../pairing-grants'
-import { extensionPairingGrantPolicyReady, setupStorageKey } from '../pairing-grants'
+import {
+  extensionPairingGrantPolicyReady,
+  setupStorageKey,
+} from '../pairing-grants'
 import { backgroundVaultRuntime } from '../vault-runtime'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
@@ -154,14 +157,18 @@ class ExtensionPairingIdentity {
     if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
     const bytes = new Uint8Array(16)
     crypto.getRandomValues(bytes)
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
+      '',
+    )
   }
 
   private pendingIdentityHandoffStorageKey(nonce: string): string {
     return `nook.extension.identity-handoff.${nonce}`
   }
 
-  private isPendingIdentityHandoff(value: unknown): value is PendingIdentityHandoff {
+  private isPendingIdentityHandoff(
+    value: unknown,
+  ): value is PendingIdentityHandoff {
     return (
       !!value &&
       typeof value === 'object' &&
@@ -250,7 +257,10 @@ class ExtensionPairingIdentity {
     )
     url.searchParams.set('device_id', device.deviceId)
     url.searchParams.set('device_public_key', device.devicePublicKey)
-    url.searchParams.set('device_signing_public_key', device.deviceSigningPublicKey)
+    url.searchParams.set(
+      'device_signing_public_key',
+      device.deviceSigningPublicKey,
+    )
     url.searchParams.set('extension_id', chrome.runtime.id)
     url.searchParams.set('device_label', device.deviceLabel)
     url.searchParams.set('nonce', nonce)
@@ -320,7 +330,9 @@ class ExtensionPairingIdentity {
         typeof response.envelope === 'string'
       ) {
         const nextNonce = this.randomNonce()
-        const nookTypedArgs0_4: Parameters<typeof this.issueIdentityHandoff>[0] = {
+        const nookTypedArgs0_4: Parameters<
+          typeof this.issueIdentityHandoff
+        >[0] = {
           nonce: nextNonce,
           pending,
         }
@@ -402,9 +414,11 @@ class ExtensionPairingIdentity {
         status: Reflect.get(transaction, 'status'),
         observedAt: Date.now(),
       } satisfies CompanionIdentityStatusAdmissionRequest
-      const admission = Reflect.apply(admit_companion_identity_status, globalThis, [
-        admissionRequest,
-      ])
+      const admission = Reflect.apply(
+        admit_companion_identity_status,
+        globalThis,
+        [admissionRequest],
+      )
       if (
         admission.kind !== 'accepted' ||
         admission.transaction.status.status !== 'unlocked'
@@ -415,7 +429,8 @@ class ExtensionPairingIdentity {
         vaultStoreId: admission.transaction.discovery.request.vaultStoreId,
         nonce: admission.transaction.status.app_key.nonce,
       }
-      const presence = await this.currentPairedVaultPresence(currentPresenceArgs)
+      const presence =
+        await this.currentPairedVaultPresence(currentPresenceArgs)
       if (presence.isErr()) return presence.error.response
 
       const authorization = {
@@ -466,10 +481,11 @@ class ExtensionPairingIdentity {
     await companionWasmReady
     const observation = message.payload
     const discover = async (presence: CompanionExtensionPresence) => {
-      const sessionRequest: CompanionIdentityDiscoverySessionTransportRequest = {
-        type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
-        payload: { presence, discovery: observation },
-      }
+      const sessionRequest: CompanionIdentityDiscoverySessionTransportRequest =
+        {
+          type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
+          payload: { presence, discovery: observation },
+        }
       const delivery = await this.sendSessionMessage(sessionRequest)
       if (delivery.isErr()) return delivery.error.response
       const response = delivery.value
@@ -613,7 +629,8 @@ class ExtensionPairingIdentity {
       !!message &&
       typeof message === 'object' &&
       'type' in message &&
-      message.type === HasPairingApprovedTypeResultType.NookExtensionPairingApproved
+      message.type ===
+        HasPairingApprovedTypeResultType.NookExtensionPairingApproved
     )
   }
 
@@ -622,10 +639,13 @@ class ExtensionPairingIdentity {
     await backgroundVaultRuntime.persistExtensionPairingItems(items)
   }
 
-  private legacyPairingStorageKeys(stored: LegacyPairingStorageItems): string[] {
+  private legacyPairingStorageKeys(
+    stored: LegacyPairingStorageItems,
+  ): string[] {
     return Object.keys(stored).filter(
       (key) =>
-        key === setupStorageKey || key.startsWith('nook:extension-pairing-grant:'),
+        key === setupStorageKey ||
+        key.startsWith('nook:extension-pairing-grant:'),
     )
   }
 
@@ -636,9 +656,8 @@ class ExtensionPairingIdentity {
         if (chrome.runtime.lastError) {
           reject(
             new Error(
-              ((...[v = 'Unable to read legacy extension pairing state.']) => v)(
-                chrome.runtime.lastError.message,
-              ),
+              ((...[v = 'Unable to read legacy extension pairing state.']) =>
+                v)(chrome.runtime.lastError.message),
             ),
           )
           return
@@ -648,16 +667,17 @@ class ExtensionPairingIdentity {
     })
   }
 
-  private removeLegacyPairingStorage(keys: LegacyPairingStorageKeys): Promise<void> {
+  private removeLegacyPairingStorage(
+    keys: LegacyPairingStorageKeys,
+  ): Promise<void> {
     // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.local.remove(keys, () => {
         if (chrome.runtime.lastError) {
           reject(
             new Error(
-              ((...[v = 'Unable to remove legacy extension pairing state.']) => v)(
-                chrome.runtime.lastError.message,
-              ),
+              ((...[v = 'Unable to remove legacy extension pairing state.']) =>
+                v)(chrome.runtime.lastError.message),
             ),
           )
           return
@@ -668,7 +688,9 @@ class ExtensionPairingIdentity {
   }
 
   ensureLegacyPairingMigration(): Promise<void> {
-    if (this.legacyPairingMigration.kind === LegacyPairingMigrationKind.Running) {
+    if (
+      this.legacyPairingMigration.kind === LegacyPairingMigrationKind.Running
+    ) {
       return this.legacyPairingMigration.operation
     }
     const operation = (async () => {
@@ -734,7 +756,9 @@ class ExtensionPairingIdentity {
       requestJson,
     }
     const parsed =
-      await WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(parseArgs)
+      await WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(
+        parseArgs,
+      )
     if (parsed.kind === WebsitePasskeyRequestParseKind.Rejected) {
       return { kind: WebsitePasskeyRequestContextKind.Rejected }
     }
@@ -822,7 +846,9 @@ class ExtensionPairingIdentity {
     forbiddenReason,
     openLockedCompanion,
   }: WebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
-    const nookTypedArgs0_8: Parameters<typeof this.isAuthorizedWebsiteSender>[0] = {
+    const nookTypedArgs0_8: Parameters<
+      typeof this.isAuthorizedWebsiteSender
+    >[0] = {
       sender,
       origin,
     }
@@ -848,7 +874,8 @@ class ExtensionPairingIdentity {
       payload: { queue },
     }
     const statusDelivery = await this.sendSessionMessage(nookTypedArgs0_9)
-    if (statusDelivery.isErr()) return { response: statusDelivery.error.response }
+    if (statusDelivery.isErr())
+      return { response: statusDelivery.error.response }
     const status = statusDelivery.value
     await companionWasmReady
     const sessionStatus = this.websiteSessionStatusTransport(status)

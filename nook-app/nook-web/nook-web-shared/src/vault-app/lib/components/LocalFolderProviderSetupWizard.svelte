@@ -39,7 +39,9 @@
         ).localFolderHandle()
       : { kind: LocalFolderHandleKind.Unselected },
   )
-  const hasFolder = $derived(folderHandle.kind === LocalFolderHandleKind.Selected)
+  const hasFolder = $derived(
+    folderHandle.kind === LocalFolderHandleKind.Selected,
+  )
   const selectedDirectoryName = $derived(
     vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
       ? localFolderDirectoryValue(vault.localFolderDraft.config.directoryName)

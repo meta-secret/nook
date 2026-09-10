@@ -39,7 +39,9 @@ class ExtensionSessionLifecycle {
     return this.document.open()
   }
 
-  closeExtensionSessionDocument(): Promise<ExtensionSessionTransportResult<void>> {
+  closeExtensionSessionDocument(): Promise<
+    ExtensionSessionTransportResult<void>
+  > {
     return this.document.close()
   }
 
@@ -133,7 +135,9 @@ class ExtensionSessionLifecycle {
     return this.notifyAuthenticationSurfaces(args)
   }
 
-  async openCompanionLauncher(intent: OpenCompanionLauncherIntent): Promise<void> {
+  async openCompanionLauncher(
+    intent: OpenCompanionLauncherIntent,
+  ): Promise<void> {
     const popupUrl = chrome.runtime.getURL('popup/index.html')
     const launcherUrl =
       intent === OpenCompanionLauncherIntent.Pair

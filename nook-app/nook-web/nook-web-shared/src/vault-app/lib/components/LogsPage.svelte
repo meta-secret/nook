@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { ChevronLeft, RefreshCw, Trash2, Copy } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
+  import { onMount } from 'svelte'
+  import { ChevronLeft, RefreshCw, Trash2, Copy } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
   import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-  } from "$lib/components/ui/card";
-  import { LogLevel, type LogEntry, browserLogRuntime } from "$lib/runtime/log";
+  } from '$lib/components/ui/card'
+  import { LogLevel, type LogEntry, browserLogRuntime } from '$lib/runtime/log'
 
-  let { onClose }: { onClose: () => void } = $props();
+  let { onClose }: { onClose: () => void } = $props()
 
   const LEVELS: LogLevel[] = [
     LogLevel.Error,
@@ -19,89 +19,89 @@
     LogLevel.Info,
     LogLevel.Debug,
     LogLevel.Trace,
-  ];
-  const PAGE_SIZE = 100;
+  ]
+  const PAGE_SIZE = 100
 
-  let minLevel = $state<LogLevel>(LogLevel.Trace);
-  let captureLevel = $state<LogLevel>(LogLevel.Info);
-  let entries = $state<LogEntry[]>([]);
-  let total = $state(0);
-  let offset = $state(0);
-  let loading = $state(false);
-  let copied = $state(false);
+  let minLevel = $state<LogLevel>(LogLevel.Trace)
+  let captureLevel = $state<LogLevel>(LogLevel.Info)
+  let entries = $state<LogEntry[]>([])
+  let total = $state(0)
+  let offset = $state(0)
+  let loading = $state(false)
+  let copied = $state(false)
 
-  const newestFirst = $derived([...entries].reverse());
-  const hasOlder = $derived(offset + PAGE_SIZE < total);
-  const hasNewer = $derived(offset > 0);
+  const newestFirst = $derived([...entries].reverse())
+  const hasOlder = $derived(offset + PAGE_SIZE < total)
+  const hasNewer = $derived(offset > 0)
 
   const LEVEL_CLASS = new Map<string, string>([
-    [LogLevel.Error, "text-red-400"],
-    [LogLevel.Warn, "text-amber-400"],
-    [LogLevel.Info, "text-sky-400"],
-    [LogLevel.Debug, "text-emerald-400"],
-    [LogLevel.Trace, "text-muted-foreground"],
-  ]);
+    [LogLevel.Error, 'text-red-400'],
+    [LogLevel.Warn, 'text-amber-400'],
+    [LogLevel.Info, 'text-sky-400'],
+    [LogLevel.Debug, 'text-emerald-400'],
+    [LogLevel.Trace, 'text-muted-foreground'],
+  ])
 
   async function load() {
-    loading = true;
+    loading = true
     try {
-      total = await browserLogRuntime.logCount();
+      total = await browserLogRuntime.logCount()
       const dumpLogsArgs: Parameters<typeof browserLogRuntime.dumpLogs>[0] = {
         minLevel,
         limit: PAGE_SIZE,
         offset,
-      };
-      entries = await browserLogRuntime.dumpLogs(dumpLogsArgs);
+      }
+      entries = await browserLogRuntime.dumpLogs(dumpLogsArgs)
     } finally {
-      loading = false;
+      loading = false
     }
   }
 
   function changeMinLevel(value: string) {
-    minLevel = ((...[v = LogLevel.Trace]) => v)(value as LogLevel);
-    offset = 0;
-    void load();
+    minLevel = ((...[v = LogLevel.Trace]) => v)(value as LogLevel)
+    offset = 0
+    void load()
   }
 
   function changeCaptureLevel(value: string) {
-    captureLevel = ((...[v = LogLevel.Info]) => v)(value as LogLevel);
-    browserLogRuntime.setLogLevel(captureLevel);
+    captureLevel = ((...[v = LogLevel.Info]) => v)(value as LogLevel)
+    browserLogRuntime.setLogLevel(captureLevel)
   }
 
   function older() {
-    if (!hasOlder) return;
-    offset += PAGE_SIZE;
-    void load();
+    if (!hasOlder) return
+    offset += PAGE_SIZE
+    void load()
   }
 
   function newer() {
-    if (!hasNewer) return;
-    offset = Math.max(0, offset - PAGE_SIZE);
-    void load();
+    if (!hasNewer) return
+    offset = Math.max(0, offset - PAGE_SIZE)
+    void load()
   }
 
   async function clearAll() {
-    await browserLogRuntime.clearLogs();
-    offset = 0;
-    await load();
+    await browserLogRuntime.clearLogs()
+    offset = 0
+    await load()
   }
 
   async function copyAll() {
     try {
-      await navigator.clipboard.writeText(JSON.stringify(newestFirst));
-      copied = true;
+      await navigator.clipboard.writeText(JSON.stringify(newestFirst))
+      copied = true
       setTimeout(() => {
-        copied = false;
-      }, 1500);
+        copied = false
+      }, 1500)
     } catch {
       // Clipboard may be unavailable; ignore.
     }
   }
 
   onMount(() => {
-    captureLevel = browserLogRuntime.getLogLevel();
-    void load();
-  });
+    captureLevel = browserLogRuntime.getLogLevel()
+    void load()
+  })
 </script>
 
 <div class="w-full animate-in fade-in duration-300" data-testid="logs-page">
@@ -186,7 +186,7 @@
           onclick={copyAll}
         >
           <Copy class="size-3.5" />
-          {copied ? "Copied" : "Copy"}
+          {copied ? 'Copied' : 'Copy'}
         </Button>
         <Button
           type="button"
@@ -212,7 +212,7 @@
           class="px-4 py-8 text-center text-sm text-muted-foreground sm:px-5"
           data-testid="logs-empty"
         >
-          {loading ? "Loading…" : "No log entries at this level."}
+          {loading ? 'Loading…' : 'No log entries at this level.'}
         </p>
       {:else}
         <ul class="divide-y divide-border/40 font-mono text-xs">

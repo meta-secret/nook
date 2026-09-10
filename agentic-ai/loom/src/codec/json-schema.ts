@@ -70,9 +70,7 @@ export type PatternStringJsonSchema = {
 export type StringJsonSchema = PlainStringJsonSchema | PatternStringJsonSchema;
 
 export type JsonSchemaProperty =
-  | BooleanJsonSchema
-  | IntegerJsonSchema
-  | StringJsonSchema;
+  BooleanJsonSchema | IntegerJsonSchema | StringJsonSchema;
 
 export type ObjectJsonSchema = {
   readonly type: JsonSchemaType.Object;

@@ -56,8 +56,7 @@ export type CortexPersistedRepresentationPolicyContract =
   };
 
 export type CortexPolicyContract =
-  | CortexGeneralPolicyContract
-  | CortexPersistedRepresentationPolicyContract;
+  CortexGeneralPolicyContract | CortexPersistedRepresentationPolicyContract;
 
 export type CortexContextContract = {
   readonly authorityDocument: CortexContextAuthorityDocument;

@@ -176,8 +176,7 @@ export class TypeScriptCommandExpression {
     model,
     visited,
   ]: readonly [LexicalBinding, string, LexicalModel, ReadonlySet<ts.Node>]):
-    | readonly StaticText[]
-    | false {
+    readonly StaticText[] | false {
     if (visited.has(parameter.declaration)) return false;
     const declaration = parameter.declaration;
     if (!ts.isParameter(declaration)) return false;

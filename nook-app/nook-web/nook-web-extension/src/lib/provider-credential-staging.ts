@@ -6,7 +6,8 @@ import { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/ex
 export type SerializedStorageProvider = unknown
 export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
 export type DecodedExtensionStorageProviders = StorageProvider[]
-export type ExtensionStorageProviderIdentities = ExtensionStorageProviderPayload[]
+export type ExtensionStorageProviderIdentities =
+  ExtensionStorageProviderPayload[]
 
 export enum ProviderCredentialFailure {
   InvalidIdentity = 'invalid-provider-identity',
@@ -51,7 +52,9 @@ class SerializedProviderField {
 }
 
 export class ProviderCredentialBuffer {
-  constructor(private readonly providers: SerializedExtensionStorageProviders) {}
+  constructor(
+    private readonly providers: SerializedExtensionStorageProviders,
+  ) {}
   identities(): Result<
     ExtensionStorageProviderIdentities,
     ProviderCredentialFailure
@@ -59,7 +62,8 @@ export class ProviderCredentialBuffer {
     const identities: ExtensionStorageProviderIdentities = []
     for (const provider of this.providers) {
       const identity = new ExtensionStorageProviderPayload(provider).parse()
-      if (identity.isErr()) return err(ProviderCredentialFailure.InvalidIdentity)
+      if (identity.isErr())
+        return err(ProviderCredentialFailure.InvalidIdentity)
       identities.push(identity.value)
     }
     return ok(identities)
@@ -78,7 +82,11 @@ export class ProviderCredentialBuffer {
         typeof provider.oauthFile === 'object'
       ) {
         const oauth = provider.oauthFile
-        if ('config' in oauth && oauth.config && typeof oauth.config === 'object') {
+        if (
+          'config' in oauth &&
+          oauth.config &&
+          typeof oauth.config === 'object'
+        ) {
           if ('accessToken' in oauth.config)
             oauth.config.accessToken = { state: 'signedOut' }
           if ('refreshToken' in oauth.config)
@@ -102,7 +110,9 @@ export class ProviderCredentialBuffer {
   }
   async stage(
     args: StageProviderCredentialsArgs,
-  ): Promise<Result<DecodedExtensionStorageProviders, ProviderCredentialFailure>> {
+  ): Promise<
+    Result<DecodedExtensionStorageProviders, ProviderCredentialFailure>
+  > {
     // Only the external structured-clone and WASM admission boundaries may reject.
     let staged: SerializedExtensionStorageProviders
     try {

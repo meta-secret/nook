@@ -112,7 +112,9 @@ describe('provider vault decision panel', () => {
     const radio = await view.findByRole('radio')
     expect((radio as HTMLInputElement).checked).toBe(true)
 
-    await fireEvent.click(view.getByTestId('sync-conflict-import-new-vault-btn'))
+    await fireEvent.click(
+      view.getByTestId('sync-conflict-import-new-vault-btn'),
+    )
     expect(onImport).toHaveBeenCalledWith({
       kind: ProviderVaultIdentitySelectionKind.Selected,
       identityId: 'personal',
@@ -207,9 +209,16 @@ test('completed import transitions to the selected locked identity', async () =>
     importedStoreId: 'store-a',
   }
 
-  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(request)
+  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(
+    request,
+  )
 
-  expect(calls).toEqual(['activate', 'clear-session', 'select:store-a', 'status'])
+  expect(calls).toEqual([
+    'activate',
+    'clear-session',
+    'select:store-a',
+    'status',
+  ])
   expect(state.deviceProtectionStatus).toBe(DeviceProtectionStatus.Pin)
   expect(state.deviceProtectionLockedStatus).toBe(DeviceProtectionStatus.Pin)
   expect(state.deviceId).toBe('')
@@ -239,7 +248,9 @@ test('activation failure preserves the completed import session', async () => {
     importedStoreId: 'store-a',
   }
 
-  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(request)
+  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(
+    request,
+  )
 
   expect(clearIdentityProviderSession).not.toHaveBeenCalled()
   expect(selectLoginVault).not.toHaveBeenCalled()

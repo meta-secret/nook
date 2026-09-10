@@ -142,7 +142,9 @@
     }
     if (item.type === SecretType.CreditCard) {
       return (
-        item.title.trim() || summary || vault.t(I18N_KEYS.VaultFieldsUnnamedCard)
+        item.title.trim() ||
+        summary ||
+        vault.t(I18N_KEYS.VaultFieldsUnnamedCard)
       )
     }
     if (item.type === SecretType.FileAttachment) {
@@ -158,7 +160,9 @@
   const accountSubtitle = $derived(
     item.type === SecretType.Login
       ? item.username.trim()
-      : item.type === SecretType.CreditCard && item.title.trim() && item.last4.trim()
+      : item.type === SecretType.CreditCard &&
+          item.title.trim() &&
+          item.last4.trim()
         ? `•••• ${item.last4.trim()}`
         : '',
   )
@@ -302,11 +306,14 @@
             {/if}
           </span>
           {#if !expanded}
-            <span class="truncate text-xs text-muted-foreground">{summary}</span>
+            <span class="truncate text-xs text-muted-foreground">{summary}</span
+            >
           {/if}
         {/if}
       </button>
-      <div class="flex shrink-0 items-center gap-0.5 {titleAsHeader ? 'pr-1' : ''}">
+      <div
+        class="flex shrink-0 items-center gap-0.5 {titleAsHeader ? 'pr-1' : ''}"
+      >
         {#if item.type !== SecretType.Passkey}
           <button
             type="button"
@@ -364,7 +371,8 @@
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.websiteUrl || vault.t(I18N_KEYS.VaultFieldsNoWebsite)}</span
+                >{item.websiteUrl ||
+                  vault.t(I18N_KEYS.VaultFieldsNoWebsite)}</span
               >
               {#if item.websiteUrl}
                 <button
@@ -373,7 +381,11 @@
                     void (() => {
                       const onCopyToClipboardArgs: Parameters<
                         typeof onCopyToClipboard
-                      >[0] = { text: item.websiteUrl, id: item.id, field: 'website' }
+                      >[0] = {
+                        text: item.websiteUrl,
+                        id: item.id,
+                        field: 'website',
+                      }
                       return onCopyToClipboard(onCopyToClipboardArgs)
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
@@ -395,7 +407,8 @@
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.username || vault.t(I18N_KEYS.VaultFieldsNoUsername)}</span
+                >{item.username ||
+                  vault.t(I18N_KEYS.VaultFieldsNoUsername)}</span
               >
               {#if item.username}
                 <button
@@ -404,7 +417,11 @@
                     void (() => {
                       const onCopyToClipboardArgs2: Parameters<
                         typeof onCopyToClipboard
-                      >[0] = { text: item.username, id: item.id, field: 'username' }
+                      >[0] = {
+                        text: item.username,
+                        id: item.id,
+                        field: 'username',
+                      }
                       return onCopyToClipboard(onCopyToClipboardArgs2)
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyUsername)}
@@ -467,7 +484,8 @@
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.websiteUrl || vault.t(I18N_KEYS.VaultFieldsNoWebsite)}</span
+                >{item.websiteUrl ||
+                  vault.t(I18N_KEYS.VaultFieldsNoWebsite)}</span
               >
               {#if item.websiteUrl}
                 <button
@@ -476,7 +494,11 @@
                     void (() => {
                       const onCopyToClipboardArgs3: Parameters<
                         typeof onCopyToClipboard
-                      >[0] = { text: item.websiteUrl, id: item.id, field: 'website' }
+                      >[0] = {
+                        text: item.websiteUrl,
+                        id: item.id,
+                        field: 'website',
+                      }
                       return onCopyToClipboard(onCopyToClipboardArgs3)
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
@@ -535,7 +557,11 @@
                     void (() => {
                       const onCopyToClipboardArgs4: Parameters<
                         typeof onCopyToClipboard
-                      >[0] = { text: item.expiresAt, id: item.id, field: 'expires' }
+                      >[0] = {
+                        text: item.expiresAt,
+                        id: item.id,
+                        field: 'expires',
+                      }
                       return onCopyToClipboard(onCopyToClipboardArgs4)
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyExpirationDate)}
@@ -557,7 +583,8 @@
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.name || vault.t(I18N_KEYS.VaultFieldsNoAccountName)}</span
+                >{item.name ||
+                  vault.t(I18N_KEYS.VaultFieldsNoAccountName)}</span
               >
               {#if item.name}
                 <button
@@ -648,7 +675,9 @@
               <div
                 class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
               >
-                <span class="truncate text-foreground">{item.passkeyUserName}</span>
+                <span class="truncate text-foreground"
+                  >{item.passkeyUserName}</span
+                >
               </div>
             </div>
           {/if}
@@ -678,7 +707,8 @@
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.cardholderName.trim() || vault.t(I18N_KEYS.CommonNone)}</span
+                >{item.cardholderName.trim() ||
+                  vault.t(I18N_KEYS.CommonNone)}</span
               >
               {#if item.cardholderName.trim()}
                 <button
@@ -804,7 +834,11 @@
                     void (() => {
                       const onCopyToClipboardArgs9: Parameters<
                         typeof onCopyToClipboard
-                      >[0] = { text: reveal.record.cvv, id: item.id, field: 'cvv' }
+                      >[0] = {
+                        text: reveal.record.cvv,
+                        id: item.id,
+                        field: 'cvv',
+                      }
                       return onCopyToClipboard(onCopyToClipboardArgs9)
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCvv)}
@@ -904,8 +938,9 @@
                   <MarkdownContent source={reveal.record.note} />
                 </div>
               {:else}
-                <span class="font-mono text-foreground" data-testid="revealed-secret"
-                  >••••••••••••••••</span
+                <span
+                  class="font-mono text-foreground"
+                  data-testid="revealed-secret">••••••••••••••••</span
                 >
               {/if}
               <button

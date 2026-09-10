@@ -1,6 +1,10 @@
 <script lang="ts">
   import { Dialog } from 'bits-ui'
-  type IdentityTextTruncation = { readonly value: string; readonly head: number; readonly tail: number }
+  type IdentityTextTruncation = {
+    readonly value: string
+    readonly head: number
+    readonly tail: number
+  }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
@@ -9,54 +13,61 @@
     Smartphone,
     UserPlus,
     X,
-  } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
+  } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
   import {
     CardContent,
     CardDescription,
     CardHeader,
-  } from "$lib/components/ui/card";
+  } from '$lib/components/ui/card'
 
-  import type { VaultState } from "$lib/vault.svelte";
-  import { JoinEnrollmentDialogVariant } from "./join-enrollment-dialog-state";
+  import type { VaultState } from '$lib/vault.svelte'
+  import { JoinEnrollmentDialogVariant } from './join-enrollment-dialog-state'
 
   let {
     vault,
     open,
     variant,
-    deviceId = "",
+    deviceId = '',
     isBusy = false,
-    enrollSecretsKey = $bindable(""),
-    enrollMembersKey = $bindable(""),
+    enrollSecretsKey = $bindable(''),
+    enrollMembersKey = $bindable(''),
     onConfirm,
     onEnrollWithKeys,
     onCreateFreshVault,
     onCancel,
   }: {
-    vault: VaultState;
-    open: boolean;
-    variant: JoinEnrollmentDialogVariant;
-    deviceId?: string;
-    isBusy?: boolean;
-    enrollSecretsKey: string;
-    enrollMembersKey: string;
-    onConfirm?: () => void | Promise<void>;
-    onEnrollWithKeys?: () => void | Promise<void>;
-    onCreateFreshVault?: () => void | Promise<void>;
-    onCancel: () => void;
-  } = $props();
+    vault: VaultState
+    open: boolean
+    variant: JoinEnrollmentDialogVariant
+    deviceId?: string
+    isBusy?: boolean
+    enrollSecretsKey: string
+    enrollMembersKey: string
+    onConfirm?: () => void | Promise<void>
+    onEnrollWithKeys?: () => void | Promise<void>
+    onCreateFreshVault?: () => void | Promise<void>
+    onCancel: () => void
+  } = $props()
 
-  let showTransferKeys = $state(false);
+  let showTransferKeys = $state(false)
 
   function truncate({ value, head, tail }: IdentityTextTruncation) {
-    if (value.length <= head + tail + 3) return value;
-    return `${value.slice(0, head)}…${value.slice(-tail)}`;
+    if (value.length <= head + tail + 3) return value
+    return `${value.slice(0, head)}…${value.slice(-tail)}`
   }
 </script>
 
-<Dialog.Root {open} onOpenChange={(nextOpen) => { if (!nextOpen) onCancel() }}>
+<Dialog.Root
+  {open}
+  onOpenChange={(nextOpen) => {
+    if (!nextOpen) onCancel()
+  }}
+>
   <Dialog.Portal disabled>
-    <Dialog.Overlay class="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
+    <Dialog.Overlay
+      class="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
+    />
     <Dialog.Content
       class="text-card-foreground flex flex-col gap-6 rounded-lg border py-6 fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[calc(100%_-_2rem)] max-w-md border-border bg-card shadow-2xl shadow-black/40 animate-in fade-in zoom-in-95 duration-200"
       data-testid="join-enrollment-dialog"
@@ -111,7 +122,14 @@
               {vault.t(I18N_KEYS.JoinEnrollmentThisBrowser)}
             </p>
             <p class="mt-1 font-mono text-muted-foreground">
-              {(() => { const truncateArgs: Parameters<typeof truncate>[0] = { value: deviceId, head: 14, tail: 10 }; return truncate(truncateArgs); })()}
+              {(() => {
+                const truncateArgs: Parameters<typeof truncate>[0] = {
+                  value: deviceId,
+                  head: 14,
+                  tail: 10,
+                }
+                return truncate(truncateArgs)
+              })()}
             </p>
           </div>
         {/if}

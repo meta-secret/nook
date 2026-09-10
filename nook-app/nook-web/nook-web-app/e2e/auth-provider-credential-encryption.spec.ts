@@ -87,7 +87,9 @@ test.describe('sync provider credential encryption', () => {
           entry.message.includes(
             'closure invoked recursively or after being dropped',
           ) ||
-          entry.data?.includes('closure invoked recursively or after being dropped'),
+          entry.data?.includes(
+            'closure invoked recursively or after being dropped',
+          ),
       ),
     ).toBe(false)
   })
@@ -111,10 +113,14 @@ test.describe('sync provider credential encryption', () => {
       expect(admission.error).toBe(AuthProviderHookFailure.ReadFailed)
 
     const raw = await readRawAuthProvidersFromIdb(page)
-    expect(raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat).toBe(pat)
+    expect(raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat).toBe(
+      pat,
+    )
   })
 
-  test('OAuth access and refresh tokens are sealed at rest', async ({ page }) => {
+  test('OAuth access and refresh tokens are sealed at rest', async ({
+    page,
+  }) => {
     const access = 'ya29.e2e-oauth-access-token'
     const refresh = '1//e2e-refresh-token-secret'
     await saveAuthProvidersInBrowser(

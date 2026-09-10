@@ -697,13 +697,12 @@ class BrowserLogRuntime {
       console[method] = (...args: ConsoleArguments) => {
         this.originalConsole[method](...args);
         if (this.isEnabled(level)) {
-          const persistMessageArgs2: Parameters<
-            typeof this.persistMessage
-          >[0] = {
-            level,
-            scope: "console",
-            message: this.stringifyArgs(args),
-          };
+          const persistMessageArgs2: Parameters<typeof this.persistMessage>[0] =
+            {
+              level,
+              scope: "console",
+              message: this.stringifyArgs(args),
+            };
           this.persistMessage(persistMessageArgs2);
         }
       };

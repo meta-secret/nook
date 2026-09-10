@@ -47,7 +47,8 @@
       const started = await new sentinelUnlockActions.SentinelUnlockActions(
         vault,
       ).startSentinelUnlock()
-      if (started.isErr()) vault.errorMsg = vault.t(started.error.translationKey)
+      if (started.isErr())
+        vault.errorMsg = vault.t(started.error.translationKey)
     })
   }
 
@@ -96,7 +97,9 @@
         copied = false
       }, 1500)
     } catch {
-      vault.errorMsg = vault.t(I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed)
+      vault.errorMsg = vault.t(
+        I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed,
+      )
     }
   }
 </script>
@@ -146,7 +149,9 @@
         role="status"
         data-testid="sentinel-unlock-progress"
       >
-        <span class="flex items-center gap-2 text-sm font-medium text-foreground">
+        <span
+          class="flex items-center gap-2 text-sm font-medium text-foreground"
+        >
           <Users class="size-4 text-primary" />
           {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockProgress)}
         </span>

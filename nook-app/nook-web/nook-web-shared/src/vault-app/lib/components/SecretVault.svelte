@@ -66,7 +66,10 @@
     PasswordGenerationOptions,
   } from '$lib/nook'
   import { SecretType } from '$lib/nook'
-  import { type DecryptedSecrets, SecretExposure } from '$lib/vault/secret-exposure'
+  import {
+    type DecryptedSecrets,
+    SecretExposure,
+  } from '$lib/vault/secret-exposure'
   import { onDestroy } from 'svelte'
   import {
     SecretTypeSelectionKind,
@@ -191,7 +194,9 @@
     const active = typeFilters.find(
       ({ filter }) => filter === vault.secretTypeFilter,
     )
-    return active ? vault.t(active.labelKey) : vault.t(I18N_KEYS.VaultFilterAllTypes)
+    return active
+      ? vault.t(active.labelKey)
+      : vault.t(I18N_KEYS.VaultFilterAllTypes)
   })
   const currentPage = $derived(
     Math.floor(vault.secretPageOffset / vault.secretPageSize) + 1,
@@ -206,7 +211,8 @@
     if (items.some((item) => item.type === SecretType.SeedPhrase)) return Sprout
     if (items.some((item) => item.type === SecretType.Authenticator))
       return ShieldCheck
-    if (items.some((item) => item.type === SecretType.CreditCard)) return CreditCard
+    if (items.some((item) => item.type === SecretType.CreditCard))
+      return CreditCard
     if (items.some((item) => item.type === SecretType.FileAttachment))
       return Paperclip
     if (items.some((item) => item.type === SecretType.Passkey)) return KeyRound
@@ -237,7 +243,9 @@
   })
 
   function notifyAddMode() {
-    const onAddModeChangeArgs: Parameters<NonNullable<typeof onAddModeChange>>[0] = {
+    const onAddModeChangeArgs: Parameters<
+      NonNullable<typeof onAddModeChange>
+    >[0] = {
       open: addSecretOpen,
       selection: formSelectedType,
     }
@@ -260,7 +268,9 @@
       })
       return
     }
-    const nextFilter = typeFilters.find((filter) => filter.filter === Number(value))
+    const nextFilter = typeFilters.find(
+      (filter) => filter.filter === Number(value),
+    )
     if (!nextFilter) return
     vault.secretTypeFilter = nextFilter.filter
     const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
@@ -364,7 +374,9 @@
     try {
       await navigator.clipboard.writeText(text)
     } catch {
-      return err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed))
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      )
     }
     copiedKey = {
       kind: ClipboardNoticeKind.Visible,
@@ -740,7 +752,9 @@
                 data-testid="secret-page-previous"
                 disabled={vault.secretPageOffset === 0}
                 onclick={() => {
-                  const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+                  const pageRequest: Parameters<
+                    typeof vault.loadSecretPage
+                  >[0] = {
                     query: vault.secretQuery,
                     requestedOffset: Math.max(
                       0,
@@ -750,7 +764,8 @@
                   void vault.loadSecretPage(pageRequest).then((result) => {
                     if (
                       result.isErr() &&
-                      result.error.kind !== VaultStorageFailureKind.GenerationChanged
+                      result.error.kind !==
+                        VaultStorageFailureKind.GenerationChanged
                     )
                       vault.errorMsg = vault.t(result.error.translationKey)
                   })
@@ -778,14 +793,18 @@
                 disabled={vault.secretPageOffset + vault.secretPageSize >=
                   vault.secretTotal}
                 onclick={() => {
-                  const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+                  const pageRequest: Parameters<
+                    typeof vault.loadSecretPage
+                  >[0] = {
                     query: vault.secretQuery,
-                    requestedOffset: vault.secretPageOffset + vault.secretPageSize,
+                    requestedOffset:
+                      vault.secretPageOffset + vault.secretPageSize,
                   }
                   void vault.loadSecretPage(pageRequest).then((result) => {
                     if (
                       result.isErr() &&
-                      result.error.kind !== VaultStorageFailureKind.GenerationChanged
+                      result.error.kind !==
+                        VaultStorageFailureKind.GenerationChanged
                     )
                       vault.errorMsg = vault.t(result.error.translationKey)
                   })

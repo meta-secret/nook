@@ -35,9 +35,7 @@ export type AssertPasskeyRequest = Extract<
 >
 
 type WebsitePasskeyRequest =
-  | CancelPasskeyRequest
-  | RegisterPasskeyRequest
-  | AssertPasskeyRequest
+  CancelPasskeyRequest | RegisterPasskeyRequest | AssertPasskeyRequest
 
 export type WebsitePasskeyOperationArgs = {
   message: WebsitePasskeyRequest
@@ -67,7 +65,8 @@ class SessionWebsitePasskeys {
     expiresAt,
   }: WebsitePasskeyRequestActivityArgs): boolean {
     return (
-      Date.now() < expiresAt && !this.canceledWebsitePasskeyRequests.has(requestId)
+      Date.now() < expiresAt &&
+      !this.canceledWebsitePasskeyRequests.has(requestId)
     )
   }
 
@@ -205,7 +204,9 @@ class SessionWebsitePasskeys {
         new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
       )
     } catch {
-      return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
     }
   }
 }

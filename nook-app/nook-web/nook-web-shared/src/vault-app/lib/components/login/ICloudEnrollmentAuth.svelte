@@ -1,24 +1,24 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { iCloudOAuthSession } from "$lib/auth/icloud/oauth";
-  import type { VaultState } from "$lib/vault.svelte";
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { iCloudOAuthSession } from '$lib/auth/icloud/oauth'
+  import type { VaultState } from '$lib/vault.svelte'
 
-  let { vault }: { vault: VaultState } = $props();
+  let { vault }: { vault: VaultState } = $props()
 
-  let open = $state(false);
-  let prepareStarted = $state(false);
-  let prepareError = $state("");
+  let open = $state(false)
+  let prepareStarted = $state(false)
+  let prepareError = $state('')
 
   $effect(() => {
-    if (!open || prepareStarted) return;
-    prepareStarted = true;
+    if (!open || prepareStarted) return
+    prepareStarted = true
     void iCloudOAuthSession.prepareICloudSignInControl().catch((error) => {
       prepareError =
         error instanceof Error
           ? vault.t(error.message)
-          : vault.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst);
-    });
-  });
+          : vault.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst)
+    })
+  })
 </script>
 
 <div
@@ -31,7 +31,7 @@
     aria-expanded={open}
     data-testid="enrollment-icloud-auth-toggle"
     onclick={() => {
-      open = !open;
+      open = !open
     }}
   >
     {vault.t(I18N_KEYS.LoginIcloudSharedEnrollmentToggle)}

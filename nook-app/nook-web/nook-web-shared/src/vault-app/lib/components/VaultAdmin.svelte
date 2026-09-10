@@ -65,8 +65,14 @@
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
-  import type { ProviderSetupRequest, StorageProvider } from '$lib/auth/providers'
-  import { ActiveVaultKind, type LoginSetup } from '$lib/vault/state/provider.svelte'
+  import type {
+    ProviderSetupRequest,
+    StorageProvider,
+  } from '$lib/auth/providers'
+  import {
+    ActiveVaultKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
   import { AdminAccordionSection } from '$lib/vault/state/ui.svelte'
   import type { NookManualProviderSync } from '$app-wasm'
   import {
@@ -146,12 +152,18 @@
     onBeginSetup: (request: ProviderSetupRequest) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
-    onAddPassword: (args: VaultPasswordCreation) => Promise<PasswordOperationResult>
+    onAddPassword: (
+      args: VaultPasswordCreation,
+    ) => Promise<PasswordOperationResult>
     onUpdatePassword: (
       args: VaultPasswordEntryUpdate,
     ) => Promise<PasswordOperationResult>
-    onRemovePassword: (entryId: PasswordEntryId) => Promise<PasswordOperationResult>
-    onIssueCode: (args: EnrollmentCodeIssue) => Promise<EnrollmentCodeIssueResult>
+    onRemovePassword: (
+      entryId: PasswordEntryId,
+    ) => Promise<PasswordOperationResult>
+    onIssueCode: (
+      args: EnrollmentCodeIssue,
+    ) => Promise<EnrollmentCodeIssueResult>
     onClearCode: () => void
     onImportBitwarden: (
       args: BitwardenVaultImport,
@@ -162,7 +174,9 @@
     onImportLastPass: (
       csv: string,
     ) => Promise<SecretOperationResult<NookImportResult>>
-    onImportKeeper: (csv: string) => Promise<SecretOperationResult<NookImportResult>>
+    onImportKeeper: (
+      csv: string,
+    ) => Promise<SecretOperationResult<NookImportResult>>
     onImportOnePassword: (
       archive: Uint8Array,
     ) => Promise<SecretOperationResult<NookImportResult>>
@@ -341,10 +355,11 @@
       storeId: entry.storeId,
     }
     try {
-      const renameLocalVaultArgs: Parameters<typeof vault.renameLocalVault>[0] = {
-        storeId: entry.storeId,
-        label: draftFor(entry),
-      }
+      const renameLocalVaultArgs: Parameters<typeof vault.renameLocalVault>[0] =
+        {
+          storeId: entry.storeId,
+          label: draftFor(entry),
+        }
       await vault.renameLocalVault(renameLocalVaultArgs)
       if (!vault.errorMsg) {
         editingStoreId = { kind: VaultLabelEditorKind.Closed }
@@ -455,7 +470,9 @@
               aria-hidden="true"
             >
               <FolderKey
-                class="size-4 {isActive ? 'text-primary' : 'text-muted-foreground'}"
+                class="size-4 {isActive
+                  ? 'text-primary'
+                  : 'text-muted-foreground'}"
               />
             </div>
 
@@ -796,7 +813,12 @@
         onToggle={() => toggleImportProvider('keeper')}
         testId="keeper-import-section"
       >
-        <KeeperImportPanel {vault} {isSaving} embedded onImport={onImportKeeper} />
+        <KeeperImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportKeeper}
+        />
       </SettingsAccordionSection>
 
       <SettingsAccordionSection

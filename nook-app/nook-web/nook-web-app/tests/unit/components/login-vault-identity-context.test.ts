@@ -6,7 +6,10 @@ import {
 } from '$app-wasm'
 import { LoginVaultIdentityReader } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
 
-function linkedIdentity(identityId: string, label: string): NookIdentitySnapshot {
+function linkedIdentity(
+  identityId: string,
+  label: string,
+): NookIdentitySnapshot {
   return {
     identityId,
     label,

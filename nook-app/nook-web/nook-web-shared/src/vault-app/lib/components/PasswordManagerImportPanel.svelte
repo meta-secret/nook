@@ -60,14 +60,17 @@
   }
 
   async function importFile() {
-    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy) return
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy)
+      return
     const file = selectedFile.file
     result = { kind: PasswordImportOutcomeKind.NotRun }
     error = ''
     isImporting = true
     try {
       if (props.format === PasswordImportFormat.Text) {
-        const importRequest: ConstructorParameters<typeof TextVaultFileImport>[0] = {
+        const importRequest: ConstructorParameters<
+          typeof TextVaultFileImport
+        >[0] = {
           file,
           isSaving: false,
           onImport: props.onImport,
@@ -79,11 +82,15 @@
             result: imported.result,
           }
         } else if (imported.kind === ImportAttemptKind.Failed) {
-          error = new SecretFailurePresentation(props.vault).message(imported.error)
+          error = new SecretFailurePresentation(props.vault).message(
+            imported.error,
+          )
         }
         return
       }
-      const importRequest: ConstructorParameters<typeof BinaryVaultFileImport>[0] = {
+      const importRequest: ConstructorParameters<
+        typeof BinaryVaultFileImport
+      >[0] = {
         file,
         isSaving: false,
         onImport: props.onImport,
@@ -95,7 +102,9 @@
           result: imported.result,
         }
       } else if (imported.kind === ImportAttemptKind.Failed) {
-        error = new SecretFailurePresentation(props.vault).message(imported.error)
+        error = new SecretFailurePresentation(props.vault).message(
+          imported.error,
+        )
       }
     } finally {
       isImporting = false
@@ -151,7 +160,8 @@
 
       <Button
         data-testid={props.submitTestId}
-        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected || busy}
+        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
+          busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />

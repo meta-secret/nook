@@ -1,12 +1,12 @@
 <script lang="ts">
   type MermaidDiagramRendering = {
-    readonly src: string;
-    readonly diagramTheme: MermaidTheme;
-  };
+    readonly src: string
+    readonly diagramTheme: MermaidTheme
+  }
 
-  import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { MermaidTheme, mermaidRenderer } from "$lib/content/mermaid-diagram";
-  import type { VaultState } from "$lib/vault.svelte";
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { MermaidTheme, mermaidRenderer } from '$lib/content/mermaid-diagram'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
@@ -14,28 +14,28 @@
     sectionId,
     theme = MermaidTheme.Dark,
   }: {
-    vault: VaultState;
-    source: string;
-    sectionId: string;
-    theme?: MermaidTheme;
-  } = $props();
+    vault: VaultState
+    source: string
+    sectionId: string
+    theme?: MermaidTheme
+  } = $props()
 
-  let svgHtml = $state("");
-  let renderError = $state("");
+  let svgHtml = $state('')
+  let renderError = $state('')
 
   async function paintDiagram({ src, diagramTheme }: MermaidDiagramRendering) {
-    renderError = "";
+    renderError = ''
     try {
       const renderMermaidDiagramArgs: Parameters<
         typeof mermaidRenderer.renderMermaidDiagram
-      >[0] = { source: src, theme: diagramTheme };
+      >[0] = { source: src, theme: diagramTheme }
       svgHtml = await mermaidRenderer.renderMermaidDiagram(
         renderMermaidDiagramArgs,
-      );
+      )
     } catch (error) {
-      svgHtml = "";
+      svgHtml = ''
       renderError =
-        error instanceof Error ? error.message : "Failed to render diagram";
+        error instanceof Error ? error.message : 'Failed to render diagram'
     }
   }
 
@@ -43,9 +43,9 @@
     const paintDiagramArgs: Parameters<typeof paintDiagram>[0] = {
       src: source,
       diagramTheme: theme,
-    };
-    void paintDiagram(paintDiagramArgs);
-  });
+    }
+    void paintDiagram(paintDiagramArgs)
+  })
 </script>
 
 <div

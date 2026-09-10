@@ -3,7 +3,10 @@
     SecretFailurePresentation,
     type SecretOperationResult,
   } from '$lib/vault/secret-operation-failure'
-  type BitwardenVaultImport = { readonly json: string; readonly password: string }
+  type BitwardenVaultImport = {
+    readonly json: string
+    readonly password: string
+  }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ArrowLeft, FileJson, Upload } from '@lucide/svelte'
@@ -54,7 +57,8 @@
   }
 
   async function importFile() {
-    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy) return
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy)
+      return
     const file = selectedFile.file
     error = ''
     result = { kind: ImportOutcomeKind.NotRun }
@@ -156,7 +160,8 @@
 
       <Button
         data-testid="bitwarden-import-submit"
-        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected || busy}
+        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
+          busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -170,7 +175,10 @@
       {/if}
 
       {#if error}
-        <p class="text-sm text-destructive" data-testid="bitwarden-import-error">
+        <p
+          class="text-sm text-destructive"
+          data-testid="bitwarden-import-error"
+        >
           {error}
         </p>
       {/if}

@@ -590,7 +590,9 @@ function resolveCredentialValue({
     case CredentialKind.CurrentPassword:
       return credentials.password
   }
-  throw new Error('credential fill plan contains an unsupported credential kind')
+  throw new Error(
+    'credential fill plan contains an unsupported credential kind',
+  )
 }
 
 type ResolvedCredentialAssignment = {

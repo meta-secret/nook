@@ -111,13 +111,16 @@
     })
   }
 
-  const requestCopy = $derived<ConstructorParameters<typeof RequestClipboard>[0]>({
+  const requestCopy = $derived<
+    ConstructorParameters<typeof RequestClipboard>[0]
+  >({
     request,
     onCopied: () => {
       copied = true
       setTimeout(() => (copied = false), 1500)
     },
-    onFailure: () => (vault.errorMsg = t(I18N_KEYS.LoginSentinelGenesisCopyFailed)),
+    onFailure: () =>
+      (vault.errorMsg = t(I18N_KEYS.LoginSentinelGenesisCopyFailed)),
   })
 
   const finalization = $derived<
@@ -127,7 +130,8 @@
     setBusy: (value) => (actionBusy = value),
     action: async () => {
       const finalized = await onFinalize()
-      if (finalized.isErr()) vault.errorMsg = vault.t(finalized.error.translationKey)
+      if (finalized.isErr())
+        vault.errorMsg = vault.t(finalized.error.translationKey)
     },
   })
 
@@ -140,7 +144,9 @@
   const rosterCount = $derived(
     initiatorKeyReady ? Math.max(1, participants.length) : 0,
   )
-  const availableRosterSlots = $derived(Math.max(0, participantCount - rosterCount))
+  const availableRosterSlots = $derived(
+    Math.max(0, participantCount - rosterCount),
+  )
   const policyDraft = $derived(
     evaluate_sentinel_policy_draft({
       participants: participantCount,
@@ -269,7 +275,9 @@
       data-testid="sentinel-dashboard-heading"
     >
       <div data-testid="sentinel-dashboard-brand">
-        <p class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase">
+        <p
+          class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
+        >
           {t(I18N_KEYS.LoginSentinelCardStackEyebrow)}
         </p>
         <h1 class="mt-1 text-3xl font-semibold tracking-[0.18em]">SENTINEL</h1>
@@ -313,9 +321,9 @@
                   : 'border-white/15',
             ]}
           >
-            {#if index < onboardingStep}<Check class="size-3.5" />{:else}{String(
-                index + 1,
-              ).padStart(2, '0')}{/if}
+            {#if index < onboardingStep}<Check
+                class="size-3.5"
+              />{:else}{String(index + 1).padStart(2, '0')}{/if}
           </span>
           <span class="text-[10px] font-semibold tracking-[0.12em] uppercase">
             {label}
@@ -326,7 +334,9 @@
 
     <div class="grid gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
       <div data-testid="sentinel-onboarding-actions-column">
-        <p class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase">
+        <p
+          class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
+        >
           {t(I18N_KEYS.LoginSentinelCardStackParticipantCards)}
         </p>
         {#if onboardingStage === SentinelCardOnboardingStage.Identity}
@@ -364,7 +374,9 @@
                 {t(I18N_KEYS.LoginSentinelCardStackThisDevice)} ·
                 {t(I18N_KEYS.LoginSentinelCardStackParticipant)} 01
               </b>
-              <span class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]">
+              <span
+                class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]"
+              >
                 {participants[0]?.fingerprint ||
                   initiatorFingerprint ||
                   t(I18N_KEYS.LoginSentinelCardStackKeyPending)}
@@ -396,7 +408,8 @@
               disabled={status !== SentinelGenesisPhase.Inactive ||
                 isBusy ||
                 actionBusy}
-              onclick={() => (onboardingStage = SentinelCardOnboardingStage.Name)}
+              onclick={() =>
+                (onboardingStage = SentinelCardOnboardingStage.Name)}
             >
               <span
                 class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] font-mono text-[10px] text-[#79dfff]"
@@ -449,7 +462,9 @@
                     {t(I18N_KEYS.LoginSentinelCardStackAddParticipant)}
                   </p>
                   <p class="mt-1 font-mono text-[9px] text-[#75818c]">
-                    {rosterLabel(I18N_KEYS.LoginSentinelCardStackSlotsRemaining)}
+                    {rosterLabel(
+                      I18N_KEYS.LoginSentinelCardStackSlotsRemaining,
+                    )}
                   </p>
                 </div>
                 <button
@@ -471,7 +486,9 @@
                 class="mt-4 grid gap-4"
                 data-testid="sentinel-genesis-participant-fields"
               >
-                <label class="text-[9px] tracking-wider text-[#8d99a4] uppercase">
+                <label
+                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
+                >
                   {t(I18N_KEYS.LoginSentinelCardStackDeviceNameLabel)}
                   <input
                     class="mt-2 h-11 w-full border border-white/20 bg-[#192128] px-3 text-sm text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
@@ -483,7 +500,9 @@
                     bind:value={participantLabel}
                   />
                 </label>
-                <label class="text-[9px] tracking-wider text-[#8d99a4] uppercase">
+                <label
+                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
+                >
                   {t(I18N_KEYS.LoginSentinelCardStackPublicKeyLabel)}
                   <textarea
                     class="mt-2 min-h-24 w-full resize-y border border-white/20 bg-[#192128] px-3 py-3 font-mono text-xs text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
@@ -506,7 +525,9 @@
                       {t(I18N_KEYS.LoginSentinelCardStackAuthenticationReady)}
                     </p>
                     <p class="mt-2 text-xs leading-5 text-[#aeb8c2]">
-                      {t(I18N_KEYS.LoginSentinelCardStackAuthenticationReadyHelp)}
+                      {t(
+                        I18N_KEYS.LoginSentinelCardStackAuthenticationReadyHelp,
+                      )}
                     </p>
                   </div>
                 {:else}
@@ -600,7 +621,9 @@
             </p>
             <div class="mt-4" data-testid="sentinel-onboarding-policy">
               <div class="max-w-sm">
-                <span class="text-[10px] tracking-wider text-[#aab5be] uppercase">
+                <span
+                  class="text-[10px] tracking-wider text-[#aab5be] uppercase"
+                >
                   {t(I18N_KEYS.LoginSentinelCardStackThresholdPolicy)}
                 </span>
                 <span
@@ -653,7 +676,9 @@
                       class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
                       data-testid="sentinel-genesis-participant-count"
                       data-value={participantCount}
-                      aria-label={t(I18N_KEYS.LoginSentinelGenesisParticipantCount)}
+                      aria-label={t(
+                        I18N_KEYS.LoginSentinelGenesisParticipantCount,
+                      )}
                     >
                       <span>
                         <span class="block text-3xl font-light text-white">
@@ -690,7 +715,8 @@
                 type="button"
                 class="px-2 py-2 text-[10px] font-semibold tracking-wider text-[#aeb8c2] uppercase hover:text-white"
                 data-testid="sentinel-onboarding-policy-back"
-                onclick={() => (onboardingStage = SentinelCardOnboardingStage.Name)}
+                onclick={() =>
+                  (onboardingStage = SentinelCardOnboardingStage.Name)}
               >
                 {t(I18N_KEYS.CommonBack)}
               </button>
@@ -700,7 +726,9 @@
                 data-testid="sentinel-onboarding-continue-devices"
                 onclick={() => void continueToRoster()}
               >
-                {policyLabel(I18N_KEYS.LoginSentinelOnboardingContinueWithDevices)}
+                {policyLabel(
+                  I18N_KEYS.LoginSentinelOnboardingContinueWithDevices,
+                )}
               </button>
             </div>
           </section>
@@ -710,7 +738,8 @@
               disabled={!canFinalize || isBusy || actionBusy}
               class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
               data-testid="sentinel-genesis-finalize"
-              onclick={() => void new DashboardInteraction(finalization).execute()}
+              onclick={() =>
+                void new DashboardInteraction(finalization).execute()}
             >
               {#if actionBusy}<RefreshCw
                   class="mr-2 inline size-4 animate-spin"
@@ -757,7 +786,8 @@
               type="button"
               class="mt-5"
               data-testid="sentinel-genesis-delivery-complete"
-              disabled={memberDeliveries.length === 0 || !deliveriesAcknowledged}
+              disabled={memberDeliveries.length === 0 ||
+                !deliveriesAcknowledged}
               onclick={async () => {
                 const completed = await onCompleteDelivery()
                 if (completed.isErr())
@@ -771,7 +801,9 @@
       </div>
 
       <div data-testid="sentinel-onboarding-summary-column">
-        <p class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase">
+        <p
+          class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
+        >
           {t(I18N_KEYS.LoginSentinelCardStackActiveConfiguration)}
         </p>
         <div
@@ -791,7 +823,9 @@
             >
               {status === SentinelGenesisPhase.Inactive
                 ? t(I18N_KEYS.LoginSentinelCardStackPreGenesis)
-                : t(sentinel_genesis_phase_translation_key(status)).toUpperCase()}
+                : t(
+                    sentinel_genesis_phase_translation_key(status),
+                  ).toUpperCase()}
             </span>
           </div>
 
@@ -825,10 +859,14 @@
                 {onboardingStage === SentinelCardOnboardingStage.Identity ||
                 onboardingStage === SentinelCardOnboardingStage.Name
                   ? t(I18N_KEYS.LoginSentinelOnboardingNotSet)
-                  : policyLabel(I18N_KEYS.LoginSentinelOnboardingThresholdSummary)}
+                  : policyLabel(
+                      I18N_KEYS.LoginSentinelOnboardingThresholdSummary,
+                    )}
               </dd>
             </div>
-            <div class="border border-white/10 bg-black/10 px-3 py-2 sm:min-w-28">
+            <div
+              class="border border-white/10 bg-black/10 px-3 py-2 sm:min-w-28"
+            >
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >

@@ -58,12 +58,8 @@ export class SecretFormState {
   submitError = $state("");
 
   generationLength = $state(passwordGenerationDefaults.length);
-  generationUppercase = $state(
-    passwordGenerationDefaults.uppercase,
-  );
-  generationLowercase = $state(
-    passwordGenerationDefaults.lowercase,
-  );
+  generationUppercase = $state(passwordGenerationDefaults.uppercase);
+  generationLowercase = $state(passwordGenerationDefaults.lowercase);
   generationNumbers = $state(passwordGenerationDefaults.numbers);
   generationSymbols = $state(passwordGenerationDefaults.symbols);
 

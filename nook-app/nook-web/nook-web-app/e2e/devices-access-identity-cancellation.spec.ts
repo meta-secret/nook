@@ -13,7 +13,9 @@ test.describe('devices and access identity cancellation', () => {
     await connectLocalVault(page)
     await page.getByTestId('header-devices-access-btn').click()
     await page.getByTestId('devices-access-add-identity').click()
-    await expect(page.getByTestId('devices-access-add-identity-flow')).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-add-identity-flow'),
+    ).toBeVisible()
   })
 
   async function identityCreationPending(page: Page): Promise<boolean> {
@@ -26,7 +28,10 @@ test.describe('devices and access identity cancellation', () => {
       const manager = vault.admitManager()
       return manager.isErr()
         ? { ok: false as const, error: manager.error.translationKey }
-        : { ok: true as const, value: manager.value.local_identity_creation_pending }
+        : {
+            ok: true as const,
+            value: manager.value.local_identity_creation_pending,
+          }
     })
     if (!pending.ok) expect.fail(pending.error)
     return pending.value
@@ -87,6 +92,8 @@ test.describe('devices and access identity cancellation', () => {
     await expect.poll(() => deviceProtectionVerifying(page)).toBe(false)
     await expect.poll(() => identityCreationPending(page)).toBe(false)
     await page.getByTestId('header-devices-access-btn').click()
-    await expect(page.getByTestId('devices-access-identity-option')).toHaveCount(1)
+    await expect(
+      page.getByTestId('devices-access-identity-option'),
+    ).toHaveCount(1)
   })
 })

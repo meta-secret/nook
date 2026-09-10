@@ -91,7 +91,9 @@
     if (sentinelVisibility.isErr())
       vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
   })
-  const presentedVaultType = $derived(new SentinelUnlockActions(vault).vaultType())
+  const presentedVaultType = $derived(
+    new SentinelUnlockActions(vault).vaultType(),
+  )
   const hidePasswordUnlock = $derived(
     showSentinelCeremony ||
       presentedVaultType.isErr() ||

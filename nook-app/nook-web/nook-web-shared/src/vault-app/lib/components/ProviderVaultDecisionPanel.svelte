@@ -7,7 +7,12 @@
     ProviderVaultDecisionReason,
     ProviderVaultIdentityEligibility,
   } from '$app-wasm'
-  import { CheckCircle2, CircleHelp, Fingerprint, RefreshCw } from '@lucide/svelte'
+  import {
+    CheckCircle2,
+    CircleHelp,
+    Fingerprint,
+    RefreshCw,
+  } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
@@ -33,7 +38,9 @@
     localStoreId: string
     remoteStoreId: string
     isBusy: boolean
-    onImport: (selection: ProviderVaultIdentitySelection) => void | Promise<void>
+    onImport: (
+      selection: ProviderVaultIdentitySelection,
+    ) => void | Promise<void>
     onCancel: () => void | Promise<void>
   } = $props()
 
@@ -54,23 +61,27 @@
       : [],
   )
   const identitySelectionRequired = $derived(preparedIdentities.length > 1)
-  const importIdentitySelection = $derived.by((): ProviderVaultIdentitySelection => {
-    if (
-      identitySelection.kind === ProviderVaultIdentitySelectionKind.Selected ||
-      preparedIdentities.length !== 1
-    ) {
-      return identitySelection
-    }
-    return {
-      kind: ProviderVaultIdentitySelectionKind.Selected,
-      identityId: preparedIdentities[0]!.identityId,
-    }
-  })
+  const importIdentitySelection = $derived.by(
+    (): ProviderVaultIdentitySelection => {
+      if (
+        identitySelection.kind ===
+          ProviderVaultIdentitySelectionKind.Selected ||
+        preparedIdentities.length !== 1
+      ) {
+        return identitySelection
+      }
+      return {
+        kind: ProviderVaultIdentitySelectionKind.Selected,
+        identityId: preparedIdentities[0]!.identityId,
+      }
+    },
+  )
   const importDisabled = $derived(
     isBusy ||
       evidence.kind !== ProviderVaultEvidenceKind.Ready ||
       (identitySelectionRequired &&
-        identitySelection.kind === ProviderVaultIdentitySelectionKind.NotSelected),
+        identitySelection.kind ===
+          ProviderVaultIdentitySelectionKind.NotSelected),
   )
 
   function selectIdentity(identityId: string): void {
@@ -114,11 +125,12 @@
       .enqueueStorage(() => {
         const manager = vault.admitManager()
         if (manager.isErr()) return Promise.resolve(err(manager.error))
-        const request: ConstructorParameters<typeof ProviderVaultEvidenceReader>[0] =
-          {
-            manager: manager.value,
-            providerStoreId: remoteStoreId,
-          }
+        const request: ConstructorParameters<
+          typeof ProviderVaultEvidenceReader
+        >[0] = {
+          manager: manager.value,
+          providerStoreId: remoteStoreId,
+        }
         return new ProviderVaultEvidenceReader(request).execute()
       })
       .then((result) => {
@@ -143,7 +155,10 @@
     {vault.t(I18N_KEYS.AuthStorageProviderVaultPasskeyExplanation)}
   </p>
   {#if evidence.kind === ProviderVaultEvidenceKind.Loading}
-    <p class="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+    <p
+      class="flex items-center gap-2 text-sm text-muted-foreground"
+      role="status"
+    >
       <RefreshCw class="size-4 animate-spin" />
       {vault.t(I18N_KEYS.AuthStorageProviderVaultChecking)}
     </p>
@@ -181,7 +196,10 @@
       </div>
     </div>
 
-    <section class="space-y-2" aria-labelledby="provider-vault-identities-title">
+    <section
+      class="space-y-2"
+      aria-labelledby="provider-vault-identities-title"
+    >
       <div class="flex items-center gap-2">
         <Fingerprint class="size-4 text-primary" />
         <h3
@@ -220,7 +238,9 @@
                     >
                     {#if identity.isCurrentApp}
                       <span class="text-xs text-primary">
-                        {vault.t(I18N_KEYS.AuthStorageProviderVaultCurrentIdentity)}
+                        {vault.t(
+                          I18N_KEYS.AuthStorageProviderVaultCurrentIdentity,
+                        )}
                       </span>
                     {/if}
                   </span>

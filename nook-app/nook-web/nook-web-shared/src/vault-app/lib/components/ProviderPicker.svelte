@@ -1,13 +1,13 @@
 <script lang="ts">
   type ProviderDescriptionRequest = {
-    readonly key: string;
-    readonly request: ProviderSetupRequest;
-  };
+    readonly key: string
+    readonly request: ProviderSetupRequest
+  }
 
-  import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { ReplicationType } from "$app-wasm";
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { ReplicationType } from '$app-wasm'
 
-  import { Cloud, FolderOpen, HardDrive } from "@lucide/svelte";
+  import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
   import {
     configuredOAuthFile,
     DEFAULT_DRIVE_BACKUP_NAME,
@@ -23,9 +23,9 @@
     storedGithubRepository,
     type ProviderSetupRequest,
     type StorageProvider,
-  } from "$lib/auth/providers";
-  import { provider_replication_capability } from "$lib/vault/architecture-model";
-  import type { VaultState } from "$lib/vault.svelte";
+  } from '$lib/auth/providers'
+  import { provider_replication_capability } from '$lib/vault/architecture-model'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
@@ -33,85 +33,85 @@
     excludeLocal = false,
     excludeLocalFolder = false,
   }: {
-    vault: VaultState;
-    onSelect: (request: ProviderSetupRequest) => void;
-    excludeLocal?: boolean;
-    excludeLocalFolder?: boolean;
-  } = $props();
+    vault: VaultState
+    onSelect: (request: ProviderSetupRequest) => void
+    excludeLocal?: boolean
+    excludeLocalFolder?: boolean
+  } = $props()
 
-  const localFolderUnavailable = $derived(!vault.localFolderBackupSupported);
+  const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
   const localProviderRequest: Parameters<typeof blocked>[0] = {
     type: LOCAL_PROVIDER_TYPE,
-  };
+  }
   const localFolderProviderRequest: Parameters<typeof blocked>[0] = {
     type: LOCAL_FOLDER_PROVIDER_TYPE,
-  };
+  }
   const googleDriveProviderRequest: Parameters<typeof blocked>[0] = {
     type: OAUTH_FILE_PROVIDER_TYPE,
     oauthPreset: GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-  };
+  }
   const iCloudProviderRequest: Parameters<typeof blocked>[0] = {
     type: OAUTH_FILE_PROVIDER_TYPE,
     oauthPreset: ICLOUD_OAUTH_FILE_PRESET,
-  };
+  }
   const githubProviderRequest: Parameters<typeof blocked>[0] = {
     type: GITHUB_PROVIDER_TYPE,
-  };
+  }
 
   function draftProvider(request: ProviderSetupRequest): StorageProvider {
-    const { type } = request;
+    const { type } = request
     const oauthPreset =
-      type === OAUTH_FILE_PROVIDER_TYPE ? request.oauthPreset : "default";
+      type === OAUTH_FILE_PROVIDER_TYPE ? request.oauthPreset : 'default'
     const base: StorageProvider = {
       ...providerPersistenceDefaults(),
-      id: `draft-${type}-${((...[v = "default"]) => v)(oauthPreset)}`,
+      id: `draft-${type}-${((...[v = 'default']) => v)(oauthPreset)}`,
       type,
       label: type,
-      syncCheckpoint: { state: "neverSynced" },
+      syncCheckpoint: { state: 'neverSynced' },
       createdAt: new Date(0).toISOString(),
-    };
+    }
     if (type === GITHUB_PROVIDER_TYPE) {
       return {
         ...base,
-        githubPat: storedGithubPat("github_pat_draft"),
-        githubRepo: storedGithubRepository("nook"),
-      };
+        githubPat: storedGithubPat('github_pat_draft'),
+        githubRepo: storedGithubRepository('nook'),
+      }
     }
     if (type === OAUTH_FILE_PROVIDER_TYPE) {
       const defaultConfigRequest: Parameters<typeof defaultOAuthFileConfig>[0] =
         {
           preset: request.oauthPreset,
           fileName: DEFAULT_DRIVE_BACKUP_NAME,
-        };
+        }
       return {
         ...base,
         oauthFile: configuredOAuthFile(
           defaultOAuthFileConfig(defaultConfigRequest),
         ),
-      };
+      }
     }
-    return base;
+    return base
   }
 
   function blocked(request: ProviderSetupRequest): boolean {
-    const draftProviderArgs: Parameters<typeof draftProvider>[0] = request;
+    const draftProviderArgs: Parameters<typeof draftProvider>[0] = request
     const result = provider_replication_capability(
       draftProvider(draftProviderArgs),
-    );
+    )
     try {
       return vault.draftReplicationType === ReplicationType.Shared
         ? !result.supportsShared
-        : !result.supportsPersonal;
+        : !result.supportsPersonal
     } finally {
-      result.free();
+      result.free()
     }
   }
 
   function description({ key, request }: ProviderDescriptionRequest): string {
     if (blocked(request)) {
-      return vault.t(I18N_KEYS.ProviderPickerUnsupportedReplicationDesc);
+      return vault.t(I18N_KEYS.ProviderPickerUnsupportedReplicationDesc)
     }
-    return vault.t(key);
+    return vault.t(key)
   }
 </script>
 
@@ -142,8 +142,8 @@
                 const descriptionRequest: Parameters<typeof description>[0] = {
                   key: I18N_KEYS.ProviderPickerThisDeviceDesc,
                   request: localProviderRequest,
-                };
-                return description(descriptionRequest);
+                }
+                return description(descriptionRequest)
               })()}
             </span>
           </span>
@@ -160,7 +160,7 @@
             blocked(localFolderProviderRequest)}
           onclick={() => {
             if (!localFolderUnavailable && !blocked(localFolderProviderRequest))
-              onSelect(localFolderProviderRequest);
+              onSelect(localFolderProviderRequest)
           }}
         >
           <FolderOpen class="size-4 shrink-0 text-foreground" />
@@ -177,8 +177,8 @@
                     >[0] = {
                       key: I18N_KEYS.ProviderPickerLocalFolderDesc,
                       request: localFolderProviderRequest,
-                    };
-                    return description(descriptionRequest);
+                    }
+                    return description(descriptionRequest)
                   })()}
             </span>
           </span>
@@ -193,7 +193,7 @@
         disabled={blocked(googleDriveProviderRequest)}
         onclick={() => {
           if (!blocked(googleDriveProviderRequest))
-            onSelect(googleDriveProviderRequest);
+            onSelect(googleDriveProviderRequest)
         }}
       >
         <svg
@@ -227,8 +227,8 @@
               const descriptionRequest: Parameters<typeof description>[0] = {
                 key: I18N_KEYS.ProviderPickerGoogleDriveDesc,
                 request: googleDriveProviderRequest,
-              };
-              return description(descriptionRequest);
+              }
+              return description(descriptionRequest)
             })()}
           </span>
         </span>
@@ -241,7 +241,7 @@
         data-testid="provider-option-icloud"
         disabled={blocked(iCloudProviderRequest)}
         onclick={() => {
-          if (!blocked(iCloudProviderRequest)) onSelect(iCloudProviderRequest);
+          if (!blocked(iCloudProviderRequest)) onSelect(iCloudProviderRequest)
         }}
       >
         <svg
@@ -263,8 +263,8 @@
               const descriptionRequest: Parameters<typeof description>[0] = {
                 key: I18N_KEYS.ProviderPickerIcloudDesc,
                 request: iCloudProviderRequest,
-              };
-              return description(descriptionRequest);
+              }
+              return description(descriptionRequest)
             })()}
           </span>
         </span>
@@ -277,7 +277,7 @@
         data-testid="provider-option-github"
         disabled={blocked(githubProviderRequest)}
         onclick={() => {
-          if (!blocked(githubProviderRequest)) onSelect(githubProviderRequest);
+          if (!blocked(githubProviderRequest)) onSelect(githubProviderRequest)
         }}
       >
         <Cloud class="size-4 shrink-0 text-foreground" />
@@ -290,8 +290,8 @@
               const descriptionRequest: Parameters<typeof description>[0] = {
                 key: I18N_KEYS.ProviderPickerGithubDesc,
                 request: githubProviderRequest,
-              };
-              return description(descriptionRequest);
+              }
+              return description(descriptionRequest)
             })()}
           </span>
         </span>

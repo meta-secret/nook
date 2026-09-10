@@ -603,5 +603,4 @@ export class ModuleEvidenceBoundary {
 }
 
 type DigestValue =
-  | EvidenceArtifactDigestContent
-  | EvidenceSourceProvenanceContent;
+  EvidenceArtifactDigestContent | EvidenceSourceProvenanceContent;

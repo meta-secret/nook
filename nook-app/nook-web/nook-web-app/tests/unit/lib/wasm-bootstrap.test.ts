@@ -7,7 +7,7 @@ const wasm = vi.hoisted(() => ({
   manager: vi.fn(),
 }))
 vi.mock('$app-wasm', async (importOriginal) => ({
-  ...await importOriginal<typeof import('$app-wasm')>(),
+  ...(await importOriginal<typeof import('$app-wasm')>()),
   default: wasm.initialize,
   configure_vault_application: wasm.configure,
   NookVaultManager: wasm.manager,
@@ -17,7 +17,9 @@ class EngineInitialization {
   readonly completion: Promise<void>
   finish: () => void = () => {}
   constructor() {
-    this.completion = new Promise((resolve) => { this.finish = resolve })
+    this.completion = new Promise((resolve) => {
+      this.finish = resolve
+    })
   }
 }
 
@@ -30,10 +32,12 @@ afterEach(() => {
 describe('vault engine startup results', () => {
   test('initialization rejection returns a concrete failure without creating a manager', async () => {
     wasm.initialize.mockRejectedValueOnce('host initialization unavailable')
-    const { VaultManagerStartup, VaultEngineFailure } = await import('$lib/runtime/wasm-bootstrap')
+    const { VaultManagerStartup, VaultEngineFailure } =
+      await import('$lib/runtime/wasm-bootstrap')
     const result = await new VaultManagerStartup(VaultApplication.Simple).open()
     expect(result.isErr()).toBe(true)
-    if (result.isErr()) expect(result.error).toBe(VaultEngineFailure.Initialization)
+    if (result.isErr())
+      expect(result.error).toBe(VaultEngineFailure.Initialization)
     expect(wasm.manager).not.toHaveBeenCalled()
   })
 
@@ -41,7 +45,8 @@ describe('vault engine startup results', () => {
     vi.useFakeTimers()
     const initialization = new EngineInitialization()
     wasm.initialize.mockReturnValueOnce(initialization.completion)
-    const { VaultManagerStartup, VaultEngineFailure } = await import('$lib/runtime/wasm-bootstrap')
+    const { VaultManagerStartup, VaultEngineFailure } =
+      await import('$lib/runtime/wasm-bootstrap')
     const opening = new VaultManagerStartup(VaultApplication.Simple).open()
     await vi.advanceTimersByTimeAsync(15000)
     const result = await opening

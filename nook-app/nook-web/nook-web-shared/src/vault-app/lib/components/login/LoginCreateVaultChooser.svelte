@@ -103,7 +103,9 @@
     onReceiveSentinelGenesisShare?: (
       sharePayload: string,
     ) => Promise<SentinelActionResult<void>>
-    onCompleteSentinelGenesisDelivery?: () => Promise<SentinelActionResult<void>>
+    onCompleteSentinelGenesisDelivery?: () => Promise<
+      SentinelActionResult<void>
+    >
     sentinelGenesisPhase?: SentinelGenesisPhase
     sentinelGenesisRequest?: string
     sentinelGenesisParticipants?: NookSentinelGenesisParticipantStatus[]
@@ -112,12 +114,16 @@
     sentinelParticipantResponsePending?: boolean
     sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
-    onAcceptSentinelOnboardingPackage?: (packageJson: string) => void | Promise<void>
+    onAcceptSentinelOnboardingPackage?: (
+      packageJson: string,
+    ) => void | Promise<void>
     onFinishSentinelInvitation?: () => void
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  let wizardStep = $state<VaultCreationWizardStep>(VaultCreationWizardStep.Choose)
+  let wizardStep = $state<VaultCreationWizardStep>(
+    VaultCreationWizardStep.Choose,
+  )
   let chosenPath = $state<ChosenVaultPath>(ChosenVaultPath.Undecided)
   let vaultName = $state('')
   let sentinelName = $state('')
@@ -185,7 +191,9 @@
       return
     }
     if (sentinelGenesisPhase !== SentinelGenesisPhase.Inactive) {
-      if (sentinelDashboardState.kind === SentinelDashboardChoiceKind.NotChosen) {
+      if (
+        sentinelDashboardState.kind === SentinelDashboardChoiceKind.NotChosen
+      ) {
         sentinelDashboardState = {
           kind: SentinelDashboardChoiceKind.Chosen,
           dashboard: SentinelDashboard.CardStack,
@@ -205,7 +213,9 @@
       threshold: sentinelThreshold,
     }),
   )
-  const sentinelPolicyValid = $derived(sentinelPolicy.admission.kind === 'accepted')
+  const sentinelPolicyValid = $derived(
+    sentinelPolicy.admission.kind === 'accepted',
+  )
   const sentinelDashboardActive = $derived(
     sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen &&
       (wizardStep === VaultCreationWizardStep.SentinelPolicy ||
@@ -319,7 +329,8 @@
       const payload = await onCreateSentinelGenesisPublicKeyAnnouncement()
       if (payload.isErr()) {
         initiatorPasskeyRequested =
-          payload.error.kind === VaultStorageFailureKind.DeviceAuthorizationRequired
+          payload.error.kind ===
+          VaultStorageFailureKind.DeviceAuthorizationRequired
         vault.errorMsg = vault.t(payload.error.translationKey)
         return
       }
@@ -388,7 +399,12 @@
   }
 
   async function startSentinelGenesis(): Promise<boolean> {
-    if (!sentinelNameReady || !sentinelPolicyValid || isBusy || sentinelActionBusy) {
+    if (
+      !sentinelNameReady ||
+      !sentinelPolicyValid ||
+      isBusy ||
+      sentinelActionBusy
+    ) {
       return false
     }
     sentinelActionBusy = true
@@ -459,20 +475,32 @@
         return onAddSentinelGenesisParticipantResponse
           ? onAddSentinelGenesisParticipantResponse(participantRequest)
           : Promise.resolve(
-              err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+              err(
+                new VaultStorageFailure(
+                  VaultStorageFailureKind.OperationFailed,
+                ),
+              ),
             )
       }}
       onFinalize={() =>
         onFinalizeSentinelGenesis
           ? onFinalizeSentinelGenesis()
           : Promise.resolve(
-              err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+              err(
+                new VaultStorageFailure(
+                  VaultStorageFailureKind.OperationFailed,
+                ),
+              ),
             )}
       onCompleteDelivery={() =>
         onCompleteSentinelGenesisDelivery
           ? onCompleteSentinelGenesisDelivery()
           : Promise.resolve(
-              err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+              err(
+                new VaultStorageFailure(
+                  VaultStorageFailureKind.OperationFailed,
+                ),
+              ),
             )}
     />
   {:else if sentinelDashboardActive && dashboardIs(SentinelDashboard.Terminal)}
@@ -495,20 +523,32 @@
         return onAddSentinelGenesisParticipantResponse
           ? onAddSentinelGenesisParticipantResponse(participantRequest)
           : Promise.resolve(
-              err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+              err(
+                new VaultStorageFailure(
+                  VaultStorageFailureKind.OperationFailed,
+                ),
+              ),
             )
       }}
       onFinalize={() =>
         onFinalizeSentinelGenesis
           ? onFinalizeSentinelGenesis()
           : Promise.resolve(
-              err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+              err(
+                new VaultStorageFailure(
+                  VaultStorageFailureKind.OperationFailed,
+                ),
+              ),
             )}
       onCompleteDelivery={() =>
         onCompleteSentinelGenesisDelivery
           ? onCompleteSentinelGenesisDelivery()
           : Promise.resolve(
-              err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+              err(
+                new VaultStorageFailure(
+                  VaultStorageFailureKind.OperationFailed,
+                ),
+              ),
             )}
     />
   {:else}
@@ -531,11 +571,15 @@
         >
           {vault.t(I18N_KEYS.LoginLandingHeadline)}
         </h1>
-        <p class="max-w-md text-base leading-7 text-muted-foreground text-pretty">
+        <p
+          class="max-w-md text-base leading-7 text-muted-foreground text-pretty"
+        >
           {landingSupporting}
         </p>
 
-        <div class="relative mt-8 grid min-h-[10rem] place-items-center lg:hidden">
+        <div
+          class="relative mt-8 grid min-h-[10rem] place-items-center lg:hidden"
+        >
           <VaultSecurityOrbit compact />
         </div>
       </div>
@@ -565,10 +609,14 @@
               data-testid="sentinel-dashboard-header"
             >
               <div>
-                <p class="text-[10px] tracking-[0.22em] text-current/60 uppercase">
+                <p
+                  class="text-[10px] tracking-[0.22em] text-current/60 uppercase"
+                >
                   {vault.t(I18N_KEYS.LoginSentinelDashboardWorkspaceEyebrow)}
                 </p>
-                <h2 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                <h2
+                  class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl"
+                >
                   {dashboardIs(SentinelDashboard.Terminal)
                     ? vault.t(I18N_KEYS.LoginSentinelDashboardTerminalTitle)
                     : vault.t(I18N_KEYS.LoginSentinelDashboardCardStackTitle)}
@@ -714,7 +762,9 @@
                               class="mb-3 flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
                             >
                               <span class="text-center text-xs">
-                                {vault.t(I18N_KEYS.LoginExistingVaultAlternative)}
+                                {vault.t(
+                                  I18N_KEYS.LoginExistingVaultAlternative,
+                                )}
                               </span>
                             </div>
                             <button
@@ -775,7 +825,9 @@
                             }}
                           />
                           {#if vaultNameReady}
-                            <p class="text-sm text-pretty text-muted-foreground">
+                            <p
+                              class="text-sm text-pretty text-muted-foreground"
+                            >
                               {(() => {
                                 const tArgs2: Parameters<typeof vault.t>[0] = {
                                   key: usesExtensionDeviceIdentity
@@ -831,7 +883,9 @@
                             data-testid="sentinel-dashboard-card-stack"
                             disabled={isBusy}
                             onclick={() =>
-                              chooseSentinelDashboard(SentinelDashboard.CardStack)}
+                              chooseSentinelDashboard(
+                                SentinelDashboard.CardStack,
+                              )}
                           >
                             <span
                               class="mb-4 grid size-10 place-items-center rounded-lg bg-foreground text-background"
@@ -859,7 +913,9 @@
                             data-testid="sentinel-dashboard-terminal"
                             disabled={isBusy}
                             onclick={() =>
-                              chooseSentinelDashboard(SentinelDashboard.Terminal)}
+                              chooseSentinelDashboard(
+                                SentinelDashboard.Terminal,
+                              )}
                           >
                             <span
                               class="mb-4 grid size-10 place-items-center rounded-lg border border-[#b7ff95]/30 bg-[#b7ff95]/10"

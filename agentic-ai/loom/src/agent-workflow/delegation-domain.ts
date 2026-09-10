@@ -324,8 +324,7 @@ export type DelegationAttemptAdmittedEvent = DelegationRunEventMetadata & {
 };
 
 export type DelegationRunEvent =
-  | DelegationPlanDeclaredEvent
-  | DelegationAttemptAdmittedEvent;
+  DelegationPlanDeclaredEvent | DelegationAttemptAdmittedEvent;
 
 export type DelegationIdentityPair = {
   readonly first: DelegationAttemptIdentity;

@@ -56,9 +56,7 @@ type LegacyLineageHybridNode = LegacyModuleDeliveryNode & {
 };
 
 type LegacyAdversarialNode =
-  | LegacySynthesisNode
-  | LegacyOwnerHybridNode
-  | LegacyLineageHybridNode;
+  LegacySynthesisNode | LegacyOwnerHybridNode | LegacyLineageHybridNode;
 
 type LegacyAdversarialPlan = Omit<LegacyModuleDeliveryPlan, 'nodes'> & {
   readonly nodes: readonly LegacyAdversarialNode[];

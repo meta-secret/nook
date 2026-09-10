@@ -9,39 +9,39 @@ on request.
     Fingerprint,
     MonitorSmartphone,
     Pencil,
-  } from "@lucide/svelte";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { Button } from "$lib/components/ui/button";
-  import type { VaultState } from "$lib/vault.svelte";
-  import type { DashboardView } from "../devices-access-dashboard-state";
-  import type { IdentityDirectoryEntry } from "./identity-directory-view";
+  } from '@lucide/svelte'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { Button } from '$lib/components/ui/button'
+  import type { VaultState } from '$lib/vault.svelte'
+  import type { DashboardView } from '../devices-access-dashboard-state'
+  import type { IdentityDirectoryEntry } from './identity-directory-view'
   import {
     IdentityKeyInventory,
     IdentityKeyInventoryRowKind,
-  } from "./identity-key-inventory";
-  import { PasskeyCardFactKind, PasskeyCardSummaryKind } from "./passkey-card";
+  } from './identity-key-inventory'
+  import { PasskeyCardFactKind, PasskeyCardSummaryKind } from './passkey-card'
 
   type IdentityKeyInventoryProps = {
-    vault: VaultState;
-    identity: IdentityDirectoryEntry;
-    view: DashboardView;
-    onRenamePasskey: (name: string) => Promise<boolean>;
-  };
+    vault: VaultState
+    identity: IdentityDirectoryEntry
+    view: DashboardView
+    onRenamePasskey: (name: string) => Promise<boolean>
+  }
 
   let { vault, identity, view, onRenamePasskey }: IdentityKeyInventoryProps =
-    $props();
-  let editingPasskey = $state(false);
-  let passkeyDraft = $state("");
-  let savingPasskey = $state(false);
-  let editingIdentityId = $state("");
+    $props()
+  let editingPasskey = $state(false)
+  let passkeyDraft = $state('')
+  let savingPasskey = $state(false)
+  let editingIdentityId = $state('')
 
   $effect(() => {
-    const currentIdentityId = identity.identityId;
-    if (editingIdentityId === currentIdentityId) return;
-    editingIdentityId = currentIdentityId;
-    editingPasskey = false;
-    passkeyDraft = "";
-  });
+    const currentIdentityId = identity.identityId
+    if (editingIdentityId === currentIdentityId) return
+    editingIdentityId = currentIdentityId
+    editingPasskey = false
+    passkeyDraft = ''
+  })
 
   const rows = $derived.by(() => {
     const inventoryArgs: ConstructorParameters<typeof IdentityKeyInventory>[0] =
@@ -49,29 +49,29 @@ on request.
         vault,
         identity,
         view,
-      };
-    return new IdentityKeyInventory(inventoryArgs).rows;
-  });
+      }
+    return new IdentityKeyInventory(inventoryArgs).rows
+  })
 
   function keysHeading(): string {
     const headingArgs: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.DevicesAccessKeysForIdentity,
       replacements: { identity: identity.label },
-    };
-    return vault.t(headingArgs);
+    }
+    return vault.t(headingArgs)
   }
 
   function beginPasskeyRename(name: string): void {
-    passkeyDraft = name;
-    editingPasskey = true;
+    passkeyDraft = name
+    editingPasskey = true
   }
 
   async function savePasskeyRename(): Promise<void> {
-    if (savingPasskey) return;
-    savingPasskey = true;
-    const saved = await onRenamePasskey(passkeyDraft);
-    savingPasskey = false;
-    if (saved) editingPasskey = false;
+    if (savingPasskey) return
+    savingPasskey = true
+    const saved = await onRenamePasskey(passkeyDraft)
+    savingPasskey = false
+    if (saved) editingPasskey = false
   }
 </script>
 

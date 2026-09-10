@@ -59,7 +59,9 @@ export type ExtensionLifecycleRoutingDependencies = {
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
 }
 
-type MessageResponse = Parameters<ExtensionLifecycleRoutingArgs['sendResponse']>[0]
+type MessageResponse = Parameters<
+  ExtensionLifecycleRoutingArgs['sendResponse']
+>[0]
 
 const forbiddenSenderResponse: MessageResponse = {
   ok: false,
@@ -172,10 +174,12 @@ async function clearAuthorizationState({
 export async function recoverInterruptedAuthorizationCleanup(
   dependencies: ExtensionLifecycleRoutingDependencies,
 ): Promise<AuthorizationCleanupResult> {
-  const pendingLookup = dependencies.accountPickerAuthorizationCleanupPending().then(
-    (pending) => ({ kind: 'resolved' as const, pending }),
-    () => ({ kind: 'rejected' as const }),
-  )
+  const pendingLookup = dependencies
+    .accountPickerAuthorizationCleanupPending()
+    .then(
+      (pending) => ({ kind: 'resolved' as const, pending }),
+      () => ({ kind: 'rejected' as const }),
+    )
   const cleanup = await dependencies.beginAccountPickerAuthorizationCleanup()
   const lookup = await pendingLookup
   if (lookup.kind === 'rejected') {
@@ -185,10 +189,11 @@ export async function recoverInterruptedAuthorizationCleanup(
     return err([AuthorizationCleanupFailureKind.MarkerLookupFailed])
   }
   if (!lookup.pending) {
-    const outcome = await dependencies.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      CleanupEvidence.Partial,
-    )
+    const outcome =
+      await dependencies.completeAccountPickerAuthorizationCleanup(
+        cleanup.authorizationGeneration,
+        CleanupEvidence.Partial,
+      )
     return 'error' in outcome
       ? err([AuthorizationCleanupFailureKind.Rejected])
       : ok(undefined)
@@ -252,7 +257,9 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     void ensureExtensionSessionDocument().then((opened) =>
-      sendResponse(opened.isOk() ? successResponse : sessionRuntimeFailureResponse),
+      sendResponse(
+        opened.isOk() ? successResponse : sessionRuntimeFailureResponse,
+      ),
     )
     return true
   }
@@ -289,7 +296,9 @@ export function routeExtensionLifecycleMessage({
     }
     void clearAuthorizationState(cleanupArgs)
       .then((cleanup) =>
-        sendResponse(cleanup.isOk() ? successResponse : sessionLockFailureResponse),
+        sendResponse(
+          cleanup.isOk() ? successResponse : sessionLockFailureResponse,
+        ),
       )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
@@ -315,7 +324,9 @@ export function routeExtensionLifecycleMessage({
     }
     void clearAuthorizationState(cleanupArgs)
       .then((cleanup) =>
-        sendResponse(cleanup.isOk() ? successResponse : sessionLockFailureResponse),
+        sendResponse(
+          cleanup.isOk() ? successResponse : sessionLockFailureResponse,
+        ),
       )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
@@ -432,7 +443,9 @@ export function routeExtensionLifecycleMessage({
     NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage(
       message,
     )
-  if (launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized) {
+  if (
+    launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
+  ) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false

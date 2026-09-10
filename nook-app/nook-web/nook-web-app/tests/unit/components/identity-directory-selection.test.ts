@@ -112,7 +112,9 @@ const directorySnapshot = {
   selectionKind: NookIdentityDirectorySelectionKind.Selected,
   selectedIdentityId: 'personal',
   identity: (index: number) =>
-    index === 0 ? identitySnapshot(identities[0]) : identitySnapshot(identities[1]),
+    index === 0
+      ? identitySnapshot(identities[0])
+      : identitySnapshot(identities[1]),
   device_access: () => accessSnapshot,
   free,
 }
@@ -164,9 +166,13 @@ describe('identity directory selection', () => {
 
     expect(rendered.getByRole('heading', { name: 'Work' })).toBeTruthy()
     expect(rendered.getByText('Nook on work phone')).toBeTruthy()
-    expect(rendered.getByTestId('devices-access-other-identity-notice')).toBeTruthy()
     expect(
-      rendered.getByTestId('devices-access-layout-graph').hasAttribute('disabled'),
+      rendered.getByTestId('devices-access-other-identity-notice'),
+    ).toBeTruthy()
+    expect(
+      rendered
+        .getByTestId('devices-access-layout-graph')
+        .hasAttribute('disabled'),
     ).toBe(true)
     expect(
       rendered
@@ -207,7 +213,9 @@ describe('identity directory selection', () => {
       ).toBe('true'),
     )
     expect(
-      rendered.getByTestId('devices-access-layout-graph').hasAttribute('disabled'),
+      rendered
+        .getByTestId('devices-access-layout-graph')
+        .hasAttribute('disabled'),
     ).toBe(true)
     expect(rendered.getByTestId('devices-access-key-inventory')).toBeTruthy()
   })

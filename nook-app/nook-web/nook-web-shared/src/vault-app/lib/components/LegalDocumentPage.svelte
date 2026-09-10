@@ -1,39 +1,39 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { ChevronLeft } from "@lucide/svelte";
-  import MarkdownContent from "$lib/components/MarkdownContent.svelte";
-  import { Button } from "$lib/components/ui/button";
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { ChevronLeft } from '@lucide/svelte'
+  import MarkdownContent from '$lib/components/MarkdownContent.svelte'
+  import { Button } from '$lib/components/ui/button'
   import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-  } from "$lib/components/ui/card";
+  } from '$lib/components/ui/card'
   import {
     LegalPageId,
     ApplicationRoutePresentation,
     LegalPageSelection,
-  } from "$lib/content/legal";
-  import type { VaultState } from "$lib/vault.svelte";
+  } from '$lib/content/legal'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
     pageId,
     onClose,
   }: {
-    vault: VaultState;
-    pageId: LegalPageId;
-    onClose: () => void;
-  } = $props();
+    vault: VaultState
+    pageId: LegalPageId
+    onClose: () => void
+  } = $props()
 
-  const page = $derived(new LegalPageSelection(pageId).legalPageForId());
+  const page = $derived(new LegalPageSelection(pageId).legalPageForId())
   const otherPageId = $derived<LegalPageId>(
     pageId === LegalPageId.Privacy ? LegalPageId.Terms : LegalPageId.Privacy,
-  );
+  )
   const otherPage = $derived(
     new LegalPageSelection(otherPageId).legalPageForId(),
-  );
+  )
 </script>
 
 <div

@@ -126,8 +126,7 @@ export class SkillProviderGithubScriptExecScenario {
   }
 
   static execCwd([options, member]: readonly [ts.Expression | false, string]):
-    | string
-    | false {
+    string | false {
     if (options === false) return false;
     if (!ts.isObjectLiteralExpression(options))
       throw new Error(`Dynamic github-script ${member} options are forbidden.`);

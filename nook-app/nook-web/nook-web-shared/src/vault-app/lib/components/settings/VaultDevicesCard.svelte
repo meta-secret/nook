@@ -108,7 +108,8 @@
   async function handleExtensionInstall() {
     extensionInstallBusy = true
     try {
-      const target = await extensionInstallationBrowser.loadExtensionInstallTarget()
+      const target =
+        await extensionInstallationBrowser.loadExtensionInstallTarget()
       extensionInstallationBrowser.openExtensionInstallTarget(target)
     } finally {
       extensionInstallBusy = false
@@ -214,13 +215,15 @@
     if (!value || value === 'genesis' || value === 'self-sync')
       return vault.t(I18N_KEYS.DevicesCardEnrolled)
     const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return vault.t(I18N_KEYS.DevicesCardEnrolled)
+    if (Number.isNaN(date.getTime()))
+      return vault.t(I18N_KEYS.DevicesCardEnrolled)
     return `${vault.t(I18N_KEYS.DevicesCardEnrolledDatePrefix)}${date.toLocaleDateString()}`
   }
 
   function formatRequestDate(value: string): string {
     const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return vault.t(I18N_KEYS.DevicesCardRecently)
+    if (Number.isNaN(date.getTime()))
+      return vault.t(I18N_KEYS.DevicesCardRecently)
     return date.toLocaleDateString()
   }
 
@@ -298,7 +301,9 @@
               key: I18N_KEYS.ExtensionSetupConnectedVault,
               replacements: {
                 vault: ((v) => (v ? v : ''))(extensionSetup.connectedVaultName),
-                store: ((v) => (v ? v : ''))(extensionSetup.connectedVaultStoreId),
+                store: ((v) => (v ? v : ''))(
+                  extensionSetup.connectedVaultStoreId,
+                ),
               },
             }
             return vault.t(tArgs)
@@ -624,7 +629,8 @@
                   variant="ghost"
                   class="px-2 text-muted-foreground"
                   aria-label={vault.t(I18N_KEYS.DevicesCardToggleDetails)}
-                  aria-expanded={detailsAuthId.kind === MemberDetailsKind.Expanded &&
+                  aria-expanded={detailsAuthId.kind ===
+                    MemberDetailsKind.Expanded &&
                     detailsAuthId.authId === member.authId}
                   data-testid="device-details-toggle"
                   onclick={() =>
@@ -686,7 +692,9 @@
                       onclick={() =>
                         void onRevokeDevice(member.authId).then((result) => {
                           if (result.isErr())
-                            vault.errorMsg = vault.t(result.error.translationKey)
+                            vault.errorMsg = vault.t(
+                              result.error.translationKey,
+                            )
                         })}
                     >
                       {vault.t(I18N_KEYS.DevicesCardRevoke)}

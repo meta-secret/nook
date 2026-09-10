@@ -97,7 +97,9 @@ describe('SessionOperationQueue results', () => {
   })
   test('continues after an explicit operation failure', async () => {
     const queue = new SessionOperationQueue()
-    const failure = new SessionOperationFailure(SessionOperationFailureKind.Failed)
+    const failure = new SessionOperationFailure(
+      SessionOperationFailureKind.Failed,
+    )
     expect(
       await queue.enqueue({
         operation: async () => err(failure),
@@ -114,7 +116,9 @@ describe('SessionOperationQueue results', () => {
   test('closing clears queued input and rejects subsequent enqueue', async () => {
     const fixture = new QueueFixture()
     const queued = fixture.enqueue(Date.now() + 60000)
-    const failure = new SessionOperationFailure(SessionOperationFailureKind.Closed)
+    const failure = new SessionOperationFailure(
+      SessionOperationFailureKind.Closed,
+    )
     fixture.queue.close(failure)
     expect(await queued).toEqual(err(failure))
     expect(await fixture.enqueue(Date.now() + 60000)).toEqual(err(failure))

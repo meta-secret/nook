@@ -113,7 +113,9 @@ export class ExtensionAuthenticatorSession {
     }
     if (response.expiresAt <= Date.now()) {
       return err(
-        new AuthenticatorSessionFailure(AuthenticatorSessionFailureKind.ExpiredCode),
+        new AuthenticatorSessionFailure(
+          AuthenticatorSessionFailureKind.ExpiredCode,
+        ),
       )
     }
     return ok(response)
@@ -152,7 +154,9 @@ export class ExtensionAuthenticatorSession {
 
   async stagedAuthenticatorCodeFromSession(
     otpauthUri: string,
-  ): Promise<Result<AuthenticatorCodeSessionResponse, AuthenticatorSessionError>> {
+  ): Promise<
+    Result<AuthenticatorCodeSessionResponse, AuthenticatorSessionError>
+  > {
     try {
       await this.readiness
     } catch {
@@ -180,7 +184,9 @@ export class ExtensionAuthenticatorSession {
     }
     if (response.expiresAt <= Date.now()) {
       return err(
-        new AuthenticatorSessionFailure(AuthenticatorSessionFailureKind.ExpiredCode),
+        new AuthenticatorSessionFailure(
+          AuthenticatorSessionFailureKind.ExpiredCode,
+        ),
       )
     }
     return ok(response)
@@ -257,7 +263,9 @@ export class ExtensionAuthenticatorSession {
       if (delivery.isErr()) return err(delivery.error)
       try {
         return ok(
-          decode_authenticator_backup_verification_session_response(delivery.value),
+          decode_authenticator_backup_verification_session_response(
+            delivery.value,
+          ),
         )
       } catch {
         return err(

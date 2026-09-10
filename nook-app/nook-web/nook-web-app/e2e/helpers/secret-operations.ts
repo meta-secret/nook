@@ -18,7 +18,10 @@ import {
   syncSecretCount,
 } from './local-sync'
 import { assertVaultReady, revealSecretInRow } from './settings-auth'
-import { waitForStorageChainIdle, waitForVaultOperationsIdle } from './vault-runtime'
+import {
+  waitForStorageChainIdle,
+  waitForVaultOperationsIdle,
+} from './vault-runtime'
 
 export async function addSecret(
   page: Page,
@@ -85,7 +88,9 @@ export async function addSecret(
           const activeReq = store.get('active_vault_id')
           activeReq.onerror = () => resolve(`idb-read-error:${activeReq.error}`)
           activeReq.onsuccess = () => {
-            const activeId = String(((v) => (v ? v : ''))(activeReq.result)).trim()
+            const activeId = String(
+              ((v) => (v ? v : ''))(activeReq.result),
+            ).trim()
             if (!activeId) {
               resolve('')
               return
@@ -239,7 +244,8 @@ export async function assertEnrolledVaultOnGithub(
 }
 
 /** @deprecated Use {@link seedOauthFileSyncProvidersWhileUnlocked}. */
-export const seedSyncProvidersWhileUnlocked = seedOauthFileSyncProvidersWhileUnlocked
+export const seedSyncProvidersWhileUnlocked =
+  seedOauthFileSyncProvidersWhileUnlocked
 
 async function synchronizeBrowserVault(page: Page): Promise<void> {
   const failure = await page.evaluate(async () => {

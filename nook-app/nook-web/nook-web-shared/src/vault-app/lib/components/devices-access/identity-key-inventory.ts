@@ -57,9 +57,7 @@ export class IdentityKeyInventory {
     for (const [index, member] of identity.members.entries()) {
       const isCurrent = member.currentBrowser;
       const localProtection =
-        currentIdentity && isCurrent
-          ? view.protection
-          : member.localProtection;
+        currentIdentity && isCurrent ? view.protection : member.localProtection;
       const isLocal = localProtection !== DeviceAccessProtectionKind.Missing;
       const isCompanion =
         isCurrent &&

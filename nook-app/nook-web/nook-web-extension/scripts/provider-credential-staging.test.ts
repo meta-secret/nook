@@ -125,7 +125,9 @@ describe('provider credential staging', () => {
   })
 
   test('rejects values outside serialized external data', async () => {
-    const source = [{ ...providerStagingFixture.github(), metadata: new Date() }]
+    const source = [
+      { ...providerStagingFixture.github(), metadata: new Date() },
+    ]
     expect(await providerStagingFixture.stage(source)).toEqual(
       err(ProviderCredentialFailure.InvalidTransport),
     )

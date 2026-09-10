@@ -32,7 +32,9 @@ vi.mock('qr-scanner', () => ({
 
 const vault = {
   t(request: TranslationRequest): string {
-    const replacements = new TranslationMessage(request).translationReplacements()
+    const replacements = new TranslationMessage(
+      request,
+    ).translationReplacements()
     const values = Object.values(replacements)
     const key = new TranslationMessage(request).translationKey()
     return values.length > 0 ? `${key} ${values.join(' ')}` : key
@@ -57,13 +59,18 @@ describe('KeePassXC import panel', () => {
       onImport,
     })
     const input = view.getByTestId('keepassxc-csv-file') as HTMLInputElement
-    const submit = view.getByTestId('keepassxc-import-submit') as HTMLButtonElement
+    const submit = view.getByTestId(
+      'keepassxc-import-submit',
+    ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
       target: {
         files: [
-          new File(['Group,Title,Username,Password,URL,Notes\n'], 'keepassxc.csv'),
+          new File(
+            ['Group,Title,Username,Password,URL,Notes\n'],
+            'keepassxc.csv',
+          ),
         ],
       },
     })
@@ -99,7 +106,9 @@ describe('LastPass import panel', () => {
       onImport,
     })
     const input = view.getByTestId('lastpass-csv-file') as HTMLInputElement
-    const submit = view.getByTestId('lastpass-import-submit') as HTMLButtonElement
+    const submit = view.getByTestId(
+      'lastpass-import-submit',
+    ) as HTMLButtonElement
     await fireEvent.change(input, {
       target: {
         files: [new File(['url,username,password\n'], 'lastpass.csv')],
@@ -117,7 +126,9 @@ describe('LastPass import panel', () => {
 
     finishImport(importResult())
     await waitFor(() => {
-      expect(view.queryAllByTestId('lastpass-import-panel-progress')).toHaveLength(0)
+      expect(
+        view.queryAllByTestId('lastpass-import-panel-progress'),
+      ).toHaveLength(0)
     })
   })
 
@@ -129,7 +140,9 @@ describe('LastPass import panel', () => {
       onImport,
     })
     const input = view.getByTestId('lastpass-csv-file') as HTMLInputElement
-    const submit = view.getByTestId('lastpass-import-submit') as HTMLButtonElement
+    const submit = view.getByTestId(
+      'lastpass-import-submit',
+    ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
@@ -151,7 +164,9 @@ describe('LastPass import panel', () => {
 
   test('renders import errors and keeps submission disabled while saving', async () => {
     const onImport = vi.fn(async () => {
-      return err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed))
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      )
     })
     const view = render(LastPassImportPanel, {
       vault,
@@ -159,7 +174,9 @@ describe('LastPass import panel', () => {
       onImport,
     })
     const input = view.getByTestId('lastpass-csv-file') as HTMLInputElement
-    const submit = view.getByTestId('lastpass-import-submit') as HTMLButtonElement
+    const submit = view.getByTestId(
+      'lastpass-import-submit',
+    ) as HTMLButtonElement
     await fireEvent.change(input, {
       target: { files: [new File(['invalid'], 'lastpass.csv')] },
     })
@@ -187,7 +204,9 @@ describe('Safari / Apple Passwords import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId('apple-passwords-csv-file') as HTMLInputElement
+    const input = view.getByTestId(
+      'apple-passwords-csv-file',
+    ) as HTMLInputElement
     const submit = view.getByTestId(
       'apple-passwords-import-submit',
     ) as HTMLButtonElement
@@ -224,7 +243,9 @@ describe('Dashlane import panel', () => {
       onImport,
     })
     const input = view.getByTestId('dashlane-export-file') as HTMLInputElement
-    const submit = view.getByTestId('dashlane-import-submit') as HTMLButtonElement
+    const submit = view.getByTestId(
+      'dashlane-import-submit',
+    ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
@@ -257,8 +278,12 @@ describe('Proton Pass import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId('proton-pass-export-file') as HTMLInputElement
-    const submit = view.getByTestId('proton-pass-import-submit') as HTMLButtonElement
+    const input = view.getByTestId(
+      'proton-pass-export-file',
+    ) as HTMLInputElement
+    const submit = view.getByTestId(
+      'proton-pass-import-submit',
+    ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
@@ -272,31 +297,35 @@ describe('Proton Pass import panel', () => {
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
     expect(receivedBytes).toEqual([80, 75, 3, 4])
     await waitFor(() => {
-      expect(view.getByTestId('proton-pass-import-result').textContent).toContain(
-        'proton_pass_import.result_imported 2',
-      )
+      expect(
+        view.getByTestId('proton-pass-import-result').textContent,
+      ).toContain('proton_pass_import.result_imported 2')
     })
   })
 
   test('renders import errors', async () => {
     const onImport = vi.fn(async () => {
-      return err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed))
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      )
     })
     const view = render(ProtonPassImportPanel, {
       vault,
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId('proton-pass-export-file') as HTMLInputElement
+    const input = view.getByTestId(
+      'proton-pass-export-file',
+    ) as HTMLInputElement
     await fireEvent.change(input, {
       target: { files: [new File(['encrypted'], 'proton.zip')] },
     })
     await fireEvent.click(view.getByTestId('proton-pass-import-submit'))
 
     await waitFor(() => {
-      expect(view.getByTestId('proton-pass-import-error').textContent).toContain(
-        I18N_KEYS.AuthStorageSyncFailed,
-      )
+      expect(
+        view.getByTestId('proton-pass-import-error').textContent,
+      ).toContain(I18N_KEYS.AuthStorageSyncFailed)
     })
   })
 })

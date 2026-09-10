@@ -94,7 +94,11 @@ export async function openWebsiteLoginPicker({
           : LoginPickerOpenStatus.Unavailable,
     }
   }
-  if (!sender.tab || !('id' in sender.tab) || typeof sender.tab.id !== 'number') {
+  if (
+    !sender.tab ||
+    !('id' in sender.tab) ||
+    typeof sender.tab.id !== 'number'
+  ) {
     return { ok: false, reason: 'login-picker-tab-missing' }
   }
 
@@ -109,7 +113,9 @@ export async function openWebsiteLoginPicker({
     allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
     expiresAt: Date.now() + LOGIN_PICKER_TTL_MS,
   }
-  const storeArgs: Parameters<typeof accountPickerSessions.storeLoginPicker>[0] = {
+  const storeArgs: Parameters<
+    typeof accountPickerSessions.storeLoginPicker
+  >[0] = {
     request,
     authorizationGeneration,
   }
@@ -192,9 +198,9 @@ export async function queryLoginPicker({
     return { ok: false, reason: 'login-picker-expired' }
   }
   const { request, authorizationGeneration } = loaded
-  const grants = (await extensionPairingIdentity.passwordPairingGrants()).filter(
-    (grant) => request.allowedVaultStoreIds.includes(grant.vaultStoreId),
-  )
+  const grants = (
+    await extensionPairingIdentity.passwordPairingGrants()
+  ).filter((grant) => request.allowedVaultStoreIds.includes(grant.vaultStoreId))
   const nookTypedArgs0_0: Parameters<
     typeof accountPickerSessions.loginAccountsForOrigin
   >[0] = {
@@ -224,7 +230,9 @@ type SelectLoginPickerArgs = {
 export async function selectLoginPicker({
   message,
   sender,
-}: SelectLoginPickerArgs): Promise<LoginOperationSuccess | LoginOperationFailure> {
+}: SelectLoginPickerArgs): Promise<
+  LoginOperationSuccess | LoginOperationFailure
+> {
   if (!accountPickerSessions.isLoginPickerSender(sender)) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
@@ -235,9 +243,9 @@ export async function selectLoginPicker({
     return { ok: false, reason: 'login-picker-expired' }
   }
   const { request, authorizationGeneration } = loaded
-  const grants = (await extensionPairingIdentity.passwordPairingGrants()).filter(
-    (grant) => request.allowedVaultStoreIds.includes(grant.vaultStoreId),
-  )
+  const grants = (
+    await extensionPairingIdentity.passwordPairingGrants()
+  ).filter((grant) => request.allowedVaultStoreIds.includes(grant.vaultStoreId))
   const nookTypedArgs0_1: Parameters<
     typeof accountPickerSessions.loginAccountsForOrigin
   >[0] = {
@@ -294,7 +302,9 @@ type CancelLoginPickerArgs = {
 export async function cancelLoginPicker({
   message,
   sender,
-}: CancelLoginPickerArgs): Promise<LoginOperationSuccess | LoginOperationFailure> {
+}: CancelLoginPickerArgs): Promise<
+  LoginOperationSuccess | LoginOperationFailure
+> {
   const loaded = await accountPickerSessions.loadLoginPicker(
     message.payload.requestId,
   )
@@ -308,7 +318,9 @@ export async function cancelLoginPicker({
     sender,
     origin: request.origin,
   }
-  const websiteFrame: Parameters<typeof AccountPickerPageTarget.matchesSender>[0] = {
+  const websiteFrame: Parameters<
+    typeof AccountPickerPageTarget.matchesSender
+  >[0] = {
     tabId: request.tabId,
     frameId: request.frameId,
     sender,
@@ -762,12 +774,15 @@ export async function websiteLoginFill({
     sender,
     reasons: nookTypedArgs0_16,
   }
-  const access = await accountPickerSessions.authorizedWebsiteGrant(nookTypedArgs0_2)
+  const access =
+    await accountPickerSessions.authorizedWebsiteGrant(nookTypedArgs0_2)
   if ('response' in access) return access.response
   if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
     return { ok: false, reason: 'login-locked' }
   }
-  const nookTypedArgs0_17: Parameters<typeof websiteLoginRevealSessionRequest>[0] = {
+  const nookTypedArgs0_17: Parameters<
+    typeof websiteLoginRevealSessionRequest
+  >[0] = {
     grant: access.grant,
     origin: message.payload.origin,
     secretId: message.payload.secretId,

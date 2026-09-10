@@ -8,10 +8,13 @@ const mocks = vi.hoisted(() => ({
   sendSessionMessage: vi.fn(),
 }))
 
-vi.mock('../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm', () => ({
-  current_code_from_otpauth_uri: mocks.currentCode,
-  preview_otpauth_uri: vi.fn(),
-}))
+vi.mock(
+  '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm',
+  () => ({
+    current_code_from_otpauth_uri: mocks.currentCode,
+    preview_otpauth_uri: vi.fn(),
+  }),
+)
 
 vi.mock(
   '../../../../nook-web-extension/src/background/service-worker/pairing-identity',
@@ -45,23 +48,26 @@ describe('authenticator code expiry transport', () => {
       expiresAtUnixSeconds: 1_725_000_030,
       free,
     })
-    const request: Parameters<typeof handleAuthenticatorEnrollmentMessage>[0] = {
-      message: {
-        type: ExtensionSessionMessageType.AuthenticatorEnrollCode,
-        payload: {
-          otpauthUri:
-            'otpauth://totp/Nook:person@example.test?secret=JBSWY3DPEHPK3PXP',
-          queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    const request: Parameters<typeof handleAuthenticatorEnrollmentMessage>[0] =
+      {
+        message: {
+          type: ExtensionSessionMessageType.AuthenticatorEnrollCode,
+          payload: {
+            otpauthUri:
+              'otpauth://totp/Nook:person@example.test?secret=JBSWY3DPEHPK3PXP',
+            queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+          },
         },
-      },
-      dependencies: {
-        ensureWasm: vi.fn(),
-        getManager: vi.fn(),
-        extensionVaultGrant: vi.fn(),
-      },
-    }
+        dependencies: {
+          ensureWasm: vi.fn(),
+          getManager: vi.fn(),
+          extensionVaultGrant: vi.fn(),
+        },
+      }
 
-    await expect(handleAuthenticatorEnrollmentMessage(request)).resolves.toEqual(
+    await expect(
+      handleAuthenticatorEnrollmentMessage(request),
+    ).resolves.toEqual(
       ok({
         ok: true,
         code: '123456',
@@ -109,7 +115,9 @@ describe('authenticator code expiry transport', () => {
       ),
     ).resolves.toEqual(
       err(
-        new AuthenticatorSessionFailure(AuthenticatorSessionFailureKind.ExpiredCode),
+        new AuthenticatorSessionFailure(
+          AuthenticatorSessionFailureKind.ExpiredCode,
+        ),
       ),
     )
   })

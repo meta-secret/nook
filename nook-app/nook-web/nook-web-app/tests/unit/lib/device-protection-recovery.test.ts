@@ -48,7 +48,8 @@ describe('device protection recovery', () => {
       githubPat: '',
       storageMode: 'local',
       enqueueExclusiveStorage: async <Value, Failure>(
-        operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
+        operation: () =>
+          Result<Value, Failure> | Promise<Result<Value, Failure>>,
       ): Promise<Result<Value, Failure>> => operation(),
       admitManager: () => ok(manager),
       adoptLocalDataStorageGeneration: vi.fn(),

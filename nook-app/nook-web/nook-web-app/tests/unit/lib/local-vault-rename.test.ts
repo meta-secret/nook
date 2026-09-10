@@ -50,7 +50,9 @@ describe('renameLocalVaultLabel', () => {
 
   test('keeps a committed manager rename when catalog refresh fails', async () => {
     const setVaultName = vi.fn().mockImplementation(async () => {})
-    wasmMocks.listLocalVaults.mockRejectedValue(new Error('catalog refresh failed'))
+    wasmMocks.listLocalVaults.mockRejectedValue(
+      new Error('catalog refresh failed'),
+    )
     const state = {
       activeVault: {
         kind: ActiveVaultKind.Open,
@@ -73,7 +75,10 @@ describe('renameLocalVaultLabel', () => {
     })
 
     expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledOnce()
-    expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledWith('store-1', 'New name')
+    expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledWith(
+      'store-1',
+      'New name',
+    )
     expect(setVaultName).toHaveBeenCalledOnce()
     expect(setVaultName).toHaveBeenCalledWith('New name')
     expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)

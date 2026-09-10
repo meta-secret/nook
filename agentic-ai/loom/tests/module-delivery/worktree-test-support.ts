@@ -284,8 +284,7 @@ export type WorktreeFileWrite = {
 export type EvidenceFixtureInput = {
   readonly state: ModuleIntegrationState;
   readonly node:
-    | ModuleDeliveryReadOnlyNodeV2
-    | ModuleDeliveryEvidenceSynthesisNodeV2;
+    ModuleDeliveryReadOnlyNodeV2 | ModuleDeliveryEvidenceSynthesisNodeV2;
   readonly lease: ModuleDeliveryAttemptLease;
 };
 

@@ -50,7 +50,8 @@ type ExtensionInstallDemoVault = {
 }
 
 const extensionInstallDemoMessageTypes: ExtensionInstallDemoMessageTypes = {
-  openCompanionLauncher: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  openCompanionLauncher:
+    OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
   pairedVaultIdentityDiscovery:
     ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
 }
@@ -112,7 +113,9 @@ test('offer browser extension install on vault home and in Devices', async ({
                     ok: true,
                     status: {
                       status: 'different-vault',
-                      request_id: String(Reflect.get(discoveryRequest, 'requestId')),
+                      request_id: String(
+                        Reflect.get(discoveryRequest, 'requestId'),
+                      ),
                       vault_store_id: String(
                         Reflect.get(discoveryRequest, 'vaultStoreId'),
                       ),
@@ -148,11 +151,16 @@ test('offer browser extension install on vault home and in Devices', async ({
     throw new Error('Paired-vault discovery message was not recorded.')
   }
   const discoveryMessage = JSON.parse(encodedDiscoveryMessage)
-  if (!ExtensionPairedVaultIdentityDiscoveryMessageSchema.is(discoveryMessage)) {
+  if (
+    !ExtensionPairedVaultIdentityDiscoveryMessageSchema.is(discoveryMessage)
+  ) {
     throw new Error('Paired-vault discovery message was malformed.')
   }
   const discoveryPayload = Reflect.get(discoveryMessage, 'payload')
-  expect(Object.keys(discoveryPayload).sort()).toEqual(['observedAt', 'request'])
+  expect(Object.keys(discoveryPayload).sort()).toEqual([
+    'observedAt',
+    'request',
+  ])
   expect(Object.keys(Reflect.get(discoveryPayload, 'request')).sort()).toEqual([
     'expiresAt',
     'requestId',
@@ -204,7 +212,9 @@ test('offer browser extension install on vault home and in Devices', async ({
   // Grant acceptance (reload-safe signing-seed persistence and rejected-import
   // rollback) is covered by extension passkey-session e2e. Companion WASM for
   // that Node/Playwright path loads from disk when file: fetch is unavailable.
-  await expect(page.getByTestId('extension-install-setup-connect')).toBeVisible()
+  await expect(
+    page.getByTestId('extension-install-setup-connect'),
+  ).toBeVisible()
   await expect(setupCard).toHaveAttribute('data-status', 'paired_elsewhere')
   await demoBeat(page)
 
@@ -286,7 +296,10 @@ test('accept delayed extension pairing acknowledgement without duplicate deliver
             'data-demo-pairing-delivery-count',
             String(deliveryCount),
           )
-          window.setTimeout(() => callback({ ok: true }), acknowledgementDelayMs)
+          window.setTimeout(
+            () => callback({ ok: true }),
+            acknowledgementDelayMs,
+          )
         },
       },
     }
@@ -332,7 +345,9 @@ test.describe('mobile browser', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(page.getByTestId('extension-setup-settings')).toHaveCount(0)
-    await expect(page.getByTestId('extension-setup-settings-cta')).toHaveCount(0)
+    await expect(page.getByTestId('extension-setup-settings-cta')).toHaveCount(
+      0,
+    )
     await demoBeat(page)
   })
 })

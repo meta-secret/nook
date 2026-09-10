@@ -55,7 +55,8 @@ export class ActiveExtensionSessionLease {
   stop(): void {
     const active = this.state
     this.state = { kind: ExtensionSessionLeaseKind.Expired }
-    if (active.kind === ExtensionSessionLeaseKind.Active) clearTimeout(active.timer)
+    if (active.kind === ExtensionSessionLeaseKind.Active)
+      clearTimeout(active.timer)
   }
 
   private expire(): void {

@@ -77,7 +77,9 @@
   )
 
   function finalize() {
-    const action: ConstructorParameters<typeof SentinelDashboardInteraction>[0] = {
+    const action: ConstructorParameters<
+      typeof SentinelDashboardInteraction
+    >[0] = {
       allowed: canFinalize && !isBusy && !actionBusy,
       setBusy: (value) => (actionBusy = value),
       action: async () => {
@@ -248,10 +250,14 @@
           {#each policyLines as line, index (index)}
             <p
               class:mt-3={line.tone === SentinelTerminalLineTone.Answer}
-              class:text-[#d4ffc7]={line.tone === SentinelTerminalLineTone.Answer}
-              class:text-[#83e273]={line.tone === SentinelTerminalLineTone.Success}
-              class:text-[#d9c365]={line.tone === SentinelTerminalLineTone.Accent}
-              class:text-[#6f9f65]={line.tone === SentinelTerminalLineTone.Muted}
+              class:text-[#d4ffc7]={line.tone ===
+                SentinelTerminalLineTone.Answer}
+              class:text-[#83e273]={line.tone ===
+                SentinelTerminalLineTone.Success}
+              class:text-[#d9c365]={line.tone ===
+                SentinelTerminalLineTone.Accent}
+              class:text-[#6f9f65]={line.tone ===
+                SentinelTerminalLineTone.Muted}
               class="whitespace-pre-wrap"
             >
               {line.text}
@@ -426,12 +432,16 @@
                 <div class="mt-4 grid gap-3 sm:grid-cols-[110px_1fr]">
                   <EnrollmentQrCode
                     enrollmentLink={delivery.payload}
-                    loadingLabel={vault.t(I18N_KEYS.LoginSentinelGenesisQrLoading)}
+                    loadingLabel={vault.t(
+                      I18N_KEYS.LoginSentinelGenesisQrLoading,
+                    )}
                     dense
                   />
                   <div>
                     <p class="text-xs">
-                      {vault.t(I18N_KEYS.LoginSentinelGenesisDeliveryParticipant)}
+                      {vault.t(
+                        I18N_KEYS.LoginSentinelGenesisDeliveryParticipant,
+                      )}
                       {index + 2}
                     </p>
                     <textarea
@@ -446,7 +456,9 @@
                 {vault.t(I18N_KEYS.LoginSentinelOnboardingVaultReadyTitle)}
               </p>
               <p class="mt-2 text-xs text-[#6ca85e]">
-                {vault.t(I18N_KEYS.LoginSentinelOnboardingVaultReadyDescription)}
+                {vault.t(
+                  I18N_KEYS.LoginSentinelOnboardingVaultReadyDescription,
+                )}
               </p>
               <button
                 class="mt-5 border border-[#83e273] px-5 py-3 text-xs disabled:opacity-30"
@@ -503,7 +515,8 @@
               <li
                 class={`flex items-center gap-3 ${index + 1 < workflowStage ? 'text-[#83e273]' : index + 1 === workflowStage ? 'text-[#d9c365]' : 'text-[#385334]'}`}
               >
-                <span class="grid size-5 place-items-center border border-current"
+                <span
+                  class="grid size-5 place-items-center border border-current"
                   >{index + 1 < workflowStage ? '✓' : index + 1}</span
                 >
                 {item}

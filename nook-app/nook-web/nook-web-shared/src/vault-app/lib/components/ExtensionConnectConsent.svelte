@@ -143,7 +143,9 @@
     class="mt-4 grid gap-3 rounded-lg border border-border/50 bg-background/60 p-3"
   >
     <div>
-      <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <p
+        class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+      >
         {vault.t(I18N_KEYS.ExtensionConsentDevice)}
       </p>
       <p class="mt-1 text-sm font-semibold text-foreground">
@@ -247,7 +249,9 @@
 
   <div class="mt-4 flex flex-wrap justify-end gap-2">
     <Button type="button" variant="outline" onclick={() => onClose(approved)}>
-      {approved ? vault.t(I18N_KEYS.CommonDone) : vault.t(I18N_KEYS.CommonCancel)}
+      {approved
+        ? vault.t(I18N_KEYS.CommonDone)
+        : vault.t(I18N_KEYS.CommonCancel)}
     </Button>
     <Button
       type="button"

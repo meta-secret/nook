@@ -1,13 +1,16 @@
 import {
   NativeVaultStorageFailure,
   type VaultStorageFailure,
-} from '$lib/runtime/storage-failure'
-import { VaultManagerStartup, VaultEngineFailure } from '$lib/runtime/wasm-bootstrap'
-import { err, ok, type Result } from 'neverthrow'
-import type { NookStorageConnectArgs } from '$app-wasm'
+} from "$lib/runtime/storage-failure";
+import {
+  VaultManagerStartup,
+  VaultEngineFailure,
+} from "$lib/runtime/wasm-bootstrap";
+import { err, ok, type Result } from "neverthrow";
+import type { NookStorageConnectArgs } from "$app-wasm";
 type StoredVaultSynchronization = NookStorageConnectArgs & {
-  readonly manager: NookVaultManager
-}
+  readonly manager: NookVaultManager;
+};
 import type {
   NookImportResult,
   NookJoinRequest,
@@ -17,7 +20,7 @@ import type {
   NookVaultManager,
   NookVaultMember,
   NookVaultSyncResult,
-} from '$app-wasm'
+} from "$app-wasm";
 import {
   authenticator_setup_key_changed,
   default_password_generation_options,
@@ -29,8 +32,8 @@ import {
   generate_password,
   generate_secret_id,
   VaultAccessStatus,
-} from '$app-wasm'
-import { browserLogRuntime } from '$lib/runtime/log'
+} from "$app-wasm";
+import { browserLogRuntime } from "$lib/runtime/log";
 
 export type {
   NookImportResult,
@@ -44,7 +47,7 @@ export type {
   NookVaultMember as VaultMember,
   NookVaultSyncResult,
   NookSecretFormFields,
-}
+};
 export {
   authenticator_setup_key_changed,
   default_password_generation_options,
@@ -53,17 +56,17 @@ export {
   generate_secret_id,
   SecretType,
   VaultAccessStatus,
-}
+};
 
 export type AuthenticatorCodeView = {
-  code: string
-  secondsRemaining: number
-  period: number
-  expiresAtUnixSeconds: number
-}
+  code: string;
+  secondsRemaining: number;
+  period: number;
+  expiresAtUnixSeconds: number;
+};
 
 export function isoTimestamp(): string {
-  return new Date().toISOString()
+  return new Date().toISOString();
 }
 
 export async function getVaultManager(): Promise<
@@ -71,17 +74,17 @@ export async function getVaultManager(): Promise<
 > {
   const manager = await new VaultManagerStartup(
     configured_vault_application(),
-  ).open()
+  ).open();
   if (manager.isOk()) {
     try {
-      browserLogRuntime.initWasmLogging()
-      drainWasmStatusIntoLog(manager.value)
+      browserLogRuntime.initWasmLogging();
+      drainWasmStatusIntoLog(manager.value);
     } catch {
-      manager.value.free()
-      return err(VaultEngineFailure.ManagerCreation)
+      manager.value.free();
+      return err(VaultEngineFailure.ManagerCreation);
     }
   }
-  return manager
+  return manager;
 }
 
 /** Narrow the generated wasm transport result at its API boundary. */
@@ -94,13 +97,13 @@ export async function syncVaultFromStorage({
   Result<NookVaultSyncResult, VaultStorageFailure>
 > {
   try {
-    return ok(await manager.sync_vault_from_storage(mode, pat, repo))
+    return ok(await manager.sync_vault_from_storage(mode, pat, repo));
   } catch (failure) {
-    return err(new NativeVaultStorageFailure(failure))
+    return err(new NativeVaultStorageFailure(failure));
   }
 }
 
-const wasmLog = browserLogRuntime.createLogger('wasm')
+const wasmLog = browserLogRuntime.createLogger("wasm");
 
 /**
  * Pipe the wasm manager's status channel (e.g. `GITHUB_FETCH_START`,
@@ -114,19 +117,19 @@ function drainWasmStatusIntoLog(manager: NookVaultManager) {
   setInterval(() => {
     try {
       for (const status of manager.drain_status_log()) {
-        wasmLog.debug(status)
+        wasmLog.debug(status);
       }
     } catch {
       // Manager may be mid-borrow by an async &mut call; retry next tick.
     }
-  }, 500)
+  }, 500);
 }
 
 /** Build a validated YAML payload from a core-owned secret form variant. */
 export function buildSecretYaml(fields: NookSecretFormFields): string {
   try {
-    return build_secret_yaml(fields)
+    return build_secret_yaml(fields);
   } finally {
-    fields.free()
+    fields.free();
   }
 }

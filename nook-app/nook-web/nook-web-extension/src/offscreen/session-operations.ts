@@ -170,7 +170,9 @@ export async function handleSessionMessage({
           deviceMode !== DeviceMode.AntiHacker
         ) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         try {
@@ -223,7 +225,9 @@ export async function handleSessionMessage({
         }
       }
       case ExtensionSessionMessageType.UnlockPasskey: {
-        const prfOutput = PasskeyBrowserBytes.fromWire(message.payload.prfOutput)
+        const prfOutput = PasskeyBrowserBytes.fromWire(
+          message.payload.prfOutput,
+        )
         try {
           await (await getManager()).unlock_device_identity(prfOutput)
         } finally {
@@ -235,7 +239,9 @@ export async function handleSessionMessage({
         const pin = message.payload.pin
         if (typeof pin !== 'string')
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         await (await getManager()).finish_pin_device_protection(pin)
         return ok({ ok: true, device: await activateSession() })
@@ -244,7 +250,9 @@ export async function handleSessionMessage({
         const pin = message.payload.pin
         if (typeof pin !== 'string')
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         await (await getManager()).unlock_pin_device_identity(pin)
         return ok({ ok: true, device: await activateSession() })
@@ -254,26 +262,36 @@ export async function handleSessionMessage({
         const payload = message.payload
         const recipientPublicKey = payload.recipientPublicKey
         const nonce = payload.nonce
-        if (typeof recipientPublicKey !== 'string' || typeof nonce !== 'string') {
+        if (
+          typeof recipientPublicKey !== 'string' ||
+          typeof nonce !== 'string'
+        ) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const activeManager = await getManager()
         const status = await activeManager.device_protection_status()
         if (status !== DeviceProtectionStatus.Unlocked) {
-          return err(new SessionOperationFailure(SessionOperationFailureKind.Locked))
+          return err(
+            new SessionOperationFailure(SessionOperationFailureKind.Locked),
+          )
         }
         const envelope = await activeManager.seal_extension_identity_handoff({
           recipientPublicKey,
           nonce,
           expectedDeviceId: payload.expectedDeviceId,
           expectedDevicePublicKey: payload.expectedDevicePublicKey,
-          expectedDeviceSigningPublicKey: payload.expectedDeviceSigningPublicKey,
+          expectedDeviceSigningPublicKey:
+            payload.expectedDeviceSigningPublicKey,
         })
         const renewal = renewSessionExpiry(generation)
         if (renewal.isErr())
-          return err(new SessionOperationFailure(SessionOperationFailureKind.Locked))
+          return err(
+            new SessionOperationFailure(SessionOperationFailureKind.Locked),
+          )
         return ok({ ok: true, envelope })
       }
       case ExtensionSessionMessageType.ImportVault: {
@@ -289,7 +307,9 @@ export async function handleSessionMessage({
         const grant = extensionVaultGrant(payload)
         if (!Array.isArray(payload.eventLogRecords)) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const recordValues = NookExternalEventLogRecords.from_array(
@@ -327,9 +347,14 @@ export async function handleSessionMessage({
       case ExtensionSessionMessageType.ListPasskeys: {
         const payload = message.payload
         const grant = extensionVaultGrant(payload)
-        if (typeof payload.rpId !== 'string' || typeof payload.origin !== 'string') {
+        if (
+          typeof payload.rpId !== 'string' ||
+          typeof payload.origin !== 'string'
+        ) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const activeManager = await getManager()
@@ -361,7 +386,9 @@ export async function handleSessionMessage({
         const grant = extensionVaultGrant(payload)
         if (typeof payload.origin !== 'string') {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const activeManager = await getManager()
@@ -396,7 +423,9 @@ export async function handleSessionMessage({
           typeof payload.secretId !== 'string'
         ) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const activeManager = await getManager()
@@ -425,7 +454,9 @@ export async function handleSessionMessage({
         const grant = extensionVaultGrant(payload)
         if (typeof payload.query !== 'string') {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const activeManager = await getManager()
@@ -456,7 +487,9 @@ export async function handleSessionMessage({
         const grant = extensionVaultGrant(payload)
         if (typeof payload.secretId !== 'string') {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const activeManager = await getManager()
@@ -505,7 +538,9 @@ export async function handleSessionMessage({
           typeof payload.password !== 'string'
         ) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const activeManager = await getManager()
@@ -579,12 +614,17 @@ export async function handleSessionMessage({
         const payload = message.payload
         if (typeof payload.origin !== 'string') {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const lookup = pendingLoginSaveOfferStore.findByOrigin(payload.origin)
         if (lookup.state === PendingLoginSaveLookupState.Unavailable) {
-          return ok({ ok: true, state: PendingLoginSaveLookupState.Unavailable })
+          return ok({
+            ok: true,
+            state: PendingLoginSaveLookupState.Unavailable,
+          })
         }
         const { offer } = lookup
         return ok({
@@ -602,7 +642,9 @@ export async function handleSessionMessage({
         const grant = extensionVaultGrant(payload)
         if (typeof payload.offerId !== 'string') {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const lookup = pendingLoginSaveOfferStore.findById(payload.offerId)
@@ -611,13 +653,17 @@ export async function handleSessionMessage({
           lookup.offer.origin !== (payload.origin as string)
         ) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         const { offer } = lookup
         if (offer.vaultStoreId !== grant.vaultStoreId) {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         pendingLoginSaveOfferStore.removeForCommit(offer)
@@ -648,7 +694,8 @@ export async function handleSessionMessage({
             activeManager,
             vaultStoreId: grant.vaultStoreId,
           }
-          const admission7 = await flushPasskeyEventToProviders(nookTypedArgs0_11)
+          const admission7 =
+            await flushPasskeyEventToProviders(nookTypedArgs0_11)
           if (admission7.isErr()) return err(admission7.error)
           return ok({ ok: true, decision: committedOffer.decision })
         } finally {
@@ -659,7 +706,9 @@ export async function handleSessionMessage({
         const payload = message.payload
         if (typeof payload.offerId !== 'string') {
           return err(
-            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
           )
         }
         pendingLoginSaveOfferStore.clearById(payload.offerId)
@@ -675,14 +724,18 @@ export async function handleSessionMessage({
           flushEvent: flushPasskeyEventToProviders,
         }
         const response: WebsitePasskeyOperationResponse =
-          await sessionWebsitePasskeys.handleWebsitePasskeyOperation(operationArgs)
+          await sessionWebsitePasskeys.handleWebsitePasskeyOperation(
+            operationArgs,
+          )
         return response
       }
       case ExtensionSessionMessageType.Lock:
         return ok({ ok: true })
       default:
         return err(
-          new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
         )
     }
   } catch {

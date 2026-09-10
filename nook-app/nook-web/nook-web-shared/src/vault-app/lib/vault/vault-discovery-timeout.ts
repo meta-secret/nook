@@ -1,37 +1,41 @@
-import { err, type Result } from 'neverthrow'
+import { err, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
-} from '$lib/runtime/storage-failure'
+} from "$lib/runtime/storage-failure";
 
 enum DiscoveryDeadlineState {
-  Waiting = 'waiting',
-  Expired = 'expired',
-  Completed = 'completed',
+  Waiting = "waiting",
+  Expired = "expired",
+  Completed = "completed",
 }
 
-type DiscoveryDeadlineRequest = { readonly timeoutMs: number }
+type DiscoveryDeadlineRequest = { readonly timeoutMs: number };
 type DiscoveryCompletion<T, E> = {
-  readonly operation: Promise<Result<T, E>>
-  readonly releaseLateValue: (value: T) => void
-}
+  readonly operation: Promise<Result<T, E>>;
+  readonly releaseLateValue: (value: T) => void;
+};
 
 /** Owns discovery's deadline and rejects publication of late native handles. */
 export class VaultDiscoveryTimeout {
-  private state = DiscoveryDeadlineState.Waiting
-  private readonly controller = new AbortController()
-  readonly completion: Promise<Result<never, VaultStorageFailure>>
+  private state = DiscoveryDeadlineState.Waiting;
+  private readonly controller = new AbortController();
+  readonly completion: Promise<Result<never, VaultStorageFailure>>;
 
   constructor({ timeoutMs }: DiscoveryDeadlineRequest) {
     this.completion = new Promise((resolve) => {
       const timer = setTimeout(() => {
-        this.state = DiscoveryDeadlineState.Expired
-        resolve(err(new VaultStorageFailure(VaultStorageFailureKind.TimedOut)))
-      }, timeoutMs)
-      this.controller.signal.addEventListener('abort', () => clearTimeout(timer), {
-        once: true,
-      })
-    })
+        this.state = DiscoveryDeadlineState.Expired;
+        resolve(err(new VaultStorageFailure(VaultStorageFailureKind.TimedOut)));
+      }, timeoutMs);
+      this.controller.signal.addEventListener(
+        "abort",
+        () => clearTimeout(timer),
+        {
+          once: true,
+        },
+      );
+    });
   }
 
   async waitFor<T, E>({
@@ -40,21 +44,21 @@ export class VaultDiscoveryTimeout {
   }: DiscoveryCompletion<T, E>): Promise<Result<T, E | VaultStorageFailure>> {
     const observed = operation.then((outcome) => {
       if (this.state === DiscoveryDeadlineState.Expired && outcome.isOk()) {
-        releaseLateValue(outcome.value)
-        return err(new VaultStorageFailure(VaultStorageFailureKind.TimedOut))
+        releaseLateValue(outcome.value);
+        return err(new VaultStorageFailure(VaultStorageFailureKind.TimedOut));
       }
-      return outcome
-    })
+      return outcome;
+    });
     try {
-      return await Promise.race([observed, this.completion])
+      return await Promise.race([observed, this.completion]);
     } finally {
-      this.cancel()
+      this.cancel();
     }
   }
 
   cancel(): void {
-    this.controller.abort()
+    this.controller.abort();
     if (this.state === DiscoveryDeadlineState.Waiting)
-      this.state = DiscoveryDeadlineState.Completed
+      this.state = DiscoveryDeadlineState.Completed;
   }
 }

@@ -41,7 +41,8 @@ describe('authenticator session adapter', () => {
         const [message, callback] = parameters
         queueMicrotask(() => {
           if (
-            message.type === ExtensionSessionMessageType.AuthenticatorBackupAttach
+            message.type ===
+            ExtensionSessionMessageType.AuthenticatorBackupAttach
           ) {
             observedCodes.push([...message.payload.codes])
           }
@@ -71,7 +72,9 @@ describe('authenticator session adapter', () => {
     }
 
     const pending =
-      extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession(args)
+      extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession(
+        args,
+      )
     codes.fill('')
 
     await expect(pending).resolves.toEqual(
@@ -117,7 +120,9 @@ describe('authenticator session adapter', () => {
     }
 
     await expect(
-      extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession(args),
+      extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession(
+        args,
+      ),
     ).resolves.toEqual(
       err(
         new AuthenticatorSessionFailure(

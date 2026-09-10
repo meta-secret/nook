@@ -147,7 +147,11 @@
       return
     }
 
-    if (editor.kind === SecretEditorKind.Editing && isEditMode && onReplaceSecret) {
+    if (
+      editor.kind === SecretEditorKind.Editing &&
+      isEditMode &&
+      onReplaceSecret
+    ) {
       const onReplaceSecretArgs: Parameters<typeof onReplaceSecret>[0] = {
         oldId: editor.record.id,
         type: selectedType,
@@ -244,7 +248,9 @@
           {typeTitle}
         </h3>
       </div>
-      <div class="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+      <div
+        class="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto"
+      >
         <Button
           type="button"
           variant="outline"

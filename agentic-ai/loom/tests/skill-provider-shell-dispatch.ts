@@ -213,8 +213,7 @@ export class SkillProviderShellDispatchScenario {
   }
 
   static resolveAt([request, index]: readonly [DispatchRequest, number]):
-    | ShellWord
-    | false {
+    ShellWord | false {
     const word = request.words[index];
     if (!word) return false;
     const resolutionRequest: WordEnvironmentRequest = {

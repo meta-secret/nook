@@ -1,24 +1,24 @@
 <script lang="ts">
-  import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { CircleHelp, KeyRound, ShieldCheck } from "@lucide/svelte";
-  import { untrack } from "svelte";
-  import { DeviceProtectionStatus } from "$app-wasm";
-  import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import DeviceModeSelect from "$lib/components/DeviceModeSelect.svelte";
-  import ExistingVaultRecoverySummary from "$lib/components/ExistingVaultRecoverySummary.svelte";
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { CircleHelp, KeyRound, ShieldCheck } from '@lucide/svelte'
+  import { untrack } from 'svelte'
+  import { DeviceProtectionStatus } from '$app-wasm'
+  import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { Button } from '$lib/components/ui/button'
+  import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
+  import ExistingVaultRecoverySummary from '$lib/components/ExistingVaultRecoverySummary.svelte'
   import {
     DeviceProtectionGateFrame,
     DeviceProtectionSetupWorkflow,
-  } from "./device-protection-gate-state";
+  } from './device-protection-gate-state'
   import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-  } from "$lib/components/ui/card";
+  } from '$lib/components/ui/card'
 
   let {
     vault,
@@ -30,59 +30,59 @@
     onProtectionActionSettled,
     onProtectionReady,
   }: {
-    vault: VaultState;
-    frame: DeviceProtectionGateFrame;
-    creationOnly: boolean;
-    initializeSession: boolean;
-    recoveryAppId: string;
-    onBeforeProtectionAction: () => void;
-    onProtectionActionSettled?: () => void;
-    onProtectionReady: () => void;
-  } = $props();
-  let pin = $state("");
-  let pinConfirm = $state("");
-  let passkeyLabel = $state("");
+    vault: VaultState
+    frame: DeviceProtectionGateFrame
+    creationOnly: boolean
+    initializeSession: boolean
+    recoveryAppId: string
+    onBeforeProtectionAction: () => void
+    onProtectionActionSettled?: () => void
+    onProtectionReady: () => void
+  } = $props()
+  let pin = $state('')
+  let pinConfirm = $state('')
+  let passkeyLabel = $state('')
   let setupWorkflow = $state(
     untrack(() =>
       creationOnly
         ? DeviceProtectionSetupWorkflow.Create
         : DeviceProtectionSetupWorkflow.Authenticate,
     ),
-  );
+  )
 
   const needsSetup = $derived(
     creationOnly ||
       vault.deviceProtectionStatus === DeviceProtectionStatus.Missing ||
       vault.deviceProtectionStatus === DeviceProtectionStatus.Plaintext ||
       vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup,
-  );
+  )
 
   function recover() {
     if (!confirm(vault.t(I18N_KEYS.DeviceProtectionRecoveryConfirm))) {
-      return;
+      return
     }
     const recoveryRequest: Parameters<
-      deviceProtectionActions.DeviceProtectionRecoveryActions["resetDeviceProtectionForRecovery"]
-    >[0] = { expectedAppId: recoveryAppId };
+      deviceProtectionActions.DeviceProtectionRecoveryActions['resetDeviceProtectionForRecovery']
+    >[0] = { expectedAppId: recoveryAppId }
     void new deviceProtectionActions.DeviceProtectionRecoveryActions(
       vault,
-    ).resetDeviceProtectionForRecovery(recoveryRequest);
+    ).resetDeviceProtectionForRecovery(recoveryRequest)
   }
 
   async function completeProtectionAction(
     action: () => Promise<void>,
   ): Promise<void> {
-    onBeforeProtectionAction();
+    onBeforeProtectionAction()
     try {
-      await action();
+      await action()
       if (
         !vault.errorMsg &&
         vault.deviceProtectionStatus === DeviceProtectionStatus.Unlocked
       ) {
-        onProtectionReady();
+        onProtectionReady()
       }
     } finally {
-      onProtectionActionSettled?.();
+      onProtectionActionSettled?.()
     }
   }
 </script>
@@ -178,15 +178,15 @@
         onclick={() =>
           void completeProtectionAction(() => {
             const setupRequest: Parameters<
-              deviceProtectionActions.DeviceProtectionActions["setupPinDeviceProtection"]
+              deviceProtectionActions.DeviceProtectionActions['setupPinDeviceProtection']
             >[0] = {
               pin,
               confirmPin: pinConfirm,
               initializeSession: initializeSession && !creationOnly,
-            };
+            }
             return new deviceProtectionActions.DeviceProtectionActions(
               vault,
-            ).setupPinDeviceProtection(setupRequest);
+            ).setupPinDeviceProtection(setupRequest)
           })}
       >
         {vault.isVerifying
@@ -232,8 +232,8 @@
             disabled={vault.isVerifying}
             data-testid="device-protection-create-new-choice"
             onclick={() => {
-              setupWorkflow = DeviceProtectionSetupWorkflow.Create;
-              vault.dismissError();
+              setupWorkflow = DeviceProtectionSetupWorkflow.Create
+              vault.dismissError()
             }}
           >
             <KeyRound class="size-4" />
@@ -275,15 +275,15 @@
             onclick={() =>
               void completeProtectionAction(() => {
                 const setupRequest: Parameters<
-                  deviceProtectionActions.DeviceProtectionActions["setupDeviceProtection"]
+                  deviceProtectionActions.DeviceProtectionActions['setupDeviceProtection']
                 >[0] = {
                   passkeyLabel,
                   deviceMode: vault.draftDeviceMode,
                   initializeSession: initializeSession && !creationOnly,
-                };
+                }
                 return new deviceProtectionActions.DeviceProtectionActions(
                   vault,
-                ).setupDeviceProtection(setupRequest);
+                ).setupDeviceProtection(setupRequest)
               })}
           >
             {vault.isVerifying
@@ -341,11 +341,11 @@
         onclick={() =>
           void completeProtectionAction(() => {
             const unlockRequest: Parameters<
-              deviceProtectionActions.DeviceProtectionActions["unlockPinDeviceProtection"]
-            >[0] = { pin, initializeSession };
+              deviceProtectionActions.DeviceProtectionActions['unlockPinDeviceProtection']
+            >[0] = { pin, initializeSession }
             return new deviceProtectionActions.DeviceProtectionActions(
               vault,
-            ).unlockPinDeviceProtection(unlockRequest);
+            ).unlockPinDeviceProtection(unlockRequest)
           })}
       >
         {vault.isVerifying
@@ -376,11 +376,11 @@
         onclick={() =>
           void completeProtectionAction(() => {
             const unlockRequest: Parameters<
-              deviceProtectionActions.DeviceProtectionActions["unlockDeviceProtection"]
-            >[0] = { initializeSession };
+              deviceProtectionActions.DeviceProtectionActions['unlockDeviceProtection']
+            >[0] = { initializeSession }
             return new deviceProtectionActions.DeviceProtectionActions(
               vault,
-            ).unlockDeviceProtection(unlockRequest);
+            ).unlockDeviceProtection(unlockRequest)
           })}
       >
         {vault.isVerifying

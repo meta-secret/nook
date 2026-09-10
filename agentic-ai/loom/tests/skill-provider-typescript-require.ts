@@ -1,7 +1,6 @@
 import ts from 'typescript';
 export type AuthoredCommandDeclaration =
-  | ts.FunctionDeclaration
-  | ts.MethodDeclaration;
+  ts.FunctionDeclaration | ts.MethodDeclaration;
 
 export class SkillProviderTypescriptRequireScenario {
   private constructor(private readonly request: AuthoredCommandDeclaration) {}

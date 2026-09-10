@@ -39,7 +39,9 @@ describe('login account listing failure handling', () => {
         ],
       },
     ]
-    const interactiveSendMessage = mock(() => Promise.resolve(ok(responses.shift())))
+    const interactiveSendMessage = mock(() =>
+      Promise.resolve(ok(responses.shift())),
+    )
     const interactiveRequest: Parameters<
       typeof accountPickerSessions.loginAccountsForOrigin
     >[0] = {

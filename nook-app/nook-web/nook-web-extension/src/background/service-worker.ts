@@ -107,7 +107,9 @@ const extensionLifecycleRoutingDependencies: Parameters<
   accountPickerAuthorizationCleanupPending,
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers:
-    accountPickerSessions.clearPendingAccountPickers.bind(accountPickerSessions),
+    accountPickerSessions.clearPendingAccountPickers.bind(
+      accountPickerSessions,
+    ),
   clearStagedAuthenticatorEnrollments:
     authenticatorEnrollmentOperations.clearStagedAuthenticatorEnrollments.bind(
       authenticatorEnrollmentOperations,
@@ -133,7 +135,8 @@ const extensionLifecycleRoutingDependencies: Parameters<
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
   isExtensionAuthenticationSurfacesRefreshMessage,
-  isExtensionPairingStateQueryMessage: ExtensionPairingStateQueryMessageSchema.is,
+  isExtensionPairingStateQueryMessage:
+    ExtensionPairingStateQueryMessageSchema.is,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
   isExtensionSessionLockMessage,
@@ -153,10 +156,15 @@ const extensionLifecycleRoutingDependencies: Parameters<
     ),
 }
 
-void recoverInterruptedAuthorizationCleanup(extensionLifecycleRoutingDependencies)
+void recoverInterruptedAuthorizationCleanup(
+  extensionLifecycleRoutingDependencies,
+)
   .then((cleanup) => {
     if (cleanup.isErr())
-      console.warn('Extension authorization cleanup remains pending', cleanup.error)
+      console.warn(
+        'Extension authorization cleanup remains pending',
+        cleanup.error,
+      )
   })
   .catch(() => {
     console.warn('Extension authorization cleanup initialization failed')
@@ -197,22 +205,24 @@ const externalCompanionRoutingDependencies: Parameters<
     extensionSessionLifecycle.refreshAuthenticationSurfaces.bind(
       extensionSessionLifecycle,
     ),
-  requestPairedVaultUnlock: extensionPairingIdentity.requestPairedVaultUnlock.bind(
-    extensionPairingIdentity,
-  ),
+  requestPairedVaultUnlock:
+    extensionPairingIdentity.requestPairedVaultUnlock.bind(
+      extensionPairingIdentity,
+    ),
 }
 
 // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage
-  const lifecycleRoutingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] =
-    {
-      dependencies: extensionLifecycleRoutingDependencies,
-      message,
-      sender,
-      sendResponse,
-    }
+  const lifecycleRoutingArgs: Parameters<
+    typeof routeExtensionLifecycleMessage
+  >[0] = {
+    dependencies: extensionLifecycleRoutingDependencies,
+    message,
+    sender,
+    sendResponse,
+  }
   const lifecycleResult = routeExtensionLifecycleMessage(lifecycleRoutingArgs)
   if (lifecycleResult !== ExtensionLifecycleRoutingResult.Unhandled) {
     return lifecycleResult
@@ -382,7 +392,9 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
           sender,
           origin: decoded.payload.origin,
         }
-        if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_1)) {
+        if (
+          !extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_1)
+        ) {
           const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = {
             ok: false,
             reason: 'workflow-forbidden-origin',
@@ -417,7 +429,9 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
           sender,
           dependencies: workflowDependencies,
         }
-        sendResponse(await authenticationWorkflowMessageResponse(workflowRequest))
+        sendResponse(
+          await authenticationWorkflowMessageResponse(workflowRequest),
+        )
       })
       .catch(() =>
         sendResponse({ ok: false, reason: 'workflow-invalid-observation' }),
@@ -824,13 +838,14 @@ chrome.runtime.onMessageExternal.addListener(
   (runtimeMessage, sender, sendResponse) => {
     if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
     const message = runtimeMessage
-    const externalRoutingArgs: Parameters<typeof routeExternalCompanionMessage>[0] =
-      {
-        dependencies: externalCompanionRoutingDependencies,
-        message,
-        sender,
-        sendResponse,
-      }
+    const externalRoutingArgs: Parameters<
+      typeof routeExternalCompanionMessage
+    >[0] = {
+      dependencies: externalCompanionRoutingDependencies,
+      message,
+      sender,
+      sendResponse,
+    }
     void routeExternalCompanionMessage(externalRoutingArgs).catch(() =>
       sendResponse({ ok: false, reason: 'forbidden-sender' }),
     )
