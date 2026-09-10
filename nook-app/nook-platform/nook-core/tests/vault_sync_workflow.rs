@@ -116,7 +116,9 @@ fn stale_revision_write_reports_remote_changed_without_overwriting() -> anyhow::
         StoreRevisionRef::Version("rev-1"),
     );
 
-    let rejected = result.expect_err("stale revision rejects");
+    let Err(rejected) = result else {
+        return Err(anyhow::anyhow!("stale revision must reject"));
+    };
     assert!(matches!(
         rejected.cause,
         VaultSyncError::RemoteChangedDuringWrite
@@ -258,9 +260,9 @@ fn later_provider_failure_retains_earlier_fan_out_effect() -> anyhow::Result<()>
         ),
     ]);
 
-    let rejected = VaultSyncFanOut::new(local, remotes)
-        .run()
-        .expect_err("invalid provider rejects");
+    let Err(rejected) = VaultSyncFanOut::new(local, remotes).run() else {
+        return Err(anyhow::anyhow!("invalid provider must reject"));
+    };
     let remotes = rejected.stores.remotes;
     assert_eq!(remotes["a-first"].blob(), local_blob);
     assert_eq!(remotes["b-invalid"].blob(), "not-a-vault");

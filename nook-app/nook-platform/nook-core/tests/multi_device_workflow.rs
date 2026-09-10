@@ -76,7 +76,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     records.push(auth_two);
     VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
         records: &mut records,
-        member_records: member_records,
+        member_records,
     })?;
 
     let device_three = DeviceIdentity::generate()?;
@@ -97,7 +97,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     records.push(auth_three);
     VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
         records: &mut records,
-        member_records: member_records,
+        member_records,
     })?;
 
     let yaml = VaultRecordSet::serialize(&records, VaultFormat::Yaml)?;
@@ -257,7 +257,7 @@ fn rename_member_label_survives_yaml_roundtrip() -> anyhow::Result<()> {
     })?;
     VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
         records: &mut records,
-        member_records: member_records,
+        member_records,
     })?;
 
     let yaml = VaultRecordSet::serialize(&records, VaultFormat::Yaml)?;
@@ -298,7 +298,7 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     records.push(auth);
     VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
         records: &mut records,
-        member_records: member_records,
+        member_records,
     })?;
 
     let revoked = VaultMember::revoke_vault_member(RevokeVaultMemberRequest {

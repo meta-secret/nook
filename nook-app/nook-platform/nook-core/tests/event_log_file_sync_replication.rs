@@ -5,6 +5,8 @@
 //! edits, and reconnect. Domain sync semantics live here; Node wasm-bindgen
 //! tests cannot drive the browser File System Access API.
 
+#![allow(clippy::result_large_err, clippy::too_many_lines)]
+
 #[path = "event_log_harness.rs"]
 mod harness;
 

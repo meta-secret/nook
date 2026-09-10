@@ -1,7 +1,11 @@
 //! Shared in-memory event-sourcing test kit for integration scenarios.
 
 #![allow(dead_code)]
-#![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::result_large_err
+)]
 
 use nook_auth2::{GenesisMembersRecordsRequest, VaultMember};
 use nook_core::EventPublicationDestination;
@@ -327,7 +331,7 @@ fn genesis_yaml(
     let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
     records.extend(VaultMember::genesis_members_records(
         GenesisMembersRecordsRequest {
-            identity: identity,
+            identity,
             members_key: &keys.members_key,
             enrolled_at: TS,
         },

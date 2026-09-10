@@ -1,4 +1,6 @@
 //! Projection, epoch, and delivery integration scenarios.
+#![allow(clippy::too_many_lines)]
+
 use super::*;
 use nook_core::EventPublicationDestination;
 

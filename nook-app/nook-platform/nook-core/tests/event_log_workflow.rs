@@ -1,5 +1,7 @@
 //! Event-sourcing integration scenarios using the in-memory harness.
 
+#![allow(clippy::result_large_err, clippy::too_many_lines)]
+
 use nook_core::EventPublicationDestination;
 use nook_core::LocalEventBytes;
 use nook_core::{
