@@ -52,7 +52,7 @@ type ReinstallSubmission =
 export class OvhReinstallPreparation {
   constructor(private readonly paths: OvhPrivatePaths) {}
   async prepare(input: ProvisionContext): Promise<Result<PreparedOvhReinstall, OvhFailure>> {
-    const context = { ...input, credentials: { ...input.credentials }, definition: { ...input.definition } };
+    const context = input;
     const compatible = await new OvhDedicatedRequireCompatibleTemplate(context).execute();
     if (compatible.isErr()) return err(compatible.error);
     const publicKey = await new OvhLocalFile(this.paths.expand(context.definition.sshPublicKeyFile)).read();
