@@ -45,8 +45,8 @@ impl NookDatabase {
         })
         .await?
         {
-            None => Vec::new(),
-            Some(json) => serde_json::from_str::<Vec<String>>(&json)
+            StoredStringRecord::MissingKey => Vec::new(),
+            StoredStringRecord::Stored(json) => serde_json::from_str::<Vec<String>>(&json)
                 .map_err(|e| NookError::Serialization(e.to_string()))?,
         };
         let mut out = Vec::new();
@@ -55,7 +55,7 @@ impl NookDatabase {
                 provider_id: provider_id,
                 event_id: &event_id,
             });
-            if let Some(text) = NookDatabase::store_get(EventDbStoreGet {
+            if let StoredStringRecord::Stored(text) = NookDatabase::store_get(EventDbStoreGet {
                 store_name: STORE_OUTBOX,
                 key: &key,
             })
@@ -83,8 +83,8 @@ impl NookDatabase {
         })
         .await?
         {
-            None => Vec::new(),
-            Some(json) => {
+            StoredStringRecord::MissingKey => Vec::new(),
+            StoredStringRecord::Stored(json) => {
                 serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?
             }
         };
@@ -121,7 +121,7 @@ impl NookDatabase {
         })
         .await?;
         let index_key = format!("outbox_index:{provider_id}");
-        if let Some(json) = NookDatabase::store_get(EventDbStoreGet {
+        if let StoredStringRecord::Stored(json) = NookDatabase::store_get(EventDbStoreGet {
             store_name: STORE_OUTBOX,
             key: &index_key,
         })
@@ -160,8 +160,8 @@ mod tests {
 
         NookDatabase::save_signing_seed("seed-material").await?;
         assert_eq!(
-            NookDatabase::load_signing_seed().await?.as_deref(),
-            Some("seed-material")
+            NookDatabase::load_signing_seed().await?,
+            StoredSigningSeed::Stored("seed-material".to_owned())
         );
 
         let store_id = "projection-round-trip";
@@ -178,8 +178,8 @@ mod tests {
         })
         .await?;
         assert_eq!(
-            NookDatabase::load_key_epoch(store_id).await?.as_deref(),
-            Some("epoch-2")
+            NookDatabase::load_key_epoch(store_id).await?,
+            StoredKeyEpoch::Recorded("epoch-2".to_owned())
         );
 
         NookDatabase::queue_outbox_entry(EventDbQueueOutboxEntry {

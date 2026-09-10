@@ -8,6 +8,7 @@ use crate::EventDbSaveEventBytes;
 use crate::EventDbSaveHeads;
 use crate::IdentityDbSetIdentityMemberSigningPublicKey;
 use crate::NookDatabase;
+use nook_core::StoredSigningSeed;
 
 use crate::storage::identity_record;
 use nook_core::{
@@ -109,12 +110,14 @@ impl NookVaultManager {
             self.event_log.signing_seed = seed;
         }
         if self.event_log.signing_seed.is_empty() {
-            self.event_log.signing_seed =
-                NookDatabase::load_signing_seed().await?.ok_or_else(|| {
-                    NookError::Database(
+            self.event_log.signing_seed = match NookDatabase::load_signing_seed().await? {
+                StoredSigningSeed::Stored(seed) => seed,
+                StoredSigningSeed::Missing => {
+                    return Err(NookError::Database(
                         "Staged Simple genesis requires an enrolled member signing key.".to_owned(),
-                    )
-                })?;
+                    ));
+                }
+            };
         }
         let signing = SigningIdentity::from_seed_hex_stored(&self.event_log.signing_seed)?;
         let staged = pending.staged_identity().ok_or_else(|| {

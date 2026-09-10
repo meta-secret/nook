@@ -1,5 +1,8 @@
 //! `IndexedDB` persistence for the immutable vault event log.
 
+use crate::StoredStringRecord;
+use nook_core::StoredSigningSeed;
+
 use crate::{NookDatabase, NookError};
 use nook_core::VaultEvent;
 mod outbox;
@@ -118,6 +121,12 @@ pub(crate) struct EventDbRemoveOutboxEntry<'a> {
     pub(crate) event_id: &'a str,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum StoredKeyEpoch {
+    NotRecorded,
+    Recorded(String),
+}
+
 impl NookDatabase {
     fn event_key(request: EventDbEventKey<'_>) -> String {
         let EventDbEventKey { store_id, event_id } = request;
@@ -138,7 +147,7 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
+    async fn vault_get(key: &str) -> Result<StoredStringRecord, NookError> {
         NookDatabase::store_get(EventDbStoreGet {
             store_name: STORE_VAULT,
             key: key,
@@ -148,7 +157,7 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    async fn store_get(request: EventDbStoreGet<'_>) -> Result<Option<String>, NookError> {
+    async fn store_get(request: EventDbStoreGet<'_>) -> Result<StoredStringRecord, NookError> {
         let EventDbStoreGet { store_name, key } = request;
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
@@ -168,11 +177,11 @@ impl NookDatabase {
             .await
             .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
         match value {
-            None => Ok(None),
-            Some(val) if val.is_undefined() || val.is_null() => Ok(None),
+            None => Ok(StoredStringRecord::MissingKey),
+            Some(val) if val.is_undefined() || val.is_null() => Ok(StoredStringRecord::MissingKey),
             Some(val) => serde_wasm_bindgen::from_value(val)
                 .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))
-                .map(Some),
+                .map(StoredStringRecord::Stored),
         }
     }
 }
@@ -273,9 +282,9 @@ impl NookDatabase {
 
 impl NookDatabase {
     pub(crate) async fn is_event_log_mode() -> Result<bool, NookError> {
-        Ok(NookDatabase::vault_get(EVENT_LOG_MODE_KEY)
-            .await?
-            .is_some_and(|value| value == EVENT_LOG_ACTIVE))
+        Ok(
+            matches!(NookDatabase::vault_get(EVENT_LOG_MODE_KEY).await?, StoredStringRecord::Stored(value) if value == EVENT_LOG_ACTIVE),
+        )
     }
 }
 
@@ -290,8 +299,11 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(crate) async fn load_signing_seed() -> Result<Option<String>, NookError> {
-        NookDatabase::vault_get(SIGNING_SEED_KEY).await
+    pub(crate) async fn load_signing_seed() -> Result<StoredSigningSeed, NookError> {
+        Ok(match NookDatabase::vault_get(SIGNING_SEED_KEY).await? {
+            StoredStringRecord::MissingKey => StoredSigningSeed::Missing,
+            StoredStringRecord::Stored(seed) => StoredSigningSeed::Stored(seed),
+        })
     }
 }
 
@@ -314,8 +326,8 @@ impl NookDatabase {
         })
         .await?
         {
-            None => Ok(Vec::new()),
-            Some(json) => {
+            StoredStringRecord::MissingKey => Ok(Vec::new()),
+            StoredStringRecord::Stored(json) => {
                 serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))
             }
         }
@@ -337,13 +349,19 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(crate) async fn load_key_epoch(store_id: &str) -> Result<Option<String>, NookError> {
+    pub(crate) async fn load_key_epoch(store_id: &str) -> Result<StoredKeyEpoch, NookError> {
         let key = NookDatabase::epoch_key(store_id);
-        NookDatabase::store_get(EventDbStoreGet {
-            store_name: STORE_PROJECTIONS,
-            key: &key,
-        })
-        .await
+        Ok(
+            match NookDatabase::store_get(EventDbStoreGet {
+                store_name: STORE_PROJECTIONS,
+                key: &key,
+            })
+            .await?
+            {
+                StoredStringRecord::MissingKey => StoredKeyEpoch::NotRecorded,
+                StoredStringRecord::Stored(epoch) => StoredKeyEpoch::Recorded(epoch),
+            },
+        )
     }
 }
 
@@ -365,7 +383,7 @@ impl NookDatabase {
     ) -> Result<LocalEventStore, NookError> {
         let mut local = LocalEventStore::new();
         let index_key = format!("event_index:{store_id}");
-        if let Some(list_json) = NookDatabase::store_get(EventDbStoreGet {
+        if let StoredStringRecord::Stored(list_json) = NookDatabase::store_get(EventDbStoreGet {
             store_name: STORE_EVENTS,
             key: &index_key,
         })
@@ -378,11 +396,12 @@ impl NookDatabase {
                     store_id: store_id,
                     event_id: &raw_id,
                 });
-                if let Some(bytes) = NookDatabase::store_get(EventDbStoreGet {
-                    store_name: STORE_EVENTS,
-                    key: &key,
-                })
-                .await?
+                if let StoredStringRecord::Stored(bytes) =
+                    NookDatabase::store_get(EventDbStoreGet {
+                        store_name: STORE_EVENTS,
+                        key: &key,
+                    })
+                    .await?
                     && let Ok(event_id) = EventId::parse(&raw_id)
                 {
                     local = local.put_event(nook_core::LocalEventWrite {
@@ -807,22 +826,22 @@ mod tests {
 
         NookDatabase::clear_local_event_store(store_id).await?;
 
-        assert!(
+        assert!(matches!(
             NookDatabase::store_get(EventDbStoreGet {
                 store_name: STORE_EVENTS,
                 key: &row_key
             })
-            .await?
-            .is_none()
-        );
-        assert!(
+            .await?,
+            StoredStringRecord::MissingKey
+        ));
+        assert!(matches!(
             NookDatabase::store_get(EventDbStoreGet {
                 store_name: STORE_EVENTS,
                 key: &index_key
             })
-            .await?
-            .is_none()
-        );
+            .await?,
+            StoredStringRecord::MissingKey
+        ));
         Ok(())
     }
 
@@ -851,14 +870,14 @@ mod tests {
             .await
             .is_err()
         );
-        assert!(
+        assert!(matches!(
             NookDatabase::store_get(EventDbStoreGet {
                 store_name: STORE_EVENTS,
                 key: &row_key
             })
-            .await?
-            .is_none()
-        );
+            .await?,
+            StoredStringRecord::MissingKey
+        ));
         NookDatabase::clear_local_event_store(store_id).await
     }
 

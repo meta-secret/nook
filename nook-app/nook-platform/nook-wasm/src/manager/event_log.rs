@@ -3,9 +3,11 @@
 use crate::BrowserTimestamp;
 use crate::EventDbSaveHeads;
 use crate::EventDbSaveKeyEpoch;
+use crate::storage::event_db::StoredKeyEpoch;
 use crate::storage::identity_record;
 use crate::storage::identity_record::LocalIdentitySigner;
 use crate::{NookDatabase, NookError};
+use nook_core::StoredSigningSeed;
 use nook_core::{
     EventError, IsoTimestamp, StoreId, VaultError, VaultMetaGraphProjection,
     VaultMetaOperationApplier, VaultMetaOperationRequest, VaultNameRef, VaultProjection,
@@ -169,7 +171,7 @@ impl NookVaultManager {
             )?);
         }
         if self.event_log.signing_seed.is_empty() {
-            if let Some(seed) = NookDatabase::load_signing_seed().await? {
+            if let StoredSigningSeed::Stored(seed) = NookDatabase::load_signing_seed().await? {
                 self.event_log.signing_seed = seed;
             } else {
                 // New devices still mint a signer so they can submit JoinRequested
@@ -185,19 +187,19 @@ impl NookVaultManager {
             // when the vault already has events. Persist in-memory seeds only
             // for empty-log create paths.
             match NookDatabase::load_signing_seed().await? {
-                Some(stored) if stored != self.event_log.signing_seed => {
+                StoredSigningSeed::Stored(stored) if stored != self.event_log.signing_seed => {
                     if self.event_log_has_events().await? {
                         self.event_log.signing_seed = stored;
                     } else {
                         NookDatabase::save_signing_seed(&self.event_log.signing_seed).await?;
                     }
                 }
-                None => {
+                StoredSigningSeed::Missing => {
                     if !self.event_log_has_events().await? {
                         NookDatabase::save_signing_seed(&self.event_log.signing_seed).await?;
                     }
                 }
-                Some(_) => {}
+                StoredSigningSeed::Stored(_) => {}
             }
         }
         Ok(SigningIdentity::from_seed_hex_stored(
@@ -240,7 +242,9 @@ impl NookVaultManager {
         if !self.event_log.key_epoch.is_empty() {
             return Ok(self.event_log.key_epoch.clone());
         }
-        if let Some(epoch) = NookDatabase::load_key_epoch(&self.vault.store_id).await? {
+        if let StoredKeyEpoch::Recorded(epoch) =
+            NookDatabase::load_key_epoch(&self.vault.store_id).await?
+        {
             self.event_log.key_epoch = epoch;
             return Ok(self.event_log.key_epoch.clone());
         }

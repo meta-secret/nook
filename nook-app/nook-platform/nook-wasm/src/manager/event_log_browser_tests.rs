@@ -10,6 +10,7 @@ use crate::{
 };
 use nook_core::ActiveVaultScope;
 use nook_core::AppKeyIdentityMembership;
+use nook_core::StoredSigningSeed;
 
 use crate::storage::{event_db, identity_record, indexed_db};
 use crate::vault_api_local::list_local_vaults;
@@ -136,7 +137,10 @@ async fn authenticated_legacy_key_bootstraps_keyring_and_preserves_signer() -> a
         manager.ensure_signing_identity().await?.public_key(),
         legacy_signing.public_key()
     );
-    assert!(NookDatabase::load_signing_seed().await?.is_none());
+    assert!(matches!(
+        NookDatabase::load_signing_seed().await?,
+        StoredSigningSeed::Missing
+    ));
     manager
         .delete_local_browser_data()
         .await
@@ -168,7 +172,10 @@ async fn local_identities_never_fall_back_to_the_singleton_signing_seed() -> any
         .identity_id();
     let first_app_id = manager.device_id();
     let first_signing_public_key = manager.ensure_signing_identity().await?.public_key();
-    assert!(NookDatabase::load_signing_seed().await?.is_none());
+    assert!(matches!(
+        NookDatabase::load_signing_seed().await?,
+        StoredSigningSeed::Missing
+    ));
 
     manager
         .begin_local_identity_creation("Work")
@@ -214,7 +221,10 @@ async fn local_identities_never_fall_back_to_the_singleton_signing_seed() -> any
     );
     let second_signing_public_key = manager.ensure_signing_identity().await?.public_key();
     assert_ne!(first_signing_public_key, second_signing_public_key);
-    assert!(NookDatabase::load_signing_seed().await?.is_none());
+    assert!(matches!(
+        NookDatabase::load_signing_seed().await?,
+        StoredSigningSeed::Missing
+    ));
 
     manager
         .activate_local_identity(first_identity_id.clone())
@@ -237,7 +247,10 @@ async fn local_identities_never_fall_back_to_the_singleton_signing_seed() -> any
         manager.ensure_signing_identity().await?.public_key(),
         first_signing_public_key
     );
-    assert!(NookDatabase::load_signing_seed().await?.is_none());
+    assert!(matches!(
+        NookDatabase::load_signing_seed().await?,
+        StoredSigningSeed::Missing
+    ));
     manager.lock_device_identity();
     assert_eq!(manager.device_id(), first_app_id);
     assert_eq!(
@@ -540,7 +553,10 @@ async fn keyring_backed_simple_genesis_keeps_the_signer_out_of_the_singleton_see
     manager.bootstrap_simple_event_log_genesis(&pending).await?;
 
     assert!(
-        NookDatabase::load_signing_seed().await?.is_none(),
+        matches!(
+            NookDatabase::load_signing_seed().await?,
+            StoredSigningSeed::Missing
+        ),
         "keyring-backed genesis must not recreate the plaintext singleton signer"
     );
     let entry = NookDatabase::load_entry_for_app_id(identity.app_id())

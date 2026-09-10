@@ -13,6 +13,7 @@ use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use nook_core::AppKeyIdentityMembership;
 use nook_core::IsoTimestamp;
 use nook_core::MemberLabelState;
+use nook_core::StoredSigningSeed;
 use nook_core::{
     DirectoryCreationEnrollment, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
     IdentityCreation, IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
@@ -295,7 +296,7 @@ mod tests {
         assert!(identity.owns_vault(&pending.store_id));
         assert_eq!(
             NookDatabase::load_signing_seed().await?,
-            Some("staged-signing-seed".to_owned())
+            StoredSigningSeed::Stored("staged-signing-seed".to_owned())
         );
         NookDatabase::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
         NookDatabase::clear_identity_directory_for_test().await

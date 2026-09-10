@@ -5,7 +5,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use std::mem;
+use std::{fmt, mem};
 
 use crate::{
     AgeArmoredCiphertext, DeviceId, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
@@ -67,10 +67,33 @@ pub enum HandoffEventLog {
     ExistingEvents,
 }
 
+/// Durable signer availability before an extension identity handoff.
+#[derive(Clone, PartialEq, Eq)]
+pub enum StoredSigningSeed {
+    Missing,
+    Stored(String),
+}
+impl fmt::Debug for StoredSigningSeed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Missing => formatter.write_str("StoredSigningSeed::Missing"),
+            Self::Stored(_) => formatter.write_str("StoredSigningSeed::Stored([REDACTED])"),
+        }
+    }
+}
+impl Zeroize for StoredSigningSeed {
+    fn zeroize(&mut self) {
+        if let Self::Stored(seed) = self {
+            seed.zeroize();
+        }
+        *self = Self::Missing;
+    }
+}
+
 /// Seed candidates owned until the existing signer-selection policy completes.
 pub struct HandoffSigningSeedSelection {
     pub handoff_seed: String,
-    pub stored_seed: Option<String>,
+    pub stored_seed: StoredSigningSeed,
     pub event_log: HandoffEventLog,
 }
 
@@ -91,7 +114,8 @@ impl HandoffSigningSeedSelection {
     #[must_use]
     pub fn choose(mut self) -> HandoffSigningSeedChoice {
         if self.event_log == HandoffEventLog::ExistingEvents
-            && let Some(seed) = self.stored_seed.as_mut().filter(|value| !value.is_empty())
+            && let StoredSigningSeed::Stored(seed) = &mut self.stored_seed
+            && !seed.is_empty()
         {
             self.handoff_seed.zeroize();
             return HandoffSigningSeedChoice::KeepStored {
@@ -285,6 +309,7 @@ mod tests {
         ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen,
         ExtensionIdentityHandoffPayload, ExtensionIdentityHandoffSeal, HandoffEventLog,
         HandoffNonce, HandoffSigningSeedChoice, HandoffSigningSeedSelection, SensitiveSigningSeed,
+        StoredSigningSeed,
     };
     use crate::{
         AgeArmoredCiphertext, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
@@ -397,7 +422,7 @@ mod tests {
         assert_eq!(
             HandoffSigningSeedSelection {
                 handoff_seed: "handoff-seed".to_owned(),
-                stored_seed: Some("authorized-seed".to_owned()),
+                stored_seed: StoredSigningSeed::Stored("authorized-seed".to_owned()),
                 event_log: HandoffEventLog::ExistingEvents,
             }
             .choose(),
@@ -413,7 +438,7 @@ mod tests {
             assert_eq!(
                 HandoffSigningSeedSelection {
                     handoff_seed: "handoff-seed".to_owned(),
-                    stored_seed: None,
+                    stored_seed: StoredSigningSeed::Missing,
                     event_log
                 }
                 .choose(),
@@ -683,7 +708,7 @@ mod tests {
         for event_log in [HandoffEventLog::Empty, HandoffEventLog::ExistingEvents] {
             let selected = HandoffSigningSeedSelection {
                 handoff_seed: "incoming".to_owned(),
-                stored_seed: Some(String::new()),
+                stored_seed: StoredSigningSeed::Stored(String::new()),
                 event_log,
             }
             .choose();
@@ -698,7 +723,7 @@ mod tests {
         assert_eq!(
             HandoffSigningSeedSelection {
                 handoff_seed: "incoming".to_owned(),
-                stored_seed: Some(" \t ".to_owned()),
+                stored_seed: StoredSigningSeed::Stored(" \t ".to_owned()),
                 event_log: HandoffEventLog::ExistingEvents
             }
             .choose(),
@@ -709,7 +734,7 @@ mod tests {
         assert_eq!(
             HandoffSigningSeedSelection {
                 handoff_seed: "incoming".to_owned(),
-                stored_seed: Some("stored".to_owned()),
+                stored_seed: StoredSigningSeed::Stored("stored".to_owned()),
                 event_log: HandoffEventLog::Empty
             }
             .choose(),
@@ -724,11 +749,11 @@ mod tests {
     fn seed_selection_cleanup_wipes_both_owned_candidates() {
         let mut request = HandoffSigningSeedSelection {
             handoff_seed: "incoming".to_owned(),
-            stored_seed: Some("stored".to_owned()),
+            stored_seed: StoredSigningSeed::Stored("stored".to_owned()),
             event_log: HandoffEventLog::ExistingEvents,
         };
         request.zeroize();
         assert!(request.handoff_seed.is_empty());
-        assert!(request.stored_seed.as_ref().is_none_or(String::is_empty));
+        assert!(matches!(request.stored_seed, StoredSigningSeed::Missing));
     }
 }

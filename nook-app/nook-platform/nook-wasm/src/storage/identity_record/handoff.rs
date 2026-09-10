@@ -11,6 +11,7 @@ use crate::storage::event_db;
 use crate::{IdbPutStringRequest, NookDatabase, manager};
 use existing_vault::ExistingVaultHandoff;
 use nook_core::MemberLabelState;
+use nook_core::StoredSigningSeed;
 use nook_core::{
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
     IdentityCreation, IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
@@ -269,7 +270,10 @@ mod tests {
                     .identities()
                     .is_empty()
             );
-            assert!(NookDatabase::load_signing_seed().await?.is_none());
+            assert!(matches!(
+                NookDatabase::load_signing_seed().await?,
+                StoredSigningSeed::Missing
+            ));
         }
         NookDatabase::clear_vault_db().await
     }
@@ -331,7 +335,10 @@ mod tests {
             .find(|member| member.app_id == *fixture.app_key.app_id())
             .ok_or_else(|| NookError::Database("Handoff member is missing.".to_owned()))?;
         assert_eq!(member.signing_public_key, fixture.signing_public_key);
-        assert_eq!(NookDatabase::load_signing_seed().await?, Some(fixture.seed));
+        assert_eq!(
+            NookDatabase::load_signing_seed().await?,
+            StoredSigningSeed::Stored(fixture.seed)
+        );
         NookDatabase::clear_vault_db().await
     }
 
@@ -357,7 +364,10 @@ mod tests {
                 .await?
                 .is_none()
         );
-        assert!(NookDatabase::load_signing_seed().await?.is_none());
+        assert!(matches!(
+            NookDatabase::load_signing_seed().await?,
+            StoredSigningSeed::Missing
+        ));
         NookDatabase::clear_vault_db().await
     }
 }

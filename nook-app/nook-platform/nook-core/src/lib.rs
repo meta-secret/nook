@@ -109,7 +109,7 @@ pub use extension_identity_handoff::{
     ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen, ExtensionIdentityHandoffSeal,
     ExtensionIdentityHandoffSealRequest, ExtensionIdentityHandoffSource,
     ExtensionIdentityHandoffSourceBinding, HandoffEventLog, HandoffSigningSeedChoice,
-    HandoffSigningSeedSelection,
+    HandoffSigningSeedSelection, StoredSigningSeed,
 };
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan,

@@ -12,6 +12,7 @@ use crate::storage::{event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::EventLookup;
 use nook_core::MemberLabelState;
+use nook_core::StoredSigningSeed;
 use nook_core::{DeviceAuthorization, EpochCheckpoint};
 use nook_core::{
     DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
@@ -255,7 +256,7 @@ mod tests {
 
         async fn assert_nothing_published(
             &self,
-            signing_seed_before: Option<&String>,
+            signing_seed_before: &StoredSigningSeed,
         ) -> Result<(), NookError> {
             assert!(
                 NookDatabase::load_identity_directory()
@@ -264,7 +265,7 @@ mod tests {
                     .is_empty()
             );
             assert_eq!(
-                NookDatabase::load_signing_seed().await?.as_ref(),
+                &NookDatabase::load_signing_seed().await?,
                 signing_seed_before
             );
             Ok(())
@@ -304,7 +305,7 @@ mod tests {
 
         assert!(result.is_err());
         fixture
-            .assert_nothing_published(signing_seed_before.as_ref())
+            .assert_nothing_published(&signing_seed_before)
             .await?;
         NookDatabase::clear_identity_directory_for_test().await?;
         Ok(())
@@ -850,7 +851,10 @@ mod tests {
                 .identities()
                 .is_empty()
         );
-        assert!(NookDatabase::load_signing_seed().await?.is_none());
+        assert!(matches!(
+            NookDatabase::load_signing_seed().await?,
+            StoredSigningSeed::Missing
+        ));
         NookDatabase::clear_vault_db().await
     }
 }
