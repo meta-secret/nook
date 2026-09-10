@@ -3,6 +3,7 @@
 use crate::NookDatabase;
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
+use crate::storage::indexed_db::StoredSentinelShareDelivery;
 use nook_core::{
     SentinelOnboardingIssuance, SentinelOnboardingPackage, SentinelOnboardingRecipient,
 };
@@ -116,16 +117,19 @@ impl NookVaultManager {
         store_id: String,
     ) -> Result<String, JsError> {
         let identity = self.ensure_device_identity()?;
-        let stored_json = NookDatabase::load_sentinel_genesis_share_delivery(
+        let stored_json = match NookDatabase::load_sentinel_genesis_share_delivery(
             SentinelDbLoadSentinelGenesisShareDelivery {
                 store_id: store_id.trim(),
                 device_id: identity.device_id().as_str(),
             },
         )
         .await?
-        .ok_or_else(|| {
-            JsError::new("No Sentinel share delivery exists for this vault and device.")
-        })?;
+        {
+            StoredSentinelShareDelivery::Delivered(value) => Ok(value),
+            StoredSentinelShareDelivery::NotDelivered => Err({
+                JsError::new("No Sentinel share delivery exists for this vault and device.")
+            }),
+        }?;
         let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let record = stored

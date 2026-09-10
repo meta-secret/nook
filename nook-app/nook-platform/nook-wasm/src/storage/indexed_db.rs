@@ -59,7 +59,10 @@ pub(crate) const APP_KEY_WRAPPED_KEY: &str = "app_key_wrapped";
 pub(crate) const DEVICE_ID_KEY: &str = "device_id";
 /// Legacy dual-read key for [`APP_KEY_WRAPPED_KEY`].
 pub(crate) const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
-pub(crate) use sentinel_storage::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY;
+pub(crate) use sentinel_storage::{
+    SENTINEL_GENESIS_FINALIZATION_PENDING_KEY, SentinelFinalizationJournal,
+    StoredSentinelShareDelivery,
+};
 
 /// Registry wire history remains an omitted field, null, or a timestamp string.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

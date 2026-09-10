@@ -7,6 +7,7 @@ use crate::IdentityDbSaveProtectedLocalIdentity;
 use crate::manager::session::ExtensionHandoffState;
 use crate::storage::device_access::DeviceAccessProfileKey;
 use crate::storage::identity_record::LocalIdentitySigner;
+use crate::storage::indexed_db::SentinelFinalizationJournal;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{auth_providers, identity_record, indexed_db};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
@@ -32,9 +33,10 @@ impl NookVaultManager {
 impl NookVaultManager {
     async fn ensure_no_pending_vault_creation() -> Result<(), NookError> {
         let simple_pending = PendingSimpleGenesis::load().await?.is_some();
-        let sentinel_pending = NookDatabase::load_sentinel_genesis_finalization_pending()
-            .await?
-            .is_some();
+        let sentinel_pending = matches!(
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::Pending(_)
+        );
         let recovery_cleanup_pending = LocalIdentityRecovery::has_pending().await?;
         if simple_pending || sentinel_pending || recovery_cleanup_pending {
             return Err(NookError::Database(

@@ -8,6 +8,7 @@ use crate::LoadedVaultUnlockRequest;
 use crate::NookDatabase;
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
+use crate::storage::indexed_db::{SentinelFinalizationJournal, StoredSentinelShareDelivery};
 use nook_core::{CreateSentinelShareRecordsRequest, DeviceId, SentinelShareEnvelope};
 use nook_core::{
     MultiDeviceError, SentinelConfiguration, SentinelGenesisPhase, SentinelUnlockSigning, StoreId,
@@ -45,7 +46,9 @@ impl NookVaultManager {
         mut args: nook_core::StartSentinelGenesisArgs,
     ) -> Result<NookSentinelGenesisStatus, JsError> {
         let pending = NookDatabase::load_sentinel_genesis_finalization_pending().await;
-        if self.observe_sentinel_genesis_journal(pending)?.is_some() {
+        if let SentinelFinalizationJournal::Pending(_) =
+            self.observe_sentinel_genesis_journal(pending)?
+        {
             return Err(JsError::new(
                 "A finalized Sentinel setup is awaiting durable completion; retry finalization first.",
             ));
@@ -266,14 +269,19 @@ impl NookVaultManager {
             }) {
             participant.signing_public_key.clone()
         } else {
-            let stored_json = NookDatabase::load_sentinel_genesis_share_delivery(
+            let stored_json = match NookDatabase::load_sentinel_genesis_share_delivery(
                 SentinelDbLoadSentinelGenesisShareDelivery {
                     store_id: request.store_id.as_str(),
                     device_id: identity.device_id().as_str(),
                 },
             )
             .await?
-            .ok_or(MultiDeviceError::InvalidSentinelUnlockPayload)?;
+            {
+                StoredSentinelShareDelivery::Delivered(raw) => raw,
+                StoredSentinelShareDelivery::NotDelivered => {
+                    return Err(MultiDeviceError::InvalidSentinelUnlockPayload.into());
+                }
+            };
             let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored_json)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             stored

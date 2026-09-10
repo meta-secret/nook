@@ -5,6 +5,18 @@
 //! persists the identifiers and encrypted delivery JSON returned by that
 //! verified boundary.
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum StoredSentinelShareDelivery {
+    NotDelivered,
+    Delivered(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SentinelFinalizationJournal {
+    NotPending,
+    Pending(String),
+}
+
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use rexie::TransactionMode;
@@ -131,13 +143,13 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn load_sentinel_genesis_share_delivery(
         request: SentinelDbLoadSentinelGenesisShareDelivery<'_>,
-    ) -> Result<Option<String>, NookError> {
+    ) -> Result<StoredSentinelShareDelivery, NookError> {
         let SentinelDbLoadSentinelGenesisShareDelivery {
             store_id,
             device_id,
         } = request;
         if store_id.trim().is_empty() || device_id.trim().is_empty() {
-            return Ok(None);
+            return Ok(StoredSentinelShareDelivery::NotDelivered);
         }
         Ok(
             match NookDatabase::idb_get_string(&NookDatabase::sentinel_genesis_share_key(
@@ -148,8 +160,8 @@ impl NookDatabase {
             ))
             .await?
             {
-                StoredStringRecord::MissingKey => None,
-                StoredStringRecord::Stored(raw) => Some(raw),
+                StoredStringRecord::MissingKey => StoredSentinelShareDelivery::NotDelivered,
+                StoredStringRecord::Stored(raw) => StoredSentinelShareDelivery::Delivered(raw),
             },
         )
     }
@@ -196,11 +208,11 @@ impl NookDatabase {
 
 impl NookDatabase {
     pub(crate) async fn load_sentinel_genesis_finalization_pending()
-    -> Result<Option<String>, NookError> {
+    -> Result<SentinelFinalizationJournal, NookError> {
         Ok(
             match NookDatabase::idb_get_string(SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await? {
-                StoredStringRecord::MissingKey => None,
-                StoredStringRecord::Stored(raw) => Some(raw),
+                StoredStringRecord::MissingKey => SentinelFinalizationJournal::NotPending,
+                StoredStringRecord::Stored(raw) => SentinelFinalizationJournal::Pending(raw),
             },
         )
     }
@@ -245,9 +257,8 @@ mod browser_tests {
                     device_id: device_id
                 }
             )
-            .await?
-            .as_deref(),
-            Some(payload)
+            .await?,
+            StoredSentinelShareDelivery::Delivered((payload).to_owned())
         );
         assert_eq!(
             NookDatabase::list_sentinel_genesis_share_deliveries(device_id).await?,
@@ -275,16 +286,16 @@ mod browser_tests {
             .await
             .is_err()
         );
-        assert!(
+        assert!(matches!(
             NookDatabase::load_sentinel_genesis_share_delivery(
                 SentinelDbLoadSentinelGenesisShareDelivery {
                     store_id: "",
                     device_id: "device"
                 }
             )
-            .await?
-            .is_none()
-        );
+            .await?,
+            StoredSentinelShareDelivery::NotDelivered
+        ));
         assert!(
             NookDatabase::list_sentinel_genesis_share_deliveries("")
                 .await?
@@ -295,11 +306,10 @@ mod browser_tests {
                 .await
                 .is_err()
         );
-        assert!(
-            NookDatabase::load_sentinel_genesis_finalization_pending()
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::NotPending
+        ));
         Ok(())
     }
 
@@ -347,17 +357,14 @@ mod browser_tests {
         let _ = Rexie::delete("nook_db").await;
         NookDatabase::save_sentinel_genesis_finalization_pending("{\"store\":\"pending\"}").await?;
         assert_eq!(
-            NookDatabase::load_sentinel_genesis_finalization_pending()
-                .await?
-                .as_deref(),
-            Some("{\"store\":\"pending\"}")
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::Pending(("{\"store\":\"pending\"}").to_owned())
         );
         NookDatabase::clear_sentinel_genesis_finalization_pending().await?;
-        assert!(
-            NookDatabase::load_sentinel_genesis_finalization_pending()
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::NotPending
+        ));
         Ok(())
     }
 }
