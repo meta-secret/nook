@@ -1,12 +1,19 @@
+enum DebugOriginAdmission {
+  Allowed = "allowed",
+  Blocked = "blocked",
+}
+
 class DebugRequestOrigin {
   constructor(private readonly request: string) {}
-  isAllowed(): boolean {
+  admission(): DebugOriginAdmission {
     const rawUrl = this.request;
 
     try {
-      return allowedOrigins.has(new URL(rawUrl).origin);
+      return allowedOrigins.has(new URL(rawUrl).origin)
+        ? DebugOriginAdmission.Allowed
+        : DebugOriginAdmission.Blocked;
     } catch {
-      return false;
+      return DebugOriginAdmission.Blocked;
     }
   }
 }
@@ -35,7 +42,10 @@ export default async ({ page }) => {
   const context = page.context();
 
   await context.route("**/*", async (route) => {
-    if (new DebugRequestOrigin(route.request().url()).isAllowed()) {
+    if (
+      new DebugRequestOrigin(route.request().url()).admission() ===
+      DebugOriginAdmission.Allowed
+    ) {
       await route.continue();
       return;
     }
@@ -44,7 +54,10 @@ export default async ({ page }) => {
   });
 
   await context.routeWebSocket(/.*/, async (webSocket) => {
-    if (new DebugRequestOrigin(webSocket.url()).isAllowed()) {
+    if (
+      new DebugRequestOrigin(webSocket.url()).admission() ===
+      DebugOriginAdmission.Allowed
+    ) {
       webSocket.connectToServer();
       return;
     }
