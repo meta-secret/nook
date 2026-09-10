@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Dialog } from 'bits-ui'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     FolderOpen,
@@ -9,11 +10,9 @@
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
-    Card,
     CardContent,
     CardDescription,
     CardHeader,
-    CardTitle,
   } from '$lib/components/ui/card'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookLocalFolderHealth } from '$app-wasm'
@@ -33,31 +32,25 @@
   } = $props()
 </script>
 
-<div
-  class="fixed inset-0 z-50 flex items-center justify-center p-4"
-  role="dialog"
-  aria-modal="true"
-  aria-labelledby="local-folder-multiple-vaults-title"
-  data-testid="local-folder-multiple-vaults-dialog"
->
-  <div
-    class="absolute inset-0 bg-background/80 backdrop-blur-sm"
-    aria-hidden="true"
-  ></div>
-
-  <Card
-    class="relative z-10 w-full max-w-lg border-border bg-card shadow-2xl shadow-black/40 animate-in fade-in zoom-in-95 duration-200"
-  >
+<Dialog.Root open={true}>
+  <Dialog.Portal>
+    <Dialog.Overlay class="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
+    <Dialog.Content
+      class="text-card-foreground flex flex-col gap-6 rounded-lg border py-6 fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[calc(100%_-_2rem)] max-w-lg border-border bg-card shadow-2xl shadow-black/40 animate-in fade-in zoom-in-95 duration-200"
+      data-testid="local-folder-multiple-vaults-dialog"
+      escapeKeydownBehavior="ignore"
+      interactOutsideBehavior="ignore"
+    >
     <CardHeader class="border-b border-border/60 pb-4">
       <div class="flex items-start justify-between gap-3">
         <div class="space-y-1">
-          <CardTitle
+          <Dialog.Title
             id="local-folder-multiple-vaults-title"
-            class="inline-flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground"
+            class="leading-none inline-flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground"
           >
             <TriangleAlert class="size-4 shrink-0 text-amber-500" />
             {vault.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsTitle)}
-          </CardTitle>
+          </Dialog.Title>
           <CardDescription class="text-pretty">
             {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
   key: I18N_KEYS.AuthStorageLocalFolderMultipleVaultsDesc,
@@ -131,5 +124,6 @@
         </Button>
       </div>
     </CardContent>
-  </Card>
-</div>
+  </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>

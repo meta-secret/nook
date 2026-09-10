@@ -137,7 +137,7 @@ export class ExtensionSessionDocumentOwner {
     try {
       await chrome.offscreen.createDocument({
         url: extensionSessionDocument,
-        reasons: ['WORKERS'],
+        reasons: [chrome.offscreen.Reason.WORKERS],
         justification:
           'Keep a user-authorized extension device identity in memory for a 15-minute session.',
       })

@@ -134,7 +134,7 @@ export class AccountPickerPageTarget {
     frameId,
     message,
   }: AccountPickerPageMessageDelivery): Promise<unknown> {
-    const options: ChromeTabMessageOptions = { frameId }
+    const options: chrome.tabs.MessageSendOptions = { frameId }
     return chrome.tabs.sendMessage(tabId, message, options)
   }
 }

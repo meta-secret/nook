@@ -290,7 +290,7 @@ export class ExtensionAuthenticatorSession {
         account: { vaultStoreId, secretId, authorizationGeneration },
       },
     }
-    const options: ChromeTabMessageOptions = { frameId }
+    const options: chrome.tabs.MessageSendOptions = { frameId }
     let response: unknown
     try {
       response = await chrome.tabs.sendMessage(tabId, message, options)

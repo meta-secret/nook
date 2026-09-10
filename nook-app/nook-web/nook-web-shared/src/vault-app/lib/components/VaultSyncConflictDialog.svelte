@@ -1,13 +1,12 @@
 <script lang="ts">
+  import { Dialog } from 'bits-ui'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { HardDrive, Cloud, RefreshCw, TriangleAlert } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
-    Card,
     CardContent,
     CardDescription,
     CardHeader,
-    CardTitle,
   } from '$lib/components/ui/card'
   import type { NookSyncConflictReview } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
@@ -92,31 +91,25 @@
   )
 </script>
 
-<div
-  class="fixed inset-0 z-50 flex items-center justify-center p-4"
-  role="dialog"
-  aria-modal="true"
-  aria-labelledby="sync-conflict-title"
-  data-testid="vault-sync-conflict-dialog"
->
-  <div
-    class="absolute inset-0 bg-background/80 backdrop-blur-sm"
-    aria-hidden="true"
-  ></div>
-
-  <Card
-    class="relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto border-border bg-card shadow-2xl shadow-black/40 animate-in fade-in zoom-in-95 duration-200"
-  >
+<Dialog.Root open={true}>
+  <Dialog.Portal>
+    <Dialog.Overlay class="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
+    <Dialog.Content
+      class="text-card-foreground flex flex-col gap-6 rounded-lg border py-6 fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto border-border bg-card shadow-2xl shadow-black/40 animate-in fade-in zoom-in-95 duration-200"
+      data-testid="vault-sync-conflict-dialog"
+      escapeKeydownBehavior="ignore"
+      interactOutsideBehavior="ignore"
+    >
     <CardHeader class="border-b border-border/60 pb-4">
       <div class="flex items-start justify-between gap-3">
         <div class="space-y-1">
-          <CardTitle
+          <Dialog.Title
             id="sync-conflict-title"
-            class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
+            class="leading-none text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
           >
             <TriangleAlert class="size-4 shrink-0 text-amber-500" />
             {conflictTitle}
-          </CardTitle>
+          </Dialog.Title>
           <CardDescription class="text-pretty">
             {conflictDescription}
           </CardDescription>
@@ -230,5 +223,6 @@
         </div>
       {/if}
     </CardContent>
-  </Card>
-</div>
+  </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
