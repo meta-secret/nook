@@ -220,15 +220,16 @@ pub use auth::vault_meta_actions::{
 };
 pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
-    AppId, AppKey, DirectoryCreationEnrollment, DirectoryLegacyVaultImport,
-    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
-    IdentityCreation, IdentityDirectory, IdentityDirectoryRejection, IdentityDirectoryResolution,
-    IdentityDirectoryVaultKeys, IdentityId, IdentityLegacyVaultImport,
+    AppId, AppKey, DirectoryCreationEnrollment, DirectoryLegacyMigration,
+    DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
+    DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
+    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityLegacyVaultImport,
     IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberSigningUpdate,
     IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection, IdentitySelection,
     IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
     IdentityVaultDekReconciliation, IdentityVaultEventId, IdentityVaultKeyOpening,
-    IdentityVaultKeys, LocalIdentityKeyRetirement, MemberDekEnvelope, StagedIdentityRebase,
+    IdentityVaultKeys, LegacyDirectoryBase, LocalIdentityKeyRetirement, MemberDekEnvelope,
+    MigratedIdentityDirectory, PreparedLegacyDirectoryMigration, StagedIdentityRebase,
 };
 
 pub use multi_device::{

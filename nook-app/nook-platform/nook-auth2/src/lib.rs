@@ -56,10 +56,11 @@ pub use auth::identity::{
     IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
 };
 pub use auth::identity_directory::{
-    DirectoryCreationEnrollment, DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate,
-    DirectoryOwnedVaultOpening, DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory,
-    IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
-    IdentitySelection, LocalIdentityKeyRetirement, StagedIdentityRebase,
+    DirectoryCreationEnrollment, DirectoryLegacyMigration, DirectoryLegacyVaultImport,
+    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
+    IdentityCreation, IdentityDirectory, IdentityDirectoryRejection, IdentityDirectoryResolution,
+    IdentityDirectoryVaultKeys, IdentitySelection, LegacyDirectoryBase, LocalIdentityKeyRetirement,
+    MigratedIdentityDirectory, PreparedLegacyDirectoryMigration, StagedIdentityRebase,
 };
 
 pub use auth::local_identity_keyring::{

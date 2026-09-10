@@ -1,4 +1,5 @@
 //! Local identity-directory persistence, independent of vault `store_id`.
+use nook_core::MigratedIdentityDirectory;
 
 use crate::storage::indexed_db;
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
@@ -231,7 +232,7 @@ impl NookDatabase {
             directory: NookDatabase::decode_directory_value(raw)?,
             preserved_identity_id: None,
         })
-        .map(|(directory, _)| directory)
+        .map(|migrated| migrated.directory)
     }
 }
 
@@ -246,7 +247,7 @@ impl NookDatabase {
 impl NookDatabase {
     fn migrate_directory(
         request: IdentityDbMigrateDirectory<'_>,
-    ) -> Result<(IdentityDirectory, bool), NookError> {
+    ) -> Result<MigratedIdentityDirectory, NookError> {
         let IdentityDbMigrateDirectory {
             directory,
             preserved_identity_id,
@@ -311,7 +312,7 @@ impl NookDatabase {
             directory: directory,
         })
         .await
-        .map(|(directory, _)| directory)
+        .map(|migrated| migrated.directory)
     }
 }
 

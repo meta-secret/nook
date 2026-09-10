@@ -1,10 +1,15 @@
 //! Atomic identity-directory and pending-genesis migration.
+use super::genesis_flow::PendingSimpleGenesisFlow;
+use super::staged_genesis::StagedSimpleGenesisIdentity;
 use super::*;
 use crate::{
     IdentityDbMigrateDirectory, IdentityDbMigrateDirectoryInStore, IdentityDbPersistPendingGenesis,
     NookDatabase, NookError,
 };
-use nook_core::IdentityDirectory;
+use nook_core::{
+    DirectoryLegacyMigration, IdentityDirectory, LegacyDirectoryBase, MigratedIdentityDirectory,
+    MultiDeviceError,
+};
 use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 impl NookDatabase {
     pub(super) async fn load_pending_genesis(
@@ -29,30 +34,82 @@ impl NookDatabase {
     }
 }
 
-impl NookDatabase {
-    pub(super) fn migrate_staged_genesis_directories(
-        pending: &mut PendingSimpleGenesis,
-    ) -> Result<bool, NookError> {
-        let genesis_flow::PendingSimpleGenesisFlow::Staged(staged) = &mut pending.flow else {
-            return Ok(false);
+pub(super) struct MigratedPendingGenesis {
+    pub(super) pending: PendingSimpleGenesis,
+    migration: DirectoryLegacyMigration,
+}
+#[derive(Debug, thiserror::Error)]
+#[error("{cause}")]
+pub(super) struct PendingGenesisMigrationRejection {
+    pending: PendingSimpleGenesis,
+    #[source]
+    cause: MultiDeviceError,
+}
+impl PendingGenesisMigrationRejection {
+    pub(super) fn into_cause(self) -> NookError {
+        let Self { pending, cause } = self;
+        drop(pending);
+        NookDatabase::map_domain_error(cause)
+    }
+}
+impl PendingSimpleGenesis {
+    pub(super) fn migrate_directories(
+        mut self,
+    ) -> Result<MigratedPendingGenesis, PendingGenesisMigrationRejection> {
+        let staged = match self.flow {
+            PendingSimpleGenesisFlow::Ordinary => {
+                return Ok(MigratedPendingGenesis {
+                    pending: self,
+                    migration: DirectoryLegacyMigration::Unchanged,
+                });
+            }
+            PendingSimpleGenesisFlow::Staged(staged) => staged,
         };
-        let legacy_base = staged.base_directory.clone();
-        let (base_directory, base_changed) = staged
-            .base_directory
-            .clone()
-            .migrate_legacy_duplicate_app_key_ownership_preserving(&pending.identity_id)
-            .map_err(NookDatabase::map_domain_error)?;
-        let (directory, directory_changed) = staged
+        let candidate = match staged
             .directory
-            .clone()
-            .migrate_legacy_duplicate_app_key_ownership_from_base(
-                &legacy_base,
-                &pending.identity_id,
-            )
-            .map_err(NookDatabase::map_domain_error)?;
-        staged.base_directory = base_directory;
-        staged.directory = directory;
-        Ok(base_changed || directory_changed)
+            .prepare_legacy_duplicate_app_key_ownership_from_base(LegacyDirectoryBase {
+                base: &staged.base_directory,
+                preserved_identity_id: &self.identity_id,
+            }) {
+            Ok(candidate) => candidate,
+            Err(rejected) => {
+                self.flow = PendingSimpleGenesisFlow::Staged(StagedSimpleGenesisIdentity {
+                    base_directory: staged.base_directory,
+                    directory: rejected.directory,
+                });
+                return Err(PendingGenesisMigrationRejection {
+                    pending: self,
+                    cause: rejected.cause,
+                });
+            }
+        };
+        let base = match staged
+            .base_directory
+            .prepare_legacy_duplicate_app_key_ownership_preserving(&self.identity_id)
+        {
+            Ok(base) => base,
+            Err(rejected) => {
+                self.flow = PendingSimpleGenesisFlow::Staged(StagedSimpleGenesisIdentity {
+                    base_directory: rejected.directory,
+                    directory: candidate.cancel(),
+                });
+                return Err(PendingGenesisMigrationRejection {
+                    pending: self,
+                    cause: rejected.cause,
+                });
+            }
+        };
+        let base = base.commit();
+        let candidate = candidate.commit();
+        let migration = base.migration.combine(candidate.migration);
+        self.flow = PendingSimpleGenesisFlow::Staged(StagedSimpleGenesisIdentity {
+            base_directory: base.directory,
+            directory: candidate.directory,
+        });
+        Ok(MigratedPendingGenesis {
+            pending: self,
+            migration,
+        })
     }
 }
 
@@ -81,28 +138,31 @@ impl NookDatabase {
 impl NookDatabase {
     pub(super) async fn migrate_directory_in_store(
         request: IdentityDbMigrateDirectoryInStore<'_>,
-    ) -> Result<(IdentityDirectory, bool), NookError> {
+    ) -> Result<MigratedIdentityDirectory, NookError> {
         let IdentityDbMigrateDirectoryInStore { store, directory } = request;
-        let mut pending = if directory.has_legacy_duplicate_app_key_ownership() {
+        let pending = if directory.has_legacy_duplicate_app_key_ownership() {
             NookDatabase::load_pending_genesis(store).await?
         } else {
             None
         };
         let preserved_identity_id = pending.as_ref().map(|pending| &pending.identity_id);
-        let (directory, migrated) = NookDatabase::migrate_directory(IdentityDbMigrateDirectory {
+        let migrated = NookDatabase::migrate_directory(IdentityDbMigrateDirectory {
             directory: directory,
             preserved_identity_id: preserved_identity_id,
         })?;
-        if let Some(pending) = &mut pending
-            && NookDatabase::migrate_staged_genesis_directories(pending)?
-        {
-            NookDatabase::persist_pending_genesis(IdentityDbPersistPendingGenesis {
-                store: store,
-                pending: pending,
-            })
-            .await?;
+        if let Some(pending) = pending {
+            let migrated_pending = pending
+                .migrate_directories()
+                .map_err(PendingGenesisMigrationRejection::into_cause)?;
+            if migrated_pending.migration == DirectoryLegacyMigration::Merged {
+                NookDatabase::persist_pending_genesis(IdentityDbPersistPendingGenesis {
+                    store,
+                    pending: &migrated_pending.pending,
+                })
+                .await?;
+            }
         }
-        Ok((directory, migrated))
+        Ok(migrated)
     }
 }
 
@@ -133,13 +193,15 @@ impl NookDatabase {
                 NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
             })?;
             let directory = NookDatabase::decode_directory_value(&persisted_raw)?;
-            let (directory, migrated) =
-                NookDatabase::migrate_directory_in_store(IdentityDbMigrateDirectoryInStore {
-                    store: &store,
-                    directory: directory,
-                })
-                .await?;
-            let raw = if migrated {
+            let MigratedIdentityDirectory {
+                directory,
+                migration,
+            } = NookDatabase::migrate_directory_in_store(IdentityDbMigrateDirectoryInStore {
+                store: &store,
+                directory: directory,
+            })
+            .await?;
+            let raw = if migration == DirectoryLegacyMigration::Merged {
                 let normalized = serde_json::to_string(&directory).map_err(|error| {
                     NookError::IndexedDb(format!("Identity directory encode error: {error}"))
                 })?;

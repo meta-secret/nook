@@ -13,6 +13,10 @@ use crate::{
 };
 
 mod legacy_migration;
+pub use legacy_migration::{
+    DirectoryLegacyMigration, LegacyDirectoryBase, MigratedIdentityDirectory,
+    PreparedLegacyDirectoryMigration,
+};
 mod staged_rebase;
 pub use staged_rebase::StagedIdentityRebase;
 mod transition;

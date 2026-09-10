@@ -610,9 +610,10 @@ mod tests {
                 directory: candidate,
             }),
         };
-        let (normalized, _) = legacy
+        let normalized = legacy
             .migrate_legacy_duplicate_app_key_ownership_preserving(&pending_identity_id)
-            .map_err(NookDatabase::map_domain_error)?;
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?
+            .directory;
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: identity_record::IDENTITY_DIRECTORY_KEY,
             value: &serde_json::to_string(&normalized)
@@ -717,9 +718,10 @@ mod tests {
                 directory: candidate,
             }),
         };
-        let (normalized, _) = legacy
+        let normalized = legacy
             .migrate_legacy_duplicate_app_key_ownership_preserving(&pending_identity_id)
-            .map_err(NookDatabase::map_domain_error)?;
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?
+            .directory;
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: identity_record::IDENTITY_DIRECTORY_KEY,
             value: &serde_json::to_string(&normalized)
