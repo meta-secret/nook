@@ -344,7 +344,8 @@ class CodexEventStream {
   ): Promise<Result<CodexTurnState, AgentExecutionFailure>> {
     let iterator;
     try {
-      iterator = this.events[Symbol.asyncIterator]();
+      const open = this.events[Symbol.asyncIterator];
+      iterator = open.call(this.events);
     } catch {
       return err({
         kind: CodexExecutionFailureKind.RuntimeBoundary,
