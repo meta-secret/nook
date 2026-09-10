@@ -11,13 +11,8 @@
 )]
 
 use crate::MemberLabelState;
-use crate::RecordTypeDeclaration;
 use crate::{MemberLabel, VaultOperation};
-use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
-use nook_auth2::{
-    IdentityRecord, IdentityVaultGenesisRecordsRequest, MultiDeviceError,
-    ResolveMemberRosterRequest, VaultMember,
-};
+use nook_auth2::{IdentityRecord, IdentityVaultGenesisRecordsRequest, MultiDeviceError};
 
 pub use nook_auth2::multi_device_api::*;
 
@@ -111,8 +106,9 @@ mod tests {
     use super::*;
     use crate::{
         DeviceAuthorization, EventGraph, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
-        EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId, EventInsertStatus,
-        IsoTimestamp, MemberLabel, SentinelMemberRecordProjection,
+        EventGraphDeviceAccessRequest, EventGraphInsert, EventGraphInsertion,
+        EventGraphVaultArchitecture, EventId, EventInsertStatus, IsoTimestamp, MemberLabel,
+        RecordTypeDeclaration, SentinelMemberRecordProjection,
         SentinelMemberRecordProjectionRequest, SigningIdentity, StoreId, VaultEvent,
         VaultEventBody, VaultEventSchemaVersion, VaultMetaGraphProjection,
         VaultMetaOperationApplier, VaultMetaOperationRequest,
@@ -789,12 +785,13 @@ mod tests {
 
         let revocation = history.first_revocation()?;
         let revocation_id = revocation.id()?;
-        assert_eq!(
-            history
-                .graph
-                .insert(revocation, history.store_id.as_str())?,
-            EventInsertStatus::Applied
-        );
+        let EventGraphInsertion { graph, status } =
+            std::mem::take(&mut history.graph).insert(EventGraphInsert {
+                event: revocation,
+                expected_store_id: history.store_id.as_str(),
+            })?;
+        history.graph = graph;
+        assert_eq!(status, EventInsertStatus::Applied);
         let meta = history.projected_meta()?;
         assert!(!meta.sentinel_shares.contains_key(history.first.device_id()));
         assert!(
@@ -807,12 +804,13 @@ mod tests {
         );
 
         let self_approval = history.self_approval(revocation_id)?;
-        assert!(matches!(
-            history
-                .graph
-                .insert(self_approval, history.store_id.as_str())?,
-            EventInsertStatus::Quarantined(_)
-        ));
+        let EventGraphInsertion { graph, status } =
+            std::mem::take(&mut history.graph).insert(EventGraphInsert {
+                event: self_approval,
+                expected_store_id: history.store_id.as_str(),
+            })?;
+        history.graph = graph;
+        assert!(matches!(status, EventInsertStatus::Quarantined(_)));
         Ok(())
     }
 

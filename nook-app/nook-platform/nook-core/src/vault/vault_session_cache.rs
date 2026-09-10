@@ -6,7 +6,6 @@
 )]
 
 use crate::SessionError;
-use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 
 use crate::errors::{MultiDeviceError, VaultResult};
 use crate::{DeviceIdentity, VaultFormatDocument, VaultRecordView, VaultType};
@@ -43,6 +42,7 @@ impl<'a> VaultProjectionCache<'a> {
 #[cfg(test)]
 mod tests {
     use crate::VaultKeys;
+    use crate::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
     use crate::{
         MultiDeviceError, VaultError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
     };
@@ -73,7 +73,6 @@ mod tests {
     fn hydrate_fails_closed_for_sentinel_projection_yaml() -> anyhow::Result<()> {
         use crate::{
             DeviceMode, SentinelPolicy, StoreId, VaultArchitecture, VaultRecordSet, VaultType,
-            create_sentinel_share_records,
         };
 
         let keys = VaultKeys::generate()?;

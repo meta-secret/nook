@@ -124,6 +124,7 @@ impl<'a> RemoteEventBatch<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct LocalRemoteUnion<'a> {
     pub remote_events: &'a [(EventId, EventStorageBytes)],
     pub store_id: &'a str,

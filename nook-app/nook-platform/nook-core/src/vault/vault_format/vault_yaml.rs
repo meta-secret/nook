@@ -5,7 +5,6 @@ use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, PasswordUnlockEntry, SecretId,
     StoredRecordPayload, StoredSecretRecord, VaultArchitecture, VaultMetaRecord, VaultUnlock,
 };
-use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -180,6 +179,7 @@ impl StoredVaultYaml {
 
 #[cfg(test)]
 mod tests {
+    use crate::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
     use crate::{DeviceIdentity, DeviceMode, DeviceSigningPublicKey, SecretType};
     use crate::{
         PasskeyDeviceProtectionMode, PasskeyRegistration, PasskeyRegistrationInput,

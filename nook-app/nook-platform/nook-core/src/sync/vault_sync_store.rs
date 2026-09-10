@@ -383,7 +383,7 @@ mod tests {
         let remote = MemoryVaultStore::with_blob_and_revision(remote_blob.clone(), "rev-9");
 
         let next = VaultSyncPair::new(local, remote).prepare()?.commit();
-        let (local, remote, action) = (next.local, next.remote, next.action);
+        let (local, action) = (next.local, next.action);
         assert_eq!(action, VaultSyncAction::AdoptRemote);
         assert_eq!(local.blob(), remote_blob);
         assert_eq!(local.revision(), StoreRevisionRef::Version("rev-9"));
@@ -443,11 +443,7 @@ mod tests {
         ]);
 
         let completed = VaultSyncFanOut::new(local, remotes).run()?;
-        let (local, remotes, results) = (
-            completed.stores.local,
-            completed.stores.remotes,
-            completed.actions,
-        );
+        let (remotes, results) = (completed.stores.remotes, completed.actions);
         assert_eq!(results.len(), 2);
         assert!(
             results

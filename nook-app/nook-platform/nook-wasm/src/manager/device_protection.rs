@@ -109,7 +109,6 @@ pub(in crate::manager) struct PendingExtensionIdentityHandoff {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::identity_record::VaultCreationAuthorityRef;
     use nook_core::{AppKey, SigningIdentity};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -205,9 +204,8 @@ mod tests {
 
         let authorizer = AppKey::generate()?;
         assert!(matches!(
-            (&vault_creation).pending_extension_enrollment(
-                VaultCreationAuthorityRef::ExistingIdentity(&authorizer)
-            )?,
+            (&vault_creation)
+                .pending_extension_enrollment(HandoffAuthorization::Authenticated(&authorizer))?,
             PendingExtensionIdentityEnrollment::VaultCreation {
                 authorizer: VaultCreationAuthority::ExistingIdentity(_)
             }

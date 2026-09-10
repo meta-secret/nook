@@ -217,6 +217,13 @@ impl VaultEventSession {
         self
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "storage boundary: admits persisted event bytes before converting them to EventStorageBytes"
+        )
+    )]
     pub fn union_remote(
         mut self,
         remote_events: &[(EventId, Vec<u8>)],

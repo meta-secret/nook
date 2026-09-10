@@ -6,8 +6,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::{EventCount, IdentityVaultAppGrantKind, VaultOperation};
-use nook_event_log::{GenesisImportRequest, VaultEvent};
+use crate::IdentityVaultAppGrantKind;
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -233,7 +232,10 @@ mod tests {
         event_id: EventId,
     }
 
-    use crate::{IdentityVaultAppGrantKind, VaultEvent, VaultEventSchemaVersion, VaultOperation};
+    use crate::{
+        GenesisImportRequest, IdentityVaultAppGrantKind, VaultEvent, VaultEventSchemaVersion,
+        VaultOperation,
+    };
 
     use super::*;
     use crate::{

@@ -2,7 +2,7 @@ use nook_companion_core::ExtensionGrantAuthority;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
-pub fn decode_extension_grant_authority_response(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_grant_authority_response(
     response: nook_companion_core::GrantAuthorityResponseJson,
     requested: nook_companion_core::PairingVaultId,
 ) -> Result<ExtensionGrantAuthority, JsError> {

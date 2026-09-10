@@ -1,6 +1,5 @@
 use super::secret_presentation::{AuthenticatorGroupKeyRequest, SecretTitle, WebsiteHost};
 use super::{SecretListItem, SecretListItemData, SecretRecord, SecretValue};
-use crate::CreditCardFields;
 
 impl SecretRecord {
     /// Build the secret-free list representation that may cross into UI state.
@@ -187,6 +186,7 @@ impl SecretRecord {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use crate::CreditCardFields;
     use crate::{AuthenticatorSecret, CreditCardSecret};
 
     use super::*;

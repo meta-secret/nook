@@ -83,6 +83,13 @@ impl<'de> Deserialize<'de> for DiscardedClientEnvironment {
         deserializer.deserialize_any(Self)
     }
 }
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: serde Visitor owns the inherited numeric method signatures"
+    )
+)]
 impl<'de> Visitor<'de> for DiscardedClientEnvironment {
     type Value = Self;
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

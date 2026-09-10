@@ -4,10 +4,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::{
-    ActiveVaultScope, LocalProviderSelection, ProviderLabel, StoredOAuthAccessCredential,
-    StoredOAuthRefreshCredential,
-};
+use crate::{ActiveVaultScope, LocalProviderSelection, ProviderLabel};
 use crate::{
     DuplicateCandidatePolicy, DuplicateSyncProvider, ProviderSelection, StoredOAuthRemoteFileId,
 };

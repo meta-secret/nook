@@ -323,7 +323,7 @@ mod wasm_tests {
         });
         let object = status.to_object()?;
         assert_eq!(object.vault_store_id, "store-fixture");
-        assert_eq!(u32::from(object.event_count), 3);
+        assert_eq!(object.event_count, 3.into());
         assert!(object.access_granted);
         assert_eq!(object.heads, ["head-a", "head-b"]);
         Ok(())

@@ -8,7 +8,6 @@
 use crate::errors::VaultResult;
 use crate::vault_connect::VaultAccessStatus;
 use crate::{Database, DeviceIdentity, VaultContent, VaultMetaState, VaultUnlock};
-use nook_auth2::{GenesisMembersRecordsRequest, VaultMember};
 
 /// Outcome of comparing remote YAML against the last synced snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,8 +113,8 @@ mod tests {
     use super::*;
     use crate::errors;
     use crate::{
-        PasswordEnvelope, PasswordUnlockEntry, StoreId, VaultKeys, VaultRecordSet, VaultResult,
-        genesis_members_records,
+        GenesisMembersRecordsRequest, PasswordEnvelope, PasswordUnlockEntry, StoreId, VaultKeys,
+        VaultMember, VaultRecordSet, VaultResult,
     };
 
     struct YamlSyncTestData;

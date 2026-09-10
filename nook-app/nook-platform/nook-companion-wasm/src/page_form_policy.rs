@@ -2,14 +2,8 @@
 
 use nook_companion_core::AuthenticationAdvanceControlObservation;
 use nook_companion_core::AuthenticationControlText;
-use nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation;
-use nook_companion_core::AuthenticationDetailedPasskeyControlObservation;
-use nook_companion_core::AuthenticationPageObservation;
-use nook_companion_core::AuthenticationPageObservationFacts;
 use nook_companion_core::AuthenticationRouteActuation;
 use nook_companion_core::AuthenticationRouteEvidence;
-use nook_companion_core::LoginContextObservation;
-use nook_companion_core::PageInputFieldObservation;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -51,7 +45,7 @@ impl NookPageInputFieldObservation {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn expand_identity_text(value: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn expand_identity_text(value: &str) -> String {
     AuthenticationControlText::new(value).expand_identity_text()
 }
 
@@ -84,37 +78,37 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
     (&observation.inner).has_login_context()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
     (&field.inner).looks_like_username_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
     (&field.inner).looks_like_one_time_code_field()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_one_time_code_auto_submit_signal(signal: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_one_time_code_auto_submit_signal(signal: &str) -> bool {
     AuthenticationControlText::new(signal).looks_like_one_time_code_auto_submit_signal()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_passkey_control_label(label: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_passkey_control_label(label: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(label)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_passkey_enrollment_or_management_label(
         label,
     )
@@ -122,25 +116,25 @@ pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_manual_checkpoint_label(label)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_email_verification_body(body: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_email_verification_body(body: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_email_verification_body(body)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_login_advance_control_label(label: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_login_advance_control_label(label: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(label)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn has_safe_authentication_route_identity(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_safe_authentication_route_identity(
     source_origin: &str,
     form_identity: &str,
     destination_identity: &str,
@@ -161,7 +155,7 @@ pub fn has_safe_authentication_route_identity(
     clippy::fn_params_excessive_bools,
     reason = "typed WASM policy boundary"
 )]
-pub fn can_activate_authentication_route_control(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn can_activate_authentication_route_control(
     source_origin: &str,
     form_identity: &str,
     destination_identity: &str,
@@ -190,7 +184,7 @@ pub fn can_activate_authentication_route_control(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn authentication_implicit_submit_actuation_is_safe(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_implicit_submit_actuation_is_safe(
     observation: nook_companion_core::AuthenticationImplicitSubmitActuationObservation,
 ) -> bool {
     observation.is_safe()
@@ -199,7 +193,7 @@ pub fn authentication_implicit_submit_actuation_is_safe(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn authentication_advance_control_is_safe(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_advance_control_is_safe(
     observation: nook_companion_core::AuthenticationAdvanceControlObservation,
 ) -> bool {
     (&observation).authentication_advance_control_is_safe()
@@ -208,7 +202,7 @@ pub fn authentication_advance_control_is_safe(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn authentication_passkey_control_candidate_is_safe(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_passkey_control_candidate_is_safe(
     candidate: nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
 ) -> bool {
     (&candidate).authentication_passkey_control_candidate_is_safe()
@@ -217,7 +211,7 @@ pub fn authentication_passkey_control_candidate_is_safe(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn authentication_passkey_control_evidence_is_safe(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_passkey_control_evidence_is_safe(
     evidence: nook_companion_core::AuthenticationDetailedPasskeyControlObservation,
 ) -> bool {
     (&evidence).authentication_passkey_control_evidence_is_safe()
@@ -232,7 +226,7 @@ pub fn authentication_passkey_control_evidence_is_safe(
         reason = "FFI boundary: exposes the authentication observation priority to JavaScript"
     )
 )]
-pub fn authentication_form_observation_priority(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {
     (observation)
@@ -250,7 +244,7 @@ pub fn authentication_form_observation_priority(
         reason = "FFI boundary: exposes the authentication facts priority to JavaScript"
     )
 )]
-pub fn authentication_page_observation_facts_priority(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_page_observation_facts_priority(
     facts: nook_companion_core::AuthenticationPageObservationFacts,
 ) -> u8 {
     (facts)
@@ -260,7 +254,7 @@ pub fn authentication_page_observation_facts_priority(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType {
     nook_companion_core::PageInputType::parse(value)
 }
 

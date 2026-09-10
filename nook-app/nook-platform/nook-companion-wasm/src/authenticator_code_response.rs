@@ -3,7 +3,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 /// Decode the complete ephemeral authenticator-code response contract.
 #[wasm_bindgen]
-pub fn decode_authenticator_code_response(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_code_response(
     response: nook_companion_core::AuthenticatorCodeResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorCodeResponse, JsError> {
     AuthenticatorCodeResponse::from_wire(response).map_err(|error| JsError::new(&error.to_string()))

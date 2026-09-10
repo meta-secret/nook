@@ -1,5 +1,8 @@
 //! Membership self-enrollment authorization policy.
-use super::*;
+use super::{
+    BTreeSet, DeviceSigningPublicKey, EventGraph, EventResult, SigningIdentity, VaultEvent,
+    VaultOperation,
+};
 impl EventGraph {
     /// Allow an unauthorized actor to publish its own membership event when the
     /// operation's signing key matches the event actor.

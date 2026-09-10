@@ -11,10 +11,8 @@
 //! age ciphertext parser as normal unlock, but it never returns plaintext keys,
 //! private device material, or decrypted secret values.
 
-use crate::RecordTypeDeclaration;
 use crate::{EpochPasswordState, EventId, ProjectionEpoch};
 use nook_auth2::{DeviceJoinStatus, PendingJoinForDeviceRequest, VaultMetaState};
-use nook_event_log::GenesisImportRequest;
 
 use crate::errors::VaultResult;
 use crate::secret_types::StoredSecretRecord;
@@ -425,6 +423,7 @@ impl EvaluatedVaultAccess<'_> {
 
 #[cfg(test)]
 mod tests {
+    use crate::{GenesisImportRequest, RecordTypeDeclaration};
     struct EncryptedSecretFixture<'a> {
         id: &'a str,
         crypto: &'a VaultCrypto,

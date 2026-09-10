@@ -111,6 +111,7 @@ pub enum ProjectionIntegrity {
     Resolved,
 }
 impl VaultProjection {
+    #[must_use]
     pub fn integrity(&self) -> ProjectionIntegrity {
         if self.unresolved_schema {
             ProjectionIntegrity::UnresolvedSchema

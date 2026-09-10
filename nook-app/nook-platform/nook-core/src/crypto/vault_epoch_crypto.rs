@@ -8,10 +8,7 @@
 
 use crate::RecordTypeDeclaration;
 use crate::{EncryptedSecretPayload, SecretValue};
-use nook_auth2::{
-    BuildMembersRecordsRequest, GenesisMembersRecordsRequest, PendingJoinForDeviceRequest,
-    ResolveMemberRosterRequest, VaultMember, VaultMetaState,
-};
+use nook_auth2::{BuildMembersRecordsRequest, ResolveMemberRosterRequest, VaultMember};
 
 use crate::errors::{VaultEpochError, VaultEpochResult, VaultResult};
 use crate::multi_device::{AuthRecordIssuance, VaultKeys};
@@ -254,10 +251,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        ApiKeySecret, DeviceIdentity, IsoTimestamp, JoinRequestApproval, JoinRequestIssuance,
-        SecretId, SecretValue, VaultMetaOperationApplier, VaultMetaOperationRequest,
-        VaultOperation, VaultRecordView, VaultResult, genesis_members_records,
-        pending_join_for_device, replace_member_records,
+        ApiKeySecret, DeviceIdentity, GenesisMembersRecordsRequest, IsoTimestamp,
+        JoinRequestApproval, JoinRequestIssuance, PendingJoinForDeviceRequest,
+        ReplaceMemberRecordsRequest, SecretId, SecretValue, VaultMetaOperationApplier,
+        VaultMetaOperationRequest, VaultOperation, VaultRecordView, VaultResult,
     };
 
     #[test]
@@ -371,7 +368,10 @@ mod tests {
         .approve()?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(joiner_auth);
-        VaultMember::replace_member_records(&mut records, member_records)?;
+        VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
+            records: &mut records,
+            member_records,
+        })?;
 
         let rotated_meta_records =
             VaultMetaRecordRewrap::new(&records, &old_keys.members_key, &new_keys).rewrap()?;

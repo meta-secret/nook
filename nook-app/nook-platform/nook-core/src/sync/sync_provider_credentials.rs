@@ -7,7 +7,6 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::ActiveVaultScope;
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey, Sha256Hex,
     StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthRefreshCredential,
@@ -603,9 +602,8 @@ mod tests {
     fn open_rejects_plaintext_credentials() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11LEGACY";
-        let mut snapshot = AuthProvidersSnapshotData::github_snapshot(pat);
-        snapshot = ExpectedCredentialFailure::Unsealed
-            .verify_open(snapshot.open_credentials(&identity))?;
+        let snapshot = AuthProvidersSnapshotData::github_snapshot(pat);
+        ExpectedCredentialFailure::Unsealed.verify_open(snapshot.open_credentials(&identity))?;
         Ok(())
     }
 

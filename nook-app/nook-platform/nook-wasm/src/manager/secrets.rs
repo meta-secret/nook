@@ -4,8 +4,6 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::{NookSecretPage, NookSecretRecord, NookSecretTypeFilter, NookTotpCode};
-use nook_core::EventPublicationDestination;
-use nook_core::LocalEventBytes;
 use nook_core::{
     SecretId, SecretValue, StorageMode, StoredRecordPayload, SymmetricKey, VaultOperation,
 };
@@ -467,7 +465,9 @@ impl NookVaultManager {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use nook_core::{AgeArmoredCiphertext, VaultKeys};
+    use nook_core::{
+        AgeArmoredCiphertext, EventPublicationDestination, LocalEventBytes, VaultKeys,
+    };
     use wasm_bindgen_test::*;
 
     /// WASM-side contract for file-sync reconnect after offline concurrent creates

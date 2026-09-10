@@ -693,7 +693,7 @@ mod tests {
 
         assert!(result.is_err());
         fixture
-            .assert_nothing_published(signing_seed_before.as_ref())
+            .assert_nothing_published(&signing_seed_before)
             .await?;
         NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
         NookDatabase::clear_identity_directory_for_test().await
@@ -774,7 +774,7 @@ mod tests {
         revocation_result?;
         assert!(handoff_result.is_err());
         fixture
-            .assert_nothing_published(signing_seed_before.as_ref())
+            .assert_nothing_published(&signing_seed_before)
             .await?;
         let revoked_graph = NookDatabase::load_local_event_store(fixture.store_id.as_str())
             .await?

@@ -211,7 +211,9 @@ mod tests {
     use super::{Database, SecretRemoval};
     use crate::secret_types::StoredRecordPayload;
     use crate::vault_wire::StoredVaultYaml;
-    use crate::{ApiKeySecret, SecretId, SecretType, SecretValue, StoredSecretRecord};
+    use crate::{
+        ApiKeySecret, RecordTypeDeclaration, SecretId, SecretType, SecretValue, StoredSecretRecord,
+    };
 
     fn sid(label: &str) -> SecretId {
         SecretId::from_vault_record(label)

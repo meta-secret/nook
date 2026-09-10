@@ -1,6 +1,6 @@
 //! Display and search helpers for vault secrets — shared by WASM, mobile, and CLI.
 
-use crate::errors::{SecretPayloadError, SecretPayloadResult};
+use crate::errors::SecretPayloadResult;
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{
     ApiKeySecret, AuthenticatorSecret, CreditCardSecret, FileAttachmentByteCount, LoginSecret,
@@ -275,6 +275,7 @@ impl SecretFormFields {
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
     use crate::ValidationError;
+    use crate::errors::SecretPayloadError;
     use base64::Engine as Base64Engine;
 
     use super::*;

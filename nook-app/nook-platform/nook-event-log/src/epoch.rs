@@ -36,7 +36,8 @@ pub enum EpochTransition {
     Rotated(EpochRotationReason),
 }
 
-/// Named values required by EpochRotationReason::concurrent_epoch_rotations_conflict.
+/// Named values required by `EpochRotationReason::concurrent_epoch_rotations_conflict`.
+#[derive(Clone, Copy)]
 pub struct ConcurrentEpochRotations {
     pub left: EpochRotationReason,
     pub right: EpochRotationReason,

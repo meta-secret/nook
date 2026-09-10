@@ -9,7 +9,10 @@
 use crate::LocalEventBytes;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{EventId, EventResult, EventStorageBytes, LocalEventStore, VaultEvent, VaultOperation};
+use crate::{
+    EventGraphRejection, EventId, EventResult, EventStorageBytes, LocalEventStore, VaultEvent,
+    VaultOperation,
+};
 
 impl VaultEvent {
     pub(crate) fn starts_security_epoch(&self) -> bool {
@@ -81,7 +84,7 @@ impl LocalGraphProjection<'_> {
                     event,
                     expected_store_id: self.store_id,
                 })
-                .map_err(|rejected| rejected.into_cause())?
+                .map_err(EventGraphRejection::into_cause)?
                 .graph;
         }
         Ok(graph)

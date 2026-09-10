@@ -45,7 +45,7 @@ impl NookCompanionExtensionProtocol {
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn admit_companion_identity_status(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_companion_identity_status(
     request: CompanionIdentityStatusAdmissionRequest,
 ) -> CompanionIdentityStatusAdmission {
     CompanionIdentityStatusAdmission::admit(request)
@@ -53,7 +53,7 @@ pub fn admit_companion_identity_status(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn admit_companion_handoff_response(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_companion_handoff_response(
     response: CompanionIdentityHandoffResponse,
 ) -> CompanionHandoffResponseAdmission {
     CompanionHandoffResponseAdmission::admit(response)

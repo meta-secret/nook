@@ -252,7 +252,7 @@ mod wasm_idb_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::{
+    use nook_companion_core::{
         EXTENSION_GRANT_KEY_PREFIX as GRANT_KEY_PREFIX, ExtensionConnectScope,
         ExtensionPairingVaultType, StoredExtensionPairingGrant,
     };

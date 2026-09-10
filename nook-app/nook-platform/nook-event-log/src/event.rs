@@ -330,6 +330,7 @@ pub enum SecurityRotationTrigger {
     DeviceRevoked,
 }
 impl VaultEventBody {
+    #[must_use]
     pub fn genesis_import_contents(&self) -> GenesisImportContents {
         match self.operations.as_slice() {
             [
@@ -348,6 +349,7 @@ impl VaultEventBody {
             _ => GenesisImportContents::Other,
         }
     }
+    #[must_use]
     pub fn security_rotation_trigger(&self) -> SecurityRotationTrigger {
         match self.operations.as_slice() {
             [VaultOperation::PasswordRotated { .. }] => SecurityRotationTrigger::PasswordRotated,
@@ -412,7 +414,7 @@ pub struct VaultEvent {
     pub signature: Ed25519Signature,
 }
 
-/// Named values required by VaultEvent::build_genesis_import_event.
+/// Named values required by `VaultEvent::build_genesis_import_event`.
 pub struct GenesisImportRequest<'a> {
     pub store_id: &'a StoreId,
     pub actor_id: &'a AuthKeyId,

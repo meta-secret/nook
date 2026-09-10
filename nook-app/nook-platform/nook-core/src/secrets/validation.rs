@@ -42,7 +42,9 @@ impl SecretValue {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ApiKeySecret, SecretId, SecretRecord, SecretType, SecretValue, StoreId};
+    use crate::{
+        ApiKeySecret, SecretId, SecretRecord, SecretRecordFilter, SecretType, SecretValue, StoreId,
+    };
 
     fn value(key: &str) -> SecretValue {
         SecretValue::ApiKey(ApiKeySecret {

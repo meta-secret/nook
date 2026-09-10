@@ -5,11 +5,8 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::RecordTypeDeclaration;
 use crate::{DatabaseError, MultiDeviceError, VaultMetaRecord, VaultName, VaultStoreIdentity};
-use nook_auth2::{
-    AssessConnectAccessRequest, CreateSentinelShareRecordsRequest, SentinelShareEnvelope,
-};
+use nook_auth2::AssessConnectAccessRequest;
 
 use crate::errors::{self, VaultResult};
 use crate::{
@@ -280,6 +277,7 @@ impl UnlockedVault {
 
 #[cfg(test)]
 mod tests {
+    use crate::{CreateSentinelShareRecordsRequest, RecordTypeDeclaration, SentinelShareEnvelope};
     use crate::{
         DatabaseError, SecretId, SentinelConfiguration, StoredRecordPayload, ValidationError,
         VaultError, VaultFormatError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,

@@ -41,6 +41,7 @@ pub struct EventGraphRejection {
     pub cause: EventError,
 }
 impl EventGraphRejection {
+    #[must_use]
     pub fn into_cause(self) -> EventError {
         self.cause
     }
@@ -80,6 +81,7 @@ pub enum EventLookup<'a> {
 }
 
 impl EventGraph {
+    #[must_use]
     pub fn replacement_evidence(&self) -> EventGraphReplacementEvidence<'_> {
         if self.is_empty() || !self.pending_events().is_empty() || !self.quarantined().is_empty() {
             return EventGraphReplacementEvidence::Unavailable;

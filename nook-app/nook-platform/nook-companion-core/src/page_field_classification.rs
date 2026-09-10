@@ -930,12 +930,7 @@ mod tests {
 
     #[test]
     fn activation_accepts_only_bounded_semantic_username_scope_evidence() {
-        let decide = |form: &str,
-                      label: &str,
-                      concrete: bool,
-                      username: bool,
-                      local: bool,
-                      password: bool| {
+        let decide = |form: &str, label: &str, concrete: bool, user: bool, local: bool, pass: bool| {
             let (machine, visible_label) = label
                 .strip_prefix("machine:")
                 .map_or(("", label), |machine| (machine, "Continue"));
@@ -947,9 +942,9 @@ mod tests {
                     control_label: visible_label,
                     control_machine_identity: machine,
                     has_concrete_control: concrete.into(),
-                    has_authentication_username: username.into(),
+                    has_authentication_username: user.into(),
                     has_local_authentication_scope: local.into(),
-                    has_authentication_password: password.into(),
+                    has_authentication_password: pass.into(),
                 },
             )
         };

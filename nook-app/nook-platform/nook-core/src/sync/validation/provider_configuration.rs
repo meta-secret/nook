@@ -9,7 +9,7 @@ use std::fmt;
 
 use super::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP, OauthFilePreset,
-    StorageMode, StorageProviderType, SyncProviderTarget, ValidationError, ValidationResult,
+    StorageMode, StorageProviderType, ValidationError, ValidationResult,
 };
 
 mod github;
@@ -265,6 +265,7 @@ mod tests {
         StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
         StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
         StoredOAuthAccountIdentity, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+        SyncProviderTarget,
     };
 
     #[test]

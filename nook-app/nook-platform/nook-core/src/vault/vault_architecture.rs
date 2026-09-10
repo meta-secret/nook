@@ -11,10 +11,8 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::RecordTypeDeclaration;
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{StoredSecretRecord, VaultMetaRecord};
-use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -404,6 +402,7 @@ impl VaultArchitecture {
 
 #[cfg(test)]
 mod tests {
+    use crate::{CreateSentinelShareRecordsRequest, RecordTypeDeclaration, SentinelShareEnvelope};
     use crate::{DeviceIdentity, SecretId, StoredRecordPayload};
 
     use std::slice;

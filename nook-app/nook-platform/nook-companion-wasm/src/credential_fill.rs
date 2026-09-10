@@ -197,7 +197,7 @@ impl CredentialFillFieldClassification {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn classify_companion_credential_fill_field(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_companion_credential_fill_field(
     field_index: &CredentialFillFieldIndex,
     field: &NookPageInputFieldObservation,
 ) -> CredentialFillFieldClassification {
@@ -410,7 +410,7 @@ impl CredentialFillResult {
 }
 
 #[wasm_bindgen]
-pub fn plan_companion_credential_fill(fields: &CredentialFillObservations) -> CredentialFillResult {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn plan_companion_credential_fill(fields: &CredentialFillObservations) -> CredentialFillResult {
     CredentialFillResult::from_core(
         fields
             .as_core()

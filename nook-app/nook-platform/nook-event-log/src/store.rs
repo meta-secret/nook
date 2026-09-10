@@ -8,7 +8,7 @@
 
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
-use crate::graph::{EventGraph, EventInsertStatus};
+use crate::graph::{EventGraph, EventGraphRejection, EventInsertStatus};
 mod transitions;
 pub use transitions::{
     LocalEventAppend, LocalEventAppendOutcome, LocalEventStoreRejection, LocalEventWrite,
@@ -39,6 +39,7 @@ impl LocalEventStore {
         Self::default()
     }
 
+    #[must_use]
     pub fn put_event(mut self, request: LocalEventWrite) -> Self {
         self.replica = self
             .replica
@@ -86,7 +87,7 @@ impl LocalEventStore {
                     event,
                     expected_store_id: store_id,
                 })
-                .map_err(|rejected| rejected.into_cause())?
+                .map_err(EventGraphRejection::into_cause)?
                 .graph;
         }
         Ok(graph)
@@ -110,7 +111,7 @@ impl LocalEventStore {
                     event: event.clone(),
                     expected_store_id: store_id,
                 })
-                .map_err(|rejected| rejected.into_cause())?;
+                .map_err(EventGraphRejection::into_cause)?;
             Ok((event_id, bytes, inserted.status))
         })();
         let (event_id, bytes, status) = match prepared {

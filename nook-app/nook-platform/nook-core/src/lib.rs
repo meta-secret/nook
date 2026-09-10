@@ -417,8 +417,9 @@ mod test_support {
     use crate::{VaultStoreIdentityRef, VaultVersionWrite};
 
     use crate::{
-        DeviceIdentity, SecretId, StoreId, StoredRecordPayload, StoredVaultYaml, VaultKeys,
-        VaultRecordSet, VaultResult, VaultUnlock, genesis_members_records,
+        DeviceIdentity, GenesisMembersRecordsRequest, RecordTypeDeclaration, SecretId, StoreId,
+        StoredRecordPayload, StoredVaultYaml, VaultKeys, VaultMember, VaultRecordSet, VaultResult,
+        VaultUnlock,
     };
 
     pub(crate) fn sample_vault_yaml(

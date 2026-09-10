@@ -11,7 +11,7 @@ use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-pub fn decode_authentication_workflow_snapshot_response(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authentication_workflow_snapshot_response(
     response: nook_companion_core::AuthenticationWorkflowSnapshotResponseWire,
 ) -> Result<nook_companion_core::AuthenticationWorkflowSnapshotResponse, wasm_bindgen::JsError> {
     AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(
@@ -21,7 +21,7 @@ pub fn decode_authentication_workflow_snapshot_response(
 }
 
 #[wasm_bindgen]
-pub fn decode_authentication_workflow_runtime_response(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authentication_workflow_runtime_response(
     response: nook_companion_core::AuthenticationWorkflowRuntimeResponseWire,
 ) -> Result<nook_companion_core::AuthenticationWorkflowRuntimeResponse, wasm_bindgen::JsError> {
     AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(response)
@@ -29,7 +29,7 @@ pub fn decode_authentication_workflow_runtime_response(
 }
 
 #[wasm_bindgen]
-pub fn decode_website_login_match_availability(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_match_availability(
     response: nook_companion_core::WebsiteLoginOptionsWireValue,
 ) -> Result<nook_companion_core::WebsiteLoginMatchAvailability, JsError> {
     WebsiteLoginOptions::from_wire(response)
@@ -39,7 +39,7 @@ pub fn decode_website_login_match_availability(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn authentication_workflow_saved_login_capability(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_workflow_saved_login_capability(
     snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
 ) -> nook_companion_core::AuthenticationSavedLoginCapability {
     snapshot.saved_login_capability()
@@ -47,7 +47,7 @@ pub fn authentication_workflow_saved_login_capability(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn authentication_workflow_requires_login_match_availability(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_workflow_requires_login_match_availability(
     snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
 ) -> bool {
     snapshot.requires_login_match_availability()
@@ -55,7 +55,7 @@ pub fn authentication_workflow_requires_login_match_availability(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn authentication_workflow_pilot_presentation_capability(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_workflow_pilot_presentation_capability(
     snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
 ) -> nook_companion_core::AuthenticationPilotPresentationCapability {
     snapshot.pilot_presentation_capability()
@@ -63,7 +63,7 @@ pub fn authentication_workflow_pilot_presentation_capability(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn classify_authentication_backup_codes_observation(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_authentication_backup_codes_observation(
     text: &str,
     candidate_present: bool,
 ) -> nook_companion_core::AuthenticationBackupCodesObservation {
@@ -82,7 +82,7 @@ pub fn classify_authentication_backup_codes_observation(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn authentication_enrollment_workflow_match(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_enrollment_workflow_match(
     authenticator_setup_hint: bool,
     backup_codes_copy: &str,
     manual_checkpoint_present: bool,
@@ -99,7 +99,7 @@ pub fn authentication_enrollment_workflow_match(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn classify_companion_authentication_workflow(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_companion_authentication_workflow(
     input: nook_companion_core::AuthenticationPageObservations,
 ) -> nook_companion_core::AuthenticationWorkflowMatch {
     AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(&input.observations)
@@ -108,7 +108,7 @@ pub fn classify_companion_authentication_workflow(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn classify_companion_authentication_workflow_facts(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_companion_authentication_workflow_facts(
     input: nook_companion_core::AuthenticationPageObservationFactsBatch,
 ) -> nook_companion_core::AuthenticationWorkflowMatch {
     input.classify()
@@ -125,7 +125,7 @@ pub enum CompanionAuthenticationWorkflowMatchKind {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn companion_authentication_workflow_match_kind(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn companion_authentication_workflow_match_kind(
     workflow_match: nook_companion_core::AuthenticationWorkflowMatch,
 ) -> CompanionAuthenticationWorkflowMatchKind {
     match workflow_match {
@@ -177,36 +177,36 @@ mod tests {
 }
 
 #[wasm_bindgen]
-pub fn project_password_workflow_activity(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn project_password_workflow_activity(
     evidence: nook_companion_core::PasswordWorkflowActivityEvidence,
 ) -> nook_companion_core::PasswordWorkflowActivityPresentation {
     evidence.project()
 }
 #[wasm_bindgen]
-pub fn authentication_workflow_activity_progress(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_workflow_activity_progress(
     activity: nook_companion_core::AuthenticationWorkflowActivity,
 ) -> nook_companion_core::AuthenticationDisplayProgress {
     activity.progress()
 }
 #[wasm_bindgen]
-pub fn saved_login_action_available(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn saved_login_action_available(
     request: nook_companion_core::SavedLoginActionPresentationRequest,
 ) -> bool {
     request.is_available()
 }
 #[wasm_bindgen]
-pub fn authentication_control_transportable(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_control_transportable(
     request: nook_companion_core::AuthenticationControlTransportability,
 ) -> bool {
     request.is_transportable()
 }
 #[wasm_bindgen]
-pub fn is_authentication_navigation_path(pathname: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_authentication_navigation_path(pathname: &str) -> bool {
     nook_companion_core::AuthenticationNavigationPath::from(pathname).has_authentication_segment()
 }
 
 #[wasm_bindgen]
-pub fn revalidate_approved_authentication_workflow(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn revalidate_approved_authentication_workflow(
     request: nook_companion_core::ApprovedAuthenticationWorkflowRevalidation,
 ) -> nook_companion_core::ApprovedAuthenticationWorkflowDecision {
     request.revalidate()

@@ -10,10 +10,12 @@ pub struct LocalOutboxWrite<'a> {
     pub provider_id: &'a str,
     pub event: LocalEventWrite,
 }
+#[derive(Clone, Copy)]
 pub struct LocalOutboxRemoval<'a> {
     pub provider_id: &'a str,
     pub event_id: &'a EventId,
 }
+#[derive(Clone, Copy)]
 pub struct LocalEventAppend<'a> {
     pub event: &'a VaultEvent,
     pub store_id: &'a str,
@@ -42,6 +44,7 @@ pub struct LocalEventStoreRejection {
     pub cause: EventError,
 }
 impl LocalEventStoreRejection {
+    #[must_use]
     pub fn into_cause(self) -> EventError {
         self.cause
     }

@@ -14,7 +14,7 @@ use crate::{
 #[cfg(test)]
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use ciborium::value::{Integer, Value};
+use ciborium::value::Value;
 use ciborium::{de, ser};
 use p256::Sec1Point;
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};

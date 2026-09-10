@@ -1,7 +1,11 @@
 //! Owned provider outbox transitions.
-use super::*;
+use super::{
+    EventId, EventStorageBytes, LocalEventStore, LocalOutboxRemoval, LocalOutboxRemovalResult,
+    LocalOutboxRemoved, LocalOutboxWrite,
+};
 use nook_replication::ReplicaOutboxRemovalResult;
 impl LocalEventStore {
+    #[must_use]
     pub fn queue_outbox(mut self, request: LocalOutboxWrite<'_>) -> Self {
         self.replica = self
             .replica
@@ -15,6 +19,7 @@ impl LocalEventStore {
             .store;
         self
     }
+    #[must_use]
     pub fn dequeue_outbox(mut self, request: LocalOutboxRemoval<'_>) -> LocalOutboxRemoved {
         let removed = self
             .replica
@@ -45,6 +50,8 @@ impl LocalEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{EventError, EventResult};
+
     #[test]
     fn outbox_queue_and_dequeue() -> EventResult<()> {
         let mut local = LocalEventStore::new();

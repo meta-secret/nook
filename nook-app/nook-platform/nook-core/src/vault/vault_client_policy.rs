@@ -4,7 +4,6 @@
 //! module owns the state transitions and predicates that must behave the same
 //! in every client.
 
-use nook_app_common::AppLocale;
 use nook_app_common::TranslateFromCatalogRequest;
 use nook_app_common::TranslationCatalog;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -274,6 +273,7 @@ impl VaultClientPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nook_app_common::AppLocale;
 
     #[test]
     fn edit_blocking_has_security_first_precedence() {

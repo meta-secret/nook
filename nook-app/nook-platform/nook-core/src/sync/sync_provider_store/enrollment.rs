@@ -585,7 +585,7 @@ mod tests {
             preset: OauthFilePreset::GoogleDrive,
             target: &SharedStorageTargetSelection::Existing("folder-required".to_owned()),
         }.resolve(), SharedGrantProviderOutcome::Existing { provider } if provider.id == "matching"));
-        assert_eq!(
+        assert!(matches!(
             SharedGrantProviderSelection {
                 providers: &providers,
                 preset: OauthFilePreset::GoogleDrive,
@@ -593,7 +593,7 @@ mod tests {
             }
             .resolve(),
             SharedGrantProviderOutcome::AuthorizationRequired
-        );
+        ));
         assert!(matches!(SharedGrantProviderSelection {
             providers: &providers,
             preset: OauthFilePreset::GoogleDrive,

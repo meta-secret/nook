@@ -1,5 +1,8 @@
 //! Concurrent security rotation projection policy.
-use super::*;
+use super::{
+    BTreeMap, ConcurrentEpochRotations, EpochRotationReason, EventGraph, EventId, SecurityConflict,
+    VaultProjection,
+};
 impl VaultProjection {
     pub(super) fn detect_security_conflicts(
         graph: &EventGraph,

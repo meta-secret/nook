@@ -10,9 +10,6 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-#[cfg(test)]
-use crate::MemberLabelState;
-use crate::{DeviceIdentityProtection, PasskeyProtectionInput, PasskeyRecordMetadata};
 use serde::{Deserialize, Serialize};
 use std::{error, fmt};
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -365,8 +362,10 @@ impl DeviceAccessProfile {
 mod tests {
     use super::*;
     use crate::{
-        AppKey, DeviceIdentity, DeviceKeyProtectionSetup, IdentityDirectory, IdentityRecord,
-        IdentitySelection, PasskeyDeviceProtectionMode, StoreId, WrappedDeviceIdentity,
+        AppKey, DeviceIdentity, DeviceIdentityProtection, DeviceKeyProtectionSetup,
+        IdentityDirectory, IdentityRecord, IdentitySelection, MemberLabelState,
+        PasskeyDeviceProtectionMode, PasskeyProtectionInput, PasskeyRecordMetadata, StoreId,
+        WrappedDeviceIdentity,
     };
 
     #[test]

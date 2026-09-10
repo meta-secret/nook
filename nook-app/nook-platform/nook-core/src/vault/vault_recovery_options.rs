@@ -13,7 +13,6 @@
 
 use crate::EventError;
 use crate::EventLookup;
-use nook_event_log::{GenesisImportRequest, VaultEvent};
 
 use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultProjection, VaultResult};
 use serde::{Deserialize, Serialize};
@@ -184,9 +183,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        DeviceIdentity, DeviceSigningPublicKey, EventId, GenesisImportPayload, IsoTimestamp,
-        MemberLabel, PasswordEntryId, PasswordEntryIssuance, SigningIdentity, StoreId, VaultEvent,
-        VaultEventBody, VaultEventSchemaVersion,
+        DeviceIdentity, DeviceSigningPublicKey, EventId, GenesisImportPayload,
+        GenesisImportRequest, IsoTimestamp, MemberLabel, PasswordEntryId, PasswordEntryIssuance,
+        SigningIdentity, StoreId, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
     };
 
     const STORE_ID: &str = "store_recovery01x";

@@ -6,7 +6,6 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::RecordTypeDeclaration;
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
 use crate::{
@@ -408,6 +407,7 @@ impl VaultName {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use crate::RecordTypeDeclaration;
     use crate::{
         DeviceMode, ReplicationType, SecretType, SentinelConfiguration, SymmetricKey, VaultType,
     };

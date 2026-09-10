@@ -6,10 +6,9 @@
 //! Destructive identity and device recovery persistence.
 use crate::IdentityDbWriteIdentityDirectory;
 use crate::KeyringDbWriteKeyring;
+use crate::NookDatabase;
 use crate::storage::identity_record::SimpleGenesisProgress;
-use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{device_access, event_db, identity_record, indexed_db};
-use crate::{IdbPutStringRequest, NookDatabase};
 use crate::{NookError, storage};
 use identity_record::{
     IdentityReconciliationStore, LEGACY_IDENTITY_RECORD_KEY, RETIRED_APP_IDS_KEY,
@@ -383,8 +382,9 @@ mod browser_tests {
         LocalIdentityRecovery, LocalIdentityRecoveryRequest, PreparedLocalIdentityRecovery,
         RecoveryMarkers, RecoveryPlanning,
     };
+    use crate::storage::indexed_db::StoredStringRecord;
     use crate::storage::{event_db, identity_record, indexed_db};
-    use crate::{NookError, storage};
+    use crate::{IdbPutStringRequest, NookDatabase, NookError, storage};
     use nook_core::IdentityDirectory;
     use rexie::TransactionMode;
     use wasm_bindgen_test::wasm_bindgen_test;
