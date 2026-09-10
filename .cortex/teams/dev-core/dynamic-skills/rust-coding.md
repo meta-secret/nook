@@ -133,10 +133,17 @@ When you see `Option<T>`, ask:
   - Prefer methods that validate, transform, or return a domain state.
   - Match the enum directly so new variants remain compiler-visible.
 - Narrow enum variants before reading their payloads.
-  - Prefer a positive `let ... else` followed by simple named-field checks when
-    every other variant is intentionally handled the same way.
   - Use an exhaustive `match` when variants represent evolving domain decisions
     or require distinct behavior.
+  - Prefer an expression-oriented `match` that shows genuine domain alternatives
+    symmetrically instead of a guard return followed by the success path.
+  - Let each arm produce the operation's result when the alternatives are peers.
+  - Prefer `if let` or positive `let ... else` for interrelated or admission
+    branches when every unmatched variant intentionally receives the same handling.
+  - Keep ordinary failure propagation with `?`.
+  - Keep an early return when it clearly expresses admission or control flow.
+  - Apply [decision locality](../../../shared/dynamic-skills/function-ownership.md#decision-locality)
+    when nesting reveals decisions that belong to other owners.
 - Use a membership collection for uniqueness checks.
   - Prefer `HashSet::insert` when rejecting duplicate identifiers.
 - Group a focused vocabulary under its owning module.
@@ -227,6 +234,8 @@ When you see `Option<T>`, ask:
 - Do not add `is_*` methods that only decode one enum variant into `bool`.
 - Do not use `let ... else` when doing so would silently collapse variants that
   need exhaustive domain handling.
+- Do not force boolean predicates into `match` or invent enum wrappers for symmetry.
+- Do not deepen nested matches merely to make branches look symmetrical.
 - Avoid negated compound conditions and deeply nested destructuring patterns.
 - Do not scan every prior element when a membership collection expresses the
   same uniqueness rule.

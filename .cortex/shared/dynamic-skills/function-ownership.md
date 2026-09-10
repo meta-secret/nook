@@ -36,6 +36,9 @@ to reconstruct that decision.
 - Let callers act on the outcome without reconstructing its prerequisites.
 - Apply the same placement rule recursively inside the extracted behavior.
 - Keep each nested decision with the value whose knowledge determines it.
+- Treat more than three nested branches or matches as a signal of mixed
+  responsibilities or misplaced domain knowledge.
+- Extract those decisions into meaningful owner types with intent-named methods.
 - Preserve short-circuit behavior when it protects admission or effects.
 - Keep transport records structural at their external boundary.
 - Admit those records into meaningful owners when authored behavior needs them.
