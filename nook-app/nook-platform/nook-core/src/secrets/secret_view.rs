@@ -209,10 +209,13 @@ impl SecretFormFields {
                 key: fields.key.clone(),
                 expires_at: fields.expires_at.clone(),
             }),
-            SecretFormFields::SeedPhrase(fields) => SecretValue::SeedPhrase(SeedPhraseSecret {
-                name: fields.name.clone(),
-                seed: fields.seed.clone(),
-            }),
+            SecretFormFields::SeedPhrase(fields) => {
+                SeedPhraseSecret::validate_bip39_mnemonic(&fields.seed)?;
+                SecretValue::SeedPhrase(SeedPhraseSecret {
+                    name: fields.name.clone(),
+                    seed: fields.seed.clone(),
+                })
+            }
             SecretFormFields::SecureNote(fields) => {
                 if fields.note.trim().is_empty() {
                     return Err(ValidationError::SecretDataRequired.into());

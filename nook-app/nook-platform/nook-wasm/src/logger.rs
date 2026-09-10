@@ -760,3 +760,38 @@ impl LoggerState {
         Ok(())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn logger_persists_filters_pages_and_clears_entries() -> Result<(), wasm_bindgen::JsError>
+    {
+        log_clear().await?;
+        log_set_level("debug");
+        assert_eq!(log_get_level(), "debug");
+
+        log_record("trace", "filtered", "not persisted");
+        log_record("info", "sync", "started");
+        log_record_with_data("warn", "sync", "retrying", r#"{"attempt":2}"#.to_owned());
+        log_flush().await?;
+
+        assert_eq!(log_count().await?, 2);
+        let entries = log_dump().await?.to_array();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].level, "info");
+        assert_eq!(entries[1].level, "warn");
+
+        let page = log_dump_page("warn".to_owned(), 1, 0).await?.to_array();
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].message, "retrying");
+
+        log_clear().await?;
+        assert_eq!(log_count().await?, 0);
+        Ok(())
+    }
+}
