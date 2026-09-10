@@ -49,9 +49,9 @@ import type {
   AgentTaskRuntime,
 } from '../../src/agent-workflow/runtime.ts';
 
-import { HostCommand } from '../../src/lib/run.ts';
+import { RepositoryCommand } from '../../src/lib/run.ts';
 
-import type { RunCommandArgs } from '../../src/lib/run.ts';
+import type { RepositoryCommandRequest } from '../../src/lib/run.ts';
 
 import { ModuleExpertInvocation } from '../../src/module-experts/invoke.ts';
 
@@ -73,8 +73,8 @@ import { MODULE_EXPERT_CONTEXT_MCP } from '../../src/module-experts/runtime-cont
 export class AgentWorkflowCodexRuntimeScenario {
   private constructor(private readonly request: string) {}
 
-  static runGit(command: RunCommandArgs): string {
-    const hostLaunch1 = new HostCommand(command).execute();
+  static runGit(command: RepositoryCommandRequest): string {
+    const hostLaunch1 = new RepositoryCommand(command).execute();
     assert(hostLaunch1.isOk());
     const result = hostLaunch1.value;
     expect(result.exitCode).toBe(0);
@@ -226,13 +226,14 @@ describe('Codex agent source stability', () => {
     );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const initCommand: RunCommandArgs = {
+      const initCommand: RepositoryCommandRequest = {
         command: 'git',
         args: ['init'],
-        cwd: workingDirectory,
+        rootDirectory: workingDirectory,
+        workingDirectory,
       };
       AgentWorkflowCodexRuntimeScenario.runGit(initCommand);
-      const identityCommand: RunCommandArgs = {
+      const identityCommand: RepositoryCommandRequest = {
         command: 'git',
         args: [
           '-c',
@@ -240,17 +241,19 @@ describe('Codex agent source stability', () => {
           '-c',
           'user.email=loom@example.test',
         ],
-        cwd: workingDirectory,
+        rootDirectory: workingDirectory,
+        workingDirectory,
       };
       const trackedPath = join(workingDirectory, 'tracked.txt');
       await writeFile(trackedPath, 'stable\n');
-      const addCommand: RunCommandArgs = {
+      const addCommand: RepositoryCommandRequest = {
         command: 'git',
         args: ['add', 'tracked.txt'],
-        cwd: workingDirectory,
+        rootDirectory: workingDirectory,
+        workingDirectory,
       };
       AgentWorkflowCodexRuntimeScenario.runGit(addCommand);
-      const commitCommand: RunCommandArgs = {
+      const commitCommand: RepositoryCommandRequest = {
         ...identityCommand,
         args: [
           '-c',
@@ -263,10 +266,11 @@ describe('Codex agent source stability', () => {
         ],
       };
       AgentWorkflowCodexRuntimeScenario.runGit(commitCommand);
-      const headCommand: RunCommandArgs = {
+      const headCommand: RepositoryCommandRequest = {
         command: 'git',
         args: ['rev-parse', 'HEAD'],
-        cwd: workingDirectory,
+        rootDirectory: workingDirectory,
+        workingDirectory,
       };
       const sourceCommit =
         AgentWorkflowCodexRuntimeScenario.runGit(headCommand);

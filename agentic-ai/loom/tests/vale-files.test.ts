@@ -6,7 +6,7 @@ import {
 import assert from 'node:assert/strict';
 import { expect, spyOn, test } from 'bun:test';
 import { ok } from 'neverthrow';
-import { HostCommand } from '../src/lib/run.ts';
+import { RepositoryCommand } from '../src/lib/run.ts';
 
 import {
   mkdtempSync,
@@ -359,7 +359,7 @@ test('rejects an in-repository path through a symlinked ancestor', () => {
   const outside = realpathSync(
     mkdtempSync(path.join(REAL_TEMP_DIRECTORY, 'vale-outside-')),
   );
-  const command = spyOn(HostCommand.prototype, 'execute').mockReturnValue(
+  const command = spyOn(RepositoryCommand.prototype, 'execute').mockReturnValue(
     ok({
       exitCode: 0,
       signaled: false,
@@ -471,7 +471,7 @@ test('fails closed on invalid JSON and native alert schema', () => {
 });
 
 test('returns decoded Vale alerts without nesting the Result', () => {
-  const command = spyOn(HostCommand.prototype, 'execute');
+  const command = spyOn(RepositoryCommand.prototype, 'execute');
   try {
     for (const stdout of [
       '{}',
@@ -520,7 +520,7 @@ test('returns decoded Vale alerts without nesting the Result', () => {
 });
 
 test('propagates malformed Vale output as a decoding failure', () => {
-  const command = spyOn(HostCommand.prototype, 'execute');
+  const command = spyOn(RepositoryCommand.prototype, 'execute');
   try {
     command.mockReturnValueOnce(
       ok({
@@ -549,7 +549,7 @@ test('rejects invalid requests and external config before starting Vale', () => 
   const outside = realpathSync(
     mkdtempSync(path.join(REAL_TEMP_DIRECTORY, 'vale-admission-')),
   );
-  const command = spyOn(HostCommand.prototype, 'execute').mockReturnValue(
+  const command = spyOn(RepositoryCommand.prototype, 'execute').mockReturnValue(
     ok({
       exitCode: 0,
       signaled: false,

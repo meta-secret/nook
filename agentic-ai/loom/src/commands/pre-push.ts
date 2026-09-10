@@ -4,11 +4,11 @@ import type { PrePushRequest } from '../codec/args/pre-push.ts';
 
 import { ChangedCortexDensity } from '../lib/changed-cortex-density.ts';
 
-import { HostCommand } from '../lib/run.ts';
+import { RepositoryCommand } from '../lib/run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
-import type { RunCommandArgs } from '../lib/run.ts';
+import type { RepositoryCommandRequest } from '../lib/run.ts';
 
 export class PrePushCommand {
   constructor(
@@ -21,12 +21,13 @@ export class PrePushCommand {
     const { request, repoRoot } = this.input;
     const messages: string[] = [];
 
-    const formatArgs: RunCommandArgs = {
+    const formatArgs: RepositoryCommandRequest = {
       command: 'task',
       args: ['format'],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const formatLaunch = new HostCommand(formatArgs).execute();
+    const formatLaunch = new RepositoryCommand(formatArgs).execute();
     if (formatLaunch.isErr()) return err(formatLaunch.error);
     const format = formatLaunch.value;
     if (format.exitCode !== 0) {
@@ -38,12 +39,13 @@ export class PrePushCommand {
     messages.push('task format passed');
 
     if (request.fetchOriginMain) {
-      const fetchArgs: RunCommandArgs = {
+      const fetchArgs: RepositoryCommandRequest = {
         command: 'git',
         args: ['fetch', 'origin', 'main'],
-        cwd: repoRoot,
+        rootDirectory: repoRoot,
+        workingDirectory: repoRoot,
       };
-      const fetchLaunch = new HostCommand(fetchArgs).execute();
+      const fetchLaunch = new RepositoryCommand(fetchArgs).execute();
       if (fetchLaunch.isErr()) return err(fetchLaunch.error);
       const fetch = fetchLaunch.value;
       if (fetch.exitCode !== 0) {
@@ -54,12 +56,13 @@ export class PrePushCommand {
       }
     }
 
-    const baseArgs: RunCommandArgs = {
+    const baseArgs: RepositoryCommandRequest = {
       command: 'git',
       args: ['rev-parse', 'origin/main'],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const baseLaunch = new HostCommand(baseArgs).execute();
+    const baseLaunch = new RepositoryCommand(baseArgs).execute();
     if (baseLaunch.isErr()) return err(baseLaunch.error);
     const base = baseLaunch.value;
     if (base.exitCode !== 0) {
@@ -99,12 +102,13 @@ export class PrePushCommand {
       `Cortex Writer density passed for ${density.checkedPaths.length} changed Markdown file(s)`,
     );
 
-    const contractArgs: RunCommandArgs = {
+    const contractArgs: RepositoryCommandRequest = {
       command: 'bash',
       args: ['.github/scripts/ui-demo-contract.sh', baseSha],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const contractLaunch = new HostCommand(contractArgs).execute();
+    const contractLaunch = new RepositoryCommand(contractArgs).execute();
     if (contractLaunch.isErr()) return err(contractLaunch.error);
     const contract = contractLaunch.value;
     if (contract.exitCode !== 0) {
@@ -117,12 +121,13 @@ export class PrePushCommand {
 
     let staged = false;
     if (request.stageHostUpdates) {
-      const stageArgs: RunCommandArgs = {
+      const stageArgs: RepositoryCommandRequest = {
         command: 'git',
         args: ['add', '-u'],
-        cwd: repoRoot,
+        rootDirectory: repoRoot,
+        workingDirectory: repoRoot,
       };
-      const stageLaunch = new HostCommand(stageArgs).execute();
+      const stageLaunch = new RepositoryCommand(stageArgs).execute();
       if (stageLaunch.isErr()) return err(stageLaunch.error);
       const stage = stageLaunch.value;
       if (stage.exitCode !== 0) {

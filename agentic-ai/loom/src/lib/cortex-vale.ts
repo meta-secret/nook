@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { LoomFailureCode } from '../loom-failure.ts';
 import { CortexMarkdownInventory } from './cortex-markdown-files.ts';
-import { type RunCommandArgs, HostCommand } from './run.ts';
+import { type RepositoryCommandRequest, RepositoryCommand } from './run.ts';
 
 export type RunCortexValeArgs = {
   readonly cortexRoot: string;
@@ -22,12 +22,13 @@ export class CortexValeInvocation {
         message: `Cortex Markdown root does not exist: ${args.cortexRoot}`,
       });
     }
-    const versionArgs: RunCommandArgs = {
+    const versionArgs: RepositoryCommandRequest = {
       command: 'vale',
       args: ['--version'],
-      cwd: args.repoRoot,
+      rootDirectory: args.repoRoot,
+      workingDirectory: args.repoRoot,
     };
-    const versionLaunch = new HostCommand(versionArgs).execute();
+    const versionLaunch = new RepositoryCommand(versionArgs).execute();
     if (versionLaunch.isErr()) return err(versionLaunch.error);
     const version = versionLaunch.value;
     if (
@@ -53,7 +54,7 @@ export class CortexValeInvocation {
         );
       });
     if (markdownFiles.length === 0) return ok();
-    const lintArgs: RunCommandArgs = {
+    const lintArgs: RepositoryCommandRequest = {
       command: 'vale',
       args: [
         '--no-global',
@@ -61,9 +62,10 @@ export class CortexValeInvocation {
         '--output=JSON',
         ...markdownFiles,
       ],
-      cwd: args.repoRoot,
+      rootDirectory: args.repoRoot,
+      workingDirectory: args.repoRoot,
     };
-    const lintLaunch = new HostCommand(lintArgs).execute();
+    const lintLaunch = new RepositoryCommand(lintArgs).execute();
     if (lintLaunch.isErr()) return err(lintLaunch.error);
     const lint = lintLaunch.value;
     if (lint.exitCode === 0) return ok();

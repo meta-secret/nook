@@ -6,8 +6,8 @@ import { join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
 import { ModuleExpertIsolation } from '../../src/module-experts/runtime-contract.ts';
 import type { ReadOnlyExpertRuntimeIsolationRequest } from '../../src/module-experts/runtime-contract.ts';
-import { HostCommand } from '../../src/lib/run.ts';
-import type { RunCommandArgs } from '../../src/lib/run.ts';
+import { RepositoryCommand } from '../../src/lib/run.ts';
+import type { RepositoryCommandRequest } from '../../src/lib/run.ts';
 import { StructuralExpertCatalog } from '../../src/structural-experts/catalog.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
@@ -123,12 +123,13 @@ test('materializes only exact shared formatter and lint tooling', async () => {
   }
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'structural-code-scope-'));
   const removeOptions: RmOptions = { recursive: true, force: true };
-  const revisionRequest: RunCommandArgs = {
+  const revisionRequest: RepositoryCommandRequest = {
     args: ['write-tree'],
     command: 'git',
-    cwd: REPO_ROOT,
+    rootDirectory: REPO_ROOT,
+    workingDirectory: REPO_ROOT,
   };
-  const hostLaunch1 = new HostCommand(revisionRequest).execute();
+  const hostLaunch1 = new RepositoryCommand(revisionRequest).execute();
   assert(hostLaunch1.isOk());
   const sourceCommit = hostLaunch1.value.stdout.trim();
   try {

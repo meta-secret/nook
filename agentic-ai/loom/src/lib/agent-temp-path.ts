@@ -3,10 +3,10 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { HostCommand } from './run.ts';
+import { RepositoryCommand } from './run.ts';
 import { LoomFailureCode } from '../loom-failure.ts';
 
-import type { RunCommandArgs } from './run.ts';
+import type { RepositoryCommandRequest } from './run.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 
 export const AGENT_TEMP_DIR_TOKEN = '{agentTempDir}';
@@ -69,12 +69,13 @@ export class AgentTemporaryPath {
       return ok(path.resolve(request.authoredPath));
     }
 
-    const gitHeadRequest: RunCommandArgs = {
+    const gitHeadRequest: RepositoryCommandRequest = {
       command: 'git',
       args: ['rev-parse', 'HEAD'],
-      cwd: request.repoRoot,
+      rootDirectory: request.repoRoot,
+      workingDirectory: request.repoRoot,
     };
-    const gitHeadLaunch = new HostCommand(gitHeadRequest).execute();
+    const gitHeadLaunch = new RepositoryCommand(gitHeadRequest).execute();
     if (gitHeadLaunch.isErr()) return err(gitHeadLaunch.error);
     const gitHead = gitHeadLaunch.value;
     const gitCommit = gitHead.stdout.trim();
@@ -86,20 +87,22 @@ export class AgentTemporaryPath {
       return err({ code: failure.code, message: failure.text });
     }
 
-    const branchRequest: RunCommandArgs = {
+    const branchRequest: RepositoryCommandRequest = {
       command: 'git',
       args: ['branch', '--show-current'],
-      cwd: request.repoRoot,
+      rootDirectory: request.repoRoot,
+      workingDirectory: request.repoRoot,
     };
-    const reflogRequest: RunCommandArgs = {
+    const reflogRequest: RepositoryCommandRequest = {
       command: 'git',
       args: ['reflog', '--format=%H%x09%gs', 'HEAD'],
-      cwd: request.repoRoot,
+      rootDirectory: request.repoRoot,
+      workingDirectory: request.repoRoot,
     };
-    const branchNameLaunch = new HostCommand(branchRequest).execute();
+    const branchNameLaunch = new RepositoryCommand(branchRequest).execute();
     if (branchNameLaunch.isErr()) return err(branchNameLaunch.error);
     const branchName = branchNameLaunch.value.stdout.trim();
-    const reflogLaunch = new HostCommand(reflogRequest).execute();
+    const reflogLaunch = new RepositoryCommand(reflogRequest).execute();
     if (reflogLaunch.isErr()) return err(reflogLaunch.error);
     const reflog = reflogLaunch.value.stdout;
     const taskAnchorSelection: TaskAnchorSelection = {

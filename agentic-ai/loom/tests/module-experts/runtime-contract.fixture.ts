@@ -18,9 +18,9 @@ import type {
   ModuleExpertRuntimeIsolationRequest,
 } from '../../src/module-experts/runtime-contract.ts';
 
-import { HostCommand } from '../../src/lib/run.ts';
+import { RepositoryCommand } from '../../src/lib/run.ts';
 
-import type { RunCommandArgs } from '../../src/lib/run.ts';
+import type { RepositoryCommandRequest } from '../../src/lib/run.ts';
 export class ModuleExpertsRuntimeContractScenario {
   private constructor(
     private readonly request: RuntimeIsolationFixtureRequest,
@@ -183,23 +183,25 @@ export class ModuleExpertsRuntimeContractScenario {
       'unrelated\n',
       'utf8',
     );
-    const gitInit: RunCommandArgs = {
+    const gitInit: RepositoryCommandRequest = {
       command: 'git',
       args: ['init'],
-      cwd: root,
+      rootDirectory: root,
+      workingDirectory: root,
     };
-    const hostLaunch1 = new HostCommand(gitInit).execute();
+    const hostLaunch1 = new RepositoryCommand(gitInit).execute();
     assert(hostLaunch1.isOk());
     expect(hostLaunch1.value.exitCode).toBe(0);
-    const gitAdd: RunCommandArgs = {
+    const gitAdd: RepositoryCommandRequest = {
       command: 'git',
       args: ['add', '.'],
-      cwd: root,
+      rootDirectory: root,
+      workingDirectory: root,
     };
-    const hostLaunch2 = new HostCommand(gitAdd).execute();
+    const hostLaunch2 = new RepositoryCommand(gitAdd).execute();
     assert(hostLaunch2.isOk());
     expect(hostLaunch2.value.exitCode).toBe(0);
-    const gitCommit: RunCommandArgs = {
+    const gitCommit: RepositoryCommandRequest = {
       command: 'git',
       args: [
         '-c',
@@ -210,17 +212,19 @@ export class ModuleExpertsRuntimeContractScenario {
         '-m',
         'fixture',
       ],
-      cwd: root,
+      rootDirectory: root,
+      workingDirectory: root,
     };
-    const hostLaunch3 = new HostCommand(gitCommit).execute();
+    const hostLaunch3 = new RepositoryCommand(gitCommit).execute();
     assert(hostLaunch3.isOk());
     expect(hostLaunch3.value.exitCode).toBe(0);
-    const gitRevision: RunCommandArgs = {
+    const gitRevision: RepositoryCommandRequest = {
       command: 'git',
       args: ['rev-parse', 'HEAD'],
-      cwd: root,
+      rootDirectory: root,
+      workingDirectory: root,
     };
-    const hostLaunch4 = new HostCommand(gitRevision).execute();
+    const hostLaunch4 = new RepositoryCommand(gitRevision).execute();
     assert(hostLaunch4.isOk());
     const sourceCommit = hostLaunch4.value.stdout.trim();
     const [entryPoint = ''] = [selected.publicEntryPoints[0]];

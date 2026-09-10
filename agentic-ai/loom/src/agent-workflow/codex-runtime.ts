@@ -23,8 +23,8 @@ import type {
 import { WorkflowResultSchema } from './structured-result-codec.ts';
 import { WorkflowRuntimeActivityKind } from './events.ts';
 import type { RuntimeActivityObservation } from './events.ts';
-import { HostCommand } from '../lib/run.ts';
-import type { RunCommandArgs } from '../lib/run.ts';
+import { RepositoryCommand } from '../lib/run.ts';
+import type { RepositoryCommandRequest } from '../lib/run.ts';
 import {
   MODULE_EXPERT_CONTEXT_MCP,
   ModuleExpertIsolation,
@@ -439,12 +439,13 @@ export class AgentSourceSnapshot {
   constructor(private readonly check: AgentSourceStabilityCheck) {}
   assertStable(): Result<void, AgentExecutionFailure> {
     const check = this.check;
-    const headCommand: RunCommandArgs = {
+    const headCommand: RepositoryCommandRequest = {
       command: 'git',
       args: ['rev-parse', 'HEAD'],
-      cwd: check.workingDirectory,
+      rootDirectory: check.workingDirectory,
+      workingDirectory: check.workingDirectory,
     };
-    const headLaunch = new HostCommand(headCommand).execute();
+    const headLaunch = new RepositoryCommand(headCommand).execute();
     if (headLaunch.isErr()) return err(headLaunch.error);
     const head = headLaunch.value;
     const actualHead = head.stdout.trim();
@@ -456,12 +457,13 @@ export class AgentSourceSnapshot {
         }),
       );
     }
-    const statusCommand: RunCommandArgs = {
+    const statusCommand: RepositoryCommandRequest = {
       command: 'git',
       args: ['status', '--porcelain', '--untracked-files=normal'],
-      cwd: check.workingDirectory,
+      rootDirectory: check.workingDirectory,
+      workingDirectory: check.workingDirectory,
     };
-    const statusLaunch = new HostCommand(statusCommand).execute();
+    const statusLaunch = new RepositoryCommand(statusCommand).execute();
     if (statusLaunch.isErr()) return err(statusLaunch.error);
     const status = statusLaunch.value;
     if (status.exitCode !== 0 || status.stdout.trim().length > 0) {

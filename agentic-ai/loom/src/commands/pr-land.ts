@@ -9,11 +9,11 @@ import { RemoteTaskPresence } from '../codec/args/pr-land.ts';
 
 import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
 
-import { HostCommand } from '../lib/run.ts';
+import { RepositoryCommand } from '../lib/run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
-import type { RunCommandArgs } from '../lib/run.ts';
+import type { RepositoryCommandRequest } from '../lib/run.ts';
 
 export type PrLandReport = {
   readonly family: RequestFamily.PrLand;
@@ -61,7 +61,7 @@ export class PullRequestDeliveryCommand {
   async status(): Promise<Result<PrLandReport, PrLandFailure>> {
     const { repoRoot, prNumber } = this.request;
 
-    const viewArgs: RunCommandArgs = {
+    const viewArgs: RepositoryCommandRequest = {
       command: 'gh',
       args: [
         'pr',
@@ -70,9 +70,10 @@ export class PullRequestDeliveryCommand {
         '--json',
         'number,state,isDraft,mergeStateStatus,url,headRefOid,baseRefName',
       ],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const viewLaunch = new HostCommand(viewArgs).execute();
+    const viewLaunch = new RepositoryCommand(viewArgs).execute();
     if (viewLaunch.isErr()) return err(viewLaunch.error);
     const view = viewLaunch.value;
     if (view.exitCode !== 0) {
@@ -94,12 +95,13 @@ export class PullRequestDeliveryCommand {
   async readiness(): Promise<Result<PrLandReport, PrLandFailure>> {
     const { repoRoot, prNumber } = this.request;
 
-    const resultArgs: RunCommandArgs = {
+    const resultArgs: RepositoryCommandRequest = {
       command: 'task',
       args: ['pr:ready', `PR=${prNumber}`],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const resultLaunch = new HostCommand(resultArgs).execute();
+    const resultLaunch = new RepositoryCommand(resultArgs).execute();
     if (resultLaunch.isErr()) return err(resultLaunch.error);
     const result = resultLaunch.value;
     const passed = result.exitCode === 0;
@@ -144,7 +146,7 @@ export class PullRequestValidationCommand {
   async execute(): Promise<Result<PrLandReport, PrLandFailure>> {
     const { repoRoot, request } = this.request;
 
-    const prePushArgs: RunCommandArgs = {
+    const prePushArgs: RepositoryCommandRequest = {
       command: 'bun',
       args: [
         'run',
@@ -155,9 +157,10 @@ export class PullRequestValidationCommand {
         '--default',
         'prePush',
       ],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const prePushLaunch = new HostCommand(prePushArgs).execute();
+    const prePushLaunch = new RepositoryCommand(prePushArgs).execute();
     if (prePushLaunch.isErr()) return err(prePushLaunch.error);
     const prePush = prePushLaunch.value;
     if (prePush.exitCode !== 0) {
@@ -168,12 +171,13 @@ export class PullRequestValidationCommand {
     }
 
     if (request.remoteTask.presence === RemoteTaskPresence.Specified) {
-      const remoteArgs: RunCommandArgs = {
+      const remoteArgs: RepositoryCommandRequest = {
         command: 'task',
         args: ['remote', `TASK_NAME=${request.remoteTask.task}`],
-        cwd: repoRoot,
+        rootDirectory: repoRoot,
+        workingDirectory: repoRoot,
       };
-      const remoteLaunch = new HostCommand(remoteArgs).execute();
+      const remoteLaunch = new RepositoryCommand(remoteArgs).execute();
       if (remoteLaunch.isErr()) return err(remoteLaunch.error);
       const remote = remoteLaunch.value;
       if (remote.exitCode !== 0) {
@@ -192,12 +196,13 @@ export class PullRequestValidationCommand {
     if (request.runFullE2e) {
       validateArgs.push('FULL_E2E=1');
     }
-    const validatedArgs: RunCommandArgs = {
+    const validatedArgs: RepositoryCommandRequest = {
       command: 'task',
       args: validateArgs,
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const validatedLaunch = new HostCommand(validatedArgs).execute();
+    const validatedLaunch = new RepositoryCommand(validatedArgs).execute();
     if (validatedLaunch.isErr()) return err(validatedLaunch.error);
     const validated = validatedLaunch.value;
     if (validated.exitCode !== 0) {

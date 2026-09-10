@@ -1,16 +1,18 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { CommandOutputPolicy, HostCommand } from '../src/lib/run.ts';
+import { CommandOutputPolicy, RepositoryCommand } from '../src/lib/run.ts';
 
 const LARGE_OUTPUT_BYTES = 2 * 1024 * 1024;
 const EXCESSIVE_OUTPUT_BYTES = 17 * 1024 * 1024;
 
 describe('run command', () => {
   test('captures output larger than the platform default within an explicit bound', () => {
-    const launch = new HostCommand({
-      command: process.execPath,
+    const launch = new RepositoryCommand({
+      command: 'node',
       args: ['-e', `process.stdout.write('x'.repeat(${LARGE_OUTPUT_BYTES}))`],
-      cwd: process.cwd(),
+      rootDirectory: process.cwd(),
+      workingDirectory: process.cwd(),
       outputPolicy: CommandOutputPolicy.GitHubApi,
     }).execute();
     assert(launch.isOk());
@@ -23,13 +25,14 @@ describe('run command', () => {
   });
 
   test('fails closed when output exceeds the explicit bound', () => {
-    const launch = new HostCommand({
-      command: process.execPath,
+    const launch = new RepositoryCommand({
+      command: 'node',
       args: [
         '-e',
         `process.stdout.write('x'.repeat(${EXCESSIVE_OUTPUT_BYTES}))`,
       ],
-      cwd: process.cwd(),
+      rootDirectory: process.cwd(),
+      workingDirectory: process.cwd(),
       outputPolicy: CommandOutputPolicy.GitHubApi,
     }).execute();
     assert(launch.isErr());
@@ -37,15 +40,28 @@ describe('run command', () => {
   });
 
   test('preserves subprocess signal termination', () => {
-    const launch = new HostCommand({
-      command: process.execPath,
+    const launch = new RepositoryCommand({
+      command: 'node',
       args: ['-e', "process.kill(process.pid, 'SIGTERM')"],
-      cwd: process.cwd(),
+      rootDirectory: process.cwd(),
+      workingDirectory: process.cwd(),
     }).execute();
     assert(launch.isOk());
     const result = launch.value;
 
     expect(result.exitCode).toBe(1);
     expect(result.signaled).toBe(true);
+  });
+
+  test('rejects a working directory outside the repository root', () => {
+    const launch = new RepositoryCommand({
+      command: 'node',
+      args: ['-e', 'process.exit(0)'],
+      rootDirectory: process.cwd(),
+      workingDirectory: path.dirname(process.cwd()),
+    }).execute();
+
+    assert(launch.isErr());
+    expect(launch.error.message).toContain('outside repository root');
   });
 });

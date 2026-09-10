@@ -16,7 +16,7 @@ import {
   CortexProseDensity,
 } from './density.ts';
 
-import { type RunCommandArgs, HostCommand } from './run.ts';
+import { type RepositoryCommandRequest, RepositoryCommand } from './run.ts';
 
 import { type ValeNativeAlert, ValeFileDiagnostics } from './vale-files.ts';
 
@@ -294,12 +294,13 @@ export class ChangedCortexDensity {
   private gitOutput(
     args: GitOutputArgs,
   ): Result<string, ChangedCortexDensityFailure> {
-    const commandArgs: RunCommandArgs = {
+    const commandArgs: RepositoryCommandRequest = {
       command: 'git',
       args: args.arguments,
-      cwd: args.repoRoot,
+      rootDirectory: args.repoRoot,
+      workingDirectory: args.repoRoot,
     };
-    const outputLaunch = new HostCommand(commandArgs).execute();
+    const outputLaunch = new RepositoryCommand(commandArgs).execute();
     if (outputLaunch.isErr()) return err(outputLaunch.error);
     const output = outputLaunch.value;
     if (output.exitCode !== 0) {

@@ -18,11 +18,11 @@ import { AgentStatisticsSchema } from '../lib/agent-stats-schema.ts';
 
 import { RepositoryRoot } from '../lib/repo.ts';
 
-import { HostCommand } from '../lib/run.ts';
+import { RepositoryCommand } from '../lib/run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
-import type { RunCommandArgs } from '../lib/run.ts';
+import type { RepositoryCommandRequest } from '../lib/run.ts';
 
 import type { ResolveAgentTempPathRequest } from '../lib/agent-temp-path.ts';
 
@@ -159,7 +159,7 @@ export class AgentStatisticsFileCommand {
     }
 
     const remotePath = `stats/ai-agent/${prNumber}.yaml`;
-    const publishedArgs: RunCommandArgs = {
+    const publishedArgs: RepositoryCommandRequest = {
       command: 'node',
       args: [
         '.github/scripts/workbench-publish.cjs',
@@ -167,9 +167,10 @@ export class AgentStatisticsFileCommand {
         remotePath,
         `stats: record Nook PR ${prNumber}`,
       ],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const publishedLaunch = new HostCommand(publishedArgs).execute();
+    const publishedLaunch = new RepositoryCommand(publishedArgs).execute();
     if (publishedLaunch.isErr()) return err(publishedLaunch.error);
     const published = publishedLaunch.value;
     if (published.exitCode !== 0) {

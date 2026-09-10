@@ -11,11 +11,11 @@ import {
   UntrustedYamlBoundary,
 } from './guards.ts';
 
-import { CommandOutputPolicy, HostCommand } from './run.ts';
+import { CommandOutputPolicy, RepositoryCommand } from './run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
-import type { RunCommandArgs } from './run.ts';
+import type { RepositoryCommandRequest } from './run.ts';
 
 export class GithubActionEvidenceApi {
   constructor(private readonly request: GitHubApiRequest) {}
@@ -31,13 +31,14 @@ export class GithubActionEvidenceApi {
     ];
     const [defaulted1 = []] = [request.fields];
     for (const field of defaulted1) args.push('-f', field);
-    const commandRequest: RunCommandArgs = {
+    const commandRequest: RepositoryCommandRequest = {
       command: 'gh',
       args,
-      cwd: request.repoRoot,
+      rootDirectory: request.repoRoot,
+      workingDirectory: request.repoRoot,
       outputPolicy: CommandOutputPolicy.GitHubApi,
     };
-    const outputLaunch = new HostCommand(commandRequest).execute();
+    const outputLaunch = new RepositoryCommand(commandRequest).execute();
     if (outputLaunch.isErr()) return err(outputLaunch.error);
     const output = outputLaunch.value;
     if (output.exitCode !== 0) {

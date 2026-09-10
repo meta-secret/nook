@@ -6,7 +6,11 @@ import path from 'node:path';
 import { LoomFailureCode } from '../loom-failure.ts';
 import { YamlNullBoundary } from '../codec/external.ts';
 import { type UntrustedYamlNode, UntrustedYamlBoundary } from './guards.ts';
-import { type CommandOutput, type RunCommandArgs, HostCommand } from './run.ts';
+import {
+  type CommandOutput,
+  type RepositoryCommandRequest,
+  RepositoryCommand,
+} from './run.ts';
 
 export enum ValeAlertSeverity {
   Error = 'error',
@@ -63,12 +67,13 @@ export class ValeFileDiagnostics {
     const args = this.request;
     const admission = new ValeFileRequest(args).admit();
     if (admission.isErr()) return err(admission.error);
-    const versionArgs: RunCommandArgs = {
+    const versionArgs: RepositoryCommandRequest = {
       command: 'vale',
       args: ['--version'],
-      cwd: args.repoRoot,
+      rootDirectory: args.repoRoot,
+      workingDirectory: args.repoRoot,
     };
-    const versionLaunch = new HostCommand(versionArgs).execute();
+    const versionLaunch = new RepositoryCommand(versionArgs).execute();
     if (versionLaunch.isErr()) return err(versionLaunch.error);
     const version = versionLaunch.value;
     if (
@@ -80,7 +85,7 @@ export class ValeFileDiagnostics {
         message: 'Vale 3.19.0 is required for exact-file linting.',
       });
     }
-    const commandArgs: RunCommandArgs = {
+    const commandArgs: RepositoryCommandRequest = {
       command: 'vale',
       args: [
         '--no-global',
@@ -88,9 +93,10 @@ export class ValeFileDiagnostics {
         '--output=JSON',
         ...args.files,
       ],
-      cwd: args.repoRoot,
+      rootDirectory: args.repoRoot,
+      workingDirectory: args.repoRoot,
     };
-    const outputLaunch = new HostCommand(commandArgs).execute();
+    const outputLaunch = new RepositoryCommand(commandArgs).execute();
     if (outputLaunch.isErr()) return err(outputLaunch.error);
     const output = outputLaunch.value;
     if (output.signaled) {

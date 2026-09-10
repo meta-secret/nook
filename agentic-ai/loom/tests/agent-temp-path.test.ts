@@ -9,14 +9,14 @@ import {
   AgentTemporaryPath,
 } from '../src/lib/agent-temp-path.ts';
 import { RepositoryRoot } from '../src/lib/repo.ts';
-import { HostCommand } from '../src/lib/run.ts';
+import { RepositoryCommand } from '../src/lib/run.ts';
 
 import type {
   AgentTempDirectoryParts,
   ResolveAgentTempPathRequest,
   TaskAnchorSelection,
 } from '../src/lib/agent-temp-path.ts';
-import type { RunCommandArgs } from '../src/lib/run.ts';
+import type { RepositoryCommandRequest } from '../src/lib/run.ts';
 
 const FIRST_COMMIT = '1111111111111111111111111111111111111111';
 const SECOND_COMMIT = '2222222222222222222222222222222222222222';
@@ -142,27 +142,30 @@ describe('agent temporary paths', () => {
     const discovery1 = new RepositoryRoot().locate();
     assert(discovery1.isOk());
     const repoRoot = discovery1.value;
-    const gitHeadRequest: RunCommandArgs = {
+    const gitHeadRequest: RepositoryCommandRequest = {
       command: 'git',
       args: ['rev-parse', 'HEAD'],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const hostLaunch1 = new HostCommand(gitHeadRequest).execute();
+    const hostLaunch1 = new RepositoryCommand(gitHeadRequest).execute();
     assert(hostLaunch1.isOk());
     const gitCommit = hostLaunch1.value.stdout.trim();
-    const branchRequest: RunCommandArgs = {
+    const branchRequest: RepositoryCommandRequest = {
       command: 'git',
       args: ['branch', '--show-current'],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const reflogRequest: RunCommandArgs = {
+    const reflogRequest: RepositoryCommandRequest = {
       command: 'git',
       args: ['reflog', '--format=%H%x09%gs', 'HEAD'],
-      cwd: repoRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: repoRoot,
     };
-    const hostLaunch3 = new HostCommand(reflogRequest).execute();
+    const hostLaunch3 = new RepositoryCommand(reflogRequest).execute();
     assert(hostLaunch3.isOk());
-    const hostLaunch2 = new HostCommand(branchRequest).execute();
+    const hostLaunch2 = new RepositoryCommand(branchRequest).execute();
     assert(hostLaunch2.isOk());
     const selection: TaskAnchorSelection = {
       currentCommit: gitCommit,

@@ -11,7 +11,7 @@ import {
   UntrustedYamlBoundary,
 } from './guards.ts';
 
-import { HostCommand } from './run.ts';
+import { RepositoryCommand } from './run.ts';
 
 import {
   type AgentStatsGitHubEvidenceRequest,
@@ -24,7 +24,7 @@ import { LoomFailureCode } from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
 
-import type { RunCommandArgs } from './run.ts';
+import type { RepositoryCommandRequest } from './run.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 
@@ -37,7 +37,7 @@ export class AgentStatisticsAssembly {
     if (scratchResult.isErr()) return err(scratchResult.error);
     const scratch = scratchResult.value;
 
-    const prJsonArgs: RunCommandArgs = {
+    const prJsonArgs: RepositoryCommandRequest = {
       command: 'gh',
       args: [
         'pr',
@@ -46,9 +46,10 @@ export class AgentStatisticsAssembly {
         '--json',
         'number,url,title,mergedAt,createdAt,mergeCommit,headRefName,headRefOid,baseRefName,state',
       ],
-      cwd: options.repoRoot,
+      rootDirectory: options.repoRoot,
+      workingDirectory: options.repoRoot,
     };
-    const prJsonLaunch = new HostCommand(prJsonArgs).execute();
+    const prJsonLaunch = new RepositoryCommand(prJsonArgs).execute();
     if (prJsonLaunch.isErr()) return err(prJsonLaunch.error);
     const prJson = prJsonLaunch.value;
     if (prJson.exitCode !== 0) {
@@ -378,12 +379,13 @@ export class AgentStatisticsAssembly {
   ): Result<number, StatisticsAssemblyFailure> {
     const { repoRoot, filter } = args;
 
-    const listedArgs3: RunCommandArgs = {
+    const listedArgs3: RepositoryCommandRequest = {
       command: 'cargo',
       args: ['nextest', 'list', '-E', filter, '--lib', '--tests'],
-      cwd: path.join(repoRoot, 'nook-app'),
+      rootDirectory: repoRoot,
+      workingDirectory: path.join(repoRoot, 'nook-app'),
     };
-    const listedLaunch = new HostCommand(listedArgs3).execute();
+    const listedLaunch = new RepositoryCommand(listedArgs3).execute();
     if (listedLaunch.isErr()) return err(listedLaunch.error);
     const listed = listedLaunch.value;
     if (listed.exitCode !== 0) {
@@ -400,12 +402,13 @@ export class AgentStatisticsAssembly {
     repoRoot: string,
   ): Result<number, StatisticsAssemblyFailure> {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
-    const listedArgs2: RunCommandArgs = {
+    const listedArgs2: RepositoryCommandRequest = {
       command: 'bunx',
       args: ['vitest', 'list'],
-      cwd: appRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: appRoot,
     };
-    const listedLaunch = new HostCommand(listedArgs2).execute();
+    const listedLaunch = new RepositoryCommand(listedArgs2).execute();
     if (listedLaunch.isErr()) return err(listedLaunch.error);
     const listed = listedLaunch.value;
     if (listed.exitCode !== 0) {
@@ -422,12 +425,13 @@ export class AgentStatisticsAssembly {
     repoRoot: string,
   ): Result<number, StatisticsAssemblyFailure> {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
-    const listedArgs: RunCommandArgs = {
+    const listedArgs: RepositoryCommandRequest = {
       command: 'bunx',
       args: ['playwright', 'test', '--list'],
-      cwd: appRoot,
+      rootDirectory: repoRoot,
+      workingDirectory: appRoot,
     };
-    const listedLaunch = new HostCommand(listedArgs).execute();
+    const listedLaunch = new RepositoryCommand(listedArgs).execute();
     if (listedLaunch.isErr()) return err(listedLaunch.error);
     const listed = listedLaunch.value;
     if (listed.exitCode !== 0) {

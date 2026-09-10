@@ -31,9 +31,9 @@ import { ModuleExpertIsolation } from '../../src/module-experts/runtime-contract
 
 import type { ModuleExpertRuntimeIsolationRequest } from '../../src/module-experts/runtime-contract.ts';
 
-import { HostCommand } from '../../src/lib/run.ts';
+import { RepositoryCommand } from '../../src/lib/run.ts';
 
-import type { RunCommandArgs } from '../../src/lib/run.ts';
+import type { RepositoryCommandRequest } from '../../src/lib/run.ts';
 
 export class ModuleExpertsWebExpertSnapshotScenario {
   private constructor(private readonly request: string) {}
@@ -74,10 +74,11 @@ export class ModuleExpertsWebExpertSnapshotScenario {
       'utf8',
     );
     ModuleExpertsWebExpertSnapshotScenario.commitFixture(root);
-    const revisionCommand: RunCommandArgs = {
+    const revisionCommand: RepositoryCommandRequest = {
       args: ['rev-parse', 'HEAD'],
       command: 'git',
-      cwd: root,
+      rootDirectory: root,
+      workingDirectory: root,
     };
     const sourceCommit =
       ModuleExpertsWebExpertSnapshotScenario.gitOutput(revisionCommand);
@@ -88,19 +89,21 @@ export class ModuleExpertsWebExpertSnapshotScenario {
   }
 
   static commitFixture(root: string): void {
-    const initCommand: RunCommandArgs = {
+    const initCommand: RepositoryCommandRequest = {
       args: ['init'],
       command: 'git',
-      cwd: root,
+      rootDirectory: root,
+      workingDirectory: root,
     };
     ModuleExpertsWebExpertSnapshotScenario.gitOutput(initCommand);
-    const addCommand: RunCommandArgs = {
+    const addCommand: RepositoryCommandRequest = {
       args: ['add', '.'],
       command: 'git',
-      cwd: root,
+      rootDirectory: root,
+      workingDirectory: root,
     };
     ModuleExpertsWebExpertSnapshotScenario.gitOutput(addCommand);
-    const commitCommand: RunCommandArgs = {
+    const commitCommand: RepositoryCommandRequest = {
       args: [
         '-c',
         'user.name=Nook Test',
@@ -111,13 +114,14 @@ export class ModuleExpertsWebExpertSnapshotScenario {
         'fixture',
       ],
       command: 'git',
-      cwd: root,
+      rootDirectory: root,
+      workingDirectory: root,
     };
     ModuleExpertsWebExpertSnapshotScenario.gitOutput(commitCommand);
   }
 
-  static gitOutput(command: RunCommandArgs): string {
-    const hostLaunch1 = new HostCommand(command).execute();
+  static gitOutput(command: RepositoryCommandRequest): string {
+    const hostLaunch1 = new RepositoryCommand(command).execute();
     assert(hostLaunch1.isOk());
     const result = hostLaunch1.value;
     if (result.exitCode !== 0) throw new Error('Fixture Git command failed.');
