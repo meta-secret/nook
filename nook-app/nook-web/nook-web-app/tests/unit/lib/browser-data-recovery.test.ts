@@ -85,4 +85,58 @@ describe('local data recovery support', () => {
     )
     expect(messages.some((message) => message.type === 'reload')).toBe(true)
   })
+
+  test('preserves a peer failure when the compensating reload also fails', async () => {
+    vi.useFakeTimers()
+    let channelCount = 0
+
+    class RecoveryChannel {
+      onmessage?: (event: MessageEvent) => void
+
+      constructor() {
+        channelCount += 1
+        if (channelCount > 1) throw new Error('reload channel failed')
+      }
+
+      postMessage(message: {
+        readonly type: string
+        readonly requestId?: string
+        readonly senderId: string
+      }): void {
+        if (message.type !== 'request' || !message.requestId) return
+        queueMicrotask(() => {
+          this.onmessage?.({
+            data: {
+              type: 'seen',
+              requestId: message.requestId,
+              senderId: message.senderId,
+              responderId: 'failed-peer',
+            },
+          } as MessageEvent)
+          this.onmessage?.({
+            data: {
+              type: 'ready',
+              requestId: message.requestId,
+              senderId: message.senderId,
+              responderId: 'failed-peer',
+              readiness: { kind: 'failed', error: 'peer failed' },
+            },
+          } as MessageEvent)
+        })
+      }
+
+      close(): void {}
+    }
+
+    vi.stubGlobal('navigator', { locks: {} })
+    vi.stubGlobal('BroadcastChannel', RecoveryChannel)
+
+    const pending = browserDataLifecycle.quiesceOtherTabsForLocalRecovery()
+    await vi.runAllTimersAsync()
+    const rejection = await pending
+
+    expect(rejection.isErr() ? rejection.error.kind : rejection.value).toBe(
+      VaultStorageFailureKind.PeerFailed,
+    )
+  })
 })

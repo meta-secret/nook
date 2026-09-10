@@ -250,24 +250,32 @@ every route it carries, as aligned columns and box-drawn ASCII.
       })
   }
 
-  function routesIntoVault({ graph, vault }: RoutesIntoVaultArgs): Route[] {
-    return new GraphView(graph)
-      .devicesForVault({
-        vault,
-      })
-      .flatMap((device) => {
-        return new GraphView(graph)
-          .passkeysForDevice({
-            device,
-          })
-          .map((passkey) => ({
-            passkey: passkey.shortId,
-            device: device.shortId,
-            vault: vault.shortId,
-            store: GraphView.storeLabel(passkey.store),
-            reach: reachWord(passkey),
-          }))
-      })
+  class VaultRouteProjection {
+    constructor(private readonly request: RoutesIntoVaultArgs) {}
+
+    get routes(): Route[] {
+      const { graph, vault } = this.request
+      const graphView = new GraphView(graph)
+      const vaultDevicesRequest: Parameters<
+        typeof graphView.devicesForVault
+      >[0] = { vault }
+      return graphView
+        .devicesForVault(vaultDevicesRequest)
+        .flatMap((device) => {
+          const devicePasskeysRequest: Parameters<
+            typeof graphView.passkeysForDevice
+          >[0] = { device }
+          return graphView
+            .passkeysForDevice(devicePasskeysRequest)
+            .map((passkey) => ({
+              passkey: passkey.shortId,
+              device: device.shortId,
+              vault: vault.shortId,
+              store: GraphView.storeLabel(passkey.store),
+              reach: reachWord(passkey),
+            }))
+        })
+    }
   }
 
   function routeLines(routes: TerminalRoutes): string[] {
@@ -399,10 +407,11 @@ every route it carries, as aligned columns and box-drawn ASCII.
     return graph.vaults
       .filter((vault) => vault.id === id)
       .flatMap((vault) => {
-        const routes = routesIntoVault({
+        const routeProjectionRequest: RoutesIntoVaultArgs = {
           graph,
           vault,
-        })
+        }
+        const routes = new VaultRouteProjection(routeProjectionRequest).routes
         const stores = new Set(routes.map((route) => route.store))
         const nookNamedArgument36: Parameters<typeof GraphMap.columns>[0] = {
           cells: ['vault', vault.shortId, vault.label],

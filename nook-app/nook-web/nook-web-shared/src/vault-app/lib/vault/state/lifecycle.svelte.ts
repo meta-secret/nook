@@ -61,13 +61,13 @@ type LifecycleSyncSchedule = {
   readonly intervalMs: number;
 };
 
-function initialBrowserLocale(): NookBrowserLocale {
-  return "window" in globalThis
-    ? new NookBrowserLocale()
-    : NookBrowserLocale.from_tags([]);
-}
-
 export class VaultLifecycleState extends VaultStateSlices {
+  private static initialBrowserLocale(): NookBrowserLocale {
+    return "window" in globalThis
+      ? new NookBrowserLocale()
+      : NookBrowserLocale.from_tags([]);
+  }
+
   private initialEnrollmentLink(): EnrollmentLink {
     if (!("window" in globalThis)) return { kind: EnrollmentLinkKind.Absent };
     const enrollment = enrollmentBrowser.consumeEnrollmentFromLocation();
@@ -77,7 +77,9 @@ export class VaultLifecycleState extends VaultStateSlices {
   }
 
   constructor() {
-    super(new VaultRuntimeSliceState(initialBrowserLocale()));
+    super(
+      new VaultRuntimeSliceState(VaultLifecycleState.initialBrowserLocale()),
+    );
   }
 
   private successDismissSchedule: SuccessDismissSchedule = {

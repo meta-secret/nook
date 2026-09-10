@@ -374,8 +374,7 @@ class BrowserDataLifecycle {
       channel.close();
     }
     if (outcome.isErr()) {
-      const reload = await this.reloadQuiescedTabsAfterLocalRecovery();
-      if (reload.isErr()) return err(reload.error);
+      await this.reloadQuiescedTabsAfterLocalRecovery();
     }
     return outcome;
   }

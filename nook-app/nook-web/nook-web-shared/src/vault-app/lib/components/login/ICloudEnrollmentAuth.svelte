@@ -12,12 +12,20 @@
   $effect(() => {
     if (!open || prepareStarted) return
     prepareStarted = true
-    void iCloudOAuthSession.prepareICloudSignInControl().catch((error) => {
-      prepareError =
-        error instanceof Error
-          ? vault.t(error.message)
-          : vault.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst)
-    })
+    prepareError = ''
+    void iCloudOAuthSession
+      .prepareICloudSignInControl()
+      .then((prepared) => {
+        if (prepared.isErr()) {
+          prepareError = vault.t(prepared.error.translationKey)
+        }
+      })
+      .catch((error) => {
+        prepareError =
+          error instanceof Error
+            ? vault.t(error.message)
+            : vault.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst)
+      })
   })
 </script>
 
@@ -32,6 +40,10 @@
     data-testid="enrollment-icloud-auth-toggle"
     onclick={() => {
       open = !open
+      if (!open && prepareError) {
+        prepareStarted = false
+        prepareError = ''
+      }
     }}
   >
     {vault.t(I18N_KEYS.LoginIcloudSharedEnrollmentToggle)}
