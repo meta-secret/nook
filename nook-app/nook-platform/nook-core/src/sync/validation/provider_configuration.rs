@@ -344,52 +344,19 @@ impl StorageProviderType {
     }
 }
 
-impl SyncProviderTarget {
-    fn non_empty(value: Option<&String>) -> Option<&str> {
-        value
-            .map(|value| value.trim())
-            .filter(|value| !value.is_empty())
-    }
-
-    #[must_use]
-    pub fn stable_key(&self) -> Option<String> {
-        match self {
-            Self::Empty => None,
-            Self::Local => Some("local".to_owned()),
-            Self::LocalFolder(folder) => {
-                let key = Self::non_empty(folder.handle_id.as_ref())
-                    .or_else(|| Self::non_empty(folder.directory_name.as_ref()))
-                    .unwrap_or("unselected");
-                Some(format!("local-folder:{key}"))
-            }
-            Self::Github(github) => {
-                let repo = github.repo.trim().to_lowercase();
-                let pat = github.pat.trim();
-                Some(format!("github:{repo}:{pat}"))
-            }
-            Self::OauthFile(oauth) => {
-                let file_key = Self::non_empty(oauth.folder_id.as_ref())
-                    .map(|folder_id| format!("shared:{folder_id}"))
-                    .or_else(|| Self::non_empty(oauth.file_id.as_ref()).map(str::to_owned))
-                    .or_else(|| Self::non_empty(oauth.file_name.as_ref()).map(str::to_owned))
-                    .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
-                let account_key = Self::non_empty(oauth.account_email.as_ref())
-                    .or_else(|| Self::non_empty(oauth.access_token.as_ref()))
-                    .unwrap_or_default();
-                Some(format!(
-                    "oauth-file:{}:{file_key}:{account_key}",
-                    oauth.preset.as_str()
-                ))
-            }
-        }
-    }
-}
+mod target;
+pub use target::{ProviderTargetKey, SyncProviderTargetIdentity};
 
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::super::{GithubSyncTarget, LocalFolderSyncTarget, OauthFileSyncTarget};
     use super::*;
+    use crate::{
+        StoredGoogleDriveFolder, StoredLocalFolderDirectory, StoredLocalFolderHandle,
+        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthRemoteFileId,
+        StoredOAuthRemoteFileName,
+    };
 
     #[test]
     fn storage_mode_for_provider_maps_oauth_presets() -> anyhow::Result<()> {
@@ -513,32 +480,35 @@ mod tests {
 
         let drive_by_id = SyncProviderTarget::OauthFile(OauthFileSyncTarget {
             preset: OauthFilePreset::GoogleDrive,
-            file_id: Some("file-123".to_owned()),
-            folder_id: None,
-            file_name: Some("other-name.yaml".to_owned()),
-            account_email: Some("me@example.com".to_owned()),
-            access_token: Some("ya29.test".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("file-123".to_owned()),
+            folder_id: StoredGoogleDriveFolder::Root,
+            file_name: StoredOAuthRemoteFileName::FileName("other-name.yaml".to_owned()),
+            account_email: StoredOAuthAccountIdentity::Email("me@example.com".to_owned()),
+            access_token: StoredOAuthAccessCredential::AccessToken("ya29.test".to_owned()),
         });
         let drive_by_name = SyncProviderTarget::OauthFile(OauthFileSyncTarget {
             preset: OauthFilePreset::GoogleDrive,
-            file_id: None,
-            folder_id: None,
-            file_name: Some("other-name.yaml".to_owned()),
-            account_email: Some("me@example.com".to_owned()),
-            access_token: Some("ya29.test".to_owned()),
+            file_id: StoredOAuthRemoteFileId::Unresolved,
+            folder_id: StoredGoogleDriveFolder::Root,
+            file_name: StoredOAuthRemoteFileName::FileName("other-name.yaml".to_owned()),
+            account_email: StoredOAuthAccountIdentity::Email("me@example.com".to_owned()),
+            access_token: StoredOAuthAccessCredential::AccessToken("ya29.test".to_owned()),
         });
         assert_ne!(drive_by_id.stable_key(), drive_by_name.stable_key());
 
         let folder = SyncProviderTarget::LocalFolder(LocalFolderSyncTarget {
-            directory_name: Some("Nook Backup".to_owned()),
-            handle_id: Some("folder-1".to_owned()),
+            directory_name: StoredLocalFolderDirectory::DirectoryName("Nook Backup".to_owned()),
+            handle_id: StoredLocalFolderHandle::HandleId("folder-1".to_owned()),
         });
         assert_eq!(
             folder.stable_key(),
-            Some("local-folder:folder-1".to_owned())
+            SyncProviderTargetIdentity::Configured("local-folder:folder-1".to_owned().into())
         );
 
-        assert_eq!(SyncProviderTarget::Empty.stable_key(), None);
+        assert_eq!(
+            SyncProviderTarget::Empty.stable_key(),
+            SyncProviderTargetIdentity::Unconfigured
+        );
         Ok(())
     }
 }

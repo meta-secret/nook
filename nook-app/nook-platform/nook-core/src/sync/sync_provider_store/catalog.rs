@@ -4,7 +4,10 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::ProviderSyncCheckpoint;
+use crate::{
+    ProviderSyncCheckpoint, StoredICloudShareTarget, StoredOAuthRemoteFileId,
+    SyncProviderTargetIdentity,
+};
 
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPat, GithubPatMask,
@@ -129,16 +132,16 @@ impl StorageProviderData {
         match provider.provider_type {
             StorageProviderType::Local => SyncProviderTarget::Local,
             StorageProviderType::LocalFolder => {
-                SyncProviderTarget::LocalFolder(LocalFolderSyncTarget {
-                    directory_name: provider
-                        .local_folder
-                        .as_ref()
-                        .and_then(|folder| folder.directory_name.as_deref().map(str::to_owned)),
-                    handle_id: provider
-                        .local_folder
-                        .as_ref()
-                        .and_then(|folder| folder.handle_id.as_deref().map(str::to_owned)),
-                })
+                let folder = match &provider.local_folder {
+                    StoredLocalFolderConfiguration::Configured(folder) => LocalFolderSyncTarget {
+                        directory_name: folder.directory_name.clone(),
+                        handle_id: folder.handle_id.clone(),
+                    },
+                    StoredLocalFolderConfiguration::NotApplicable => {
+                        LocalFolderSyncTarget::default()
+                    }
+                };
+                SyncProviderTarget::LocalFolder(folder)
             }
             StorageProviderType::Github => SyncProviderTarget::Github(GithubSyncTarget {
                 repo: CatalogProviderText(provider.github_repo.as_deref())
@@ -149,31 +152,38 @@ impl StorageProviderData {
                     None => return SyncProviderTarget::Empty,
                 },
             }),
-            StorageProviderType::OauthFile => match provider.oauth_file.as_ref() {
-                Some(oauth) => {
+            StorageProviderType::OauthFile => match &provider.oauth_file {
+                StoredOAuthFileConfiguration::Configured(oauth) => {
                     let preset = oauth.preset;
                     SyncProviderTarget::OauthFile(OauthFileSyncTarget {
                         preset,
                         file_id: if preset == OauthFilePreset::ICloud
                             && oauth.resolved_icloud_mode() == ICloudMode::Shared
                         {
-                            oauth.icloud_share_target.as_deref().map(str::to_owned)
+                            match &oauth.icloud_share_target {
+                                StoredICloudShareTarget::SharedTarget(target) => {
+                                    StoredOAuthRemoteFileId::FileId(target.clone())
+                                }
+                                StoredICloudShareTarget::Personal => {
+                                    StoredOAuthRemoteFileId::Unresolved
+                                }
+                            }
                         } else {
-                            oauth.file_id.as_deref().map(str::to_owned)
+                            oauth.file_id.clone()
                         },
-                        folder_id: oauth.folder_id.as_deref().map(str::to_owned),
-                        file_name: oauth.file_name.as_deref().map(str::to_owned),
-                        account_email: oauth.account_email.as_deref().map(str::to_owned),
-                        access_token: oauth.access_token.as_deref().map(str::to_owned),
+                        folder_id: oauth.folder_id.clone(),
+                        file_name: oauth.file_name.clone(),
+                        account_email: oauth.account_email.clone(),
+                        access_token: oauth.access_token.clone(),
                     })
                 }
-                None => SyncProviderTarget::Empty,
+                StoredOAuthFileConfiguration::NotApplicable => SyncProviderTarget::Empty,
             },
         }
     }
 
     #[must_use]
-    pub fn target_key(&self) -> Option<String> {
+    pub fn target_key(&self) -> SyncProviderTargetIdentity {
         let provider = self;
         provider.catalog_target().stable_key()
     }
@@ -187,14 +197,17 @@ impl DuplicateProviderSelection<'_> {
             candidate,
             exclude_id,
         } = self;
-        let candidate_key = candidate.target_key()?;
+        let candidate_key = candidate.target_key();
+        if matches!(candidate_key, SyncProviderTargetIdentity::Unconfigured) {
+            return None;
+        }
         providers
             .iter()
             .find(|provider| {
                 if exclude_id.is_some_and(|excluded| provider.id == excluded) {
                     return false;
                 }
-                provider.target_key().as_deref() == Some(candidate_key.as_str())
+                provider.target_key() == candidate_key
             })
             .cloned()
     }
@@ -312,6 +325,7 @@ mod tests {
         DuplicateProviderSelection, LocalProviderRowChange, LocalProviderRowOutcome,
         LocalProviderRowRequest,
     };
+    use crate::SyncProviderTargetIdentity;
 
     impl GithubCatalogFixture<'_> {
         fn build(self) -> StorageProviderData {
@@ -477,7 +491,10 @@ mod tests {
             }
             .build()
         };
-        assert_eq!(no_pat.target_key(), None);
+        assert_eq!(
+            no_pat.target_key(),
+            SyncProviderTargetIdentity::Unconfigured
+        );
 
         let self_row = GithubCatalogFixture {
             id: "gh-self",

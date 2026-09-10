@@ -308,8 +308,8 @@ pub use validation::{
     ExistingVaultProviderReadiness, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
     GoogleDriveFolderId, GoogleDriveMode, ICloudEventTarget, ICloudMode, ICloudShareRole,
     ICloudSharedTarget, LocalFolderSyncTarget, OauthAccessToken, OauthFilePreset,
-    OauthFileSyncTarget, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType,
-    SyncProviderTarget,
+    OauthFileSyncTarget, ProviderTargetKey, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode,
+    StorageProviderType, SyncProviderTarget, SyncProviderTargetIdentity,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,
