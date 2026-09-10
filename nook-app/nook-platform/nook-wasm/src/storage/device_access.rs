@@ -74,14 +74,13 @@ impl SelectedPasskeyCreation<'_> {
                 intent: DeviceAccessProfileUpdateIntent::BestEffort,
                 guard: StringUpdateGuard::WrappedCredentialFingerprint(credential_fingerprint),
                 update: move |profile: DeviceAccessProfile| {
-                    profile = profile.record_passkey_created(
+                    Ok(profile.record_passkey_created(
                         credential_fingerprint,
                         nook_name,
                         observation,
                         now,
                         ceremony,
-                    );
-                    Ok(profile)
+                    ))
                 },
             })
             .await
@@ -153,7 +152,7 @@ impl AppPasskeyUse<'_> {
                     app_id,
                     expected: credential_fingerprint,
                 },
-                update: move |mut profile: DeviceAccessProfile| {
+                update: move |profile: DeviceAccessProfile| {
                     profile = profile.record_passkey_used(credential_fingerprint, observation, now);
                     Ok(profile)
                 },
@@ -181,7 +180,7 @@ impl PasskeyProviderLabelUpdate<'_> {
             .update(DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::Interactive,
                 guard: StringUpdateGuard::WrappedCredentialFingerprint(credential_fingerprint),
-                update: move |mut profile: DeviceAccessProfile| {
+                update: move |profile: DeviceAccessProfile| {
                     profile
                         .set_passkey_provider_label(credential_fingerprint, normalized)
                         .map_err(|error| NookError::Database(error.to_string()))

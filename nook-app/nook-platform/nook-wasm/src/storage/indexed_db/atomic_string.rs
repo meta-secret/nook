@@ -67,7 +67,7 @@ impl NookDatabase {
             key: key,
             fallback_key: StringRecordFallback::Disabled,
             guard: guard,
-            can_adopt_fallback: |_| true,
+            can_adopt_fallback: (|_: &str| true) as fn(&str) -> bool,
             update: update,
         })
         .await
