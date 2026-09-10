@@ -7,6 +7,7 @@ import {
 } from "./operational-fixture";
 import {
   OperationalCommandProbe,
+  OperationalProbeStream,
   OperationalContractFailureKind,
   type OperationalContractFailure,
 } from "./operational-contract";
@@ -169,8 +170,8 @@ ${trigger}
         MOCK_CONFIG: config,
         MOCK_FRAGMENT: fragment,
       },
-      stdout: "inherit" as const,
-      stderr: "inherit" as const,
+      stdout: OperationalProbeStream.Inherit,
+      stderr: OperationalProbeStream.Inherit,
     };
     const processResult = new OperationalCommandProbe(processInput).execute();
     if (processResult.isErr()) return err(processResult.error);
@@ -308,8 +309,8 @@ replace_k0s_firewall_rules committed
         MOCK_INPUT_STATE: inputState,
         MOCK_FORWARD_STATE: forwardState,
       },
-      stdout: "inherit" as const,
-      stderr: "inherit" as const,
+      stdout: OperationalProbeStream.Inherit,
+      stderr: OperationalProbeStream.Inherit,
     };
     const processResult = new OperationalCommandProbe(processInput).execute();
     if (processResult.isErr()) return err(processResult.error);
@@ -389,8 +390,8 @@ class FirewallContract {
     if (filter.isErr()) return err(filter.error);
     const awkInput = {
       cmd: ["awk", filter.value],
-      stdout: "pipe" as const,
-      stderr: "pipe" as const,
+      stdout: OperationalProbeStream.Pipe,
+      stderr: OperationalProbeStream.Pipe,
       stdin: new Blob([nftablesConfig]),
     };
     const filteredResult = new OperationalCommandProbe(awkInput).execute();

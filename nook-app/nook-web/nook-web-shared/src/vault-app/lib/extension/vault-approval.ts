@@ -58,7 +58,7 @@ export class ExtensionVaultApproval {
           request.deviceSigningPublicKey,
           request.deviceLabel,
         );
-        return ok(undefined);
+        return ok();
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
@@ -167,7 +167,7 @@ export class ExtensionVaultApproval {
   }
 
   admitCompletion(): Result<void, VaultStorageFailure> {
-    return this.admitManager().map(() => undefined);
+    return this.admitManager().map(() => {});
   }
 
   async deliver(message: ExtensionPairingApprovedMessage) {

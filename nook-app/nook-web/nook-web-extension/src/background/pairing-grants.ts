@@ -192,7 +192,7 @@ function migratedLegacyPairingStorageItems(
 }
 
 export type ExtensionPairingGrantPolicy = {
-  comparePairingRecords: typeof compare_extension_pairing_records
+  compare_extension_pairing_records: typeof compare_extension_pairing_records
   pairingGrantStorageKey: typeof pairingGrantStorageKey
   isStoredExtensionPairingGrant: typeof isStoredExtensionPairingGrant
   isExtensionReadySetupState: typeof isExtensionReadySetupState
@@ -207,7 +207,7 @@ export type ExtensionPairingGrantPolicy = {
 
 export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPolicy> =
   companionWasmReady.then(() => ({
-    comparePairingRecords: compare_extension_pairing_records,
+    compare_extension_pairing_records,
     pairingGrantStorageKey,
     isStoredExtensionPairingGrant,
     isExtensionReadySetupState,

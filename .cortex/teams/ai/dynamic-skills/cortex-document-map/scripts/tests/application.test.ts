@@ -143,7 +143,7 @@ test('fails closed for unknown keys, unsafe paths, and missing exclusions', () =
       .execute()
       .match(
         (value) => {
-          expect(value).toBeUndefined();
+          expect(value).toEqual(void 0);
         },
         (outcome) => {
           expect(outcome).toBeInstanceOf(CortexDocumentMapRequestDecodeError);

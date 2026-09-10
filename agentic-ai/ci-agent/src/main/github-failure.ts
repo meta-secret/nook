@@ -10,13 +10,13 @@ export class GithubRequestFailure {
       "status" in this.cause &&
       typeof this.cause.status === "number"
         ? this.cause.status
-        : undefined;
+        : false;
     return {
       kind: this.signal?.aborted
         ? CiFailureKind.Cancelled
         : CiFailureKind.Github,
       message: "GitHub request failed",
-      ...(code === undefined ? {} : { code }),
+      ...(code === false ? {} : { code }),
     };
   }
 }

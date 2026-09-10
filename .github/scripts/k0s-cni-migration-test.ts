@@ -7,6 +7,7 @@ import {
 } from "./operational-fixture";
 import {
   OperationalCommandProbe,
+  OperationalProbeStream,
   OperationalContractFailureKind,
   type OperationalContractFailure,
 } from "./operational-contract";
@@ -117,8 +118,8 @@ ${migration.value}
         PATH: `${mockBin}:${executablePath}`,
         MOCK_LOG: log,
       },
-      stdout: "inherit" as const,
-      stderr: "inherit" as const,
+      stdout: OperationalProbeStream.Inherit,
+      stderr: OperationalProbeStream.Inherit,
     };
     const run = new OperationalCommandProbe(runInput).execute();
     if (run.isErr()) return err(run.error);

@@ -1,6 +1,10 @@
 import type { prepare_shared_storage_grant } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
+enum SharedStorageGrantOutcomeKind {
+  Unsupported = "unsupported",
+}
+
 export enum OAuthFailureKind {
   GoogleConfiguration = "google-configuration",
   GoogleScript = "google-script",
@@ -79,7 +83,7 @@ export class SharedStorageGrantFailure {
   constructor(
     private readonly rejection: Extract<
       Awaited<ReturnType<typeof prepare_shared_storage_grant>>,
-      { kind: "unsupported" }
+      { kind: SharedStorageGrantOutcomeKind.Unsupported }
     >,
   ) {}
   get translationKey() {

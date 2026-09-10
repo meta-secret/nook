@@ -11,8 +11,8 @@ vi.mock('$app-wasm', async (importOriginal) => {
 
 vi.mock('$lib/runtime/browser-data', () => ({
   browserDataLifecycle: {
-    quiesceOtherTabsForLocalRecovery: vi.fn(async () => ok(undefined)),
-    reloadQuiescedTabsAfterLocalRecovery: vi.fn(async () => ok(undefined)),
+    quiesceOtherTabsForLocalRecovery: vi.fn(async () => ok()),
+    reloadQuiescedTabsAfterLocalRecovery: vi.fn(async () => ok()),
   },
 }))
 

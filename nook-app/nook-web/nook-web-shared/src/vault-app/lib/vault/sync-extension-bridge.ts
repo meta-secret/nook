@@ -61,7 +61,7 @@ export class ExtensionSyncPublication {
           ),
         );
       }
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       records.value.free();
     }

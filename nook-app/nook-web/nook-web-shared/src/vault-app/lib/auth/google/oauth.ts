@@ -168,13 +168,13 @@ class GoogleOAuthSession {
     return new Promise((resolve) => {
       try {
         if (window.google?.accounts?.oauth2) {
-          resolve(ok(undefined));
+          resolve(ok());
           return;
         }
         const existing = document.querySelector(
           `script[src="${GIS_SCRIPT_URL}"]`,
         );
-        const loaded = () => resolve(ok(undefined));
+        const loaded = () => resolve(ok());
         const failed = () =>
           resolve(err(new OAuthFailure(OAuthFailureKind.GoogleScript)));
         if (existing) {
@@ -259,12 +259,12 @@ class GoogleOAuthSession {
 
   async initGoogleAuth(): Promise<Result<void, OAuthFailure>> {
     return (await this.tokenClientForScope(GoogleDriveOAuthScope.AppData)).map(
-      () => undefined,
+      () => {},
     );
   }
   async initGoogleSharedDriveAuth(): Promise<Result<void, OAuthFailure>> {
     return (await this.tokenClientForScope(GoogleDriveOAuthScope.Shared)).map(
-      () => undefined,
+      () => {},
     );
   }
   private tokensFromResponse(
@@ -282,7 +282,8 @@ class GoogleOAuthSession {
       return err(new OAuthFailure(OAuthFailureKind.GoogleResponse));
     // Date construction parses external GIS protocol data at this boundary.
     try {
-      const expiresIn = response.expires_in ?? 3600;
+      const expiresIn =
+        typeof response.expires_in === "number" ? response.expires_in : 3600;
       return ok({
         accessToken: response.access_token,
         expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),

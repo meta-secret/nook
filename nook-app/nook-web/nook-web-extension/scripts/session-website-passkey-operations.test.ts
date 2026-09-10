@@ -137,10 +137,10 @@ describe('website passkey session operations', () => {
       message: cancelRequest('request-cancel'),
       getManager: async () => manager,
       openVault: async () => {
-        return ok(undefined)
+        return ok()
       },
       flushEvent: async () => {
-        return ok(undefined)
+        return ok()
       },
     }
 
@@ -175,12 +175,12 @@ describe('website passkey session operations', () => {
     const openVault: WebsitePasskeyOperationArgs['openVault'] = async () => {
       openCount += 1
 
-      return ok(undefined)
+      return ok()
     }
     const flushEvent: WebsitePasskeyOperationArgs['flushEvent'] = async () => {
       flushCount += 1
 
-      return ok(undefined)
+      return ok()
     }
     const getManager = async () => manager
     const registrationArgs: WebsitePasskeyOperationArgs = {

@@ -18,7 +18,7 @@ export {
   findSharedGrantProvider,
   SharedStorageTargetKind,
   shouldFlushSharedDriveGrant,
-  type SharedGrantProvider,
+  type SharedGrantProviderSelection,
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 import {
@@ -38,7 +38,7 @@ import {
   StorageProviderPresentation,
   LocalFolderProviderConfigurationKind,
   isConfiguredOAuthFile,
-  oauthAccessToken,
+  oauth_access_token,
   OAuthFilePresentation,
   OAuthFileNameKind,
   oauthConfigurationNotApplicable,
@@ -101,7 +101,7 @@ export class PasswordEnrollmentActions {
     ) {
       state.storageMode = "local";
       state.activateLoginSetup("local");
-      return storageOk(undefined);
+      return storageOk();
     }
 
     const { provider } = selection;
@@ -112,7 +112,7 @@ export class PasswordEnrollmentActions {
       state.githubRepo = githubRepositoryValue(provider.githubRepo);
       state.clearOauthFile();
       state.clearLocalFolder();
-      return storageOk(undefined);
+      return storageOk();
     }
     if (provider.type === "oauth-file") {
       const configuration = provider.oauthFile;
@@ -134,7 +134,7 @@ export class PasswordEnrollmentActions {
         state.githubRepo = fileName.fileName;
       }
       state.clearLocalFolder();
-      return storageOk(undefined);
+      return storageOk();
     }
 
     const configuration = new StorageProviderPresentation(
@@ -152,7 +152,7 @@ export class PasswordEnrollmentActions {
     state.configureLocalFolder(configuration.config);
     state.githubPat = "";
     state.clearOauthFile();
-    return storageOk(undefined);
+    return storageOk();
   }
 
   private async localVaultHasPasswordEntries(): Promise<
@@ -347,7 +347,7 @@ export class PasswordEnrollmentActions {
                     >[0] = { preset: "icloud", fileName: "nook-events" };
                     return defaultOAuthFileConfig(defaultOAuthFileConfigArgs3);
                   })();
-              const existingCredential = oauthAccessToken(existingConfig);
+              const existingCredential = oauth_access_token(existingConfig);
               const tokens =
                 existingCredential.kind === "available"
                   ? storageOk({

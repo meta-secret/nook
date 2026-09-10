@@ -8,9 +8,6 @@ import {
 } from "$lib/runtime/wasm-bootstrap";
 import { err, ok, type Result } from "neverthrow";
 import type { NookStorageConnectArgs } from "$app-wasm";
-type StoredVaultSynchronization = NookStorageConnectArgs & {
-  readonly manager: NookVaultManager;
-};
 import type {
   NookImportResult,
   NookJoinRequest,
@@ -93,7 +90,7 @@ export async function syncVaultFromStorage({
   mode,
   pat,
   repo,
-}: StoredVaultSynchronization): Promise<
+}: NookStorageConnectArgs & { readonly manager: NookVaultManager }): Promise<
   Result<NookVaultSyncResult, VaultStorageFailure>
 > {
   try {

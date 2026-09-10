@@ -10,7 +10,8 @@ import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
 
 import {
   configuredOAuthFile,
-  oauthAccessToken,
+  OAuthAccessTokenKind,
+  oauth_access_token,
   storedOAuthAccountEmail,
   unknownOAuthAccountIdentity,
   type OAuthFileConfig,
@@ -218,7 +219,7 @@ class ICloudOAuthSession {
       if (!window.CloudKit)
         return err(new OAuthFailure(OAuthFailureKind.CloudKitUnavailable));
       window.CloudKit.configure(configureArgs);
-      return ok(undefined);
+      return ok();
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
     }
@@ -276,19 +277,20 @@ class ICloudOAuthSession {
       !existing
     )
       this.cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
-    return (await this.setUpCloudKitAuth(admitted.value)).map(() => undefined);
+    return (await this.setUpCloudKitAuth(admitted.value)).map(() => {});
   }
   private clickCloudKitSignInButton(): Result<void, OAuthFailure> {
     try {
       const mount = document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
-      const control =
-        mount?.querySelector<HTMLElement>(
-          'button, [role="button"], iframe, a, .apple-auth-button',
-        ) ?? mount;
+      const control = mount
+        ? mount.querySelector<HTMLElement>(
+            'button, [role="button"], iframe, a, .apple-auth-button',
+          ) || mount
+        : mount;
       if (!control)
         return err(new OAuthFailure(OAuthFailureKind.ControlUnavailable));
       control.click();
-      return ok(undefined);
+      return ok();
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.ControlUnavailable));
     }
@@ -402,10 +404,14 @@ class ICloudOAuthSession {
         ? setup
         : await this.fetchCurrentCloudKitIdentity(container);
     if (current.isErr()) return err(current.error);
-    const ownerRecordName =
+    const ownerRecordNameValue =
       current.value.kind === CloudKitIdentityKind.SignedIn
-        ? current.value.identity.userRecordName?.trim()
-        : undefined;
+        ? current.value.identity.userRecordName
+        : false;
+    const ownerRecordName =
+      typeof ownerRecordNameValue === "string"
+        ? ownerRecordNameValue.trim()
+        : "";
     if (!ownerRecordName)
       return err(new OAuthFailure(OAuthFailureKind.SharedSignInRequired));
     const database = container.privateCloudDatabase;
@@ -693,7 +699,8 @@ class ICloudOAuthSession {
   async ensureValidICloudOAuthFileConfig(
     config: OAuthFileConfig,
   ): Promise<Result<OAuthFileConfig, OAuthFailure>> {
-    if (oauthAccessToken(config).kind === "available") return ok(config);
+    if (oauth_access_token(config).kind === OAuthAccessTokenKind.Available)
+      return ok(config);
     const refreshed = await this.requestICloudWebAuthToken({
       signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
       clickSignInControl: true,

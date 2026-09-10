@@ -138,7 +138,7 @@ async function clearAuthorizationState({
       : beginAccountPickerAuthorizationCleanup()
   const closeOperation = closeSession
     ? closeExtensionSessionDocument()
-    : Promise.resolve(ok(undefined))
+    : Promise.resolve(ok())
   const startedCleanup = await cleanupOperation
   const { authorizationGeneration, markerStatus } = startedCleanup
   const failures: AuthorizationCleanupFailure[] = []
@@ -168,7 +168,7 @@ async function clearAuthorizationState({
   )
   return 'error' in outcome
     ? err([AuthorizationCleanupFailureKind.Rejected])
-    : ok(undefined)
+    : ok()
 }
 
 export async function recoverInterruptedAuthorizationCleanup(
@@ -196,7 +196,7 @@ export async function recoverInterruptedAuthorizationCleanup(
       )
     return 'error' in outcome
       ? err([AuthorizationCleanupFailureKind.Rejected])
-      : ok(undefined)
+      : ok()
   }
   const cleanupArgs: ClearAuthorizationStateArgs = {
     ...dependencies,

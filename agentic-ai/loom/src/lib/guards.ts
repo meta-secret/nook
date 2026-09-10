@@ -14,9 +14,11 @@ export class UntrustedYamlBoundary {
       const result: UntrustedYamlMapBuilder = {};
       for (const [key, item] of Object.entries(value)) {
         // Match JSON omission for optional fields in already-typed values.
-        if (item === undefined) continue;
+        const omitted = Symbol('omitted');
+        const { admittedItem = omitted } = { admittedItem: item };
+        if (admittedItem === omitted) continue;
         Object.defineProperty(result, key, {
-          value: UntrustedYamlBoundary.fromJson(item),
+          value: UntrustedYamlBoundary.fromJson(admittedItem),
           enumerable: true,
           configurable: true,
           writable: true,

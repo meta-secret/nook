@@ -22,7 +22,7 @@ export {
   findSharedGrantProvider,
   SharedStorageTargetKind,
   shouldFlushSharedDriveGrant,
-  type SharedGrantProvider,
+  type SharedGrantProviderSelection,
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 import { JoinEnrollmentState } from "$app-wasm";
@@ -106,10 +106,10 @@ export class VaultPasswordActions {
             e2eManager.add_vault_password_for_e2e
           ) {
             await e2eManager.add_vault_password_for_e2e(trimmedLabel, password);
-            return storageOk(undefined);
+            return storageOk();
           }
           await manager.add_vault_password(trimmedLabel, password);
-          return storageOk(undefined);
+          return storageOk();
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -129,7 +129,7 @@ export class VaultPasswordActions {
           ? state.t(I18N_KEYS.ToastsPasswordAddedRotate)
           : state.t(I18N_KEYS.ToastsPasswordSet),
       );
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isPasswordBusy = false;
     }
@@ -171,10 +171,10 @@ export class VaultPasswordActions {
               entryId,
               password,
             );
-            return storageOk(undefined);
+            return storageOk();
           }
           await manager.update_vault_password_entry(entryId, password);
-          return storageOk(undefined);
+          return storageOk();
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -185,7 +185,7 @@ export class VaultPasswordActions {
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();
       if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsPasswordUpdated));
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isPasswordBusy = false;
     }
@@ -237,7 +237,7 @@ export class VaultPasswordActions {
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();
       if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsPasswordRemoved));
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isPasswordBusy = false;
     }

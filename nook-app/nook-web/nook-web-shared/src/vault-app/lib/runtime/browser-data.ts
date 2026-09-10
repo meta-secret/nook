@@ -76,9 +76,10 @@ class BrowserDataLifecycle {
 
   captureLocalDataStorageGeneration(): Result<string, VaultStorageFailure> {
     try {
-      return ok(
-        this.browser.localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? "",
+      const generation = this.browser.localStorage.getItem(
+        LOCAL_DATA_STORAGE_GENERATION,
       );
+      return ok(typeof generation === "string" ? generation : "");
     } catch {
       return err(
         new VaultStorageFailure(VaultStorageFailureKind.GenerationUnavailable),
@@ -191,7 +192,7 @@ class BrowserDataLifecycle {
   clearTabScopedBrowserData(): Result<void, VaultStorageFailure> {
     try {
       this.browser.sessionStorage.clear();
-      return ok(undefined);
+      return ok();
     } catch {
       return err(
         new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed),
@@ -226,7 +227,7 @@ class BrowserDataLifecycle {
       ? err(
           new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed),
         )
-      : ok(undefined);
+      : ok();
   }
 
   subscribeToLocalBrowserDataDeletion(
@@ -295,7 +296,7 @@ class BrowserDataLifecycle {
   requireLocalDataRecoverySupport(): Result<void, VaultStorageFailure> {
     return "BroadcastChannel" in this.browser &&
       "locks" in this.browser.navigator
-      ? ok(undefined)
+      ? ok()
       : err(new VaultStorageFailure(VaultStorageFailureKind.LockUnavailable));
   }
 
@@ -334,7 +335,7 @@ class BrowserDataLifecycle {
       if (message.type === LocalDataResetMessageType.Ready)
         ready.set(message.responderId, message.readiness);
     };
-    let outcome: Result<void, VaultStorageFailure> = ok(undefined);
+    let outcome: Result<void, VaultStorageFailure> = ok();
     try {
       try {
         channel.postMessage(request);
@@ -378,7 +379,7 @@ class BrowserDataLifecycle {
   async reloadQuiescedTabsAfterLocalRecovery(): Promise<
     Result<void, VaultStorageFailure>
   > {
-    if (!("BroadcastChannel" in this.browser)) return ok(undefined);
+    if (!("BroadcastChannel" in this.browser)) return ok();
     let channel: BroadcastChannel;
     try {
       channel = new this.browser.BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
@@ -393,7 +394,7 @@ class BrowserDataLifecycle {
         senderId: TAB_ID,
       } satisfies LocalDataResetMessage);
       await new Promise((resolve) => setTimeout(resolve, 50));
-      return ok(undefined);
+      return ok();
     } catch {
       return err(new VaultStorageFailure(VaultStorageFailureKind.ReloadFailed));
     } finally {
@@ -412,7 +413,7 @@ class BrowserDataLifecycle {
     let logging: Result<void, VaultStorageFailure>;
     try {
       await browserLogRuntime.suspendWasmLogging();
-      logging = ok(undefined);
+      logging = ok();
     } catch {
       logging = err(
         new VaultStorageFailure(VaultStorageFailureKind.LoggingCleanupFailed),
@@ -436,7 +437,7 @@ class BrowserDataLifecycle {
     } catch {
       return err(new VaultStorageFailure(VaultStorageFailureKind.ReloadFailed));
     }
-    return ok(undefined);
+    return ok();
   }
 }
 

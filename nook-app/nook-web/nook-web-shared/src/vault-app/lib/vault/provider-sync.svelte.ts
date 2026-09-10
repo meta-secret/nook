@@ -105,7 +105,7 @@ export class ProviderSyncActions {
         return err(new NativeVaultStorageFailure(failure));
       }
       this.state.stageSyncConflict(conflict);
-      return ok(undefined);
+      return ok();
     } finally {
       revision.free();
     }
@@ -150,7 +150,7 @@ export class ProviderSyncActions {
       });
       if (metadata.isErr()) return err(metadata.error);
     }
-    return ok(undefined);
+    return ok();
   }
 
   private async presentFailure({

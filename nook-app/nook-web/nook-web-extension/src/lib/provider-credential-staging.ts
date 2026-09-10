@@ -39,7 +39,7 @@ class SerializedProviderField {
       ? value
       : value && Object.getPrototypeOf(value) === Object.prototype
         ? Object.values(value)
-        : undefined
+        : false
     if (!values) return SerializedProviderFieldAdmission.Rejected
     return values.every(
       (entry) =>

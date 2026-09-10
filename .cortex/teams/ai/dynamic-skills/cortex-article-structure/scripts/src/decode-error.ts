@@ -61,16 +61,16 @@ export class CortexArticleSchemaFailure {
     // Strict envelope/record key admission precedes ordinary field validation.
     // Zod supplies canonical schema order; missing fields retain the old leading dot.
     const missing = error.issues.find(
-      (issue) => issue.path.length > 0 && issue.input === undefined,
+      (issue) => issue.path.length > 0 && issue.code === 'invalid_type',
     );
-    const issue = missing ?? error.issues[0];
-    const field = issue?.path[0];
-    const fieldPath =
-      field === undefined
-        ? path
-        : path.length > 0 || missing !== undefined
-          ? `${path}.${String(field)}`
-          : String(field);
+    const issue = missing ? missing : error.issues[0]!;
+    const fieldPresent = issue.path.length > 0;
+    const field = issue.path[0];
+    const fieldPath = !fieldPresent
+      ? path
+      : path.length > 0 || Boolean(missing)
+        ? `${path}.${String(field)}`
+        : String(field);
     return new CortexArticleRequestDecodeError({ kind, path: fieldPath });
   }
 }

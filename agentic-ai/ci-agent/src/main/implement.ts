@@ -350,7 +350,7 @@ export class AgentImplementationRunCiImplementationPhases {
     this.#phase = { kind: EditingPhaseKind.Consumed };
     if (request.mode === CiImplementationMode.EditOnly) {
       const edited = await request.edit();
-      return edited.map(() => undefined);
+      return edited.map(() => {});
     }
     const result = await new LegacyCiEdit(request).execute();
     if (result.isErr()) return err(result.error);

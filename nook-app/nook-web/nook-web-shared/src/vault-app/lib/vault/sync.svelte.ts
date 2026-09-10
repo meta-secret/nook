@@ -11,7 +11,7 @@ import {
 import type {
   SyncActionsContext,
   SyncFromProvidersRequest,
-  VaultStorageArguments,
+  NookStorageConnectArgs,
 } from "$lib/vault/action-contexts";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -98,7 +98,7 @@ export enum StagedProviderConflictOutcome {
 }
 
 interface StagedProviderSyncIssueAssessment {
-  readonly args: VaultStorageArguments;
+  readonly args: NookStorageConnectArgs;
 }
 
 interface SyncConflictStaging {
@@ -128,8 +128,7 @@ export class VaultSyncActions {
 
   async hydrateMultiDeviceState(): Promise<RosterHydrationResult> {
     const state = this.state;
-    if (!state.hasManager || !state.isAuthenticated)
-      return storageOk(undefined);
+    if (!state.hasManager || !state.isAuthenticated) return storageOk();
     const mergedJoins: JoinRequest[] = [];
     try {
       for (const provider of state.syncProviders) {
@@ -201,7 +200,7 @@ export class VaultSyncActions {
       if (passwordRefresh1.isErr()) {
         return storageErr(passwordRefresh1.error);
       }
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       for (const join of mergedJoins) join.free();
     }
@@ -289,7 +288,7 @@ export class VaultSyncActions {
       state,
     ).publishExtensionEventLogUpdateForVault();
     if (publication.isErr()) return storageErr(publication.error);
-    if (!state.deviceProtectionReady) return storageOk(undefined);
+    if (!state.deviceProtectionReady) return storageOk();
     if (state.syncProviders.length === 0) {
       return state.flushRemoteEventOutboxNow({
         kind: EventOutboxRequestKind.Default,
@@ -302,7 +301,7 @@ export class VaultSyncActions {
       );
       if (flushed.isErr()) return storageErr(flushed.error);
     }
-    return storageOk(undefined);
+    return storageOk();
   }
 
   eventOutboxTarget({
@@ -356,8 +355,7 @@ export class VaultSyncActions {
       });
       return synced;
     }
-    if (target.kind === EventOutboxTargetKind.Unavailable)
-      return storageOk(undefined);
+    if (target.kind === EventOutboxTargetKind.Unavailable) return storageOk();
     const flushed = await state.enqueueStorage(async () => {
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
@@ -367,7 +365,7 @@ export class VaultSyncActions {
           target.args.pat,
           target.args.repo,
         );
-        return storageOk(undefined);
+        return storageOk();
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
@@ -428,7 +426,7 @@ export class VaultSyncActions {
         providers: updated.value.providers,
       });
       if (persisted.isErr()) return storageErr(persisted.error);
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       revision.free();
     }
@@ -566,7 +564,7 @@ export class VaultSyncActions {
           );
         try {
           await current.value.restore_local_after_provider_assessment();
-          return storageOk(undefined);
+          return storageOk();
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -757,7 +755,7 @@ export class VaultSyncActions {
     mode,
     pat,
     repo,
-  }: VaultStorageArguments): Promise<Result<void, StorageOperationFailure>> {
+  }: NookStorageConnectArgs): Promise<Result<void, StorageOperationFailure>> {
     const state = this.state;
     const synchronized = await state.enqueueStorage(async () => {
       const manager = state.admitManager();

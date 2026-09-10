@@ -196,7 +196,7 @@ export class SyncConflictActions {
     const state = this.state;
     if (!state.hasManager) {
       state.clearProjectionConflicts();
-      return storageOk(undefined);
+      return storageOk();
     }
     const snapshot = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
@@ -222,7 +222,7 @@ export class SyncConflictActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.replaceProjectionConflicts(snapshot.value);
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async resolveSyncConflictKeepLocal(): Promise<void> {
@@ -329,7 +329,7 @@ export class SyncConflictActions {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
-    return storageOk(undefined);
+    return storageOk();
   }
 
   private async resumeConnectAfterSyncConflict({

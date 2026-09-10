@@ -52,7 +52,7 @@ export class CortexValeInvocation {
           CortexMarkdownRole.Article
         );
       });
-    if (markdownFiles.length === 0) return ok(undefined);
+    if (markdownFiles.length === 0) return ok();
     const lintArgs: RunCommandArgs = {
       command: 'vale',
       args: [
@@ -66,7 +66,7 @@ export class CortexValeInvocation {
     const lintLaunch = new HostCommand(lintArgs).execute();
     if (lintLaunch.isErr()) return err(lintLaunch.error);
     const lint = lintLaunch.value;
-    if (lint.exitCode === 0) return ok(undefined);
+    if (lint.exitCode === 0) return ok();
     return err({
       code: LoomFailureCode.CortexAuditFailed,
       message: `Vale Cortex lint failed:\n${lint.stdout || lint.stderr}`,

@@ -115,6 +115,6 @@ export class VaultLocaleActions {
     }
     this.state.locale = request.newLocale;
     this.state.translations = catalog.value;
-    return ok(undefined);
+    return ok();
   }
 }

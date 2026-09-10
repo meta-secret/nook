@@ -13,8 +13,8 @@ export const MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH = 65_536;
 const MISSING_FIELDS =
   'workflow structured result contains missing or extra fields';
 const error = (message: string) => ({
-  error: (issue: { readonly input?: unknown }) =>
-    issue.input === undefined ? MISSING_FIELDS : message,
+  error: (issue: { readonly code: string }) =>
+    issue.code === 'invalid_type' ? MISSING_FIELDS : message,
 });
 const exact = { error: MISSING_FIELDS };
 const string = z.string(error('workflow structured result expected a string'));
@@ -232,7 +232,7 @@ export class WorkflowResultSchema {
   ): DecodedWorkflowTaskOutput {
     const serialized = JSON.stringify(input);
     if (
-      serialized !== undefined &&
+      typeof serialized === 'string' &&
       Buffer.byteLength(serialized, 'utf8') > 131_072
     )
       throw new Error('workflow structured result exceeds 131072 bytes');
@@ -248,7 +248,9 @@ export class WorkflowResultSchema {
       .safeParse(input);
     if (!envelope.success)
       throw new Error(
-        envelope.error.issues[0]?.message ?? 'workflow resultKind is invalid',
+        envelope.error.issues.length > 0
+          ? envelope.error.issues[0]!.message
+          : 'workflow resultKind is invalid',
       );
     const kind = envelope.data.resultKind;
     const schema = RESULT_SCHEMAS[kind];
@@ -256,7 +258,11 @@ export class WorkflowResultSchema {
       return parseStructural<DecodedWorkflowTaskOutput>(schema, input);
     const decoded = schema.safeParse(input);
     if (!decoded.success)
-      throw new Error(decoded.error.issues[0]?.message ?? MISSING_FIELDS);
+      throw new Error(
+        decoded.error.issues.length > 0
+          ? decoded.error.issues[0]!.message
+          : MISSING_FIELDS,
+      );
     return decoded.data;
   }
 }

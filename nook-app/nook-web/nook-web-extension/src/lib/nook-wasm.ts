@@ -46,7 +46,10 @@ type ExtensionWasmStartup =
       operation: ReturnType<typeof initNookWasm>
     }
 
-export type { NookAppLocale } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+export type {
+  ExtensionSessionDeviceWire,
+  NookAppLocale,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export { DeviceMode, DeviceProtectionStatus }
 
@@ -67,8 +70,6 @@ export enum StoredAppLocaleParseKind {
 export type StoredAppLocaleParse =
   | { kind: StoredAppLocaleParseKind.Unsupported }
   | { kind: StoredAppLocaleParseKind.Supported; locale: NookAppLocale }
-
-export type ExtensionDeviceProtectionResult = ExtensionSessionDeviceWire
 
 type ExtensionControlPayload = { queue: ExtensionSessionQueue }
 
@@ -152,7 +153,7 @@ export type ExtensionSessionDeviceState =
   | { kind: ExtensionSessionDeviceStateKind.Locked }
   | {
       kind: ExtensionSessionDeviceStateKind.Active
-      device: ExtensionDeviceProtectionResult
+      device: ExtensionSessionDeviceWire
     }
 
 export type CreateExtensionPasskeyArgs = {
@@ -387,7 +388,7 @@ class ExtensionWasmRuntime {
 
   async createExtensionPasskey(
     args: CreateExtensionPasskeyArgs,
-  ): Promise<ExtensionDeviceProtectionResult> {
+  ): Promise<ExtensionSessionDeviceWire> {
     const { passkeyLabel, deviceMode } = args
     await this.ensureNookWasm()
     const beginRequest: ExtensionBeginPasskeySetupRequest = {
@@ -426,7 +427,7 @@ class ExtensionWasmRuntime {
     return decode_extension_session_device_response(finishResponse).device
   }
 
-  async recoverExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
+  async recoverExtensionPasskey(): Promise<ExtensionSessionDeviceWire> {
     await this.ensureNookWasm()
     const options = build_passkey_recovery_request_options('')
     const credential = await this.getPasskey(options)
@@ -443,7 +444,7 @@ class ExtensionWasmRuntime {
     return decode_extension_session_device_response(response).device
   }
 
-  async unlockExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
+  async unlockExtensionPasskey(): Promise<ExtensionSessionDeviceWire> {
     await this.ensureNookWasm()
     const optionsRequest: ExtensionUnlockOptionsRequest = {
       type: ExtensionSessionMessageType.UnlockOptions,
@@ -469,9 +470,7 @@ class ExtensionWasmRuntime {
     return decode_extension_session_device_response(response).device
   }
 
-  async createExtensionPin(
-    pin: string,
-  ): Promise<ExtensionDeviceProtectionResult> {
+  async createExtensionPin(pin: string): Promise<ExtensionSessionDeviceWire> {
     const request: ExtensionCreatePinRequest = {
       type: ExtensionSessionMessageType.CreatePin,
       payload: { pin, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
@@ -480,9 +479,7 @@ class ExtensionWasmRuntime {
     return decode_extension_session_device_response(response).device
   }
 
-  async unlockExtensionPin(
-    pin: string,
-  ): Promise<ExtensionDeviceProtectionResult> {
+  async unlockExtensionPin(pin: string): Promise<ExtensionSessionDeviceWire> {
     const request: ExtensionUnlockPinRequest = {
       type: ExtensionSessionMessageType.UnlockPin,
       payload: { pin, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },

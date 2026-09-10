@@ -63,7 +63,7 @@ export class CortexDocumentMapVerifier {
         );
       }
     }
-    return ok(undefined);
+    return ok();
   }
 
   private deriveIndependentFindings(

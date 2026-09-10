@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 const missingFields = 'structural result contains missing or extra fields';
 export const structuralError = (message: string) => ({
-  error: (issue: { readonly input?: unknown }) =>
-    issue.input === undefined ? missingFields : message,
+  error: (issue: { readonly code: string }) =>
+    issue.code === 'invalid_type' ? missingFields : message,
 });
 export const structuralObjectError = { error: missingFields };
 
@@ -66,6 +66,6 @@ export function parseStructural<T>(schema: z.ZodType<T>, input: unknown): T {
   const result = schema.safeParse(input);
   if (result.success) return result.data;
   throw new Error(
-    `Invalid workflow structured result: ${result.error.issues[0]?.message ?? missingFields}.`,
+    `Invalid workflow structured result: ${result.error.issues.length > 0 ? result.error.issues[0]!.message : missingFields}.`,
   );
 }

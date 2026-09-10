@@ -225,11 +225,10 @@ export class AgentAttemptTransport {
   private static enumeration<T extends string>(
     request: AttemptEnumDecode<T>,
   ): T {
-    const value = request.values.find(
-      (candidate) => candidate === request.value,
-    );
-    if (value === undefined) throw new AgentAttemptDecodeError();
-    return value;
+    for (const value of request.values) {
+      if (value === request.value) return value;
+    }
+    throw new AgentAttemptDecodeError();
   }
   private static exactKeys(request: AttemptFieldsDecode): void {
     const keys = Object.keys(request.node);

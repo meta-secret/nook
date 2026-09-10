@@ -333,7 +333,7 @@ export class VaultInitializationActions {
     if (identity.isErr()) return storageErr(identity.error);
     state.deviceId = identity.value.deviceId;
     state.devicePublicKey = identity.value.devicePublicKey;
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async authorizeWithExternalDeviceIdentity({
@@ -598,7 +598,7 @@ class DeviceInitializationContinuation {
           StorageOperationFailureKind.DeviceAuthorizationRequired,
         ),
       );
-    return storageOk(undefined);
+    return storageOk();
   }
   async continue(): Promise<
     Result<void, StorageOperationFailure | OAuthFailure>
@@ -721,6 +721,6 @@ class DeviceInitializationContinuation {
       state.startVaultSync();
     }
     log.info("app init finished");
-    return storageOk(undefined);
+    return storageOk();
   }
 }

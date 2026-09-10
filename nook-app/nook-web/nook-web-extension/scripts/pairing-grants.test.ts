@@ -263,13 +263,13 @@ describe('extension pairing grant transport', () => {
     const policy = await extensionPairingGrantPolicyReady
     const { vaultName, ...otherFields } = storedGrant
     expect(
-      policy.comparePairingRecords({
+      policy.compare_extension_pairing_records({
         current: storedGrant,
         migrated: { ...otherFields, vaultName },
       }),
     ).toBe('Equivalent')
     expect(
-      policy.comparePairingRecords({
+      policy.compare_extension_pairing_records({
         current: storedGrant,
         migrated: { ...storedGrant, vaultName: 'Changed' },
       }),

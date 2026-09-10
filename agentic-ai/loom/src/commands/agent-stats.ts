@@ -263,7 +263,7 @@ class AgentStatisticsDocument {
     try {
       mkdirSync(path.dirname(this.file), { recursive: true });
       writeFileSync(this.file, content, 'utf8');
-      return ok(undefined);
+      return ok();
     } catch {
       return err({
         code: LoomFailureCode.CommandFailed,

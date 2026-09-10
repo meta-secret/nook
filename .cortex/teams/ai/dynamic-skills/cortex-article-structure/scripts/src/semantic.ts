@@ -155,8 +155,9 @@ export class CortexArticleFindingSequence {
     if (this.findings.length !== expected.length)
       return ArticleFindingAgreement.Different;
     for (const [index, wanted] of expected.entries()) {
-      const actual = this.findings.at(index);
-      if (actual === undefined) return ArticleFindingAgreement.Different;
+      if (index >= this.findings.length)
+        return ArticleFindingAgreement.Different;
+      const actual = this.findings[index]!;
       if (
         new CortexArticleFindingValue(actual).agreementWith(wanted) ===
         ArticleFindingAgreement.Different

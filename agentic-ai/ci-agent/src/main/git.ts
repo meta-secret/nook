@@ -159,7 +159,7 @@ export class CiRepository {
   excludeAgentRuntimeArtifacts() {
     return this.trustedGit({
       args: ["reset", "--quiet", "HEAD", "--", ...AGENT_RUNTIME_ARTIFACTS],
-    }).map(() => undefined);
+    }).map(() => {});
   }
   async markSafeDirectory(): Promise<Result<void, CiFailure>> {
     const explicit = await new CiProcess("git", [
@@ -189,7 +189,7 @@ export class CiRepository {
     );
     if (present.isErr()) return err(present.error);
     return this.trustedGit({ args: ["rev-parse", "--git-dir"] }).map(
-      () => undefined,
+      () => {},
     );
   }
   async configureGitForCi({
@@ -260,7 +260,7 @@ export class CiRepository {
       { env: authEnv },
     )
       .execute()
-      .map(() => undefined);
+      .map(() => {});
   }
   async pushFixBranch({
     fixBranch,

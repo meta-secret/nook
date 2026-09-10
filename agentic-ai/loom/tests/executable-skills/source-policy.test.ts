@@ -355,7 +355,7 @@ describe('executable skill source policy', () => {
       '  BroadcastChannel: class { constructor(readonly name: string) {} },',
       '  onmessage: (value: string) => value,',
       '  addEventListener: (name: string) => name,',
-      '  close: () => undefined,',
+      '  close: () => {},',
       '  MessageChannel: class {},',
       '  MessagePort: class {},',
       '};',

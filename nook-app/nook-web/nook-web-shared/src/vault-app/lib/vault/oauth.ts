@@ -16,7 +16,7 @@ import {
   defaultOAuthFileConfig,
   DEFAULT_DRIVE_BACKUP_NAME,
   findDuplicateSyncProvider,
-  oauthAccessToken,
+  oauth_access_token,
   OAuthFilePresentation,
   OAuthFileNameKind,
   set_google_drive_provider_mode,
@@ -118,7 +118,7 @@ export class VaultOAuthActions {
       state.storageMode !== "oauth-file" ||
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
     ) {
-      return ok(undefined);
+      return ok();
     }
     const oauthFile = state.oauthFileDraft.config;
     log.info("oauth token freshness check started");
@@ -166,7 +166,7 @@ export class VaultOAuthActions {
           refreshed.expiresAt.value === oauthFile.expiresAt.value))
     ) {
       log.info("oauth token freshness check kept existing token");
-      return ok(undefined);
+      return ok();
     }
     if (providerToRefresh.state === "duplicate") {
       const providers = state.providers.map((provider) =>
@@ -183,7 +183,7 @@ export class VaultOAuthActions {
     }
     state.configureOauthFile(refreshed);
     log.info("oauth token freshness check refreshed provider");
-    return ok(undefined);
+    return ok();
   }
 
   private bindSharedICloudTarget({
@@ -269,7 +269,7 @@ export class VaultOAuthActions {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
-      oauthAccessToken(state.oauthFileDraft.config).kind === "missing"
+      oauth_access_token(state.oauthFileDraft.config).kind === "missing"
     )
       return err(new OAuthFailure(OAuthFailureKind.SharedSignInRequired));
     const target = await iCloudOAuthSession.createICloudSharedVault(
@@ -285,7 +285,7 @@ export class VaultOAuthActions {
     state.sharedGrantInstructions = state.t(
       I18N_KEYS.ProviderSetupIcloudSharedCreated,
     );
-    return ok(undefined);
+    return ok();
   }
 
   async useICloudSharedProvider({
@@ -294,7 +294,7 @@ export class VaultOAuthActions {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
-      oauthAccessToken(state.oauthFileDraft.config).kind === "missing"
+      oauth_access_token(state.oauthFileDraft.config).kind === "missing"
     )
       return err(new OAuthFailure(OAuthFailureKind.SharedSignInRequired));
     const target =
@@ -309,7 +309,7 @@ export class VaultOAuthActions {
     state.sharedGrantInstructions = state.t(
       I18N_KEYS.ProviderSetupIcloudSharedConnected,
     );
-    return ok(undefined);
+    return ok();
   }
 
   async createGoogleSharedFolder({
@@ -322,7 +322,7 @@ export class VaultOAuthActions {
       return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
     }
     const oauthFile = state.oauthFileDraft.config;
-    const accessCredential = oauthAccessToken(oauthFile);
+    const accessCredential = oauth_access_token(oauthFile);
     if (accessCredential.kind === "missing") {
       return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
     }
@@ -405,7 +405,7 @@ export class VaultOAuthActions {
       return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
     }
     const config = state.oauthFileDraft.config;
-    const accessCredential = oauthAccessToken(config);
+    const accessCredential = oauth_access_token(config);
     if (accessCredential.kind === "missing") {
       return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
     }
@@ -544,7 +544,7 @@ export class VaultOAuthActions {
       name.kind === OAuthFileNameKind.Resolved
         ? name.fileName
         : DEFAULT_DRIVE_BACKUP_NAME;
-    return ok(undefined);
+    return ok();
   }
 
   private ensureSupportedOAuthOrigin({
@@ -619,6 +619,6 @@ export class VaultOAuthActions {
         : name.kind === OAuthFileNameKind.Resolved
           ? name.fileName
           : DEFAULT_DRIVE_BACKUP_NAME;
-    return ok(undefined);
+    return ok();
   }
 }

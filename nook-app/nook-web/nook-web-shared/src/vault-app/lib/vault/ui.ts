@@ -229,7 +229,7 @@ export class VaultWorkspaceActions {
         async () => {
           try {
             await admitted.value.delete_local_browser_data();
-            return storageOk(undefined);
+            return storageOk();
           } catch {
             return storageErr(
               new StorageOperationFailure(
@@ -265,12 +265,12 @@ export class VaultWorkspaceActions {
           if (manager.isErr()) return storageErr(manager.error);
           try {
             await manager.value.quiesce_for_local_recovery();
-            return storageOk(undefined);
+            return storageOk();
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })
-      : state.waitForStorageChain().then(() => storageOk(undefined));
+      : state.waitForStorageChain().then(() => storageOk());
     state.localDataDeletionStarted = true;
     state.stopIdleSessionTracking();
     state.stopVaultSync();

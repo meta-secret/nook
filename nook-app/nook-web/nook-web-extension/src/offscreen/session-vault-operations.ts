@@ -260,7 +260,7 @@ export async function openPasskeyVault({
       grant.devicePublicKey,
       grant.deviceSigningPublicKey,
     )
-    return ok(undefined)
+    return ok()
   } catch {
     return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
   }
@@ -351,7 +351,7 @@ export async function flushPasskeyEventToProviders({
       return err(
         new SessionOperationFailure(SessionOperationFailureKind.Failed),
       )
-    return ok(undefined)
+    return ok()
   } catch {
     return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
   }

@@ -196,7 +196,8 @@ export class CloudKitFailureDiagnostic {
   private containsToken(token: CloudKitFailureToken): boolean {
     const { code, message, reason, statusText } = this.details;
     return [code, message, reason, statusText].some(
-      (value) => value !== undefined && value.toUpperCase().includes(token),
+      (value) =>
+        typeof value === "string" && value.toUpperCase().includes(token),
     );
   }
 

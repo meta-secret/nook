@@ -205,9 +205,10 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     if (!groupByKind) return [];
     const groups = filteredTasks.reduce((groups, task) => {
       const label = task.kind_label || task.kind || 'Other';
+      const existing = groups.get(label);
       return new Map([
         ...groups,
-        [label, [...(groups.get(label) ?? []), task]],
+        [label, [...(existing ? existing : []), task]],
       ]);
     }, new Map<string, ObservedTask[]>());
     return [...groups.entries()];

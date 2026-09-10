@@ -7,10 +7,10 @@ import { CloudKitIdentityKind } from '$lib/auth/icloud/auth-state'
 
 class CloudKitTransportFixture {
   readonly identity: CloudKitUserIdentity = { userRecordName: 'test-user' }
-  async setUpAuth(): Promise<CloudKitUserIdentity | undefined> {
+  async setUpAuth(): Promise<unknown> {
     return this.identity
   }
-  async fetchCurrentUserIdentity(): Promise<CloudKitUserIdentity | undefined> {
+  async fetchCurrentUserIdentity(): Promise<unknown> {
     return this.identity
   }
   async whenUserSignsIn() {
@@ -47,8 +47,8 @@ describe('CloudKit transport identity adapter', () => {
   test('normalizes empty identity responses to signed out', async () => {
     const transport = new CloudKitTransportFixture()
     transport.install()
-    vi.spyOn(transport, 'setUpAuth').mockResolvedValue(undefined)
-    vi.spyOn(transport, 'fetchCurrentUserIdentity').mockResolvedValue(undefined)
+    vi.spyOn(transport, 'setUpAuth').mockResolvedValue(false)
+    vi.spyOn(transport, 'fetchCurrentUserIdentity').mockResolvedValue(false)
     const admitted = cloudKitRuntime.getDefaultCloudKitContainer()
     expect(admitted.isOk()).toBe(true)
     if (admitted.isErr()) return

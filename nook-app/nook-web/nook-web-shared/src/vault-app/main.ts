@@ -35,7 +35,7 @@ class VaultAppMount {
         return err(VaultMountFailure.DetachedTarget);
       mount(App, { target });
       startupShell.remove();
-      return ok(undefined);
+      return ok();
     } catch {
       startupShell.showUnavailable();
       return err(VaultMountFailure.RenderUnavailable);

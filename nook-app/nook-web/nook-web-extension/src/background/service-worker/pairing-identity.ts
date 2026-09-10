@@ -711,7 +711,7 @@ class ExtensionPairingIdentity {
           (key) =>
             legacyKeys.includes(key) &&
             key in current &&
-            pairingPolicy.comparePairingRecords({
+            pairingPolicy.compare_extension_pairing_records({
               current: current[key],
               migrated: migrated[key],
             }) === 'Equivalent',

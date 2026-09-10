@@ -392,7 +392,7 @@ export class CortexDocumentMapTransport {
         }),
       );
     }
-    return ok(undefined);
+    return ok();
   }
 
   private assertResultExactKeys(request: {
@@ -426,7 +426,7 @@ export class CortexDocumentMapTransport {
         }),
       );
     }
-    return ok(undefined);
+    return ok();
   }
 
   private assertResultByteLimit(
@@ -443,7 +443,7 @@ export class CortexDocumentMapTransport {
         }),
       );
     }
-    return ok(undefined);
+    return ok();
   }
 
   private failure(request: DecodeFailure): CortexDocumentMapRequestDecodeError {

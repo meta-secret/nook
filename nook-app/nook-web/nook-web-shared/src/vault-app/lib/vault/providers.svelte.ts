@@ -30,9 +30,9 @@ import {
   localFolderConfigurationNotApplicable,
   isConfiguredOAuthFile,
   isConfiguredLocalFolder,
-  missingOAuthAccessToken,
+  missing_oauth_access_token,
   OAUTH_FILE_PROVIDER_TYPE,
-  oauthAccessToken,
+  oauth_access_token,
   oauthRefreshCredentialNotIssued,
   OAuthFilePresentation,
   OAuthFileNameKind,
@@ -253,8 +253,8 @@ export class VaultProviderActions {
     const state = this.state;
     const oauthCredential =
       state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-        ? oauthAccessToken(state.oauthFileDraft.config)
-        : missingOAuthAccessToken();
+        ? oauth_access_token(state.oauthFileDraft.config)
+        : missing_oauth_access_token();
     const folderHandle: LocalFolderHandle =
       state.localFolderDraft.kind === LocalFolderDraftKind.Configured
         ? new LocalFolderPresentation(
@@ -286,7 +286,7 @@ export class VaultProviderActions {
       state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
       draft.kind !== OAuthFileDraftKind.Configured
     )
-      return storageOk(undefined);
+      return storageOk();
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     let updated: ReturnType<typeof update_oauth_remote_ref>;
@@ -302,13 +302,13 @@ export class VaultProviderActions {
       let config: typeof draft.config;
       try {
         if (updated.state !== NookOAuthRemoteConfigurationUpdateState.Updated)
-          return storageOk(undefined);
+          return storageOk();
         config = updated.config;
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       state.configureOauthFile(config);
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       updated.free();
     }
@@ -409,7 +409,7 @@ export class VaultProviderActions {
     }
     state.providersLoaded = true;
     log.debug("providers loaded");
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<
@@ -448,7 +448,7 @@ export class VaultProviderActions {
       state.clearOauthFile();
       state.clearLocalFolder();
     }
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async persistProviders({ opts }: ProviderPersistence) {
@@ -457,7 +457,7 @@ export class VaultProviderActions {
       NookVaultManager["persist_auth_providers_snapshot"]
     >[0] = {
       snapshot: {
-        providers: opts.providers ?? state.providers,
+        providers: opts.providers ? opts.providers : state.providers,
         activeVaultStoreId:
           state.activeVault.kind === ActiveVaultKind.Open
             ? activeVaultScope(state.activeVault.storeId)
@@ -481,7 +481,7 @@ export class VaultProviderActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.providers = snapshot.value.providers;
-    return storageOk(undefined);
+    return storageOk();
   }
 
   beginProviderSetup({ request }: ProviderSetup) {
@@ -579,7 +579,7 @@ export class VaultProviderActions {
   }: ProviderRemoval): Promise<Result<void, StorageOperationFailure>> {
     const state = this.state;
     const target = state.providers.find((p) => p.id === id);
-    if (!target || target.type === "local") return storageOk(undefined);
+    if (!target || target.type === "local") return storageOk();
 
     const persistence = await state.persistProviders({
       replace: true,
@@ -614,7 +614,7 @@ export class VaultProviderActions {
       replacements: { label: target.label },
     };
     state.showSuccess(state.t(tArgs));
-    return storageOk(undefined);
+    return storageOk();
   }
 }
 
@@ -730,7 +730,7 @@ export class ProviderPersistenceActions {
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       outcome.free();
     }

@@ -76,7 +76,7 @@ export class ProviderSelectionActions {
         handleId: storedLocalFolderHandle(folder.handleId),
       };
       state.configureLocalFolder(request);
-      return ok(undefined);
+      return ok();
     } finally {
       folder.free();
     }

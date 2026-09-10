@@ -75,7 +75,7 @@ export class CloudKitTokenWait {
     if (this.state === CloudKitTokenWaitState.Settled) return;
     let popupClosed = false;
     try {
-      popupClosed = this.request.popup?.closed ?? false;
+      popupClosed = this.request.popup ? this.request.popup.closed : false;
     } catch {
       this.finish(
         err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication)),
@@ -215,7 +215,7 @@ class CloudKitSignInBrowser {
               ? data.authToken
               : key === "token" && "token" in data
                 ? data.token
-                : undefined;
+                : false;
       if (typeof candidate === "string" && candidate.trim())
         return {
           kind: WebAuthTokenLookupKind.Available,

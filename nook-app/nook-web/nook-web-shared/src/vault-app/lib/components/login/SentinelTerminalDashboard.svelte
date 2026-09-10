@@ -155,8 +155,7 @@
       threshold,
     }).thresholdChoices
     if (!choices.includes(threshold)) {
-      const lastChoice = choices.at(-1)
-      if (lastChoice !== undefined) threshold = lastChoice
+      if (choices.length > 0) threshold = choices[choices.length - 1]!
     }
     policyStep = SentinelTerminalPolicyStep.Threshold
     void scrollOutput()

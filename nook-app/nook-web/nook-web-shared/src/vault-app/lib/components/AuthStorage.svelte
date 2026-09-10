@@ -31,7 +31,7 @@
     LocalFolderHandleKind,
     localizedProviderStorageDetail,
     localizeProviderLabel,
-    oauthAccessToken,
+    oauth_access_token,
     OAUTH_FILE_PROVIDER_TYPE,
   } from '$lib/auth/providers'
   import type { VaultState } from '$lib/vault.svelte'
@@ -132,7 +132,7 @@
         ).localFolderHandle().kind === LocalFolderHandleKind.Selected) ||
       (setupIs('oauth-file') &&
         vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        oauthAccessToken(vault.oauthFileDraft.config).kind === 'available') ||
+        oauth_access_token(vault.oauthFileDraft.config).kind === 'available') ||
       (setupIs('github') && Boolean(githubPat.trim())),
   )
   const oauthPreset = $derived(

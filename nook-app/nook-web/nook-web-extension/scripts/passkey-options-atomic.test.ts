@@ -50,9 +50,7 @@ describe('website passkey options', () => {
       Promise.resolve(ok(sessionResponses.shift())),
     )
     const dependencies: WebsitePasskeyOptionsDependencies = {
-      ensureExtensionSessionDocument: mock(() =>
-        Promise.resolve(ok(undefined)),
-      ),
+      ensureExtensionSessionDocument: mock(() => Promise.resolve(ok())),
       isAuthorizedWebsiteSender: mock(() => true),
       isUnlockedSessionStatus: mock(() => true),
       passkeyPairingGrants: mock(() =>

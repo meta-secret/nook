@@ -84,26 +84,26 @@ class SentinelFinalizationFixture {
       operation(),
     dismissSuccess: vi.fn(),
     loadSecretPage: vi.fn<() => Promise<SentinelActionResult<void>>>(async () =>
-      ok(undefined),
+      ok(),
     ),
     ensureProviderSaved: vi.fn<() => Promise<SentinelActionResult<void>>>(
-      async () => ok(undefined),
+      async () => ok(),
     ),
     loadProviders: vi.fn<() => Promise<SentinelActionResult<void>>>(async () =>
-      ok(undefined),
+      ok(),
     ),
     refreshPasswordEntriesList: vi.fn<
       () => Promise<SentinelActionResult<void>>
-    >(async () => ok(undefined)),
-    hydrateMultiDeviceState: vi.fn(async () => ok(undefined)),
-    markVaultUnlocked: vi.fn(() => ok(undefined)),
+    >(async () => ok()),
+    hydrateMultiDeviceState: vi.fn(async () => ok()),
+    markVaultUnlocked: vi.fn(() => ok()),
     showSuccess: vi.fn(),
     startIdleSessionTracking: vi.fn(),
     startVaultSync: vi.fn(),
-    initDeviceIdentity: vi.fn(async () => ok(undefined)),
+    initDeviceIdentity: vi.fn(async () => ok()),
     syncFromStorage: vi.fn(async () => ok(ProviderSyncOutcome.Synced)),
     connectStorageArgs: vi.fn(),
-    refreshVaultArchitectureFromManager: vi.fn(() => ok(undefined)),
+    refreshVaultArchitectureFromManager: vi.fn(() => ok()),
     resolveErrorMessage: (message: string) => message,
     t: (key: string) => key,
   }

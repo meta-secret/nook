@@ -13,8 +13,6 @@ import {
   type NookPasswordEntrySummary,
 } from "$app-wasm";
 
-type VaultConnectAssessment = NookStorageConnectArgs;
-
 type LoginUnlockCapabilityState = {
   hasManager: boolean;
   localVaultPresent: boolean;
@@ -22,7 +20,7 @@ type LoginUnlockCapabilityState = {
   loginPasswordPrompt: boolean;
   passwordEntries: readonly NookPasswordEntrySummary[];
   assessVaultConnectStatus(
-    args: VaultConnectAssessment,
+    args: NookStorageConnectArgs,
   ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
 };
 
@@ -33,7 +31,7 @@ export class LoginUnlockPresentation {
     const state = this.request;
     if (!state.hasManager || !state.localVaultPresent) {
       state.loginDeviceKeysCapable = true;
-      return ok(undefined);
+      return ok();
     }
     const accessStatus = await state.assessVaultConnectStatus({
       mode: "local",
@@ -59,6 +57,6 @@ export class LoginUnlockPresentation {
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
-    return ok(undefined);
+    return ok();
   }
 }

@@ -436,7 +436,7 @@ export class ModuleExpertIsolation {
         message: 'Module expert source commit must be a full Git SHA.',
       });
     }
-    return ok(undefined);
+    return ok();
   }
 
   private static moduleExpertProfile(

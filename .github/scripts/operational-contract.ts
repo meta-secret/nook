@@ -61,6 +61,10 @@ export interface OperationalProbeOutcome {
   readonly stdout: string;
   readonly stderr: string;
 }
+export enum OperationalProbeStream {
+  Pipe = "pipe",
+  Inherit = "inherit",
+}
 export class OperationalShellProbe {
   constructor(private readonly source: string) {}
   execute(): Result<OperationalProbeOutcome, OperationalContractFailure> {
@@ -68,13 +72,13 @@ export class OperationalShellProbe {
       const outcome = Bun.spawnSync({
         cmd: ["bash"],
         stdin: new Blob([this.source]),
-        stdout: "pipe",
-        stderr: "pipe",
+        stdout: OperationalProbeStream.Pipe,
+        stderr: OperationalProbeStream.Pipe,
       });
       return ok({
         exitCode: outcome.exitCode,
-        stdout: outcome.stdout?.toString() ?? "",
-        stderr: outcome.stderr?.toString() ?? "",
+        stdout: outcome.stdout ? outcome.stdout.toString() : "",
+        stderr: outcome.stderr ? outcome.stderr.toString() : "",
       });
     } catch {
       return err({
@@ -89,9 +93,9 @@ export class OperationalCommandProbe {
     private readonly request: {
       cmd: string[];
       stdin?: Blob;
-      env?: Record<string, string | undefined>;
-      stdout: "pipe" | "inherit";
-      stderr: "pipe" | "inherit";
+      env?: Record<string, string>;
+      stdout: OperationalProbeStream;
+      stderr: OperationalProbeStream;
     },
   ) {}
   execute(): Result<OperationalProbeOutcome, OperationalContractFailure> {
@@ -99,8 +103,8 @@ export class OperationalCommandProbe {
       const outcome = Bun.spawnSync(this.request);
       return ok({
         exitCode: outcome.exitCode,
-        stdout: outcome.stdout?.toString() ?? "",
-        stderr: outcome.stderr?.toString() ?? "",
+        stdout: outcome.stdout ? outcome.stdout.toString() : "",
+        stderr: outcome.stderr ? outcome.stderr.toString() : "",
       });
     } catch {
       return err({

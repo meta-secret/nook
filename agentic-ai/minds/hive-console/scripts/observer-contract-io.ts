@@ -30,7 +30,7 @@ export class ContractDirectory {
         kind: ContractFailureKind.Files,
         message: 'Unable to create observer contract directory',
       }),
-    ).map(() => undefined);
+    ).map(() => {});
   }
   copyFrom(source: string) {
     return ResultAsync.fromPromise(

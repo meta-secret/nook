@@ -183,7 +183,7 @@ export class SentinelUnlockActions {
 
   async ensureSentinelCeremonyHydrated(): Promise<SentinelActionResult<void>> {
     const state = this.state;
-    if (state.isAuthenticated || state.isVerifying) return storageOk(undefined);
+    if (state.isAuthenticated || state.isVerifying) return storageOk();
     const initialized = await state.initDeviceIdentity();
     if (initialized.isErr()) return storageErr(initialized.error);
     const synchronized = await state.syncFromStorage(
@@ -200,7 +200,7 @@ export class SentinelUnlockActions {
       if (architecture.isErr()) return storageErr(architecture.error);
       state.sentinelCeremonyPrompt = true;
       state.loginPasswordPrompt = false;
-      return storageOk(undefined);
+      return storageOk();
     }
     const connected = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
@@ -224,10 +224,10 @@ export class SentinelUnlockActions {
       if (architecture.isErr()) return storageErr(architecture.error);
       state.sentinelCeremonyPrompt = true;
       state.loginPasswordPrompt = false;
-      return storageOk(undefined);
+      return storageOk();
     }
     for (const record of connected.value) record.free();
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async startSentinelUnlock(): Promise<SentinelActionResult<void>> {
@@ -270,7 +270,7 @@ export class SentinelUnlockActions {
     });
     if (request.isErr()) return storageErr(request.error);
     state.sentinelUnlockRequest = request.value;
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async addSentinelUnlockResponse({
@@ -301,7 +301,7 @@ export class SentinelUnlockActions {
       SentinelUnlockActions["replaceUnlockSession"]
     >[0] = { status: status.value };
     this.replaceUnlockSession(replaceUnlockSessionArgs2);
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async listSentinelStoredDeliveries(): Promise<
@@ -467,7 +467,7 @@ export class SentinelUnlockActions {
       state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
       state.startIdleSessionTracking();
       state.startVaultSync();
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isVerifying = false;
     }

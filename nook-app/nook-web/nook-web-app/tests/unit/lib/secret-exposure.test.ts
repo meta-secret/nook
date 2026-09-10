@@ -63,7 +63,7 @@ describe('secret exposure lifecycle', () => {
       load: async () => ok(record),
       action: (secret) => {
         copied(secret.primaryCredential)
-        return ok(undefined)
+        return ok()
       },
     })
 
@@ -78,7 +78,7 @@ describe('secret exposure lifecycle', () => {
     await new SecretExposure({ 'secret-1': record }).withRecord({
       id: 'secret-1',
       load: load,
-      action: () => ok(undefined),
+      action: () => ok(),
     })
 
     expect(load).not.toHaveBeenCalled()

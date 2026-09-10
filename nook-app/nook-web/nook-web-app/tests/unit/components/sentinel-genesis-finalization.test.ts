@@ -62,7 +62,7 @@ class GenesisFinalizationFixture {
     sentinelGenesisDeliveries: [],
     dismissSuccess: vi.fn(),
     clearSentinelGenesisStore: vi.fn(),
-    initDeviceIdentity: vi.fn(async () => ok(undefined)),
+    initDeviceIdentity: vi.fn(async () => ok()),
     sentinelGenesisPhase: SentinelGenesisPhase.ReadyToFinalize,
     sentinelGenesisParticipantCount: 1,
     sentinelGenesisParticipants: [this.previousParticipant],
@@ -74,7 +74,7 @@ class GenesisFinalizationFixture {
   }
   readonly prepare = vi.fn()
   readonly start = vi.fn(async () => false)
-  readonly finalizeAction = vi.fn(async () => ok(undefined))
+  readonly finalizeAction = vi.fn(async () => ok())
 
   retain(phase: SentinelGenesisPhase): void {
     this.status.phase = phase
@@ -120,9 +120,9 @@ class GenesisFinalizationFixture {
       onPrepareInitiator: this.prepare,
       onBack: vi.fn(),
       onStart: this.start,
-      onAddParticipant: vi.fn(async () => ok(undefined)),
+      onAddParticipant: vi.fn(async () => ok()),
       onFinalize: this.finalizeAction,
-      onCompleteDelivery: vi.fn(async () => ok(undefined)),
+      onCompleteDelivery: vi.fn(async () => ok()),
     }
     return props
   }

@@ -211,7 +211,7 @@ export class VaultDeviceActions {
           ? state.t(I18N_KEYS.ToastsDeviceRenamed)
           : state.t(I18N_KEYS.ToastsDeviceNameReset),
       );
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isSaving = false;
     }
@@ -254,7 +254,7 @@ export class VaultDeviceActions {
       if (isSelf) {
         state.clearUnlockedSession();
         state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRemoved));
-        return storageOk(undefined);
+        return storageOk();
       }
       const secretRefresh3 = await state.refreshSecretsFromSession();
       if (secretRefresh3.isErr()) {
@@ -267,7 +267,7 @@ export class VaultDeviceActions {
       }
       state.scheduleFanOutSyncAfterLocalSave();
       state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRevoked));
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isSaving = false;
     }

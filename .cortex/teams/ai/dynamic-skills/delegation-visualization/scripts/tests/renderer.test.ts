@@ -185,7 +185,7 @@ describe('delegation visualization renderer', () => {
     if (execution.isErr()) return;
     const result = execution.value;
     const [first, second, third] = result.document.gizmo.tasks;
-    expect(first && second && third).toBeDefined();
+    expect(first && second && third).not.toEqual(void 0);
     if (!first || !second || !third) return;
     const tamperedDocuments = [
       new DelegationVisualizationDocument([

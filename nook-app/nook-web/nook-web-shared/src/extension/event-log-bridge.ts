@@ -26,14 +26,14 @@ class ExtensionEventLogPublisher {
     eventLogRecords,
   }: PublishExtensionEventLogUpdateArgs): Result<void, ExtensionPublicationFailure> {
     if (!('window' in this.browser) || eventLogRecords.length === 0)
-      return ok(undefined)
+      return ok()
     const message: ExtensionLocalEventLogUpdatedMessage = {
       type: ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated,
       payload: { vaultStoreId, eventLogRecords },
     }
     try {
       this.browser.window.postMessage(message, this.browser.window.location.origin)
-      return ok(undefined)
+      return ok()
     } catch {
       return err(ExtensionPublicationFailure.BrowserDelivery)
     }

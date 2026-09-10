@@ -49,7 +49,7 @@ export class ActiveExtensionSessionLease {
       deadline: Date.now() + this.request.durationMs,
       timer: setTimeout(() => this.expire(), this.request.durationMs),
     }
-    return ok(undefined)
+    return ok()
   }
 
   stop(): void {

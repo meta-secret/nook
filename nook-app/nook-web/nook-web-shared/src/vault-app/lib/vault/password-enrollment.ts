@@ -4,8 +4,9 @@ import {
   type SharedStorageGrantCredential,
   type SharedGrantProviderSelection,
 } from "$app-wasm";
+export type { SharedGrantProviderSelection } from "$app-wasm";
 import {
-  oauthAccessToken,
+  oauth_access_token,
   unselectedVaultScope,
   type OAuthFilePreset,
   type StorageProvider,
@@ -21,8 +22,6 @@ export type SharedStorageTarget =
   | { kind: SharedStorageTargetKind.NotBound }
   | { kind: SharedStorageTargetKind.Bound; storageTargetId: string };
 
-export type SharedGrantProvider = SharedGrantProviderSelection;
-
 export type SharedGrantProviderSearch = {
   readonly providers: StorageProvider[];
   readonly preset: OAuthFilePreset;
@@ -31,14 +30,14 @@ export type SharedGrantProviderSearch = {
 
 export type SharedDriveGrantFlushAssessment = {
   readonly grant: SharedStorageGrantOutcome;
-  readonly accessCredential: ReturnType<typeof oauthAccessToken>;
+  readonly accessCredential: ReturnType<typeof oauth_access_token>;
 };
 
 export function findSharedGrantProvider({
   providers,
   preset,
   target,
-}: SharedGrantProviderSearch): SharedGrantProvider {
+}: SharedGrantProviderSearch): SharedGrantProviderSelection {
   return select_shared_grant_provider({
     snapshot: { providers, activeVaultStoreId: unselectedVaultScope() },
     preset,

@@ -127,7 +127,7 @@ export class DeviceProtectionActions {
     if (state.localVaultPresent) state.storageMode = LOCAL_PROVIDER_TYPE;
 
     // Dispose native authority synchronously, before any queued or asynchronous work.
-    let locked: Result<void, StorageOperationFailure> = storageOk(undefined);
+    let locked: Result<void, StorageOperationFailure> = storageOk();
     if (state.hasManager) {
       const manager = state.admitManager();
       if (manager.isErr()) locked = storageErr(manager.error);
@@ -184,7 +184,7 @@ export class DeviceProtectionActions {
       }
     }
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-    return storageOk(undefined);
+    return storageOk();
   }
 
   private lockFailedAuthorization({
@@ -672,7 +672,7 @@ export class DeviceProtectionRecoveryActions {
         status: status.value,
       };
       this.applyPersistedProtectionStatus(statusRequest);
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.adoptLocalDataStorageGeneration();
     }

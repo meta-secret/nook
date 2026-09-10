@@ -2,6 +2,7 @@ import { err, ok, type Result } from "neverthrow";
 import {
   OperationalContractSource,
   OperationalCommandProbe,
+  OperationalProbeStream,
   OperationalContractFailureKind,
   type OperationalContractFailure,
 } from "./operational-contract";
@@ -158,8 +159,8 @@ exit ${scenario.commandStatus}
       const resultResult = new OperationalCommandProbe({
         cmd: ["bash"],
         stdin: new Blob([program]),
-        stdout: "pipe",
-        stderr: "pipe",
+        stdout: OperationalProbeStream.Pipe,
+        stderr: OperationalProbeStream.Pipe,
       }).execute();
       if (resultResult.isErr()) return err(resultResult.error);
       const result = resultResult.value;
@@ -269,8 +270,8 @@ class WorkerPreparingTaintContract {
           JSON.stringify({ spec: { taints } }),
           `$node | ${query}`,
         ],
-        stdout: "pipe",
-        stderr: "pipe",
+        stdout: OperationalProbeStream.Pipe,
+        stderr: OperationalProbeStream.Pipe,
       }).execute();
       if (resultResult.isErr()) return err(resultResult.error);
       const result = resultResult.value;
@@ -463,8 +464,8 @@ class ArcWorkloadDrainContract {
           JSON.stringify({ items: fixture.pods }),
           `$input | [(${nonTerminating}), (${allActive})]`,
         ],
-        stdout: "pipe",
-        stderr: "pipe",
+        stdout: OperationalProbeStream.Pipe,
+        stderr: OperationalProbeStream.Pipe,
       }).execute();
       if (selectionResult.isErr()) return err(selectionResult.error);
       const selection = selectionResult.value;

@@ -171,7 +171,7 @@ export class SentinelGenesisActions {
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isVerifying = false;
     }
@@ -209,7 +209,7 @@ export class SentinelGenesisActions {
       });
       if (status.isErr()) return storageErr(status.error);
       this.applyStatus({ status: status.value });
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isVerifying = false;
     }
@@ -271,7 +271,7 @@ export class SentinelGenesisActions {
           await admitted.value.remember_sentinel_genesis_request(
             requestPayload.trim(),
           );
-          return storageOk(undefined);
+          return storageOk();
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -343,7 +343,7 @@ export class SentinelGenesisActions {
         return storageErr(result.error);
       }
       this.applyFinalizeResult({ result: result.value });
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isVerifying = false;
     }
@@ -371,7 +371,7 @@ export class SentinelGenesisActions {
           await admitted.value.accept_sentinel_genesis_share_delivery(
             payload.trim(),
           );
-          return storageOk(undefined);
+          return storageOk();
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -384,7 +384,7 @@ export class SentinelGenesisActions {
       state.showSuccess(
         state.t(I18N_KEYS.LoginSentinelGenesisReceiveShareSuccess),
       );
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isVerifying = false;
     }
@@ -424,7 +424,7 @@ export class SentinelGenesisActions {
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isVerifying = false;
     }
@@ -470,6 +470,6 @@ export class SentinelGenesisActions {
     } catch (failure) {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
-    return storageOk(undefined);
+    return storageOk();
   }
 }

@@ -202,6 +202,6 @@ export class SnapshotContextFiles {
         });
       }
     }
-    return ok(undefined);
+    return ok();
   }
 }

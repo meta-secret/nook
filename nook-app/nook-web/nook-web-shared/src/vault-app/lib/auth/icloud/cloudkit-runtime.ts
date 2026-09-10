@@ -173,7 +173,7 @@ type ExternalCloudKitContainer = Omit<
 export type CloudKitAuthTokenStore = {
   // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
   putToken: (containerIdentifier: string, authToken: unknown) => void;
-  getToken: (containerIdentifier: string) => string | undefined;
+  getToken: (containerIdentifier: string) => unknown;
 };
 
 export type CloudKitConfiguration = {
@@ -238,11 +238,11 @@ export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
     const stored = cloudKitRuntime.readStoredToken(containerIdentifier);
     if (stored.isErr()) {
       log.warn("CloudKit token lookup failed");
-      return undefined;
+      return;
     }
-    return stored.value.kind === WebAuthTokenLookupKind.Available
-      ? stored.value.token
-      : undefined;
+    if (stored.value.kind === WebAuthTokenLookupKind.Available)
+      return stored.value.token;
+    return;
   },
 };
 
@@ -504,7 +504,7 @@ class CloudKitRuntime {
                   ? stored.authToken
                   : key === "value" && "value" in stored
                     ? stored.value
-                    : undefined;
+                    : false;
         if (typeof candidate === "string" && candidate.trim()) {
           return {
             kind: WebAuthTokenLookupKind.Available,
@@ -566,10 +566,10 @@ class CloudKitRuntime {
     return new Promise((resolve) => {
       try {
         if (window.CloudKit) {
-          resolve(ok(undefined));
+          resolve(ok());
           return;
         }
-        const loaded = () => resolve(ok(undefined));
+        const loaded = () => resolve(ok());
         const failed = () =>
           resolve(err(new OAuthFailure(OAuthFailureKind.CloudKitScript)));
         const existing = document.querySelector(

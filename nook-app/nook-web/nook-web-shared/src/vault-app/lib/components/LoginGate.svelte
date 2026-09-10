@@ -35,7 +35,7 @@
     DEFAULT_GITHUB_REPO,
     LocalFolderPresentation,
     LocalFolderHandleKind,
-    oauthAccessToken,
+    oauth_access_token,
   } from '$lib/auth/providers'
   import {
     Card,
@@ -436,7 +436,7 @@
         ).localFolderHandle().kind === LocalFolderHandleKind.Selected) ||
       (setupIs('oauth-file') &&
         vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        oauthAccessToken(vault.oauthFileDraft.config).kind === 'available') ||
+        oauth_access_token(vault.oauthFileDraft.config).kind === 'available') ||
       (setupIs('github') && Boolean(githubPat.trim())),
   )
   const recoveryPasswordEntries = $derived(

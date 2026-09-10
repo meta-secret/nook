@@ -65,7 +65,7 @@ export class CortexArticleResultVerifier {
         }),
       );
     }
-    return ok(undefined);
+    return ok();
   }
 
   private independentlyDeriveFindings(

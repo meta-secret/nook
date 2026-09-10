@@ -35,8 +35,8 @@ function lifecycleHarness(authenticated = false) {
     sentinelCeremonyPrompt: false,
     t: (key: string) => key,
     clearUnlockedSession: vi.fn(),
-    selectVaultForUnlock: vi.fn(async (_storeId: string) => ok(undefined)),
-    prepareExistingVaultImportSlot: vi.fn(async () => ok(undefined)),
+    selectVaultForUnlock: vi.fn(async (_storeId: string) => ok()),
+    prepareExistingVaultImportSlot: vi.fn(async () => ok()),
     activateLoginSetup: vi.fn(),
     configureOauthFile: vi.fn(),
     clearOauthFile: vi.fn(),
@@ -46,7 +46,7 @@ function lifecycleHarness(authenticated = false) {
     selectPasswordEntry: vi.fn(),
     clearSelectedPasswordEntry: vi.fn(),
     unlockWithPassword: vi.fn(),
-    activateConnectedExistingVault: vi.fn(async () => ok(undefined)),
+    activateConnectedExistingVault: vi.fn(async () => ok()),
     clearExistingVaultRecoverySummary: vi.fn(),
     beginLoginVaultPicker: vi.fn(),
   }
@@ -56,7 +56,7 @@ function lifecycleHarness(authenticated = false) {
   })
   state.selectVaultForUnlock.mockImplementation(async (storeId: string) => {
     state.activeVault = { kind: ActiveVaultKind.Open, storeId }
-    return ok(undefined)
+    return ok()
   })
   state.activateLoginSetup.mockImplementation((providerType) => {
     state.loginSetup = { kind: LoginSetupKind.Active, providerType }

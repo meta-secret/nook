@@ -78,7 +78,7 @@ function providerState(providerType: StorageProviderType): AdapterState {
     configureOauthFile: vi.fn(),
     clearLoginSetup: vi.fn(),
     applyActiveProviderCredentials: vi.fn(),
-    persistProviders: vi.fn(async () => ok(undefined)),
+    persistProviders: vi.fn(async () => ok()),
   }
 }
 

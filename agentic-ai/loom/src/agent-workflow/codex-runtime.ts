@@ -455,7 +455,7 @@ export class AgentSourceSnapshot {
         }),
       );
     }
-    return ok(undefined);
+    return ok();
   }
 }
 class CodexActivity {

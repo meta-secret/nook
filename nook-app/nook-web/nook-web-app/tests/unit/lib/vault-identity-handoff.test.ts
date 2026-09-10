@@ -43,7 +43,7 @@ class IdentityHandoffFixture {
     free: vi.fn(),
     [Symbol.dispose]: vi.fn(),
   } satisfies NookAdoptedExtensionIdentityHandoff
-  private storageAdmission: Result<void, VaultStorageFailure> = ok(undefined)
+  private storageAdmission: Result<void, VaultStorageFailure> = ok()
 
   constructor() {
     this.state.openManager(this.manager)

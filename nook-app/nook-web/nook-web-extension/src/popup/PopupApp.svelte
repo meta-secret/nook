@@ -1,6 +1,6 @@
 <script lang="ts">
   type RunDeviceActionArgs = {
-    action: () => Promise<ExtensionDeviceProtectionResult>
+    action: () => Promise<ExtensionSessionDeviceWire>
     fallbackKey?: I18nKey
   }
 
@@ -25,7 +25,7 @@
     DeviceMode,
     DeviceProtectionStatus,
     ExtensionSessionDeviceStateKind,
-    type ExtensionDeviceProtectionResult,
+    type ExtensionSessionDeviceWire,
     type ExtensionSessionDeviceState,
     extensionWasmRuntime,
   } from '../lib/nook-wasm'
@@ -126,12 +126,12 @@
     window.close()
   }
 
-  function beginPairing(device: ExtensionDeviceProtectionResult): void {
+  function beginPairing(device: ExtensionSessionDeviceWire): void {
     busy = true
     error = ''
     const message: {
       type: string
-      payload: ExtensionDeviceProtectionResult & { deviceLabel: string }
+      payload: ExtensionSessionDeviceWire & { deviceLabel: string }
     } = {
       type: 'nook:begin-extension-pairing',
       payload: {
@@ -149,7 +149,7 @@
     })
   }
 
-  function enterToolbarMenu(device: ExtensionDeviceProtectionResult): void {
+  function enterToolbarMenu(device: ExtensionSessionDeviceWire): void {
     pairingCandidate = { kind: PairingCandidateKind.Selected, device }
     status = DeviceProtectionStatus.Unlocked
     busy = false

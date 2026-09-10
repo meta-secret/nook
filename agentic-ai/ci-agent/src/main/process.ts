@@ -30,13 +30,13 @@ export class CiProcess {
           "code" in cause &&
           (typeof cause.code === "number" || typeof cause.code === "string")
             ? cause.code
-            : undefined;
+            : false;
         return {
           kind: this.options.signal?.aborted
             ? CiFailureKind.Cancelled
             : CiFailureKind.Git,
           message: `${this.command} command failed`,
-          ...(code === undefined ? {} : { code }),
+          ...(code === false ? {} : { code }),
         };
       },
     );

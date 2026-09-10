@@ -31,7 +31,7 @@ import type { VaultState } from '$lib/vault.svelte'
 import { DeviceProtectionActions } from '$lib/vault/device-protection.svelte'
 
 function deviceProtectionState(
-  initialization: Result<void, VaultStorageFailure> = ok(undefined),
+  initialization: Result<void, VaultStorageFailure> = ok(),
 ): VaultState {
   return {
     hasManager: true,
@@ -48,9 +48,13 @@ function deviceProtectionState(
       operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
     ) => operation(),
     continueInitializationAfterDeviceUnlock: vi.fn(async () => initialization),
-    lockDeviceProtection: vi.fn(async () => ok(undefined)),
+    lockDeviceProtection: vi.fn(async () => ok()),
     t: vi.fn((request: { key?: string } | string) =>
-      typeof request === 'string' ? request : (request.key ?? 'translated'),
+      typeof request === 'string'
+        ? request
+        : 'key' in request && request.key
+          ? request.key
+          : 'translated',
     ),
   } as unknown as VaultState
 }
@@ -58,7 +62,7 @@ function deviceProtectionState(
 describe('device protection actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    createPasskeyProtection.mockReturnValue(ok(undefined))
+    createPasskeyProtection.mockReturnValue(ok())
   })
 
   test('publishes unlocked state after passkey authorization and initialization', async () => {

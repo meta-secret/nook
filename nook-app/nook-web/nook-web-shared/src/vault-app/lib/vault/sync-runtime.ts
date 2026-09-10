@@ -47,7 +47,7 @@ export class VaultSyncRuntimeActions {
         for (const member of state.vaultMembers) member.free();
         state.pendingJoins = joins;
         state.vaultMembers = members;
-        return ok(undefined);
+        return ok();
       }
 
       let decision: UnauthenticatedSyncDecision;
@@ -81,7 +81,7 @@ export class VaultSyncRuntimeActions {
         case UnauthenticatedSyncDecision.Ignore:
           break;
       }
-      return ok(undefined);
+      return ok();
     } finally {
       result.free();
     }
@@ -101,12 +101,12 @@ export class VaultSyncRuntimeActions {
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
-    if (!shouldConnect) return ok(undefined);
+    if (!shouldConnect) return ok();
     log.info("scheduling auto-connect after join approval");
     setTimeout(() => {
       if (state.isAuthenticated || state.isVerifying) return;
       void state.loadDb();
     }, 0);
-    return ok(undefined);
+    return ok();
   }
 }

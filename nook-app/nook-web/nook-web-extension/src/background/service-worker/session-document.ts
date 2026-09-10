@@ -89,7 +89,7 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
     this.access = SessionDocumentAccess.Revoked
     try {
       await chrome.offscreen.closeDocument()
-      return ok(undefined)
+      return ok()
     } catch {
       return err(
         new ExtensionSessionTransportFailure(
@@ -247,7 +247,7 @@ export class ExtensionSessionDocumentOwner {
       })
       if (contexts.length === 0) {
         this.state = { kind: ExtensionSessionDocumentStateKind.Closed }
-        return ok(undefined)
+        return ok()
       }
     } catch {
       const failure = new ExtensionSessionTransportFailure(
@@ -265,7 +265,7 @@ export class ExtensionSessionDocumentOwner {
   close(): Promise<ExtensionSessionTransportResult<void>> {
     const state = this.state
     if (state.kind === ExtensionSessionDocumentStateKind.Closed)
-      return Promise.resolve(ok(undefined))
+      return Promise.resolve(ok())
     if (state.kind === ExtensionSessionDocumentStateKind.Closing)
       return state.operation
     if (

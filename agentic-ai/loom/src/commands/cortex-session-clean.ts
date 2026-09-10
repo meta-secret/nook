@@ -80,9 +80,11 @@ export class CortexSessionDirectory {
 /** Native filesystem failures enter the session contract at these reads. */
 class CortexSessionEntry {
   constructor(private readonly absolutePath: string) {}
-  status(): Result<Stats | undefined, CortexSessionFailure> {
+  status(): Result<Stats | false, CortexSessionFailure> {
     try {
-      return ok(lstatSync(this.absolutePath, { throwIfNoEntry: false }));
+      return ok(
+        lstatSync(this.absolutePath, { throwIfNoEntry: false }) || false,
+      );
     } catch {
       return err({
         kind: CortexSessionFailureKind.Read,

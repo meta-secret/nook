@@ -104,7 +104,7 @@ export class VaultSessionActions {
           kind: publication.error.kind,
         });
     });
-    return storageOk(undefined);
+    return storageOk();
   }
 
   clearUnlockedSession({ resetManager }: UnlockedSessionClearRequest): void {

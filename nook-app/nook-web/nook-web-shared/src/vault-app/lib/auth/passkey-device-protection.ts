@@ -171,7 +171,7 @@ export async function setupDeviceProtection({
       passkeyLabel,
       deviceMode,
     );
-    return ok(undefined);
+    return ok();
   } catch (failure) {
     return err(
       new PasskeyCeremonyFailure(PasskeyCeremonyAction.Create, failure),
@@ -184,7 +184,7 @@ export async function unlockDeviceProtection(
 ): Promise<Result<void, PasskeyCeremonyFailure>> {
   try {
     await manager.unlock_device_protection_with_passkey(location.hostname);
-    return ok(undefined);
+    return ok();
   } catch (failure) {
     return err(
       new PasskeyCeremonyFailure(PasskeyCeremonyAction.Unlock, failure),
@@ -197,7 +197,7 @@ export async function recoverDeviceProtectionWithPasskey(
 ): Promise<Result<void, PasskeyCeremonyFailure>> {
   try {
     await manager.recover_device_protection_with_passkey(location.hostname);
-    return ok(undefined);
+    return ok();
   } catch (failure) {
     return err(
       new PasskeyCeremonyFailure(PasskeyCeremonyAction.Recover, failure),

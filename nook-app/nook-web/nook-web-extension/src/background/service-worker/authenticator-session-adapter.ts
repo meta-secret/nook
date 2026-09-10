@@ -313,7 +313,7 @@ export class ExtensionAuthenticatorSession {
       typeof response === 'object' &&
       'ok' in response &&
       response.ok === true
-      ? ok(undefined)
+      ? ok()
       : err(
           new AuthenticatorSessionFailure(
             AuthenticatorSessionFailureKind.PageRejected,

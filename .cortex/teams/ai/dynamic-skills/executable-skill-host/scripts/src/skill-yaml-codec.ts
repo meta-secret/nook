@@ -330,7 +330,7 @@ export class ExecutableSkillYamlEncoding {
         pending.push(next);
       }
     }
-    return ok(undefined);
+    return ok();
   }
 
   private oversizedSkillYamlScalar(value: UntrustedSkillYamlNode): boolean {

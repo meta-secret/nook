@@ -50,7 +50,7 @@ export class WorkspaceLocation {
     return new ApplicationRoutePresentation(WORKSPACE_PATHS[route]).appPath();
   }
   navigate(): Result<void, WorkspaceNavigationFailure> {
-    if (!("window" in globalThis)) return ok(undefined);
+    if (!("window" in globalThis)) return ok();
     const path = this.path;
     try {
       const nextUrl = new URL(path, window.location.href);
@@ -59,11 +59,11 @@ export class WorkspaceLocation {
         window.location.search === "" &&
         window.location.hash === ""
       )
-        return ok(undefined);
+        return ok();
       const historyState: Parameters<typeof window.history.pushState>[0] = {};
       window.history.pushState(historyState, "", path);
       window.dispatchEvent(new PopStateEvent("popstate"));
-      return ok(undefined);
+      return ok();
     } catch {
       return err(new WorkspaceNavigationFailure());
     }

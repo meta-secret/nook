@@ -51,7 +51,7 @@ class CiAgentCommand {
         return this.runAgentCommand(AgentCommandMode.RequiredPlanning);
       case "fix":
         return (await new CiFixCommand(process.env).runCiFix()).map(
-          () => undefined,
+          () => {},
         );
       case "implement":
         return new CiImplementationCommand(process.env).runCiImplement();

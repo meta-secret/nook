@@ -65,7 +65,7 @@ export class AdoptedBrowserIdentity {
     if (handle.isErr()) return err(handle.error);
     try {
       handle.value.mark_existing_vault_import(manager);
-      return ok(undefined);
+      return ok();
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
@@ -78,7 +78,7 @@ export class AdoptedBrowserIdentity {
     try {
       const committed = await handle.value.commit(manager);
       committed.confirm(manager);
-      return ok(undefined);
+      return ok();
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
@@ -91,19 +91,18 @@ export class AdoptedBrowserIdentity {
     try {
       const committed = handle.value.after_verified_connect(manager);
       committed.confirm(manager);
-      return ok(undefined);
+      return ok();
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
   }
   discard(): Result<void, VaultStorageFailure> {
-    if (this.handle.kind === BrowserAdoptionHandleKind.Consumed)
-      return ok(undefined);
+    if (this.handle.kind === BrowserAdoptionHandleKind.Consumed) return ok();
     const handle = this.take();
     if (handle.isErr()) return err(handle.error);
     try {
       handle.value.free();
-      return ok(undefined);
+      return ok();
     } catch {
       return err(
         new VaultStorageFailure(
@@ -114,13 +113,12 @@ export class AdoptedBrowserIdentity {
   }
   rollback(manager: NookVaultManager): Result<void, VaultStorageFailure> {
     // A failed consuming Rust transition already performs its existing cleanup.
-    if (this.handle.kind === BrowserAdoptionHandleKind.Consumed)
-      return ok(undefined);
+    if (this.handle.kind === BrowserAdoptionHandleKind.Consumed) return ok();
     const handle = this.take();
     if (handle.isErr()) return err(handle.error);
     try {
       handle.value.rollback(manager);
-      return ok(undefined);
+      return ok();
     } catch {
       return err(
         new VaultStorageFailure(

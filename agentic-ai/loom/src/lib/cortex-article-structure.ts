@@ -81,9 +81,10 @@ export class CortexMarkdownArticle {
 
   private collectTableBlocks(request: CollectTableBlocksRequest): void {
     if (request.node.type === 'table') {
+      const position = request.node.position;
       request.blocks.push({
         kind: CortexArticleSemanticKind.Table,
-        line: request.node.position?.start.line ?? 1,
+        line: position ? position.start.line : 1,
       });
       return;
     }

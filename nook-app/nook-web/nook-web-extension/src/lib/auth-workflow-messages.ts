@@ -80,9 +80,13 @@ export enum AuthenticationWorkflowSnapshotMessageType {
 
 export const MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS = 64
 
+enum AuthenticationWorkflowTransportAdmissionKind {
+  Accepted = 'accepted',
+}
+
 export type AuthenticationWorkflowSnapshotMessage = Extract<
   ReturnType<typeof admit_authentication_workflow_snapshot_message>,
-  { kind: 'accepted' }
+  { kind: AuthenticationWorkflowTransportAdmissionKind.Accepted }
 >['message']
 
 /** Canonical protocol admission is owned by Rust; browser callers retain the decoded message. */
@@ -93,6 +97,9 @@ export class AuthenticationWorkflowSnapshotIngress {
     return admit_authentication_workflow_snapshot_message(value)
   }
   static is(value: unknown): boolean {
-    return this.admit(value).kind === 'accepted'
+    return (
+      this.admit(value).kind ===
+      AuthenticationWorkflowTransportAdmissionKind.Accepted
+    )
   }
 }

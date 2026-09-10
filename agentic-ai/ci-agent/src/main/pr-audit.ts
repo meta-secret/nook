@@ -349,7 +349,7 @@ export class PullRequestAuditClient {
         });
       }
     }
-    return ok(undefined);
+    return ok();
   }
 }
 

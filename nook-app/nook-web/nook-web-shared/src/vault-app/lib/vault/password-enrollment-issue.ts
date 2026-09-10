@@ -37,7 +37,7 @@ import {
   githubPatValue,
   githubRepositoryValue,
   isConfiguredOAuthFile,
-  oauthAccessToken,
+  oauth_access_token,
   OAuthFilePresentation,
   OAuthFileNameKind,
   type StorageProvider,
@@ -100,7 +100,7 @@ export class PasswordEnrollmentIssue {
       // "database is not open" and poisons subsequent borrows. Surface a
       // retriable error instead.
       const idle = await state.raceStorageTimeout({
-        promise: state.waitForStorageChain().then(() => storageOk(undefined)),
+        promise: state.waitForStorageChain().then(() => storageOk()),
         releaseLateValue: () => {},
       });
       if (idle.isErr()) return storageErr(idle.error);
@@ -229,7 +229,7 @@ export class PasswordEnrollmentIssue {
               ),
             );
           }
-          const accessCredential = oauthAccessToken(selectedOauth.config);
+          const accessCredential = oauth_access_token(selectedOauth.config);
           log.info("shared enrollment grant started");
           const fileName = new OAuthFilePresentation(
             selectedOauth.config,

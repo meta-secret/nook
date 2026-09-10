@@ -103,8 +103,9 @@ export class CortexProseNode {
   }
 
   sourceSpan(): CortexProseSourceSpan {
-    const line = this.node.position?.start.line ?? 1;
-    return { line, endLine: this.node.position?.end.line ?? line };
+    const position = this.node.position;
+    const line = position ? position.start.line : 1;
+    return { line, endLine: position ? position.end.line : line };
   }
 
   private quotedOutputExemption(): CortexProseExemption {

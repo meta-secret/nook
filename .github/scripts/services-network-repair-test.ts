@@ -7,6 +7,7 @@ import {
 } from "./operational-fixture";
 import {
   OperationalCommandProbe,
+  OperationalProbeStream,
   OperationalContractFailureKind,
   type OperationalContractFailure,
 } from "./operational-contract";
@@ -144,8 +145,8 @@ esac
         MOCK_STATE: state,
         MOCK_DOCKER_VERSION: input.version,
       },
-      stdout: "pipe" as const,
-      stderr: "pipe" as const,
+      stdout: OperationalProbeStream.Pipe,
+      stderr: OperationalProbeStream.Pipe,
     };
     const result = new OperationalCommandProbe(processInput).execute();
     if (result.isErr()) return err(result.error);

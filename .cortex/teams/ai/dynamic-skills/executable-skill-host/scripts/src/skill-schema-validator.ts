@@ -57,7 +57,7 @@ export class ExecutableSkillInputSchema {
         if (selected !== false) ambiguous = true;
         selected = result;
       }
-      if (matches === 1) return ok(undefined);
+      if (matches === 1) return ok();
       if (matches > 1)
         return this.invalidAt(request.path)('Value matches multiple variants.');
       if (selected !== false && !ambiguous) return selected;
@@ -67,7 +67,7 @@ export class ExecutableSkillInputSchema {
     }
     if ('const' in request.schema) {
       return request.value === request.schema.const
-        ? ok(undefined)
+        ? ok()
         : this.invalidAt(request.path)('Expected false.');
     }
     if (request.schema.type === SkillSchemaType.Object) {
@@ -103,7 +103,7 @@ export class ExecutableSkillInputSchema {
       return this.validateInteger(integerRequest);
     }
     return typeof request.value === 'boolean'
-      ? ok(undefined)
+      ? ok()
       : this.invalidAt(request.path)('Expected a boolean.');
   }
 
@@ -192,7 +192,7 @@ export class ExecutableSkillInputSchema {
       const result = ExecutableSkillInputSchema.from(fieldRequest).execute();
       if (!result.isOk()) return result;
     }
-    return ok(undefined);
+    return ok();
   }
 
   private validateArray(
@@ -218,7 +218,7 @@ export class ExecutableSkillInputSchema {
       const result = ExecutableSkillInputSchema.from(itemRequest).execute();
       if (!result.isOk()) return result;
     }
-    return ok(undefined);
+    return ok();
   }
 
   private validateString(
@@ -262,7 +262,7 @@ export class ExecutableSkillInputSchema {
         'Value does not match the required pattern.',
       );
     }
-    return ok(undefined);
+    return ok();
   }
 
   private validateInteger(
@@ -287,7 +287,7 @@ export class ExecutableSkillInputSchema {
         `Expected at most ${request.schema.maximum}.`,
       );
     }
-    return ok(undefined);
+    return ok();
   }
 
   private childPath(parent: string): (child: string) => string {

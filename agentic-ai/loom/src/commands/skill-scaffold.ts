@@ -252,7 +252,7 @@ class SkillScaffoldFile {
     try {
       mkdirSync(path.dirname(this.filePath), { recursive: true });
       writeFileSync(this.filePath, content, 'utf8');
-      return ok(undefined);
+      return ok();
     } catch {
       return err({
         kind: SkillScaffoldFailureKind.Write,

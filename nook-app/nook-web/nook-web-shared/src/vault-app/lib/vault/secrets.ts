@@ -178,7 +178,7 @@ export class VaultSecretActions {
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async handleAddSecret({
@@ -218,7 +218,7 @@ export class VaultSecretActions {
       const synchronized = await state.refreshSecretsFromSession();
       if (synchronized.isErr()) return storageErr(synchronized.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved));
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isSaving = false;
     }
@@ -477,7 +477,7 @@ export class VaultSecretActions {
       const synchronized = await state.refreshSecretsFromSession();
       if (synchronized.isErr()) return storageErr(synchronized.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsSecretDeleted));
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       if (!committed) state.secrets = previousSecrets;
       state.isSaving = false;
@@ -517,7 +517,7 @@ export class VaultSecretActions {
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();
       if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated));
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isSaving = false;
     }
@@ -529,7 +529,7 @@ export class VaultSecretActions {
     const state = this.state;
     if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
       state.passwordEntries = [];
-      return storageOk(undefined);
+      return storageOk();
     }
     if (state.storageMode !== "local") {
       const refreshed = await state.ensureOAuthTokensFresh();
@@ -561,7 +561,7 @@ export class VaultSecretActions {
       for (const entry of state.passwordEntries)
         state.selectPasswordEntry(entry.id);
     }
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async refreshSecretsFromSession(): Promise<
@@ -692,7 +692,7 @@ export class VaultSecretActions {
     state.secretPageOffset = offset;
     state.secretPageRequestOffset = offset;
     state.secretQuery = query;
-    return storageOk(undefined);
+    return storageOk();
   }
 
   applyConnectedSecretPage({

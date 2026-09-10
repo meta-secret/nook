@@ -20,7 +20,7 @@ class SessionOperationGate {
   }
   async operation() {
     await this.promise
-    return ok(undefined)
+    return ok()
   }
 }
 class QueueFixture {
@@ -37,7 +37,7 @@ class QueueFixture {
     return this.queue.enqueue({
       operation: async () => {
         this.dispatched += 1
-        return ok(undefined)
+        return ok()
       },
       options: {
         priority: SessionOperationPriority.Interactive,
@@ -65,14 +65,14 @@ describe('SessionOperationQueue results', () => {
     const normal = fixture.queue.enqueue({
       operation: async () => {
         order.push('normal')
-        return ok(undefined)
+        return ok()
       },
       options: DEFAULT_SESSION_OPERATION_OPTIONS,
     })
     const interactive = fixture.queue.enqueue({
       operation: async () => {
         order.push('interactive')
-        return ok(undefined)
+        return ok()
       },
       options: {
         ...DEFAULT_SESSION_OPERATION_OPTIONS,

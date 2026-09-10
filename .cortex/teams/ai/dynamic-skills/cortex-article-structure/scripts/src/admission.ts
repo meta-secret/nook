@@ -45,7 +45,7 @@ export class CortexArticleRequestCapacity {
         }),
       );
     }
-    return ok(undefined);
+    return ok();
   }
 
   private findingContributorPath(
@@ -91,7 +91,7 @@ export class CortexArticleFindingAdmission {
         }),
       );
     }
-    return ok(undefined);
+    return ok();
   }
 }
 

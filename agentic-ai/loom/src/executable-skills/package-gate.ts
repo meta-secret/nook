@@ -82,7 +82,7 @@ export class ExecutableSkillPackageGate {
           message: `Executable skill workspace install failed with status ${exitCode.value}`,
         });
       }
-      return ok(undefined);
+      return ok();
     }
     for (const skillPackage of new ExecutableTrackedPackages(
       tracked.value,
@@ -100,7 +100,7 @@ export class ExecutableSkillPackageGate {
         });
       }
     }
-    return ok(undefined);
+    return ok();
   }
 }
 

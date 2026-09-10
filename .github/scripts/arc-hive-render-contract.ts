@@ -5,6 +5,7 @@ import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
 import {
   OperationalCommandProbe,
+  OperationalProbeStream,
   OperationalContractSource,
   OperationalYamlDocument,
   OperationalContractFailureKind,
@@ -205,8 +206,8 @@ class HiveRenderWorkspace {
         resolve(root, "infra/k0s/manifests/arc/runner-scale-set-values.yaml"),
         path,
       ],
-      stdout: "pipe",
-      stderr: "pipe",
+      stdout: OperationalProbeStream.Pipe,
+      stderr: OperationalProbeStream.Pipe,
     }).execute();
     if (rendered.isErr()) return err(rendered.error);
     if (rendered.value.exitCode !== 0)

@@ -168,7 +168,7 @@ export class ValeFileRequest {
       files.add(file);
     }
 
-    return ok(undefined);
+    return ok();
   }
 }
 export class ValeVersionOutput {
@@ -270,7 +270,7 @@ export class ValeRepositoryFile {
     }
     try {
       const metadata = lstatSync(file);
-      if (metadata.isFile() && !metadata.isSymbolicLink()) return ok(undefined);
+      if (metadata.isFile() && !metadata.isSymbolicLink()) return ok();
     } catch {
       // The bounded failure below owns missing and unreadable paths.
     }
@@ -314,7 +314,8 @@ export class ValeAlertDocument {
     const decoded = VALE_ALERT_SCHEMA.safeParse(this.request.value);
     if (!decoded.success) {
       const issue = decoded.error.issues[0];
-      const field = issue?.path[0];
+      const fieldPresent = Boolean(issue && issue.path.length > 0);
+      const field = fieldPresent ? issue!.path[0] : false;
       const label =
         field === 'Description' || field === 'Link' || field === 'Match'
           ? 'text fields'
@@ -322,9 +323,9 @@ export class ValeAlertDocument {
             ? 'Action shape'
             : String(field);
       const message =
-        issue?.code === 'unrecognized_keys'
+        issue && issue.code === 'unrecognized_keys'
           ? `Vale exact-file lint ${field === 'Action' ? 'alert Action' : 'alert'} fields are invalid.`
-          : field === undefined
+          : !fieldPresent
             ? `Vale exact-file lint alert must be an object: ${this.request.file}`
             : `Vale exact-file lint alert ${label} ${label === 'text fields' ? 'are' : 'is'} invalid: ${this.request.file}`;
       return err({ code: LoomFailureCode.CortexAuditFailed, message });

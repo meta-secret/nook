@@ -977,8 +977,8 @@ describe('CloudKit token transport decoding', () => {
       'nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID,
       '{',
     )
-    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBeUndefined()
+    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toEqual(void 0)
     cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, { token: 42 })
-    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBeUndefined()
+    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toEqual(void 0)
   })
 })

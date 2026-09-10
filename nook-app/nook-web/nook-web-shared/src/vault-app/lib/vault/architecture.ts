@@ -61,7 +61,7 @@ export class VaultArchitectureActions {
     }
     this.replaceVaultArchitecture({ architecture });
     state.architectureSecretCreationAllowed = allowed;
-    return ok(undefined);
+    return ok();
   }
 
   refreshVaultArchitectureFromManager(): Result<void, VaultStorageFailure> {
@@ -102,7 +102,7 @@ export class VaultArchitectureActions {
         }
       }
     });
-    return ok(undefined);
+    return ok();
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<
@@ -144,6 +144,6 @@ export class VaultArchitectureActions {
       );
     }
     state.architectureSecretCreationAllowed = permission.value;
-    return ok(undefined);
+    return ok();
   }
 }

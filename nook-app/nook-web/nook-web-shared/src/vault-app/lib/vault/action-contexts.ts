@@ -5,6 +5,7 @@ import type { Result } from "neverthrow";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import type { NookStorageConnectArgs } from "$app-wasm";
+export type { NookStorageConnectArgs } from "$app-wasm";
 import type {
   NookPendingSyncConflict,
   NookProviderSyncRevision,
@@ -100,7 +101,6 @@ interface SharedStorageActionsContext {
 }
 
 type ProviderPersistenceOptions = { readonly replace: boolean };
-export type VaultStorageArguments = NookStorageConnectArgs;
 
 export type ProviderSyncRequest = {
   readonly providerId: string;
@@ -114,7 +114,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   readonly syncProviders: StorageProvider[];
   applyActiveProviderCredentials(): void;
   assessVaultConnectStatus(
-    argsOverride?: VaultStorageArguments,
+    argsOverride?: NookStorageConnectArgs,
   ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
   clearUnlockedSession(resetManager?: boolean): void;
   connectAndSyncStagedProvider(): Promise<void>;
@@ -136,7 +136,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   >;
   showSuccess(message: string): void;
   stageStagedProviderSyncIssue(
-    args: VaultStorageArguments,
+    args: NookStorageConnectArgs,
   ): Promise<Result<StagedProviderConflictOutcome, VaultStorageFailure>>;
   stagedRemoteStorageArgs(): StagedRemoteStorage;
   syncProviderById(
@@ -320,7 +320,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
     request: StorageTimeoutRace<T, E>,
   ): Promise<Result<T, E | VaultStorageFailure>>;
   assessVaultConnectStatus(
-    args?: VaultStorageArguments,
+    args?: NookStorageConnectArgs,
   ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
   refreshLocalVaultCatalog(): Promise<Result<void, VaultStorageFailure>>;
   refreshPasswordEntriesList(): Promise<

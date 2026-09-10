@@ -283,7 +283,9 @@ class CortexArticleBlockSequence {
   append(
     block: CortexArticleSemanticBlock,
   ): Result<CortexArticleBlockSequence, CortexArticleRequestDecodeError> {
-    if (block.line <= (this.blocks.at(-1)?.line ?? 0)) {
+    const previousLine =
+      this.blocks.length > 0 ? this.blocks[this.blocks.length - 1]!.line : 0;
+    if (block.line <= previousLine) {
       return err(
         new CortexArticleRequestDecodeError({
           kind: CortexArticleRequestFailureKind.NonmonotonicLine,

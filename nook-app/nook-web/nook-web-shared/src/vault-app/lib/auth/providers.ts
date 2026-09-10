@@ -105,14 +105,16 @@ export {
 };
 
 export type { OAuthAccessToken, DuplicateSyncProvider } from "$app-wasm";
-export {
-  oauth_access_token as oauthAccessToken,
-  missing_oauth_access_token as missingOAuthAccessToken,
-};
+export { oauth_access_token, missing_oauth_access_token };
 
 export enum DriveFileIdentityKind {
   New = "new",
   Existing = "existing",
+}
+
+export enum OAuthAccessTokenKind {
+  Missing = "missing",
+  Available = "available",
 }
 
 export type DriveFileIdentity =
@@ -500,7 +502,7 @@ export async function saveAuthProviders({
 }: AuthProviderPersistence): Promise<Result<void, VaultStorageFailure>> {
   try {
     await manager.save_auth_providers_snapshot(snapshot);
-    return ok(undefined);
+    return ok();
   } catch {
     return err(
       new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),

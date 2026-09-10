@@ -81,7 +81,7 @@ export class VaultLoginActions {
       state.openActiveVault(snapshot.value.activeVaultStoreId.value);
     }
     state.applyActiveProviderCredentials();
-    return storageOk(undefined);
+    return storageOk();
   }
 
   beginLoginVaultPicker(): void {
@@ -183,7 +183,7 @@ export class VaultLoginActions {
       state.localVaultPresent = present;
       if (selection.state === NookActiveVaultSelectionState.Selected)
         state.openActiveVault(selection.storeId);
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       selection.free();
     }
@@ -242,7 +242,7 @@ export class VaultLoginActions {
           if (manager.isErr()) return storageErr(manager.error);
           try {
             await manager.value.reset_vault_session();
-            return storageOk(undefined);
+            return storageOk();
           } catch (failure) {
             return storageErr(new NativeVaultStorageFailure(failure));
           }
@@ -264,7 +264,7 @@ export class VaultLoginActions {
       const presentation = await new LoginUnlockPresentation(state).refresh();
       if (presentation.isErr()) return storageErr(presentation.error);
       state.localLoginPreparation = LocalLoginPreparationState.Ready;
-      return storageOk(undefined);
+      return storageOk();
     } finally {
       state.isVerifying = false;
     }
@@ -285,7 +285,7 @@ export class VaultLoginActions {
         if (manager.isErr()) return storageErr(manager.error);
         try {
           await manager.value.reset_vault_session();
-          return storageOk(undefined);
+          return storageOk();
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -299,7 +299,7 @@ export class VaultLoginActions {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     state.localLoginPreparation = LocalLoginPreparationState.Idle;
-    return storageOk(undefined);
+    return storageOk();
   }
 
   async createLocalVaultWithDeviceKeys({
@@ -597,10 +597,9 @@ export class VaultLoginActions {
     Result<void, StorageOperationFailure>
   > {
     const state = this.state;
-    if (state.activeVault.kind === ActiveVaultKind.Closed)
-      return storageOk(undefined);
+    if (state.activeVault.kind === ActiveVaultKind.Closed) return storageOk();
     const storeId = state.activeVault.storeId.trim();
-    if (!storeId) return storageOk(undefined);
+    if (!storeId) return storageOk();
     return state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);

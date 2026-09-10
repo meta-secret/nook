@@ -389,7 +389,7 @@
       )
         copiedKey = { kind: ClipboardNoticeKind.Hidden }
     }, 2000)
-    return ok(undefined)
+    return ok()
   }
 
   function secretReveal(itemId: string): SecretReveal {

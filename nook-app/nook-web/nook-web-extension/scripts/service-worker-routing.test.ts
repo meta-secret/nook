@@ -59,9 +59,7 @@ completedTransition.into_lifecycle().free()
 const unusedAsyncDependency = mock(() =>
   Promise.reject(new Error('unused routing test dependency')),
 )
-const ensureExtensionSessionDocument = mock(() =>
-  Promise.resolve(ok(undefined)),
-)
+const ensureExtensionSessionDocument = mock(() => Promise.resolve(ok()))
 const openCompanionLauncher = mock(() => Promise.resolve())
 const accountPickerAuthorizationCleanupPending = mock(() =>
   Promise.resolve(false),
@@ -224,7 +222,7 @@ describe('service worker routing', () => {
       },
       closeExtensionSessionDocument: () => {
         events.push('session-closed')
-        return Promise.resolve(ok(undefined))
+        return Promise.resolve(ok())
       },
       completeAccountPickerAuthorizationCleanup: (generation) => {
         events.push(`authorization-restored-${generation}`)
@@ -273,7 +271,7 @@ describe('service worker routing', () => {
       const dependencies: ExtensionLifecycleRoutingDependencies = {
         ...lifecycleDependencies,
         clearPendingAccountPickers: () => Promise.resolve(),
-        closeExtensionSessionDocument: () => Promise.resolve(ok(undefined)),
+        closeExtensionSessionDocument: () => Promise.resolve(ok()),
         completeAccountPickerAuthorizationCleanup: () =>
           Promise.resolve(outcome),
         isExtensionSessionEnsureMessage: () => false,
@@ -335,7 +333,7 @@ describe('service worker routing', () => {
   )
 
   test('closes the session when authorization initialization fails', async () => {
-    const closeSession = mock(() => Promise.resolve(ok(undefined)))
+    const closeSession = mock(() => Promise.resolve(ok()))
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
       beginAccountPickerAuthorizationCleanup: () =>
@@ -427,7 +425,7 @@ describe('service worker routing', () => {
       },
       closeExtensionSessionDocument: () => {
         events.push('session-closed')
-        return Promise.resolve(ok(undefined))
+        return Promise.resolve(ok())
       },
       importLocalEventLogUpdate: () => {
         events.push('revocation-reconciled')
@@ -483,7 +481,7 @@ describe('service worker routing', () => {
     { ok: false as const, reason: LocalEventLogUpdateFailure.VaultNotPaired },
   ])('preserves the warm session for %j', async (response) => {
     const events: string[] = []
-    const closeSession = mock(() => Promise.resolve(ok(undefined)))
+    const closeSession = mock(() => Promise.resolve(ok()))
     const clearPickers = mock(() => Promise.resolve())
     const clearEnrollments = mock(() => {})
     const dependencies: ExtensionLifecycleRoutingDependencies = {

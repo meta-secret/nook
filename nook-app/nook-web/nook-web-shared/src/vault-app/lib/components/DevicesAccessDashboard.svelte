@@ -212,7 +212,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       if (manager.isErr()) return err(manager.error)
       try {
         await manager.value.begin_local_identity_creation(vault.t(labelArgs))
-        return ok(undefined)
+        return ok()
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure))
       }
@@ -289,7 +289,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       if (manager.isErr()) return err(manager.error)
       try {
         await manager.value.activate_local_identity(identityId)
-        return ok(undefined)
+        return ok()
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure))
       }
