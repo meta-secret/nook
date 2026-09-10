@@ -108,125 +108,131 @@ export class ModuleExpertIsolation {
     let authenticationBroker: ModuleExpertAuthenticationBroker | false = false;
     let contextServer: ModuleExpertReadContextServer | false = false;
     try {
-      const processEnvironment = ModuleExpertIsolation.allowlistedEnvironment(
-        request.parentEnvironment,
-      );
-      const credentialResult = ModuleExpertIsolation.supportedEnvironmentAuth(
-        request.parentEnvironment,
-      );
-      if (credentialResult.isErr()) return err(credentialResult.error);
-      const credential = credentialResult.value;
-      const repositorySnapshotRequest: RepositorySnapshotRequest = {
-        codexHome,
-        environment: processEnvironment,
-        sourceCommit: request.sourceCommit,
-        excludedPaths: request.snapshot.excludedPaths,
-        optionalScopePaths: request.snapshot.optionalScopePaths,
-        scopePaths: request.snapshot.scopePaths,
-        workingDirectory: request.workingDirectory,
-      };
-      const snapshot = new RepositorySnapshot(
-        repositorySnapshotRequest,
-      ).materialize();
-      if (snapshot.isErr()) return err(snapshot.error);
-      const repositorySnapshot = snapshot.value;
-      const contextWriteRequest: SnapshotContextFilesRequest = {
-        contextFiles: request.snapshot.contextFiles,
-        repositorySnapshot,
-      };
-      const written = new SnapshotContextFiles(
-        contextWriteRequest,
-      ).materialize();
-      if (written.isErr()) return err(written.error);
-      const isolatedWorkspace = join(
-        codexHome,
-        ModuleExpertIsolation.ISOLATED_WORKSPACE_NAME,
-      );
       try {
-        mkdirSync(isolatedWorkspace);
-      } catch {
-        return err({
-          kind: ExpertIsolationFailureKind.Storage,
-          message: 'Expert isolated workspace could not be created.',
-        });
-      }
-      const authenticationBrokerRequest: ModuleExpertAuthenticationBrokerRequest =
-        {
+        const processEnvironment = ModuleExpertIsolation.allowlistedEnvironment(
+          request.parentEnvironment,
+        );
+        const credentialResult = ModuleExpertIsolation.supportedEnvironmentAuth(
+          request.parentEnvironment,
+        );
+        if (credentialResult.isErr()) return err(credentialResult.error);
+        const credential = credentialResult.value;
+        const repositorySnapshotRequest: RepositorySnapshotRequest = {
           codexHome,
-          credential,
+          environment: processEnvironment,
+          sourceCommit: request.sourceCommit,
+          excludedPaths: request.snapshot.excludedPaths,
+          optionalScopePaths: request.snapshot.optionalScopePaths,
+          scopePaths: request.snapshot.scopePaths,
+          workingDirectory: request.workingDirectory,
         };
-      authenticationBroker = ModuleExpertIsolation.createAuthenticationBroker(
-        authenticationBrokerRequest,
-      );
-      const contextServerRequest = { repositoryRoot: repositorySnapshot };
-      contextServer =
-        ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
-          contextServerRequest,
-        );
-      processEnvironment.CODEX_HOME = codexHome;
-      const codexOptionsRequest: ModuleExpertCodexOptionsRequest = {
-        authenticationCommandArgs: authenticationBroker.commandArgs,
-        contextServerUrl: contextServer.url,
-        processEnvironment,
-      };
-      const codexOptions =
-        ModuleExpertIsolation.buildModuleExpertCodexOptions(
-          codexOptionsRequest,
-        );
-      const isolatedThreadOptionsRequest: ModuleExpertThreadOptionsArgs = {
-        workingDirectory: isolatedWorkspace,
-      };
-      const threadOptions =
-        ModuleExpertIsolation.moduleExpertIsolatedThreadOptions(
-          isolatedThreadOptionsRequest,
-        );
-      const admitted = ReadOnlyExpertRuntimeIsolation.admit({
-        key: ISOLATION_TRANSITION,
-        resources: {
-          codexHome,
-          codexOptions,
+        const snapshot = new RepositorySnapshot(
+          repositorySnapshotRequest,
+        ).materialize();
+        if (snapshot.isErr()) return err(snapshot.error);
+        const repositorySnapshot = snapshot.value;
+        const contextWriteRequest: SnapshotContextFilesRequest = {
+          contextFiles: request.snapshot.contextFiles,
           repositorySnapshot,
-          threadOptions,
-          dispose: async () => {
-            try {
-              if (authenticationBroker) authenticationBroker.dispose();
-            } finally {
-              try {
-                if (contextServer) await contextServer.dispose();
-              } finally {
-                const removeOptions: RmOptions = {
-                  recursive: true,
-                  force: true,
-                };
-                rmSync(codexHome, removeOptions);
-              }
-            }
-          },
-        },
-      });
-      setup = IsolationSetup.Admitted;
-      return ok(admitted);
-    } finally {
-      if (setup === IsolationSetup.Pending) {
+        };
+        const written = new SnapshotContextFiles(
+          contextWriteRequest,
+        ).materialize();
+        if (written.isErr()) return err(written.error);
+        const isolatedWorkspace = join(
+          codexHome,
+          ModuleExpertIsolation.ISOLATED_WORKSPACE_NAME,
+        );
         try {
-          if (authenticationBroker) authenticationBroker.dispose();
+          mkdirSync(isolatedWorkspace);
         } catch {
-          // Preserve the setup failure while continuing fail-safe cleanup.
-        } finally {
+          return err({
+            kind: ExpertIsolationFailureKind.Storage,
+            message: 'Expert isolated workspace could not be created.',
+          });
+        }
+        const authenticationBrokerRequest: ModuleExpertAuthenticationBrokerRequest =
+          {
+            codexHome,
+            credential,
+          };
+        authenticationBroker = ModuleExpertIsolation.createAuthenticationBroker(
+          authenticationBrokerRequest,
+        );
+        const contextServerRequest = { repositoryRoot: repositorySnapshot };
+        contextServer =
+          ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
+            contextServerRequest,
+          );
+        processEnvironment.CODEX_HOME = codexHome;
+        const codexOptionsRequest: ModuleExpertCodexOptionsRequest = {
+          authenticationCommandArgs: authenticationBroker.commandArgs,
+          contextServerUrl: contextServer.url,
+          processEnvironment,
+        };
+        const codexOptions =
+          ModuleExpertIsolation.buildModuleExpertCodexOptions(
+            codexOptionsRequest,
+          );
+        const isolatedThreadOptionsRequest: ModuleExpertThreadOptionsArgs = {
+          workingDirectory: isolatedWorkspace,
+        };
+        const threadOptions =
+          ModuleExpertIsolation.moduleExpertIsolatedThreadOptions(
+            isolatedThreadOptionsRequest,
+          );
+        const admitted = ReadOnlyExpertRuntimeIsolation.admit({
+          key: ISOLATION_TRANSITION,
+          resources: {
+            codexHome,
+            codexOptions,
+            repositorySnapshot,
+            threadOptions,
+            dispose: async () => {
+              try {
+                if (authenticationBroker) authenticationBroker.dispose();
+              } finally {
+                try {
+                  if (contextServer) await contextServer.dispose();
+                } finally {
+                  const removeOptions: RmOptions = {
+                    recursive: true,
+                    force: true,
+                  };
+                  rmSync(codexHome, removeOptions);
+                }
+              }
+            },
+          },
+        });
+        setup = IsolationSetup.Admitted;
+        return ok(admitted);
+      } finally {
+        if (setup === IsolationSetup.Pending) {
           try {
-            if (contextServer) await contextServer.dispose();
+            if (authenticationBroker) authenticationBroker.dispose();
+          } catch {
+            // Preserve the setup failure while continuing fail-safe cleanup.
           } finally {
             try {
-              rmSync(codexHome, { recursive: true, force: true });
-            } catch {
-              return err({
-                kind: ExpertIsolationFailureKind.Storage,
-                message: 'Expert isolation directory could not be removed.',
-              });
+              if (contextServer) await contextServer.dispose();
+            } finally {
+              try {
+                rmSync(codexHome, { recursive: true, force: true });
+              } catch {
+                new ExpertIsolationCleanupError({
+                  kind: ExpertIsolationFailureKind.Storage,
+                  message: 'Expert isolation directory could not be removed.',
+                }).raise();
+              }
             }
           }
         }
       }
+    } catch (failure) {
+      if (failure instanceof ExpertIsolationCleanupError)
+        return err(failure.failure);
+      throw failure;
     }
   }
 
@@ -473,6 +479,16 @@ export class ModuleExpertIsolation {
         ...request.profile.skillPaths,
       ]),
     ];
+  }
+}
+
+class ExpertIsolationCleanupError extends Error {
+  constructor(readonly failure: ExpertIsolationFailure) {
+    super(failure.message);
+    this.name = 'ExpertIsolationCleanupError';
+  }
+  raise(): never {
+    throw this;
   }
 }
 

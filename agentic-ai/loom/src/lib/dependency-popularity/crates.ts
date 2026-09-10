@@ -30,10 +30,10 @@ export class CrateRegistryMetrics {
         'User-Agent': 'nook-loom-dependency-popularity (meta-secret/nook)',
       },
     };
-    const fetched = await new RegistryResponse(
-      `https://crates.io/api/v1/crates/${encodeURIComponent(name)}`,
-      requestInit,
-    ).fetch();
+    const fetched = await new RegistryResponse({
+      url: `https://crates.io/api/v1/crates/${encodeURIComponent(name)}`,
+      init: requestInit,
+    }).fetch();
     if (fetched.isErr()) return err(fetched.error);
     const response = fetched.value;
     if (!response.ok) {
@@ -149,10 +149,10 @@ export class CrateRegistryMetrics {
         'User-Agent': 'nook-loom-dependency-popularity',
       },
     };
-    const fetched = await new RegistryResponse(
-      `https://api.github.com/repos/${owner}/${repo.replace(/\.git$/, '')}`,
-      requestInit,
-    ).fetch();
+    const fetched = await new RegistryResponse({
+      url: `https://api.github.com/repos/${owner}/${repo.replace(/\.git$/, '')}`,
+      init: requestInit,
+    }).fetch();
     if (fetched.isErr()) return err(fetched.error);
     const response = fetched.value;
     if (!response.ok) {

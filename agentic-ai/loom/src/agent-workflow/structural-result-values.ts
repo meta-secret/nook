@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { UntrustedYamlNode } from '../lib/guards.ts';
 
 const missingFields = 'structural result contains missing or extra fields';
 export const structuralError = (message: string) => ({
@@ -17,7 +18,17 @@ export const structuralText = (maximum = 4096) =>
       'structural result string is invalid',
     )
     .refine(
-      (value) => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value),
+      (value) =>
+        !Array.from(value).some((character) => {
+          const code = character.charCodeAt(0);
+          return (
+            code <= 8 ||
+            code === 11 ||
+            code === 12 ||
+            code === 127 ||
+            (code >= 14 && code <= 31)
+          );
+        }),
       'structural result string is invalid',
     )
     .meta({ pattern: '\\S' });
@@ -62,8 +73,13 @@ export const structuralPaths = (minimum = 1) =>
       'structural paths are invalid',
     );
 
-export function parseStructural<T>(schema: z.ZodType<T>, input: unknown): T {
-  const result = schema.safeParse(input);
+export type ParseStructuralRequest<T> = {
+  readonly schema: z.ZodType<T>;
+  readonly input: UntrustedYamlNode | void;
+};
+
+export function parseStructural<T>(request: ParseStructuralRequest<T>): T {
+  const result = request.schema.safeParse(request.input);
   if (result.success) return result.data;
   throw new Error(
     `Invalid workflow structured result: ${result.error.issues.length > 0 ? result.error.issues[0]!.message : missingFields}.`,

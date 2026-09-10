@@ -34,6 +34,11 @@ import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from './agent-attempt-version.
 import { DelegationRunFinalization } from './delegation-aggregation.ts';
 import type { FinalizeDelegationRunInput } from './delegation-aggregation.ts';
 import { DelegationPlanTree } from './delegation-plan-tree.ts';
+import {
+  UntrustedYamlBoundary,
+  type UntrustedYamlMap,
+  type UntrustedYamlNode,
+} from '../lib/guards.ts';
 
 const HELP = `Loom delegated agent journal
 
@@ -335,15 +340,15 @@ export class DelegationJournalCli {
       positionals.length !== 1 ||
       tokens.length !== 3 ||
       tokens[0]?.kind !== 'positional' ||
-      tokens
-        .slice(1)
-        .some(
-          (token, index) =>
-            token.kind !== 'option' ||
-            token.name !== [inputOption, 'working-directory'][index] ||
-            token.inlineValue ||
-            token.index !== index * 2 + 1,
-        ) ||
+      Array.from(tokens.slice(1).entries()).some((entry) => {
+        const [index, token] = entry;
+        return (
+          token.kind !== 'option' ||
+          token.name !== [inputOption, 'working-directory'][index] ||
+          token.inlineValue ||
+          token.index !== index * 2 + 1
+        );
+      }) ||
       typeof inputPath !== 'string' ||
       !inputPath ||
       inputPath.startsWith('--') ||
@@ -374,7 +379,7 @@ export class DelegationJournalCli {
   private static decodeRecordRequest(
     serialized: string,
   ): DelegationRecordRequest {
-    const value: unknown = JSON.parse(serialized);
+    const value = UntrustedYamlBoundary.fromJson(JSON.parse(serialized));
     if (
       !DelegationJournalCli.isRecord(value) ||
       Object.keys(value).length !== RECORD_REQUEST_KEYS.size ||
@@ -403,9 +408,7 @@ export class DelegationJournalCli {
     };
   }
 
-  private static isRecord(
-    value: unknown,
-  ): value is { readonly [field: string]: unknown } {
+  private static isRecord(value: UntrustedYamlNode): value is UntrustedYamlMap {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
 

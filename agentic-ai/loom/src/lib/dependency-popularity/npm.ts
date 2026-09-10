@@ -26,10 +26,12 @@ export class NpmRegistryMetrics {
     const name = this.request;
     const encoded = encodeURIComponent(name);
     const [downloadsFetch, metadataFetch] = await Promise.all([
-      new RegistryResponse(
-        `https://api.npmjs.org/downloads/point/last-week/${encoded}`,
-      ).fetch(),
-      new RegistryResponse(`https://registry.npmjs.org/${encoded}`).fetch(),
+      new RegistryResponse({
+        url: `https://api.npmjs.org/downloads/point/last-week/${encoded}`,
+      }).fetch(),
+      new RegistryResponse({
+        url: `https://registry.npmjs.org/${encoded}`,
+      }).fetch(),
     ]);
     if (downloadsFetch.isErr()) return err(downloadsFetch.error);
     if (metadataFetch.isErr()) return err(metadataFetch.error);
@@ -135,10 +137,10 @@ export class NpmRegistryMetrics {
         'User-Agent': 'nook-loom-dependency-popularity',
       },
     };
-    const fetched = await new RegistryResponse(
-      `https://api.github.com/repos/${slug}`,
-      requestInit,
-    ).fetch();
+    const fetched = await new RegistryResponse({
+      url: `https://api.github.com/repos/${slug}`,
+      init: requestInit,
+    }).fetch();
     if (fetched.isErr()) return err(fetched.error);
     const response = fetched.value;
     if (!response.ok) {

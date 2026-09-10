@@ -20,6 +20,11 @@ import {
   ValeFileDiagnostics,
 } from '../lib/vale-files.ts';
 import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
+import {
+  UntrustedYamlBoundary,
+  type UntrustedYamlMap,
+  type UntrustedYamlNode,
+} from '../lib/guards.ts';
 
 import type { LintProseDensityArgs } from '../lib/density.ts';
 import type { FindBrokenRelativeLinksArgs } from '../lib/links.ts';
@@ -423,7 +428,7 @@ export class CortexAuditCommand {
   private static decodeRepositoryPolicyEvent(
     serialized: string,
   ): GitHubRepositoryPolicyEvent {
-    const value: unknown = JSON.parse(serialized);
+    const value = UntrustedYamlBoundary.fromJson(JSON.parse(serialized));
     if (!CortexAuditCommand.isEventRecord(value))
       throw new Error('Invalid GitHub policy event.');
     const before =
@@ -442,8 +447,8 @@ export class CortexAuditCommand {
   }
 
   private static isEventRecord(
-    value: unknown,
-  ): value is { readonly [field: string]: unknown } {
+    value: RepositoryPolicyEventTransportValue,
+  ): value is UntrustedYamlMap {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
 
@@ -513,6 +518,8 @@ export class CortexAuditCommand {
       : path.basename(filePath);
   }
 }
+
+type RepositoryPolicyEventTransportValue = UntrustedYamlNode | void;
 
 type IsPersistentCortexMarkdownFileArgs = {
   readonly cortexRoot: string;

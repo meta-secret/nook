@@ -2,10 +2,6 @@ import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 
 import { TeamKey } from '../../src/team-agents/catalog.ts';
 
-import { ModuleGenerationAuthority } from '../../src/module-delivery/admission.ts';
-
-import { ModuleEvidenceBoundary } from '../../src/module-delivery/evidence.ts';
-
 import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 
 import {

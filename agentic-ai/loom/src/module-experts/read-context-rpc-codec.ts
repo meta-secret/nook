@@ -1,7 +1,9 @@
+import type { UntrustedYamlMap, UntrustedYamlNode } from '../lib/guards.ts';
+
 /** Owns admission of the external repository-context JSON-RPC envelope. */
 export class RepositoryContextRpcSchema {
   private constructor() {}
-  static decodeJsonRpcRequest(value: unknown): JsonRpcRequest {
+  static decodeJsonRpcRequest(value: UntrustedYamlNode): JsonRpcRequest {
     if (!RepositoryContextRpcSchema.isTransportRecord(value)) return {};
     return {
       ...(typeof value.id === 'string' || typeof value.id === 'number'
@@ -15,7 +17,9 @@ export class RepositoryContextRpcSchema {
     };
   }
 
-  private static decodeToolParams(value: unknown): ToolCallParams {
+  private static decodeToolParams(
+    value: RepositoryContextTransportValue,
+  ): ToolCallParams {
     if (
       !RepositoryContextRpcSchema.isTransportRecord(value) ||
       typeof value.name !== 'string' ||
@@ -60,11 +64,13 @@ export class RepositoryContextRpcSchema {
   }
 
   private static isTransportRecord(
-    value: unknown,
-  ): value is { readonly [field: string]: unknown } {
+    value: RepositoryContextTransportValue,
+  ): value is UntrustedYamlMap {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
 }
+
+type RepositoryContextTransportValue = UntrustedYamlNode | void;
 
 export type JsonRpcId = number | string;
 

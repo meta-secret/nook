@@ -1,4 +1,9 @@
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import {
+  UntrustedYamlBoundary,
+  type UntrustedYamlMap,
+  type UntrustedYamlNode,
+} from '../lib/guards.ts';
 
 export class CargoWorkspaceDiscovery {
   private constructor(private readonly request: DiscoverCargoWorkspaceArgs) {}
@@ -57,7 +62,7 @@ export class CargoWorkspaceMetadata {
     return new CargoWorkspaceMetadata(args).execute();
   }
   private static parse(source: string): CargoMetadata {
-    const node: unknown = JSON.parse(source);
+    const node = UntrustedYamlBoundary.fromJson(JSON.parse(source));
     if (
       !CargoWorkspaceMetadata.isRecord(node) ||
       !Array.isArray(node.packages) ||
@@ -85,9 +90,7 @@ export class CargoWorkspaceMetadata {
     }
     return { packages, workspace_members };
   }
-  private static isRecord(
-    value: unknown,
-  ): value is { readonly [field: string]: unknown } {
+  private static isRecord(value: UntrustedYamlNode): value is UntrustedYamlMap {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
   private execute(): CargoWorkspaceInventory {

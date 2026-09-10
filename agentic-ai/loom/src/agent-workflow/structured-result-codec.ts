@@ -6,12 +6,31 @@ import {
   WorkflowResultKind,
 } from './domain.ts';
 import type { UntrustedYamlMap } from '../lib/guards.ts';
+import {
+  UntrustedYamlBoundary,
+  type UntrustedYamlNode,
+} from '../lib/guards.ts';
 import { STRUCTURAL_RESULT_SCHEMAS } from './structural-result-codec.ts';
 import { parseStructural } from './structural-result-values.ts';
 
 export const MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH = 65_536;
 const MISSING_FIELDS =
   'workflow structured result contains missing or extra fields';
+class WorkflowTextValue {
+  constructor(private readonly value: string) {}
+  hasControlCharacter(): boolean {
+    return Array.from(this.value).some((character) => {
+      const code = character.charCodeAt(0);
+      return (
+        code <= 8 ||
+        code === 11 ||
+        code === 12 ||
+        code === 127 ||
+        (code >= 14 && code <= 31)
+      );
+    });
+  }
+}
 const error = (message: string) => ({
   error: (issue: { readonly code: string }) =>
     issue.code === 'invalid_type' && Reflect.get(issue, 'input') === void 0
@@ -39,7 +58,7 @@ const view = string
   .refine(
     (value) =>
       value.trim() !== '' &&
-      !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value),
+      !new WorkflowTextValue(value).hasControlCharacter(),
     'workflow materialized view must be non-empty, bounded Markdown without control characters',
   )
   .meta({ minLength: 1, pattern: '\\S' });
@@ -155,7 +174,7 @@ const continuationEntries = strings
         (value) =>
           value.trim() !== '' &&
           value.length <= 4096 &&
-          !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value),
+          !new WorkflowTextValue(value).hasControlCharacter(),
       ),
     continuationMessage,
   )
@@ -226,11 +245,11 @@ export class WorkflowResultSchema {
   ): DecodedWorkflowTaskOutput {
     if (Buffer.byteLength(serialized, 'utf8') > 131_072)
       throw new Error('workflow structured result exceeds 131072 bytes');
-    const node: unknown = JSON.parse(serialized);
+    const node = UntrustedYamlBoundary.fromJson(JSON.parse(serialized));
     return this.decodeWorkflowTaskOutputNode(node);
   }
   static decodeWorkflowTaskOutputNode(
-    input: unknown,
+    input: UntrustedYamlNode | void,
   ): DecodedWorkflowTaskOutput {
     const serialized = JSON.stringify(input);
     if (
@@ -257,7 +276,7 @@ export class WorkflowResultSchema {
     const kind = envelope.data.resultKind;
     const schema = RESULT_SCHEMAS[kind];
     if (kind in STRUCTURAL_RESULT_SCHEMAS)
-      return parseStructural<DecodedWorkflowTaskOutput>(schema, input);
+      return parseStructural<DecodedWorkflowTaskOutput>({ schema, input });
     const decoded = schema.safeParse(input);
     if (!decoded.success)
       throw new Error(

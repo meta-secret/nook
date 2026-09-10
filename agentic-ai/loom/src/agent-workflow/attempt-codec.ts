@@ -16,6 +16,11 @@ import {
   type TaskTerminal,
 } from './domain.ts';
 import { WorkflowResultSchema } from './structured-result-codec.ts';
+import {
+  UntrustedYamlBoundary,
+  type UntrustedYamlMap,
+  type UntrustedYamlNode,
+} from '../lib/guards.ts';
 
 /** Decodes persisted attempt artifacts before lifecycle or authorization logic. */
 export class AgentAttemptTransport {
@@ -29,7 +34,7 @@ export class AgentAttemptTransport {
   }
 
   static decodeEvent(serialized: string): AgentAttemptEvent {
-    const value: unknown = JSON.parse(serialized);
+    const value = UntrustedYamlBoundary.fromJson(JSON.parse(serialized));
     const node = AgentAttemptTransport.record(value);
     const metadata: AgentAttemptEventMetadata = {
       adapter: AgentAttemptTransport.enumeration({
@@ -109,11 +114,13 @@ export class AgentAttemptTransport {
   }
 
   static decodeTerminal(serialized: string): TaskTerminal<string> {
-    const value: unknown = JSON.parse(serialized);
+    const value = UntrustedYamlBoundary.fromJson(JSON.parse(serialized));
     return AgentAttemptTransport.decodeTerminalValue(value);
   }
 
-  static decodeTerminalValue(value: unknown): TaskTerminal<string> {
+  static decodeTerminalValue(
+    value: AttemptTransportValue,
+  ): TaskTerminal<string> {
     const node = AgentAttemptTransport.record(value);
     const identity = {
       task: AgentAttemptTransport.string(node.task),
@@ -146,7 +153,7 @@ export class AgentAttemptTransport {
     };
   }
 
-  static decodeParent(value: unknown): AgentAttemptParent {
+  static decodeParent(value: AttemptTransportValue): AgentAttemptParent {
     const node = AgentAttemptTransport.record(value);
     if (node.kind === AgentAttemptParentKind.WorkflowRoot) {
       AgentAttemptTransport.exactKeys({ node, fields: ['kind'] });
@@ -167,7 +174,7 @@ export class AgentAttemptTransport {
     throw new AgentAttemptDecodeError();
   }
 
-  private static projection(value: unknown): ProjectionReference {
+  private static projection(value: AttemptTransportValue): ProjectionReference {
     const node = AgentAttemptTransport.record(value);
     AgentAttemptTransport.exactKeys({ node, fields: ['path', 'sha256'] });
     return {
@@ -176,7 +183,7 @@ export class AgentAttemptTransport {
     };
   }
 
-  private static view(value: unknown): MaterializedViewReference {
+  private static view(value: AttemptTransportValue): MaterializedViewReference {
     const node = AgentAttemptTransport.record(value);
     if (node.presence === MaterializedViewPresence.Unavailable) {
       AgentAttemptTransport.exactKeys({ node, fields: ['presence', 'reason'] });
@@ -205,19 +212,21 @@ export class AgentAttemptTransport {
     throw new AgentAttemptDecodeError();
   }
 
-  private static record(value: unknown): AttemptTransportRecord {
+  private static record(value: AttemptTransportValue): AttemptTransportRecord {
     if (!AgentAttemptTransport.isRecord(value))
       throw new AgentAttemptDecodeError();
     return value;
   }
-  private static isRecord(value: unknown): value is AttemptTransportRecord {
+  private static isRecord(
+    value: AttemptTransportValue,
+  ): value is AttemptTransportRecord {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
-  private static string(value: unknown): string {
+  private static string(value: AttemptTransportValue): string {
     if (typeof value !== 'string') throw new AgentAttemptDecodeError();
     return value;
   }
-  private static integer(value: unknown): number {
+  private static integer(value: AttemptTransportValue): number {
     if (typeof value !== 'number' || !Number.isSafeInteger(value))
       throw new AgentAttemptDecodeError();
     return value;
@@ -240,9 +249,10 @@ export class AgentAttemptTransport {
   }
 }
 
-type AttemptTransportRecord = { readonly [field: string]: unknown };
+type AttemptTransportRecord = UntrustedYamlMap;
+type AttemptTransportValue = UntrustedYamlNode | void;
 type AttemptEnumDecode<T extends string> = {
-  readonly value: unknown;
+  readonly value: AttemptTransportValue;
   readonly values: readonly T[];
 };
 type AttemptFieldsDecode = {

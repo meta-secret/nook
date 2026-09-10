@@ -1,7 +1,7 @@
 /** The host syntax edge; values leave it only through a concrete decoder. */
 export class UntrustedYamlBoundary {
   private constructor(private readonly value: UntrustedYamlNode) {}
-  static fromJson(value: unknown): UntrustedYamlNode {
+  static fromJson(value: UntrustedYamlNode): UntrustedYamlNode {
     if (
       typeof value === 'string' ||
       typeof value === 'number' ||
@@ -9,7 +9,9 @@ export class UntrustedYamlBoundary {
     )
       return value;
     if (Array.isArray(value))
-      return value.map((item: unknown) => UntrustedYamlBoundary.fromJson(item));
+      return value.map((item: UntrustedYamlNode) =>
+        UntrustedYamlBoundary.fromJson(item),
+      );
     if (typeof value === 'object' && value instanceof Object) {
       const result: UntrustedYamlMapBuilder = {};
       for (const [key, item] of Object.entries(value)) {

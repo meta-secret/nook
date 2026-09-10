@@ -261,19 +261,21 @@ export class LoomRequestExecution {
       }
       case RequestFamily.CortexAudit:
         return CortexAuditCommand.runCortexAudit(request.cortexAudit);
-      case RequestFamily.CortexSessionClean:
+      case RequestFamily.CortexSessionClean: {
         const discovery4 = new RepositoryRoot().locate();
         if (discovery4.isErr()) return err(discovery4.error);
         return new CortexSessionDirectory({
           repoRoot: discovery4.value,
         }).clean();
-      case RequestFamily.SkillScaffold:
+      }
+      case RequestFamily.SkillScaffold: {
         const discovery5 = new RepositoryRoot().locate();
         if (discovery5.isErr()) return err(discovery5.error);
         return new SkillScaffoldCommand({
           request: request.skillScaffold,
           repoRoot: discovery5.value,
         }).execute();
+      }
       case RequestFamily.AgentStats: {
         switch (request.operation) {
           case AgentStatsOperation.Assemble:
@@ -287,34 +289,38 @@ export class LoomRequestExecution {
       }
       case RequestFamily.PrLand: {
         switch (request.operation) {
-          case PrLandOperation.Status:
+          case PrLandOperation.Status: {
             const discovery6 = new RepositoryRoot().locate();
             if (discovery6.isErr()) return err(discovery6.error);
             return new PullRequestDeliveryCommand({
               repoRoot: discovery6.value,
               prNumber: request.status.prNumber,
             }).status();
-          case PrLandOperation.Validate:
+          }
+          case PrLandOperation.Validate: {
             const discovery7 = new RepositoryRoot().locate();
             if (discovery7.isErr()) return err(discovery7.error);
             return new PullRequestValidationCommand({
               repoRoot: discovery7.value,
               request: request.validate,
             }).execute();
-          case PrLandOperation.Ready:
+          }
+          case PrLandOperation.Ready: {
             const discovery8 = new RepositoryRoot().locate();
             if (discovery8.isErr()) return err(discovery8.error);
             return new PullRequestDeliveryCommand({
               repoRoot: discovery8.value,
               prNumber: request.ready.prNumber,
             }).readiness();
-          case PrLandOperation.MergeCheck:
+          }
+          case PrLandOperation.MergeCheck: {
             const discovery9 = new RepositoryRoot().locate();
             if (discovery9.isErr()) return err(discovery9.error);
             return new PullRequestDeliveryCommand({
               repoRoot: discovery9.value,
               prNumber: request.mergeCheck.prNumber,
             }).mergeReadiness();
+          }
         }
         break;
       }

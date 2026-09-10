@@ -178,17 +178,20 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
     };
     const before = new AgentSourceSnapshot(beforeAttempt).assertStable();
     if (before.isErr()) return err(before.error);
+    let outcome: Result<AgentExecutionCompletion, AgentExecutionFailure>;
+    let after: ReturnType<AgentSourceSnapshot['assertStable']>;
     try {
-      return await this.executeStable();
+      outcome = await this.executeStable();
     } finally {
       const afterAttempt: AgentSourceStabilityCheck = {
         workingDirectory: execution.invocation.workingDirectory,
         sourceCommit: execution.invocation.sourceCommit,
         phase: AgentSourceStabilityPhase.AfterAttempt,
       };
-      const after = new AgentSourceSnapshot(afterAttempt).assertStable();
-      if (after.isErr()) return err(after.error);
+      after = new AgentSourceSnapshot(afterAttempt).assertStable();
     }
+    if (after.isErr()) return err(after.error);
+    return outcome;
   }
   private async executeStable(): Promise<
     Result<AgentExecutionCompletion, AgentExecutionFailure>
@@ -283,12 +286,20 @@ enum TurnValuePresence {
 type TurnText =
   | { readonly presence: TurnValuePresence.Missing }
   | { readonly presence: TurnValuePresence.Present; readonly text: string };
+type CodexTurnStateRequest = {
+  readonly termination?: TurnTermination;
+  readonly thread?: TurnText;
+  readonly output?: TurnText;
+};
 class CodexTurnState {
-  constructor(
-    readonly termination: TurnTermination = TurnTermination.Pending,
-    readonly thread: TurnText = { presence: TurnValuePresence.Missing },
-    readonly output: TurnText = { presence: TurnValuePresence.Missing },
-  ) {}
+  readonly termination: TurnTermination;
+  readonly thread: TurnText;
+  readonly output: TurnText;
+  constructor(request: CodexTurnStateRequest = {}) {
+    this.termination = request.termination ?? TurnTermination.Pending;
+    this.thread = request.thread ?? { presence: TurnValuePresence.Missing };
+    this.output = request.output ?? { presence: TurnValuePresence.Missing };
+  }
 
   advance(event: ThreadEvent): CodexTurnState {
     const thread =
@@ -308,7 +319,7 @@ class CodexTurnState {
       event.item.type === 'agent_message'
         ? new CodexTurnText(event.item.text).value()
         : this.output;
-    return new CodexTurnState(termination, thread, output);
+    return new CodexTurnState({ termination, thread, output });
   }
 }
 
@@ -342,20 +353,24 @@ class CodexEventStream {
     }
     let state = new CodexTurnState();
     let lifecycle = CodexStreamLifecycle.Open;
+    let outcome: Result<CodexTurnState, AgentExecutionFailure> | false = false;
+    let closeFailure: AgentExecutionFailure | false = false;
     try {
-      while (true) {
+      while (outcome === false) {
         let next;
         try {
           next = await iterator.next();
         } catch {
-          return err({
+          outcome = err({
             kind: CodexExecutionFailureKind.RuntimeBoundary,
             message: 'Codex event stream failed.',
           });
+          break;
         }
         if (next.done) {
           lifecycle = CodexStreamLifecycle.Exhausted;
-          return ok(state);
+          outcome = ok(state);
+          break;
         }
         state = state.advance(next.value);
         const observation = new CodexActivity(next.value).normalize();
@@ -366,13 +381,14 @@ class CodexEventStream {
         try {
           await iterator.return();
         } catch {
-          return err({
+          closeFailure = {
             kind: CodexExecutionFailureKind.RuntimeBoundary,
             message: 'Codex event stream could not be closed.',
-          });
+          };
         }
       }
     }
+    return closeFailure === false ? outcome : err(closeFailure);
   }
 }
 

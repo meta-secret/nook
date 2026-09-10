@@ -14,6 +14,7 @@ import { randomBytes } from 'node:crypto';
 import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 
 import type { Dirent, ObjectEncodingOptions } from 'node:fs';
+import { UntrustedYamlBoundary } from '../lib/guards.ts';
 
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
@@ -102,7 +103,7 @@ export class ModuleExpertRepositoryContext {
     }
     let request: JsonRpcRequest;
     try {
-      const value: unknown = JSON.parse(body);
+      const value = UntrustedYamlBoundary.fromJson(JSON.parse(body));
       request = RepositoryContextRpcSchema.decodeJsonRpcRequest(value);
     } catch {
       const errorWrite: JsonRpcErrorWrite = {

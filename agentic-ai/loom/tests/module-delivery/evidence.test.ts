@@ -24,8 +24,6 @@ import {
   ModuleEvidenceBoundary,
 } from '../../src/module-delivery/index.ts';
 
-import { ModuleGenerationAuthority } from '../../src/module-delivery/admission.ts';
-
 import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 
 import type {
@@ -47,8 +45,6 @@ import type {
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
-
-import { ModuleEvidenceBoundary } from '../../src/module-delivery/evidence.ts';
 
 import type {
   ModuleDeliveryEvidenceDigestRequest,

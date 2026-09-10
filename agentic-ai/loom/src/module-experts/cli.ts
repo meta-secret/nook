@@ -79,15 +79,15 @@ export class ModuleExpertCommandParser {
       positionals.length !== 1 ||
       tokens.length !== expected.length + 1 ||
       tokens[0]?.kind !== 'positional' ||
-      tokens
-        .slice(1)
-        .some(
-          (token, index) =>
-            token.kind !== 'option' ||
-            token.name !== expected[index] ||
-            token.inlineValue ||
-            token.index !== index * 2 + 1,
-        ) ||
+      Array.from(tokens.slice(1).entries()).some((entry) => {
+        const [index, token] = entry;
+        return (
+          token.kind !== 'option' ||
+          token.name !== expected[index] ||
+          token.inlineValue ||
+          token.index !== index * 2 + 1
+        );
+      }) ||
       typeof directory !== 'string' ||
       !directory ||
       directory.startsWith('--')

@@ -169,10 +169,9 @@ export type SnapshotContextFilesRequest = {
 export class SnapshotContextFiles {
   constructor(private readonly request: SnapshotContextFilesRequest) {}
   materialize(): Result<void, ExpertIsolationFailure> {
-    const totalBytes = this.request.contextFiles.reduce(
-      (sum, file) => sum + Buffer.byteLength(file.content, 'utf8'),
-      0,
-    );
+    let totalBytes = 0;
+    for (const file of this.request.contextFiles)
+      totalBytes += Buffer.byteLength(file.content, 'utf8');
     if (this.request.contextFiles.length > 64 || totalBytes > 1_048_576)
       return err({
         kind: ExpertIsolationFailureKind.ContextFiles,

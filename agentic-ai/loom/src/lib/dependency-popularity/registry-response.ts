@@ -10,21 +10,23 @@ export type RegistryFailure = {
   readonly kind: RegistryFailureKind;
   readonly message: string;
 };
+export type RegistryResponseRequest = {
+  readonly url: string;
+  readonly init?: RequestInit;
+};
 
 /** Owns the foreign HTTP and JSON exception boundaries for registry metrics. */
 export class RegistryResponse {
-  constructor(
-    private readonly url: string,
-    private readonly init?: RequestInit,
-  ) {}
+  constructor(private readonly request: RegistryResponseRequest) {}
 
   async fetch(): Promise<Result<Response, RegistryFailure>> {
+    const { url, init } = this.request;
     try {
-      return ok(await fetch(this.url, this.init));
+      return ok(await fetch(url, init));
     } catch {
       return err({
         kind: RegistryFailureKind.Transport,
-        message: `Registry request failed: ${this.url}`,
+        message: `Registry request failed: ${url}`,
       });
     }
   }
