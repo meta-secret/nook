@@ -977,7 +977,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     assert!(
         pre_push_task.contains("bun .github/scripts/pr-authored-budget.ts \"{{.PR}}\"")
             && budget_guard.contains("PR_ADDITION_LIMIT = 2_000")
-            && budget_guard.contains("summary.authoredLines += added")
+            && budget_guard.contains("this.authoredLines += added")
             && !budget_guard.contains("REVIEW_GROWTH_STOP"),
         "pre-push must fail closed on the one-PR authored-addition budget"
     );

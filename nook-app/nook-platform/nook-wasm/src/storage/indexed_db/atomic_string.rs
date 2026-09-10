@@ -438,7 +438,7 @@ mod tests {
                 key: "target",
                 fallback_key: StringRecordFallback::AdoptFrom("fallback"),
                 guard: StringUpdateGuard::Unconditional,
-                can_adopt_fallback: |_| false,
+                can_adopt_fallback: (|_: &str| false) as fn(&str) -> bool,
                 update: |value| match value {
                     StoredStringRecord::Stored(raw) => Ok(raw),
                     StoredStringRecord::MissingKey => Ok("fresh".to_owned()),
@@ -459,7 +459,7 @@ mod tests {
         NookDatabase::idb_migrate_string_if(IndexedDbMigration {
             source_key: "missing-source",
             target_key: "missing-target",
-            can_migrate: |_| true,
+            can_migrate: (|_: &str| true) as fn(&str) -> bool,
         })
         .await?;
         NookDatabase::idb_put_string(IdbPutStringRequest {
@@ -470,7 +470,7 @@ mod tests {
         NookDatabase::idb_migrate_string_if(IndexedDbMigration {
             source_key: "blocked-source",
             target_key: "blocked-target",
-            can_migrate: |_| false,
+            can_migrate: (|_: &str| false) as fn(&str) -> bool,
         })
         .await?;
         assert_eq!(
