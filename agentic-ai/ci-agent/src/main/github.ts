@@ -786,11 +786,11 @@ export {
   DEFAULT_REVIEW_CLOCK,
   ExactHeadReviewFallback,
   ExactHeadReviewProvider,
-  codexReviewRequestMarker,
-  cursorReviewRequestMarker,
-  isTrustedCodexReviewRequestComment,
-  isTrustedExactHeadReviewRequest,
-  requestExactHeadReview,
+  CodexReviewRevision,
+  CursorReviewRevision,
+  GitHubReviewIsTrustedCodexReviewRequestComment,
+  GitHubReviewIsTrustedExactHeadReviewRequest,
+  GitHubReviewClient,
 } from "./github-review.js";
 
 const log = new Logger("github");

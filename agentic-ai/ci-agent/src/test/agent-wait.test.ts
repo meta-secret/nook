@@ -26,7 +26,7 @@ test("waitWithHeartbeat rejects on timeout", async () => {
   await assertAsyncFailure(
     new AgentWait({
       label: "Test",
-      wait: () => new Promise(() => {}),
+      wait: () => new Promise<never>(() => {}),
       options: { timeoutMs: 50, heartbeatMs: 60_000 },
     }).complete(),
     /timed out/,

@@ -15,7 +15,7 @@ enum AgentCommandMode {
   RequiredPlanning,
 }
 class CiAgentCommand {
-  constructor(private readonly arguments: readonly string[]) {}
+  constructor(private readonly argv: readonly string[]) {}
   async runAgentCommand(
     mode: AgentCommandMode,
   ): Promise<Result<void, CiFailure>> {
@@ -43,7 +43,7 @@ class CiAgentCommand {
     });
   }
   async main(): Promise<Result<void, CiFailure>> {
-    const command = this.arguments[2] || "fix";
+    const command = this.argv[2] || "fix";
     switch (command) {
       case "agent":
         return this.runAgentCommand(AgentCommandMode.OptionalLegacy);

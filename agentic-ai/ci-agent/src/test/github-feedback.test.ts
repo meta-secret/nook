@@ -5,7 +5,7 @@ import {
   AutomatedFindingHistory,
   ReviewBodyClassification,
   GitHubIsRepositoryStatusComment,
-  isTrustedExactHeadReviewRequest,
+  GitHubReviewIsTrustedExactHeadReviewRequest,
 } from "../main/github.js";
 
 test("countAutomatedFindingBatches groups root bot findings by review", () => {
@@ -104,39 +104,39 @@ test("countAutomatedFindingBatches excludes dismissed review comments", () => {
 test("exact-head iteration markers require a trusted exact request", () => {
   const marker = "<!-- nook-codex-review:head-sha -->";
   assert.equal(
-    isTrustedExactHeadReviewRequest({
+    new GitHubReviewIsTrustedExactHeadReviewRequest({
       authorAssociation: "OWNER",
       body: `@codex review\n\n${marker}`,
       marker,
       user: { login: "cypherkitty" },
-    }),
+    }).execute(),
     true,
   );
   assert.equal(
-    isTrustedExactHeadReviewRequest({
+    new GitHubReviewIsTrustedExactHeadReviewRequest({
       authorAssociation: "NONE",
       body: `@codex review\n\n${marker}`,
       marker,
       user: { login: "reviewer" },
-    }),
+    }).execute(),
     false,
   );
   assert.equal(
-    isTrustedExactHeadReviewRequest({
+    new GitHubReviewIsTrustedExactHeadReviewRequest({
       authorAssociation: "OWNER",
       body: `Quoted marker: ${marker}`,
       marker,
       user: { login: "cypherkitty" },
-    }),
+    }).execute(),
     false,
   );
   assert.equal(
-    isTrustedExactHeadReviewRequest({
+    new GitHubReviewIsTrustedExactHeadReviewRequest({
       authorAssociation: "CONTRIBUTOR",
       body: `@codex review\n\n${marker}`,
       marker,
       user: { login: "github-actions[bot]" },
-    }),
+    }).execute(),
     true,
   );
 });

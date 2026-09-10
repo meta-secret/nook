@@ -17,7 +17,7 @@ import { AgentPrompt, AgentPromptEnvironment } from "./prompt.js";
 import { AgentIsolation, ConfiguredAgentRuntime } from "./run-agent.js";
 export class CiImplementationCommand {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
-  resolveTargetFromEnvironment() {
+  resolveTargetFromEnvironment(): Result<ImplementPrTarget, CiFailure> {
     const runId = this.environment.GITHUB_RUN_ID?.trim() || "";
     return new AgentImplementationResolveImplementPrTarget({
       branch:
@@ -293,7 +293,7 @@ class AgentImplementationIsValidBranch {
 
 export class AgentImplementationResolveImplementPrTarget {
   constructor(private readonly request: ImplementPrTargetInput) {}
-  execute() {
+  execute(): Result<ImplementPrTarget, CiFailure> {
     const input = this.request;
 
     if (
@@ -413,6 +413,13 @@ type PreserveImplementedBranchArgs = {
 
 export enum ImplementPrTargetKind {
   Standalone = "standalone",
+}
+
+export interface ImplementPrTarget {
+  readonly branch: string;
+  readonly baseBranch: string;
+  readonly kind: ImplementPrTargetKind.Standalone;
+  readonly budgetBaseRef: string;
 }
 
 type ImplementPrTargetInput = {
