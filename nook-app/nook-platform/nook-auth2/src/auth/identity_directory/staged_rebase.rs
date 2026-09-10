@@ -1,10 +1,5 @@
 //! Three-way rebase policy for staged vault-creation identity ownership.
 
-use crate::MemberLabelState;
-use crate::{
-    DirectoryCreationEnrollment, DirectoryOwnedVaultOpening, IdentityCreation,
-    IdentityVaultKeyOpening,
-};
 use std::mem;
 
 use super::{IdentityDirectory, IdentityDirectoryRejection};
@@ -162,7 +157,7 @@ impl StagedRebaseRollback {
 mod tests {
     use crate::{
         DirectoryCreationEnrollment, DirectoryOwnedVaultOpening, IdentityCreation,
-        IdentityVaultKeyOpening,
+        IdentityVaultKeyOpening, MemberLabelState,
     };
 
     use super::*;

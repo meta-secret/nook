@@ -10,7 +10,6 @@
 //! Sentinel roots are split with the current extendable SLIP-0039 format.
 
 use super::multi_device::{DeviceIdentity, VaultMetaRecord};
-use crate::SentinelShareEnvelope;
 mod links;
 mod payload;
 mod session;
@@ -491,7 +490,7 @@ mod tests {
 
     use super::super::multi_device;
     use super::*;
-    use crate::StoreId;
+    use crate::{SentinelShareEnvelope, StoreId};
 
     struct Fixture;
     impl Fixture {

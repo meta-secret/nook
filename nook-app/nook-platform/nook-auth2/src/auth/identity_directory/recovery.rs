@@ -1,6 +1,5 @@
 //! Retirement and selection transitions for local identity recovery.
 use super::*;
-use crate::MemberLabelState;
 
 pub enum RecoveryRetirement {
     RetireInstallation(crate::AppId),
@@ -113,6 +112,7 @@ impl IdentityRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::MemberLabelState;
     #[test]
     fn device_recovery_removes_stale_local_ownership() -> anyhow::Result<()> {
         let inaccessible_key = AppKey::generate()?;
@@ -210,7 +210,6 @@ mod tests {
             Err(rejected) => rejected,
             Ok(_) => anyhow::bail!("Rejected identity transition unexpectedly succeeded"),
         };
-        directory = rejected.directory;
         assert!(matches!(rejected.cause, MultiDeviceError::RetiredAppKey));
         Ok(())
     }

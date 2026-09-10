@@ -1,13 +1,13 @@
 //! Encrypted vault-member roster storage and member lifecycle operations.
 
 use super::{DeviceIdentity, JoinRequest, MemberEntry, VaultMember, VaultMetaRecord};
+use crate::DeviceId;
 use crate::MemberLabelState;
 use crate::RecordTypeDeclaration;
 use crate::{
     AgeArmoredCiphertext, AuthKeyId, MultiDeviceError, MultiDeviceResult, SecretId,
     StoredRecordPayload, StoredSecretRecord, SymmetricKey, VaultCrypto,
 };
-use crate::{CreateSentinelShareRecordsRequest, DeviceId, SentinelShareEnvelope, VaultMetaState};
 
 /// Named values required by VaultMember::member_from_identity.
 pub struct MemberFromIdentityRequest<'a> {
@@ -375,7 +375,10 @@ mod tests {
     use crate::auth::multi_device::{
         JoinRequestApproval, JoinRequestIssuance, MEMBER_RECORD_PREFIX, VaultKeys, VaultRecordView,
     };
-    use crate::{SecretType, StoredRecordPayload};
+    use crate::{
+        CreateSentinelShareRecordsRequest, PendingJoinForDeviceRequest, SecretType,
+        SentinelShareEnvelope, StoredRecordPayload, VaultMetaState,
+    };
 
     const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
 
@@ -457,9 +460,8 @@ mod tests {
                 .iter()
                 .find(|member| member.auth_id == joiner.auth_id())
                 .ok_or_else(|| io::Error::other("renamed member must exist"))?
-                .label
-                .as_deref(),
-            Some("Travel iPad")
+                .label,
+            MemberLabelState::Named("Travel iPad".to_owned())
         );
         assert_eq!(
             VaultRecordView::new(&records).members_key(&joiner)?,

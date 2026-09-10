@@ -1,4 +1,3 @@
-use crate::RecordTypeDeclaration;
 use crate::{
     AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey, SecretId,
     SecretType, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
@@ -43,7 +42,7 @@ mod tests {
     use std::io;
 
     use super::*;
-    use crate::DeviceSigningPublicKey;
+    use crate::{DeviceSigningPublicKey, RecordTypeDeclaration};
 
     const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
     fn genesis_vault(

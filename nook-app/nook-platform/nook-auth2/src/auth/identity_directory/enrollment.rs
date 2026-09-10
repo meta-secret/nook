@@ -213,6 +213,17 @@ impl IdentityRecord {
 mod tests {
     use super::*;
     use crate::IdentityVaultDekReconciliation;
+
+    fn known_epoch(epoch: char, checkpoint: char) -> anyhow::Result<crate::IdentityVaultDekEpoch> {
+        let id = |fill: char| {
+            crate::IdentityVaultEventId::parse(&format!("sha256u:{}", fill.to_string().repeat(43)))
+        };
+        Ok(crate::IdentityVaultDekEpoch::Known {
+            key_epoch: id(epoch)?,
+            checkpoint: id(checkpoint)?,
+        })
+    }
+
     #[test]
     fn authenticated_handoff_enrolls_only_before_vault_creation() -> anyhow::Result<()> {
         let website_key = AppKey::generate()?;
@@ -249,7 +260,6 @@ mod tests {
             Err(rejected) => rejected,
             Ok(_) => anyhow::bail!("Rejected identity transition unexpectedly succeeded"),
         };
-        directory = rejected.directory;
         assert!(matches!(
             rejected.cause,
             MultiDeviceError::IdentityEnrollmentRequired

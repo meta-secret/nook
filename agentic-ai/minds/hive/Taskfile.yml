@@ -368,7 +368,13 @@ tasks:
         msg: HIVE_CONSOLE_CACHE_TO is required for console image publication.
     cmds:
       - |
+        HIVE_TASK_DIR='{{.HIVE_TASK_DIR}}' \
+        bash <<'BASH'
         set -euo pipefail
+        # shellcheck source=prepare-sccache-context.sh
+        . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
+        prepare_nook_sccache_helpers_context
+        trap cleanup_nook_sccache_helpers_context EXIT
         cache_from="$HIVE_CONSOLE_CACHE_FROM"
         cache_ref_status() {
           local ref="$1"
@@ -409,8 +415,11 @@ tasks:
           --cache-from "$cache_from" \
           --cache-to "$HIVE_CONSOLE_CACHE_TO" \
           --push \
+          --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
+          --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}" \
           --file hive/Dockerfile \
           .
+        BASH
 
   image:
     desc: Build the linux/amd64 Hive worker image.

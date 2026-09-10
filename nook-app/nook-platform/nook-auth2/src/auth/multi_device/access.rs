@@ -1,8 +1,8 @@
 use super::{DeviceIdentity, JoinRequest, VaultMetaState, VaultRecordView};
 use crate::errors::MultiDeviceResult;
 use crate::{
-    BuildMembersRecordsRequest, GenesisMembersRecordsRequest, MemberFromIdentityRequest,
-    ReplaceMemberRecordsRequest, ResolveMemberRosterRequest, RosterAddMemberRequest, VaultMember,
+    BuildMembersRecordsRequest, MemberFromIdentityRequest, ResolveMemberRosterRequest,
+    RosterAddMemberRequest, VaultMember,
 };
 use crate::{DeviceId, StoredSecretRecord, SymmetricKey};
 
@@ -135,11 +135,9 @@ impl VaultMetaState {
 mod tests {
     use std::io;
 
-    use super::super::{
-        JoinRequestApproval, JoinRequestIssuance, VaultKeys, VaultRecordView,
-        genesis_members_records, replace_member_records,
-    };
+    use super::super::{JoinRequestApproval, JoinRequestIssuance, VaultKeys, VaultRecordView};
     use super::*;
+    use crate::{GenesisMembersRecordsRequest, ReplaceMemberRecordsRequest};
 
     const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
 

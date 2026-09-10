@@ -623,7 +623,7 @@ mod tests {
 
     #[test]
     fn identity_requires_member_before_vault_dek() -> anyhow::Result<()> {
-        let mut identity = IdentityRecord {
+        let identity = IdentityRecord {
             identity_id: IdentityId::generate()?,
             label: "Empty".to_owned(),
             control_epoch: IdentityControlEpoch::INITIAL,

@@ -40,7 +40,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use crate::model::{
-    ActiveDelivery, ActiveDeliveryQuery, Completion, EnqueueTask, TaskId, TaskKind, TaskTrigger,
+    ActiveDelivery, ActiveDeliveryQuery, EnqueueTask, TaskId, TaskKind, TaskTrigger,
 };
 use crate::store::TaskStore;
 

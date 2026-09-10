@@ -384,8 +384,8 @@ impl TerminalResult {
 #[cfg(test)]
 mod tests {
     use super::{
-        ActivityKind, AgentId, AttemptId, ClaimOutcome, CompletionRelevance, EnqueueTask,
-        LeaseToken, ModelError, TaskId, TaskTrigger, TerminalResult,
+        ActivityKind, AgentId, AttemptId, ClaimOutcome, ClaimedTask, CompletionRelevance,
+        EnqueueTask, LeaseToken, ModelError, TaskId, TaskTrigger, TerminalResult,
     };
 
     #[test]

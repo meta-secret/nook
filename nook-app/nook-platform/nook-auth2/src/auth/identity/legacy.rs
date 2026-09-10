@@ -2,8 +2,7 @@
 use super::super::identity_dek_grant::IdentityVaultGrantReconciliation;
 use super::*;
 #[cfg(test)]
-use crate::IdentityVaultBinding;
-use crate::MemberLabelState;
+use crate::{IdentityVaultBinding, MemberLabelState};
 
 impl IdentityRecord {
     pub fn reconcile_legacy_vault_member(

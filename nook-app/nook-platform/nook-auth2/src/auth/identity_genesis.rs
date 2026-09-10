@@ -3,7 +3,6 @@
 use super::identity::IdentityRecord;
 use super::multi_device::{AuthRecordIssuance, VaultKeys};
 use crate::BuildMembersRecordsRequest;
-use crate::MemberLabelState;
 use crate::{MultiDeviceError, MultiDeviceResult, StoredSecretRecord, VaultMember};
 
 /// Authorize every member of an identity in a new Simple vault.
@@ -68,7 +67,7 @@ impl IdentityRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AppKey, IdentityMember, VaultRecordView};
+    use crate::{AppKey, IdentityMember, MemberLabelState, VaultRecordView};
 
     #[test]
     fn genesis_authorizes_every_identity_member() -> anyhow::Result<()> {

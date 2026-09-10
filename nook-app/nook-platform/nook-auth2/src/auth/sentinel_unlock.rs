@@ -21,7 +21,6 @@ use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     MultiDeviceError, MultiDeviceResult, StoreId, StoredSecretRecord,
 };
-use crate::{CreateSentinelRootShareRecordsForRecipientsRequest, SentinelShareEnvelope};
 use crate::{SentinelParticipantCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold};
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
@@ -441,7 +440,10 @@ impl SentinelUnlockRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SentinelShareOpening;
+    use crate::{
+        CreateSentinelRootShareRecordsForRecipientsRequest, SentinelShareEnvelope,
+        SentinelShareOpening,
+    };
 
     struct Fixture {
         keys: VaultKeys,

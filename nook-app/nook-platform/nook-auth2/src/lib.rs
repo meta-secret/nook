@@ -9,9 +9,21 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 #![allow(
+    clippy::doc_markdown,
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
-    clippy::uninlined_format_args
+    clippy::must_use_candidate,
+    clippy::needless_borrow,
+    clippy::needless_lifetimes,
+    clippy::needless_pass_by_value,
+    clippy::raw_string_hashes,
+    clippy::redundant_field_names,
+    clippy::result_large_err,
+    clippy::return_self_not_must_use,
+    clippy::single_match,
+    clippy::too_many_lines,
+    clippy::uninlined_format_args,
+    clippy::wildcard_imports
 )]
 
 //! Portable vault authentication and key-access primitives.

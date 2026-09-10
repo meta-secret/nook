@@ -1,5 +1,4 @@
 use super::secret_sharing::{IndexedShare, SentinelSecretSplit, SentinelShareThreshold};
-use crate::{AssessConnectAccessRequest, DeviceIsEnrolledRequest, VaultMetaState};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
@@ -286,11 +285,9 @@ impl SentinelShareEnvelope {
 mod tests {
     use std::slice;
 
-    use super::super::{
-        ConnectAccessStatus, DeviceIdentity, VaultRecordView, assess_connect_access,
-        device_is_enrolled,
-    };
+    use super::super::{ConnectAccessStatus, DeviceIdentity, VaultRecordView};
     use super::*;
+    use crate::{AssessConnectAccessRequest, DeviceIsEnrolledRequest, VaultMetaState};
 
     type SentinelShareFixture = (VaultKeys, [DeviceIdentity; 3], Vec<StoredSecretRecord>);
 

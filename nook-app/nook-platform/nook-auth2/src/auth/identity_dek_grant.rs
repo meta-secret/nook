@@ -7,7 +7,6 @@
 
 use super::identity::{IdentityMember, IdentityVaultDek, IdentityVaultDekEpoch, MemberDekEnvelope};
 use super::multi_device::{AppKey, VaultKeys};
-use crate::MemberLabelState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum IdentityVaultGrantReconciliation {
@@ -60,7 +59,7 @@ impl IdentityVaultDek {
 #[cfg(test)]
 mod tests {
     use super::{AppKey, IdentityMember, IdentityVaultDek, IdentityVaultDekEpoch, VaultKeys};
-    use crate::{IdentityRecord, IdentityVaultEventId, StoreId};
+    use crate::{IdentityRecord, IdentityVaultEventId, MemberLabelState, StoreId};
     use std::mem;
 
     struct GrantFixture {

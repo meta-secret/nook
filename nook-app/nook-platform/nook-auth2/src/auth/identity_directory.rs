@@ -595,14 +595,7 @@ impl Default for IdentityDirectory {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
-    use crate::IdentityVaultDekReconciliation;
-    use crate::{
-        DirectoryCreationEnrollment, DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening,
-        DirectoryVaultEnrollment, IdentityCreation, IdentityLegacyVaultReconciliation,
-        IdentityVaultKeyOpening, LocalIdentityKeyRetirement,
-    };
 
     fn known_epoch(epoch: char, checkpoint: char) -> anyhow::Result<crate::IdentityVaultDekEpoch> {
         let id = |fill: char| {

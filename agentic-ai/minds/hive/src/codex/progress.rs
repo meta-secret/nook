@@ -4,7 +4,13 @@ pub(super) enum InspectionHints {
     Files(String),
 }
 pub(super) enum ProgressDetail<'a> {
-    #[cfg(test)]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "summary-only phases are exercised by output tests"
+        )
+    )]
     Summary,
     Detail(&'a str),
 }

@@ -9,7 +9,6 @@ mod admission;
 use super::IdentityDirectory;
 #[cfg(test)]
 use crate::IdentityRecordRejection;
-use crate::MemberLabelState;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{
     AppId, IdentityDirectoryRejection, IdentityId, IdentityMember, IdentityMemberKeyBinding,
@@ -270,7 +269,7 @@ mod tests {
     use crate::{DirectoryCreationEnrollment, IdentityCreation, IdentityVaultKeyOpening};
 
     use super::*;
-    use crate::{AppKey, DeviceSigningPublicKey};
+    use crate::{AppKey, DeviceSigningPublicKey, MemberLabelState};
 
     impl IdentityMember {
         fn fixture(app: &AppKey) -> Self {
