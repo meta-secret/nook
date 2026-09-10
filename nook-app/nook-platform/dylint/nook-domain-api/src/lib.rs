@@ -217,7 +217,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
             && (ImplementationSurface {
                 cx,
                 impl_id: item.owner_id.def_id,
-                implementation,
+                implementation: &implementation,
             })
             .exposes_reachable_surface()
         {
@@ -227,7 +227,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
             } else if (ImplementationSurface {
                 cx,
                 impl_id: item.owner_id.def_id,
-                implementation,
+                implementation: &implementation,
             })
             .inherited_surface_contains_raw()
             {

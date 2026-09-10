@@ -21,6 +21,7 @@ pub enum SupportedAppLocale {
     Russian,
 }
 impl SupportedAppLocale {
+    #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
             Self::English => "en",
@@ -82,20 +83,23 @@ impl TranslationNode {
     }
 }
 
-/// Named values required by TranslationCatalog::lookup_translation.
+/// Named values required by `TranslationCatalog::lookup_translation`.
+#[derive(Clone, Copy)]
 pub struct LookupTranslationRequest<'a> {
     pub catalog_json: &'a str,
     pub key: &'a str,
 }
 
-/// Named values required by TranslationCatalog::translate_from_catalog.
+/// Named values required by `TranslationCatalog::translate_from_catalog`.
+#[derive(Clone, Copy)]
 pub struct TranslateFromCatalogRequest<'a> {
     pub catalog_json: &'a str,
     pub locale: &'a str,
     pub key: &'a str,
 }
 
-/// Named values required by TranslationCatalog::translate_with_replacements.
+/// Named values required by `TranslationCatalog::translate_with_replacements`.
+#[derive(Clone, Copy)]
 pub struct TranslateWithReplacementsRequest<'a> {
     pub catalog_json: &'a str,
     pub locale: &'a str,
@@ -103,20 +107,23 @@ pub struct TranslateWithReplacementsRequest<'a> {
     pub replacements: &'a [(String, String)],
 }
 
-/// Named values required by TranslationCatalog::resolve_error_message.
+/// Named values required by `TranslationCatalog::resolve_error_message`.
+#[derive(Clone, Copy)]
 pub struct ResolveErrorMessageRequest<'a> {
     pub catalog_json: &'a str,
     pub locale: &'a str,
     pub message: &'a str,
 }
 
-/// Named values required by TranslationCatalog::merge_translation_catalogs.
+/// Named values required by `TranslationCatalog::merge_translation_catalogs`.
+#[derive(Clone, Copy)]
 pub struct MergeTranslationCatalogsRequest<'a> {
     pub base_json: &'a str,
     pub overlay_json: &'a str,
 }
 
-/// Named values required by TranslationCatalog::resolve_translation_catalog.
+/// Named values required by `TranslationCatalog::resolve_translation_catalog`.
+#[derive(Clone, Copy)]
 pub enum TranslationCatalogSource<'a> {
     Bundled,
     Supplied(&'a str),
@@ -132,32 +139,42 @@ enum TranslationPrefixMatch<'a> {
     Remainder(&'a str),
 }
 
+#[derive(Clone, Copy)]
 pub struct ResolveTranslationCatalogRequest<'a> {
     pub locale: &'a str,
     pub wasm_catalog_json: TranslationCatalogSource<'a>,
 }
 
-/// Named values required by TranslationCatalog::translate.
+/// Named values required by `TranslationCatalog::translate`.
+#[derive(Clone, Copy)]
 pub struct TranslateRequest<'a> {
     pub locale: &'a str,
     pub key: &'a str,
 }
 
-/// Named values required by TranslationCatalog::lookup_key.
+/// Named values required by `TranslationCatalog::lookup_key`.
+#[derive(Clone, Copy)]
 struct LookupKeyRequest<'a> {
     json_str: &'a str,
     key: &'a str,
 }
 
+#[derive(Clone, Copy)]
 struct TranslationPrefix<'a> {
     value: &'a str,
     prefix: &'a str,
 }
 
 impl TranslationCatalog {
+    /// Parses a typed translation catalog from its JSON representation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the supplied JSON is not a translation catalog.
     pub fn parse(catalog_json: &str) -> serde_json::Result<Self> {
         serde_json::from_str(catalog_json).map(|document| Self { document })
     }
+    #[must_use]
     pub fn lookup(&self, key: &str) -> TranslationLookup {
         let mut current = &self.document;
         for part in key.split('.') {
@@ -252,7 +269,7 @@ impl TranslationCatalog {
         let LookupTranslationRequest { catalog_json, key } = request;
         TranslationCatalog::lookup_key(LookupKeyRequest {
             json_str: catalog_json,
-            key: key,
+            key,
         })
     }
 }
@@ -267,10 +284,7 @@ impl TranslationCatalog {
             key,
         } = request;
         if let TranslationLookup::Found(val) =
-            TranslationCatalog::lookup_translation(LookupTranslationRequest {
-                catalog_json: catalog_json,
-                key: key,
-            })
+            TranslationCatalog::lookup_translation(LookupTranslationRequest { catalog_json, key })
         {
             return val;
         }
@@ -279,7 +293,7 @@ impl TranslationCatalog {
         } else {
             match TranslationCatalog::lookup_translation(LookupTranslationRequest {
                 catalog_json: EN_JSON,
-                key: key,
+                key,
             }) {
                 TranslationLookup::Found(value) => value,
                 TranslationLookup::Missing | TranslationLookup::InvalidCatalog => key.to_owned(),
@@ -299,9 +313,9 @@ impl TranslationCatalog {
             replacements,
         } = request;
         let mut message = TranslationCatalog::translate_from_catalog(TranslateFromCatalogRequest {
-            catalog_json: catalog_json,
-            locale: locale,
-            key: key,
+            catalog_json,
+            locale,
+            key,
         });
         for (name, value) in replacements {
             message = message.replacen(&format!("{{{name}}}"), value, 1);
@@ -324,7 +338,7 @@ impl TranslationCatalog {
             .fold(message, |current, prefix| {
                 match TranslationCatalog::strip_prefix_ignore_ascii_case(TranslationPrefix {
                     value: current,
-                    prefix: prefix,
+                    prefix,
                 }) {
                     TranslationPrefixMatch::Unmatched => current,
                     TranslationPrefixMatch::Remainder(tail) => tail.trim_start(),
@@ -333,15 +347,15 @@ impl TranslationCatalog {
             .trim();
         if stripped.starts_with("errors.") {
             return TranslationCatalog::translate_from_catalog(TranslateFromCatalogRequest {
-                catalog_json: catalog_json,
-                locale: locale,
+                catalog_json,
+                locale,
                 key: stripped,
             });
         }
         if message.starts_with("errors.") {
             return TranslationCatalog::translate_from_catalog(TranslateFromCatalogRequest {
-                catalog_json: catalog_json,
-                locale: locale,
+                catalog_json,
+                locale,
                 key: message,
             });
         }
@@ -405,8 +419,8 @@ impl TranslationCatalog {
         let TranslateRequest { locale, key } = request;
         TranslationCatalog::translate_from_catalog(TranslateFromCatalogRequest {
             catalog_json: AppLocale::get_translation_catalog(locale),
-            locale: locale,
-            key: key,
+            locale,
+            key,
         })
     }
 }
@@ -422,9 +436,9 @@ impl TranslationCatalog {
 }
 
 impl TranslationCatalog {
-    fn strip_prefix_ignore_ascii_case<'a>(
-        request: TranslationPrefix<'a>,
-    ) -> TranslationPrefixMatch<'a> {
+    fn strip_prefix_ignore_ascii_case(
+        request: TranslationPrefix<'_>,
+    ) -> TranslationPrefixMatch<'_> {
         let TranslationPrefix { value, prefix } = request;
         match value.get(..prefix.len()) {
             Some(candidate) if candidate.eq_ignore_ascii_case(prefix) => {
@@ -702,25 +716,16 @@ mod tests {
 
         for (key, expected) in sources {
             assert_eq!(
-                TranslationCatalog::translate(TranslateRequest {
-                    locale: "en",
-                    key: key
-                }),
+                TranslationCatalog::translate(TranslateRequest { locale: "en", key }),
                 expected
             );
             assert!(
-                !TranslationCatalog::translate(TranslateRequest {
-                    locale: "en",
-                    key: key
-                })
-                .starts_with("Import from ")
+                !TranslationCatalog::translate(TranslateRequest { locale: "en", key })
+                    .starts_with("Import from ")
             );
             assert!(
-                !TranslationCatalog::translate(TranslateRequest {
-                    locale: "ru",
-                    key: key
-                })
-                .starts_with("Импорт из ")
+                !TranslationCatalog::translate(TranslateRequest { locale: "ru", key })
+                    .starts_with("Импорт из ")
             );
         }
     }

@@ -173,6 +173,8 @@ impl RunEvidence {
 
 #[cfg(test)]
 mod tests {
+    use super::RunEvidence;
+
     const SHA: &str = "1783e5db6458451a3ce30f16b8b64f87a8e148cf";
 
     fn run_page(run_id: u64, status: &str) -> String {

@@ -1,4 +1,5 @@
 //! Legacy vault import and authenticated epoch reconciliation.
+use super::super::identity_dek_grant::IdentityVaultGrantReconciliation;
 use super::*;
 #[cfg(test)]
 use crate::IdentityVaultBinding;
@@ -58,7 +59,7 @@ impl IdentityRecord {
                 ));
             }
             if vault_dek.reconciliation_with(app_key, &authorized_members, &keys, &next_epoch)
-                == super::identity_dek_grant::IdentityVaultGrantReconciliation::Current
+                == IdentityVaultGrantReconciliation::Current
             {
                 return Ok(());
             }

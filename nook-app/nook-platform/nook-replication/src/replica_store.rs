@@ -537,7 +537,7 @@ mod tests {
 mod loom_tests {
     use std::panic;
 
-    use super::{ReplicaEventBytes, ReplicaInsertStatus, ReplicaStore};
+    use super::{ReplicaEventBytes, ReplicaEventWrite, ReplicaInsertStatus, ReplicaStore};
     use loom::sync::{Arc, Mutex};
     use loom::thread;
 
@@ -554,11 +554,11 @@ mod loom_tests {
                     Err(poisoned) => poisoned.into_inner(),
                 };
                 {
-                    let outcome = guard.put_event(ReplicaEventWrite {
+                    let outcome = std::mem::take(&mut *guard).put_event(ReplicaEventWrite {
                         event_id: 1_u8,
                         bytes: vec![1],
                     });
-                    guard = outcome.store;
+                    *guard = outcome.store;
                     outcome.status
                 }
             });
@@ -568,11 +568,11 @@ mod loom_tests {
                     Err(poisoned) => poisoned.into_inner(),
                 };
                 {
-                    let outcome = guard.put_event(ReplicaEventWrite {
+                    let outcome = std::mem::take(&mut *guard).put_event(ReplicaEventWrite {
                         event_id: 1_u8,
                         bytes: vec![2],
                     });
-                    guard = outcome.store;
+                    *guard = outcome.store;
                     outcome.status
                 }
             });

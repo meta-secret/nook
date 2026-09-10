@@ -26,7 +26,7 @@ impl WorkbenchCompletionCheck<'_> {
             "repos/meta-secret/nook-workbench/contents/issues/hive-isolated-agent-platform/{task_base}.md"
         );
         let incident = (DeliveryCommand {
-            repository: repository,
+            repository,
             arguments: &[
                 "api",
                 "-H",

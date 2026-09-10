@@ -175,10 +175,10 @@ mod tests {
             }
             Ok(())
         };
-        WorkbenchCheckout::git(&["init", "--initial-branch=main"])?;
+        git(&["init", "--initial-branch=main"])?;
         fs::write(origin.path().join("README.md"), "first\n")?;
-        WorkbenchCheckout::git(&["add", "README.md"])?;
-        WorkbenchCheckout::git(&[
+        git(&["add", "README.md"])?;
+        git(&[
             "-c",
             "user.name=Hive Test",
             "-c",
@@ -204,8 +204,8 @@ mod tests {
         assert_eq!(first, unchanged);
 
         fs::write(origin.path().join("README.md"), "second\n")?;
-        WorkbenchCheckout::git(&["add", "README.md"])?;
-        WorkbenchCheckout::git(&[
+        git(&["add", "README.md"])?;
+        git(&[
             "-c",
             "user.name=Hive Test",
             "-c",
@@ -247,7 +247,7 @@ mod tests {
             .status()?;
         assert!(status.success());
         let (before_zombies, _) = git_process_ids(repository.path())?;
-        super::git(
+        WorkbenchCheckout::git(
             repository.path(),
             WorkbenchCheckout::workbench_cleanup_arguments(),
         )

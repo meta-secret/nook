@@ -1,10 +1,10 @@
 //! Vault authorization rows derived from an identity's complete app-key roster.
 
 use super::identity::IdentityRecord;
-use super::multi_device::{AuthRecordIssuance, VaultKeys, VaultMember};
+use super::multi_device::{AuthRecordIssuance, VaultKeys};
 use crate::BuildMembersRecordsRequest;
 use crate::MemberLabelState;
-use crate::{MultiDeviceError, MultiDeviceResult, StoredSecretRecord};
+use crate::{MultiDeviceError, MultiDeviceResult, StoredSecretRecord, VaultMember};
 
 /// Authorize every member of an identity in a new Simple vault.
 /// Named values required by IdentityRecord::identity_vault_genesis_records.

@@ -37,7 +37,7 @@ impl DeliveryReadiness<'_> {
         let number = pull_request.number.to_string();
         let repository_state: GithubRepositoryIdentity = serde_json::from_str(
             &(DeliveryCommand {
-                repository: repository,
+                repository,
                 arguments: &["repo", "view", "--json", "nameWithOwner"],
             })
             .gh_output()
@@ -68,7 +68,7 @@ impl DeliveryReadiness<'_> {
             let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
             let review: GithubReviewResponse = serde_json::from_str(
                 &(DeliveryCommand {
-                    repository: repository,
+                    repository,
                     arguments: &references,
                 })
                 .gh_output()
@@ -101,7 +101,7 @@ impl DeliveryReadiness<'_> {
 
         let deployments: Vec<GithubDeployment> = serde_json::from_str(
             &(DeliveryCommand {
-                repository: repository,
+                repository,
                 arguments: &[
                     "api",
                     "-X",
@@ -123,7 +123,7 @@ impl DeliveryReadiness<'_> {
         for deployment_id in deployments.iter().map(|deployment| deployment.id) {
             let statuses: Vec<GithubDeploymentStatus> = serde_json::from_str(
                 &(DeliveryCommand {
-                    repository: repository,
+                    repository,
                     arguments: &[
                         "api",
                         "-X",
@@ -165,7 +165,7 @@ impl DeliveryReadiness<'_> {
             let arguments = DeliveryReadiness::feedback_api_arguments(&endpoint);
             let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
             let bodies = (DeliveryCommand {
-                repository: repository,
+                repository,
                 arguments: &references,
             })
             .gh_output()

@@ -84,7 +84,7 @@ impl Neo4jTaskStore {
             .filter(|digest| {
                 digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
             })
-            .hive_context("release id must be a sha256 digest")?;
+            .ok_or_else(|| crate::HiveError::message("release id must be a sha256 digest"))?;
         let release_id = format!("sha256:{digest}");
         let mut transaction = self.graph.start_txn().await?;
         let mut lock_rows = transaction
@@ -229,7 +229,7 @@ impl Neo4jTaskStore {
         let owning_repair_ids: Vec<String> = row.get("owning_repair_ids")?;
         let owning_repairs = owning_repair_ids
             .into_iter()
-            .map(TaskId::new)
+            .map(TaskId::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         let artifact_ids: Vec<String> = row.get("artifact_ids")?;
         let artifact_kinds: Vec<String> = row.get("artifact_kinds")?;

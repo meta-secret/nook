@@ -168,13 +168,10 @@ mod tests {
 
     use async_trait::async_trait;
 
-    use super::{
-        ClaimCompletion, ClaimStep, ClaimWindow, TaskClaim, WorkerCompletionMarker, WorkerShutdown,
-        WorkerStartup,
-    };
+    use super::{ClaimCompletion, ClaimStep, ClaimWindow, TaskClaim, WorkerStartup};
     use crate::model::{
         ActivityLease, AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
-        CompletionArtifact, EnqueueTask, LeaseToken, TaskActivity, TaskId,
+        EnqueueTask, LeaseToken, TaskActivity, TaskId,
     };
     use crate::store::TaskStore;
 

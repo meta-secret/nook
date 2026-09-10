@@ -13,6 +13,7 @@ use super::{
     SentinelGenesisShareDelivery,
 };
 use crate::MemberLabelState;
+use crate::VaultMember;
 use crate::{
     BuildMembersRecordsRequest, CreateSentinelRootShareRecordsForRecipientsRequest,
     SentinelShareEnvelope,
@@ -22,7 +23,7 @@ use crate::{
     SentinelParticipantCount, SentinelThreshold, StoreId,
 };
 use ed25519_dalek::{Signer, SigningKey};
-use multi_device::{VaultMember, VaultMetaRecord};
+use multi_device::VaultMetaRecord;
 
 use super::payload::{SentinelPayloadClassification, SentinelPayloadHeader};
 

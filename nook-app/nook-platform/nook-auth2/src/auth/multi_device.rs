@@ -3,7 +3,6 @@ use crate::{
     AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey, SecretId,
     SecretType, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
 };
-use crate::{VaultMember, VaultMetaState};
 use serde::{Deserialize, Serialize};
 
 mod access;

@@ -277,8 +277,6 @@ mod tests {
         );
         assert_eq!(ObservedAgent::presence_expires_at(i64::MAX - 1), i64::MAX);
     }
-    use crate::observer::ObserverCopy;
-
     #[test]
     fn observer_copy_preserves_english_and_russian_operator_meaning() {
         let english = ObserverCopy::for_locale("en-US");

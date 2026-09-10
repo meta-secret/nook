@@ -243,7 +243,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
         let task_id = TaskId::main_failure_task_id(task_base, run_id, run_attempt)?;
         if let crate::model::ActiveDelivery::Active(active_id) = store
             .active_delivery(crate::model::ActiveDeliveryQuery {
-                source_commit: source_commit,
+                source_commit,
                 kind: &crate::model::TaskKind::from("main-repair"),
             })
             .await?
@@ -467,8 +467,7 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::model::{
-        AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
-        LeaseToken, TaskId,
+        AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, EnqueueTask, LeaseToken, TaskId,
     };
     use crate::store::TaskStore;
 

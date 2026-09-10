@@ -1,6 +1,4 @@
 mod classification;
-use crate::observer::presentation::ObservedAlert;
-use crate::observer::presentation::ObservedTask;
 use axum::response;
 pub use classification::{ObservedTaskState, ObservedTaskTrigger};
 use std::collections::BTreeMap;
@@ -691,7 +689,7 @@ mod tests {
         async fn observer_task_view(
             &self,
             task_id: &str,
-            locale: &str,
+            _locale: &str,
         ) -> crate::HiveResult<super::TaskObservation> {
             match self {
                 Self::Ready if task_id == "task-1" => Ok(super::TaskObservation::Observed(
@@ -824,11 +822,14 @@ mod tests {
         async_fs::write(dashboard.join("index.html"), "Hive dashboard fixture").await?;
         let listener = async_net::TcpListener::bind("127.0.0.1:0").await?;
         let address = listener.local_addr()?;
-        let server = tokio::spawn(super::run_observer_on_listener(
-            FixtureStore::Ready,
-            listener,
-            dashboard,
-        ));
+        let server = tokio::spawn(
+            (super::BoundObserverServer {
+                store: FixtureStore::Ready,
+                listener,
+                dashboard,
+            })
+            .run_observer_on_listener(),
+        );
 
         let health = http_get(address, "/healthz").await?;
         assert!(health.starts_with("HTTP/1.1 204 No Content"));

@@ -279,9 +279,9 @@ impl<S: TaskStore> Worker<S> {
                     } = &result
                     {
                         return Ok(TaskDisposition::blocked_disposition(BlockerDisposition {
-                            task: task,
-                            summary: summary,
-                            blocker: blocker,
+                            task,
+                            summary,
+                            blocker,
                         }));
                     }
                     if let TerminalResult::Failed { summary, .. } = &result {
@@ -577,7 +577,6 @@ impl TaskDisposition {
 mod tests {
     use super::{
         BlockerDisposition, MAX_PERSISTED_RESULT_BYTES, TaskActivityStream, TaskDisposition,
-        TaskWorkspace,
     };
     use crate::model::{
         ActivityKind, AgentId, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact,
@@ -585,9 +584,6 @@ mod tests {
     };
     use crate::store::TaskStore;
     use crate::store::tests::{MemoryStore, task};
-    use std::fs;
-    use std::io;
-    use std::process;
     use tokio::sync::mpsc;
 
     #[test]

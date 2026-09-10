@@ -282,7 +282,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{HiveContext, HiveError};
+    use super::HiveError;
     use crate::codex;
     use std::env;
     use std::hint;

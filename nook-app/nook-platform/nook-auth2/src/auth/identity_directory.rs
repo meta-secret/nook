@@ -2,7 +2,7 @@
 mod enrollment;
 mod recovery;
 pub use crate::MemberLabelState;
-use recovery::RecoveryRetirement;
+pub use recovery::RecoveryRetirement;
 
 /// Membership of an admitted app key in the local identity directory.
 #[derive(Debug, Clone, PartialEq, Eq)]

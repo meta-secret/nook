@@ -184,8 +184,8 @@ pub(crate) mod tests {
             request: crate::model::ActiveDeliveryQuery<'_>,
         ) -> crate::HiveResult<crate::model::ActiveDelivery> {
             let crate::model::ActiveDeliveryQuery {
-                source_commit: source_commit,
-                kind: kind,
+                source_commit,
+                kind,
             } = request;
             Ok(self
                 .tasks

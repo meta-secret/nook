@@ -153,7 +153,7 @@ impl MainRepairDelivery<'_> {
     .hive_context("GitHub returned invalid Hive pull request state")?;
         let pull_request = (DeliveryGenerationSelection {
             pull_requests: &pull_requests,
-            branch: branch,
+            branch,
         })
         .latest_delivery_generation()?
         .require_delivery("Hive repair delivery is incomplete: no pull request generation exists")?
