@@ -211,7 +211,7 @@ test('rejects duplicate documents and nonmonotonic source lines', () => {
     .decodeRequest()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect(value).toBeUndefined();
       },
       (outcome) => {
         expect(outcome).toHaveProperty(
@@ -241,7 +241,7 @@ test('rejects duplicate documents and nonmonotonic source lines', () => {
     .decodeRequest()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect(value).toBeUndefined();
       },
       (outcome) => {
         expect(outcome).toHaveProperty(
@@ -291,7 +291,7 @@ test('bounds heading diagnostic details', () => {
     .decodeRequest()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect(value).toBeUndefined();
       },
       (outcome) => {
         expect(outcome).toHaveProperty(
@@ -344,7 +344,7 @@ test('bounds paths, source lines, codes, and finding messages', () => {
     .decodeRequest()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect(value).toBeUndefined();
       },
       (outcome) => {
         expect(outcome).toHaveProperty(
@@ -365,7 +365,7 @@ test('rejects control characters in request and result paths', () => {
       .decodeRequest()
       .match(
         (value) => {
-          expect(value).toEqual(void 0);
+          expect(value).toBeUndefined();
         },
         (outcome) => {
           expect(outcome).toHaveProperty(
@@ -384,7 +384,7 @@ test('rejects control characters in request and result paths', () => {
       .decodeResult()
       .match(
         (value) => {
-          expect(value).toEqual(void 0);
+          expect(value).toBeUndefined();
         },
         (outcome) => {
           expect(outcome).toHaveProperty(
@@ -402,7 +402,7 @@ test('enforces serialized request and result byte limits', () => {
     .decodeRequest()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect(value).toBeUndefined();
       },
       (outcome) => {
         expect(outcome).toHaveProperty(
@@ -416,7 +416,7 @@ test('enforces serialized request and result byte limits', () => {
     .decodeResult()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect(value).toBeUndefined();
       },
       (outcome) => {
         expect(outcome).toHaveProperty(
@@ -447,7 +447,7 @@ test('rejects requests whose possible findings exceed result capacity', () => {
     .decodeRequest()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect(value).toBeUndefined();
       },
       (outcome) => {
         expect(outcome).toHaveProperty(
