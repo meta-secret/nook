@@ -321,6 +321,11 @@ mod tests {
         pub(super) event_id: EventId,
     }
 
+    pub(super) struct ProjectionGraphInsert {
+        pub(super) graph: EventGraph,
+        pub(super) event: VaultEvent,
+    }
+
     use super::*;
     use crate::PasswordEnvelope;
     use crate::event::{
@@ -328,7 +333,7 @@ mod tests {
         VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
-    use crate::{EventResult, GenesisImportRequest, SecretFingerprint};
+    use crate::{EventGraphRejection, EventResult, GenesisImportRequest, SecretFingerprint};
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
     use nook_auth2::{IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretId, Sha256Hex};
@@ -338,6 +343,17 @@ mod tests {
     pub(super) struct ProjectionFixtures;
 
     impl ProjectionFixtures {
+        pub(super) fn insert(request: ProjectionGraphInsert) -> EventResult<EventGraph> {
+            let ProjectionGraphInsert { graph, event } = request;
+            graph
+                .insert(crate::EventGraphInsert {
+                    event,
+                    expected_store_id: STORE,
+                })
+                .map(|inserted| inserted.graph)
+                .map_err(EventGraphRejection::into_cause)
+        }
+
         pub(super) fn ts(value: &str) -> IsoTimestamp {
             IsoTimestamp::from_trusted(value.to_owned())
         }
@@ -427,19 +443,7 @@ mod tests {
                 signing_key,
             })?;
             let id = event.id()?;
-            match graph.insert(crate::EventGraphInsert {
-                event,
-                expected_store_id: STORE,
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?;
+            graph = Self::insert(ProjectionGraphInsert { graph, event })?;
             Ok(FixtureGraphEvent {
                 graph,
                 event_id: id,
@@ -497,32 +501,8 @@ mod tests {
             "secret_bbbbbbbbbbb",
             &signing_key,
         )?;
-        match graph.insert(crate::EventGraphInsert {
-            event: a,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
-            event: b,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: a })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: b })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert_eq!(projection.live_secrets(&graph).len(), 2);
@@ -545,50 +525,14 @@ mod tests {
             &signing_key,
         )?;
         let base_id = base.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: base,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: base })?;
 
         let r1 =
             ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")?;
         let r2 =
             ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newbbbbbbb")?;
-        match graph.insert(crate::EventGraphInsert {
-            event: r1,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
-            event: r2,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: r1 })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: r2 })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert_eq!(projection.live_secrets(&graph).len(), 2);
@@ -601,6 +545,53 @@ mod tests {
     }
 
     #[test]
+    fn causally_ordered_replacements_do_not_create_a_conflict() -> EventResult<()> {
+        let signing_key = key();
+        let prepared = ProjectionFixtures::genesis(EventGraph::new(), &signing_key)?;
+        let base = ProjectionFixtures::secret_created(
+            vec![prepared.event_id],
+            "secret_original1",
+            &signing_key,
+        )?;
+        let base_id = base.id()?;
+        let graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph: prepared.graph,
+            event: base,
+        })?;
+
+        let first =
+            ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")?;
+        let first_id = first.id()?;
+        let graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: first,
+        })?;
+        let second =
+            ProjectionFixtures::replacement_event(&signing_key, &first_id, "secret_newbbbbbbb")?;
+        let graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: second,
+        })?;
+
+        let projection = VaultProjection::from_graph(&graph, STORE)?;
+        assert!(projection.replacement_conflicts.is_empty());
+        assert!(!projection.has_blocking_conflicts());
+        Ok(())
+    }
+
+    #[test]
+    fn projection_rejects_a_different_store_identity() -> EventResult<()> {
+        let signing_key = key();
+        let prepared = ProjectionFixtures::genesis(EventGraph::new(), &signing_key)?;
+
+        assert!(matches!(
+            VaultProjection::from_graph(&prepared.graph, "store_otherid0001"),
+            Err(EventError::ProjectionStoreMismatch)
+        ));
+        Ok(())
+    }
+
+    #[test]
     fn projection_is_replay_invariant() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
@@ -609,40 +600,22 @@ mod tests {
             graph = prepared.graph;
             prepared.event_id
         };
-        match graph.insert(crate::EventGraphInsert {
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: ProjectionFixtures::secret_created(
                 vec![genesis_id.clone()],
                 "secret_aaaaaaaaaaa",
                 &signing_key,
             )?,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
+        })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: ProjectionFixtures::secret_created(
                 vec![genesis_id],
                 "secret_bbbbbbbbbbb",
                 &signing_key,
             )?,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        })?;
         VaultProjection::assert_replay_invariant(&graph, STORE)?;
         Ok(())
     }
@@ -662,50 +635,14 @@ mod tests {
             &signing_key,
         )?;
         let base_id = base.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: base,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: base })?;
 
         let r1 =
             ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")?;
         let r2 =
             ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newbbbbbbb")?;
-        match graph.insert(crate::EventGraphInsert {
-            event: r1,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
-            event: r2,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: r1 })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: r2 })?;
 
         let resolve_body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
@@ -722,19 +659,10 @@ mod tests {
             }],
         };
         let resolved = VaultEvent::sign(resolve_body, &signing_key)?;
-        match graph.insert(crate::EventGraphInsert {
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: resolved,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(!projection.has_blocking_conflicts());
@@ -759,19 +687,10 @@ mod tests {
             &signing_key,
         )?;
         let created_id = created.id()?;
-        match graph.insert(crate::EventGraphInsert {
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: created,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        })?;
 
         let delete_body = |parents: Vec<EventId>| -> EventResult<VaultEventBody> {
             Ok(VaultEventBody {
@@ -790,32 +709,8 @@ mod tests {
 
         let d1 = VaultEvent::sign(delete_body(vec![created_id.clone()])?, &signing_key)?;
         let d2 = VaultEvent::sign(delete_body(vec![created_id])?, &signing_key)?;
-        match graph.insert(crate::EventGraphInsert {
-            event: d1,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
-            event: d2,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: d1 })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: d2 })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(projection.live_secrets(&graph).is_empty());
@@ -843,32 +738,14 @@ mod tests {
                 entry_id: PasswordEntryId::parse("pwdentry001")?,
             },
         )?;
-        match graph.insert(crate::EventGraphInsert {
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: mutation,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
+        })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: rotation,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(projection.has_blocking_conflicts());
@@ -905,45 +782,9 @@ mod tests {
             "secret_forkcccccc",
             &signing_key,
         )?;
-        match graph.insert(crate::EventGraphInsert {
-            event: a,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
-            event: b,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
-            event: c,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: a })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: b })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: c })?;
 
         VaultProjection::assert_replay_invariant(&graph, STORE)?;
         let projection = VaultProjection::from_graph(&graph, STORE)?;

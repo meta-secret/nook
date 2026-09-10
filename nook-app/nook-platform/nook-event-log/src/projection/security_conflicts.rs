@@ -35,7 +35,7 @@ impl VaultProjection {
 }
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{ProjectionFixtures, STORE};
+    use super::super::tests::{ProjectionFixtures, ProjectionGraphInsert, STORE};
     use super::*;
     use crate::event::{VaultEvent, VaultEventBody, VaultEventSchemaVersion};
     use crate::test_support::{actor, public_key, signing_key as key, store};
@@ -70,32 +70,14 @@ mod tests {
                 envelope: ProjectionFixtures::password_envelope_fixture("x"),
             },
         )?;
-        match graph.insert(crate::EventGraphInsert {
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: revoke,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
+        })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: rotate,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(!projection.security_conflicts.is_empty());
@@ -130,32 +112,14 @@ mod tests {
                 device_id: DeviceId::parse("fedcba9876543210")?,
             },
         )?;
-        match graph.insert(crate::EventGraphInsert {
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: grant,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
+        })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: revoke,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(projection.has_blocking_conflicts());
@@ -215,45 +179,18 @@ mod tests {
             &owner_key,
         )?;
         let checkpoint_id = checkpoint.id()?;
-        match graph.insert(crate::EventGraphInsert {
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: request,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
+        })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: rotation,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        match graph.insert(crate::EventGraphInsert {
+        })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
             event: checkpoint,
-            expected_store_id: STORE,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(projection.security_conflicts.is_empty());
