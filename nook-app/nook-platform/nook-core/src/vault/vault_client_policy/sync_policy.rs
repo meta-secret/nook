@@ -84,30 +84,30 @@ impl VaultClientPolicy {
     pub const fn unauthenticated_sync_decision(
         request: crate::UnauthenticatedSyncDecisionRequest,
     ) -> UnauthenticatedSyncDecision {
-        if !matches!(request.changed, crate::VaultSyncChange::Changed) {
-            return UnauthenticatedSyncDecision::Ignore;
-        }
-        match (
-            request.access_status,
-            request.join_state,
-            request.awaiting_join_approval,
-        ) {
-            (
-                VaultAccessObservation::Available(VaultAccessStatus::Ready),
-                JoinEnrollmentState::Pending,
-                _,
-            ) => UnauthenticatedSyncDecision::Approved,
-            (
-                VaultAccessObservation::Available(VaultAccessStatus::Ready),
-                _,
-                crate::VaultJoinApprovalWait::Waiting,
-            ) => UnauthenticatedSyncDecision::AutoConnect,
-            (
-                VaultAccessObservation::Available(VaultAccessStatus::JoinPending),
-                JoinEnrollmentState::None,
-                _,
-            ) => UnauthenticatedSyncDecision::MarkJoinPending,
-            _ => UnauthenticatedSyncDecision::Ignore,
+        match request.changed {
+            crate::VaultSyncChange::Unchanged => UnauthenticatedSyncDecision::Ignore,
+            crate::VaultSyncChange::Changed => match (
+                request.access_status,
+                request.join_state,
+                request.awaiting_join_approval,
+            ) {
+                (
+                    VaultAccessObservation::Available(VaultAccessStatus::Ready),
+                    JoinEnrollmentState::Pending,
+                    _,
+                ) => UnauthenticatedSyncDecision::Approved,
+                (
+                    VaultAccessObservation::Available(VaultAccessStatus::Ready),
+                    _,
+                    crate::VaultJoinApprovalWait::Waiting,
+                ) => UnauthenticatedSyncDecision::AutoConnect,
+                (
+                    VaultAccessObservation::Available(VaultAccessStatus::JoinPending),
+                    JoinEnrollmentState::None,
+                    _,
+                ) => UnauthenticatedSyncDecision::MarkJoinPending,
+                _ => UnauthenticatedSyncDecision::Ignore,
+            },
         }
     }
 
@@ -137,27 +137,26 @@ impl VaultClientPolicy {
     pub const fn vault_sync_timer_start_decision(
         request: crate::VaultSyncTimerStartDecisionRequest,
     ) -> VaultSyncTimerStartDecision {
-        if matches!(
-            request.authenticated,
-            crate::VaultAuthenticationState::Authenticated
-        ) && !matches!(
-            request.device_protection_ready,
-            crate::DeviceProtectionReadiness::Ready
-        ) {
-            return VaultSyncTimerStartDecision::SkipDeviceProtectionLocked;
-        }
-        if matches!(
-            request.authenticated,
-            crate::VaultAuthenticationState::Authenticated
-        ) || !matches!(request.join_state, JoinEnrollmentState::None)
-            || matches!(
-                request.awaiting_join_approval,
-                crate::VaultJoinApprovalWait::Waiting
-            )
-        {
-            VaultSyncTimerStartDecision::Start
-        } else {
-            VaultSyncTimerStartDecision::SkipNoRemoteUpdates
+        match request.authenticated {
+            crate::VaultAuthenticationState::Authenticated => match request.device_protection_ready
+            {
+                crate::DeviceProtectionReadiness::Locked => {
+                    VaultSyncTimerStartDecision::SkipDeviceProtectionLocked
+                }
+                crate::DeviceProtectionReadiness::Ready => VaultSyncTimerStartDecision::Start,
+            },
+            crate::VaultAuthenticationState::Unauthenticated => {
+                if !matches!(request.join_state, JoinEnrollmentState::None)
+                    || matches!(
+                        request.awaiting_join_approval,
+                        crate::VaultJoinApprovalWait::Waiting
+                    )
+                {
+                    VaultSyncTimerStartDecision::Start
+                } else {
+                    VaultSyncTimerStartDecision::SkipNoRemoteUpdates
+                }
+            }
         }
     }
 
@@ -170,68 +169,93 @@ impl VaultClientPolicy {
             || matches!(request.syncing, crate::VaultSyncActivity::Syncing)
             || matches!(request.password_busy, crate::VaultPasswordActivity::Busy)
         {
-            return VaultSyncTimerTickDecision::SkipBusy;
+            VaultSyncTimerTickDecision::SkipBusy
+        } else {
+            request.idle_target_decision()
         }
-        if !matches!(
-            request.authenticated,
-            crate::VaultAuthenticationState::Authenticated
-        ) && matches!(request.join_state, JoinEnrollmentState::None)
-            && !matches!(
-                request.awaiting_join_approval,
-                crate::VaultJoinApprovalWait::Waiting
-            )
-        {
-            return VaultSyncTimerTickDecision::SkipNoRemoteUpdates;
-        }
-        if matches!(
-            request.authenticated,
-            crate::VaultAuthenticationState::Authenticated
-        ) && request.sync_provider_count.is_zero()
-            && matches!(request.join_state, JoinEnrollmentState::None)
-        {
-            return VaultSyncTimerTickDecision::SkipLocalOnly;
-        }
-        VaultSyncTimerTickDecision::Sync
     }
 
     #[must_use]
     pub const fn vault_storage_sync_decision(
         request: crate::VaultStorageSyncDecisionRequest,
     ) -> VaultStorageSyncDecision {
-        let forced = matches!(request.freshness, ProviderSyncFreshness::Forced);
-        if matches!(request.sync_blocked, crate::VaultSyncPermission::Blocked)
-            || (!forced
-                && (matches!(request.verifying, crate::VaultVerificationState::Verifying)
-                    || matches!(request.saving, crate::VaultSaveActivity::Saving)
-                    || matches!(request.password_busy, crate::VaultPasswordActivity::Busy)
-                    || matches!(request.syncing, crate::VaultSyncActivity::Syncing)))
+        match request.sync_blocked {
+            crate::VaultSyncPermission::Blocked => VaultStorageSyncDecision::Skip,
+            crate::VaultSyncPermission::Allowed => request.allowed_sync_decision(),
+        }
+    }
+}
+
+impl crate::VaultSyncTimerTickDecisionRequest {
+    const fn idle_target_decision(self) -> VaultSyncTimerTickDecision {
+        match self.authenticated {
+            crate::VaultAuthenticationState::Unauthenticated => {
+                if matches!(self.join_state, JoinEnrollmentState::None)
+                    && !matches!(
+                        self.awaiting_join_approval,
+                        crate::VaultJoinApprovalWait::Waiting
+                    )
+                {
+                    VaultSyncTimerTickDecision::SkipNoRemoteUpdates
+                } else {
+                    VaultSyncTimerTickDecision::Sync
+                }
+            }
+            crate::VaultAuthenticationState::Authenticated => {
+                if self.sync_provider_count.is_zero()
+                    && matches!(self.join_state, JoinEnrollmentState::None)
+                {
+                    VaultSyncTimerTickDecision::SkipLocalOnly
+                } else {
+                    VaultSyncTimerTickDecision::Sync
+                }
+            }
+        }
+    }
+}
+
+impl crate::VaultStorageSyncDecisionRequest {
+    const fn allowed_sync_decision(self) -> VaultStorageSyncDecision {
+        if !matches!(self.freshness, ProviderSyncFreshness::Forced)
+            && (matches!(self.verifying, crate::VaultVerificationState::Verifying)
+                || matches!(self.saving, crate::VaultSaveActivity::Saving)
+                || matches!(self.password_busy, crate::VaultPasswordActivity::Busy)
+                || matches!(self.syncing, crate::VaultSyncActivity::Syncing))
         {
-            return VaultStorageSyncDecision::Skip;
+            VaultStorageSyncDecision::Skip
+        } else {
+            self.storage_target_decision()
         }
-        if !matches!(
-            request.authenticated,
-            crate::VaultAuthenticationState::Authenticated
-        ) && request.sync_provider_count.is_nonzero()
-        {
-            return VaultStorageSyncDecision::SyncFirstProviderUnauthenticated;
+    }
+
+    const fn storage_target_decision(self) -> VaultStorageSyncDecision {
+        match self.authenticated {
+            crate::VaultAuthenticationState::Unauthenticated
+                if self.sync_provider_count.is_nonzero() =>
+            {
+                VaultStorageSyncDecision::SyncFirstProviderUnauthenticated
+            }
+            crate::VaultAuthenticationState::Unauthenticated
+            | crate::VaultAuthenticationState::Authenticated => self.credential_target_decision(),
         }
-        if !matches!(
-            request.has_remote_credentials,
-            crate::RemoteVaultCredentialPresence::Present
-        ) {
-            return VaultStorageSyncDecision::Skip;
+    }
+
+    const fn credential_target_decision(self) -> VaultStorageSyncDecision {
+        match self.has_remote_credentials {
+            crate::RemoteVaultCredentialPresence::Absent => VaultStorageSyncDecision::Skip,
+            crate::RemoteVaultCredentialPresence::Present => {
+                if matches!(
+                    self.authenticated,
+                    crate::VaultAuthenticationState::Authenticated
+                ) && matches!(self.local_vault_present, crate::LocalVaultPresence::Present)
+                    && self.sync_provider_count.is_nonzero()
+                {
+                    VaultStorageSyncDecision::SyncProviders
+                } else {
+                    VaultStorageSyncDecision::SyncConfiguredStorage
+                }
+            }
         }
-        if matches!(
-            request.authenticated,
-            crate::VaultAuthenticationState::Authenticated
-        ) && matches!(
-            request.local_vault_present,
-            crate::LocalVaultPresence::Present
-        ) && request.sync_provider_count.is_nonzero()
-        {
-            return VaultStorageSyncDecision::SyncProviders;
-        }
-        VaultStorageSyncDecision::SyncConfiguredStorage
     }
 }
 

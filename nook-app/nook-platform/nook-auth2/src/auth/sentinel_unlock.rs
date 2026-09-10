@@ -248,14 +248,16 @@ impl SentinelUnlockSession {
         mut self,
         response: SentinelUnlockResponse,
     ) -> Result<Self, SentinelUnlockRejection> {
-        if let Err(error) = self.validate_response(&response) {
-            return Err(SentinelUnlockRejection {
+        match self.validate_response(&response) {
+            Ok(()) => {
+                self.responses.push(response);
+                Ok(self)
+            }
+            Err(error) => Err(SentinelUnlockRejection {
                 session: Box::new(self),
                 error,
-            });
+            }),
         }
-        self.responses.push(response);
-        Ok(self)
     }
 
     fn validate_response(&self, response: &SentinelUnlockResponse) -> MultiDeviceResult<()> {
@@ -268,27 +270,28 @@ impl SentinelUnlockSession {
                     == response.participant_signing_public_key
                 || existing.share_index == response.share_index
         }) {
-            return Err(MultiDeviceError::DuplicateSentinelUnlockParticipant {
+            Err(MultiDeviceError::DuplicateSentinelUnlockParticipant {
                 device_id: response.participant_device_id.to_string(),
-            });
+            })
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     pub fn into_quorum(
         self,
         requester_identity: &DeviceIdentity,
     ) -> Result<SentinelUnlockQuorum<'_>, SentinelUnlockRejection> {
-        if let Err(error) = self.validate_quorum_identity(requester_identity) {
-            return Err(SentinelUnlockRejection {
+        match self.validate_quorum_identity(requester_identity) {
+            Ok(()) => Ok(SentinelUnlockQuorum {
+                session: self,
+                requester_identity,
+            }),
+            Err(error) => Err(SentinelUnlockRejection {
                 session: Box::new(self),
                 error,
-            });
+            }),
         }
-        Ok(SentinelUnlockQuorum {
-            session: self,
-            requester_identity,
-        })
     }
 
     fn validate_quorum_identity(
@@ -299,15 +302,15 @@ impl SentinelUnlockSession {
         if requester_identity.device_id() != &self.request.requester_device_id
             || requester_identity.public_key() != self.request.requester_encryption_public_key
         {
-            return Err(MultiDeviceError::SentinelUnlockRecipientMismatch);
-        }
-        if self.responses.len() < usize::from(u8::from(self.request.policy.threshold)) {
-            return Err(MultiDeviceError::NotEnoughSentinelShares {
+            Err(MultiDeviceError::SentinelUnlockRecipientMismatch)
+        } else if self.responses.len() < usize::from(u8::from(self.request.policy.threshold)) {
+            Err(MultiDeviceError::NotEnoughSentinelShares {
                 threshold: self.request.policy.threshold,
                 available: self.responses.len().into(),
-            });
+            })
+        } else {
+            Ok(())
         }
-        Ok(())
     }
     #[must_use]
     pub fn status(&self) -> SentinelUnlockStatus {
@@ -333,9 +336,10 @@ impl<'a> SentinelUnlockQuorum<'a> {
         policy: SentinelUnlockPolicy,
     ) -> MultiDeviceResult<ContextBoundSentinelUnlock<'a>> {
         if &self.session.request.store_id != store_id || self.session.request.policy != policy {
-            return Err(MultiDeviceError::InvalidSentinelUnlockSession);
+            Err(MultiDeviceError::InvalidSentinelUnlockSession)
+        } else {
+            Ok(ContextBoundSentinelUnlock { quorum: self })
         }
-        Ok(ContextBoundSentinelUnlock { quorum: self })
     }
 }
 

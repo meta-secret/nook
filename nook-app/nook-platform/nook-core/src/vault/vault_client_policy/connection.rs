@@ -182,9 +182,10 @@ impl VaultClientPolicy {
                 ActiveVaultStore::Selected(active) if active.trim() == requested_store_id
             )
         {
-            return VaultSwitchDecision::NoChange;
+            VaultSwitchDecision::NoChange
+        } else {
+            VaultSwitchDecision::SwitchTo(requested_store_id.to_owned())
         }
-        VaultSwitchDecision::SwitchTo(requested_store_id.to_owned())
     }
 }
 
