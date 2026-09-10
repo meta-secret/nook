@@ -182,14 +182,10 @@ where
 
     #[must_use]
     pub fn dequeue_outbox(mut self, request: &ReplicaOutboxRemoval<'_, Id>) -> ReplicaDequeue<Id> {
-        let ReplicaOutboxRemoval {
-            provider_id,
-            event_id,
-        } = request;
         let bytes = self
             .outbox
-            .get_mut(provider_id)
-            .and_then(|entries| entries.remove(event_id));
+            .get_mut(request.provider_id)
+            .and_then(|entries| entries.remove(request.event_id));
         let removal = match bytes {
             Some(bytes) => ReplicaOutboxRemovalResult::Removed(bytes),
             None => ReplicaOutboxRemovalResult::NotQueued,
