@@ -2,25 +2,18 @@ import { GitHubActionEvidence } from '../src/lib/agent-stats-github.ts';
 import { GitHubReviewEvidence } from '../src/lib/agent-stats-github-review-evidence.ts';
 import assert from 'node:assert/strict';
 import { describe, expect, test } from 'bun:test';
-
 import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
-
 import {
   type BuildActionsEvidenceRequest,
   type BuildReviewEvidenceRequest,
 } from '../src/lib/agent-stats-github.ts';
-
 import { ReviewedDeliveryHistory } from '../src/lib/agent-stats-github-delivery.ts';
-
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
-
 export class AgentStatsGithubScenario {
   private constructor(private readonly request: ActionRunFixture) {}
-
   static actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
     return new AgentStatsGithubScenario(fixture).execute();
   }
-
   private execute(): UntrustedYamlNode {
     const fixture = this.request;
     const [defaulted1 = 'PR'] = [fixture.workflow];
@@ -44,7 +37,6 @@ export class AgentStatsGithubScenario {
         fixture.validationRequested === false ? 'false' : 'true',
     };
   }
-
   static actionPages(fixtures: readonly ActionRunFixture[]): UntrustedYamlNode {
     return UntrustedYamlBoundary.fromHost([
       {
@@ -53,18 +45,13 @@ export class AgentStatsGithubScenario {
       },
     ]);
   }
-
   static yamlPages(items: readonly UntrustedYamlNode[]): UntrustedYamlNode {
     return UntrustedYamlBoundary.fromHost([items]);
   }
 }
-
 const firstHead = '1111111111111111111111111111111111111111';
-
 const finalHead = '2222222222222222222222222222222222222222';
-
 const thirdHead = '3333333333333333333333333333333333333333';
-
 describe('agent stats GitHub evidence', () => {
   test('groups validation by head and measures work after supersession', () => {
     const firstRun: ActionRunFixture = {
@@ -122,7 +109,6 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.runs).toHaveLength(4);
     expect(evidence.heads).toHaveLength(2);
     expect(evidence.validationCycles).toHaveLength(4);
@@ -131,7 +117,6 @@ describe('agent stats GitHub evidence', () => {
     expect(evidence.cancelledValidationSeconds).toBe(1080);
     expect(evidence.cancelledValidationCount).toBe(1);
   });
-
   test('uses delivery order when head timestamps tie', () => {
     const sharedTimestamp = '2026-08-01T10:00:00Z';
     const pages = AgentStatsGithubScenario.actionPages([
@@ -163,14 +148,12 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.heads.map((head) => head.head_sha)).toEqual([
       firstHead,
       finalHead,
     ]);
     expect(evidence.obsoleteValidationSeconds).toBe(600);
   });
-
   test('uses delivery order when an ancestor is observed after its successor', () => {
     const pages = AgentStatsGithubScenario.actionPages([
       {
@@ -198,14 +181,12 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.heads.map((head) => head.head_sha)).toEqual([
       firstHead,
       finalHead,
     ]);
     expect(evidence.obsoleteValidationSeconds).toBe(120);
   });
-
   test('uses the earliest observed descendant as the supersession boundary', () => {
     const pages = AgentStatsGithubScenario.actionPages([
       {
@@ -244,10 +225,8 @@ describe('agent stats GitHub evidence', () => {
     const firstCycle = evidence.validationCycles.find(
       (cycle) => cycle.head_sha === firstHead,
     );
-
     expect(firstCycle?.obsolete_seconds).toBe(1200);
   });
-
   test('keeps unsupported-label runs out of validation cycles', () => {
     const pages = AgentStatsGithubScenario.actionPages([
       {
@@ -271,11 +250,9 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(0);
   });
-
   test('ignores a same-branch run associated with another PR', () => {
     const sourceRun: ActionRunFixture = {
       id: 101,
@@ -316,7 +293,6 @@ describe('agent stats GitHub evidence', () => {
     const evidence = evidenceResult.value;
     expect(evidence.runs).toHaveLength(1);
   });
-
   test('retains branch-scoped runs whose PR association was cleared', () => {
     const pages = AgentStatsGithubScenario.actionPages([
       {
@@ -340,11 +316,9 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.runs[0]?.source_pr).toBe(42);
   });
-
   test('allows a final head with no applicable Actions workflow', () => {
     const pages = UntrustedYamlBoundary.fromHost([
       { total_count: 0, workflow_runs: [] },
@@ -360,14 +334,12 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.runs).toHaveLength(0);
     expect(evidence.heads).toHaveLength(1);
     expect(evidence.heads[0]?.head_sha).toBe(finalHead);
     expect(evidence.heads[0]?.first_observed_at).toBe('');
     expect(evidence.validationCycles).toHaveLength(0);
   });
-
   test('counts every repository validation workflow', () => {
     const rustRun: ActionRunFixture = {
       id: 201,
@@ -407,14 +379,12 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.validationCycles).toHaveLength(2);
     expect(evidence.validationCycles.map((cycle) => cycle.workflow)).toEqual([
       'Rust ecosystem checks',
       'Web research',
     ]);
   });
-
   test('keeps manual runs out of validation cycles', () => {
     const pages = AgentStatsGithubScenario.actionPages([
       {
@@ -439,11 +409,9 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(0);
   });
-
   test('excludes workflow attempts started after merge', () => {
     const deliveredRun: ActionRunFixture = {
       id: 301,
@@ -483,11 +451,9 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(1);
   });
-
   test('measures a rerun from its attempt-specific start', () => {
     const pages = AgentStatsGithubScenario.actionPages([
       {
@@ -508,15 +474,12 @@ describe('agent stats GitHub evidence', () => {
       reviewEvents: [],
       deliveryHeadOrder: [finalHead],
     };
-
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.runs[0]?.started_at).toBe('2026-08-01T10:00:00Z');
     expect(evidence.runs[0]?.duration_seconds).toBe(120);
   });
-
   test('includes queued time through the merge boundary', () => {
     const queuedRun: ActionRunFixture = {
       id: 401,
@@ -544,10 +507,8 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.runs[0]?.duration_seconds).toBe(600);
   });
-
   test('uses review-only heads to supersede running validation', () => {
     const oldHeadRun: ActionRunFixture = {
       id: 402,
@@ -579,11 +540,9 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.obsoleteValidationSeconds).toBe(600);
     expect(evidence.obsoleteValidationCount).toBe(1);
   });
-
   test('does not invent supersession without server evidence', () => {
     const oldHeadRun: ActionRunFixture = {
       id: 403,
@@ -610,7 +569,6 @@ describe('agent stats GitHub evidence', () => {
     const evidenceResult = new GitHubActionEvidence(request).build();
     assert(evidenceResult.isOk());
     const evidence = evidenceResult.value;
-
     expect(evidence.obsoleteValidationSeconds).toBe(0);
     expect(evidence.heads[1]?.head_sha).toBe(finalHead);
   });

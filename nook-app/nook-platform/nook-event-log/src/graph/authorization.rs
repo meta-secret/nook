@@ -198,10 +198,12 @@ impl EventGraph {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unused_assignments)]
+
     use super::*;
     use crate::event::{
-        EncryptedSecretPayload, GenesisImportPayload, SentinelShareIssuedPayload, VaultEvent,
-        VaultEventBody, VaultEventSchemaVersion, VaultOperation,
+        EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
+        VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key, store};
     use crate::{EventId, EventInsertStatus, EventResult, GenesisImportRequest};

@@ -86,6 +86,8 @@ impl EventGraph {
 }
 #[cfg(test)]
 mod tests {
+    #![allow(unused_assignments)]
+
     use super::super::tests::{
         STORE_STR, assert_self_approval_quarantined, genesis_event, signed_operation,
     };

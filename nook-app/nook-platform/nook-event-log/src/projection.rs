@@ -327,14 +327,11 @@ mod tests {
         VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
-    use crate::{
-        AgeArmoredCiphertext, DevicePublicKey, EventResult, GenesisImportRequest, MemberLabel,
-        SecretFingerprint,
-    };
+    use crate::{EventResult, GenesisImportRequest, SecretFingerprint};
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
     use nook_auth2::{
-        DeviceId, IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretId, Sha256Hex,
+        IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretId, Sha256Hex,
     };
 
     pub(super) const STORE: &str = "store_testtoken11";

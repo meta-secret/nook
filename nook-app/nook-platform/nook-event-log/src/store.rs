@@ -134,6 +134,8 @@ impl LocalEventStore {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unused_assignments)]
+
     use super::*;
     use crate::canonical::Ed25519Signature;
     use crate::event::{

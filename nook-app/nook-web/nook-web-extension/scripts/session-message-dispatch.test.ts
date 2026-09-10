@@ -14,7 +14,6 @@ import {
   parseExtensionSessionRequest,
 } from '../src/offscreen/session-request-adapter'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-
 function messagePayload(message: unknown): Record<string, unknown> {
   if (!message || typeof message !== 'object' || !('payload' in message)) {
     return {}
@@ -24,11 +23,9 @@ function messagePayload(message: unknown): Record<string, unknown> {
     ? (payload as Record<string, unknown>)
     : {}
 }
-
 async function decodeProviders(providers: StorageProvider[]) {
   return structuredClone(providers)
 }
-
 describe('ExtensionSessionMessageDispatcher', () => {
   test('routes grant authority through runtime ingress and the owned queue', async () => {
     type RuntimeListener = Parameters<
@@ -153,7 +150,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(stagedPayloads).toHaveLength(1)
     expect(stagedPayloads[0].stored_json).toBe('')
   })
-
   test('accepts explicit default queue state for control commands', async () => {
     for (const type of [
       ExtensionSessionMessageType.MigrateAuthProviders,
@@ -168,7 +164,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
       expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     }
   })
-
   test('rejects payloadless control commands at browser ingress', async () => {
     const message = {
       type: ExtensionSessionMessageType.Status,
@@ -176,7 +171,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const parse = await parseExtensionSessionRequest(message)
     expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
   })
-
   test('rejects malformed backup codes without normalizing them into an empty replacement', async () => {
     const payload = {
       origin: 'https://example.com',
@@ -190,11 +184,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
       type: ExtensionSessionMessageType.AuthenticatorBackupAttach,
       payload,
     })
-
     expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
     expect(payload.codes).toEqual([])
   })
-
   test('rejects malformed provider and event-log elements at Rust ingress', async () => {
     const grant = {
       vaultStoreId: 'vault',
@@ -214,7 +206,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(malformedProvider.kind).toBe(
       ExtensionSessionRequestParseKind.Invalid,
     )
-
     const malformedEvent = await parseExtensionSessionRequest({
       type: ExtensionSessionMessageType.UpdateVault,
       payload: {
@@ -225,7 +216,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     expect(malformedEvent.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
   })
-
   test('accepts complete vault events at Rust ingress', async () => {
     const message = {
       type: ExtensionSessionMessageType.UpdateVault,
@@ -257,7 +247,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const parse = await parseExtensionSessionRequest(message)
     expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
   })
-
   test('validates a credential-safe provider identity without discarding metadata', async () => {
     const provider = {
       id: 'github',
@@ -282,9 +271,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-
     const parse = await parseExtensionSessionRequest(message)
-
     expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parse.kind !== ExtensionSessionRequestParseKind.Parsed) return
     const stagedProvider = parse.request.payload.providers[0] as StorageProvider
@@ -295,7 +282,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     expect(provider.githubPat).toEqual({ state: 'missing' })
   })
-
   test('stages sensitive fields and clears the caller-owned payload', async () => {
     const payload: Record<string, unknown> = {
       pin: '123456',
@@ -320,16 +306,13 @@ describe('ExtensionSessionMessageDispatcher', () => {
           pin: messagePayload(message).pin,
         }),
     })
-
     const response = dispatcher.enqueue({
       type: ExtensionSessionMessageType.CreatePin,
       payload,
     })
-
     expect(payload.pin).toBe('')
     await expect(response).resolves.toEqual(ok({ pin: '123456' }))
   })
-
   test('stages browser-owned secrets before awaiting cold WASM', async () => {
     const payload = {
       vaultStoreId: 'vault',
@@ -345,7 +328,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
       type: ExtensionSessionMessageType.PlanLoginSave,
       payload,
     })
-
     expect(payload.username).toBe('')
     expect(payload.password).toBe('')
     const parsed = await parsing
@@ -355,7 +337,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
       expect(messagePayload(parsed.request).password).toBe('password')
     }
   })
-
   test('rejects a missing queue before staging and clears browser-owned secrets', async () => {
     const payload = {
       vaultStoreId: 'vault',
@@ -366,17 +347,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
       username: 'alice',
       password: 'password',
     }
-
     const parsed = await parseExtensionSessionRequest({
       type: ExtensionSessionMessageType.PlanLoginSave,
       payload,
     })
-
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
     expect(payload.username).toBe('')
     expect(payload.password).toBe('')
   })
-
   test('stages passkey request JSON before awaiting cold WASM', async () => {
     for (const type of [
       ExtensionSessionMessageType.RegisterPasskey,
@@ -396,7 +374,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
         },
       }
       const parsing = parseExtensionSessionRequest({ type, payload })
-
       expect(payload.requestJson).toBe('')
       const parsed = await parsing
       expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
@@ -407,7 +384,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
       }
     }
   })
-
   test('rejects an expired request before WASM validation and clears secrets', async () => {
     const payload = {
       vaultStoreId: 'vault',

@@ -1,4 +1,4 @@
-use crate::{
+use nook_auth2::{
     DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
     IdentityVaultKeyOpening,
 };

@@ -15,29 +15,24 @@ import {
   type PasswordFormObservation,
   passwordFormInteraction as forms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-
 const wholeDocumentPasswordFormSubmission: Parameters<
   typeof forms.submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
-
 function didSubmit(
   request: Parameters<typeof forms.submitLoginForm>[0],
 ): boolean {
   return forms.submitLoginForm(request) === FormSubmissionResult.Submitted
 }
-
 function ownedFormId(observation: PasswordFormObservation): string {
   return observation.formScope.kind === PasswordFormScopeKind.Owned
     ? observation.formScope.owner.id
     : ''
 }
-
 function observedAuthenticationWorkflow(): PasswordFormObservation {
   const observation = forms.summarizeAuthenticationWorkflowForms()[0]
   if (!observation) throw new Error('expected an authentication workflow')
   return observation
 }
-
 function classifiedObservedAuthenticationWorkflow(): AuthenticationWorkflowClassification['observations'][number] {
   const classified = new AuthenticationWorkflowClassification({
     workflowForms: [observedAuthenticationWorkflow()],
@@ -47,7 +42,6 @@ function classifiedObservedAuthenticationWorkflow(): AuthenticationWorkflowClass
   if (!classified) throw new Error('expected an approved workflow')
   return classified
 }
-
 function approvedWorkflowDisposition(
   approved: AuthenticationWorkflowClassification['observations'][number],
 ): LiveAuthenticationWorkflowDisposition {

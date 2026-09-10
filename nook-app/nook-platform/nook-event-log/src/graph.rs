@@ -310,6 +310,8 @@ impl EventGraph {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unused_assignments)]
+
     use super::*;
     use crate::event::{
         EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
