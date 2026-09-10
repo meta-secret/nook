@@ -51,25 +51,24 @@ pub enum ProviderCredentialOpening {
 }
 impl PreparedProviderCredentials {
     fn opening_evidence(&self, provider: &StorageProviderData) -> ProviderCredentialOpening {
-        let oauth = provider.oauth_file.as_ref();
-        let pairs = [
-            (provider.github_pat.as_deref(), self.github.as_ref()),
-            (
-                oauth.and_then(|oauth| oauth.access_token.as_deref()),
-                self.access.as_ref(),
-            ),
-            (
-                oauth.and_then(|oauth| oauth.refresh_token.as_deref()),
-                self.refresh.as_ref(),
-            ),
-        ];
-        if pairs.into_iter().any(|(original, replacement)| {
-            replacement.is_some_and(|replacement| original != Some(replacement.as_str()))
-        }) {
-            ProviderCredentialOpening::Opened
-        } else {
-            ProviderCredentialOpening::Unchanged
+        if let StoredGithubPat::Token(value) = &provider.github_pat
+            && self.github.opening_evidence(value) == ProviderCredentialOpening::Opened
+        {
+            return ProviderCredentialOpening::Opened;
         }
+        if let StoredOAuthFileConfiguration::Configured(oauth) = &provider.oauth_file {
+            if let StoredOAuthAccessCredential::AccessToken(value) = &oauth.access_token
+                && self.access.opening_evidence(value) == ProviderCredentialOpening::Opened
+            {
+                return ProviderCredentialOpening::Opened;
+            }
+            if let StoredOAuthRefreshCredential::Token(value) = &oauth.refresh_token
+                && self.refresh.opening_evidence(value) == ProviderCredentialOpening::Opened
+            {
+                return ProviderCredentialOpening::Opened;
+            }
+        }
+        ProviderCredentialOpening::Unchanged
     }
 }
 impl AuthProvidersSnapshotData {
@@ -96,10 +95,25 @@ enum CredentialTransition<'a> {
     Open(&'a DeviceIdentity),
 }
 
+enum PreparedCredentialProjection {
+    Unchanged,
+    Transformed(Zeroizing<String>),
+}
+impl PreparedCredentialProjection {
+    fn opening_evidence(&self, original: &str) -> ProviderCredentialOpening {
+        match self {
+            Self::Unchanged => ProviderCredentialOpening::Unchanged,
+            Self::Transformed(value) if value.as_str() == original => {
+                ProviderCredentialOpening::Unchanged
+            }
+            Self::Transformed(_) => ProviderCredentialOpening::Opened,
+        }
+    }
+}
 struct PreparedProviderCredentials {
-    github: Option<Zeroizing<String>>,
-    access: Option<Zeroizing<String>>,
-    refresh: Option<Zeroizing<String>>,
+    github: PreparedCredentialProjection,
+    access: PreparedCredentialProjection,
+    refresh: PreparedCredentialProjection,
 }
 impl CredentialTransition<'_> {
     fn project(&self, provider: &StorageProviderData) -> MultiDeviceResult<StorageProviderData> {
@@ -156,36 +170,39 @@ impl CredentialTransition<'_> {
     }
     fn project_field(&self, value: &str) -> MultiDeviceResult<String> {
         match self.field(value)? {
-            Some(mut prepared) => Ok(mem::take(&mut *prepared)),
-            None => Ok(value.to_owned()),
+            PreparedCredentialProjection::Transformed(mut prepared) => {
+                Ok(mem::take(&mut *prepared))
+            }
+            PreparedCredentialProjection::Unchanged => Ok(value.to_owned()),
         }
     }
     fn prepare(
         &self,
         provider: &StorageProviderData,
     ) -> MultiDeviceResult<PreparedProviderCredentials> {
-        let github = provider
-            .github_pat
-            .as_deref()
-            .map(|value| self.field(value))
-            .transpose()?
-            .flatten();
-        let (access, refresh) = match provider.oauth_file.as_ref() {
-            Some(oauth) => (
-                oauth
-                    .access_token
-                    .as_deref()
-                    .map(|value| self.field(value))
-                    .transpose()?
-                    .flatten(),
-                oauth
-                    .refresh_token
-                    .as_deref()
-                    .map(|value| self.field(value))
-                    .transpose()?
-                    .flatten(),
+        let github = match &provider.github_pat {
+            StoredGithubPat::Missing => PreparedCredentialProjection::Unchanged,
+            StoredGithubPat::Token(value) => self.field(value)?,
+        };
+        let (access, refresh) = match &provider.oauth_file {
+            StoredOAuthFileConfiguration::Configured(oauth) => (
+                match &oauth.access_token {
+                    StoredOAuthAccessCredential::SignedOut => {
+                        PreparedCredentialProjection::Unchanged
+                    }
+                    StoredOAuthAccessCredential::AccessToken(value) => self.field(value)?,
+                },
+                match &oauth.refresh_token {
+                    StoredOAuthRefreshCredential::NotIssued => {
+                        PreparedCredentialProjection::Unchanged
+                    }
+                    StoredOAuthRefreshCredential::Token(value) => self.field(value)?,
+                },
             ),
-            None => (None, None),
+            StoredOAuthFileConfiguration::NotApplicable => (
+                PreparedCredentialProjection::Unchanged,
+                PreparedCredentialProjection::Unchanged,
+            ),
         };
         Ok(PreparedProviderCredentials {
             github,
@@ -193,18 +210,22 @@ impl CredentialTransition<'_> {
             refresh,
         })
     }
-    fn field(&self, value: &str) -> MultiDeviceResult<Option<Zeroizing<String>>> {
+    fn field(&self, value: &str) -> MultiDeviceResult<PreparedCredentialProjection> {
         if value.is_empty() {
-            return Ok(None);
+            return Ok(PreparedCredentialProjection::Unchanged);
         }
         match self {
-            Self::Seal(key) if !ProviderCredentialField::has_armor_marker(value) => Ok(Some(
-                Zeroizing::new(key.seal_bytes(value.as_bytes())?.into_inner()),
-            )),
-            Self::Seal(_) => Ok(None),
-            Self::Open(identity) if ProviderCredentialField::has_armor_marker(value) => Ok(Some(
-                Zeroizing::new(identity.open_utf8(&AgeArmoredCiphertext::parse(value)?)?),
-            )),
+            Self::Seal(key) if !ProviderCredentialField::has_armor_marker(value) => {
+                Ok(PreparedCredentialProjection::Transformed(Zeroizing::new(
+                    key.seal_bytes(value.as_bytes())?.into_inner(),
+                )))
+            }
+            Self::Seal(_) => Ok(PreparedCredentialProjection::Unchanged),
+            Self::Open(identity) if ProviderCredentialField::has_armor_marker(value) => {
+                Ok(PreparedCredentialProjection::Transformed(Zeroizing::new(
+                    identity.open_utf8(&AgeArmoredCiphertext::parse(value)?)?,
+                )))
+            }
             Self::Open(_) => Err(MultiDeviceError::UnsealedProviderCredential),
         }
     }
@@ -266,19 +287,25 @@ impl AuthProvidersSnapshotData {
         // Every fallible transformation completed. Swap owned replacements locally;
         // the displaced plaintext and any unapplied prepared fields zeroize on drop.
         for (provider, prepared) in self.providers.iter_mut().zip(prepared) {
-            if let (StoredGithubPat::Token(value), Some(mut replacement)) =
-                (&mut provider.github_pat, prepared.github)
+            if let (
+                StoredGithubPat::Token(value),
+                PreparedCredentialProjection::Transformed(mut replacement),
+            ) = (&mut provider.github_pat, prepared.github)
             {
                 mem::swap(value, &mut replacement);
             }
             if let StoredOAuthFileConfiguration::Configured(oauth) = &mut provider.oauth_file {
-                if let (StoredOAuthAccessCredential::AccessToken(value), Some(mut replacement)) =
-                    (&mut oauth.access_token, prepared.access)
+                if let (
+                    StoredOAuthAccessCredential::AccessToken(value),
+                    PreparedCredentialProjection::Transformed(mut replacement),
+                ) = (&mut oauth.access_token, prepared.access)
                 {
                     mem::swap(value, &mut replacement);
                 }
-                if let (StoredOAuthRefreshCredential::Token(value), Some(mut replacement)) =
-                    (&mut oauth.refresh_token, prepared.refresh)
+                if let (
+                    StoredOAuthRefreshCredential::Token(value),
+                    PreparedCredentialProjection::Transformed(mut replacement),
+                ) = (&mut oauth.refresh_token, prepared.refresh)
                 {
                     mem::swap(value, &mut replacement);
                 }
@@ -440,7 +467,7 @@ mod tests {
 
     struct OAuthCredentialFixture<'a> {
         access: &'a str,
-        refresh: Option<&'a str>,
+        refresh: &'a str,
     }
 
     impl AuthProvidersSnapshotData {
@@ -469,9 +496,7 @@ mod tests {
                     oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                         preset: OauthFilePreset::GoogleDrive,
                         access_token: StoredOAuthAccessCredential::AccessToken(access.to_owned()),
-                        refresh_token: StoredOAuthRefreshCredential::from_option(
-                            refresh.map(str::to_owned),
-                        ),
+                        refresh_token: StoredOAuthRefreshCredential::Token(refresh.to_owned()),
                         expires_at: StoredOAuthTokenExpiry::Unknown,
                         file_id: StoredOAuthRemoteFileId::Unresolved,
                         folder_id: StoredGoogleDriveFolder::Root,
@@ -524,7 +549,7 @@ mod tests {
         let refresh = "1//refresh-token-secret";
         let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture {
             access,
-            refresh: Some(refresh),
+            refresh: refresh,
         });
         snapshot = snapshot
             .seal_credentials(&identity)
@@ -608,7 +633,7 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture {
             access: "ya29.valid-access",
-            refresh: Some("invalid plaintext refresh"),
+            refresh: "invalid plaintext refresh",
         });
         let oauth = (match &mut snapshot.providers[0].oauth_file {
             StoredOAuthFileConfiguration::Configured(config) => Some(config),
@@ -662,7 +687,7 @@ mod tests {
         snapshot.providers.extend(
             AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture {
                 access: "oauth-access-pairing",
-                refresh: Some("oauth-refresh-pairing"),
+                refresh: "oauth-refresh-pairing",
             })
             .providers,
         );
@@ -756,7 +781,7 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture {
             access: "valid access",
-            refresh: Some("valid refresh"),
+            refresh: "valid refresh",
         });
         snapshot = snapshot
             .seal_credentials(&identity)

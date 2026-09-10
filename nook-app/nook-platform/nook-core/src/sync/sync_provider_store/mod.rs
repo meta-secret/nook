@@ -27,6 +27,7 @@ mod oauth;
 mod save;
 mod scope;
 mod state;
+mod state_storage;
 mod storage_args;
 mod sync_metadata;
 
