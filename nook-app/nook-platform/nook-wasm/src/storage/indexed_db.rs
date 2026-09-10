@@ -30,7 +30,7 @@ mod atomic_string;
 mod device_identity;
 pub(crate) use atomic_string::{
     GuardedKeyringEntryRequest, IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate,
-    StringUpdateGuard, StringUpdateResult,
+    StringRecordFallback, StringUpdateGuard, StringUpdateResult,
 };
 mod local_vault;
 #[path = "sentinel_storage.rs"]
@@ -84,8 +84,15 @@ pub(crate) struct ClearVaultStoreRequest<'a> {
     pub(crate) store_name: &'a str,
 }
 
-/// Named values required by NookDatabase::read_optional_string_from_store.
-pub(crate) struct ReadOptionalStringFromStoreRequest<'a> {
+/// IndexedDB string rows retain key absence independently from empty text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum StoredStringRecord {
+    MissingKey,
+    Stored(String),
+}
+
+/// Named values required by NookDatabase::read_string_record.
+pub(crate) struct ReadStringRecordRequest<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) key: &'a str,
     pub(crate) context: &'a str,
@@ -190,10 +197,10 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    async fn read_optional_string_from_store(
-        request: ReadOptionalStringFromStoreRequest<'_>,
-    ) -> Result<Option<String>, NookError> {
-        let ReadOptionalStringFromStoreRequest {
+    async fn read_string_record(
+        request: ReadStringRecordRequest<'_>,
+    ) -> Result<StoredStringRecord, NookError> {
+        let ReadStringRecordRequest {
             store,
             key,
             context,
@@ -205,10 +212,12 @@ impl NookDatabase {
             .await
             .map_err(|error| NookError::IndexedDb(format!("{context} read error: {error:?}")))?;
         match value {
-            None => Ok(None),
-            Some(value) if value.is_undefined() || value.is_null() => Ok(None),
+            None => Ok(StoredStringRecord::MissingKey),
+            Some(value) if value.is_undefined() || value.is_null() => {
+                Ok(StoredStringRecord::MissingKey)
+            }
             Some(value) => serde_wasm_bindgen::from_value(value)
-                .map(Some)
+                .map(StoredStringRecord::Stored)
                 .map_err(|error| {
                     NookError::IndexedDb(format!("{context} decode error: {error:?}"))
                 }),

@@ -5,6 +5,7 @@
 )]
 //! Vault-scoped reconciliation marker persistence and guarded cleanup.
 use super::super::indexed_db;
+use crate::StoredStringRecord;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use crate::{NookError, storage};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
@@ -80,8 +81,8 @@ impl<'a> IdentityReconciliationStore<'a> {
             key: &IdentityReconciliationStore::new(store_id).key(),
             guard: StringUpdateGuard::Unconditional,
             update: move |raw| match raw {
-                None => proposed.encode(),
-                Some(raw) => {
+                StoredStringRecord::MissingKey => proposed.encode(),
+                StoredStringRecord::Stored(raw) => {
                     if PendingIdentityReconciliation::decode(&raw)? == proposed {
                         Ok(raw)
                     } else {
@@ -192,9 +193,15 @@ impl<'a> IdentityReconciliationStore<'a> {
             key: &IdentityReconciliationStore::new(store_id).key(),
             guard: StringUpdateGuard::Unconditional,
             update: move |raw| {
-                let pending = PendingIdentityReconciliation::decode(&raw.ok_or_else(|| {
-                    NookError::IndexedDb("Identity reconciliation marker disappeared.".to_owned())
-                })?)?;
+                let raw = match raw {
+                    StoredStringRecord::Stored(raw) => raw,
+                    StoredStringRecord::MissingKey => {
+                        return Err(NookError::IndexedDb(
+                            "Identity reconciliation marker disappeared.".to_owned(),
+                        ));
+                    }
+                };
+                let pending = PendingIdentityReconciliation::decode(&raw)?;
                 if pending.store_id != expected_store_id {
                     return Err(NookError::IndexedDb(
                         "Identity reconciliation marker names another vault.".to_owned(),

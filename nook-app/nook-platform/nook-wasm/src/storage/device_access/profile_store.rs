@@ -8,6 +8,7 @@
 use crate::NookDatabase;
 use crate::storage::{identity_record, indexed_db};
 use crate::{IdbPutStringRequest, IndexedDbFallbackUpdate, IndexedDbMigration, NookError};
+use crate::{StoredStringRecord, StringRecordFallback};
 use nook_core::AppId;
 
 use super::{
@@ -161,10 +162,10 @@ impl DeviceAccessProfileKey {
     where
         F: FnOnce(DeviceAccessProfile) -> Result<DeviceAccessProfile, NookError>,
     {
-        let fallback_key = self
-            .legacy_owner
-            .is_some()
-            .then_some(DEVICE_ACCESS_PROFILE_KEY);
+        let fallback_key = match &self.legacy_owner {
+            Some(_) => StringRecordFallback::AdoptFrom(DEVICE_ACCESS_PROFILE_KEY),
+            None => StringRecordFallback::Disabled,
+        };
         let legacy_owner = self.legacy_owner;
         NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
             key: &self.value,
@@ -213,10 +214,10 @@ impl<F> DeviceAccessProfileMutation<'_, F>
 where
     F: FnOnce(DeviceAccessProfile) -> Result<DeviceAccessProfile, NookError>,
 {
-    fn apply(self, raw: Option<String>) -> Result<String, NookError> {
+    fn apply(self, raw: StoredStringRecord) -> Result<String, NookError> {
         let Self { intent, update, .. } = self;
 
-        let disposition = DeviceAccessProfileUpdate::observe(raw.as_deref());
+        let disposition = DeviceAccessProfileUpdate::observe(&raw);
         let profile = match intent {
             DeviceAccessProfileUpdateIntent::Interactive => {
                 disposition.into_interactive_profile()?
@@ -224,11 +225,12 @@ where
             DeviceAccessProfileUpdateIntent::BestEffort => match disposition {
                 DeviceAccessProfileUpdate::Writable(profile) => profile,
                 DeviceAccessProfileUpdate::PreserveFutureVersion => {
-                    return raw.ok_or_else(|| {
-                        NookError::Database(
+                    return match raw {
+                        StoredStringRecord::Stored(raw) => Ok(raw),
+                        StoredStringRecord::MissingKey => Err(NookError::Database(
                             "Future device access profile disappeared during update.".to_owned(),
-                        )
-                    });
+                        )),
+                    };
                 }
             },
         };
@@ -263,8 +265,8 @@ impl LegacyProfileAdmission<'_> {
 }
 impl DeviceAccessProfileUpdate {
     #[must_use]
-    pub(super) fn observe(raw: Option<&str>) -> Self {
-        let Some(raw) = raw else {
+    pub(super) fn observe(raw: &StoredStringRecord) -> Self {
+        let StoredStringRecord::Stored(raw) = raw else {
             return DeviceAccessProfileUpdate::Writable(DeviceAccessProfile::default());
         };
         match nook_core::DeviceAccessProfile::decode(raw) {
@@ -285,6 +287,7 @@ impl DeviceAccessProfileUpdate {
 mod browser_tests {
     use super::DEVICE_ACCESS_PROFILE_VERSION_ERROR;
     use crate::storage::indexed_db;
+    use crate::{StoredStringRecord, StringRecordFallback};
     use nook_core::{AppKey, DeviceId, IdentityId, IsoTimestamp, LocalIdentityKeyringEntry};
     use std::cell::Cell;
 
@@ -334,7 +337,7 @@ mod browser_tests {
 
         let result = NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
             key: TARGET_KEY,
-            fallback_key: Some(SOURCE_KEY),
+            fallback_key: StringRecordFallback::AdoptFrom(SOURCE_KEY),
             guard: StringUpdateGuard::Unconditional,
             can_adopt_fallback: move |raw| {
                 LegacyProfileAdmission {
@@ -343,7 +346,7 @@ mod browser_tests {
                 .accepts(raw)
             },
             update: |current| {
-                assert!(current.is_none());
+                assert!(matches!(current, StoredStringRecord::MissingKey));
                 serde_json::to_string(&DeviceAccessProfile::default()).map_err(|error| {
                     NookError::IndexedDb(format!("Test profile serialize error: {error}"))
                 })
@@ -557,7 +560,11 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn mutation_admission_reads_current_recoverable_and_absent_profiles() -> anyhow::Result<()> {
         let current = serde_json::to_string(&DeviceAccessProfile::default())?;
-        for raw in [None, Some("malformed".to_owned()), Some(current.clone())] {
+        for raw in [
+            StoredStringRecord::MissingKey,
+            StoredStringRecord::Stored("malformed".to_owned()),
+            StoredStringRecord::Stored(current.clone()),
+        ] {
             let called = Cell::new(false);
             let stored = DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::Interactive,

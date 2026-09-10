@@ -7,6 +7,7 @@
 
 use crate::BrowserTimestamp;
 use crate::IdentityDbEnsureLocalIdentityForAppKey;
+use crate::StoredStringRecord;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use nook_core::IdentityCreation;
@@ -265,11 +266,14 @@ impl OrdinarySimpleGenesisRequest<'_> {
                 key: PENDING_SIMPLE_GENESIS_KEY,
                 guard: StringUpdateGuard::Unconditional,
                 update: move |current| {
-                    let raw = current.ok_or_else(|| {
-                        NookError::IndexedDb(
-                            "Pending Simple genesis marker disappeared.".to_owned(),
-                        )
-                    })?;
+                    let raw = match current {
+                        StoredStringRecord::Stored(raw) => raw,
+                        StoredStringRecord::MissingKey => {
+                            return Err(NookError::IndexedDb(
+                                "Pending Simple genesis marker disappeared.".to_owned(),
+                            ));
+                        }
+                    };
                     let mut pending = PendingSimpleGenesis::decode(&raw)?;
                     pending.seal_legacy_signing_seed(app_key)?;
                     let encoded = pending.encode()?;
@@ -304,11 +308,10 @@ impl OrdinarySimpleGenesisRequest<'_> {
             key: PENDING_SIMPLE_GENESIS_KEY,
             guard: StringUpdateGuard::Unconditional,
             update: move |current| {
-                let pending = current
-                    .as_deref()
-                    .map(PendingSimpleGenesis::decode)
-                    .transpose()?
-                    .unwrap_or(proposed);
+                let pending = match current {
+                    StoredStringRecord::MissingKey => proposed,
+                    StoredStringRecord::Stored(raw) => PendingSimpleGenesis::decode(&raw)?,
+                };
                 let encoded = pending.encode()?;
                 *captured.borrow_mut() = Some(pending);
                 Ok(encoded)

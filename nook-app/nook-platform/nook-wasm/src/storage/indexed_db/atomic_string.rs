@@ -1,9 +1,23 @@
 //! Guarded updates and conditional migrations share one database transaction.
-use super::{ReadOptionalStringFromStoreRequest, TransactionMode, identity_record};
+use super::{
+    APP_KEY_WRAPPED_KEY, ReadStringRecordRequest, StoredStringRecord, TransactionMode,
+    WRAPPED_DEVICE_IDENTITY_KEY,
+};
 use crate::IdentityDbLocalKeyringEntryForAppIdFromStore;
 use crate::ReadStringPreferringRequest;
 use crate::{NookDatabase, NookError};
 use nook_core::{AppId, WrappedDeviceIdentity};
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum StringRecordFallback<'a> {
+    Disabled,
+    AdoptFrom(&'a str),
+}
+
+enum AdoptedStringSource<'a> {
+    RetainAllSources,
+    DeleteAfterWrite(&'a str),
+}
 
 pub(crate) struct IndexedDbMigration<'a, F> {
     pub(crate) source_key: &'a str,
@@ -12,7 +26,7 @@ pub(crate) struct IndexedDbMigration<'a, F> {
 }
 pub(crate) struct IndexedDbFallbackUpdate<'a, F, P> {
     pub(crate) key: &'a str,
-    pub(crate) fallback_key: Option<&'a str>,
+    pub(crate) fallback_key: StringRecordFallback<'a>,
     pub(crate) guard: StringUpdateGuard<'a>,
     pub(crate) can_adopt_fallback: P,
     pub(crate) update: F,
@@ -45,12 +59,12 @@ impl NookDatabase {
         request: IndexedDbUpdate<'_, F>,
     ) -> Result<StringUpdateResult, NookError>
     where
-        F: FnOnce(Option<String>) -> Result<String, NookError>,
+        F: FnOnce(StoredStringRecord) -> Result<String, NookError>,
     {
         let IndexedDbUpdate { key, guard, update } = request;
         NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
             key: key,
-            fallback_key: None,
+            fallback_key: StringRecordFallback::Disabled,
             guard: guard,
             can_adopt_fallback: |_| true,
             update: update,
@@ -62,29 +76,56 @@ impl NookDatabase {
 impl NookDatabase {
     async fn guarded_keyring_entry(
         request: GuardedKeyringEntryRequest<'_>,
-    ) -> Result<(Option<nook_core::LocalIdentityKeyringEntry>, bool), NookError> {
+    ) -> Result<StringUpdateResult, NookError> {
         let GuardedKeyringEntryRequest { store, guard } = request;
-        match guard {
-            StringUpdateGuard::WrappedCredentialFingerprint(_) => Ok((
-                NookDatabase::selected_local_keyring_entry_for_store(store).await?,
-                true,
-            )),
-            StringUpdateGuard::AppWrappedCredentialFingerprint { app_id, .. } => {
+        let (wrapped, expected) = match guard {
+            StringUpdateGuard::Unconditional => return Ok(StringUpdateResult::Applied),
+            StringUpdateGuard::WrappedCredentialFingerprint(expected) => {
+                match NookDatabase::selected_local_keyring_entry_for_store(store).await? {
+                    Some(entry) => (entry.wrapped_app_key().clone(), expected),
+                    None => {
+                        let raw =
+                            NookDatabase::read_string_preferring(ReadStringPreferringRequest {
+                                store,
+                                preferred_key: APP_KEY_WRAPPED_KEY,
+                                legacy_key: WRAPPED_DEVICE_IDENTITY_KEY,
+                                label: "Atomic string guard",
+                            })
+                            .await?;
+                        let Some(raw) = raw else {
+                            return Ok(StringUpdateResult::GuardRejected);
+                        };
+                        let Ok(wrapped) = WrappedDeviceIdentity::parse(&raw) else {
+                            return Ok(StringUpdateResult::GuardRejected);
+                        };
+                        (wrapped, expected)
+                    }
+                }
+            }
+            StringUpdateGuard::AppWrappedCredentialFingerprint { app_id, expected } => {
                 let app_id =
                     AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
-                Ok((
-                    NookDatabase::local_keyring_entry_for_app_id_from_store(
-                        IdentityDbLocalKeyringEntryForAppIdFromStore {
-                            store: store,
-                            app_id: &app_id,
-                        },
-                    )
-                    .await?,
-                    false,
-                ))
+                match NookDatabase::local_keyring_entry_for_app_id_from_store(
+                    IdentityDbLocalKeyringEntryForAppIdFromStore {
+                        store,
+                        app_id: &app_id,
+                    },
+                )
+                .await?
+                {
+                    Some(entry) => (entry.wrapped_app_key().clone(), expected),
+                    None => return Ok(StringUpdateResult::GuardRejected),
+                }
             }
-            StringUpdateGuard::Unconditional => Ok((None, false)),
-        }
+        };
+        let authorized = wrapped.credential_id().is_ok_and(|bytes| {
+            nook_core::PasskeyAccessProfile::credential_identifier(bytes.as_ref()) == expected
+        });
+        Ok(if authorized {
+            StringUpdateResult::Applied
+        } else {
+            StringUpdateResult::GuardRejected
+        })
     }
 }
 
@@ -93,7 +134,7 @@ impl NookDatabase {
         request: IndexedDbFallbackUpdate<'_, F, P>,
     ) -> Result<StringUpdateResult, NookError>
     where
-        F: FnOnce(Option<String>) -> Result<String, NookError>,
+        F: FnOnce(StoredStringRecord) -> Result<String, NookError>,
         P: FnOnce(&str) -> bool,
     {
         let IndexedDbFallbackUpdate {
@@ -115,70 +156,41 @@ impl NookDatabase {
         let store = transaction.store("vault").map_err(|error| {
             NookError::IndexedDb(format!("Atomic string update store error: {error:?}"))
         })?;
-        let (guarded_entry, allow_legacy_guard) =
-            NookDatabase::guarded_keyring_entry(GuardedKeyringEntryRequest {
-                store: &store,
-                guard: guard,
-            })
-            .await?;
-        let expected_fingerprint = match guard {
-            StringUpdateGuard::WrappedCredentialFingerprint(expected)
-            | StringUpdateGuard::AppWrappedCredentialFingerprint { expected, .. } => Some(expected),
-            StringUpdateGuard::Unconditional => None,
-        };
-        if let Some(expected) = expected_fingerprint {
-            let fingerprint = match guarded_entry {
-                Some(entry) => entry.wrapped_app_key().credential_id().ok().map(|bytes| {
-                    nook_core::PasskeyAccessProfile::credential_identifier(bytes.as_ref())
-                }),
-                None if allow_legacy_guard => {
-                    NookDatabase::read_string_preferring(ReadStringPreferringRequest {
-                        store: &store,
-                        preferred_key: APP_KEY_WRAPPED_KEY,
-                        legacy_key: WRAPPED_DEVICE_IDENTITY_KEY,
-                        label: "Atomic string guard",
-                    })
-                    .await?
-                    .and_then(|raw| {
-                        let wrapped = WrappedDeviceIdentity::parse(&raw).ok()?;
-                        wrapped.credential_id().ok().map(|bytes| {
-                            nook_core::PasskeyAccessProfile::credential_identifier(bytes.as_ref())
-                        })
-                    })
-                }
-                None => None,
-            };
-            if fingerprint.as_deref() != Some(expected) {
-                transaction.done().await.map_err(|error| {
-                    NookError::IndexedDb(format!("Atomic string guard completion error: {error:?}"))
-                })?;
-                return Ok(StringUpdateResult::GuardRejected);
-            }
+        let authorization = NookDatabase::guarded_keyring_entry(GuardedKeyringEntryRequest {
+            store: &store,
+            guard,
+        })
+        .await?;
+        if authorization == StringUpdateResult::GuardRejected {
+            transaction.done().await.map_err(|error| {
+                NookError::IndexedDb(format!("Atomic string guard completion error: {error:?}"))
+            })?;
+            return Ok(StringUpdateResult::GuardRejected);
         }
         let id_key = serde_wasm_bindgen::to_value(key).map_err(|error| {
             NookError::IndexedDb(format!("Atomic string update key error: {error:?}"))
         })?;
-        let mut current =
-            NookDatabase::read_optional_string_from_store(ReadOptionalStringFromStoreRequest {
+        let mut current = NookDatabase::read_string_record(ReadStringRecordRequest {
+            store: &store,
+            key: key,
+            context: "Atomic string update",
+        })
+        .await?;
+        let mut adopted_fallback_key = AdoptedStringSource::RetainAllSources;
+        if matches!(current, StoredStringRecord::MissingKey)
+            && let StringRecordFallback::AdoptFrom(fallback_key) = fallback_key
+        {
+            let fallback = NookDatabase::read_string_record(ReadStringRecordRequest {
                 store: &store,
-                key: key,
-                context: "Atomic string update",
+                key: fallback_key,
+                context: "Atomic string fallback",
             })
             .await?;
-        let mut adopted_fallback_key = None;
-        if current.is_none()
-            && let Some(fallback_key) = fallback_key
-        {
-            let fallback =
-                NookDatabase::read_optional_string_from_store(ReadOptionalStringFromStoreRequest {
-                    store: &store,
-                    key: fallback_key,
-                    context: "Atomic string fallback",
-                })
-                .await?;
-            if fallback.as_deref().is_some_and(can_adopt_fallback) {
-                current = fallback;
-                adopted_fallback_key = Some(fallback_key);
+            if let StoredStringRecord::Stored(raw) = fallback
+                && can_adopt_fallback(&raw)
+            {
+                current = StoredStringRecord::Stored(raw);
+                adopted_fallback_key = AdoptedStringSource::DeleteAfterWrite(fallback_key);
             }
         }
         let updated = update(current)?;
@@ -191,7 +203,7 @@ impl NookDatabase {
             .map_err(|error| {
                 NookError::IndexedDb(format!("Atomic string update write error: {error:?}"))
             })?;
-        if let Some(fallback_key) = adopted_fallback_key {
+        if let AdoptedStringSource::DeleteAfterWrite(fallback_key) = adopted_fallback_key {
             let fallback_id = serde_wasm_bindgen::to_value(fallback_key).map_err(|error| {
                 NookError::IndexedDb(format!("Atomic string fallback key error: {error:?}"))
             })?;
@@ -364,10 +376,15 @@ mod tests {
 
         let result = NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
             key: TARGET_KEY,
-            fallback_key: Some(SOURCE_KEY),
+            fallback_key: StringRecordFallback::AdoptFrom(SOURCE_KEY),
             guard: StringUpdateGuard::Unconditional,
             can_adopt_fallback: |_| true,
-            update: |current| Ok(format!("{}-updated", current.unwrap_or_default())),
+            update: |current| match current {
+                StoredStringRecord::Stored(raw) => Ok(format!("{raw}-updated")),
+                StoredStringRecord::MissingKey => {
+                    Err(NookError::Database("Expected adopted profile".to_owned()))
+                }
+            },
         })
         .await?;
 
@@ -388,7 +405,10 @@ mod tests {
             NookDatabase::idb_update_string(IndexedDbUpdate {
                 key: "current",
                 guard: StringUpdateGuard::Unconditional,
-                update: |value| { Ok(format!("{}-updated", value.unwrap_or_default())) }
+                update: |value| match value {
+                    StoredStringRecord::Stored(raw) => Ok(format!("{raw}-updated")),
+                    StoredStringRecord::MissingKey => Ok("-updated".to_owned()),
+                }
             })
             .await?,
             StringUpdateResult::Applied
@@ -406,10 +426,13 @@ mod tests {
         assert_eq!(
             NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
                 key: "target",
-                fallback_key: Some("fallback"),
+                fallback_key: StringRecordFallback::AdoptFrom("fallback"),
                 guard: StringUpdateGuard::Unconditional,
                 can_adopt_fallback: |_| false,
-                update: |value| Ok(value.unwrap_or_else(|| "fresh".to_owned()))
+                update: |value| match value {
+                    StoredStringRecord::Stored(raw) => Ok(raw),
+                    StoredStringRecord::MissingKey => Ok("fresh".to_owned()),
+                }
             })
             .await?,
             StringUpdateResult::Applied

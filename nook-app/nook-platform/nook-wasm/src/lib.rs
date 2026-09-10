@@ -221,7 +221,7 @@ pub use vault_api_local::*;
 pub(crate) use storage::NookDatabase;
 
 pub(crate) use storage::indexed_db::{
-    ClearVaultStoreRequest, GuardedKeyringEntryRequest, ReadOptionalStringFromStoreRequest,
+    ClearVaultStoreRequest, GuardedKeyringEntryRequest, ReadStringRecordRequest,
     SecretSearchBucketKeyRequest,
 };
 
@@ -232,7 +232,8 @@ pub(crate) use storage::indexed_db::{
 };
 
 pub(crate) use storage::indexed_db::{
-    IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate,
+    IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate, StoredStringRecord,
+    StringRecordFallback,
 };
 
 pub(crate) use conversion::BrowserTimestamp;

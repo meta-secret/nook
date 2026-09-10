@@ -7,6 +7,7 @@
 
 use super::LocalIdentityRecovery;
 use crate::BrowserTimestamp;
+use crate::StoredStringRecord;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use nook_core::AppKeyIdentityMembership;
@@ -162,11 +163,10 @@ impl StagedSimpleGenesisInput<'_> {
             key: PENDING_SIMPLE_GENESIS_KEY,
             guard: StringUpdateGuard::Unconditional,
             update: move |current| {
-                let pending = current
-                    .as_deref()
-                    .map(PendingSimpleGenesis::decode)
-                    .transpose()?
-                    .unwrap_or(proposed);
+                let pending = match current {
+                    StoredStringRecord::MissingKey => proposed,
+                    StoredStringRecord::Stored(raw) => PendingSimpleGenesis::decode(&raw)?,
+                };
                 if !pending.is_staged() {
                     return Err(NookError::IndexedDb(
                         "Pending Simple genesis belongs to another creation flow.".to_owned(),

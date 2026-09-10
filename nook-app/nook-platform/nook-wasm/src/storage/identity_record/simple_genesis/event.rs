@@ -8,6 +8,7 @@ use super::{
     PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
     PinnedSimpleGenesisEvent,
 };
+use crate::StoredStringRecord;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use crate::{NookError, storage::indexed_db};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
@@ -184,9 +185,14 @@ impl PreparedSimpleGenesisEvent {
             key: PENDING_SIMPLE_GENESIS_KEY,
             guard: StringUpdateGuard::Unconditional,
             update: move |raw| {
-                let raw = raw.ok_or_else(|| {
-                    NookError::IndexedDb("Pending Simple genesis marker disappeared.".to_owned())
-                })?;
+                let raw = match raw {
+                    StoredStringRecord::Stored(raw) => raw,
+                    StoredStringRecord::MissingKey => {
+                        return Err(NookError::IndexedDb(
+                            "Pending Simple genesis marker disappeared.".to_owned(),
+                        ));
+                    }
+                };
                 let mut current = PendingSimpleGenesis::decode(&raw)?;
                 if current.store_id != expected.store_id
                     || current.identity_id != expected.identity_id
