@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { parseArgs } from 'node:util';
 import { AgentAttemptTransport } from './attempt-codec.ts';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -308,40 +309,65 @@ export class DelegationJournalCli {
   private static parseCommandLine(
     argv: readonly string[],
   ): DelegationCommandLine | false {
-    if (argv.length !== 5) return false;
-    const command = argv[0];
-    const workingDirectoryFlag = argv.indexOf('--working-directory');
-    const workingDirectory = argv[workingDirectoryFlag + 1];
-    if (
-      workingDirectoryFlag !== 3 ||
-      !workingDirectory ||
-      workingDirectory.startsWith('--')
-    ) {
+    let parsed;
+    try {
+      parsed = parseArgs({
+        args: [...argv],
+        options: {
+          plan: { type: 'string' },
+          request: { type: 'string' },
+          'working-directory': { type: 'string' },
+        },
+        allowPositionals: true,
+        strict: false,
+        tokens: true,
+      });
+    } catch {
       return false;
     }
-    if (command === DelegationCommandKind.Start && argv[1] === '--plan') {
-      const planPath = argv[2];
-      if (!planPath || planPath.startsWith('--')) return false;
+    const { values, positionals, tokens } = parsed;
+    const [command] = positionals;
+    const inputOption =
+      command === DelegationCommandKind.Start ? 'plan' : 'request';
+    const inputPath = values[inputOption];
+    const directory = values['working-directory'];
+    if (
+      positionals.length !== 1 ||
+      tokens.length !== 3 ||
+      tokens[0]?.kind !== 'positional' ||
+      tokens
+        .slice(1)
+        .some(
+          (token, index) =>
+            token.kind !== 'option' ||
+            token.name !== [inputOption, 'working-directory'][index] ||
+            token.inlineValue ||
+            token.index !== index * 2 + 1,
+        ) ||
+      typeof inputPath !== 'string' ||
+      !inputPath ||
+      inputPath.startsWith('--') ||
+      typeof directory !== 'string' ||
+      !directory ||
+      directory.startsWith('--')
+    )
+      return false;
+    if (command === DelegationCommandKind.Start)
       return {
-        kind: DelegationCommandKind.Start,
-        planPath: resolve(planPath),
-        workingDirectory: resolve(workingDirectory),
+        kind: command,
+        planPath: resolve(inputPath),
+        workingDirectory: resolve(directory),
       };
-    }
     if (
-      (command !== DelegationCommandKind.Admit &&
-        command !== DelegationCommandKind.Record &&
-        command !== DelegationCommandKind.Finalize) ||
-      argv[1] !== '--request'
-    ) {
+      command !== DelegationCommandKind.Admit &&
+      command !== DelegationCommandKind.Record &&
+      command !== DelegationCommandKind.Finalize
+    )
       return false;
-    }
-    const requestPath = argv[2];
-    if (!requestPath || requestPath.startsWith('--')) return false;
     return {
       kind: command,
-      requestPath: resolve(requestPath),
-      workingDirectory: resolve(workingDirectory),
+      requestPath: resolve(inputPath),
+      workingDirectory: resolve(directory),
     };
   }
 

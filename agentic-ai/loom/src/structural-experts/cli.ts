@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { parseArgs } from 'node:util';
 import { readFile } from 'node:fs/promises';
 
 import { resolve } from 'node:path';
@@ -12,12 +13,12 @@ import { StructuralExpertInvocation } from './invoke.ts';
 import { StructuralExpertRequestDecoder } from './request-codec.ts';
 
 export class StructuralExpertCommandLine {
-  private constructor(private readonly request: readonly string[]) {}
+  constructor(private readonly request: readonly string[]) {}
   static parse(argv: readonly string[]): StructuralExpertCommand | false {
     return new StructuralExpertCommandLine(argv).execute();
   }
-  private async main(): Promise<number> {
-    const command = this.execute(process.argv.slice(2));
+  async main(): Promise<number> {
+    const command = this.execute();
     if (!command) {
       console.error(HELP);
       return 2;
@@ -48,36 +49,64 @@ export class StructuralExpertCommandLine {
   }
 
   private execute(): StructuralExpertCommand | false {
-    const argv = this.request;
+    let parsed;
+    try {
+      parsed = parseArgs({
+        args: [...this.request],
+        options: {
+          request: { type: 'string' },
+          'working-directory': { type: 'string' },
+        },
+        allowPositionals: true,
+        strict: false,
+        tokens: true,
+      });
+    } catch {
+      return false;
+    }
+    const { values, positionals, tokens } = parsed;
+    const [command] = positionals;
+    const directory = values['working-directory'];
+    const expected =
+      command === StructuralExpertCommandKind.Invoke
+        ? ['request', 'working-directory']
+        : ['working-directory'];
     if (
-      argv.length === 5 &&
-      argv[0] === StructuralExpertCommandKind.Invoke &&
-      argv[1] === '--request' &&
-      argv[2] &&
-      !argv[2].startsWith('--') &&
-      argv[3] === '--working-directory' &&
-      argv[4] &&
-      !argv[4].startsWith('--')
+      positionals.length !== 1 ||
+      tokens.length !== expected.length + 1 ||
+      tokens[0]?.kind !== 'positional' ||
+      tokens
+        .slice(1)
+        .some(
+          (token, index) =>
+            token.kind !== 'option' ||
+            token.name !== expected[index] ||
+            token.inlineValue ||
+            token.index !== index * 2 + 1,
+        ) ||
+      typeof directory !== 'string' ||
+      !directory ||
+      directory.startsWith('--')
+    )
+      return false;
+    if (
+      command === StructuralExpertCommandKind.Invoke &&
+      typeof values.request === 'string' &&
+      values.request &&
+      !values.request.startsWith('--')
     ) {
       return {
         kind: StructuralExpertCommandKind.Invoke,
-        requestPath: resolve(argv[2]),
-        workingDirectory: resolve(argv[4]),
+        requestPath: resolve(values.request),
+        workingDirectory: resolve(directory),
       };
     }
-    if (
-      argv.length === 3 &&
-      argv[0] === StructuralExpertCommandKind.Validate &&
-      argv[1] === '--working-directory' &&
-      argv[2] &&
-      !argv[2].startsWith('--')
-    ) {
-      return {
-        kind: StructuralExpertCommandKind.Validate,
-        workingDirectory: resolve(argv[2]),
-      };
-    }
-    return false;
+    return command === StructuralExpertCommandKind.Validate
+      ? {
+          kind: StructuralExpertCommandKind.Validate,
+          workingDirectory: resolve(directory),
+        }
+      : false;
   }
 }
 
@@ -108,7 +137,9 @@ type StructuralExpertCommand = ValidateCommand | InvokeCommand;
 
 if (import.meta.main) {
   try {
-    process.exit(await main());
+    process.exit(
+      await new StructuralExpertCommandLine(process.argv.slice(2)).main(),
+    );
   } catch {
     console.error('Structural expert command failed.');
     process.exit(1);

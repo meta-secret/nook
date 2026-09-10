@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { HostCommandFailure } from './run.ts';
 import { err, ok, type Result } from 'neverthrow';
 import { lstatSync, realpathSync } from 'node:fs';
@@ -10,23 +11,6 @@ export enum ValeAlertSeverity {
   Error = 'error',
   Suggestion = 'suggestion',
   Warning = 'warning',
-}
-
-enum ValeAlertField {
-  Action = 'Action',
-  Check = 'Check',
-  Description = 'Description',
-  Line = 'Line',
-  Link = 'Link',
-  Match = 'Match',
-  Message = 'Message',
-  Severity = 'Severity',
-  Span = 'Span',
-}
-
-enum ValeActionField {
-  Name = 'Name',
-  Params = 'Params',
 }
 
 export type ValeNativeAlert = {
@@ -72,7 +56,6 @@ type ParseAlertArgs = {
 /** Owns the vale file diagnostics registry and its capability transitions. */
 const VALE_ALERT_EXIT_CODE = 1;
 const REQUIRED_VALE_VERSION = 'vale version 3.19.0';
-const JSON_NULL = JSON.parse('null') as UntrustedYamlNode;
 export class ValeFileDiagnostics {
   constructor(private readonly request: RunValeFilesArgs) {}
   execute(): Result<ValeFilesResult, ValeFailure> {
@@ -233,7 +216,9 @@ export class ValeOutputDocument {
       }
       for (const untrustedAlert of untrustedAlerts) {
         const alertArgs: ParseAlertArgs = { file, value: untrustedAlert };
-        alerts.push(new ValeAlertDocument(alertArgs).decode());
+        const alert = new ValeAlertDocument(alertArgs).decode();
+        if (alert.isErr()) return err(alert.error);
+        alerts.push(alert.value);
       }
     }
     return ok({ alerts });
@@ -302,133 +287,50 @@ export class ValeRepositoryContainment {
       : ValePathContainment.Outside;
   }
 }
+const VALE_ALERT_SCHEMA = z.strictObject({
+  Action: z.strictObject({ Name: z.string(), Params: z.null() }),
+  Span: z.tuple([z.int().positive(), z.int().positive()]),
+  Check: z.string().min(1),
+  Line: z.int().positive(),
+  Message: z.string().min(1),
+  Severity: z.enum(ValeAlertSeverity),
+  Description: z.string(),
+  Link: z.string(),
+  Match: z.string(),
+});
+
 export class ValeAlertDocument {
   constructor(private readonly request: ParseAlertArgs) {}
   decode(): Result<ValeNativeAlert, ValeFailure> {
-    const args = this.request;
-    if (!UntrustedYamlBoundary.isRecord(args.value)) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint alert must be an object: ${args.file}`,
-      });
+    const decoded = VALE_ALERT_SCHEMA.safeParse(this.request.value);
+    if (!decoded.success) {
+      const issue = decoded.error.issues[0];
+      const field = issue?.path[0];
+      const label =
+        field === 'Description' || field === 'Link' || field === 'Match'
+          ? 'text fields'
+          : field === 'Action' && issue.path.length > 1
+            ? 'Action shape'
+            : String(field);
+      const message =
+        issue?.code === 'unrecognized_keys'
+          ? `Vale exact-file lint ${field === 'Action' ? 'alert Action' : 'alert'} fields are invalid.`
+          : field === undefined
+            ? `Vale exact-file lint alert must be an object: ${this.request.file}`
+            : `Vale exact-file lint alert ${label} ${label === 'text fields' ? 'are' : 'is'} invalid: ${this.request.file}`;
+      return err({ code: LoomFailureCode.CortexAuditFailed, message });
     }
-    new ValeExactFields({
-      actual: Object.keys(args.value),
-      expected: Object.values(ValeAlertField),
-      label: 'alert',
-    }).admit();
-    const action = args.value[ValeAlertField.Action] as UntrustedYamlNode;
-    const span = args.value[ValeAlertField.Span] as UntrustedYamlNode;
-    if (!UntrustedYamlBoundary.isRecord(action)) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint alert Action is invalid: ${args.file}`,
-      });
-    }
-    new ValeExactFields({
-      actual: Object.keys(action),
-      expected: Object.values(ValeActionField),
-      label: 'alert Action',
-    }).admit();
-    if (
-      typeof action[ValeActionField.Name] !== 'string' ||
-      action[ValeActionField.Params] !== JSON_NULL
-    ) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint alert Action shape is invalid: ${args.file}`,
-      });
-    }
-    if (
-      !Array.isArray(span) ||
-      span.length !== 2 ||
-      !span.every((value) => Number.isSafeInteger(value) && Number(value) >= 1)
-    ) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint alert Span is invalid: ${args.file}`,
-      });
-    }
-    const Check = args.value[ValeAlertField.Check];
-    const Description = args.value[ValeAlertField.Description];
-    const Line = args.value[ValeAlertField.Line];
-    const Link = args.value[ValeAlertField.Link];
-    const Match = args.value[ValeAlertField.Match];
-    const Message = args.value[ValeAlertField.Message];
-    const Severity = args.value[ValeAlertField.Severity];
-    if (typeof Check !== 'string' || Check.length === 0) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint alert Check is invalid: ${args.file}`,
-      });
-    }
-    if (!Number.isSafeInteger(Line) || Number(Line) < 1) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint alert Line is invalid: ${args.file}`,
-      });
-    }
-    if (typeof Message !== 'string' || Message.length === 0) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint alert Message is invalid: ${args.file}`,
-      });
-    }
-    if (typeof Severity !== 'string' || !this.isSeverity(Severity)) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint alert Severity is invalid: ${args.file}`,
-      });
-    }
-    if (
-      typeof Description !== 'string' ||
-      typeof Link !== 'string' ||
-      typeof Match !== 'string'
-    ) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint alert text fields are invalid: ${args.file}`,
-      });
-    }
+    const alert = decoded.data;
     return ok({
-      check: Check,
-      file: args.file,
-      line: Number(Line),
-      match: Match,
-      message: Message,
-      severity: Severity,
+      check: alert.Check,
+      file: this.request.file,
+      line: alert.Line,
+      match: alert.Match,
+      message: alert.Message,
+      severity: alert.Severity,
     });
   }
-  private isSeverity(value: string): value is ValeAlertSeverity {
-    return (
-      value === ValeAlertSeverity.Error ||
-      value === ValeAlertSeverity.Suggestion ||
-      value === ValeAlertSeverity.Warning
-    );
-  }
 }
-export class ValeExactFields {
-  constructor(private readonly request: RequireExactFieldsArgs) {}
-  admit(): Result<void, ValeFailure> {
-    const args = this.request;
-    const actual = [...args.actual].sort();
-    const expected = [...args.expected].sort();
-    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-      return err({
-        code: LoomFailureCode.CortexAuditFailed,
-        message: `Vale exact-file lint ${args.label} fields are invalid.`,
-      });
-    }
-
-    return ok(undefined);
-  }
-}
-
-type RequireExactFieldsArgs = {
-  readonly actual: readonly string[];
-  readonly expected: readonly string[];
-  readonly label: string;
-};
 
 export type ValeFailure =
   | HostCommandFailure

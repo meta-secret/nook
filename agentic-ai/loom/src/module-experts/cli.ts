@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { parseArgs } from 'node:util';
 import { readFile } from 'node:fs/promises';
 
 import { resolve } from 'node:path';
@@ -17,12 +18,12 @@ import {
 import type { InvokeModuleExpertArgs } from './invoke.ts';
 
 export class ModuleExpertCommandParser {
-  private constructor(private readonly request: readonly string[]) {}
+  constructor(private readonly request: readonly string[]) {}
   static parse(argv: readonly string[]): ModuleExpertCommandLine | false {
     return new ModuleExpertCommandParser(argv).execute();
   }
-  private async main(): Promise<number> {
-    const commandLine = this.execute(process.argv.slice(2));
+  async main(): Promise<number> {
+    const commandLine = this.execute();
     if (!commandLine) {
       console.error(HELP);
       return 2;
@@ -52,36 +53,64 @@ export class ModuleExpertCommandParser {
   }
 
   private execute(): ModuleExpertCommandLine | false {
-    const argv = this.request;
+    let parsed;
+    try {
+      parsed = parseArgs({
+        args: [...this.request],
+        options: {
+          request: { type: 'string' },
+          'working-directory': { type: 'string' },
+        },
+        allowPositionals: true,
+        strict: false,
+        tokens: true,
+      });
+    } catch {
+      return false;
+    }
+    const { values, positionals, tokens } = parsed;
+    const [command] = positionals;
+    const directory = values['working-directory'];
+    const expected =
+      command === ModuleExpertCommandKind.Invoke
+        ? ['request', 'working-directory']
+        : ['working-directory'];
     if (
-      argv.length === 5 &&
-      argv[0] === ModuleExpertCommandKind.Invoke &&
-      argv[1] === '--request' &&
-      argv[2] &&
-      !argv[2].startsWith('--') &&
-      argv[3] === '--working-directory' &&
-      argv[4] &&
-      !argv[4].startsWith('--')
+      positionals.length !== 1 ||
+      tokens.length !== expected.length + 1 ||
+      tokens[0]?.kind !== 'positional' ||
+      tokens
+        .slice(1)
+        .some(
+          (token, index) =>
+            token.kind !== 'option' ||
+            token.name !== expected[index] ||
+            token.inlineValue ||
+            token.index !== index * 2 + 1,
+        ) ||
+      typeof directory !== 'string' ||
+      !directory ||
+      directory.startsWith('--')
+    )
+      return false;
+    if (
+      command === ModuleExpertCommandKind.Invoke &&
+      typeof values.request === 'string' &&
+      values.request &&
+      !values.request.startsWith('--')
     ) {
       return {
         kind: ModuleExpertCommandKind.Invoke,
-        requestPath: resolve(argv[2]),
-        workingDirectory: resolve(argv[4]),
+        requestPath: resolve(values.request),
+        workingDirectory: resolve(directory),
       };
     }
-    if (
-      argv.length !== 3 ||
-      argv[0] !== ModuleExpertCommandKind.Validate ||
-      argv[1] !== '--working-directory' ||
-      !argv[2] ||
-      argv[2].startsWith('--')
-    ) {
-      return false;
-    }
-    return {
-      kind: ModuleExpertCommandKind.Validate,
-      workingDirectory: resolve(argv[2]),
-    };
+    return command === ModuleExpertCommandKind.Validate
+      ? {
+          kind: ModuleExpertCommandKind.Validate,
+          workingDirectory: resolve(directory),
+        }
+      : false;
   }
 }
 
@@ -109,12 +138,13 @@ export type InvokeModuleExpertCommandLine = {
 };
 
 export type ModuleExpertCommandLine =
-  | ValidateModuleExpertCommandLine
-  | InvokeModuleExpertCommandLine;
+  ValidateModuleExpertCommandLine | InvokeModuleExpertCommandLine;
 
 if (import.meta.main) {
   try {
-    process.exit(await main());
+    process.exit(
+      await new ModuleExpertCommandParser(process.argv.slice(2)).main(),
+    );
   } catch {
     console.error('Module expert command failed.');
     process.exit(1);
