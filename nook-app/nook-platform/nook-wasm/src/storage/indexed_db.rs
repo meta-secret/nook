@@ -716,7 +716,7 @@ mod sentinel_genesis_storage_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use local_vault::SaveVaultBlobRequest;
 #[cfg(test)]
 pub(crate) use local_vault::UpsertRegistryEntryRequest;

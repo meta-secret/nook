@@ -935,7 +935,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         );
     }
     assert!(
-        prompt_loader.contains("process.env.MAJOR_CHANGE_AUTHORIZED === \"true\"")
+        prompt_loader.contains("this.environment.MAJOR_CHANGE_AUTHORIZED === \"true\"")
             && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}")
             && prompt_loader
                 .contains("Validated implementation plan hash changed before agent start")
