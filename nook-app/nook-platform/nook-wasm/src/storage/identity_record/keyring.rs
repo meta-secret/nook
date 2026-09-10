@@ -1,6 +1,7 @@
 //! Versioned persistence for independently protected local identity keys.
 
 use crate::IdentityDbWriteIdentityDirectory;
+use crate::storage::indexed_db::StoredStringRecord;
 use nook_core::LocalIdentityProtection;
 
 use crate::NookDatabase;
@@ -66,7 +67,7 @@ pub(crate) struct KeyringDbEntryForAppIdFromStore<'a> {
 impl NookDatabase {
     async fn keyring_read_string(
         request: KeyringDbKeyringReadString<'_>,
-    ) -> Result<Option<String>, NookError> {
+    ) -> Result<StoredStringRecord, NookError> {
         let KeyringDbKeyringReadString {
             store,
             key,
@@ -78,11 +79,15 @@ impl NookDatabase {
             .get(key)
             .await
             .map_err(|error| NookError::IndexedDb(format!("{context} read error: {error:?}")))?;
-        value
-            .filter(|value| !value.is_undefined() && !value.is_null())
-            .map(serde_wasm_bindgen::from_value::<String>)
-            .transpose()
-            .map_err(|error| NookError::IndexedDb(format!("{context} value error: {error:?}")))
+        match value {
+            None => Ok(StoredStringRecord::MissingKey),
+            Some(value) if value.is_undefined() || value.is_null() => {
+                Ok(StoredStringRecord::MissingKey)
+            }
+            Some(value) => serde_wasm_bindgen::from_value::<String>(value)
+                .map(StoredStringRecord::Stored)
+                .map_err(|error| NookError::IndexedDb(format!("{context} value error: {error:?}"))),
+        }
     }
 }
 
@@ -126,8 +131,8 @@ impl NookDatabase {
         })
         .await?
         {
-            Some(raw) => NookDatabase::decode_keyring(&raw),
-            None => Ok(LocalIdentityKeyring::empty()),
+            StoredStringRecord::Stored(raw) => NookDatabase::decode_keyring(&raw),
+            StoredStringRecord::MissingKey => Ok(LocalIdentityKeyring::empty()),
         }
     }
 }
@@ -212,8 +217,8 @@ impl NookDatabase {
         })
         .await?
         {
-            Some(raw) => NookDatabase::decode_keyring(&raw)?,
-            None => LocalIdentityKeyring::empty(),
+            StoredStringRecord::Stored(raw) => NookDatabase::decode_keyring(&raw)?,
+            StoredStringRecord::MissingKey => LocalIdentityKeyring::empty(),
         };
         let migrated = NookDatabase::migrate_legacy_active_key(LegacyIdentityKeyMigration {
             store: store,
@@ -311,9 +316,10 @@ impl NookDatabase {
         if entry.has_signing_seed() {
             return Ok(false);
         }
-        Ok(NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY)
-            .await?
-            .is_some())
+        Ok(matches!(
+            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ))
     }
 }
 

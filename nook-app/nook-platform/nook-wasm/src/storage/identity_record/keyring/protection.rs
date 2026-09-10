@@ -22,6 +22,7 @@ use crate::KeyringDbValidateKeyringDirectoryBinding;
 use crate::KeyringDbWriteKeyring;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::{self, PENDING_SIMPLE_GENESIS_KEY, recovery};
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{event_db, indexed_db};
 use crate::{IdbPutStringRequest, NookDatabase, NookError, SaveWrappedDeviceIdentityRequest};
 use nook_core::MemberLabelState;
@@ -339,9 +340,8 @@ mod tests {
                 key: event_db::SIGNING_SEED_KEY,
                 context: "Test seed"
             })
-            .await?
-            .as_deref(),
-            Some(saved.signing_seed.as_str())
+            .await?,
+            StoredStringRecord::Stored((saved.signing_seed.as_str()).to_owned())
         );
         transaction.done().await.map_err(|error| {
             NookError::IndexedDb(format!("Prepared test completion error: {error:?}"))
@@ -416,7 +416,7 @@ mod tests {
         );
         assert_eq!(
             NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY,).await?,
-            Some(legacy_seed.clone())
+            StoredStringRecord::Stored(legacy_seed.clone())
         );
         assert_eq!(NookDatabase::load_keyring().await?.entries().len(), 1);
 
@@ -438,11 +438,10 @@ mod tests {
                 .map_err(|error| NookError::Database(error.to_string()))?,
             ProtectedSigningMaterial::Opened(SigningSeedHex::from_trusted(legacy_seed))
         );
-        assert!(
-            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY,)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY,).await?,
+            StoredStringRecord::MissingKey
+        ));
 
         NookDatabase::clear_keyring_for_test().await?;
         NookDatabase::clear_identity_directory_for_test().await
@@ -557,11 +556,10 @@ mod tests {
 
         assert_eq!(signing_seed, protected.signing_seed);
         assert!(NookDatabase::load_keyring().await?.entries()[0].has_signing_seed());
-        assert!(
-            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         NookDatabase::clear_keyring_for_test().await?;
         NookDatabase::clear_identity_directory_for_test().await
     }
@@ -864,11 +862,10 @@ mod tests {
                 protected.signing_seed.as_str().to_owned()
             ))
         );
-        assert!(
-            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         let _ = Rexie::delete("nook_db").await;
         Ok(())
     }
@@ -897,11 +894,10 @@ mod tests {
         .await?;
         NookDatabase::idb_delete_key(identity_record::IDENTITY_DIRECTORY_KEY).await?;
         assert!(NookDatabase::load_keyring().await.is_err());
-        assert!(
-            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
-                .await?
-                .is_some()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ));
         let _ = Rexie::delete("nook_db").await;
         Ok(())
     }

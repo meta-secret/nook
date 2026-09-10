@@ -11,6 +11,7 @@ use super::{
     PendingIdentityReconciliationProgress,
 };
 use crate::storage::identity_record::IdentityDirectoryWrite;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{IdbPutStringRequest, NookDatabase};
 use identity_record::LegacyVaultIdentityInput;
 use nook_core::DirectoryLegacyVaultImport;
@@ -67,7 +68,7 @@ impl IdentityReconciliationStore<'_> {
             checkpoint_ancestors,
         } = input;
 
-        let Some(raw) =
+        let StoredStringRecord::Stored(raw) =
             NookDatabase::idb_get_string(&IdentityReconciliationStore::new(store_id).key()).await?
         else {
             if let (
@@ -320,7 +321,7 @@ mod browser_tests {
                     &IdentityReconciliationStore::new(&self.store_id).key()
                 )
                 .await?,
-                Some(self.marker.clone())
+                StoredStringRecord::Stored(self.marker.clone())
             );
             Ok(())
         }
@@ -348,13 +349,13 @@ mod browser_tests {
         );
         let expected = persisted.record.clone();
         assert_eq!(persisted.complete().await?, expected);
-        assert!(
+        assert!(matches!(
             NookDatabase::idb_get_string(
                 &IdentityReconciliationStore::new(&fixture.store_id).key()
             )
-            .await?
-            .is_none()
-        );
+            .await?,
+            StoredStringRecord::MissingKey
+        ));
         NookDatabase::clear_vault_db().await
     }
 
@@ -380,10 +381,8 @@ mod browser_tests {
         ));
         fixture.assert_marker().await?;
         assert_eq!(
-            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
-                .await?
-                .as_deref(),
-            Some("{malformed")
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
+            StoredStringRecord::Stored(("{malformed").to_owned())
         );
         NookDatabase::clear_vault_db().await
     }
@@ -406,11 +405,10 @@ mod browser_tests {
             let _unpolled_persistence = fixture.resolved()?.persist();
         }
         fixture.assert_marker().await?;
-        assert!(
-            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         {
             let _persisted = fixture.resolved()?.persist().await?;
         }
@@ -419,11 +417,10 @@ mod browser_tests {
             let _unpolled_completion = fixture.resolved()?.persist().await?.complete();
         }
         fixture.assert_marker().await?;
-        assert!(
-            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
-                .await?
-                .is_some()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ));
         NookDatabase::clear_vault_db().await
     }
 }

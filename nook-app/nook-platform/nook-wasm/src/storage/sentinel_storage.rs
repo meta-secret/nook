@@ -5,6 +5,7 @@
 //! persists the identifiers and encrypted delivery JSON returned by that
 //! verified boundary.
 
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use rexie::TransactionMode;
 use serde::{Deserialize, Serialize};
@@ -138,13 +139,19 @@ impl NookDatabase {
         if store_id.trim().is_empty() || device_id.trim().is_empty() {
             return Ok(None);
         }
-        NookDatabase::idb_get_string(&NookDatabase::sentinel_genesis_share_key(
-            SentinelDbSentinelGenesisShareKey {
-                store_id: store_id,
-                device_id: device_id,
+        Ok(
+            match NookDatabase::idb_get_string(&NookDatabase::sentinel_genesis_share_key(
+                SentinelDbSentinelGenesisShareKey {
+                    store_id: store_id,
+                    device_id: device_id,
+                },
+            ))
+            .await?
+            {
+                StoredStringRecord::MissingKey => None,
+                StoredStringRecord::Stored(raw) => Some(raw),
             },
-        ))
-        .await
+        )
     }
 }
 
@@ -155,7 +162,8 @@ impl NookDatabase {
         if device_id.trim().is_empty() {
             return Ok(Vec::new());
         }
-        let Some(json) = NookDatabase::idb_get_string(SENTINEL_GENESIS_SHARE_CATALOG_KEY).await?
+        let StoredStringRecord::Stored(json) =
+            NookDatabase::idb_get_string(SENTINEL_GENESIS_SHARE_CATALOG_KEY).await?
         else {
             return Ok(Vec::new());
         };
@@ -189,7 +197,12 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn load_sentinel_genesis_finalization_pending()
     -> Result<Option<String>, NookError> {
-        NookDatabase::idb_get_string(SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await
+        Ok(
+            match NookDatabase::idb_get_string(SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await? {
+                StoredStringRecord::MissingKey => None,
+                StoredStringRecord::Stored(raw) => Some(raw),
+            },
+        )
     }
 }
 

@@ -2,6 +2,7 @@
 use super::genesis_flow::PendingSimpleGenesisFlow;
 use super::staged_genesis::StagedSimpleGenesisIdentity;
 use super::*;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{
     IdentityDbMigrateDirectory, IdentityDbMigrateDirectoryInStore, IdentityDbPersistPendingGenesis,
     NookDatabase, NookError,
@@ -392,9 +393,12 @@ mod tests {
         .await?;
 
         let migrated = NookDatabase::load_identity_directory().await?;
-        let normalized_raw = NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-            .await?
-            .ok_or_else(|| NookError::Database("Staged marker is missing.".to_owned()))?;
+        let normalized_raw = match NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => {
+                Err(NookError::Database("Staged marker is missing.".to_owned()))
+            }
+        }?;
         let normalized = PendingSimpleGenesis::decode(&normalized_raw)?;
         let staged = normalized
             .staged_identity()

@@ -10,6 +10,7 @@ use crate::KeyringDbKeyringDeleteKey;
 use crate::KeyringDbKeyringReadString;
 use crate::KeyringDbLoadKeyringForStore;
 use crate::KeyringDbWriteKeyring;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{self, event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::LocalIdentityProtection;
@@ -106,11 +107,12 @@ impl IdentitySigningSource<'_> {
                 })
                 .await?
                 {
-                    Some(seed) => seed,
-                    None if matches!(
-                        legacy_signing_public_key,
-                        DeviceSigningPublicKey::Unavailable
-                    ) && matches!(self.vaults, IdentityVaultEvidence::Empty) =>
+                    StoredStringRecord::Stored(seed) => seed,
+                    StoredStringRecord::MissingKey
+                        if matches!(
+                            legacy_signing_public_key,
+                            DeviceSigningPublicKey::Unavailable
+                        ) && matches!(self.vaults, IdentityVaultEvidence::Empty) =>
                     {
                         SigningIdentity::generate()
                             .map_err(|error| NookError::Database(error.to_string()))?
@@ -118,7 +120,7 @@ impl IdentitySigningSource<'_> {
                             .as_str()
                             .to_owned()
                     }
-                    None => {
+                    StoredStringRecord::MissingKey => {
                         return Err(NookError::Database(
                     "Legacy protected identity with signing or vault evidence is missing its established signing seed"
                         .to_owned(),
@@ -197,12 +199,13 @@ impl LegacySignerProtection<'_> {
             mut directory,
             keyring,
         } = self;
-        let Some(seed) = NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
-            store: store,
-            key: event_db::SIGNING_SEED_KEY,
-            context: "Legacy signing seed",
-        })
-        .await?
+        let StoredStringRecord::Stored(seed) =
+            NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
+                store: store,
+                key: event_db::SIGNING_SEED_KEY,
+                context: "Legacy signing seed",
+            })
+            .await?
         else {
             return Ok(ProtectedLegacySigners { directory, keyring });
         };
@@ -403,10 +406,8 @@ mod tests {
                 NookError::IndexedDb(format!("Seed test completion error: {error:?}"))
             })?;
             assert_eq!(
-                NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY)
-                    .await?
-                    .as_deref(),
-                Some(self.seed.as_str())
+                NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
+                StoredStringRecord::Stored((self.seed.as_str()).to_owned())
             );
             NookDatabase::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
             result

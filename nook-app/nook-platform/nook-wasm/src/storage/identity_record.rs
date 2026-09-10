@@ -1,4 +1,5 @@
 //! Local identity-directory persistence, independent of vault `store_id`.
+use crate::storage::indexed_db::StoredStringRecord;
 use nook_core::AppKeyIdentityMembership;
 use nook_core::LocalIdentityProtection;
 use nook_core::MemberLabelState;
@@ -712,16 +713,14 @@ mod tests {
                 .identity_id,
             legacy_id
         );
-        assert!(
-            NookDatabase::idb_get_string(LEGACY_IDENTITY_RECORD_KEY)
-                .await?
-                .is_none()
-        );
-        assert!(
-            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
-                .await?
-                .is_some()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
+        assert!(matches!(
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ));
 
         let work_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let work_id = NookDatabase::update_identity_directory(move |directory| {
@@ -866,9 +865,12 @@ mod tests {
                 .map_err(NookDatabase::map_domain_error)?,
             expected
         );
-        let normalized_raw = NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
-            .await?
-            .ok_or_else(|| NookError::IndexedDb("Normalized directory is missing.".to_owned()))?;
+        let normalized_raw = match NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await? {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => Err(NookError::IndexedDb(
+                "Normalized directory is missing.".to_owned(),
+            )),
+        }?;
         assert_ne!(normalized_raw, legacy_raw);
         let normalized: IdentityDirectory = serde_json::from_str(&normalized_raw)
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
@@ -915,10 +917,8 @@ mod tests {
             identity_id
         );
         assert_eq!(
-            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-                .await?
-                .as_deref(),
-            Some(malformed_marker)
+            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?,
+            StoredStringRecord::Stored((malformed_marker).to_owned())
         );
         NookDatabase::clear_identity_directory_for_test().await
     }
@@ -963,11 +963,10 @@ mod tests {
 
         let loaded = NookDatabase::load_identity_directory().await?;
         assert_eq!(loaded, current);
-        assert!(
-            NookDatabase::idb_get_string(LEGACY_IDENTITY_RECORD_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         NookDatabase::clear_identity_directory_for_test().await
     }
 
@@ -991,11 +990,10 @@ mod tests {
         .await?;
 
         assert!(NookDatabase::load_identity_directory().await.is_err());
-        assert!(
-            NookDatabase::idb_get_string(LEGACY_IDENTITY_RECORD_KEY)
-                .await?
-                .is_some()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ));
         NookDatabase::clear_identity_directory_for_test().await
     }
 }

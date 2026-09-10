@@ -334,11 +334,10 @@ mod tests {
             result,
             Err(NookError::Database(message)) if message.contains("recovery cleanup")
         ));
-        assert!(
-            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         NookDatabase::idb_delete_key(recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY).await?;
         NookDatabase::clear_identity_directory_for_test().await
     }
@@ -816,11 +815,10 @@ mod tests {
                 if message.contains("belongs to another local identity")
         ));
         assert_eq!(NookDatabase::load_identity_directory().await?, base);
-        assert!(
-            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         NookDatabase::clear_identity_directory_for_test().await
     }
 

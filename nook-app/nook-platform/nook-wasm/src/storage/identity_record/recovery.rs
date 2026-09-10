@@ -6,6 +6,7 @@
 //! Destructive identity and device recovery persistence.
 use crate::IdentityDbWriteIdentityDirectory;
 use crate::KeyringDbWriteKeyring;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{device_access, event_db, identity_record, indexed_db};
 use crate::{IdbPutStringRequest, NookDatabase};
 use crate::{NookError, storage};
@@ -434,16 +435,12 @@ mod browser_tests {
         }
         async fn assert_unpublished(&self) -> Result<(), NookError> {
             assert_eq!(
-                NookDatabase::idb_get_string(identity_record::IDENTITY_DIRECTORY_KEY)
-                    .await?
-                    .as_deref(),
-                Some(self.directory.as_str())
+                NookDatabase::idb_get_string(identity_record::IDENTITY_DIRECTORY_KEY).await?,
+                StoredStringRecord::Stored((self.directory.as_str()).to_owned())
             );
             assert_eq!(
-                NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY)
-                    .await?
-                    .as_deref(),
-                Some("retained-until-persistence")
+                NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
+                StoredStringRecord::Stored(("retained-until-persistence").to_owned())
             );
             assert!(!LocalIdentityRecovery::has_pending().await?);
             Ok(())
@@ -473,11 +470,10 @@ mod browser_tests {
         let completed = fixture.prepare().await?.persist().await?;
         assert!(!completed.has_remaining_local_identities);
         assert!(LocalIdentityRecovery::has_pending().await?);
-        assert!(
-            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         let resumed = LocalIdentityRecoveryRequest {
             expected_app_id: None,
         }

@@ -305,9 +305,12 @@ mod tests {
                 proposed_signing_seed: "first-seed".to_owned(),
             })
             .await?;
-        let stored = NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-            .await?
-            .ok_or_else(|| NookError::IndexedDb("Marker disappeared.".to_owned()))?;
+        let stored = match NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => {
+                Err(NookError::IndexedDb("Marker disappeared.".to_owned()))
+            }
+        }?;
         assert!(!stored.contains("first-seed"));
         assert!(stored.contains("signingSeedEnvelope"));
         let resumed = (&pending)
@@ -402,9 +405,12 @@ mod tests {
             }
         }
         async fn marker(&self) -> Result<String, NookError> {
-            NookDatabase::idb_get_string(super::PENDING_SIMPLE_GENESIS_KEY)
-                .await?
-                .ok_or_else(|| NookError::IndexedDb("Pinning marker disappeared.".to_owned()))
+            match NookDatabase::idb_get_string(super::PENDING_SIMPLE_GENESIS_KEY).await? {
+                StoredStringRecord::Stored(value) => Ok(value),
+                StoredStringRecord::MissingKey => Err(NookError::IndexedDb(
+                    "Pinning marker disappeared.".to_owned(),
+                )),
+            }
         }
     }
     #[cfg_attr(

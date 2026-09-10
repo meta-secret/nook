@@ -109,21 +109,22 @@ impl DeviceAccessProfileKey {
     }
     pub(crate) async fn load(self) -> Result<DeviceAccessProfile, NookError> {
         let raw = match NookDatabase::idb_get_string(&self.value).await? {
-            Some(raw) => Some(raw),
-            None if self.legacy_owner.is_some() => {
-                NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
-                    .await?
-                    .filter(|raw| {
-                        LegacyProfileAdmission {
-                            owner: self.legacy_owner.as_ref(),
-                        }
-                        .accepts(raw)
-                    })
+            StoredStringRecord::Stored(raw) => raw,
+            StoredStringRecord::MissingKey => {
+                let Some(owner) = self.legacy_owner.as_ref() else {
+                    return Ok(DeviceAccessProfile::default());
+                };
+                match NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? {
+                    StoredStringRecord::Stored(raw)
+                        if (LegacyProfileAdmission { owner: Some(owner) }).accepts(&raw) =>
+                    {
+                        raw
+                    }
+                    StoredStringRecord::Stored(_) | StoredStringRecord::MissingKey => {
+                        return Ok(DeviceAccessProfile::default());
+                    }
+                }
             }
-            None => None,
-        };
-        let Some(raw) = raw else {
-            return Ok(DeviceAccessProfile::default());
         };
         Ok(match nook_core::DeviceAccessProfile::decode(&raw) {
             DeviceAccessProfileDecodeResult::Current(profile) => *profile,
@@ -356,10 +357,13 @@ mod browser_tests {
 
         assert_eq!(result, StringUpdateResult::Applied);
         assert_eq!(
-            NookDatabase::idb_get_string(SOURCE_KEY).await?.as_deref(),
-            Some(companion_raw.as_str())
+            NookDatabase::idb_get_string(SOURCE_KEY).await?,
+            StoredStringRecord::Stored((companion_raw.as_str()).to_owned())
         );
-        assert!(NookDatabase::idb_get_string(TARGET_KEY).await?.is_some());
+        assert!(matches!(
+            NookDatabase::idb_get_string(TARGET_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ));
         NookDatabase::idb_delete_keys(&[SOURCE_KEY, TARGET_KEY]).await?;
         Ok(())
     }
@@ -378,7 +382,7 @@ mod browser_tests {
                 legacy_owner: None,
             }
         }
-        async fn read(&self) -> Result<Option<String>, NookError> {
+        async fn read(&self) -> Result<StoredStringRecord, NookError> {
             NookDatabase::idb_get_string(&self.key).await
         }
         async fn write(&self, raw: &str) -> Result<(), NookError> {
@@ -418,7 +422,10 @@ mod browser_tests {
         let destination = fixture.destination();
         assert_eq!(destination.value, fixture.key);
         drop(destination);
-        assert_eq!(fixture.read().await?.as_deref(), Some(original));
+        assert_eq!(
+            fixture.read().await?,
+            StoredStringRecord::Stored((original).to_owned())
+        );
         fixture.clear().await?;
         Ok(())
     }
@@ -459,7 +466,10 @@ mod browser_tests {
             .await;
         ProfileMutationFixture::expect_rejected(result)?;
         assert!(called.get());
-        assert_eq!(fixture.read().await?.as_deref(), Some(original.as_str()));
+        assert_eq!(
+            fixture.read().await?,
+            StoredStringRecord::Stored((original.as_str().to_owned()))
+        );
         fixture.clear().await?;
         Ok(())
     }
@@ -490,7 +500,10 @@ mod browser_tests {
             .await?;
         assert_eq!(outcome, StringUpdateResult::Applied);
         assert!(!called.get());
-        assert_eq!(fixture.read().await?.as_deref(), Some(original));
+        assert_eq!(
+            fixture.read().await?,
+            StoredStringRecord::Stored((original).to_owned())
+        );
         let rejected = fixture
             .destination()
             .update(DeviceAccessProfileMutation {
@@ -510,7 +523,10 @@ mod browser_tests {
             Ok(_) => anyhow::bail!("future metadata must reject interactive mutation"),
         }
         assert!(!called.get());
-        assert_eq!(fixture.read().await?.as_deref(), Some(original));
+        assert_eq!(
+            fixture.read().await?,
+            StoredStringRecord::Stored((original).to_owned())
+        );
         fixture.clear().await?;
         Ok(())
     }
@@ -545,7 +561,10 @@ mod browser_tests {
             .await?;
         assert_eq!(outcome, StringUpdateResult::GuardRejected);
         assert!(!called.get());
-        assert_eq!(fixture.read().await?.as_deref(), Some(original));
+        assert_eq!(
+            fixture.read().await?,
+            StoredStringRecord::Stored((original).to_owned())
+        );
         fixture.clear().await?;
         Ok(())
     }

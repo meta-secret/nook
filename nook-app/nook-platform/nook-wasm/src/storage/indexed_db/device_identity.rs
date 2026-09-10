@@ -429,14 +429,13 @@ mod tests {
                 .identities()
                 .is_empty()
         );
-        assert!(
-            NookDatabase::idb_get_string(simple_genesis::PENDING_SIMPLE_GENESIS_KEY,)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(simple_genesis::PENDING_SIMPLE_GENESIS_KEY,).await?,
+            StoredStringRecord::MissingKey
+        ));
         assert_eq!(
             NookDatabase::idb_get_string("vault:preserved").await?,
-            Some("ciphertext".to_owned())
+            StoredStringRecord::Stored("ciphertext".to_owned())
         );
         recovery.complete().await?;
         Ok(())

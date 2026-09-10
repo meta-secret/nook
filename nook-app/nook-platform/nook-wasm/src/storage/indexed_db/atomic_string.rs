@@ -352,12 +352,12 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(
-            NookDatabase::idb_get_string(SOURCE_KEY).await?.as_deref(),
-            Some("legacy-value")
+            NookDatabase::idb_get_string(SOURCE_KEY).await?,
+            StoredStringRecord::Stored(("legacy-value").to_owned())
         );
         assert_eq!(
-            NookDatabase::idb_get_string(TARGET_KEY).await?.as_deref(),
-            Some("scoped-value")
+            NookDatabase::idb_get_string(TARGET_KEY).await?,
+            StoredStringRecord::Stored(("scoped-value").to_owned())
         );
         NookDatabase::idb_delete_keys(&[SOURCE_KEY, TARGET_KEY]).await?;
         Ok(())
@@ -389,10 +389,13 @@ mod tests {
         .await?;
 
         assert_eq!(result, StringUpdateResult::Applied);
-        assert!(NookDatabase::idb_get_string(SOURCE_KEY).await?.is_none());
+        assert!(matches!(
+            NookDatabase::idb_get_string(SOURCE_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         assert_eq!(
-            NookDatabase::idb_get_string(TARGET_KEY).await?.as_deref(),
-            Some("legacy-value-updated")
+            NookDatabase::idb_get_string(TARGET_KEY).await?,
+            StoredStringRecord::Stored(("legacy-value-updated").to_owned())
         );
         NookDatabase::idb_delete_key(TARGET_KEY).await?;
         Ok(())
@@ -414,8 +417,8 @@ mod tests {
             StringUpdateResult::Applied
         );
         assert_eq!(
-            NookDatabase::idb_get_string("current").await?.as_deref(),
-            Some("-updated")
+            NookDatabase::idb_get_string("current").await?,
+            StoredStringRecord::Stored(("-updated").to_owned())
         );
 
         NookDatabase::idb_put_string(IdbPutStringRequest {
@@ -438,12 +441,12 @@ mod tests {
             StringUpdateResult::Applied
         );
         assert_eq!(
-            NookDatabase::idb_get_string("target").await?.as_deref(),
-            Some("fresh")
+            NookDatabase::idb_get_string("target").await?,
+            StoredStringRecord::Stored(("fresh").to_owned())
         );
         assert_eq!(
-            NookDatabase::idb_get_string("fallback").await?.as_deref(),
-            Some("legacy")
+            NookDatabase::idb_get_string("fallback").await?,
+            StoredStringRecord::Stored(("legacy").to_owned())
         );
 
         NookDatabase::idb_migrate_string_if(IndexedDbMigration {
@@ -464,10 +467,8 @@ mod tests {
         })
         .await?;
         assert_eq!(
-            NookDatabase::idb_get_string("blocked-source")
-                .await?
-                .as_deref(),
-            Some("legacy")
+            NookDatabase::idb_get_string("blocked-source").await?,
+            StoredStringRecord::Stored(("legacy").to_owned())
         );
 
         let bad_guard = NookDatabase::idb_update_string(IndexedDbUpdate {

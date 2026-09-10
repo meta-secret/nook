@@ -6,6 +6,7 @@
 )]
 
 use crate::storage::indexed_db;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{NookDatabase, NookError};
 use rexie::TransactionMode;
 
@@ -45,11 +46,10 @@ impl LocalIdentityRecovery {
     }
 
     pub(crate) async fn has_pending() -> Result<bool, NookError> {
-        Ok(
-            NookDatabase::idb_get_string(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
-                .await?
-                .is_some(),
-        )
+        Ok(matches!(
+            NookDatabase::idb_get_string(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ))
     }
 
     pub(super) async fn write_pending(&self, store: &rexie::Store) -> Result<(), NookError> {
@@ -136,9 +136,16 @@ mod tests {
             .done()
             .await
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
-        let original = NookDatabase::idb_get_string(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
-            .await?
-            .ok_or_else(|| NookError::Database("Cleanup marker is missing.".to_owned()))?;
+        let original = match NookDatabase::idb_get_string(
+            PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY,
+        )
+        .await?
+        {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => {
+                Err(NookError::Database("Cleanup marker is missing.".to_owned()))
+            }
+        }?;
         assert!(LocalIdentityRecovery::has_pending().await?);
         for changed in [
             LocalIdentityRecovery {
@@ -162,10 +169,8 @@ mod tests {
                 }
             }
             assert_eq!(
-                NookDatabase::idb_get_string(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
-                    .await?
-                    .as_ref(),
-                Some(&original)
+                NookDatabase::idb_get_string(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY).await?,
+                StoredStringRecord::Stored(original.clone())
             );
         }
         let absent = recovery.clone();

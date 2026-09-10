@@ -7,6 +7,7 @@ use crate::IdentityDbSaveProtectedLocalIdentity;
 use crate::manager::session::ExtensionHandoffState;
 use crate::storage::device_access::DeviceAccessProfileKey;
 use crate::storage::identity_record::LocalIdentitySigner;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{auth_providers, identity_record, indexed_db};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use identity_record::{LocalIdentityRecovery, PendingSimpleGenesis};
@@ -269,11 +270,10 @@ mod browser_tests {
                 .ok_or_else(|| anyhow::anyhow!("migrated identity is missing"))?
                 .has_signing_seed()
         );
-        assert!(
-            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY,)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY,).await?,
+            StoredStringRecord::MissingKey
+        ));
         manager
             .delete_local_browser_data()
             .await

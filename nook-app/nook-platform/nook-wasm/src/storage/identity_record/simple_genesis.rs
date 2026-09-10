@@ -243,10 +243,10 @@ impl PendingSimpleGenesis {
         Ok((pending.store_id == store_id).then_some(pending))
     }
     pub(crate) async fn load() -> Result<Option<Self>, NookError> {
-        NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-            .await?
-            .map(|raw| PendingSimpleGenesis::decode(&raw))
-            .transpose()
+        match NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
+            StoredStringRecord::MissingKey => Ok(None),
+            StoredStringRecord::Stored(raw) => PendingSimpleGenesis::decode(&raw).map(Some),
+        }
     }
 }
 pub(crate) struct OrdinarySimpleGenesisRequest<'a> {
@@ -256,10 +256,10 @@ pub(crate) struct OrdinarySimpleGenesisRequest<'a> {
 impl OrdinarySimpleGenesisRequest<'_> {
     pub(crate) async fn begin_or_resume(self) -> Result<PendingSimpleGenesis, NookError> {
         let Self { app_key, label } = self;
-        if NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-            .await?
-            .is_some()
-        {
+        if matches!(
+            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ) {
             let selected = Rc::new(RefCell::new(None));
             let captured = Rc::clone(&selected);
             NookDatabase::idb_update_string(IndexedDbUpdate {
@@ -432,9 +432,12 @@ mod tests {
         }
         .begin_or_resume()
         .await?;
-        let original = NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-            .await?
-            .ok_or_else(|| NookError::Database("Pending genesis marker is missing.".to_owned()))?;
+        let original = match NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => Err(NookError::Database(
+                "Pending genesis marker is missing.".to_owned(),
+            )),
+        }?;
         let different_store = PendingSimpleGenesis {
             store_id: nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?,
             ..pending.clone()
@@ -457,20 +460,17 @@ mod tests {
             .clear_pending()
             .await?;
             assert_eq!(
-                NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-                    .await?
-                    .as_ref(),
-                Some(&original)
+                NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?,
+                StoredStringRecord::Stored(original.clone())
             );
         }
         SimpleGenesisCompletion::Ordinary { pending: &pending }
             .clear_pending()
             .await?;
-        assert!(
-            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         NookDatabase::clear_identity_directory_for_test().await
     }
 
@@ -511,9 +511,12 @@ mod tests {
         .begin_or_resume()
         .await?;
         assert_eq!(marker.event_yaml(), Some("signed-event\n"));
-        let upgraded = NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-            .await?
-            .ok_or_else(|| NookError::IndexedDb("Marker disappeared.".to_owned()))?;
+        let upgraded = match NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => {
+                Err(NookError::IndexedDb("Marker disappeared.".to_owned()))
+            }
+        }?;
         let upgraded: UpgradedGenesisMarker = serde_json::from_str(&upgraded)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         assert!(

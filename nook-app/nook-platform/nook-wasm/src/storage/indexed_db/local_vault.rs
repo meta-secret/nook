@@ -3,6 +3,7 @@ use super::{
     ACTIVE_VAULT_KEY, Date, IsoTimestamp, NookError, PENDING_NEW_LOCAL_VAULT_KEY, TransactionMode,
     VAULT_REGISTRY_KEY, VaultName, VaultRegistry, VaultRegistryEntry, VaultStoreIdentity,
 };
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{IdbPutStringRequest, NookDatabase, SecretSearchBucketKeyRequest};
 use nook_core::ActiveVaultScope;
 
@@ -99,7 +100,7 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn load_vault_registry() -> Result<VaultRegistry, NookError> {
         let raw = NookDatabase::idb_get_string(VAULT_REGISTRY_KEY).await?;
-        let Some(json) = raw else {
+        let StoredStringRecord::Stored(json) = raw else {
             return Ok(VaultRegistry::default());
         };
         let mut registry: VaultRegistry = serde_json::from_str(&json)
@@ -129,8 +130,8 @@ impl NookDatabase {
     pub(crate) async fn get_active_vault_id() -> Result<ActiveVaultScope, NookError> {
         Ok(
             match NookDatabase::idb_get_string(ACTIVE_VAULT_KEY).await? {
-                Some(store_id) => ActiveVaultScope::StoreId(store_id),
-                None => ActiveVaultScope::Unselected,
+                StoredStringRecord::Stored(store_id) => ActiveVaultScope::StoreId(store_id),
+                StoredStringRecord::MissingKey => ActiveVaultScope::Unselected,
             },
         )
     }
@@ -154,9 +155,10 @@ impl NookDatabase {
 
 impl NookDatabase {
     async fn is_pending_new_local_vault() -> Result<bool, NookError> {
-        Ok(NookDatabase::idb_get_string(PENDING_NEW_LOCAL_VAULT_KEY)
-            .await?
-            .is_some())
+        Ok(matches!(
+            NookDatabase::idb_get_string(PENDING_NEW_LOCAL_VAULT_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ))
     }
 }
 
@@ -232,8 +234,8 @@ impl NookDatabase {
     pub(crate) async fn load_vault_blob(store_id: &str) -> Result<VaultSnapshotLookup, NookError> {
         Ok(
             match NookDatabase::idb_get_string(&NookDatabase::vault_blob_key(store_id)).await? {
-                Some(content) => VaultSnapshotLookup::Stored(content),
-                None => VaultSnapshotLookup::NotStored,
+                StoredStringRecord::Stored(content) => VaultSnapshotLookup::Stored(content),
+                StoredStringRecord::MissingKey => VaultSnapshotLookup::NotStored,
             },
         )
     }
@@ -380,8 +382,8 @@ impl NookDatabase {
     ) -> Result<VaultSnapshotLookup, NookError> {
         Ok(
             match NookDatabase::idb_get_string(&NookDatabase::vault_cache_key(cache_ref)).await? {
-                Some(content) => VaultSnapshotLookup::Stored(content),
-                None => VaultSnapshotLookup::NotStored,
+                StoredStringRecord::Stored(content) => VaultSnapshotLookup::Stored(content),
+                StoredStringRecord::MissingKey => VaultSnapshotLookup::NotStored,
             },
         )
     }

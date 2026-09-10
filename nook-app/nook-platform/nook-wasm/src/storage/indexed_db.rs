@@ -247,7 +247,7 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(crate) async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
+    pub(crate) async fn idb_get_string(key: &str) -> Result<StoredStringRecord, NookError> {
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadOnly)
@@ -266,12 +266,12 @@ impl NookDatabase {
             .await
             .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
         match value {
-            None => Ok(None),
-            Some(val) if val.is_undefined() || val.is_null() => Ok(None),
+            None => Ok(StoredStringRecord::MissingKey),
+            Some(val) if val.is_undefined() || val.is_null() => Ok(StoredStringRecord::MissingKey),
             Some(val) => {
                 let text: String = serde_wasm_bindgen::from_value(val)
                     .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))?;
-                Ok(Some(text))
+                Ok(StoredStringRecord::Stored(text))
             }
         }
     }
@@ -663,11 +663,10 @@ mod sentinel_genesis_storage_tests {
         })
         .await?;
         NookDatabase::delete_legacy_secret_search_catalog(&first_id).await?;
-        assert!(
-            NookDatabase::idb_get_string(&NookDatabase::secret_search_key(&first_id))
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(&NookDatabase::secret_search_key(&first_id)).await?,
+            StoredStringRecord::MissingKey
+        ));
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: &NookDatabase::vault_cache_key("provider-cache"),
             value: "cached-vault",

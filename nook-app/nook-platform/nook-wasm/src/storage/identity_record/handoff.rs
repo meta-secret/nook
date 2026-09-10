@@ -8,6 +8,7 @@
 mod existing_vault;
 use crate::manager::PendingExtensionIdentityEnrollment;
 use crate::storage::event_db;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{IdbPutStringRequest, NookDatabase, manager};
 use existing_vault::ExistingVaultHandoff;
 use nook_core::MemberLabelState;
@@ -359,11 +360,10 @@ mod tests {
         {
             let _commit = fixture.request(&enrollment).commit();
         }
-        assert!(
-            NookDatabase::idb_get_string(identity_record::IDENTITY_DIRECTORY_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(identity_record::IDENTITY_DIRECTORY_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         assert!(matches!(
             NookDatabase::load_signing_seed().await?,
             StoredSigningSeed::Missing

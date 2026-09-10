@@ -297,8 +297,14 @@ mod tests {
         .execute()
         .await?;
 
-        assert!(NookDatabase::idb_get_string(&marker_v2).await?.is_none());
-        assert!(NookDatabase::idb_get_string(&marker_v1).await?.is_none());
+        assert!(matches!(
+            NookDatabase::idb_get_string(&marker_v2).await?,
+            StoredStringRecord::MissingKey
+        ));
+        assert!(matches!(
+            NookDatabase::idb_get_string(&marker_v1).await?,
+            StoredStringRecord::MissingKey
+        ));
 
         let stale_result = NookDatabase::ensure_local_identity_for_app_key(
             IdentityDbEnsureLocalIdentityForAppKey {
@@ -389,12 +395,14 @@ mod tests {
         .execute()
         .await?;
 
-        assert!(
-            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
-                .await?
-                .is_none()
-        );
-        assert!(NookDatabase::idb_get_string(&marker).await?.is_none());
+        assert!(matches!(
+            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
+        assert!(matches!(
+            NookDatabase::idb_get_string(&marker).await?,
+            StoredStringRecord::MissingKey
+        ));
         let recovered = NookDatabase::load_identity_directory().await?;
         assert!(recovered.identities().is_empty());
         assert!(matches!(
@@ -464,17 +472,18 @@ mod tests {
         }
         .execute()
         .await?;
-        assert!(
-            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
-                .await?
-                .is_none()
-        );
-        assert!(
-            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY)
-                .await?
-                .is_none()
-        );
-        assert!(NookDatabase::idb_get_string(&marker).await?.is_none());
+        assert!(matches!(
+            NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
+        assert!(matches!(
+            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
+        assert!(matches!(
+            NookDatabase::idb_get_string(&marker).await?,
+            StoredStringRecord::MissingKey
+        ));
         let recovered = NookDatabase::load_identity_directory().await?;
         assert!(recovered.retired_app_ids().is_empty());
         recovery.complete().await?;
@@ -568,11 +577,11 @@ mod tests {
         assert_ne!(first.identity.identity_id, second.identity.identity_id);
         assert_eq!(
             NookDatabase::idb_get_string(&unrelated_marker).await?,
-            Some("remaining-identity-plan".to_owned())
+            StoredStringRecord::Stored("remaining-identity-plan".to_owned())
         );
         assert_eq!(
             NookDatabase::idb_get_string(device_access::DEVICE_ACCESS_PROFILE_KEY).await?,
-            Some("companion-access-evidence".to_owned())
+            StoredStringRecord::Stored("companion-access-evidence".to_owned())
         );
 
         recovery.complete().await?;
@@ -682,9 +691,12 @@ mod tests {
             label: "Work",
         })
         .await?;
-        let directory_before = NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY)
-            .await?
-            .ok_or_else(|| NookError::IndexedDb("Identity directory is missing".to_owned()))?;
+        let directory_before = match NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await? {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => Err(NookError::IndexedDb(
+                "Identity directory is missing".to_owned(),
+            )),
+        }?;
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: keyring::LOCAL_IDENTITY_KEYRING_KEY,
             value: "{future-or-corrupt",
@@ -703,11 +715,11 @@ mod tests {
         ));
         assert_eq!(
             NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
-            Some(directory_before)
+            StoredStringRecord::Stored(directory_before)
         );
         assert_eq!(
             NookDatabase::idb_get_string(keyring::LOCAL_IDENTITY_KEYRING_KEY).await?,
-            Some("{future-or-corrupt".to_owned())
+            StoredStringRecord::Stored("{future-or-corrupt".to_owned())
         );
         NookDatabase::clear_keyring_for_test().await?;
         NookDatabase::clear_identity_directory_for_test().await
@@ -887,7 +899,7 @@ mod tests {
         assert_eq!(
             NookDatabase::idb_get_string(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY)
                 .await?,
-            Some("{}".to_owned())
+            StoredStringRecord::Stored("{}".to_owned())
         );
         NookDatabase::idb_delete_key(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await?;
         NookDatabase::clear_keyring_for_test().await?;

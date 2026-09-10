@@ -104,7 +104,7 @@ impl<'a> IdentityReconciliationStore<'a> {
     pub(crate) async fn load(&self) -> Result<Option<PendingIdentityRotation>, NookError> {
         let store_id = self.store_id;
 
-        let Some(raw) =
+        let StoredStringRecord::Stored(raw) =
             NookDatabase::idb_get_string(&IdentityReconciliationStore::new(store_id).key()).await?
         else {
             return Ok(None);
@@ -516,9 +516,12 @@ mod browser_tests {
             .clear_consumed(consumed)
             .await?;
 
-        let preserved = NookDatabase::idb_get_string(&key).await?.ok_or_else(|| {
-            NookError::IndexedDb("Successor reconciliation marker disappeared.".to_owned())
-        })?;
+        let preserved = match NookDatabase::idb_get_string(&key).await? {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => Err({
+                NookError::IndexedDb("Successor reconciliation marker disappeared.".to_owned())
+            }),
+        }?;
         assert_eq!(preserved, successor_raw);
         NookDatabase::idb_delete_key(&key).await
     }

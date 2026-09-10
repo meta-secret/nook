@@ -1,5 +1,6 @@
 //! Identity transition admission before protected publication.
 use super::*;
+use crate::storage::indexed_db::StoredStringRecord;
 pub(in super::super) struct IdentityTransitionAdmission<'a> {
     pub(in super::super) store: &'a Store,
 }
@@ -24,9 +25,9 @@ impl IdentityTransitionAdmission<'_> {
                 context: "Pending identity recovery cleanup",
             })
             .await?;
-        if simple_pending.is_some()
-            || sentinel_pending.is_some()
-            || recovery_cleanup_pending.is_some()
+        if matches!(simple_pending, StoredStringRecord::Stored(_))
+            || matches!(sentinel_pending, StoredStringRecord::Stored(_))
+            || matches!(recovery_cleanup_pending, StoredStringRecord::Stored(_))
         {
             return Err(NookError::Database(
                 "Pending vault creation or recovery cleanup must finish before changing identities"
@@ -85,9 +86,8 @@ mod tests {
                 key: simple_genesis::PENDING_SIMPLE_GENESIS_KEY,
                 context: "Test pending"
             })
-            .await?
-            .as_deref(),
-            Some("pending")
+            .await?,
+            StoredStringRecord::Stored(("pending").to_owned())
         );
         transaction.done().await.map_err(|error| {
             NookError::IndexedDb(format!("Marker test completion error: {error:?}"))

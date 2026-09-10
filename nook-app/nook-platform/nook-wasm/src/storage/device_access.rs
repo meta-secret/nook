@@ -9,6 +9,7 @@
 //! Corrupt or future descriptive metadata must never block device-key unlock.
 
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{IdbPutStringRequest, NookDatabase, NookError, SaveWrappedDeviceIdentityRequest};
 use js_sys::Date;
 use nook_core::IsoTimestamp;
@@ -879,11 +880,10 @@ mod tests {
                 .iter()
                 .any(|entry| entry.store_id == second_store)
         );
-        assert!(
-            NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         let _ = Rexie::delete("nook_db").await;
         Ok(())
     }
@@ -924,10 +924,8 @@ mod tests {
             .is_err()
         );
         assert_eq!(
-            NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
-                .await?
-                .as_deref(),
-            Some(FUTURE_PROFILE)
+            NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await?,
+            StoredStringRecord::Stored((FUTURE_PROFILE).to_owned())
         );
 
         DeviceAccessProfileKey::clear_companion().await?;
