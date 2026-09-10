@@ -173,7 +173,7 @@ mod tests {
                     password_entries: vec![],
                 },
                 created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-                signing_key: signing_key,
+                signing_key,
             })
         }
     }

@@ -159,6 +159,7 @@ impl EventGraph {
     }
 
     /// Insert an event after envelope and current-schema signature validation.
+    #[allow(clippy::result_large_err)]
     pub fn insert(
         mut self,
         request: EventGraphInsert<'_>,
@@ -392,7 +393,7 @@ mod tests {
                 password_entries: vec![],
             },
             created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            signing_key: signing_key,
+            signing_key,
         })
     }
 

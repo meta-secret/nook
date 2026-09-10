@@ -251,8 +251,8 @@ impl LocalEventStore {
 mod tests {
     use super::*;
     use crate::{
-        Ed25519Signature, GenesisImportPayload, GenesisImportRequest, IsoTimestamp, Sha256Hex,
-        test_support,
+        Ed25519Signature, GenesisImportPayload, GenesisImportRequest, IsoTimestamp,
+        LocalEventStoreRejection, Sha256Hex, test_support,
     };
 
     const STORE: &str = "store_testtoken11";
@@ -305,7 +305,7 @@ mod tests {
                 store_id: STORE,
             },
         )
-        .map_err(|rejected| rejected.into_cause())?;
+        .map_err(LocalEventStoreRejection::into_cause)?;
         assert_eq!(prepared.additions, vec![(id.clone(), bytes.clone())]);
         local = prepared.cancel();
         assert!(local.event_ids().is_empty());
@@ -346,7 +346,7 @@ mod tests {
                 store_id: STORE,
             },
         )
-        .map_err(|rejected| rejected.into_cause())?;
+        .map_err(LocalEventStoreRejection::into_cause)?;
         let committed = prepared.commit();
         local = committed.store;
         assert_eq!(committed.imported, expected_ids);
@@ -398,12 +398,11 @@ mod tests {
                     (id.clone(), different_bytes.clone()),
                 ]
             };
-            let rejected = match local.union_remote(LocalRemoteUnion {
+            let Err(rejected) = local.union_remote(LocalRemoteUnion {
                 remote_events: &records,
                 store_id: STORE,
-            }) {
-                Err(rejected) => rejected,
-                Ok(_) => anyhow::bail!("conflicting duplicate ID was accepted"),
+            }) else {
+                anyhow::bail!("conflicting duplicate ID was accepted");
             };
             assert!(matches!(
                 rejected.cause,
@@ -426,7 +425,7 @@ mod tests {
                 remote_events: &records,
                 store_id: STORE,
             })
-            .map_err(|rejected| rejected.into_cause())?;
+            .map_err(LocalEventStoreRejection::into_cause)?;
         assert_eq!(admitted.imported, vec![record.0.clone()]);
         assert_eq!(
             admitted.store.get_bytes(&record.0),
@@ -452,15 +451,14 @@ mod tests {
                 bytes: corrupt.clone(),
             },
         });
-        let rejected = match PreparedRemoteUnion::prepare(
+        let Err(rejected) = PreparedRemoteUnion::prepare(
             local,
             LocalRemoteUnion {
                 remote_events: &[],
                 store_id: STORE,
             },
-        ) {
-            Err(rejected) => rejected,
-            Ok(_) => anyhow::bail!("corrupt local graph was prepared"),
+        ) else {
+            anyhow::bail!("corrupt local graph was prepared");
         };
         local = rejected.store;
         assert!(matches!(rejected.cause, EventError::ParseStoredEvent(_)));

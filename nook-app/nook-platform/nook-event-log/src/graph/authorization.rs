@@ -34,6 +34,7 @@ impl EventGraph {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub(super) fn quarantine_rejected_applicable_events(
         mut self,
     ) -> Result<Self, EventGraphRejection> {
@@ -260,7 +261,7 @@ mod tests {
                 password_entries: vec![],
             },
             created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            signing_key: signing_key,
+            signing_key,
         })
     }
 
@@ -339,7 +340,7 @@ mod tests {
         let event_id = event.id()?;
         assert!(matches!(
             match graph.insert(crate::EventGraphInsert {
-                event: event,
+                event,
                 expected_store_id: STORE_STR
             }) {
                 Ok(inserted) => {

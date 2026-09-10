@@ -174,6 +174,84 @@ mod tests {
             );
         }
     }
+
+    #[wasm_bindgen_test]
+    fn workflow_bridge_preserves_recovery_activity_and_transport_policy() {
+        assert_eq!(
+            super::classify_authentication_backup_codes_observation(
+                "Save your recovery codes",
+                false,
+            ),
+            nook_companion_core::AuthenticationBackupCodesObservation::Present
+        );
+        assert!(matches!(
+            super::authentication_enrollment_workflow_match(
+                true,
+                "Save your recovery codes",
+                false,
+            ),
+            AuthenticationWorkflowMatch::Matched(_)
+        ));
+        for (current_password_field_count, new_password_field_count, expected) in [
+            (0, 0, nook_companion_core::AuthenticationWorkflowKind::Login),
+            (
+                0,
+                1,
+                nook_companion_core::AuthenticationWorkflowKind::Signup,
+            ),
+            (
+                1,
+                1,
+                nook_companion_core::AuthenticationWorkflowKind::PasswordChange,
+            ),
+        ] {
+            assert_eq!(
+                super::project_password_workflow_activity(
+                    nook_companion_core::PasswordWorkflowActivityEvidence {
+                        current_password_field_count: current_password_field_count.into(),
+                        new_password_field_count: new_password_field_count.into(),
+                    },
+                )
+                .kind,
+                expected
+            );
+        }
+        for activity in [
+            nook_companion_core::AuthenticationWorkflowActivity::ReadyLogin,
+            nook_companion_core::AuthenticationWorkflowActivity::FillingLogin,
+            nook_companion_core::AuthenticationWorkflowActivity::VerifyingLogin,
+            nook_companion_core::AuthenticationWorkflowActivity::FillingAuthenticator,
+            nook_companion_core::AuthenticationWorkflowActivity::SaveOffer,
+        ] {
+            let progress = super::authentication_workflow_activity_progress(activity);
+            assert!(u8::from(progress.current_step) <= u8::from(progress.total_steps));
+        }
+        assert!(super::authentication_control_transportable(
+            nook_companion_core::AuthenticationControlTransportability {
+                submission_method: nook_companion_core::PageControlSubmissionMethod::Post,
+                username_field_count: 0.into(),
+            }
+        ));
+        assert!(!super::authentication_control_transportable(
+            nook_companion_core::AuthenticationControlTransportability {
+                submission_method: nook_companion_core::PageControlSubmissionMethod::Dialog,
+                username_field_count: 1.into(),
+            }
+        ));
+        assert!(super::is_authentication_navigation_path("/account/login"));
+        assert!(!super::is_authentication_navigation_path(
+            "/settings/profile"
+        ));
+        assert!(matches!(
+            super::revalidate_approved_authentication_workflow(
+                nook_companion_core::ApprovedAuthenticationWorkflowRevalidation {
+                    approved: Default::default(),
+                    live: Default::default(),
+                }
+            ),
+            nook_companion_core::ApprovedAuthenticationWorkflowDecision::Rejected
+        ));
+    }
 }
 
 #[wasm_bindgen]

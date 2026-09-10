@@ -381,6 +381,42 @@ mod wasm_tests {
         );
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn authenticator_session_decoders_admit_complete_responses() -> Result<(), JsError> {
+        assert!(
+            decode_authenticator_code_session_response(js_value(
+                r#"{"ok":true,"code":"012345","expiresAt":1700000030000}"#,
+            )?)
+            .is_ok()
+        );
+        assert!(decode_authenticator_preview_session_response(js_value(
+            r#"{"ok":true,"preview":{"issuer":"Example","account":"alice@example.com","websiteUrl":"https://example.com","algorithm":"SHA1","digits":6,"period":30}}"#,
+        )?)
+        .is_ok());
+        assert!(
+            decode_authenticator_secret_session_response(js_value(
+                r#"{"ok":true,"secretId":"authenticator-1"}"#,
+            )?)
+            .is_ok()
+        );
+        assert!(decode_authenticator_backup_verification_session_response(js_value(
+            r#"{"ok":true,"secretId":"authenticator-1","backupCodesVerified":true,"reviewedInputPersisted":true}"#,
+        )?)
+        .is_ok());
+        assert!(decode_authenticator_code_session_response(JsValue::from_str("invalid")).is_err());
+        assert!(
+            decode_authenticator_preview_session_response(JsValue::from_str("invalid")).is_err()
+        );
+        assert!(
+            decode_authenticator_secret_session_response(JsValue::from_str("invalid")).is_err()
+        );
+        assert!(
+            decode_authenticator_backup_verification_session_response(JsValue::from_str("invalid"))
+                .is_err()
+        );
+        Ok(())
+    }
 }
 
 #[wasm_bindgen]

@@ -331,9 +331,7 @@ mod tests {
     use crate::{EventResult, GenesisImportRequest, SecretFingerprint};
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
-    use nook_auth2::{
-        IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretId, Sha256Hex,
-    };
+    use nook_auth2::{IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretId, Sha256Hex};
 
     pub(super) const STORE: &str = "store_testtoken11";
 
@@ -426,11 +424,11 @@ mod tests {
                     password_entries: vec![],
                 },
                 created_at: &Self::ts("2026-06-28T00:00:00Z"),
-                signing_key: signing_key,
+                signing_key,
             })?;
             let id = event.id()?;
             match graph.insert(crate::EventGraphInsert {
-                event: event,
+                event,
                 expected_store_id: STORE,
             }) {
                 Ok(inserted) => {
