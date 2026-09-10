@@ -824,10 +824,7 @@ mod tests {
             )],
             active_vault_store_id: ActiveVaultScope::Unselected,
         };
-        assert_eq!(
-            original.credential_opening_evidence(&identity)?,
-            ProviderCredentialOpening::Unchanged
-        );
+        assert!(original.credential_opening_evidence(&identity).is_err());
         let sealed = original.sealed_credentials_projection(&identity)?;
         assert_eq!(
             sealed.credential_opening_evidence(&identity)?,
