@@ -1,15 +1,21 @@
 //! Session-independent local materialized projection helpers.
 
 use crate::NookDatabase;
+use crate::VaultSnapshotLookup;
 
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub async fn read_local_vault_yaml() -> Result<String, JsError> {
-    Ok(NookDatabase::load_from_indexed_db()
-        .await
-        .map_err(|e| JsError::new(&e.to_string()))?
-        .unwrap_or_default())
+    Ok(
+        match NookDatabase::load_from_indexed_db()
+            .await
+            .map_err(|e| JsError::new(&e.to_string()))?
+        {
+            VaultSnapshotLookup::Stored(content) => content,
+            VaultSnapshotLookup::NotStored => String::new(),
+        },
+    )
 }
 
 #[wasm_bindgen]

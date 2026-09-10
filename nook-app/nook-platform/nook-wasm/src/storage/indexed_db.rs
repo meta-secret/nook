@@ -34,6 +34,7 @@ use atomic_string::{
 };
 pub(crate) use nook_core::ActiveVaultScope;
 mod local_vault;
+pub(crate) use local_vault::VaultSnapshotLookup;
 #[path = "sentinel_storage.rs"]
 mod sentinel_storage;
 
@@ -426,8 +427,8 @@ mod sentinel_genesis_storage_tests {
         })
         .await?;
         assert_eq!(
-            NookDatabase::load_vault_blob(store_id).await?.as_deref(),
-            Some("encrypted-vault")
+            NookDatabase::load_vault_blob(store_id).await?,
+            VaultSnapshotLookup::Stored("encrypted-vault".to_owned())
         );
         assert_eq!(
             NookDatabase::get_active_vault_id().await?,
@@ -436,18 +437,24 @@ mod sentinel_genesis_storage_tests {
         assert_eq!(NookDatabase::list_vault_registry_entries().await?.len(), 1);
 
         NookDatabase::prepare_new_local_vault_slot().await?;
-        assert!(NookDatabase::load_from_indexed_db().await?.is_none());
+        assert!(matches!(
+            NookDatabase::load_from_indexed_db().await?,
+            VaultSnapshotLookup::NotStored
+        ));
         NookDatabase::save_vault_blob(SaveVaultBlobRequest {
             store_id: store_id,
             content: "updated-vault",
         })
         .await?;
         assert_eq!(
-            NookDatabase::load_from_indexed_db().await?.as_deref(),
-            Some("updated-vault")
+            NookDatabase::load_from_indexed_db().await?,
+            VaultSnapshotLookup::Stored("updated-vault".to_owned())
         );
         NookDatabase::clear_active_vault_id().await?;
-        assert!(NookDatabase::load_from_indexed_db().await?.is_none());
+        assert!(matches!(
+            NookDatabase::load_from_indexed_db().await?,
+            VaultSnapshotLookup::NotStored
+        ));
         Ok(())
     }
 
@@ -596,8 +603,8 @@ mod sentinel_genesis_storage_tests {
             first_id
         );
         assert_eq!(
-            NookDatabase::load_from_indexed_db().await?.as_deref(),
-            Some(first.as_str())
+            NookDatabase::load_from_indexed_db().await?,
+            VaultSnapshotLookup::Stored(first.as_str().to_owned())
         );
         assert_eq!(
             NookDatabase::list_vault_registry_entries().await?[0].label,
@@ -613,9 +620,10 @@ mod sentinel_genesis_storage_tests {
             NookDatabase::list_vault_registry_entries().await?[0].label,
             "Renamed"
         );
-        let renamed = NookDatabase::load_vault_blob(&first_id)
-            .await?
-            .expect("renamed vault");
+        let VaultSnapshotLookup::Stored(renamed) = NookDatabase::load_vault_blob(&first_id).await?
+        else {
+            return Err(wasm_bindgen::JsError::new("renamed vault missing"));
+        };
         let renamed_name = nook_core::VaultFormatDocument::new(&renamed)
             .name()
             .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
@@ -641,14 +649,15 @@ mod sentinel_genesis_storage_tests {
         })
         .await?;
         assert_eq!(
-            NookDatabase::load_vault_local_cache("provider-cache")
-                .await?
-                .as_deref(),
-            Some("cached-vault")
+            NookDatabase::load_vault_local_cache("provider-cache").await?,
+            VaultSnapshotLookup::Stored("cached-vault".to_owned())
         );
 
         NookDatabase::prepare_new_local_vault_slot().await?;
-        assert!(NookDatabase::load_from_indexed_db().await?.is_none());
+        assert!(matches!(
+            NookDatabase::load_from_indexed_db().await?,
+            VaultSnapshotLookup::NotStored
+        ));
         assert_eq!(
             NookDatabase::import_vault_blob(ImportVaultBlobRequest {
                 content: &second,
@@ -660,8 +669,8 @@ mod sentinel_genesis_storage_tests {
         assert_eq!(NookDatabase::list_vault_registry_entries().await?.len(), 2);
         NookDatabase::switch_active_vault(&first_id).await?;
         assert_eq!(
-            NookDatabase::load_from_indexed_db().await?.as_deref(),
-            Some(renamed.as_str())
+            NookDatabase::load_from_indexed_db().await?,
+            VaultSnapshotLookup::Stored(renamed.as_str().to_owned())
         );
         assert!(
             NookDatabase::switch_active_vault("missing-vault")

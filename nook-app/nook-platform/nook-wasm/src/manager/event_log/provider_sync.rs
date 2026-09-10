@@ -8,6 +8,7 @@ use crate::EventDbAppendOutboxIndex;
 use crate::EventDbQueueOutboxEntry;
 use crate::EventDbRemoveOutboxEntry;
 use crate::EventDbSaveKeyEpoch;
+use crate::VaultSnapshotLookup;
 use crate::storage::event_db::{RemoteEventUnion, VaultEventPersistence};
 use nook_core::LocalEventBytes;
 use nook_core::{
@@ -555,9 +556,10 @@ impl NookVaultManager {
             .await?
             .write_events(&writes)
             .await?;
-        Ok(NookDatabase::load_from_indexed_db()
-            .await?
-            .unwrap_or_default())
+        Ok(match NookDatabase::load_from_indexed_db().await? {
+            VaultSnapshotLookup::Stored(content) => content,
+            VaultSnapshotLookup::NotStored => String::new(),
+        })
     }
 }
 

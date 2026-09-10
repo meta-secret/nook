@@ -3,6 +3,7 @@ use crate::AuthProviderDatabase;
 use crate::ConfiguredVaultApplication;
 use crate::ExtensionPairingDatabase;
 use crate::ExtensionPairingReconciliation;
+use crate::VaultSnapshotLookup;
 use crate::storage::auth_providers::{
     PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
 };
@@ -675,10 +676,15 @@ mod projection_tests {
             .connect_fresh("local".to_owned(), String::new(), String::new())
             .await?;
         let store_id = manager.vault_store_id();
-        let content = NookDatabase::load_vault_blob(&store_id)
+        let content = match NookDatabase::load_vault_blob(&store_id)
             .await
             .map_err(|error| JsError::new(&error.to_string()))?
-            .ok_or_else(|| JsError::new("connected local vault blob was not persisted"))?;
+        {
+            VaultSnapshotLookup::Stored(content) => content,
+            VaultSnapshotLookup::NotStored => {
+                return Err(JsError::new("connected local vault blob was not persisted").into());
+            }
+        };
         assert!(!store_id.is_empty());
         assert!(!content.is_empty());
 

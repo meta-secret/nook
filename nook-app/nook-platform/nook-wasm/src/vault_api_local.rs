@@ -1,5 +1,6 @@
 use super::{application, wasm_bindgen};
 use crate::ConfiguredVaultApplication;
+use crate::VaultSnapshotLookup;
 use crate::storage::indexed_db;
 use crate::{ImportVaultBlobRequest, NookDatabase, SetLocalVaultLabelRequest};
 use nook_core::ActiveVaultScope;
@@ -119,7 +120,8 @@ impl ConfiguredVaultApplication {
     async fn local_vault_matches_compiled_application(
         store_id: &str,
     ) -> Result<bool, crate::NookError> {
-        let Some(content) = NookDatabase::load_vault_blob(store_id).await? else {
+        let VaultSnapshotLookup::Stored(content) = NookDatabase::load_vault_blob(store_id).await?
+        else {
             return Ok(false);
         };
         let architecture = nook_core::VaultFormatDocument::new(&content).architecture()?;
@@ -267,9 +269,12 @@ pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, Js
 
 #[wasm_bindgen]
 pub async fn set_active_vault(store_id: String) -> Result<(), JsError> {
-    let content = NookDatabase::load_vault_blob(&store_id)
-        .await?
-        .ok_or_else(|| crate::NookError::Database("Local vault was not found.".to_owned()))?;
+    let content = match NookDatabase::load_vault_blob(&store_id).await? {
+        VaultSnapshotLookup::Stored(content) => content,
+        VaultSnapshotLookup::NotStored => {
+            return Err(crate::NookError::Database("Local vault was not found.".to_owned()).into());
+        }
+    };
     ConfiguredVaultApplication::validate_configured_application_for_content(&content)?;
     NookDatabase::switch_active_vault(&store_id)
         .await

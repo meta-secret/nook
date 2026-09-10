@@ -1,6 +1,7 @@
 //! Import a provider/local-folder event log as an additional local vault.
 
 use super::NookVaultManager;
+use crate::VaultSnapshotLookup;
 use crate::storage::indexed_db;
 use crate::{NookDatabase, NookError, SaveVaultBlobRequest};
 use wasm_bindgen::JsError;
@@ -18,7 +19,7 @@ impl NookVaultManager {
         if trimmed.is_empty() {
             return Ok(());
         }
-        let Some(_) = NookDatabase::load_vault_blob(trimmed).await? else {
+        let VaultSnapshotLookup::Stored(_) = NookDatabase::load_vault_blob(trimmed).await? else {
             return Err(NookError::Database(format!(
                 "Import as new vault removed the previous local vault {trimmed}."
             )));
@@ -37,7 +38,10 @@ impl NookVaultManager {
         if trimmed.is_empty() {
             return Ok((trimmed, false));
         }
-        let existed = NookDatabase::load_vault_blob(&trimmed).await?.is_some();
+        let existed = matches!(
+            NookDatabase::load_vault_blob(&trimmed).await?,
+            VaultSnapshotLookup::Stored(_)
+        );
         Ok((trimmed, existed))
     }
 }

@@ -2,6 +2,7 @@ use super::super::PendingExtensionIdentityEnrollment;
 use super::super::device_protection::PendingExtensionIdentityHandoff;
 use super::*;
 use crate::EventDbRemoveEventFixture;
+use crate::VaultSnapshotLookup;
 use crate::identity_record::NookIdentityDirectorySelectionKind;
 use crate::{
     DeviceProtectionDeviceModeState, IdbPutStringRequest, ImportVaultBlobRequest, NookDatabase,
@@ -697,9 +698,12 @@ async fn assert_rollback(
         NookDatabase::get_active_vault_id().await?,
         ActiveVaultScope::StoreId(previous_store_id.to_owned())
     );
-    let projection = NookDatabase::load_from_indexed_db()
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("restored active projection is missing"))?;
+    let projection = match NookDatabase::load_from_indexed_db().await? {
+        VaultSnapshotLookup::Stored(content) => content,
+        VaultSnapshotLookup::NotStored => {
+            return Err(anyhow::anyhow!("restored active projection is missing").into());
+        }
+    };
     assert_eq!(
         nook_core::VaultFormatDocument::new(&projection).store_id()?,
         VaultStoreIdentity::Assigned(previous_store_id.to_owned())
@@ -875,9 +879,10 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
         "imported provider vault must be registered"
     );
     assert!(
-        NookDatabase::load_vault_blob(&previous_store_id)
-            .await?
-            .is_some(),
+        matches!(
+            NookDatabase::load_vault_blob(&previous_store_id).await?,
+            VaultSnapshotLookup::Stored(_)
+        ),
         "previous vault blob must survive import-as-new-vault"
     );
     let local_vaults = list_local_vaults()

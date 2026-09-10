@@ -50,6 +50,13 @@ pub(crate) struct ImportVaultBlobRequest<'a> {
     pub(crate) label: Option<&'a str>,
 }
 
+/// Presence of an encrypted local vault snapshot or provider cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum VaultSnapshotLookup {
+    NotStored,
+    Stored(String),
+}
+
 impl NookDatabase {
     pub(crate) fn store_id_from_yaml(content: &str) -> Result<String, NookError> {
         match nook_core::VaultFormatDocument::new(content)
@@ -210,8 +217,13 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(crate) async fn load_vault_blob(store_id: &str) -> Result<Option<String>, NookError> {
-        NookDatabase::idb_get_string(&NookDatabase::vault_blob_key(store_id)).await
+    pub(crate) async fn load_vault_blob(store_id: &str) -> Result<VaultSnapshotLookup, NookError> {
+        Ok(
+            match NookDatabase::idb_get_string(&NookDatabase::vault_blob_key(store_id)).await? {
+                Some(content) => VaultSnapshotLookup::Stored(content),
+                None => VaultSnapshotLookup::NotStored,
+            },
+        )
     }
 }
 
@@ -334,15 +346,17 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(crate) async fn load_from_indexed_db() -> Result<Option<String>, NookError> {
+    pub(crate) async fn load_from_indexed_db() -> Result<VaultSnapshotLookup, NookError> {
         if NookDatabase::is_pending_new_local_vault().await? {
-            return Ok(None);
+            return Ok(VaultSnapshotLookup::NotStored);
         }
 
         let active = NookDatabase::get_active_vault_id().await?;
         let store_id = match active {
             ActiveVaultScope::StoreId(store_id) if !store_id.trim().is_empty() => store_id,
-            ActiveVaultScope::StoreId(_) | ActiveVaultScope::Unselected => return Ok(None),
+            ActiveVaultScope::StoreId(_) | ActiveVaultScope::Unselected => {
+                return Ok(VaultSnapshotLookup::NotStored);
+            }
         };
         NookDatabase::load_vault_blob(&store_id).await
     }
@@ -351,8 +365,13 @@ impl NookDatabase {
 impl NookDatabase {
     pub(crate) async fn load_vault_local_cache(
         cache_ref: &str,
-    ) -> Result<Option<String>, NookError> {
-        NookDatabase::idb_get_string(&NookDatabase::vault_cache_key(cache_ref)).await
+    ) -> Result<VaultSnapshotLookup, NookError> {
+        Ok(
+            match NookDatabase::idb_get_string(&NookDatabase::vault_cache_key(cache_ref)).await? {
+                Some(content) => VaultSnapshotLookup::Stored(content),
+                None => VaultSnapshotLookup::NotStored,
+            },
+        )
     }
 }
 
@@ -400,7 +419,9 @@ impl NookDatabase {
             touch_unlock: false,
         });
         NookDatabase::save_vault_registry(&registry).await?;
-        if let Some(content) = NookDatabase::load_vault_blob(store_id).await? {
+        if let VaultSnapshotLookup::Stored(content) =
+            NookDatabase::load_vault_blob(store_id).await?
+        {
             let named = nook_core::VaultFormatDocument::new(&content).rename(trimmed)?;
             NookDatabase::idb_put_string(IdbPutStringRequest {
                 key: &NookDatabase::vault_blob_key(store_id),

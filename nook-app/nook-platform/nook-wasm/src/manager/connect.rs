@@ -16,6 +16,7 @@ use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultNameState};
 use crate::IdentityDbEnsureLocalIdentityForAppKey;
 use crate::NookDatabase;
+use crate::VaultSnapshotLookup;
 use crate::conversion::LoadedVault;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 #[cfg(test)]
@@ -506,7 +507,7 @@ impl NookVaultManager {
                     .send(format!("ASSESS_{}_{}", self.storage.mode, status));
                 return Ok(status);
             }
-            if let Some(cached) =
+            if let VaultSnapshotLookup::Stored(cached) =
                 NookDatabase::load_vault_local_cache(&self.local_cache_ref()).await?
                 && !cached.trim().is_empty()
             {
@@ -854,10 +855,12 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         if self.event_log_has_events().await? || self.ensure_event_log_mode().await? {
             self.event_log.enabled = true;
-            let cache = NookDatabase::load_from_indexed_db()
-                .await?
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| content.to_owned());
+            let cache = match NookDatabase::load_from_indexed_db().await? {
+                VaultSnapshotLookup::Stored(cache) if !cache.trim().is_empty() => cache,
+                VaultSnapshotLookup::Stored(_) | VaultSnapshotLookup::NotStored => {
+                    content.to_owned()
+                }
+            };
             match self.load_stored_vault_or_sentinel_ceremony(&cache, identity) {
                 Ok(LoadedVault {
                     meta,
@@ -886,12 +889,15 @@ impl NookVaultManager {
     async fn load_connect_content(&mut self) -> Result<(String, bool), NookError> {
         if self.storage.use_local_cache_for_connect {
             self.storage.use_local_cache_for_connect = false;
-            let cached = NookDatabase::load_vault_local_cache(&self.local_cache_ref())
-                .await?
-                .filter(|value| !value.trim().is_empty())
-                .ok_or_else(|| {
-                    NookError::Database("No local vault copy is available to recover.".to_owned())
-                })?;
+            let cached = match NookDatabase::load_vault_local_cache(&self.local_cache_ref()).await?
+            {
+                VaultSnapshotLookup::Stored(cache) if !cache.trim().is_empty() => cache,
+                VaultSnapshotLookup::Stored(_) | VaultSnapshotLookup::NotStored => {
+                    return Err(NookError::Database(
+                        "No local vault copy is available to recover.".to_owned(),
+                    ));
+                }
+            };
             return Ok((cached, true));
         }
 

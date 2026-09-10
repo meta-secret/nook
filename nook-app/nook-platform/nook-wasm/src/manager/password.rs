@@ -6,6 +6,7 @@
 
 use super::NookVaultManager;
 use crate::BrowserTimestamp;
+use crate::VaultSnapshotLookup;
 use nook_core::ActiveVaultScope;
 
 use crate::{ImportVaultBlobRequest, NookDatabase};
@@ -45,7 +46,7 @@ impl NookVaultManager {
         let mut vault_missing = false;
         let mut content = self.fetch_vault_content(&mut vault_missing).await?;
         if (vault_missing || content.trim().is_empty())
-            && let Some(cached) =
+            && let VaultSnapshotLookup::Stored(cached) =
                 NookDatabase::load_vault_local_cache(&self.local_cache_ref()).await?
             && !cached.trim().is_empty()
         {
@@ -686,9 +687,12 @@ mod wasm_tests {
             nook_core::VaultFormatDocument::new(&manager.vault.last_synced_content).name()?,
             VaultName::Named("Personal".to_owned())
         );
-        let persisted_projection = NookDatabase::load_from_indexed_db()
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("persisted rolled-back projection is missing"))?;
+        let persisted_projection = match NookDatabase::load_from_indexed_db().await? {
+            VaultSnapshotLookup::Stored(content) => content,
+            VaultSnapshotLookup::NotStored => {
+                return Err(anyhow::anyhow!("persisted rolled-back projection is missing").into());
+            }
+        };
         assert_eq!(
             nook_core::VaultFormatDocument::new(&persisted_projection).name()?,
             VaultName::Named("Personal".to_owned())

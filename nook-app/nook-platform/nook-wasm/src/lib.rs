@@ -222,7 +222,7 @@ pub(crate) use storage::NookDatabase;
 
 pub(crate) use storage::indexed_db::{
     ClearVaultStoreRequest, GuardedKeyringEntryRequest, ReadStringRecordRequest,
-    SecretSearchBucketKeyRequest,
+    SecretSearchBucketKeyRequest, VaultSnapshotLookup,
 };
 
 pub(crate) use storage::indexed_db::{

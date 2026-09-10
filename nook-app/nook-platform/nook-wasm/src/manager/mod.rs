@@ -17,6 +17,8 @@
 //! `ensure_event_log_ready`, device-identity helpers, vault-key application) stays
 //! in this file because every submodule depends on it.
 
+use crate::VaultSnapshotLookup;
+
 use crate::AuthProviderDatabase;
 use crate::DriveStorageClient;
 use crate::GitHubStorageClient;
@@ -185,10 +187,15 @@ impl NookVaultManager {
     pub async fn set_vault_name(&mut self, name: &str) -> Result<(), JsError> {
         let previous_name = self.vault.vault_name.clone();
         let previous_projection = if self.vault.last_synced_content.trim().is_empty() {
-            NookDatabase::load_from_indexed_db()
+            match NookDatabase::load_from_indexed_db()
                 .await
                 .map_err(|error| JsError::new(&error.to_string()))?
-                .ok_or_else(|| JsError::new("Vault projection is not initialized."))?
+            {
+                VaultSnapshotLookup::Stored(content) => content,
+                VaultSnapshotLookup::NotStored => {
+                    return Err(JsError::new("Vault projection is not initialized."));
+                }
+            }
         } else {
             self.vault.last_synced_content.clone()
         };
@@ -613,7 +620,7 @@ impl NookVaultManager {
             self.apply_vault_keys(&secrets_key, &members_key)?;
             return Ok(());
         }
-        if let Some(cache) = NookDatabase::load_from_indexed_db().await?
+        if let VaultSnapshotLookup::Stored(cache) = NookDatabase::load_from_indexed_db().await?
             && !cache.trim().is_empty()
         {
             let (secrets_key, members_key) =
@@ -806,7 +813,10 @@ impl NookVaultManager {
                 let _ = self.status.tx.send("IDB_LOAD_START".to_owned());
                 let stored = NookDatabase::load_from_indexed_db().await?;
                 let _ = self.status.tx.send("IDB_LOAD_SUCCESS".to_owned());
-                stored.unwrap_or_default()
+                match stored {
+                    VaultSnapshotLookup::Stored(content) => content,
+                    VaultSnapshotLookup::NotStored => String::new(),
+                }
             }
             StorageMode::Github | StorageMode::GoogleDrive | StorageMode::ICloud => {
                 *remote_content_missing = true;
