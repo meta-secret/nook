@@ -8,9 +8,9 @@
 use super as genesis;
 use super::super::multi_device;
 use super::{
-    GENESIS_VERSION, PUBLIC_KEY_ANNOUNCEMENT_KIND, SentinelGenesisIssued,
-    SentinelGenesisParticipant, SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
-    SentinelGenesisRequest, SentinelGenesisShareDelivery,
+    GENESIS_VERSION, SentinelGenesisIssued, SentinelGenesisParticipant,
+    SentinelGenesisParticipantResponse, SentinelGenesisPolicy, SentinelGenesisRequest,
+    SentinelGenesisShareDelivery,
 };
 use crate::{
     BuildMembersRecordsRequest, CreateSentinelRootShareRecordsForRecipientsRequest,
@@ -22,12 +22,8 @@ use crate::{
 };
 use ed25519_dalek::{Signer, SigningKey};
 use multi_device::{VaultMember, VaultMetaRecord};
-use serde::Deserialize;
 
-#[derive(Deserialize)]
-struct SentinelPayloadHeader {
-    kind: Option<String>,
-}
+use super::payload::{SentinelPayloadClassification, SentinelPayloadHeader};
 
 /// Public observations never construct a verified roster.
 ///
@@ -254,9 +250,8 @@ impl SentinelGenesisSession {
     fn response_from_payload(
         payload: &str,
     ) -> MultiDeviceResult<SentinelGenesisParticipantResponse> {
-        let header: SentinelPayloadHeader = serde_json::from_str(payload)
-            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        if header.kind.as_deref() == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
+        let header = SentinelPayloadHeader::parse(payload)?;
+        if let SentinelPayloadClassification::PublicKeyAnnouncement = header.classification() {
             return Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected);
         }
         serde_json::from_str(payload).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)

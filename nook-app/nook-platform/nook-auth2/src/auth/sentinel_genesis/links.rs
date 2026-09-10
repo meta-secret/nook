@@ -6,17 +6,15 @@
 //! Canonical public deep links for the Sentinel genesis ceremony.
 
 use super::{
-    PUBLIC_KEY_ANNOUNCEMENT_KIND, SentinelGenesisParticipantResponse,
-    SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest,
+    SentinelGenesisParticipantResponse, SentinelGenesisPublicKeyAnnouncement,
+    SentinelGenesisRequest,
 };
 use crate::{MultiDeviceError, MultiDeviceResult};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::Deserialize;
+use serde_json::Value;
 
-#[derive(Deserialize)]
-struct SentinelPayloadHeader {
-    kind: Option<String>,
-}
+use super::payload::{SentinelPayloadClassification, SentinelPayloadHeader};
 
 const SENTINEL_REQUEST_HASH_PREFIX: &str = "#sentinel-request=";
 const SENTINEL_RESPONSE_HASH_PREFIX: &str = "#sentinel-response=";
@@ -94,9 +92,8 @@ impl SentinelGenesisLinkInput<'_> {
     pub fn canonical_response(&self) -> MultiDeviceResult<String> {
         let input = self.input;
         let json = (SentinelGenesisLinkInput { input }).decode(SentinelLinkKind::Response)?;
-        let header: SentinelPayloadHeader = serde_json::from_str(&json)
-            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        if header.kind.as_deref() == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
+        let header = SentinelPayloadHeader::parse(&json)?;
+        if let SentinelPayloadClassification::PublicKeyAnnouncement = header.classification() {
             return Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected);
         }
         let response: SentinelGenesisParticipantResponse = serde_json::from_str(&json)
@@ -112,7 +109,9 @@ impl SentinelGenesisLinkInput<'_> {
         if trimmed.starts_with('{') {
             let value: Value = serde_json::from_str(trimmed)
                 .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-            if value.get("kind").and_then(Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
+            let header = SentinelPayloadHeader::deserialize(&value)
+                .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+            if let SentinelPayloadClassification::PublicKeyAnnouncement = header.classification() {
                 let announcement: SentinelGenesisPublicKeyAnnouncement =
                     serde_json::from_value(value)
                         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
@@ -137,9 +136,7 @@ impl SentinelGenesisLinkInput<'_> {
             return Ok(trimmed.to_owned());
         }
 
-        let encoded = (SentinelGenesisLinkInput { input: trimmed })
-            .extract(kind)
-            .ok_or(MultiDeviceError::InvalidSentinelGenesisPayload)?;
+        let encoded = (SentinelGenesisLinkInput { input: trimmed }).extract(kind)?;
         let decoded = percent_encoding::percent_decode_str(encoded)
             .decode_utf8()
             .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
@@ -156,24 +153,28 @@ impl SentinelGenesisLinkInput<'_> {
     }
 }
 impl<'a> SentinelGenesisLinkInput<'a> {
-    fn extract(&self, kind: SentinelLinkKind) -> Option<&'a str> {
+    fn extract(&self, kind: SentinelLinkKind) -> MultiDeviceResult<&'a str> {
         let input = self.input;
         let hash_prefix = kind.hash_prefix();
         let query_key = kind.query_key();
         if let Some(value) = input.strip_prefix(hash_prefix) {
-            return Some(value);
+            return Ok(value);
         }
         if let Some(hash) = input.split_once('#').map(|(_, hash)| hash) {
             let prefix = hash_prefix.trim_start_matches('#');
             if let Some(value) = hash.strip_prefix(prefix) {
-                return Some(value);
+                return Ok(value);
             }
         }
         let query = input.split_once('?').map_or(input, |(_, query)| query);
-        query.split('&').find_map(|part| {
-            let (key, value) = part.split_once('=')?;
-            (key == query_key).then_some(value)
-        })
+        for part in query.split('&') {
+            if let Some((key, value)) = part.split_once('=')
+                && key == query_key
+            {
+                return Ok(value);
+            }
+        }
+        Err(MultiDeviceError::InvalidSentinelGenesisPayload)
     }
 }
 impl SentinelPublicLink<'_> {

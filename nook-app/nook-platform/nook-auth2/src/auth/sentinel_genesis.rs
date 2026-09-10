@@ -12,6 +12,7 @@
 use super::multi_device::{DeviceIdentity, VaultMetaRecord};
 use crate::SentinelShareEnvelope;
 mod links;
+mod payload;
 mod session;
 pub use super::sentinel_genesis_types::*;
 use crate::{
