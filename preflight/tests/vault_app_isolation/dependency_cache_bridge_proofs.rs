@@ -389,11 +389,11 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
         !blob_verifier.contains("method: 'HEAD'")
             && !blob_verifier.contains("Range")
             && blob_verifier.contains("content-length")
-            && blob_verifier.contains("response.body?.getReader()")
-            && blob_verifier.contains("createHash('sha256')")
+            && blob_verifier.contains("body.getReader()")
+            && blob_verifier.contains("createHash(\"sha256\")")
             && blob_verifier.contains("hash.update(chunk.value)")
-            && blob_verifier.contains("digest !== descriptor.digest")
-            && blob_verifier.contains("bytes.length !== input.descriptor.size")
+            && blob_verifier.contains("digest !== this.descriptor.digest")
+            && blob_verifier.contains("bytesRead !== this.descriptor.size")
             && blob_verifier.contains("descriptor.size"),
         "portable cache proof must validate child manifests and stream every complete Zot blob through SHA-256 without hydrating its filesystem"
     );

@@ -61,6 +61,7 @@ impl AuthenticationAdvanceControlObservation {
 
 #[cfg(test)]
 mod tests {
+    use super::AuthenticationAdvanceControlObservation;
 
     #[test]
     fn distinguishes_login_passkeys_from_enrollment_labels() {

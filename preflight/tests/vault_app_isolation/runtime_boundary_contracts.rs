@@ -92,19 +92,19 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
     assert!(!browser_operations.contains("DeviceProtectedOperationState"));
 
     let shared_entry = root.read("nook-app/nook-web/nook-web-shared/src/vault-app/main.ts");
-    assert!(shared_entry.contains("ensureAppWasm(expectedKind)"));
+    assert!(shared_entry.contains("vaultApplicationRuntime.ensureAppWasm(this.application)"));
     assert!(shared_entry.contains("import(\"./App.svelte\")"));
     assert!(!shared_entry.contains("await Promise.all"));
-    assert!(shared_entry.contains("createVaultStartupShell"));
+    assert!(shared_entry.contains("new VaultStartupShell"));
     assert!(shared_entry.contains("startupShell.showUnavailable()"));
-    assert!(shared_entry.contains("throw error"));
+    assert!(shared_entry.contains("return err(VaultMountFailure.RenderUnavailable)"));
     assert!(!shared_entry.contains("companionWasmReady"));
     assert!(
         shared_entry
-            .find("createVaultStartupShell")
+            .find("new VaultStartupShell")
             .unwrap_or(usize::MAX)
             < shared_entry
-                .find("ensureAppWasm(expectedKind)")
+                .find("vaultApplicationRuntime.ensureAppWasm(this.application)")
                 .unwrap_or(0),
         "the startup shell must render before the vault WASM gate"
     );

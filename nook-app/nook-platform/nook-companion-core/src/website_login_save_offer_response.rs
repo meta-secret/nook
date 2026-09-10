@@ -16,13 +16,6 @@ pub struct WebsiteLoginSaveOfferDecision(u32);
 
 impl TryFrom<u32> for WebsiteLoginSaveOfferDecision {
     type Error = String;
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: admits the existing numeric wire representation"
-        )
-    )]
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             decision @ (0 | 1) => Ok(Self(decision)),

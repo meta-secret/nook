@@ -18,13 +18,6 @@ pub struct PasskeyDeviceModeWire(nook_authenticator_domain::PasskeyDeviceProtect
 
 impl TryFrom<u32> for PasskeyDeviceModeWire {
     type Error = String;
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: admits the existing numeric wire representation"
-        )
-    )]
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Self(

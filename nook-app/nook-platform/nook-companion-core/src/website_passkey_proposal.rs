@@ -89,6 +89,10 @@ impl WebsitePasskeyProposal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AuthenticationWorkflowKind::{
+        Login, PasswordChange, Signup, TotpChallenge, TotpEnrollment,
+    };
+    use WebsitePasskeyProposal::{CreatePasskey, None, UsePasskey};
 
     #[test]
     fn proposes_passkeys_for_the_supported_workflow_cases() {

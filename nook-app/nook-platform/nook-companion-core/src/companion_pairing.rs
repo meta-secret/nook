@@ -599,7 +599,7 @@ mod tests {
     #[test]
     fn real_endpoints_compose_without_transport() -> anyhow::Result<()> {
         let request = PairingFixture::request()?;
-        let mut extension = CompanionExtensionPairingEndpoint::issue(request.clone())?;
+        let extension = CompanionExtensionPairingEndpoint::issue(request.clone())?;
         let website = CompanionWebsitePairingEndpoint::admit(CompanionPairingRequestObservation {
             request,
             observed_at: PairingFixture::epoch("125")?,
