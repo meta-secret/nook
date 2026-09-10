@@ -1,87 +1,81 @@
-import {
-  device_access_credential_kind,
-  DeviceAccessCredentialKind,
-} from "$app-wasm";
+import { device_access_credential_kind, DeviceAccessCredentialKind } from '$app-wasm'
 type AccessDateFormatting = {
-  readonly value: string;
-};
+  readonly value: string
+}
 
 type LastUsedLabelRequest = {
-  readonly value: DashboardTimestamp;
-};
+  readonly value: DashboardTimestamp
+}
 
 type DeviceProtectionLabelRequest = {
-  readonly protection: DeviceAccessProtectionKind;
-};
+  readonly protection: DeviceAccessProtectionKind
+}
 
 type IdentityStateLabelRequest = {
-  readonly state: DeviceAccessIdentityState;
-};
+  readonly state: DeviceAccessIdentityState
+}
 
 type AccessChainStageLabelRequest = {
-  readonly stage: AccessChainStage;
-  readonly protection: DeviceAccessProtectionKind;
-};
+  readonly stage: AccessChainStage
+  readonly protection: DeviceAccessProtectionKind
+}
 
 type DeviceKeyTitleRequest = {
-  readonly protection: DeviceAccessProtectionKind;
-};
+  readonly protection: DeviceAccessProtectionKind
+}
 
 type AccessPanelTitleRequest = {
-  readonly stage: AccessChainStage;
-  readonly protection: DeviceAccessProtectionKind;
-};
+  readonly stage: AccessChainStage
+  readonly protection: DeviceAccessProtectionKind
+}
 
 type DeviceKeyDescriptionRequest = {
-  readonly protection: DeviceAccessProtectionKind;
-};
+  readonly protection: DeviceAccessProtectionKind
+}
 
 type AccessPanelDescriptionRequest = {
-  readonly stage: AccessChainStage;
-  readonly protection: DeviceAccessProtectionKind;
-};
+  readonly stage: AccessChainStage
+  readonly protection: DeviceAccessProtectionKind
+}
 
 type VerifiedVaultsLabelRequest = {
-  readonly vaults: readonly VaultAccessView[];
-};
+  readonly vaults: readonly VaultAccessView[]
+}
 
 type VerifiedVaultsSummaryRequest = {
-  readonly vaults: readonly VaultAccessView[];
-};
+  readonly vaults: readonly VaultAccessView[]
+}
 
 type UnlockNodeTitleRequest = {
-  readonly protection: DeviceAccessProtectionKind;
-  readonly passkeyName: DashboardText;
-};
+  readonly protection: DeviceAccessProtectionKind
+  readonly passkeyName: DashboardText
+}
 
 type AccessChainNodeCollection = {
   readonly input: {
-    protection: DeviceAccessProtectionKind;
-    passkeyName: DashboardText;
-    credentialId: DashboardText;
-    deviceId: DashboardText;
-    vaults: readonly VaultAccessView[];
-  };
-};
+    protection: DeviceAccessProtectionKind
+    passkeyName: DashboardText
+    credentialId: DashboardText
+    deviceId: DashboardText
+    vaults: readonly VaultAccessView[]
+  }
+}
 
 type VaultAccessNodeRequest = {
-  readonly protection: DeviceAccessProtectionKind;
-  readonly vaults: readonly VaultAccessView[];
-};
+  readonly protection: DeviceAccessProtectionKind
+  readonly vaults: readonly VaultAccessView[]
+}
 
 type VaultAccessNodeTitleRequest = {
-  readonly vaults: readonly VaultAccessView[];
-  readonly verified: readonly VaultAccessView[];
-};
+  readonly vaults: readonly VaultAccessView[]
+  readonly verified: readonly VaultAccessView[]
+}
 
-import { I18N_KEYS } from "../../../../generated/i18n-keys";
+import { I18N_KEYS } from '../../../../generated/i18n-keys'
 
-import {
-  DeviceAccessIdentityState,
-  DeviceAccessProtectionKind,
-} from "$app-wasm";
+import { DeviceAccessIdentityState, DeviceAccessProtectionKind } from '$app-wasm'
 
-import type { VaultState } from "$lib/vault.svelte";
+import type { VaultState } from '$lib/vault.svelte'
 
 import {
   type DashboardText,
@@ -89,256 +83,223 @@ import {
   type AccessNodeDetail,
   type DashboardTimestamp,
   DashboardTimestampKind,
-} from "../devices-access-dashboard-state";
+} from '../devices-access-dashboard-state'
 
 /** One link of the browser access chain the dashboard lets a person inspect. */
 export enum AccessChainStage {
-  Unlock = "unlock",
-  DeviceKey = "device-key",
-  Vaults = "vaults",
+  Unlock = 'unlock',
+  DeviceKey = 'device-key',
+  Vaults = 'vaults',
 }
 
 export const ACCESS_CHAIN_STAGES: readonly AccessChainStage[] = [
   AccessChainStage.Unlock,
   AccessChainStage.DeviceKey,
   AccessChainStage.Vaults,
-];
+]
 
 export {
   AccessNodeDetailKind,
   type AccessNodeDetail,
-} from "../devices-access-dashboard-state";
+} from '../devices-access-dashboard-state'
 
 export enum AccessChainLinkKind {
-  Origin = "origin",
-  Relation = "relation",
+  Origin = 'origin',
+  Relation = 'relation',
 }
 
 /** The connector drawn before a node: nothing for the first, a verb otherwise. */
 export type AccessChainLink =
   | { kind: typeof AccessChainLinkKind.Origin }
-  | { kind: typeof AccessChainLinkKind.Relation; label: string };
+  | { kind: typeof AccessChainLinkKind.Relation; label: string }
 
 export type AccessChainNode = {
-  stage: AccessChainStage;
-  caption: string;
-  title: string;
-  detail: AccessNodeDetail;
-  incoming: AccessChainLink;
-};
-
-export type VaultAccessView = {
-  storeId: string;
-  label: string;
-  verified: boolean;
-  verifiedAt: DashboardText;
-  lastLocalUpdateAt: DashboardText;
-};
-
-export enum AccessChainTabKind {
-  Mounted = "mounted",
-  Missing = "missing",
+  stage: AccessChainStage
+  caption: string
+  title: string
+  detail: AccessNodeDetail
+  incoming: AccessChainLink
 }
 
-/** A chain tab can be gone by the time a rerender settles, so say so. */
-export type AccessChainTab =
-  | { kind: typeof AccessChainTabKind.Mounted; element: HTMLElement }
-  | { kind: typeof AccessChainTabKind.Missing };
+export type VaultAccessView = {
+  storeId: string
+  label: string
+  verified: boolean
+  verifiedAt: DashboardText
+  lastLocalUpdateAt: DashboardText
+}
 
 /** Owns browser orchestration for one nook web shared/src/vault app/lib/components/devices access/access chain context. */
 export class AccessChainPresentation {
   constructor(private readonly vault: VaultState) {}
 
-  static accessChainTabId(stage: AccessChainStage): string {
-    return `devices-access-tab-${stage}`;
-  }
-
-  static accessChainTab(stage: AccessChainStage): AccessChainTab {
-    const element = document.getElementById(
-      AccessChainPresentation.accessChainTabId(stage),
-    );
-    return element
-      ? { kind: AccessChainTabKind.Mounted, element }
-      : { kind: AccessChainTabKind.Missing };
-  }
-
   formatAccessDate({ value }: AccessDateFormatting): string {
-    const vault = this.vault;
-    const date = new Date(value);
+    const vault = this.vault
+    const date = new Date(value)
     if (Number.isNaN(date.getTime())) {
-      return vault.t(I18N_KEYS.DevicesAccessUnknown);
+      return vault.t(I18N_KEYS.DevicesAccessUnknown)
     }
-    const DateTimeFormatArgs: ConstructorParameters<
-      typeof Intl.DateTimeFormat
-    >[1] = {
-      dateStyle: "medium",
-      timeStyle: "short",
-    };
-    return new Intl.DateTimeFormat(vault.locale, DateTimeFormatArgs).format(
-      date,
-    );
+    const DateTimeFormatArgs: ConstructorParameters<typeof Intl.DateTimeFormat>[1] =
+      {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }
+    return new Intl.DateTimeFormat(vault.locale, DateTimeFormatArgs).format(date)
   }
 
   lastUsedLabel({ value }: LastUsedLabelRequest): string {
-    const vault = this.vault;
+    const vault = this.vault
     if (value.kind === DashboardTimestampKind.Known) {
       const formatAccessDateArgs: Parameters<
-        AccessChainPresentation["formatAccessDate"]
+        AccessChainPresentation['formatAccessDate']
       >[0] = {
         value: value.value,
-      };
-      return this.formatAccessDate(formatAccessDateArgs);
+      }
+      return this.formatAccessDate(formatAccessDateArgs)
     }
     return value.kind === DashboardTimestampKind.NotYetObserved
       ? vault.t(I18N_KEYS.DevicesAccessNotUsedYet)
-      : vault.t(I18N_KEYS.DevicesAccessUnknownLegacy);
+      : vault.t(I18N_KEYS.DevicesAccessUnknownLegacy)
   }
 
   protectionLabel({ protection }: DeviceProtectionLabelRequest): string {
-    const vault = this.vault;
+    const vault = this.vault
     if (protection === DeviceAccessProtectionKind.PasskeyStandard) {
-      return vault.t(I18N_KEYS.DevicesAccessPasskeyStandard);
+      return vault.t(I18N_KEYS.DevicesAccessPasskeyStandard)
     }
     if (protection === DeviceAccessProtectionKind.PasskeyAntiHacker) {
-      return vault.t(I18N_KEYS.DevicesAccessPasskeyHighSecurity);
+      return vault.t(I18N_KEYS.DevicesAccessPasskeyHighSecurity)
     }
     if (protection === DeviceAccessProtectionKind.CompanionSession) {
-      return vault.t(I18N_KEYS.DevicesAccessCompanionSession);
+      return vault.t(I18N_KEYS.DevicesAccessCompanionSession)
     }
     if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
-      return vault.t(I18N_KEYS.DevicesAccessPinOrPassphrase);
+      return vault.t(I18N_KEYS.DevicesAccessPinOrPassphrase)
     }
-    return vault.t(I18N_KEYS.DevicesAccessNotPrepared);
+    return vault.t(I18N_KEYS.DevicesAccessNotPrepared)
   }
 
   identityStateLabel({ state }: IdentityStateLabelRequest): string {
-    const vault = this.vault;
+    const vault = this.vault
     if (state === DeviceAccessIdentityState.Unlocked) {
-      return vault.t(I18N_KEYS.DevicesAccessIdentityUnlocked);
+      return vault.t(I18N_KEYS.DevicesAccessIdentityUnlocked)
     }
     return state === DeviceAccessIdentityState.Locked
       ? vault.t(I18N_KEYS.DevicesAccessIdentityLocked)
-      : vault.t(I18N_KEYS.DevicesAccessIdentityMissing);
+      : vault.t(I18N_KEYS.DevicesAccessIdentityMissing)
   }
 
   stageLabel({ stage, protection }: AccessChainStageLabelRequest): string {
-    const vault = this.vault;
+    const vault = this.vault
     if (stage === AccessChainStage.DeviceKey) {
-      return vault.t(I18N_KEYS.DevicesAccessStageDeviceKey);
+      return vault.t(I18N_KEYS.DevicesAccessStageDeviceKey)
     }
     if (stage === AccessChainStage.Vaults) {
-      return vault.t(I18N_KEYS.DevicesAccessStageVaults);
+      return vault.t(I18N_KEYS.DevicesAccessStageVaults)
     }
     if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
-      return vault.t(I18N_KEYS.DevicesAccessStagePin);
+      return vault.t(I18N_KEYS.DevicesAccessStagePin)
     }
     if (protection === DeviceAccessProtectionKind.CompanionSession) {
-      return vault.t(I18N_KEYS.DevicesAccessStageSession);
+      return vault.t(I18N_KEYS.DevicesAccessStageSession)
     }
     return device_access_credential_kind(protection) ===
       DeviceAccessCredentialKind.Passkey
       ? vault.t(I18N_KEYS.DevicesAccessStagePasskey)
-      : vault.t(I18N_KEYS.DevicesAccessStageUnlock);
+      : vault.t(I18N_KEYS.DevicesAccessStageUnlock)
   }
 
   deviceKeyTitle({ protection }: DeviceKeyTitleRequest): string {
-    const vault = this.vault;
+    const vault = this.vault
     return protection === DeviceAccessProtectionKind.CompanionSession
       ? vault.t(I18N_KEYS.DevicesAccessCompanionIdentity)
-      : vault.t(I18N_KEYS.DevicesAccessThisDevice);
+      : vault.t(I18N_KEYS.DevicesAccessThisDevice)
   }
 
   panelTitle({ stage, protection }: AccessPanelTitleRequest): string {
-    const vault = this.vault;
+    const vault = this.vault
     if (stage === AccessChainStage.DeviceKey) {
       return protection === DeviceAccessProtectionKind.CompanionSession
         ? vault.t(I18N_KEYS.DevicesAccessCompanionIdentity)
-        : vault.t(I18N_KEYS.DevicesAccessDeviceAgeKey);
+        : vault.t(I18N_KEYS.DevicesAccessDeviceAgeKey)
     }
     if (stage === AccessChainStage.Vaults) {
-      return vault.t(I18N_KEYS.DevicesAccessVaultRelationships);
+      return vault.t(I18N_KEYS.DevicesAccessVaultRelationships)
     }
     if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
-      return vault.t(I18N_KEYS.DevicesAccessPinNodeTitle);
+      return vault.t(I18N_KEYS.DevicesAccessPinNodeTitle)
     }
     const protectionLabelArgs: Parameters<
-      AccessChainPresentation["protectionLabel"]
+      AccessChainPresentation['protectionLabel']
     >[0] = {
       protection,
-    };
-    return this.protectionLabel(protectionLabelArgs);
+    }
+    return this.protectionLabel(protectionLabelArgs)
   }
 
-  private deviceKeyDescription({
-    protection,
-  }: DeviceKeyDescriptionRequest): string {
-    const vault = this.vault;
+  private deviceKeyDescription({ protection }: DeviceKeyDescriptionRequest): string {
+    const vault = this.vault
     if (protection === DeviceAccessProtectionKind.CompanionSession) {
-      return vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc);
+      return vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc)
     }
     return protection === DeviceAccessProtectionKind.PasskeyStandard
       ? vault.t(I18N_KEYS.DevicesAccessDeviceKeyPanelDescDerived)
-      : vault.t(I18N_KEYS.DevicesAccessDeviceKeyPanelDesc);
+      : vault.t(I18N_KEYS.DevicesAccessDeviceKeyPanelDesc)
   }
 
-  panelDescription({
-    stage,
-    protection,
-  }: AccessPanelDescriptionRequest): string {
-    const vault = this.vault;
+  panelDescription({ stage, protection }: AccessPanelDescriptionRequest): string {
+    const vault = this.vault
     if (stage === AccessChainStage.DeviceKey) {
       const deviceKeyDescriptionArgs: Parameters<
-        AccessChainPresentation["deviceKeyDescription"]
-      >[0] = { protection };
-      return this.deviceKeyDescription(deviceKeyDescriptionArgs);
+        AccessChainPresentation['deviceKeyDescription']
+      >[0] = { protection }
+      return this.deviceKeyDescription(deviceKeyDescriptionArgs)
     }
     if (stage === AccessChainStage.Vaults) {
-      return vault.t(I18N_KEYS.DevicesAccessVaultRelationshipsDesc);
+      return vault.t(I18N_KEYS.DevicesAccessVaultRelationshipsDesc)
     }
     if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
-      return vault.t(I18N_KEYS.DevicesAccessPinPanelDesc);
+      return vault.t(I18N_KEYS.DevicesAccessPinPanelDesc)
     }
     return protection === DeviceAccessProtectionKind.CompanionSession
       ? vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc)
-      : vault.t(I18N_KEYS.DevicesAccessPasskeyPanelDesc);
+      : vault.t(I18N_KEYS.DevicesAccessPasskeyPanelDesc)
   }
 
   verifiedVaultsLabel({ vaults }: VerifiedVaultsLabelRequest): string {
-    const vault = this.vault;
+    const vault = this.vault
     const tArgs: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.DevicesAccessVerifiedOfTotal,
       replacements: {
         verified: String(vaults.filter((entry) => entry.verified).length),
         total: String(vaults.length),
       },
-    };
-    return vault.t(tArgs);
+    }
+    return vault.t(tArgs)
   }
 
-  private verifiedVaultsSummary({
-    vaults,
-  }: VerifiedVaultsSummaryRequest): string {
-    const vault = this.vault;
+  private verifiedVaultsSummary({ vaults }: VerifiedVaultsSummaryRequest): string {
+    const vault = this.vault
     const tArgs2: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.DevicesAccessVerifiedSummary,
       replacements: {
         verified: String(vaults.filter((entry) => entry.verified).length),
         total: String(vaults.length),
       },
-    };
-    return vault.t(tArgs2);
+    }
+    return vault.t(tArgs2)
   }
 
   private unlockNodeTitle({
     protection,
     passkeyName,
   }: UnlockNodeTitleRequest): string {
-    const vault = this.vault;
+    const vault = this.vault
     if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
-      return vault.t(I18N_KEYS.DevicesAccessPinNodeTitle);
+      return vault.t(I18N_KEYS.DevicesAccessPinNodeTitle)
     }
     if (protection === DeviceAccessProtectionKind.CompanionSession) {
-      return vault.t(I18N_KEYS.DevicesAccessSessionNodeTitle);
+      return vault.t(I18N_KEYS.DevicesAccessSessionNodeTitle)
     }
     if (
       !(
@@ -346,37 +307,35 @@ export class AccessChainPresentation {
         DeviceAccessCredentialKind.Passkey
       )
     ) {
-      return vault.t(I18N_KEYS.DevicesAccessNotPrepared);
+      return vault.t(I18N_KEYS.DevicesAccessNotPrepared)
     }
     return passkeyName.displayText(() =>
       vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed),
-    );
+    )
   }
 
-  buildAccessChainNodes({
-    input,
-  }: AccessChainNodeCollection): AccessChainNode[] {
-    const vault = this.vault;
+  buildAccessChainNodes({ input }: AccessChainNodeCollection): AccessChainNode[] {
+    const vault = this.vault
     return [
       {
         stage: AccessChainStage.Unlock,
         caption: (() => {
           const stageLabelArgs: Parameters<
-            AccessChainPresentation["stageLabel"]
+            AccessChainPresentation['stageLabel']
           >[0] = {
             stage: AccessChainStage.Unlock,
             protection: input.protection,
-          };
-          return this.stageLabel(stageLabelArgs);
+          }
+          return this.stageLabel(stageLabelArgs)
         })(),
         title: (() => {
           const unlockNodeTitleArgs: Parameters<
-            AccessChainPresentation["unlockNodeTitle"]
+            AccessChainPresentation['unlockNodeTitle']
           >[0] = {
             protection: input.protection,
             passkeyName: input.passkeyName,
-          };
-          return this.unlockNodeTitle(unlockNodeTitleArgs);
+          }
+          return this.unlockNodeTitle(unlockNodeTitleArgs)
         })(),
         detail:
           device_access_credential_kind(input.protection) ===
@@ -389,20 +348,20 @@ export class AccessChainPresentation {
         stage: AccessChainStage.DeviceKey,
         caption: (() => {
           const stageLabelArgs2: Parameters<
-            AccessChainPresentation["stageLabel"]
+            AccessChainPresentation['stageLabel']
           >[0] = {
             stage: AccessChainStage.DeviceKey,
             protection: input.protection,
-          };
-          return this.stageLabel(stageLabelArgs2);
+          }
+          return this.stageLabel(stageLabelArgs2)
         })(),
         title: (() => {
           const deviceKeyTitleArgs: Parameters<
-            AccessChainPresentation["deviceKeyTitle"]
+            AccessChainPresentation['deviceKeyTitle']
           >[0] = {
             protection: input.protection,
-          };
-          return this.deviceKeyTitle(deviceKeyTitleArgs);
+          }
+          return this.deviceKeyTitle(deviceKeyTitleArgs)
         })(),
         detail: input.deviceId.identifierDetail(),
         incoming: {
@@ -411,42 +370,40 @@ export class AccessChainPresentation {
         },
       },
       (() => {
-        const vaultsNodeArgs: Parameters<
-          AccessChainPresentation["vaultsNode"]
-        >[0] = {
-          protection: input.protection,
-          vaults: input.vaults,
-        };
-        return this.vaultsNode(vaultsNodeArgs);
+        const vaultsNodeArgs: Parameters<AccessChainPresentation['vaultsNode']>[0] =
+          {
+            protection: input.protection,
+            vaults: input.vaults,
+          }
+        return this.vaultsNode(vaultsNodeArgs)
       })(),
-    ];
+    ]
   }
 
   private vaultsNode({
     protection,
     vaults,
   }: VaultAccessNodeRequest): AccessChainNode {
-    const vault = this.vault;
-    const verified = vaults.filter((entry) => entry.verified);
+    const vault = this.vault
+    const verified = vaults.filter((entry) => entry.verified)
     return {
       stage: AccessChainStage.Vaults,
       caption: (() => {
-        const stageLabelArgs3: Parameters<
-          AccessChainPresentation["stageLabel"]
-        >[0] = {
-          stage: AccessChainStage.Vaults,
-          protection,
-        };
-        return this.stageLabel(stageLabelArgs3);
+        const stageLabelArgs3: Parameters<AccessChainPresentation['stageLabel']>[0] =
+          {
+            stage: AccessChainStage.Vaults,
+            protection,
+          }
+        return this.stageLabel(stageLabelArgs3)
       })(),
       title: (() => {
         const vaultsNodeTitleArgs: Parameters<
-          AccessChainPresentation["vaultsNodeTitle"]
+          AccessChainPresentation['vaultsNodeTitle']
         >[0] = {
           vaults,
           verified,
-        };
-        return this.vaultsNodeTitle(vaultsNodeTitleArgs);
+        }
+        return this.vaultsNodeTitle(vaultsNodeTitleArgs)
       })(),
       detail:
         vaults.length === 0
@@ -455,9 +412,9 @@ export class AccessChainPresentation {
               kind: AccessNodeDetailKind.Summary,
               value: (() => {
                 const verifiedVaultsSummaryArgs: Parameters<
-                  AccessChainPresentation["verifiedVaultsSummary"]
-                >[0] = { vaults };
-                return this.verifiedVaultsSummary(verifiedVaultsSummaryArgs);
+                  AccessChainPresentation['verifiedVaultsSummary']
+                >[0] = { vaults }
+                return this.verifiedVaultsSummary(verifiedVaultsSummaryArgs)
               })(),
             },
       incoming: {
@@ -468,21 +425,21 @@ export class AccessChainPresentation {
             : I18N_KEYS.DevicesAccessLinkOpens,
         ),
       },
-    };
+    }
   }
 
   private vaultsNodeTitle({
     vaults,
     verified,
   }: VaultAccessNodeTitleRequest): string {
-    const vault = this.vault;
+    const vault = this.vault
     if (vaults.length === 0) {
-      return vault.t(I18N_KEYS.DevicesAccessNoVaultsShort);
+      return vault.t(I18N_KEYS.DevicesAccessNoVaultsShort)
     }
     if (verified.length === 0) {
-      return vault.t(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort);
+      return vault.t(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort)
     }
-    const [primary, ...rest] = verified;
+    const [primary, ...rest] = verified
     return rest.length === 0
       ? primary.label
       : (() => {
@@ -492,8 +449,8 @@ export class AccessChainPresentation {
               label: primary.label,
               count: String(rest.length),
             },
-          };
-          return vault.t(tArgs3);
-        })();
+          }
+          return vault.t(tArgs3)
+        })()
   }
 }
