@@ -10,6 +10,7 @@ use std::{
     cmp::Ordering,
     io::{Cursor, Read},
 };
+use zeroize::Zeroizing;
 use zip::ZipArchive;
 pub(super) struct SafariArchive<'a> {
     archive: ZipArchive<Cursor<&'a [u8]>>,
@@ -21,7 +22,7 @@ impl<'a> SafariArchive<'a> {
                 .map_err(ApplePasswordsImportError::archive)?,
         })
     }
-    fn candidates(&mut self) -> Result<Vec<SafariCsvCandidate>, ApplePasswordsImportError> {
+    fn candidates(mut self) -> Result<SelectedSafariCandidates<'a>, ApplePasswordsImportError> {
         let mut candidates = Vec::new();
         for index in 0..self.archive.len() {
             let name = self
@@ -40,12 +41,21 @@ impl<'a> SafariArchive<'a> {
             }
         }
         candidates.sort_by(SafariCsvCandidate::compare);
-        Ok(candidates)
+        Ok(SelectedSafariCandidates {
+            archive: self,
+            candidates,
+        })
     }
-    pub(super) fn plan(mut self) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
+    pub(super) fn plan(self) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
+        let SelectedSafariCandidates {
+            mut archive,
+            candidates,
+        } = self.candidates()?;
         let mut last_missing_column = None;
-        for candidate in self.candidates()? {
-            let csv = self.read(candidate.index)?;
+        for candidate in candidates {
+            let read = archive.read(candidate)?;
+            archive = read.archive;
+            let csv = read.csv;
             match ApplePasswordsCsvInput::new(&csv).plan() {
                 Ok(plan) => return Ok(plan),
                 Err(ApplePasswordsImportError::MissingColumn(column)) => {
@@ -59,23 +69,35 @@ impl<'a> SafariArchive<'a> {
         }
         Err(ApplePasswordsImportError::MissingPasswordsFile)
     }
-    fn read(&mut self, index: usize) -> Result<String, ApplePasswordsImportError> {
+    fn read(
+        mut self,
+        candidate: SafariCsvCandidate,
+    ) -> Result<ReadSafariCandidate<'a>, ApplePasswordsImportError> {
         let file = self
             .archive
-            .by_index(index)
+            .by_index(candidate.index)
             .map_err(ApplePasswordsImportError::archive)?;
         if file.size() > MAX_CSV_BYTES as u64 {
             return Err(ApplePasswordsImportError::CsvTooLarge);
         }
-        let mut csv = String::new();
+        let mut csv = Zeroizing::new(String::new());
         file.take(MAX_CSV_BYTES as u64 + 1)
             .read_to_string(&mut csv)
             .map_err(ApplePasswordsImportError::archive)?;
         if csv.len() > MAX_CSV_BYTES {
             return Err(ApplePasswordsImportError::CsvTooLarge);
         }
-        Ok(csv)
+        Ok(ReadSafariCandidate { archive: self, csv })
     }
+}
+
+struct SelectedSafariCandidates<'a> {
+    archive: SafariArchive<'a>,
+    candidates: Vec<SafariCsvCandidate>,
+}
+struct ReadSafariCandidate<'a> {
+    archive: SafariArchive<'a>,
+    csv: Zeroizing<String>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -139,9 +161,10 @@ mod tests {
             ],
         }
         .build()?;
-        let mut archive = SafariArchive::open(&bytes)?;
+        let archive = SafariArchive::open(&bytes)?;
         let names = archive
             .candidates()?
+            .candidates
             .into_iter()
             .map(|candidate| candidate.name)
             .collect::<Vec<_>>();

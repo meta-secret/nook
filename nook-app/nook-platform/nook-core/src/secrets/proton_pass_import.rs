@@ -83,7 +83,7 @@ impl<'a> ProtonPassImportInput<'a> {
             return Err(ProtonPassImportError::EncryptedExport);
         }
         if self.is_zip() {
-            let mut archive = ProtonPassArchive::open(self.bytes)?;
+            let archive = ProtonPassArchive::open(self.bytes)?;
             let json = archive.select_data()?.read()?;
             return ProtonPassExport::parse(&json).map(ProtonPassExport::plan);
         }
