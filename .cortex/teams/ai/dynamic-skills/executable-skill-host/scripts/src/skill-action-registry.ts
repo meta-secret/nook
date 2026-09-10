@@ -665,19 +665,21 @@ export type SkillExecutionFailure =
   | CortexDocumentMapFailure
   | DelegationVisualizationResultVerificationError;
 
+type ExecutableSkillCatalogRequest = {
+  readonly actions: readonly DiscoverableSkillAction[];
+  readonly blueprint: string;
+};
+
 export class ExecutableSkillCatalog {
-  constructor(
-    private readonly actions: readonly DiscoverableSkillAction[],
-    private readonly blueprint: string,
-  ) {}
+  constructor(private readonly request: ExecutableSkillCatalogRequest) {}
   list(): SkillToolsListResult {
-    return { actions: this.actions };
+    return { actions: this.request.actions };
   }
   example(): string {
-    return this.blueprint;
+    return this.request.blueprint;
   }
 }
-export const EXECUTABLE_SKILL_CATALOG = new ExecutableSkillCatalog(
-  DISCOVERABLE_ACTIONS,
-  TOOLS_LIST_EXAMPLE,
-);
+export const EXECUTABLE_SKILL_CATALOG = new ExecutableSkillCatalog({
+  actions: DISCOVERABLE_ACTIONS,
+  blueprint: TOOLS_LIST_EXAMPLE,
+});
