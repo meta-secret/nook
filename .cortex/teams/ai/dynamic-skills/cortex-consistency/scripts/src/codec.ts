@@ -10,9 +10,7 @@ import {
 } from './domain.ts';
 
 export class CortexConsistencyRequestDecoder {
-  private isTransportRecord(
-    value: unknown,
-  ): value is { readonly [key: string]: unknown } {
+  private isTransportRecord(value: CortexConsistencyTransportRecord): boolean {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
 
@@ -33,9 +31,9 @@ export class CortexConsistencyRequestDecoder {
     ) {
       return err(new CortexConsistencyRequestDecodeError(''));
     }
-    let transport: unknown;
+    let transport: CortexConsistencyRequestTransport;
     try {
-      transport = JSON.parse(serialized);
+      transport = JSON.parse(serialized) as CortexConsistencyRequestTransport;
     } catch {
       return err(new CortexConsistencyRequestDecodeError(''));
     }
@@ -84,7 +82,7 @@ export class CortexConsistencyRequestDecoder {
         !Array.isArray(candidate.references) ||
         candidate.references.length > CORTEX_CONSISTENCY_REFERENCE_LIMIT ||
         !candidate.references.every(
-          (reference: unknown): reference is string =>
+          (reference: string | false): reference is string =>
             typeof reference === 'string' &&
             reference.length <= CORTEX_CONSISTENCY_PATH_LIMIT,
         )
@@ -97,7 +95,7 @@ export class CortexConsistencyRequestDecoder {
         !Array.isArray(candidate.commands) ||
         candidate.commands.length > CORTEX_CONSISTENCY_REFERENCE_LIMIT ||
         !candidate.commands.every(
-          (command: unknown): command is string =>
+          (command: string | false): command is string =>
             typeof command === 'string' &&
             command.length <= CORTEX_CONSISTENCY_PATH_LIMIT,
         )
@@ -152,6 +150,20 @@ export class CortexConsistencyRequestDecodeError {
 }
 
 type ExactKeysRequest = {
-  readonly value: unknown;
+  readonly value: CortexConsistencyTransportRecord;
   readonly expected: readonly string[];
 };
+
+type CortexConsistencyDocumentTransport = {
+  readonly relativePath: string | false;
+  readonly references: readonly (string | false)[] | false;
+  readonly commands: readonly (string | false)[] | false;
+};
+
+type CortexConsistencyRequestTransport = {
+  readonly kind: string | false;
+  readonly documents: readonly CortexConsistencyDocumentTransport[] | false;
+};
+
+type CortexConsistencyTransportRecord =
+  CortexConsistencyRequestTransport | CortexConsistencyDocumentTransport;
