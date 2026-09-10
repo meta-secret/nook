@@ -1,11 +1,14 @@
 //! Local identity creation, selection, and session adoption.
 
+use super::session::LocalIdentityCreation;
 use crate::AuthProviderDatabase;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::IdentityDbSaveProtectedLocalIdentity;
+use crate::manager::device_protection::ExtensionIdentityPublication;
 #[cfg(test)]
 use crate::manager::session::ExtensionHandoffState;
 use crate::storage::device_access::DeviceAccessProfileKey;
+use crate::storage::identity_record::AuthorizerSigningUpdate;
 use crate::storage::identity_record::LocalIdentitySigner;
 use crate::storage::identity_record::PreviousLocalSelection;
 use crate::storage::identity_record::PriorAppAuthorization;
@@ -75,18 +78,21 @@ impl NookVaultManager {
                 .load_or_create()
                 .await?;
         }
-        self.device.pending_local_identity_label = Some(label);
+        self.device.pending_local_identity_label = LocalIdentityCreation::Creating(label);
         Ok(())
     }
 
     #[wasm_bindgen]
     pub fn cancel_local_identity_creation(&mut self) {
-        self.device.pending_local_identity_label = None;
+        self.device.pending_local_identity_label = LocalIdentityCreation::ExistingIdentity;
     }
 
     #[wasm_bindgen(getter)]
     pub fn local_identity_creation_pending(&self) -> bool {
-        self.device.pending_local_identity_label.is_some()
+        matches!(
+            &self.device.pending_local_identity_label,
+            LocalIdentityCreation::Creating(_)
+        )
     }
 
     /// Select a protected identity on this browser and lock the prior one.
@@ -142,7 +148,7 @@ mod tests {
     fn cancelled_creation_leaves_no_pending_identity() -> Result<(), &'static str> {
         let mut manager = NookVaultManager::new();
         manager.device.pending_local_identity_label =
-            Some(NookVaultManager::local_identity_label("Work")?);
+            LocalIdentityCreation::Creating(NookVaultManager::local_identity_label("Work")?);
         assert!(manager.local_identity_creation_pending());
 
         manager.cancel_local_identity_creation();
@@ -184,21 +190,25 @@ mod tests {
         let mut manager = NookVaultManager::new();
         manager.device.extension_handoff_private_key =
             ExtensionHandoffState::Recipient(("handoff-private-key".to_owned()).into());
-        manager.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
-            enrollment: PendingExtensionIdentityEnrollment::PairedVault {
-                authorizer,
-                store_id: nook_core::StoreId::generate()?,
-            },
-            authorizer_signing: None,
-            signing_public_key: signing.public_key(),
-            handoff_signing_seed: signing_seed.into_inner(),
-            persist_signing_seed: true,
-            previous_session_signing_seed: "previous-session-signer".to_owned(),
-        });
+        manager.device.pending_extension_handoff =
+            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+                enrollment: PendingExtensionIdentityEnrollment::PairedVault {
+                    authorizer,
+                    store_id: nook_core::StoreId::generate()?,
+                },
+                authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
+                signing_public_key: signing.public_key(),
+                handoff_signing_seed: signing_seed.into_inner(),
+                persist_signing_seed: true,
+                previous_session_signing_seed: "previous-session-signer".to_owned(),
+            });
 
         manager.reset_local_identity_session();
 
-        assert!(manager.device.pending_extension_handoff.is_none());
+        assert!(matches!(
+            &manager.device.pending_extension_handoff,
+            ExtensionIdentityPublication::Idle
+        ));
         assert!(manager.device.extension_handoff_private_key.is_empty());
         Ok(())
     }
@@ -364,11 +374,11 @@ impl NookVaultManager {
         self.reset_local_identity_session();
         self.lock_device_identity();
         self.device.id = app_id.to_string();
-        self.device.pending_local_identity_label = None;
+        self.device.pending_local_identity_label = LocalIdentityCreation::ExistingIdentity;
     }
 
     fn reset_local_identity_session(&mut self) {
-        self.device.pending_extension_handoff = None;
+        self.device.pending_extension_handoff = ExtensionIdentityPublication::Idle;
         self.device.extension_handoff_private_key.zeroize();
         self.device.extension_handoff_private_key.clear();
         self.reset_vault_session();
@@ -378,7 +388,10 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) fn is_creating_local_identity(&self) -> bool {
-        self.device.pending_local_identity_label.is_some()
+        matches!(
+            &self.device.pending_local_identity_label,
+            LocalIdentityCreation::Creating(_)
+        )
     }
 
     pub(in crate::manager) async fn persist_and_adopt_local_identity(
@@ -387,8 +400,8 @@ impl NookVaultManager {
         record: &nook_core::WrappedDeviceIdentity,
     ) -> Result<String, NookError> {
         let pending_label = self.device.pending_local_identity_label.clone();
-        let saved = match pending_label.as_deref() {
-            Some(label) => {
+        let saved = match &pending_label {
+            LocalIdentityCreation::Creating(label) => {
                 let prior_app_key = if self.device.identity_private_key.is_empty() {
                     None
                 } else {
@@ -409,7 +422,7 @@ impl NookVaultManager {
                 )
                 .await?
             }
-            None => {
+            LocalIdentityCreation::ExistingIdentity => {
                 NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
                     app_key: &app_key,
                     record: record,
@@ -429,7 +442,7 @@ impl NookVaultManager {
         self.device.identity_private_key.zeroize();
         self.device.identity_private_key = app_key.secret_string().into_inner();
         self.event_log.signing_seed = saved.signing_seed;
-        self.device.pending_local_identity_label = None;
+        self.device.pending_local_identity_label = LocalIdentityCreation::ExistingIdentity;
         Ok(self.device.id.clone())
     }
 

@@ -55,9 +55,7 @@ impl NookIdentityDirectorySnapshot {
                 "No linked identity grants this browser access to the selected vault",
             ));
         }
-        NookIdentitySnapshot::current_browser_identity(&self.identities)
-            .cloned()
-            .ok_or_else(|| JsError::new("No linked identity belongs to this browser"))
+        NookIdentitySnapshot::current_browser_identity(&self.identities).cloned()
     }
 
     /// Return access evidence captured from the same protected app ID as the

@@ -18,6 +18,7 @@
 //! in this file because every submodule depends on it.
 
 use crate::VaultSnapshotLookup;
+use crate::manager::device_protection::ExtensionIdentityPublication;
 
 use crate::AuthProviderDatabase;
 use crate::DriveStorageClient;
@@ -265,14 +266,13 @@ impl NookVaultManager {
     /// Clear the failed vault session while retaining the staged signer that a
     /// verified extension handoff needs when the caller retries connect.
     pub(in crate::manager) fn reset_vault_session_for_handoff_retry(&mut self) {
-        let handoff_signing_seed = self
-            .device
-            .pending_extension_handoff
-            .as_ref()
-            .map(|pending| pending.handoff_signing_seed.clone());
         self.reset_vault_session();
-        if let Some(seed) = handoff_signing_seed {
-            self.event_log.signing_seed = seed;
+        if let ExtensionIdentityPublication::Staged(pending) =
+            &self.device.pending_extension_handoff
+        {
+            self.event_log
+                .signing_seed
+                .clone_from(&pending.handoff_signing_seed);
         }
     }
 

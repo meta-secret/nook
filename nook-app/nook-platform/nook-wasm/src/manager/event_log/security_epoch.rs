@@ -19,6 +19,11 @@ use nook_core::{
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
 
+enum EpochPublication {
+    Unpublished,
+    Published(IdentityVaultEventId),
+}
+
 struct PreparedEpochRotation {
     previous_key_epoch: nook_core::IdentityVaultEventId,
     previous_checkpoint: nook_core::IdentityVaultEventId,
@@ -256,10 +261,10 @@ impl NookVaultManager {
         &mut self,
         plan: SecurityEpochRecoveryPlan,
         plan_envelope: &nook_core::AgeArmoredCiphertext,
-        persisted_key_epoch: Option<nook_core::IdentityVaultEventId>,
+        persisted_key_epoch: EpochPublication,
     ) -> Result<(), SecurityEpochRotationFailure> {
         let execution = plan
-            .prepare_execution(&self.vault.store_id, persisted_key_epoch.as_ref())
+            .prepare_execution(&self.vault.store_id, &persisted_key_epoch)
             .map_err(SecurityEpochRotationFailure::before)?;
         let committed = execution.commit(self, plan_envelope).await?;
         if let Err(error) = committed.complete(self).await {
@@ -309,13 +314,14 @@ impl SecurityEpochRecoveryPlan {
     fn prepare_execution(
         self,
         store_id: &str,
-        persisted_key_epoch: Option<&nook_core::IdentityVaultEventId>,
+        persisted_key_epoch: &EpochPublication,
     ) -> Result<PreparedSecurityEpochExecution, NookError> {
         let store_id = StoreId::parse(store_id)?;
         let trigger_event = Self::built_event_from_yaml(&self.trigger_event_yaml)?;
         let trigger_event_id = trigger_event.event.id()?;
         let key_epoch = IdentityVaultEventId::parse(trigger_event_id.as_str())?;
-        if persisted_key_epoch.is_some_and(|persisted| persisted != &key_epoch) {
+        if matches!(persisted_key_epoch, EpochPublication::Published(persisted) if persisted != &key_epoch)
+        {
             return Err(NookError::Database(
                 "Persisted security epoch does not match its recovery plan.".to_owned(),
             ));
@@ -404,15 +410,16 @@ impl NookVaultManager {
             return Ok(false);
         }
         let store_id = StoreId::parse(&self.vault.store_id)?;
-        let Some(pending) = IdentityReconciliationStore::new(&store_id).load().await? else {
-            return Ok(false);
-        };
+        let pending = IdentityReconciliationStore::new(&store_id).load().await?;
         let (plan_envelope, persisted_key_epoch) = match pending {
-            PendingIdentityRotation::Prepared { plan_envelope } => (plan_envelope, None),
+            PendingIdentityRotation::Complete => return Ok(false),
+            PendingIdentityRotation::Prepared { plan_envelope } => {
+                (plan_envelope, EpochPublication::Unpublished)
+            }
             PendingIdentityRotation::EpochCommitted {
                 key_epoch,
                 plan_envelope,
-            } => (plan_envelope, Some(key_epoch)),
+            } => (plan_envelope, EpochPublication::Published(key_epoch)),
         };
         let plan_json = Zeroizing::new(identity.open_utf8(&plan_envelope)?);
         let plan: SecurityEpochRecoveryPlan = serde_json::from_str(&plan_json)
@@ -471,8 +478,12 @@ impl NookVaultManager {
             .persist_security_epoch_recovery_plan(prepared, trigger, &password_entries)
             .await
             .map_err(SecurityEpochRotationFailure::before)?;
-        self.execute_security_epoch_recovery_plan(persisted.plan, &persisted.plan_envelope, None)
-            .await
+        self.execute_security_epoch_recovery_plan(
+            persisted.plan,
+            &persisted.plan_envelope,
+            EpochPublication::Unpublished,
+        )
+        .await
     }
 
     pub(in crate::manager) async fn rotate_password_security_epoch(
@@ -506,9 +517,13 @@ impl NookVaultManager {
                 &password_entries,
             )
             .await?;
-        self.execute_security_epoch_recovery_plan(persisted.plan, &persisted.plan_envelope, None)
-            .await
-            .map_err(SecurityEpochRotationFailure::into_error)?;
+        self.execute_security_epoch_recovery_plan(
+            persisted.plan,
+            &persisted.plan_envelope,
+            EpochPublication::Unpublished,
+        )
+        .await
+        .map_err(SecurityEpochRotationFailure::into_error)?;
         Ok(envelope)
     }
 }
@@ -558,7 +573,10 @@ mod tests {
         let mut plan = SecurityEpochRecoveryPlan::fixture()?;
         plan.checkpoint_event_yaml = "invalid checkpoint".to_owned();
         let persisted = IdentityVaultEventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
-        match plan.prepare_execution("store_epochstate1", Some(&persisted)) {
+        match plan.prepare_execution(
+            "store_epochstate1",
+            &EpochPublication::Published(persisted.clone()),
+        ) {
             Err(NookError::Database(message)) => {
                 assert_eq!(
                     message,
@@ -604,7 +622,7 @@ mod tests {
     fn detects_a_verified_epoch_after_the_prepared_epoch() -> anyhow::Result<()> {
         let committed = CommittedSecurityEpochExecution {
             execution: SecurityEpochRecoveryPlan::fixture()?
-                .prepare_execution("store_epochstate1", None)?,
+                .prepare_execution("store_epochstate1", &EpochPublication::Unpublished)?,
         };
         let latest = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
         let projection = nook_core::VaultProjection {
@@ -728,7 +746,7 @@ mod tests {
     fn recovery_plan_rejects_malformed_checkpoint_after_valid_trigger() -> anyhow::Result<()> {
         let mut plan = SecurityEpochRecoveryPlan::fixture()?;
         plan.checkpoint_event_yaml = "not an event".to_owned();
-        match plan.prepare_execution("store_epochstate1", None) {
+        match plan.prepare_execution("store_epochstate1", &EpochPublication::Unpublished) {
             Err(NookError::Database(message))
                 if message.starts_with("failed to parse stored event:") => {}
             Err(error) => return Err(error.into()),
@@ -745,7 +763,7 @@ mod tests {
     fn recovery_plan_rejects_an_invalid_store_before_event_replay() -> anyhow::Result<()> {
         let plan = SecurityEpochRecoveryPlan::fixture()?;
 
-        let error = match plan.prepare_execution("", None) {
+        let error = match plan.prepare_execution("", &EpochPublication::Unpublished) {
             Err(error) => error,
             Ok(_) => anyhow::bail!("invalid store ids must fail closed"),
         };
@@ -763,10 +781,11 @@ mod tests {
         let mut plan = SecurityEpochRecoveryPlan::fixture()?;
         plan.trigger_event_yaml = "not an event".to_owned();
 
-        let error = match plan.prepare_execution("store_epochstate1", None) {
-            Err(error) => error,
-            Ok(_) => anyhow::bail!("malformed triggers must fail closed"),
-        };
+        let error =
+            match plan.prepare_execution("store_epochstate1", &EpochPublication::Unpublished) {
+                Err(error) => error,
+                Ok(_) => anyhow::bail!("malformed triggers must fail closed"),
+            };
 
         assert!(
             matches!(error, NookError::Database(message) if message.starts_with("failed to parse stored event:"))
@@ -785,7 +804,10 @@ mod tests {
         let trigger_event = SecurityEpochRecoveryPlan::built_event_from_yaml(&trigger_yaml)?;
         let persisted = IdentityVaultEventId::parse(trigger_event.event.id()?.as_str())?;
 
-        let prepared = plan.prepare_execution("store_epochstate1", Some(&persisted))?;
+        let prepared = plan.prepare_execution(
+            "store_epochstate1",
+            &EpochPublication::Published(persisted.clone()),
+        )?;
 
         assert_eq!(prepared.store_id.as_str(), "store_epochstate1");
         assert_eq!(prepared.trigger_event_id.as_str(), persisted.as_str());
@@ -847,7 +869,8 @@ mod tests {
     {
         let plan = SecurityEpochRecoveryPlan::fixture()?;
         let committed = CommittedSecurityEpochExecution {
-            execution: plan.prepare_execution("store_epochstate1", None)?,
+            execution: plan
+                .prepare_execution("store_epochstate1", &EpochPublication::Unpublished)?,
         };
         let trigger = committed.execution.trigger_event_id.clone();
         assert!(!committed.projection_advanced_past(&nook_core::VaultProjection::default()));

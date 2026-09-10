@@ -1,5 +1,11 @@
 //! Manager-owned secret transitions behind the one-use handoff handles.
 use super::*;
+use crate::manager::device_protection::ExtensionIdentityPublication;
+use crate::storage::identity_record::HandoffAuthorization;
+use crate::storage::identity_record::{
+    AuthorizerSigningUpdate, VaultCreationAuthority, VaultCreationAuthorityRef,
+};
+use crate::storage::identity_record::{IdentityHandoffOperation, PairedVaultEnrollment};
 
 impl NookVaultManager {
     pub(in crate::manager) async fn finish_extension_identity_handoff(
@@ -11,14 +17,8 @@ impl NookVaultManager {
         expected_device_signing_public_key: &str,
         context: &NookExtensionIdentityHandoffContext,
     ) -> Result<(), JsError> {
-        let Some(private_key) =
-            mem::take(&mut self.device.extension_handoff_private_key).into_recipient()
-        else {
-            return Err(NookError::Decryption(
-                "Extension identity handoff was not initialized.".to_owned(),
-            )
-            .into());
-        };
+        let private_key =
+            mem::take(&mut self.device.extension_handoff_private_key).into_recipient()?;
         let recipient =
             DeviceIdentity::from_secret_str(&DeviceIdentitySecret::parse(&private_key)?)?;
         let expected_signing_public_key =
@@ -40,8 +40,10 @@ impl NookVaultManager {
             let signing_public_key = self.ensure_signing_identity().await?.public_key();
             Some((app_key, signing_public_key))
         };
-        let enrollment = (context)
-            .pending_extension_enrollment(authorizer.as_ref().map(|(app_key, _)| app_key))?;
+        let enrollment = (context).pending_extension_enrollment(match &authorizer {
+            Some((app_key, _)) => HandoffAuthorization::Authenticated(app_key),
+            None => HandoffAuthorization::Unauthenticated,
+        })?;
 
         // Age identity may come from a reinstalled extension. Keep any durable
         // authorized signer when the vault already has events so Approve does
@@ -90,31 +92,30 @@ impl NookVaultManager {
                 debug_assert_eq!(persist, persist_signing_seed);
             }
         }
-        self.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
-            enrollment,
-            authorizer_signing: authorizer.map(|(app_key, signing_public_key)| {
-                (app_key.app_id().clone(), signing_public_key)
-            }),
-            signing_public_key: expected_signing_public_key,
-            handoff_signing_seed: pending_handoff_signing_seed,
-            persist_signing_seed,
-            previous_session_signing_seed,
-        });
+        self.device.pending_extension_handoff =
+            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+                enrollment,
+                authorizer_signing: match authorizer {
+                    Some((app_key, signing_public_key)) => {
+                        AuthorizerSigningUpdate::Verified(AuthorizerMemberSigning {
+                            app_id: app_key.app_id().clone(),
+                            signing_public_key,
+                        })
+                    }
+                    None => AuthorizerSigningUpdate::RetainMembership,
+                },
+                signing_public_key: expected_signing_public_key,
+                handoff_signing_seed: pending_handoff_signing_seed,
+                persist_signing_seed,
+                previous_session_signing_seed,
+            });
         Ok(())
     }
     pub(in crate::manager) fn extension_identity_handoff_requires_connect(&self) -> bool {
-        self.device
-            .pending_extension_handoff
-            .as_ref()
-            .is_some_and(|pending| {
-                matches!(
-                    &pending.enrollment,
-                    PendingExtensionIdentityEnrollment::VaultCreation { .. }
-                        | PendingExtensionIdentityEnrollment::PairedVault { .. }
-                        | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
-                        | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
-                )
-            })
+        matches!(
+            &self.device.pending_extension_handoff,
+            ExtensionIdentityPublication::Staged(_)
+        )
     }
     pub(in crate::manager) fn mark_extension_identity_handoff_existing_vault_import(
         &mut self,
@@ -123,10 +124,10 @@ impl NookVaultManager {
         let pending = self
             .device
             .pending_extension_handoff
-            .as_mut()
-            .ok_or_else(|| JsError::new("Extension identity handoff is not pending."))?;
+            .pending_mut()
+            .map_err(|error| JsError::new(&error.to_string()))?;
         pending.enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id };
-        pending.authorizer_signing = None;
+        pending.authorizer_signing = AuthorizerSigningUpdate::RetainMembership;
         pending.persist_signing_seed = true;
         self.event_log.signing_seed.zeroize();
         self.event_log
@@ -140,8 +141,8 @@ impl NookVaultManager {
         let pending = self
             .device
             .pending_extension_handoff
-            .as_ref()
-            .ok_or_else(|| JsError::new("Extension identity handoff is not pending."))?;
+            .pending()
+            .map_err(|error| JsError::new(&error.to_string()))?;
         if !matches!(
             &pending.enrollment,
             PendingExtensionIdentityEnrollment::PairedVault { .. }
@@ -151,26 +152,41 @@ impl NookVaultManager {
             ));
         }
         let app_key = self.device_identity()?;
-        let signing_seed = pending
-            .persist_signing_seed
-            .then_some(self.event_log.signing_seed.as_str());
+        let signing_seed = if pending.persist_signing_seed {
+            HandoffSignerPublication::ReplaceWith(self.event_log.signing_seed.as_str())
+        } else {
+            HandoffSignerPublication::RetainStored
+        };
+        let PendingExtensionIdentityEnrollment::PairedVault {
+            authorizer,
+            store_id,
+        } = &pending.enrollment
+        else {
+            return Err(JsError::new(
+                "This extension identity handoff must be finalized by verified connect.",
+            ));
+        };
         identity_record::IdentityHandoffCommit {
             app_key: &app_key,
             signing_public_key: &pending.signing_public_key,
-            authorizer_signing: pending.authorizer_signing.as_ref(),
-            enrollment: &pending.enrollment,
+            authorizer_signing: &pending.authorizer_signing,
+            operation: IdentityHandoffOperation::PairedVault(PairedVaultEnrollment {
+                authorizer,
+                store_id,
+            }),
             signing_seed,
-            existing_vault: None,
         }
         .commit()
         .await?;
         Ok(())
     }
     pub(in crate::manager) fn confirm_extension_identity_handoff(&mut self) {
-        self.device.pending_extension_handoff = None;
+        self.device.pending_extension_handoff = ExtensionIdentityPublication::Idle;
     }
     pub(in crate::manager) fn rollback_extension_identity_handoff(&mut self) {
-        if let Some(mut pending) = self.device.pending_extension_handoff.take() {
+        if let ExtensionIdentityPublication::Staged(mut pending) =
+            mem::take(&mut self.device.pending_extension_handoff)
+        {
             self.event_log.signing_seed.zeroize();
             self.event_log.signing_seed = mem::take(&mut pending.previous_session_signing_seed);
         }

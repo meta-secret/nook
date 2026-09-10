@@ -4,7 +4,10 @@ use super::*;
 use crate::EventDbRemoveEventFixture;
 use crate::VaultSnapshotLookup;
 use crate::identity_record::NookIdentityDirectorySelectionKind;
+use crate::manager::device_protection::ExtensionIdentityPublication;
+use crate::storage::identity_record::AuthorizerMemberSigning;
 use crate::storage::identity_record::StoredIdentityProtection;
+use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuthority};
 use crate::storage::indexed_db::ImportVaultLabel;
 use crate::{
     DeviceProtectionDeviceModeState, IdbPutStringRequest, ImportVaultBlobRequest, NookDatabase,
@@ -374,16 +377,20 @@ async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_iden
     let (authorizer_signer, _) = SigningIdentity::generate()?;
     first_tab.device.id = extension_key.app_id().as_str().to_owned();
     first_tab.device.identity_private_key = extension_key.secret_string().into_inner();
-    first_tab.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
-        enrollment: PendingExtensionIdentityEnrollment::VaultCreation {
-            authorizer: Some(first_key.clone()),
-        },
-        authorizer_signing: Some((first_key.app_id().clone(), authorizer_signer.public_key())),
-        signing_public_key: extension_signer.public_key(),
-        handoff_signing_seed: extension_signing_seed.as_str().to_owned(),
-        persist_signing_seed: true,
-        previous_session_signing_seed: String::new(),
-    });
+    first_tab.device.pending_extension_handoff =
+        ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+            enrollment: PendingExtensionIdentityEnrollment::VaultCreation {
+                authorizer: VaultCreationAuthority::ExistingIdentity(first_key.clone()),
+            },
+            authorizer_signing: AuthorizerSigningUpdate::Verified(AuthorizerMemberSigning {
+                app_id: first_key.app_id().clone(),
+                signing_public_key: authorizer_signer.public_key(),
+            }),
+            signing_public_key: extension_signer.public_key(),
+            handoff_signing_seed: extension_signing_seed.as_str().to_owned(),
+            persist_signing_seed: true,
+            previous_session_signing_seed: String::new(),
+        });
 
     let pending = first_tab
         .initialize_genesis_vault_with_identity(&extension_key)

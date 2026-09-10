@@ -6,6 +6,7 @@
 //! Identity persistence must complete before exact-marker cleanup becomes available.
 use super::super as identity_record;
 use super::super::super::indexed_db;
+use super::VerifiedPreviousEpoch;
 use super::{
     IdentityReconciliationStore, NookError, PendingIdentityReconciliation,
     PendingIdentityReconciliationProgress,
@@ -21,13 +22,17 @@ use nook_core::{
 };
 pub(super) struct EpochObservation<'a> {
     pub(super) observed: IdentityVaultDekEpoch,
-    pub(super) verified_previous_key_epoch: Option<IdentityVaultEventId>,
+    pub(super) verified_previous_key_epoch: VerifiedPreviousEpoch,
     pub(super) committed_event_ids: &'a [IdentityVaultEventId],
     pub(super) checkpoint_ancestors: &'a [IdentityVaultEventId],
 }
+enum ReconciliationCleanup {
+    NoMarker,
+    ConsumeExact(String),
+}
 pub(super) struct IdentityEpochResolution {
     update: IdentityVaultDekEpochUpdate,
-    consumed_marker: Option<String>,
+    consumed_marker: ReconciliationCleanup,
 }
 /// Carries the selected marker through directory persistence without cleaning it.
 /// Dropping this state or its unpolled future has no storage effect.
@@ -53,7 +58,7 @@ struct ResolvedIdentityPersistence {
 struct PersistedIdentityReconciliation {
     store_id: StoreId,
     record: IdentityRecord,
-    consumed_marker: Option<String>,
+    consumed_marker: ReconciliationCleanup,
 }
 impl IdentityReconciliationStore<'_> {
     pub(super) async fn resolve(
@@ -72,7 +77,7 @@ impl IdentityReconciliationStore<'_> {
             NookDatabase::idb_get_string(&IdentityReconciliationStore::new(store_id).key()).await?
         else {
             if let (
-                Some(previous_key_epoch),
+                VerifiedPreviousEpoch::Verified(previous_key_epoch),
                 IdentityVaultDekEpoch::Known {
                     key_epoch,
                     checkpoint,
@@ -86,7 +91,7 @@ impl IdentityReconciliationStore<'_> {
                         key_epoch: key_epoch.clone(),
                         checkpoint: checkpoint.clone(),
                     },
-                    consumed_marker: None,
+                    consumed_marker: ReconciliationCleanup::NoMarker,
                 });
             }
             return Ok(IdentityEpochResolution {
@@ -94,7 +99,7 @@ impl IdentityReconciliationStore<'_> {
                     key_epoch: observed,
                     checkpoint_ancestors: checkpoint_ancestors.to_vec(),
                 },
-                consumed_marker: None,
+                consumed_marker: ReconciliationCleanup::NoMarker,
             });
         };
         let pending = PendingIdentityReconciliation::decode(&raw)?;
@@ -143,7 +148,7 @@ impl IdentityReconciliationStore<'_> {
                         key_epoch: observed_epoch.clone(),
                         checkpoint: observed_checkpoint.clone(),
                     },
-                    consumed_marker: Some(raw),
+                    consumed_marker: ReconciliationCleanup::ConsumeExact(raw),
                 })
             }
         }
@@ -243,7 +248,7 @@ impl PersistedIdentityReconciliation {
             record,
             consumed_marker,
         } = self;
-        if let Some(consumed_marker) = consumed_marker {
+        if let ReconciliationCleanup::ConsumeExact(consumed_marker) = consumed_marker {
             IdentityReconciliationStore::new(&store_id)
                 .clear_consumed(&consumed_marker)
                 .await?;
@@ -257,14 +262,19 @@ impl IdentityEpochResolution {
     pub(super) fn update(&self) -> &IdentityVaultDekEpochUpdate {
         &self.update
     }
-    pub(super) fn marker(&self) -> Option<&str> {
-        self.consumed_marker.as_deref()
+    pub(super) fn marker(&self) -> Result<&str, NookError> {
+        match &self.consumed_marker {
+            ReconciliationCleanup::ConsumeExact(marker) => Ok(marker),
+            ReconciliationCleanup::NoMarker => Err(NookError::IndexedDb(
+                "Committed marker was not selected for cleanup.".to_owned(),
+            )),
+        }
     }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_tests {
-    use super::{IdentityEpochResolution, ResolvedIdentityPersistence};
+    use super::{IdentityEpochResolution, ReconciliationCleanup, ResolvedIdentityPersistence};
     use crate::NookError;
     use crate::storage::identity_record::IDENTITY_DIRECTORY_KEY;
     use crate::storage::identity_record::reconciliation::IdentityReconciliationStore;
@@ -304,7 +314,7 @@ mod browser_tests {
                         key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
                         checkpoint_ancestors: Vec::new(),
                     },
-                    consumed_marker: Some(self.marker.clone()),
+                    consumed_marker: ReconciliationCleanup::ConsumeExact(self.marker.clone()),
                 },
                 store_id: self.store_id.clone(),
                 app_key: self.app_key.clone(),

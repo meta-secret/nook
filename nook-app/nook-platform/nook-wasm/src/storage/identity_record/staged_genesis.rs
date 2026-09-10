@@ -6,6 +6,7 @@
 //! Staged identity ownership for crash-safe fresh-vault genesis.
 
 use super::LocalIdentityRecovery;
+use super::{AuthorizerMemberSigning, AuthorizerSigningUpdate, VaultCreationAuthorityRef};
 use crate::BrowserTimestamp;
 use crate::StoredStringRecord;
 use crate::storage::identity_record::IdentityDirectoryWrite;
@@ -39,9 +40,8 @@ pub(crate) struct StagedSimpleGenesisIdentity {
 pub(crate) struct StagedSimpleGenesisInput<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) signing_public_key: &'a nook_core::DeviceSigningPublicKey,
-    pub(crate) authorizer: Option<&'a nook_core::AppKey>,
-    pub(crate) authorizer_signing:
-        Option<&'a (nook_core::AppId, nook_core::DeviceSigningPublicKey)>,
+    pub(crate) authorizer: VaultCreationAuthorityRef<'a>,
+    pub(crate) authorizer_signing: &'a AuthorizerSigningUpdate,
     pub(crate) label: &'a str,
 }
 
@@ -50,7 +50,10 @@ impl StagedSimpleGenesisInput<'_> {
         &self,
         mut directory: nook_core::IdentityDirectory,
     ) -> Result<nook_core::IdentityDirectoryResolution, NookError> {
-        let live_owner = self.authorizer.unwrap_or(self.app_key);
+        let live_owner = match self.authorizer {
+            VaultCreationAuthorityRef::NewIdentity => self.app_key,
+            VaultCreationAuthorityRef::ExistingIdentity(authorizer) => authorizer,
+        };
         let owner_identity_id = match directory
             .identity_for_app_key(live_owner)
             .map_err(NookDatabase::map_domain_error)?
@@ -126,7 +129,11 @@ impl StagedSimpleGenesisInput<'_> {
                 },
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
-        if let Some((app_id, signing_public_key)) = input.authorizer_signing {
+        if let AuthorizerSigningUpdate::Verified(AuthorizerMemberSigning {
+            app_id,
+            signing_public_key,
+        }) = input.authorizer_signing
+        {
             staged_directory = staged_directory
                 .set_member_signing_public_key(DirectoryMemberSigningUpdate {
                     identity_id: &identity_id,
@@ -211,6 +218,7 @@ impl StagedSimpleGenesisInput<'_> {
 }
 #[cfg(test)]
 mod tests {
+    use super::{AuthorizerMemberSigning, AuthorizerSigningUpdate, VaultCreationAuthorityRef};
     use crate::storage::identity_record::IdentityDirectoryWrite;
     use crate::storage::identity_record::SimpleGenesisProgress;
 
@@ -260,8 +268,11 @@ mod tests {
         let (pending, _, _) = StagedSimpleGenesisInput {
             app_key: &extension,
             signing_public_key: &extension_signing.public_key(),
-            authorizer: Some(&authorizer),
-            authorizer_signing: Some(&authorizer_signing_pair),
+            authorizer: VaultCreationAuthorityRef::ExistingIdentity(&authorizer),
+            authorizer_signing: &AuthorizerSigningUpdate::Verified(AuthorizerMemberSigning {
+                app_id: authorizer_signing_pair.0.clone(),
+                signing_public_key: authorizer_signing_pair.1.clone(),
+            }),
             label: "Personal",
         }
         .begin_or_resume()
@@ -325,8 +336,8 @@ mod tests {
         let result = StagedSimpleGenesisInput {
             app_key: &app_key,
             signing_public_key: &signing.public_key(),
-            authorizer: None,
-            authorizer_signing: None,
+            authorizer: VaultCreationAuthorityRef::NewIdentity,
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
             label: "Personal",
         }
         .begin_or_resume()
@@ -361,8 +372,8 @@ mod tests {
         let (pending, _, _) = StagedSimpleGenesisInput {
             app_key: &extension,
             signing_public_key: &extension_signing.public_key(),
-            authorizer: None,
-            authorizer_signing: None,
+            authorizer: VaultCreationAuthorityRef::NewIdentity,
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
             label: "Personal",
         }
         .begin_or_resume()
@@ -511,8 +522,8 @@ mod tests {
         let (pending, _, _) = StagedSimpleGenesisInput {
             app_key: &app_key,
             signing_public_key: &signing.public_key(),
-            authorizer: None,
-            authorizer_signing: None,
+            authorizer: VaultCreationAuthorityRef::NewIdentity,
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
             label: "Pending",
         }
         .begin_or_resume()
@@ -801,8 +812,8 @@ mod tests {
         let pending = StagedSimpleGenesisInput {
             app_key: &overlapping_key,
             signing_public_key: &signing.public_key(),
-            authorizer: Some(&selected_key),
-            authorizer_signing: None,
+            authorizer: VaultCreationAuthorityRef::ExistingIdentity(&selected_key),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
             label: "Selected",
         }
         .begin_or_resume()
@@ -842,8 +853,11 @@ mod tests {
         let (pending, _, _) = StagedSimpleGenesisInput {
             app_key: &extension,
             signing_public_key: &extension_signing.public_key(),
-            authorizer: Some(&authorizer),
-            authorizer_signing: Some(&authorizer_signing_pair),
+            authorizer: VaultCreationAuthorityRef::ExistingIdentity(&authorizer),
+            authorizer_signing: &AuthorizerSigningUpdate::Verified(AuthorizerMemberSigning {
+                app_id: authorizer_signing_pair.0.clone(),
+                signing_public_key: authorizer_signing_pair.1.clone(),
+            }),
             label: "Personal",
         }
         .begin_or_resume()

@@ -21,41 +21,45 @@ use rexie::TransactionMode;
 
 use super as identity_record;
 use super::IDENTITY_DIRECTORY_KEY;
+use super::{AuthorizerMemberSigning, AuthorizerSigningUpdate, HandoffSignerPublication};
 use crate::{NookError, storage};
 
+pub(crate) enum IdentityHandoffOperation<'a> {
+    PairedVault(PairedVaultEnrollment<'a>),
+    ExistingVaultImport(ExistingVaultEnrollment<'a>),
+}
+pub(crate) struct PairedVaultEnrollment<'a> {
+    pub(crate) authorizer: &'a nook_core::AppKey,
+    pub(crate) store_id: &'a nook_core::StoreId,
+}
+pub(crate) struct ExistingVaultEnrollment<'a> {
+    pub(crate) store_id: &'a nook_core::StoreId,
+    pub(crate) existing: ExistingVaultImportCommit,
+}
 pub(crate) struct IdentityHandoffCommit<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) signing_public_key: &'a nook_core::DeviceSigningPublicKey,
-    pub(crate) authorizer_signing:
-        Option<&'a (nook_core::AppId, nook_core::DeviceSigningPublicKey)>,
-    pub(crate) enrollment: &'a manager::PendingExtensionIdentityEnrollment,
-    pub(crate) signing_seed: Option<&'a str>,
-    pub(crate) existing_vault: Option<ExistingVaultImportCommit>,
+    pub(crate) authorizer_signing: &'a AuthorizerSigningUpdate,
+    pub(crate) operation: IdentityHandoffOperation<'a>,
+    pub(crate) signing_seed: HandoffSignerPublication<'a>,
 }
-
 pub(crate) struct ExistingVaultImportCommit {
     pub(crate) device_id: nook_core::DeviceId,
     pub(crate) label: String,
 }
-
-pub(crate) struct IdentityHandoffCommitResult {
-    pub(crate) existing_vault_keys: Option<nook_core::VaultKeys>,
+pub(crate) enum IdentityHandoffCommitResult {
+    PairedVaultCommitted,
+    ExistingVaultImported(nook_core::VaultKeys),
 }
-
 struct HandoffSigningSeed<'a> {
     store: &'a rexie::Store,
-    seed: Option<&'a str>,
+    seed: HandoffSignerPublication<'a>,
 }
 impl IdentityHandoffCommit<'_> {
     fn store_names(&self) -> &'static [&'static str] {
-        let enrollment = self.enrollment;
-        if matches!(
-            enrollment,
-            PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
-        ) {
-            &["vault", "events"]
-        } else {
-            &["vault"]
+        match self.operation {
+            IdentityHandoffOperation::PairedVault(_) => &["vault"],
+            IdentityHandoffOperation::ExistingVaultImport(_) => &["vault", "events"],
         }
     }
     async fn persist_signing_seed(input: &HandoffSigningSeed<'_>) -> Result<(), NookError> {
@@ -63,7 +67,7 @@ impl IdentityHandoffCommit<'_> {
             store,
             seed: signing_seed,
         } = *input;
-        let Some(seed) = signing_seed else {
+        let HandoffSignerPublication::ReplaceWith(seed) = signing_seed else {
             return Ok(());
         };
         let seed_key = serde_wasm_bindgen::to_value(event_db::SIGNING_SEED_KEY)
@@ -98,16 +102,11 @@ impl IdentityHandoffCommit<'_> {
                 NookError::IndexedDb(format!("Handoff legacy key error: {error:?}"))
             })?;
         let mut directory = NookDatabase::load_directory_for_write(&store).await?;
-        let (identity_id, existing_vault_keys) = match input.enrollment {
-            PendingExtensionIdentityEnrollment::VaultCreation { .. } => {
-                return Err(NookError::Database(
-                    "Vault-creation identity must publish with verified genesis.".to_owned(),
-                ));
-            }
-            PendingExtensionIdentityEnrollment::PairedVault {
+        let (identity_id, result) = match input.operation {
+            IdentityHandoffOperation::PairedVault(PairedVaultEnrollment {
                 authorizer,
                 store_id,
-            } => {
+            }) => {
                 let enrolled = directory
                     .enroll_app_key_for_owned_vault(DirectoryVaultEnrollment {
                         current_app_key: authorizer,
@@ -116,17 +115,15 @@ impl IdentityHandoffCommit<'_> {
                     })
                     .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
                 directory = enrolled.directory;
-                (enrolled.identity_id, None)
+                (
+                    enrolled.identity_id,
+                    IdentityHandoffCommitResult::PairedVaultCommitted,
+                )
             }
-            PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. } => {
-                return Err(NookError::Database(
-                    "Paired session unlock does not publish identity membership.".to_owned(),
-                ));
-            }
-            PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id } => {
-                let existing = input.existing_vault.ok_or_else(|| {
-                    NookError::Database("Existing-vault handoff material is missing.".to_owned())
-                })?;
+            IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id,
+                existing,
+            }) => {
                 let events = transaction.store("events").map_err(|error| {
                     NookError::IndexedDb(format!("Handoff event store error: {error:?}"))
                 })?;
@@ -141,7 +138,10 @@ impl IdentityHandoffCommit<'_> {
                 .import()
                 .await?;
                 directory = imported.directory;
-                (imported.identity_id, Some(imported.vault_keys))
+                (
+                    imported.identity_id,
+                    IdentityHandoffCommitResult::ExistingVaultImported(imported.vault_keys),
+                )
             }
         };
         directory = directory
@@ -153,7 +153,11 @@ impl IdentityHandoffCommit<'_> {
                 },
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
-        if let Some((app_id, signing_public_key)) = input.authorizer_signing {
+        if let AuthorizerSigningUpdate::Verified(AuthorizerMemberSigning {
+            app_id,
+            signing_public_key,
+        }) = input.authorizer_signing
+        {
             directory = directory
                 .set_member_signing_public_key(DirectoryMemberSigningUpdate {
                     identity_id: &identity_id,
@@ -186,9 +190,7 @@ impl IdentityHandoffCommit<'_> {
         transaction.done().await.map_err(|error| {
             NookError::IndexedDb(format!("Handoff transaction completion error: {error:?}"))
         })?;
-        Ok(IdentityHandoffCommitResult {
-            existing_vault_keys,
-        })
+        Ok(result)
     }
 }
 
@@ -196,8 +198,13 @@ impl IdentityHandoffCommit<'_> {
 mod tests {
     use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
-    use super::{IdentityHandoffCommit, PendingExtensionIdentityEnrollment};
+    use super::{
+        AuthorizerSigningUpdate, HandoffSignerPublication, IdentityHandoffCommit,
+        IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
+        PendingExtensionIdentityEnrollment,
+    };
     use crate::NookError;
+    use crate::storage::identity_record::VaultCreationAuthority;
     use crate::storage::{event_db, identity_record, indexed_db};
     use nook_core::{AppKey, DeviceSigningPublicKey, IdentityDirectory, SigningIdentity, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -222,15 +229,38 @@ mod tests {
         fn request<'a>(
             &'a self,
             enrollment: &'a PendingExtensionIdentityEnrollment,
-        ) -> IdentityHandoffCommit<'a> {
-            IdentityHandoffCommit {
+        ) -> Result<IdentityHandoffCommit<'a>, NookError> {
+            let operation = match enrollment {
+                PendingExtensionIdentityEnrollment::PairedVault {
+                    authorizer,
+                    store_id,
+                } => IdentityHandoffOperation::PairedVault(PairedVaultEnrollment {
+                    authorizer,
+                    store_id,
+                }),
+                PendingExtensionIdentityEnrollment::VaultCreation { .. } => {
+                    return Err(NookError::Database(
+                        "Vault-creation identity must publish with verified genesis.".to_owned(),
+                    ));
+                }
+                PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. } => {
+                    return Err(NookError::Database(
+                        "Paired session unlock does not publish identity membership.".to_owned(),
+                    ));
+                }
+                PendingExtensionIdentityEnrollment::ExistingVaultImport { .. } => {
+                    return Err(NookError::Database(
+                        "Existing-vault handoff material is missing.".to_owned(),
+                    ));
+                }
+            };
+            Ok(IdentityHandoffCommit {
                 app_key: &self.app_key,
                 signing_public_key: &self.signing_public_key,
-                authorizer_signing: None,
-                enrollment,
-                signing_seed: Some(&self.seed),
-                existing_vault: None,
-            }
+                authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+                operation,
+                signing_seed: HandoffSignerPublication::ReplaceWith(&self.seed),
+            })
         }
     }
 
@@ -246,7 +276,9 @@ mod tests {
         let fixture = HandoffFixture::new()?;
         for (enrollment, expected) in [
             (
-                PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None },
+                PendingExtensionIdentityEnrollment::VaultCreation {
+                    authorizer: VaultCreationAuthority::NewIdentity,
+                },
                 "Vault-creation identity must publish with verified genesis.",
             ),
             (
@@ -263,7 +295,10 @@ mod tests {
             ),
         ] {
             NookDatabase::clear_vault_db().await?;
-            let result = fixture.request(&enrollment).commit().await;
+            let result = match fixture.request(&enrollment) {
+                Ok(commit) => commit.commit().await,
+                Err(error) => Err(error),
+            };
             assert!(matches!(result, Err(NookError::Database(message)) if message == expected));
             assert!(
                 NookDatabase::load_identity_directory()
@@ -322,8 +357,11 @@ mod tests {
             authorizer,
             store_id: fixture.store_id.clone(),
         };
-        let committed = fixture.request(&enrollment).commit().await?;
-        assert!(committed.existing_vault_keys.is_none());
+        let committed = fixture.request(&enrollment)?.commit().await?;
+        assert!(matches!(
+            committed,
+            IdentityHandoffCommitResult::PairedVaultCommitted
+        ));
         let persisted = NookDatabase::load_identity_directory().await?;
         let record = persisted
             .identities()
@@ -353,12 +391,13 @@ mod tests {
     #[wasm_bindgen_test]
     async fn dropping_unpolled_commit_does_not_publish() -> Result<(), NookError> {
         let fixture = HandoffFixture::new()?;
-        let enrollment = PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
+        let enrollment = PendingExtensionIdentityEnrollment::PairedVault {
+            authorizer: AppKey::generate()?,
             store_id: fixture.store_id.clone(),
         };
         NookDatabase::clear_vault_db().await?;
         {
-            let _commit = fixture.request(&enrollment).commit();
+            let _commit = fixture.request(&enrollment)?.commit();
         }
         assert!(matches!(
             NookDatabase::idb_get_string(identity_record::IDENTITY_DIRECTORY_KEY).await?,

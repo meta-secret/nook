@@ -37,8 +37,19 @@ impl NookError {
     }
 }
 
+#[derive(Clone, Copy)]
+enum GenesisContext<'a> {
+    ExistingVault,
+    Pending(&'a identity_record::PendingSimpleGenesis),
+}
+
+struct GenesisBootstrap<'a> {
+    created_at: &'a IsoTimestamp,
+    pending: GenesisContext<'a>,
+}
+
 struct SimpleGenesisOperationsInput<'a> {
-    pending: Option<&'a identity_record::PendingSimpleGenesis>,
+    pending: GenesisContext<'a>,
     identity: &'a nook_core::AppKey,
     signing_public_key: &'a nook_core::DeviceSigningPublicKey,
     keys: &'a nook_core::VaultKeys,
@@ -47,7 +58,7 @@ struct SimpleGenesisOperationsInput<'a> {
 
 impl SimpleGenesisOperationsInput<'_> {
     async fn operations(&self) -> Result<Vec<VaultOperation>, NookError> {
-        let Some(pending) = self.pending else {
+        let GenesisContext::Pending(pending) = self.pending else {
             let auth_record = self
                 .identity
                 .auth_record(&self.keys.secrets_key, &self.keys.members_key)?;
@@ -104,11 +115,14 @@ impl SimpleGenesisOperationsInput<'_> {
 impl NookVaultManager {
     async fn simple_genesis_signing_identity(
         &mut self,
-        pending: Option<&identity_record::PendingSimpleGenesis>,
+        pending: GenesisContext<'_>,
     ) -> Result<nook_core::SigningIdentity, NookError> {
-        let Some(pending) = pending.filter(|pending| pending.is_staged()) else {
+        let GenesisContext::Pending(pending) = pending else {
             return self.ensure_signing_identity().await;
         };
+        if !pending.is_staged() {
+            return self.ensure_signing_identity().await;
+        }
         let app_key = self.device_identity()?;
         if let StoredSigningSeed::Stored(seed) = pending.resume_signing_seed(&app_key)? {
             self.event_log.signing_seed = seed;
@@ -265,23 +279,32 @@ impl NookVaultManager {
         &mut self,
     ) -> Result<(), NookError> {
         let created_at = IsoTimestamp::parse(&crate::BrowserTimestamp::now().into_iso_string())?;
-        self.bootstrap_event_log_genesis_inner(&created_at, None)
-            .await
+        self.bootstrap_event_log_genesis_inner(GenesisBootstrap {
+            created_at: &created_at,
+            pending: GenesisContext::ExistingVault,
+        })
+        .await
     }
 
     pub(in crate::manager) async fn bootstrap_simple_event_log_genesis(
         &mut self,
         pending: &identity_record::PendingSimpleGenesis,
     ) -> Result<(), NookError> {
-        self.bootstrap_event_log_genesis_inner(&pending.created_at, Some(pending))
-            .await
+        self.bootstrap_event_log_genesis_inner(GenesisBootstrap {
+            created_at: &pending.created_at,
+            pending: GenesisContext::Pending(pending),
+        })
+        .await
     }
 
     async fn bootstrap_event_log_genesis_inner(
         &mut self,
-        created_at: &nook_core::IsoTimestamp,
-        pending: Option<&identity_record::PendingSimpleGenesis>,
+        input: GenesisBootstrap<'_>,
     ) -> Result<(), NookError> {
+        let GenesisBootstrap {
+            created_at,
+            pending,
+        } = input;
         self.activate_event_log_mode().await?;
         let signing = self.simple_genesis_signing_identity(pending).await?;
         let actor_id = signing.actor_id()?;
@@ -339,7 +362,7 @@ impl NookVaultManager {
         let proposed_bytes: Vec<u8> = VaultEvent::serialize_event_storage_yaml(&proposed)
             .map_err(|e| NookError::Serialization(e.to_string()))?
             .into();
-        let bytes = if let Some(pending) = pending {
+        let bytes = if let GenesisContext::Pending(pending) = pending {
             let app_key = self.device_identity()?;
             let proposed_yaml = String::from_utf8(proposed_bytes)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;

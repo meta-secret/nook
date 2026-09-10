@@ -28,11 +28,20 @@ mod genesis_flow;
 mod handoff;
 mod keyring;
 mod reconciliation;
+pub(crate) use reconciliation::VerifiedPreviousEpoch;
+mod handoff_authority;
+pub(crate) use handoff_authority::{
+    AuthorizerMemberSigning, AuthorizerSigningUpdate, HandoffAuthorization,
+    HandoffSignerPublication, VaultCreationAuthority, VaultCreationAuthorityRef,
+};
 mod recovery;
 pub(crate) mod simple_genesis;
 mod staged_genesis;
 pub(crate) use genesis_flow::{PendingSimpleGenesisFlow, SimpleGenesisCompletion};
-pub(crate) use handoff::{ExistingVaultImportCommit, IdentityHandoffCommit};
+pub(crate) use handoff::{
+    ExistingVaultEnrollment, ExistingVaultImportCommit, IdentityHandoffCommit,
+    IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
+};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use keyring::LOCAL_IDENTITY_KEYRING_KEY;
 pub(crate) use keyring::{LocalIdentitySigner, ProtectedLocalIdentitySave};
@@ -509,7 +518,7 @@ pub(crate) struct LegacyVaultIdentityInput<'a> {
     pub(crate) secrets_envelope: nook_core::AgeArmoredCiphertext,
     pub(crate) members_envelope: nook_core::AgeArmoredCiphertext,
     pub(crate) key_epoch: nook_core::IdentityVaultDekEpoch,
-    pub(crate) verified_previous_key_epoch: Option<nook_core::IdentityVaultEventId>,
+    pub(crate) verified_previous_key_epoch: reconciliation::VerifiedPreviousEpoch,
     pub(crate) committed_event_ids: Vec<nook_core::IdentityVaultEventId>,
     pub(crate) checkpoint_ancestors: Vec<nook_core::IdentityVaultEventId>,
     pub(crate) authorized_auth_ids: Vec<nook_core::AuthKeyId>,

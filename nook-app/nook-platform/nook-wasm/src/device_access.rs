@@ -151,10 +151,15 @@ pub(crate) struct BrowserDeviceVaultAccessForIdentity<'a> {
 }
 
 /// Named values required by NookDeviceVaultAccess::vault_access_rows.
+pub(crate) enum VaultAccessScope<'a> {
+    AllLocalVaults,
+    Identity(&'a nook_core::IdentityRecord),
+}
+
 pub(crate) struct BrowserVaultAccessRows<'a> {
     pub(crate) registry: Vec<indexed_db::VaultRegistryEntry>,
     pub(crate) profiles: &'a [LocalAccessProfile],
-    pub(crate) identity: Option<&'a nook_core::IdentityRecord>,
+    pub(crate) identity: VaultAccessScope<'a>,
 }
 
 impl NookDeviceVaultAccess {
@@ -490,7 +495,7 @@ impl NookDeviceAccessSnapshot {
         let vaults = NookDeviceVaultAccess::vault_access_rows(BrowserVaultAccessRows {
             registry: NookDatabase::list_vault_registry_entries().await?,
             profiles: &profiles,
-            identity: None,
+            identity: VaultAccessScope::AllLocalVaults,
         });
 
         Ok(NookDeviceAccessSnapshot {
@@ -563,7 +568,7 @@ impl NookDeviceVaultAccess {
             BrowserVaultAccessRows {
                 registry: NookDatabase::list_vault_registry_entries().await?,
                 profiles: &profiles,
-                identity: Some(identity),
+                identity: VaultAccessScope::Identity(identity),
             },
         ))
     }
@@ -578,19 +583,18 @@ impl NookDeviceVaultAccess {
         } = request;
         let mut vaults = Vec::new();
         for entry in registry {
-            if identity.is_some_and(|record| {
-                StoreId::parse(&entry.store_id)
-                    .map_or(true, |store_id| !record.owns_vault(&store_id))
-            }) {
+            if matches!(&identity, VaultAccessScope::Identity(record) if StoreId::parse(&entry.store_id).map_or(true, |store_id| !record.owns_vault(&store_id)))
+            {
                 continue;
             }
             let verified_at = profiles
                 .iter()
                 .flat_map(|local| {
                     local.profile.verified_vaults.iter().filter(|access| {
-                        identity.is_none_or(|record| {
-                            AppId::parse(&local.app_id)
-                                .is_ok_and(|app_id| record.has_app_id(&app_id))
+                        (match &identity {
+                            VaultAccessScope::AllLocalVaults => true,
+                            VaultAccessScope::Identity(record) => AppId::parse(&local.app_id)
+                                .is_ok_and(|app_id| record.has_app_id(&app_id)),
                         }) && access.device_id.as_str() == local.app_id
                             && access.store_id.as_str() == entry.store_id
                     })
@@ -754,12 +758,12 @@ mod tests {
         let personal_rows = NookDeviceVaultAccess::vault_access_rows(BrowserVaultAccessRows {
             registry: registry.clone(),
             profiles: &profiles,
-            identity: Some(&personal),
+            identity: VaultAccessScope::Identity(&personal),
         });
         let work_rows = NookDeviceVaultAccess::vault_access_rows(BrowserVaultAccessRows {
             registry: registry,
             profiles: &profiles,
-            identity: Some(&work),
+            identity: VaultAccessScope::Identity(&work),
         });
 
         assert_eq!(personal_rows.len(), 1);
@@ -962,7 +966,7 @@ mod browser_tests {
         let rows = NookDeviceVaultAccess::vault_access_rows(BrowserVaultAccessRows {
             registry: unsorted,
             profiles: &[],
-            identity: None,
+            identity: VaultAccessScope::AllLocalVaults,
         });
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].label(), "Alpha");

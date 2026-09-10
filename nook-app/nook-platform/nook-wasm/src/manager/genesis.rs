@@ -1,5 +1,7 @@
 //! Vault genesis and empty-session initialization.
 
+use super::device_protection::{ExtensionIdentityPublication, PendingExtensionIdentityEnrollment};
+use super::identity_handoff::VaultCreationHandoff;
 use super::{NookVaultManager, VaultNameState};
 use crate::IdentityDbGenerateVaultDekForIdentity;
 use crate::NookDatabase;
@@ -27,16 +29,25 @@ impl NookVaultManager {
             VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),
         };
-        if let Some(handoff) = self.pending_vault_creation_handoff() {
+        if let ExtensionIdentityPublication::Staged(pending) =
+            &self.device.pending_extension_handoff
+        {
+            if matches!(
+                &pending.enrollment,
+                PendingExtensionIdentityEnrollment::VaultCreation { .. }
+            ) {
+                self.event_log
+                    .signing_seed
+                    .clone_from(&pending.handoff_signing_seed);
+            }
+        }
+        if let VaultCreationHandoff::Extension(handoff) = self.pending_vault_creation_handoff() {
             let app_key = self.device_identity()?;
-            self.event_log
-                .signing_seed
-                .clone_from(&handoff.signing_seed);
             let (pending, identity_record, keys) = identity_record::StagedSimpleGenesisInput {
                 app_key: &app_key,
-                signing_public_key: &handoff.signing_public_key,
-                authorizer: handoff.authorizer.as_ref(),
-                authorizer_signing: handoff.authorizer_signing.as_ref(),
+                signing_public_key: handoff.signing_public_key,
+                authorizer: handoff.authorizer,
+                authorizer_signing: handoff.authorizer_signing,
                 label: &label,
             }
             .begin_or_resume()

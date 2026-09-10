@@ -3,6 +3,7 @@
 //! Dropping a handle cannot retain manager keys; manager lock/reset/drop retain their
 //! existing zeroization responsibilities. Explicit transport cancellation remains an effect.
 use super::{NookExtensionIdentityHandoffContext, NookVaultManager};
+use crate::manager::device_protection::ExtensionIdentityPublication;
 use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -163,7 +164,10 @@ impl NookAdoptedExtensionIdentityHandoff {
         manager: &mut NookVaultManager,
     ) -> Result<NookCommittedExtensionIdentityHandoff, JsError> {
         self.binding.check(manager)?;
-        if manager.device.pending_extension_handoff.is_some() {
+        if matches!(
+            &manager.device.pending_extension_handoff,
+            ExtensionIdentityPublication::Staged(_)
+        ) {
             manager.rollback_extension_identity_handoff();
             return Err(JsError::new(
                 "Extension identity handoff has not completed verified connect.",

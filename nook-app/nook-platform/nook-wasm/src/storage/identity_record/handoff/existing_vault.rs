@@ -185,12 +185,15 @@ impl CheckedExistingVaultHandoff<'_> {
 mod tests {
     use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
-    use super::super::IdentityHandoffCommit;
+    use super::super::{
+        ExistingVaultEnrollment, IdentityHandoffCommit, IdentityHandoffCommitResult,
+        IdentityHandoffOperation,
+    };
     use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
-    use crate::manager::PendingExtensionIdentityEnrollment;
     use crate::storage;
     use crate::storage::event_db;
     use crate::storage::identity_record;
+    use crate::storage::identity_record::{AuthorizerSigningUpdate, HandoffSignerPublication};
     use crate::storage::indexed_db;
     use futures_util::future;
     use identity_record::{IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis};
@@ -285,19 +288,18 @@ mod tests {
         let signing_seed_before = NookDatabase::load_signing_seed().await?;
         let signing_public_key = DeviceSigningPublicKey::parse(&"22".repeat(32))
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
         let signing_seed = "33".repeat(32);
         let result = IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: Some(&signing_seed),
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::ReplaceWith(&signing_seed),
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit()
@@ -520,26 +522,24 @@ mod tests {
             })
             .await?;
         }
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
 
         let committed = IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &events.signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: None,
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::RetainStored,
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit()
         .await?;
-        assert_eq!(
-            committed.existing_vault_keys,
-            Some(events.replacement_keys.clone())
+        assert!(
+            matches!(committed, IdentityHandoffCommitResult::ExistingVaultImported(keys) if keys == events.replacement_keys)
         );
 
         let mut directory = NookDatabase::load_identity_directory().await?;
@@ -609,19 +609,18 @@ mod tests {
             .map_err(|error| NookError::Serialization(error.to_string()))?,
         })
         .await?;
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
 
         IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &events.signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: None,
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::RetainStored,
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit()
@@ -668,20 +667,19 @@ mod tests {
             })
             .await?;
         }
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
         let signing_seed = "33".repeat(32);
 
         let result = IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &events.signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: Some(&signing_seed),
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::ReplaceWith(&signing_seed),
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit()
@@ -750,19 +748,18 @@ mod tests {
                 NookError::IndexedDb(format!("Revocation commit error: {error:?}"))
             })
         };
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
         let signing_seed = "33".repeat(32);
         let handoff = IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &events.signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: Some(&signing_seed),
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::ReplaceWith(&signing_seed),
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit();

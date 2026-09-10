@@ -10,8 +10,13 @@ use crate::BrowserPasskeyRequestOptions;
 use crate::BrowserPasskeySignalCurrentUserDetails;
 use crate::NookDatabase;
 use crate::manager::session::ExtensionHandoffState;
+use crate::storage::identity_record::HandoffAuthorization;
 use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::identity_record::ProtectedLocalIdentity;
+use crate::storage::identity_record::{
+    AuthorizerMemberSigning, AuthorizerSigningUpdate, HandoffSignerPublication,
+    VaultCreationAuthority,
+};
 use nook_companion_core::CompanionIdentityHandoffContext;
 #[path = "device_protection_recovery.rs"]
 mod device_protection_recovery;
@@ -48,7 +53,7 @@ enum ExtensionIdentityHandoffContextValue {
 
 pub(crate) enum PendingExtensionIdentityEnrollment {
     VaultCreation {
-        authorizer: Option<nook_core::AppKey>,
+        authorizer: VaultCreationAuthority,
     },
     PairedVault {
         authorizer: nook_core::AppKey,
@@ -62,10 +67,38 @@ pub(crate) enum PendingExtensionIdentityEnrollment {
     },
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("Extension identity handoff is not pending.")]
+pub(in crate::manager) struct HandoffNotPending;
+
+#[derive(Default)]
+pub(in crate::manager) enum ExtensionIdentityPublication {
+    #[default]
+    Idle,
+    Staged(PendingExtensionIdentityHandoff),
+}
+impl ExtensionIdentityPublication {
+    pub(in crate::manager) fn pending(
+        &self,
+    ) -> Result<&PendingExtensionIdentityHandoff, HandoffNotPending> {
+        match self {
+            Self::Idle => Err(HandoffNotPending),
+            Self::Staged(pending) => Ok(pending),
+        }
+    }
+    pub(in crate::manager) fn pending_mut(
+        &mut self,
+    ) -> Result<&mut PendingExtensionIdentityHandoff, HandoffNotPending> {
+        match self {
+            Self::Idle => Err(HandoffNotPending),
+            Self::Staged(pending) => Ok(pending),
+        }
+    }
+}
+
 pub(in crate::manager) struct PendingExtensionIdentityHandoff {
     pub(in crate::manager) enrollment: PendingExtensionIdentityEnrollment,
-    pub(in crate::manager) authorizer_signing:
-        Option<(nook_core::AppId, nook_core::DeviceSigningPublicKey)>,
+    pub(in crate::manager) authorizer_signing: AuthorizerSigningUpdate,
     pub(in crate::manager) signing_public_key: nook_core::DeviceSigningPublicKey,
     pub(in crate::manager) handoff_signing_seed: String,
     pub(in crate::manager) persist_signing_seed: bool,
@@ -85,22 +118,26 @@ mod tests {
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let mut manager = NookVaultManager::new();
         manager.event_log.signing_seed = "session-signer".to_owned();
-        manager.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
-            enrollment: PendingExtensionIdentityEnrollment::PairedVault {
-                authorizer,
-                store_id: staged_store_id,
-            },
-            authorizer_signing: None,
-            signing_public_key: signing.public_key(),
-            handoff_signing_seed: signing_seed.as_str().to_owned(),
-            persist_signing_seed: true,
-            previous_session_signing_seed: String::new(),
-        });
+        manager.device.pending_extension_handoff =
+            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+                enrollment: PendingExtensionIdentityEnrollment::PairedVault {
+                    authorizer,
+                    store_id: staged_store_id,
+                },
+                authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
+                signing_public_key: signing.public_key(),
+                handoff_signing_seed: signing_seed.as_str().to_owned(),
+                persist_signing_seed: true,
+                previous_session_signing_seed: String::new(),
+            });
 
         manager.reset_vault_session_for_handoff_retry();
 
         assert_eq!(manager.event_log.signing_seed, signing_seed.as_str());
-        assert!(manager.device.pending_extension_handoff.is_some());
+        assert!(matches!(
+            &manager.device.pending_extension_handoff,
+            ExtensionIdentityPublication::Staged(_)
+        ));
         Ok(())
     }
 
@@ -141,7 +178,8 @@ mod tests {
             },
         };
 
-        let enrollment = (&context).pending_extension_enrollment(None)?;
+        let enrollment =
+            (&context).pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?;
 
         assert!(matches!(
             enrollment,
@@ -156,15 +194,20 @@ mod tests {
             value: ExtensionIdentityHandoffContextValue::VaultCreation,
         };
         assert!(matches!(
-            (&vault_creation).pending_extension_enrollment(None)?,
-            PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None }
+            (&vault_creation)
+                .pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
+            PendingExtensionIdentityEnrollment::VaultCreation {
+                authorizer: VaultCreationAuthority::NewIdentity
+            }
         ));
 
         let authorizer = AppKey::generate()?;
         assert!(matches!(
-            (&vault_creation).pending_extension_enrollment(Some(&authorizer))?,
+            (&vault_creation).pending_extension_enrollment(
+                VaultCreationAuthorityRef::ExistingIdentity(&authorizer)
+            )?,
             PendingExtensionIdentityEnrollment::VaultCreation {
-                authorizer: Some(_)
+                authorizer: VaultCreationAuthority::ExistingIdentity(_)
             }
         ));
 
@@ -175,12 +218,12 @@ mod tests {
             },
         };
         assert!(matches!(
-            (&paired).pending_extension_enrollment(None)?,
+            (&paired).pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
             PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { store_id: id }
                 if id == store_id
         ));
         assert!(matches!(
-            (&paired).pending_extension_enrollment(Some(&authorizer))?,
+            (&paired).pending_extension_enrollment(HandoffAuthorization::Authenticated(&authorizer))?,
             PendingExtensionIdentityEnrollment::PairedVault { store_id: id, .. }
                 if id == store_id
         ));
@@ -191,7 +234,7 @@ mod tests {
             },
         };
         assert!(matches!(
-            (&imported).pending_extension_enrollment(None)?,
+            (&imported).pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
             PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id: id }
                 if id == store_id
         ));
@@ -271,21 +314,30 @@ impl NookExtensionIdentityHandoffContext {
 impl NookExtensionIdentityHandoffContext {
     fn pending_extension_enrollment(
         &self,
-        authorizer: Option<&nook_core::AppKey>,
+        authorizer: HandoffAuthorization<'_>,
     ) -> Result<PendingExtensionIdentityEnrollment, NookError> {
         let context = self;
         match &context.value {
             ExtensionIdentityHandoffContextValue::VaultCreation => {
                 Ok(PendingExtensionIdentityEnrollment::VaultCreation {
-                    authorizer: authorizer.cloned(),
+                    authorizer: match authorizer {
+                        HandoffAuthorization::Unauthenticated => {
+                            VaultCreationAuthority::NewIdentity
+                        }
+                        HandoffAuthorization::Authenticated(key) => {
+                            VaultCreationAuthority::ExistingIdentity(key.clone())
+                        }
+                    },
                 })
             }
             ExtensionIdentityHandoffContextValue::PairedVault { store_id } => match authorizer {
-                Some(app_key) => Ok(PendingExtensionIdentityEnrollment::PairedVault {
-                    authorizer: app_key.clone(),
-                    store_id: store_id.clone(),
-                }),
-                None => Ok(
+                HandoffAuthorization::Authenticated(app_key) => {
+                    Ok(PendingExtensionIdentityEnrollment::PairedVault {
+                        authorizer: app_key.clone(),
+                        store_id: store_id.clone(),
+                    })
+                }
+                HandoffAuthorization::Unauthenticated => Ok(
                     PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
                         store_id: store_id.clone(),
                     },

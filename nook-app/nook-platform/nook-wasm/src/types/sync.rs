@@ -350,11 +350,17 @@ impl NookDecryptedEnrollmentPayload {
     }
 }
 
+#[derive(Clone, Copy)]
+enum VaultSyncAccessAssessment {
+    NotAssessed,
+    Assessed(nook_core::VaultAccessStatus),
+}
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookVaultSyncResult {
     changed: bool,
-    access_status: Option<nook_core::VaultAccessStatus>,
+    access_status: VaultSyncAccessAssessment,
     secrets: Vec<NookSecretRecord>,
     pending_joins: Vec<NookJoinRequest>,
     vault_members: Vec<NookVaultMember>,
@@ -377,15 +383,19 @@ impl NookVaultSyncResult {
     #[wasm_bindgen(getter, js_name = accessState)]
     pub fn access_state(&self) -> NookVaultSyncAccessState {
         match self.access_status {
-            None => NookVaultSyncAccessState::NotAssessed,
-            Some(_) => NookVaultSyncAccessState::Assessed,
+            VaultSyncAccessAssessment::NotAssessed => NookVaultSyncAccessState::NotAssessed,
+            VaultSyncAccessAssessment::Assessed(_) => NookVaultSyncAccessState::Assessed,
         }
     }
 
     #[wasm_bindgen(getter, js_name = accessStatus)]
     pub fn access_status(&self) -> Result<nook_core::VaultAccessStatus, wasm_bindgen::JsError> {
-        self.access_status
-            .ok_or_else(|| JsError::new("vault access was not assessed"))
+        match self.access_status {
+            VaultSyncAccessAssessment::NotAssessed => {
+                Err(JsError::new("vault access was not assessed"))
+            }
+            VaultSyncAccessAssessment::Assessed(status) => Ok(status),
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -406,7 +416,7 @@ impl NookVaultSyncResult {
     pub(crate) fn unchanged() -> Self {
         Self {
             changed: false,
-            access_status: None,
+            access_status: VaultSyncAccessAssessment::NotAssessed,
             secrets: Vec::new(),
             pending_joins: Vec::new(),
             vault_members: Vec::new(),
@@ -416,7 +426,7 @@ impl NookVaultSyncResult {
     pub(crate) fn with_access_status(status: nook_core::VaultAccessStatus) -> Self {
         Self {
             changed: true,
-            access_status: Some(status),
+            access_status: VaultSyncAccessAssessment::Assessed(status),
             secrets: Vec::new(),
             pending_joins: Vec::new(),
             vault_members: Vec::new(),
@@ -426,7 +436,7 @@ impl NookVaultSyncResult {
     pub(crate) fn session(manager: &NookVaultManager, changed: bool) -> Result<Self, NookError> {
         Ok(Self {
             changed,
-            access_status: None,
+            access_status: VaultSyncAccessAssessment::NotAssessed,
             secrets: Vec::new(),
             pending_joins: manager.pending_joins().unwrap_or_default(),
             vault_members: manager.vault_members().unwrap_or_default(),

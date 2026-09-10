@@ -2,8 +2,10 @@
 
 use super::NookVaultManager;
 use crate::AuthProviderDatabase;
+use crate::manager::device_protection::ExtensionIdentityPublication;
 #[cfg(test)]
 use crate::manager::session::ExtensionHandoffState;
+use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuthority};
 use crate::storage::identity_record::{
     LocalIdentityRecoveryRequest, ProtectedIdentityLookup, ProtectedLocalIdentity,
 };
@@ -133,14 +135,17 @@ mod tests {
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let mut manager = NookVaultManager::new();
         assert!(!manager.extension_identity_handoff_requires_connect());
-        manager.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
-            enrollment: PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None },
-            authorizer_signing: None,
-            signing_public_key: signing.public_key(),
-            handoff_signing_seed: signing_seed.as_str().to_owned(),
-            persist_signing_seed: false,
-            previous_session_signing_seed: "previous-seed".to_owned(),
-        });
+        manager.device.pending_extension_handoff =
+            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+                enrollment: PendingExtensionIdentityEnrollment::VaultCreation {
+                    authorizer: VaultCreationAuthority::NewIdentity,
+                },
+                authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
+                signing_public_key: signing.public_key(),
+                handoff_signing_seed: signing_seed.as_str().to_owned(),
+                persist_signing_seed: false,
+                previous_session_signing_seed: "previous-seed".to_owned(),
+            });
         assert!(manager.extension_identity_handoff_requires_connect());
         manager.confirm_extension_identity_handoff();
         assert!(!manager.extension_identity_handoff_requires_connect());

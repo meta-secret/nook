@@ -2,6 +2,9 @@ use super::*;
 use crate::DeviceProtectionDeviceModeState;
 use crate::NookExtensionIdentityHandoffContext;
 use crate::NookVaultManager;
+use crate::manager::device_protection::ExtensionIdentityPublication;
+use crate::storage::identity_record::HandoffAuthorization;
+use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuthority};
 use nook_core::{AppKey, SigningIdentity};
 use nook_core::{DeviceMode, DeviceProtectionStatus, PasskeyDeviceProtectionMode};
 use wasm_bindgen_test::*;
@@ -13,28 +16,34 @@ fn device_protection_contexts_and_manager_state_project_in_wasm() -> Result<(), 
     let store_id = nook_core::StoreId::generate()?;
     let creation = NookExtensionIdentityHandoffContext::vault_creation();
     assert!(matches!(
-        (&creation).pending_extension_enrollment(None)?,
-        PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None }
+        (&creation).pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
+        PendingExtensionIdentityEnrollment::VaultCreation {
+            authorizer: VaultCreationAuthority::NewIdentity
+        }
     ));
     let authorizer = AppKey::generate()?;
     assert!(matches!(
-        (&creation).pending_extension_enrollment(Some(&authorizer))?,
+        (&creation).pending_extension_enrollment(VaultCreationAuthorityRef::ExistingIdentity(
+            &authorizer
+        ))?,
         PendingExtensionIdentityEnrollment::VaultCreation {
-            authorizer: Some(_)
+            authorizer: VaultCreationAuthority::ExistingIdentity(_)
         }
     ));
     let paired = NookExtensionIdentityHandoffContext::paired_vault(store_id.as_str())?;
     assert!(matches!(
-        (&paired).pending_extension_enrollment(None)?,
+        (&paired).pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
         PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
     ));
     assert!(matches!(
-        (&paired).pending_extension_enrollment(Some(&authorizer))?,
+        (&paired).pending_extension_enrollment(VaultCreationAuthorityRef::ExistingIdentity(
+            &authorizer
+        ))?,
         PendingExtensionIdentityEnrollment::PairedVault { .. }
     ));
     let imported = NookExtensionIdentityHandoffContext::existing_vault_import(store_id.as_str())?;
     assert!(matches!(
-        (&imported).pending_extension_enrollment(None)?,
+        (&imported).pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
         PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
     ));
     assert!(NookExtensionIdentityHandoffContext::paired_vault("invalid").is_err());
@@ -68,17 +77,18 @@ fn pending_handoff_state_can_be_confirmed_and_rolled_back() -> Result<(), JsErro
     let mut manager = NookVaultManager::new();
     manager.device.id = extension.device_id().as_str().to_owned();
     manager.device.identity_private_key = extension.secret_string().into_inner();
-    manager.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
-        enrollment: PendingExtensionIdentityEnrollment::PairedVault {
-            authorizer,
-            store_id: store_id.clone(),
-        },
-        authorizer_signing: None,
-        signing_public_key: signing.public_key(),
-        handoff_signing_seed: signing_seed.as_str().to_owned(),
-        persist_signing_seed: false,
-        previous_session_signing_seed: String::new(),
-    });
+    manager.device.pending_extension_handoff =
+        ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+            enrollment: PendingExtensionIdentityEnrollment::PairedVault {
+                authorizer,
+                store_id: store_id.clone(),
+            },
+            authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
+            signing_public_key: signing.public_key(),
+            handoff_signing_seed: signing_seed.as_str().to_owned(),
+            persist_signing_seed: false,
+            previous_session_signing_seed: String::new(),
+        });
     assert!(manager.extension_identity_handoff_requires_connect());
     manager.vault.store_id = store_id.to_string();
     manager.mark_extension_identity_handoff_existing_vault_import()?;

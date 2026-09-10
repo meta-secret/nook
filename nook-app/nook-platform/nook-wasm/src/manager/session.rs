@@ -1,4 +1,5 @@
 use super::companion_protocol::PendingCompanionWebsiteHandoff;
+use super::device_protection::ExtensionIdentityPublication;
 use crate::ConfiguredVaultApplication;
 use nook_core::{
     DriveEventParent, ICloudEventTarget, SentinelGenesisPhase, StorageMode, VaultArchitecture,
@@ -8,7 +9,6 @@ use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
 
-use super::device_protection::PendingExtensionIdentityHandoff;
 use crate::application;
 use crate::{NookError, NookEventLogSyncIssue};
 
@@ -268,14 +268,21 @@ impl VaultSessionState {
     }
 }
 
+#[derive(Clone, Default)]
+pub(in crate::manager) enum LocalIdentityCreation {
+    #[default]
+    ExistingIdentity,
+    Creating(String),
+}
+
 #[derive(Default)]
 pub(in crate::manager) struct DeviceSessionState {
     pub(in crate::manager) handoff_generation: Rc<()>,
     pub(in crate::manager) id: String,
     pub(in crate::manager) identity_private_key: String,
     pub(in crate::manager) extension_handoff_private_key: ExtensionHandoffState,
-    pub(in crate::manager) pending_extension_handoff: Option<PendingExtensionIdentityHandoff>,
-    pub(in crate::manager) pending_local_identity_label: Option<String>,
+    pub(in crate::manager) pending_extension_handoff: ExtensionIdentityPublication,
+    pub(in crate::manager) pending_local_identity_label: LocalIdentityCreation,
 }
 
 impl DeviceSessionState {
@@ -553,10 +560,12 @@ impl ExtensionHandoffState {
     pub(in crate::manager) fn is_empty(&self) -> bool {
         matches!(self, Self::Idle)
     }
-    pub(in crate::manager) fn into_recipient(self) -> Option<Zeroizing<String>> {
+    pub(in crate::manager) fn into_recipient(self) -> Result<Zeroizing<String>, NookError> {
         match self {
-            Self::Recipient(secret) => Some(secret),
-            Self::Idle | Self::Companion(_) => None,
+            Self::Recipient(secret) => Ok(secret),
+            Self::Idle | Self::Companion(_) => Err(NookError::Decryption(
+                "Extension identity handoff was not initialized.".to_owned(),
+            )),
         }
     }
 }

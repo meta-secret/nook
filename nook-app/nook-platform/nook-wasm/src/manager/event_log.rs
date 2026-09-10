@@ -3,6 +3,7 @@
 use crate::BrowserTimestamp;
 use crate::EventDbSaveHeads;
 use crate::EventDbSaveKeyEpoch;
+use crate::manager::device_protection::ExtensionIdentityPublication;
 use crate::storage::event_db::StoredKeyEpoch;
 use crate::storage::identity_record;
 use crate::storage::identity_record::LocalIdentitySigner;
@@ -152,8 +153,10 @@ impl NookVaultManager {
     pub(in crate::manager) async fn ensure_signing_identity(
         &mut self,
     ) -> Result<SigningIdentity, NookError> {
-        if self.device.pending_extension_handoff.is_some()
-            && !self.event_log.signing_seed.is_empty()
+        if matches!(
+            &self.device.pending_extension_handoff,
+            ExtensionIdentityPublication::Staged(_)
+        ) && !self.event_log.signing_seed.is_empty()
         {
             return Ok(SigningIdentity::from_seed_hex_stored(
                 &self.event_log.signing_seed,

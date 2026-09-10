@@ -2,14 +2,27 @@
 
 use super::{NookVaultManager, PendingExtensionIdentityEnrollment, VaultNameState};
 use crate::NookError;
+use crate::manager::device_protection::ExtensionIdentityPublication;
 use crate::storage::identity_record;
+use crate::storage::identity_record::{
+    AuthorizerSigningUpdate, ExistingVaultEnrollment, HandoffSignerPublication,
+    IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
+    VaultCreationAuthority, VaultCreationAuthorityRef,
+};
 
-pub(in crate::manager) struct PendingVaultCreationHandoff {
-    pub(in crate::manager) authorizer: Option<nook_core::AppKey>,
-    pub(in crate::manager) authorizer_signing:
-        Option<(nook_core::AppId, nook_core::DeviceSigningPublicKey)>,
-    pub(in crate::manager) signing_public_key: nook_core::DeviceSigningPublicKey,
-    pub(in crate::manager) signing_seed: String,
+pub(in crate::manager) struct PendingVaultCreationHandoff<'a> {
+    pub(in crate::manager) authorizer: VaultCreationAuthorityRef<'a>,
+    pub(in crate::manager) authorizer_signing: &'a AuthorizerSigningUpdate,
+    pub(in crate::manager) signing_public_key: &'a nook_core::DeviceSigningPublicKey,
+}
+pub(in crate::manager) enum VaultCreationHandoff<'a> {
+    Ordinary,
+    Extension(PendingVaultCreationHandoff<'a>),
+}
+#[derive(Debug, PartialEq, Eq)]
+pub(in crate::manager) enum ExistingVaultImportState {
+    NotImporting,
+    Importing(nook_core::StoreId),
 }
 
 impl NookVaultManager {
@@ -24,56 +37,57 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) fn defers_identity_reconciliation_until_handoff(&self) -> bool {
-        self.device
-            .pending_extension_handoff
-            .as_ref()
-            .is_some_and(|pending| {
-                matches!(
-                    &pending.enrollment,
-                    PendingExtensionIdentityEnrollment::VaultCreation { .. }
-                        | PendingExtensionIdentityEnrollment::PairedVault { .. }
-                        | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
-                        | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
-                )
-            })
+        matches!(
+            &self.device.pending_extension_handoff,
+            ExtensionIdentityPublication::Staged(_)
+        )
     }
 
-    pub(in crate::manager) fn pending_vault_creation_handoff(
-        &self,
-    ) -> Option<PendingVaultCreationHandoff> {
-        let pending = self.device.pending_extension_handoff.as_ref()?;
-        let PendingExtensionIdentityEnrollment::VaultCreation { authorizer } = &pending.enrollment
+    pub(in crate::manager) fn pending_vault_creation_handoff(&self) -> VaultCreationHandoff<'_> {
+        let ExtensionIdentityPublication::Staged(pending) = &self.device.pending_extension_handoff
         else {
-            return None;
+            return VaultCreationHandoff::Ordinary;
         };
-        Some(PendingVaultCreationHandoff {
-            authorizer: authorizer.clone(),
-            authorizer_signing: pending.authorizer_signing.clone(),
-            signing_public_key: pending.signing_public_key.clone(),
-            signing_seed: pending.handoff_signing_seed.clone(),
-        })
+        match &pending.enrollment {
+            PendingExtensionIdentityEnrollment::VaultCreation { authorizer } => {
+                VaultCreationHandoff::Extension(PendingVaultCreationHandoff {
+                    authorizer: authorizer.authorization(),
+                    authorizer_signing: &pending.authorizer_signing,
+                    signing_public_key: &pending.signing_public_key,
+                })
+            }
+            PendingExtensionIdentityEnrollment::PairedVault { .. }
+            | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
+            | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. } => {
+                VaultCreationHandoff::Ordinary
+            }
+        }
     }
-
-    pub(in crate::manager) fn pending_existing_vault_import(&self) -> Option<nook_core::StoreId> {
-        let pending = self.device.pending_extension_handoff.as_ref()?;
-        let PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id } =
-            &pending.enrollment
+    pub(in crate::manager) fn pending_existing_vault_import(&self) -> ExistingVaultImportState {
+        let ExtensionIdentityPublication::Staged(pending) = &self.device.pending_extension_handoff
         else {
-            return None;
+            return ExistingVaultImportState::NotImporting;
         };
-        Some(store_id.clone())
+        match &pending.enrollment {
+            PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id } => {
+                ExistingVaultImportState::Importing(store_id.clone())
+            }
+            PendingExtensionIdentityEnrollment::VaultCreation { .. }
+            | PendingExtensionIdentityEnrollment::PairedVault { .. }
+            | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. } => {
+                ExistingVaultImportState::NotImporting
+            }
+        }
     }
 
     pub(in crate::manager) async fn finalize_existing_vault_import_handoff(
         &mut self,
     ) -> Result<(), NookError> {
-        if self.pending_existing_vault_import().is_none() {
+        let ExistingVaultImportState::Importing(store_id) = self.pending_existing_vault_import()
+        else {
             return Ok(());
-        }
+        };
         let identity = self.device_identity()?;
-        let store_id = self
-            .pending_existing_vault_import()
-            .ok_or_else(|| NookError::Database("Existing-vault handoff disappeared.".to_owned()))?;
         if self.vault.store_id != store_id.as_str() {
             return Err(NookError::Database(
                 "Existing-vault handoff connected a different vault.".to_owned(),
@@ -86,35 +100,44 @@ impl NookVaultManager {
         let pending = self
             .device
             .pending_extension_handoff
-            .as_ref()
-            .ok_or_else(|| NookError::Database("Identity handoff disappeared.".to_owned()))?;
+            .pending()
+            .map_err(|_| NookError::Database("Identity handoff disappeared.".to_owned()))?;
         let committed = identity_record::IdentityHandoffCommit {
             app_key: &identity,
             signing_public_key: &pending.signing_public_key,
-            authorizer_signing: None,
-            enrollment: &pending.enrollment,
-            signing_seed: pending
-                .persist_signing_seed
-                .then_some(self.event_log.signing_seed.as_str()),
-            existing_vault: Some(identity_record::ExistingVaultImportCommit {
-                device_id: identity.device_id().clone(),
-                label,
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &store_id,
+                existing: identity_record::ExistingVaultImportCommit {
+                    device_id: identity.device_id().clone(),
+                    label,
+                },
             }),
+            signing_seed: if pending.persist_signing_seed {
+                HandoffSignerPublication::ReplaceWith(self.event_log.signing_seed.as_str())
+            } else {
+                HandoffSignerPublication::RetainStored
+            },
         }
         .commit()
         .await?;
-        let vault_keys = committed.existing_vault_keys.ok_or_else(|| {
-            NookError::Database("Existing-vault handoff did not return committed keys.".to_owned())
-        })?;
+        let vault_keys = match committed {
+            IdentityHandoffCommitResult::ExistingVaultImported(keys) => keys,
+            IdentityHandoffCommitResult::PairedVaultCommitted => {
+                return Err(NookError::Database(
+                    "Existing-vault handoff did not return committed keys.".to_owned(),
+                ));
+            }
+        };
         self.adopt_existing_vault_handoff_keys(&vault_keys)?;
-        self.device.pending_extension_handoff = None;
+        self.device.pending_extension_handoff = ExtensionIdentityPublication::Idle;
         Ok(())
     }
 
     pub(in crate::manager) async fn finalize_paired_vault_handoff(
         &mut self,
     ) -> Result<(), NookError> {
-        let Some(pending) = self.device.pending_extension_handoff.as_ref() else {
+        let Ok(pending) = self.device.pending_extension_handoff.pending() else {
             return Ok(());
         };
         let session_unlock = matches!(
@@ -134,24 +157,35 @@ impl NookVaultManager {
             ));
         }
         if session_unlock {
-            self.device.pending_extension_handoff = None;
+            self.device.pending_extension_handoff = ExtensionIdentityPublication::Idle;
             return Ok(());
         }
         let identity = self.device_identity()?;
-        let signing_seed = pending
-            .persist_signing_seed
-            .then_some(self.event_log.signing_seed.as_str());
+        let signing_seed = if pending.persist_signing_seed {
+            HandoffSignerPublication::ReplaceWith(self.event_log.signing_seed.as_str())
+        } else {
+            HandoffSignerPublication::RetainStored
+        };
+        let PendingExtensionIdentityEnrollment::PairedVault {
+            authorizer,
+            store_id,
+        } = &pending.enrollment
+        else {
+            return Ok(());
+        };
         identity_record::IdentityHandoffCommit {
             app_key: &identity,
             signing_public_key: &pending.signing_public_key,
-            authorizer_signing: pending.authorizer_signing.as_ref(),
-            enrollment: &pending.enrollment,
+            authorizer_signing: &pending.authorizer_signing,
+            operation: IdentityHandoffOperation::PairedVault(PairedVaultEnrollment {
+                authorizer,
+                store_id,
+            }),
             signing_seed,
-            existing_vault: None,
         }
         .commit()
         .await?;
-        self.device.pending_extension_handoff = None;
+        self.device.pending_extension_handoff = ExtensionIdentityPublication::Idle;
         Ok(())
     }
 }
@@ -169,7 +203,7 @@ mod tests {
         let (signing, signing_seed) = SigningIdentity::generate()?;
         Ok(PendingExtensionIdentityHandoff {
             enrollment,
-            authorizer_signing: None,
+            authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
             signing_public_key: signing.public_key(),
             handoff_signing_seed: signing_seed.as_str().to_owned(),
             persist_signing_seed: false,
@@ -181,42 +215,63 @@ mod tests {
     fn handoff_state_helpers_cover_each_enrollment_shape() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         assert!(!manager.defers_identity_reconciliation_until_handoff());
-        assert!(manager.pending_vault_creation_handoff().is_none());
-        assert!(manager.pending_existing_vault_import().is_none());
+        assert!(matches!(
+            manager.pending_vault_creation_handoff(),
+            VaultCreationHandoff::Ordinary
+        ));
+        assert!(matches!(
+            manager.pending_existing_vault_import(),
+            ExistingVaultImportState::NotImporting
+        ));
 
-        manager.device.pending_extension_handoff = Some(staged_handoff(
-            PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None },
-        )?);
+        manager.device.pending_extension_handoff = ExtensionIdentityPublication::Staged(
+            staged_handoff(PendingExtensionIdentityEnrollment::VaultCreation {
+                authorizer: VaultCreationAuthority::NewIdentity,
+            })?,
+        );
         assert!(manager.defers_identity_reconciliation_until_handoff());
-        assert!(manager.pending_vault_creation_handoff().is_some());
-        assert!(manager.pending_existing_vault_import().is_none());
+        assert!(matches!(
+            manager.pending_vault_creation_handoff(),
+            VaultCreationHandoff::Extension(_)
+        ));
+        assert!(matches!(
+            manager.pending_existing_vault_import(),
+            ExistingVaultImportState::NotImporting
+        ));
 
         let paired_store = nook_core::StoreId::generate()?;
-        manager.device.pending_extension_handoff = Some(staged_handoff(
-            PendingExtensionIdentityEnrollment::PairedVault {
+        manager.device.pending_extension_handoff = ExtensionIdentityPublication::Staged(
+            staged_handoff(PendingExtensionIdentityEnrollment::PairedVault {
                 authorizer: AppKey::generate()?,
                 store_id: paired_store,
-            },
-        )?);
+            })?,
+        );
         assert!(manager.defers_identity_reconciliation_until_handoff());
-        assert!(manager.pending_vault_creation_handoff().is_none());
+        assert!(matches!(
+            manager.pending_vault_creation_handoff(),
+            VaultCreationHandoff::Ordinary
+        ));
 
         let unlock_store = nook_core::StoreId::generate()?;
-        manager.device.pending_extension_handoff = Some(staged_handoff(
-            PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
-                store_id: unlock_store,
-            },
-        )?);
+        manager.device.pending_extension_handoff =
+            ExtensionIdentityPublication::Staged(staged_handoff(
+                PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
+                    store_id: unlock_store,
+                },
+            )?);
         assert!(manager.defers_identity_reconciliation_until_handoff());
 
         let import_store = nook_core::StoreId::generate()?;
-        manager.device.pending_extension_handoff = Some(staged_handoff(
-            PendingExtensionIdentityEnrollment::ExistingVaultImport {
+        manager.device.pending_extension_handoff = ExtensionIdentityPublication::Staged(
+            staged_handoff(PendingExtensionIdentityEnrollment::ExistingVaultImport {
                 store_id: import_store.clone(),
-            },
-        )?);
+            })?,
+        );
         assert!(manager.defers_identity_reconciliation_until_handoff());
-        assert_eq!(manager.pending_existing_vault_import(), Some(import_store));
+        assert_eq!(
+            manager.pending_existing_vault_import(),
+            ExistingVaultImportState::Importing(import_store)
+        );
         Ok(())
     }
 
