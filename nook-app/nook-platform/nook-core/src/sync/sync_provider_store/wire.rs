@@ -225,7 +225,7 @@ impl From<Value> for NormalizedAuthSnapshot {
             missing_state: "unselected",
             present_state: "storeId",
         }
-        .normalize(ProviderFieldRead {
+        .normalize(&mut ProviderFieldRead {
             fields: &mut fields,
             name: "activeVaultStoreId",
         });
