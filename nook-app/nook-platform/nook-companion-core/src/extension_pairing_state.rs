@@ -557,6 +557,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn granted_event_log_evidence_admission_preserves_imported_fields() -> anyhow::Result<()> {
+        let evidence = Fixture::refresh_input(PairingSelection::Select).imported;
+        assert_eq!(evidence.clone().admit()?, evidence);
+        Ok(())
+    }
+
+    #[test]
+    fn granted_event_log_evidence_rejects_each_inconsistent_shape() {
+        for (event_count, heads) in [
+            (0, vec!["event-4".to_owned()]),
+            (4, Vec::new()),
+            (0, Vec::new()),
+        ] {
+            let evidence = ImportedExtensionEventLog {
+                event_count: event_count.into(),
+                heads,
+                ..Fixture::refresh_input(PairingSelection::Select).imported
+            };
+            assert!(matches!(
+                evidence.admit(),
+                Err(ImportedExtensionEventLogError)
+            ));
+        }
+    }
+
+    #[test]
+    fn denied_event_log_evidence_admission_preserves_every_shape() -> anyhow::Result<()> {
+        for event_count in [0, 4] {
+            for heads in [Vec::new(), vec!["event-4".to_owned()]] {
+                let evidence = ImportedExtensionEventLog {
+                    event_count: event_count.into(),
+                    heads,
+                    access_granted: false,
+                    ..Fixture::refresh_input(PairingSelection::Select).imported
+                };
+                assert_eq!(evidence.clone().admit()?, evidence);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn extension_scope_parser_matches_serialized_vocabulary() {
         let scopes = [
             ExtensionConnectScope::VaultAccess,
