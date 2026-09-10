@@ -113,7 +113,7 @@ test('rejects malformed envelopes and unknown or missing fields', () => {
       .decodeResult()
       .match(
         (value) => {
-          expect(value).toEqual(void 0);
+          expect({ value }).not.toHaveProperty('value');
         },
         (outcome) => {
           expect(outcome).toBeInstanceOf(CortexDocumentMapResultDecodeError);
@@ -142,7 +142,7 @@ test('rejects invalid finding codes, paths, lines, and messages', () => {
       .decodeResult()
       .match(
         (value) => {
-          expect(value).toEqual(void 0);
+          expect({ value }).not.toHaveProperty('value');
         },
         (outcome) => {
           expect(outcome).toBeInstanceOf(CortexDocumentMapResultDecodeError);
@@ -158,7 +158,7 @@ test('rejects oversized serialized results', () => {
     .decodeResult()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect({ value }).not.toHaveProperty('value');
       },
       (outcome) => {
         expect(outcome).toBeInstanceOf(CortexDocumentMapResultDecodeError);
@@ -208,7 +208,7 @@ test('acceptance rejects removal, reordering, duplication, and mutation', () => 
       .execute()
       .match(
         (value) => {
-          expect(value).toEqual(void 0);
+          expect({ value }).not.toHaveProperty('value');
         },
         (outcome) => {
           expect(outcome.message).toContain(
@@ -241,7 +241,7 @@ test('acceptance binds findings to the exact admitted request', () => {
     .execute()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect({ value }).not.toHaveProperty('value');
       },
       (outcome) => {
         expect(outcome.message).toContain(
@@ -267,7 +267,7 @@ test('acceptance rejects an omitted transient-link diagnostic', () => {
     .execute()
     .match(
       (value) => {
-        expect(value).toEqual(void 0);
+        expect({ value }).not.toHaveProperty('value');
       },
       (outcome) => {
         expect(outcome.message).toContain(

@@ -21,9 +21,7 @@ import {
 } from './cortex-document-structure.ts';
 
 export class CortexDocumentMapTransport {
-  private isTransportRecord(
-    value: unknown,
-  ): value is { readonly [key: string]: unknown } {
+  private isTransportRecord(value: CortexDocumentMapTransportRecord): boolean {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
 
@@ -49,9 +47,9 @@ export class CortexDocumentMapTransport {
         }),
       );
     }
-    let transport: unknown;
+    let transport: CortexDocumentMapRequestTransport;
     try {
-      transport = JSON.parse(serialized);
+      transport = JSON.parse(serialized) as CortexDocumentMapRequestTransport;
     } catch {
       return err(
         this.failure({
@@ -163,9 +161,9 @@ export class CortexDocumentMapTransport {
     const serialized = this.request;
     const capacity = this.assertResultByteLimit(serialized);
     if (capacity.isErr()) return err(capacity.error);
-    let transport: unknown;
+    let transport: CortexDocumentMapResultTransport;
     try {
-      transport = JSON.parse(serialized);
+      transport = JSON.parse(serialized) as CortexDocumentMapResultTransport;
     } catch {
       return err(
         this.resultFailure({
@@ -337,7 +335,7 @@ export class CortexDocumentMapTransport {
     });
   }
 
-  private validPath(value: unknown): value is string {
+  private validPath(value: string | false): value is string {
     return (
       typeof value === 'string' &&
       value.length <= CORTEX_DOCUMENT_MAP_PATH_LIMIT &&
@@ -345,21 +343,15 @@ export class CortexDocumentMapTransport {
     );
   }
 
-  private isRecord(
-    value: unknown,
-  ): value is { readonly [key: string]: unknown } {
+  private isRecord(value: CortexDocumentMapTransportRecord): boolean {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   }
 
-  private isResultRecord(
-    value: unknown,
-  ): value is { readonly [key: string]: unknown } {
+  private isResultRecord(value: CortexDocumentMapTransportRecord): boolean {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   }
 
-  private isFindingRecord(
-    value: unknown,
-  ): value is { readonly [key: string]: unknown } {
+  private isFindingRecord(value: CortexDocumentMapTransportRecord): boolean {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   }
 
@@ -395,11 +387,9 @@ export class CortexDocumentMapTransport {
     return ok();
   }
 
-  private assertResultExactKeys(request: {
-    readonly value: unknown;
-    readonly expected: readonly string[];
-    readonly path: string;
-  }): Result<void, CortexDocumentMapResultDecodeError> {
+  private assertResultExactKeys(
+    request: ResultExactKeysRequest,
+  ): Result<void, CortexDocumentMapResultDecodeError> {
     if (!this.isTransportRecord(request.value))
       return err(
         this.resultFailure({
@@ -460,20 +450,50 @@ export class CortexDocumentMapTransport {
 type DecodeFailure = { readonly path: string; readonly message: string };
 
 type ExactKeysRequest = {
-  readonly value: unknown;
+  readonly value: CortexDocumentMapTransportRecord;
   readonly expected: readonly string[];
   readonly path: string;
 };
 
+type ResultExactKeysRequest = ExactKeysRequest;
+
 type DecodeDocumentRequest = {
-  readonly transport: unknown;
+  readonly transport: CortexDocumentMapDocumentTransport;
   readonly index: number;
 };
 
 type DecodeFindingRequest = {
-  readonly transport: unknown;
+  readonly transport: CortexDocumentMapFindingTransport;
   readonly index: number;
 };
+
+type CortexDocumentMapDocumentTransport = {
+  readonly relativePath: string | false;
+  readonly content: string | false;
+};
+type CortexDocumentMapRequestTransport = {
+  readonly kind: string | false;
+  readonly documents: CortexDocumentMapDocumentTransport[] | false;
+  readonly excludedDocumentPaths: (string | false)[] | false;
+};
+
+type CortexDocumentMapFindingTransport = {
+  readonly code: string | false;
+  readonly file: string | false;
+  readonly line: number | false;
+  readonly message: string | false;
+};
+
+type CortexDocumentMapResultTransport = {
+  readonly kind: string | false;
+  readonly findings: CortexDocumentMapFindingTransport[] | false;
+};
+
+type CortexDocumentMapTransportRecord =
+  | CortexDocumentMapRequestTransport
+  | CortexDocumentMapDocumentTransport
+  | CortexDocumentMapResultTransport
+  | CortexDocumentMapFindingTransport;
 
 const REQUEST_KEYS = ['kind', 'documents', 'excludedDocumentPaths'] as const;
 
