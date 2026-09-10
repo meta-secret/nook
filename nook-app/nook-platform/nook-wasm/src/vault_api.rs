@@ -10,6 +10,7 @@ use crate::storage::{auth_providers, extension_state, identity_record};
 use crate::vault_api_local::has_local_vault;
 use crate::{NookDatabase, SetLocalVaultLabelRequest};
 use js_sys::Date;
+use nook_core::ActiveVaultScope;
 use nook_core::{
     ActiveProviderLoginSetup, AppId, DevicePublicKey, ProviderSaveOutcome, ProviderSaveSetup,
     VaultSyncAction,
@@ -538,10 +539,10 @@ mod projection_tests {
             find_duplicate_sync_provider_excluding(snapshot, provider.clone(), "provider-1");
         assert_eq!(unique, nook_core::DuplicateSyncProvider::Unique);
 
-        let empty = NookActiveVaultSelection(None);
+        let empty = NookActiveVaultSelection(ActiveVaultScope::Unselected);
         assert_eq!(empty.state(), NookActiveVaultSelectionState::NotSelected);
         assert!(empty.store_id().is_err());
-        let selected = NookActiveVaultSelection(Some("store-1".into()));
+        let selected = NookActiveVaultSelection(ActiveVaultScope::StoreId("store-1".into()));
         assert_eq!(selected.state(), NookActiveVaultSelectionState::Selected);
         assert_eq!(selected.store_id().unwrap(), "store-1");
 

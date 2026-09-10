@@ -3,6 +3,7 @@ use super::{
     VAULT_REGISTRY_KEY, VaultName, VaultRegistry, VaultRegistryEntry, VaultStoreIdentity,
 };
 use crate::{IdbPutStringRequest, NookDatabase, SecretSearchBucketKeyRequest};
+use nook_core::ActiveVaultScope;
 
 /// Named values required by NookDatabase::upsert_registry_entry.
 pub(crate) struct UpsertRegistryEntryRequest<'a> {
@@ -108,8 +109,13 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(crate) async fn get_active_vault_id() -> Result<Option<String>, NookError> {
-        NookDatabase::idb_get_string(ACTIVE_VAULT_KEY).await
+    pub(crate) async fn get_active_vault_id() -> Result<ActiveVaultScope, NookError> {
+        Ok(
+            match NookDatabase::idb_get_string(ACTIVE_VAULT_KEY).await? {
+                Some(store_id) => ActiveVaultScope::StoreId(store_id),
+                None => ActiveVaultScope::Unselected,
+            },
+        )
     }
 }
 
@@ -334,8 +340,9 @@ impl NookDatabase {
         }
 
         let active = NookDatabase::get_active_vault_id().await?;
-        let Some(store_id) = active.filter(|id| !id.trim().is_empty()) else {
-            return Ok(None);
+        let store_id = match active {
+            ActiveVaultScope::StoreId(store_id) if !store_id.trim().is_empty() => store_id,
+            ActiveVaultScope::StoreId(_) | ActiveVaultScope::Unselected => return Ok(None),
         };
         NookDatabase::load_vault_blob(&store_id).await
     }

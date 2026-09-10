@@ -7,6 +7,7 @@ use crate::{
     DeviceProtectionDeviceModeState, IdbPutStringRequest, ImportVaultBlobRequest, NookDatabase,
     SaveWrappedDeviceIdentityRequest,
 };
+use nook_core::ActiveVaultScope;
 use nook_core::AppKeyIdentityMembership;
 
 use crate::storage::{event_db, identity_record, indexed_db};
@@ -693,8 +694,8 @@ async fn assert_rollback(
     assert_eq!(manager.event_log.key_epoch, "previous-key-epoch");
     assert_eq!(manager.sync_outbox.access_token, "previous-access-token");
     assert_eq!(
-        NookDatabase::get_active_vault_id().await?.as_deref(),
-        Some(previous_store_id)
+        NookDatabase::get_active_vault_id().await?,
+        ActiveVaultScope::StoreId(previous_store_id.to_owned())
     );
     let projection = NookDatabase::load_from_indexed_db()
         .await?

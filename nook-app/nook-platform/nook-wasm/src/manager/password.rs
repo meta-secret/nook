@@ -6,6 +6,7 @@
 
 use super::NookVaultManager;
 use crate::BrowserTimestamp;
+use nook_core::ActiveVaultScope;
 
 use crate::{ImportVaultBlobRequest, NookDatabase};
 
@@ -66,7 +67,7 @@ impl NookVaultManager {
             self.capture_vault_unlock(content)?;
         }
         if self.vault.store_id.trim().is_empty()
-            && let Some(store_id) = NookDatabase::get_active_vault_id().await?
+            && let ActiveVaultScope::StoreId(store_id) = NookDatabase::get_active_vault_id().await?
             && !store_id.trim().is_empty()
         {
             self.vault.store_id = store_id;

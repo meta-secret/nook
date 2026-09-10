@@ -1,5 +1,6 @@
 use super::{ExtensionEventLogImportStatus, ExternalEventLogRecord, NookVaultManager};
 use crate::manager::{CeremonyState, EventLogSessionState, SyncOutboxState, VaultSessionState};
+use nook_core::ActiveVaultScope;
 
 use crate::storage::indexed_db;
 use crate::{NookDatabase, NookError};
@@ -42,7 +43,7 @@ impl NookVaultManager {
 
     async fn restore_rejected_extension_import(
         &mut self,
-        previous_active_store_id: Option<&str>,
+        previous_active_store_id: &ActiveVaultScope,
         previous_vault: VaultSessionState,
         previous_event_log: EventLogSessionState,
         previous_sync_outbox: SyncOutboxState,
@@ -51,7 +52,7 @@ impl NookVaultManager {
         self.vault = previous_vault;
         self.event_log = previous_event_log;
         self.sync_outbox = previous_sync_outbox;
-        if let Some(store_id) = previous_active_store_id {
+        if let ActiveVaultScope::StoreId(store_id) = previous_active_store_id {
             NookDatabase::switch_active_vault(store_id).await?;
         } else {
             NookDatabase::clear_active_vault_id().await?;
@@ -135,7 +136,7 @@ impl NookVaultManager {
     async fn reject_extension_import(
         &mut self,
         store_id: &str,
-        previous_active_store_id: Option<&str>,
+        previous_active_store_id: &ActiveVaultScope,
         previous_vault: VaultSessionState,
         previous_event_log: EventLogSessionState,
         previous_sync_outbox: SyncOutboxState,
@@ -221,7 +222,7 @@ impl NookVaultManager {
             Ok(status) => {
                 self.reject_extension_import(
                     targets.store_id.as_str(),
-                    previous_active_store_id.as_deref(),
+                    &previous_active_store_id,
                     previous_vault,
                     previous_event_log,
                     previous_sync_outbox,
@@ -238,7 +239,7 @@ impl NookVaultManager {
             Err(error) => {
                 self.reject_extension_import(
                     targets.store_id.as_str(),
-                    previous_active_store_id.as_deref(),
+                    &previous_active_store_id,
                     previous_vault,
                     previous_event_log,
                     previous_sync_outbox,

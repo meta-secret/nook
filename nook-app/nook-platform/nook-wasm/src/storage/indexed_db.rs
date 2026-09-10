@@ -28,10 +28,11 @@
 //!   not contain plaintext key material.
 mod atomic_string;
 mod device_identity;
-pub(crate) use atomic_string::{
+use atomic_string::{
     GuardedKeyringEntryRequest, IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate,
     StringRecordFallback, StringUpdateGuard, StringUpdateResult,
 };
+pub(crate) use nook_core::ActiveVaultScope;
 mod local_vault;
 #[path = "sentinel_storage.rs"]
 mod sentinel_storage;
@@ -429,8 +430,8 @@ mod sentinel_genesis_storage_tests {
             Some("encrypted-vault")
         );
         assert_eq!(
-            NookDatabase::get_active_vault_id().await?.as_deref(),
-            Some(store_id)
+            NookDatabase::get_active_vault_id().await?,
+            ActiveVaultScope::StoreId(store_id.to_owned())
         );
         assert_eq!(NookDatabase::list_vault_registry_entries().await?.len(), 1);
 

@@ -2,6 +2,7 @@ use super::{application, wasm_bindgen};
 use crate::ConfiguredVaultApplication;
 use crate::storage::indexed_db;
 use crate::{ImportVaultBlobRequest, NookDatabase, SetLocalVaultLabelRequest};
+use nook_core::ActiveVaultScope;
 use nook_core::{IsoTimestamp, VaultApplication, VaultConnectIntent, VaultType};
 use wasm_bindgen::JsError;
 
@@ -141,7 +142,7 @@ pub async fn has_local_vault() -> Result<bool, JsError> {
 
 #[wasm_bindgen]
 pub async fn has_active_local_vault() -> Result<bool, JsError> {
-    let Some(store_id) = NookDatabase::get_active_vault_id().await? else {
+    let ActiveVaultScope::StoreId(store_id) = NookDatabase::get_active_vault_id().await? else {
         return Ok(false);
     };
     Ok(ConfiguredVaultApplication::local_vault_matches_compiled_application(&store_id).await?)
@@ -228,37 +229,39 @@ pub enum NookActiveVaultSelectionState {
 }
 
 #[wasm_bindgen]
-pub struct NookActiveVaultSelection(pub(crate) Option<String>);
+pub struct NookActiveVaultSelection(pub(crate) ActiveVaultScope);
 
 #[wasm_bindgen]
 impl NookActiveVaultSelection {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookActiveVaultSelectionState {
-        if self.0.is_some() {
-            NookActiveVaultSelectionState::Selected
-        } else {
-            NookActiveVaultSelectionState::NotSelected
+        match &self.0 {
+            ActiveVaultScope::StoreId(_) => NookActiveVaultSelectionState::Selected,
+            ActiveVaultScope::Unselected => NookActiveVaultSelectionState::NotSelected,
         }
     }
 
     #[wasm_bindgen(getter, js_name = storeId)]
     pub fn store_id(&self) -> Result<String, JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("no active local vault is selected"))
+        match &self.0 {
+            ActiveVaultScope::StoreId(store_id) => Ok(store_id.clone()),
+            ActiveVaultScope::Unselected => Err(JsError::new("no active local vault is selected")),
+        }
     }
 }
 
 #[wasm_bindgen]
 pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, JsError> {
-    let Some(store_id) = NookDatabase::get_active_vault_id().await? else {
-        return Ok(NookActiveVaultSelection(None));
+    let ActiveVaultScope::StoreId(store_id) = NookDatabase::get_active_vault_id().await? else {
+        return Ok(NookActiveVaultSelection(ActiveVaultScope::Unselected));
     };
     if ConfiguredVaultApplication::local_vault_matches_compiled_application(&store_id).await? {
-        Ok(NookActiveVaultSelection(Some(store_id)))
+        Ok(NookActiveVaultSelection(ActiveVaultScope::StoreId(
+            store_id,
+        )))
     } else {
-        Ok(NookActiveVaultSelection(None))
+        Ok(NookActiveVaultSelection(ActiveVaultScope::Unselected))
     }
 }
 
