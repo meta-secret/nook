@@ -81,4 +81,17 @@ mod tests {
         assert!(local.pending_outbox("github").is_empty());
         Ok(())
     }
+
+    #[test]
+    fn dequeue_reports_when_event_was_not_queued() -> EventResult<()> {
+        let id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        let removed = LocalEventStore::new().dequeue_outbox(crate::LocalOutboxRemoval {
+            provider_id: "github",
+            event_id: &id,
+        });
+
+        assert_eq!(removed.removal, LocalOutboxRemovalResult::NotQueued);
+        assert!(removed.store.pending_outbox("github").is_empty());
+        Ok(())
+    }
 }

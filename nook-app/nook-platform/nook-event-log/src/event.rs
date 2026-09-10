@@ -698,6 +698,84 @@ mod tests {
     }
 
     #[test]
+    fn event_body_classifies_import_rotation_and_checkpoint_states() -> anyhow::Result<()> {
+        let signing_key = test_signing_key();
+        let mut body = empty_genesis_event(&signing_key)?.body;
+        assert_eq!(body.genesis_import_contents(), GenesisImportContents::Empty);
+        assert_eq!(
+            body.security_rotation_trigger(),
+            SecurityRotationTrigger::Other
+        );
+        assert!(matches!(
+            body.epoch_checkpoint_requirement()?,
+            EpochCheckpointRequirement::NotRequired
+        ));
+
+        let VaultOperation::VaultImported { secrets, .. } = &mut body.operations[0] else {
+            return Err(anyhow::anyhow!("fixture must contain a genesis import"));
+        };
+        secrets.push(EncryptedSecretPayload {
+            id: SecretId::from_vault_record("secret_abc12345678"),
+            secret_type: SecretType::Login,
+            ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+            identity_fingerprint: SecretFingerprint::from_trusted("identity".to_owned()),
+            fingerprint: SecretFingerprint::from_trusted("version".to_owned()),
+        });
+        assert_eq!(
+            body.genesis_import_contents(),
+            GenesisImportContents::Populated
+        );
+
+        let parent = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        body.parents = vec![parent.clone()];
+        body.key_epoch = parent.clone();
+        body.operations = vec![VaultOperation::PasswordRemoved {
+            entry_id: PasswordEntryId::from_trusted("pwdentry001".to_owned()),
+        }];
+        assert_eq!(body.genesis_import_contents(), GenesisImportContents::Other);
+        assert_eq!(
+            body.security_rotation_trigger(),
+            SecurityRotationTrigger::PasswordRemoved
+        );
+
+        body.operations = vec![VaultOperation::DeviceRevoked {
+            device_id: DeviceId::parse("0123456789abcdef")?,
+        }];
+        assert_eq!(
+            body.security_rotation_trigger(),
+            SecurityRotationTrigger::DeviceRevoked
+        );
+
+        body.operations = vec![VaultOperation::EpochCheckpoint {
+            secrets: Vec::new(),
+            members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+            rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
+            password_entries: EpochPasswordState::Replace(Vec::new()),
+        }];
+        assert!(matches!(
+            body.epoch_checkpoint_requirement()?,
+            EpochCheckpointRequirement::SecurityRotationParent(id) if id == &parent
+        ));
+
+        body.parents.clear();
+        assert!(matches!(
+            body.epoch_checkpoint_requirement(),
+            Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must have exactly one direct parent"
+            })
+        ));
+        body.parents.push(parent);
+        body.operations.push(VaultOperation::VaultCleared);
+        assert!(matches!(
+            body.epoch_checkpoint_requirement(),
+            Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must be the event's sole operation"
+            })
+        ));
+        Ok(())
+    }
+
+    #[test]
     fn schema_one_event_is_rejected() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let mut event = empty_genesis_event(&signing_key)?;

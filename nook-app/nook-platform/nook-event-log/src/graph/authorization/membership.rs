@@ -100,6 +100,62 @@ mod tests {
     use crate::{EventInsertStatus, EventResult};
     use nook_auth2::{AgeArmoredCiphertext, DeviceId, DevicePublicKey, MemberLabel};
     #[test]
+    fn simple_membership_requires_only_self_signed_membership_operations() -> EventResult<()> {
+        let joiner_key = signing_key();
+        let other_key = signing_key();
+        let graph = EventGraph::new();
+        let parent = crate::EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        let join_request = signed_operation(
+            vec![parent.clone()],
+            VaultOperation::JoinRequested {
+                device_id: DeviceId::parse("0123456789abcdef")?,
+                encryption_public_key: DevicePublicKey::from_trusted("age-joiner".to_owned()),
+                signing_public_key: public_key(&joiner_key),
+                label: MemberLabel::from_trusted("Phone".to_owned()),
+            },
+            &joiner_key,
+        )?;
+        assert!(graph.is_self_signed_membership_event(&join_request)?);
+
+        let mismatched_request = signed_operation(
+            vec![parent.clone()],
+            VaultOperation::JoinRequested {
+                device_id: DeviceId::parse("fedcba9876543210")?,
+                encryption_public_key: DevicePublicKey::from_trusted("age-other".to_owned()),
+                signing_public_key: public_key(&other_key),
+                label: MemberLabel::from_trusted("Other".to_owned()),
+            },
+            &joiner_key,
+        )?;
+        assert!(!graph.is_self_signed_membership_event(&mismatched_request)?);
+
+        let join_approval = signed_operation(
+            vec![parent],
+            VaultOperation::JoinApproved {
+                device_id: DeviceId::parse("0123456789abcdef")?,
+                encryption_public_key: DevicePublicKey::from_trusted("age-joiner".to_owned()),
+                signing_public_key: public_key(&joiner_key),
+                label: MemberLabel::from_trusted("Phone".to_owned()),
+                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secrets".to_owned()),
+                members_key_ciphertext: AgeArmoredCiphertext::from_trusted("members".to_owned()),
+            },
+            &joiner_key,
+        )?;
+        assert!(graph.is_self_signed_membership_event(&join_approval)?);
+
+        let mut mixed = join_request.clone();
+        mixed.body.operations.push(VaultOperation::VaultCleared);
+        mixed = VaultEvent::sign(mixed.body, &joiner_key)?;
+        assert!(!graph.is_self_signed_membership_event(&mixed)?);
+
+        let mut empty = join_request;
+        empty.body.operations.clear();
+        empty = VaultEvent::sign(empty.body, &joiner_key)?;
+        assert!(!graph.is_self_signed_membership_event(&empty)?);
+        Ok(())
+    }
+
+    #[test]
     fn self_signed_sentinel_participant_enrolled_is_quarantined() -> EventResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
