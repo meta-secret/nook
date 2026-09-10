@@ -1,51 +1,65 @@
 import { err, ok, type Result } from 'neverthrow'
 
-export enum ExtensionSessionLeaseFailure { Locked = 'EXTENSION_SESSION_LOCKED' }
+export enum ExtensionSessionLeaseFailure {
+  Locked = 'EXTENSION_SESSION_LOCKED',
+}
 
 enum ExtensionSessionLeaseKind {
   Active = 'active',
   Expired = 'expired',
 }
+
+type ExtensionSessionLeaseState =
+  | {
+      readonly kind: ExtensionSessionLeaseKind.Active
+      readonly deadline: number
+      readonly timer: ReturnType<typeof setTimeout>
+    }
+  | { readonly kind: ExtensionSessionLeaseKind.Expired }
+
+type ExtensionSessionLeaseRequest = {
+  readonly generation: number
+  readonly durationMs: number
+  readonly onExpire: () => void
+}
+
 /** Only an active lease can renew its deadline; stale aliases fail at the effect. */
 export class ActiveExtensionSessionLease {
-  private state = ExtensionSessionLeaseKind.Active
-  private deadline: number
-  private timer: ReturnType<typeof setTimeout>
-  private constructor(
-    private readonly request: {
-      generation: number
-      durationMs: number
-      onExpire: () => void
-    },
-  ) {
-    this.deadline = Date.now() + request.durationMs
-    this.timer = setTimeout(() => this.expire(), request.durationMs)
+  private state: ExtensionSessionLeaseState
+
+  constructor(private readonly request: ExtensionSessionLeaseRequest) {
+    this.state = {
+      kind: ExtensionSessionLeaseKind.Active,
+      deadline: Date.now() + request.durationMs,
+      timer: setTimeout(() => this.expire(), request.durationMs),
+    }
   }
-  static start(request: {
-    generation: number
-    durationMs: number
-    onExpire: () => void
-  }): ActiveExtensionSessionLease {
-    return new ActiveExtensionSessionLease(request)
-  }
+
   renew(generation: number): Result<void, ExtensionSessionLeaseFailure> {
+    const active = this.state
     if (
-      this.state !== ExtensionSessionLeaseKind.Active ||
+      active.kind !== ExtensionSessionLeaseKind.Active ||
       generation !== this.request.generation ||
-      Date.now() >= this.deadline
+      Date.now() >= active.deadline
     )
       return err(ExtensionSessionLeaseFailure.Locked)
-    clearTimeout(this.timer)
-    this.deadline = Date.now() + this.request.durationMs
-    this.timer = setTimeout(() => this.expire(), this.request.durationMs)
+    clearTimeout(active.timer)
+    this.state = {
+      kind: ExtensionSessionLeaseKind.Active,
+      deadline: Date.now() + this.request.durationMs,
+      timer: setTimeout(() => this.expire(), this.request.durationMs),
+    }
     return ok(undefined)
   }
+
   stop(): void {
-    this.state = ExtensionSessionLeaseKind.Expired
-    clearTimeout(this.timer)
+    const active = this.state
+    this.state = { kind: ExtensionSessionLeaseKind.Expired }
+    if (active.kind === ExtensionSessionLeaseKind.Active) clearTimeout(active.timer)
   }
+
   private expire(): void {
-    if (this.state !== ExtensionSessionLeaseKind.Active) return
+    if (this.state.kind !== ExtensionSessionLeaseKind.Active) return
     this.stop()
     this.request.onExpire()
   }

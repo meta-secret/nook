@@ -150,19 +150,12 @@ type ExtensionSessionMessageDispatcherenqueueVaultImportArgs = {
   requestedExpiry: RequestedQueueExpiry
 }
 
-export class ListeningExtensionSession {
-  private constructor(
-    private readonly operations: {
-      resetOperations(): void
-      replaceOperations(error: SessionOperationFailure): void
-    },
-  ) {}
-  static register<Response>(
-    context: SessionMessageDispatchContext<Response>,
-  ): ListeningExtensionSession {
-    const dispatcher = new ExtensionSessionMessageDispatcher(context)
-    chrome.runtime.onMessage.addListener(dispatcher.listener())
-    return new ListeningExtensionSession(dispatcher)
+export class ListeningExtensionSession<Response> {
+  private readonly operations: ExtensionSessionMessageDispatcher<Response>
+
+  constructor(context: SessionMessageDispatchContext<Response>) {
+    this.operations = new ExtensionSessionMessageDispatcher(context)
+    chrome.runtime.onMessage.addListener(this.operations.listener())
   }
   resetOperations(): void {
     this.operations.resetOperations()

@@ -154,7 +154,7 @@ function scheduleSessionExpiry(generation: number): void {
   }
   sessionExpirySchedule = {
     kind: SessionExpiryScheduleKind.Scheduled,
-    lease: ActiveExtensionSessionLease.start({
+    lease: new ActiveExtensionSessionLease({
       generation,
       durationMs: SESSION_DURATION_MS,
       onExpire: () => {
@@ -331,4 +331,4 @@ const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
     return admit_extension_storage_providers(providers)
   },
 }
-const sessionMessageDispatcher = ListeningExtensionSession.register(dispatchContext)
+const sessionMessageDispatcher = new ListeningExtensionSession(dispatchContext)
