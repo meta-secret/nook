@@ -18,6 +18,10 @@ use crate::{
 
 mod active_credentials;
 mod catalog;
+mod draft_connection;
+pub use draft_connection::{
+    DraftStorageConnection, GithubStorageDraft, OAuthStorageDraft, VaultStorageConnection,
+};
 mod wire;
 pub use wire::ProviderWireMigration;
 mod enrollment;
@@ -58,10 +62,7 @@ pub use scope::{
     RemoteEventFlushProviderRequest,
 };
 pub use state::*;
-pub use storage_args::{
-    DraftStorageConnection, ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs,
-    VaultStorageConnection,
-};
+pub use storage_args::{ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs};
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
 ///

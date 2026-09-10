@@ -5,8 +5,8 @@ use nook_core::{
     StoredOAuthFileConfiguration,
 };
 use nook_core::{
-    DraftStorageConnection, OAuthRemoteConfigurationUpdate, OAuthRemoteStorageReference,
-    ProviderSelection, StagedStorageConnection,
+    DraftStorageConnection, GithubStorageDraft, OAuthRemoteConfigurationUpdate,
+    OAuthRemoteStorageReference, OAuthStorageDraft, ProviderSelection, StagedStorageConnection,
 };
 use wasm_bindgen::JsError;
 
@@ -333,15 +333,10 @@ pub fn authenticated_vault_storage_args(
 #[wasm_bindgen]
 #[must_use]
 pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookStorageConnectArgs {
-    DraftStorageConnection {
-        provider_type: StorageProviderType::Github,
-        github_pat: Some(github_pat),
-        github_repo: Some(github_repo),
-        oauth_preset: None,
-        oauth_access_token: None,
-        oauth_file_id: None,
-        oauth_file_name: None,
-    }
+    DraftStorageConnection::Github(GithubStorageDraft {
+        credential: &nook_core::StoredGithubPat::Token(github_pat.to_owned()),
+        repository: &nook_core::StoredGithubRepository::Repository(github_repo.to_owned()),
+    })
     .project()
     .into()
 }
@@ -350,19 +345,13 @@ pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookSto
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
 pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
-    let remote_ref = config.remote_storage_ref();
-    DraftStorageConnection {
-        provider_type: StorageProviderType::OauthFile,
-        github_pat: None,
-        github_repo: None,
-        oauth_preset: Some(config.preset),
-        oauth_access_token: config.access_token.as_deref(),
-        oauth_file_id: match &remote_ref {
-            OAuthRemoteStorageReference::Unresolved => None,
-            OAuthRemoteStorageReference::Resolved(reference) => Some(reference.as_str()),
-        },
-        oauth_file_name: config.file_name.as_deref(),
-    }
+    DraftStorageConnection::OAuth(OAuthStorageDraft {
+        preset: config.preset,
+        credential: &config.access_token,
+        remote_reference: config.remote_storage_ref(),
+        file_name: &config.file_name,
+        alternate_name: &nook_core::StoredOAuthRemoteFileName::Unresolved,
+    })
     .project()
     .into()
 }
@@ -370,17 +359,7 @@ pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookS
 #[wasm_bindgen]
 #[must_use]
 pub fn draft_local_storage_args() -> NookStorageConnectArgs {
-    DraftStorageConnection {
-        provider_type: StorageProviderType::Local,
-        github_pat: None,
-        github_repo: None,
-        oauth_preset: None,
-        oauth_access_token: None,
-        oauth_file_id: None,
-        oauth_file_name: None,
-    }
-    .project()
-    .into()
+    DraftStorageConnection::Local.project().into()
 }
 
 /// Return a masked GitHub PAT hint without exposing the full credential.

@@ -4,38 +4,15 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::{DriveBackupName, ProviderOauthPreset, ProviderSyncCheckpoint};
-
 use super::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode,
-    ICloudSharedTarget, OAuthFileConfigData, OauthFilePreset, ProviderReplicationCapability,
-    ProviderVaultScope, ReplicationType, StorageMode, StorageProviderData, StorageProviderType,
-    StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
-    StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
+    ICloudSharedTarget, OauthFilePreset, ProviderReplicationCapability, ReplicationType,
+    StorageMode, StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
+    StoredGoogleDriveFolder, StoredICloudShareTarget, StoredOAuthAccessCredential,
+    StoredOAuthFileConfiguration, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
     ValidationError, ValidationResult,
 };
-
-/// Optional connection field interpreted with the persisted whitespace policy.
-struct ConnectionField<'a>(Option<&'a str>);
-
-/// Unauthenticated connection draft; its fields are configuration, not authorization.
-pub struct DraftStorageConnection<'a> {
-    pub provider_type: StorageProviderType,
-    pub github_pat: Option<&'a str>,
-    pub github_repo: Option<&'a str>,
-    pub oauth_preset: Option<OauthFilePreset>,
-    pub oauth_access_token: Option<&'a str>,
-    pub oauth_file_id: Option<&'a str>,
-    pub oauth_file_name: Option<&'a str>,
-}
-
-/// Connection observations used to choose local, persisted, or draft arguments.
-pub struct VaultStorageConnection<'a> {
-    pub local_vault_present: bool,
-    pub is_authenticated: bool,
-    pub sync_provider: Option<&'a StorageProviderData>,
-    pub draft: DraftStorageConnection<'a>,
-}
+use crate::{DriveBackupName, ProviderOauthPreset};
 
 /// Positional connect arguments expected by the current wasm manager boundary:
 /// storage mode, credential/token, and remote reference/repo.
@@ -78,136 +55,134 @@ pub struct ProviderLabelLabels {
     pub icloud: String,
 }
 
-/// Trim optional persisted fields and discard empty values.
-impl ConnectionField<'_> {
-    fn non_empty(self) -> Option<String> {
-        let value = self.0;
-
-        value
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned)
-    }
-}
-
-/// Derive connect args from a configured persisted provider row.
-///
-/// Local-folder rows are browser-side backup targets, so manager sync still uses
-/// the local encrypted vault cache for the main connect boundary.
 impl StorageProviderData {
     pub fn connection_args(&self) -> ValidationResult<StorageConnectArgs> {
-        let provider = self;
-        let provider_type = provider.provider_type;
-        let oauth_preset = provider.oauth_file.as_ref().map(|oauth| oauth.preset);
-        let resolved_oauth_preset = oauth_preset;
-        let mode = provider_type
-            .storage_mode(resolved_oauth_preset)
-            .as_str()
-            .to_owned();
-        match provider_type {
+        match self.provider_type {
             StorageProviderType::Local | StorageProviderType::LocalFolder => {
                 Ok(StorageConnectArgs::local())
             }
             StorageProviderType::Github => Ok(StorageConnectArgs {
-                mode,
-                pat: ConnectionField(provider.github_pat.as_deref())
-                    .non_empty()
-                    .unwrap_or_default(),
-                repo: ConnectionField(provider.github_repo.as_deref())
-                    .non_empty()
-                    .unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned()),
+                mode: StorageMode::Github.as_str().to_owned(),
+                pat: match &self.github_pat {
+                    StoredGithubPat::Token(pat) => pat.trim().to_owned(),
+                    StoredGithubPat::Missing => String::new(),
+                },
+                repo: match &self.github_repo {
+                    StoredGithubRepository::Repository(repo) if !repo.trim().is_empty() => {
+                        repo.trim().to_owned()
+                    }
+                    StoredGithubRepository::Repository(_)
+                    | StoredGithubRepository::DefaultRepository => {
+                        DEFAULT_GITHUB_REPO_NAME.to_owned()
+                    }
+                },
             }),
             StorageProviderType::OauthFile => {
-                let oauth = provider.oauth_file.as_ref();
-                let file_name = oauth
-                    .and_then(|oauth| ConnectionField(oauth.file_name.as_deref()).non_empty())
-                    .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
-                // Shared replication stores events under a My Drive folder id.
-                // Encode with the `shared:` prefix so prepare_storage can select
-                // Shared Drive parent vs personal appDataFolder without a 4th arg.
-                let storage_id = match (resolved_oauth_preset, oauth) {
-                    (Some(OauthFilePreset::GoogleDrive), Some(oauth))
+                let StoredOAuthFileConfiguration::Configured(oauth) = &self.oauth_file else {
+                    return Ok(StorageConnectArgs {
+                        mode: StorageMode::GoogleDrive.as_str().to_owned(),
+                        pat: String::new(),
+                        repo: DEFAULT_DRIVE_BACKUP_NAME.to_owned(),
+                    });
+                };
+                let file_name = match &oauth.file_name {
+                    StoredOAuthRemoteFileName::FileName(name) if !name.trim().is_empty() => {
+                        name.trim()
+                    }
+                    StoredOAuthRemoteFileName::FileName(_)
+                    | StoredOAuthRemoteFileName::Unresolved => DEFAULT_DRIVE_BACKUP_NAME,
+                };
+                let storage_id = match oauth.preset {
+                    OauthFilePreset::GoogleDrive
                         if oauth.resolved_google_drive_mode() == GoogleDriveMode::Shared =>
                     {
-                        format!(
-                            "shared:{}",
-                            ConnectionField(oauth.folder_id.as_deref())
-                                .non_empty()
-                                .ok_or(ValidationError::SharedStorageTargetRequired)?
-                        )
+                        match &oauth.folder_id {
+                            StoredGoogleDriveFolder::FolderId(folder)
+                                if !folder.trim().is_empty() =>
+                            {
+                                format!("shared:{}", folder.trim())
+                            }
+                            StoredGoogleDriveFolder::Root
+                            | StoredGoogleDriveFolder::FolderId(_) => {
+                                return Err(ValidationError::SharedStorageTargetRequired);
+                            }
+                        }
                     }
-                    (Some(OauthFilePreset::ICloud), Some(oauth))
+                    OauthFilePreset::ICloud
                         if oauth.resolved_icloud_mode() == ICloudMode::Shared =>
                     {
-                        ConnectionField(oauth.icloud_share_target.as_deref())
-                            .non_empty()
-                            .ok_or(ValidationError::SharedStorageTargetRequired)?
+                        match &oauth.icloud_share_target {
+                            StoredICloudShareTarget::SharedTarget(target)
+                                if !target.trim().is_empty() =>
+                            {
+                                target.trim().to_owned()
+                            }
+                            StoredICloudShareTarget::Personal
+                            | StoredICloudShareTarget::SharedTarget(_) => {
+                                return Err(ValidationError::SharedStorageTargetRequired);
+                            }
+                        }
                     }
-                    _ => oauth
-                        .and_then(|oauth| ConnectionField(oauth.file_id.as_deref()).non_empty())
-                        .unwrap_or_default(),
+                    OauthFilePreset::GoogleDrive | OauthFilePreset::ICloud => {
+                        match &oauth.file_id {
+                            StoredOAuthRemoteFileId::Unresolved => String::new(),
+                            StoredOAuthRemoteFileId::FileId(id) => id.trim().to_owned(),
+                        }
+                    }
                 };
                 Ok(StorageConnectArgs {
-                    mode,
-                    pat: oauth
-                        .and_then(|oauth| {
-                            ConnectionField(oauth.access_token.as_deref()).non_empty()
-                        })
-                        .unwrap_or_default(),
-                    repo: DriveBackupName::format_storage_ref_raw(&storage_id, &file_name),
+                    mode: match oauth.preset {
+                        OauthFilePreset::GoogleDrive => StorageMode::GoogleDrive,
+                        OauthFilePreset::ICloud => StorageMode::ICloud,
+                    }
+                    .as_str()
+                    .to_owned(),
+                    pat: match &oauth.access_token {
+                        StoredOAuthAccessCredential::SignedOut => String::new(),
+                        StoredOAuthAccessCredential::AccessToken(token) => token.trim().to_owned(),
+                    },
+                    repo: DriveBackupName::format_storage_ref_raw(&storage_id, file_name),
                 })
             }
         }
     }
-}
-
-impl StorageProviderData {
     pub fn replication_capability(&self) -> ProviderReplicationCapability {
-        let provider = self;
-
-        let provider_type = provider.provider_type;
-        let oauth_preset = provider.oauth_file.as_ref().map(|oauth| oauth.preset);
-        ProviderReplicationCapability::for_provider(
-            provider_type,
-            match oauth_preset {
-                Some(preset) => ProviderOauthPreset::Preset(preset),
-                None => ProviderOauthPreset::NotApplicable,
-            },
-        )
+        let preset = match &self.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => {
+                ProviderOauthPreset::Preset(config.preset)
+            }
+            StoredOAuthFileConfiguration::NotApplicable => ProviderOauthPreset::NotApplicable,
+        };
+        ProviderReplicationCapability::for_provider(self.provider_type, preset)
     }
-}
-
-impl StorageProviderData {
     pub fn validate_replication(
         &self,
         replication_type: ReplicationType,
     ) -> ValidationResult<ProviderReplicationCapability> {
-        let provider = self;
-
-        let provider_type = provider.provider_type;
-        let oauth_preset = provider.oauth_file.as_ref().map(|oauth| oauth.preset);
-        let capability = ProviderReplicationCapability::validate(
-            provider_type,
-            match oauth_preset {
-                Some(preset) => ProviderOauthPreset::Preset(preset),
-                None => ProviderOauthPreset::NotApplicable,
-            },
-            replication_type,
-        )?;
+        let preset = match &self.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => {
+                ProviderOauthPreset::Preset(config.preset)
+            }
+            StoredOAuthFileConfiguration::NotApplicable => ProviderOauthPreset::NotApplicable,
+        };
+        let capability =
+            ProviderReplicationCapability::validate(self.provider_type, preset, replication_type)?;
         if replication_type == ReplicationType::Shared
-            && oauth_preset == Some(OauthFilePreset::ICloud)
+            && let StoredOAuthFileConfiguration::Configured(oauth) = &self.oauth_file
+            && oauth.preset == OauthFilePreset::ICloud
         {
-            let oauth = provider
-                .oauth_file
-                .as_ref()
-                .ok_or(ValidationError::SharedStorageTargetRequired)?;
             if oauth.resolved_icloud_mode() != ICloudMode::Shared {
                 return Err(ValidationError::SharedStorageTargetRequired);
             }
-            let storage_target = ConnectionField(oauth.icloud_share_target.as_deref())
-                .non_empty()
-                .ok_or(ValidationError::SharedStorageTargetRequired)?;
-            ICloudSharedTarget::from_storage_id(&storage_target)?;
+            let target = match &oauth.icloud_share_target {
+                StoredICloudShareTarget::SharedTarget(target) if !target.trim().is_empty() => {
+                    target.trim()
+                }
+                StoredICloudShareTarget::Personal | StoredICloudShareTarget::SharedTarget(_) => {
+                    return Err(ValidationError::SharedStorageTargetRequired);
+                }
+            };
+            ICloudSharedTarget::from_storage_id(target)?;
         }
         Ok(capability)
     }
@@ -224,63 +199,6 @@ impl StorageProviderData {
     }
 }
 
-impl DraftStorageConnection<'_> {
-    #[must_use]
-    pub fn project(self) -> StorageConnectArgs {
-        let Self {
-            provider_type,
-            github_pat,
-            github_repo,
-            oauth_preset,
-            oauth_access_token,
-            oauth_file_id,
-            oauth_file_name,
-        } = self;
-
-        let mode = provider_type.storage_mode(oauth_preset).as_str().to_owned();
-        if provider_type == StorageProviderType::OauthFile {
-            let file_name = ConnectionField(oauth_file_name)
-                .non_empty()
-                .or_else(|| ConnectionField(github_repo).non_empty())
-                .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
-            return StorageConnectArgs {
-                mode,
-                pat: ConnectionField(oauth_access_token)
-                    .non_empty()
-                    .unwrap_or_default(),
-                repo: DriveBackupName::format_storage_ref_raw(
-                    oauth_file_id.unwrap_or_default(),
-                    &file_name,
-                ),
-            };
-        }
-        StorageConnectArgs {
-            mode,
-            pat: github_pat.unwrap_or_default().to_owned(),
-            repo: github_repo.unwrap_or_default().to_owned(),
-        }
-    }
-}
-
-impl VaultStorageConnection<'_> {
-    pub fn project(self) -> ValidationResult<StorageConnectArgs> {
-        let Self {
-            local_vault_present,
-            is_authenticated,
-            sync_provider,
-            draft,
-        } = self;
-
-        if local_vault_present {
-            return Ok(StorageConnectArgs::local());
-        }
-        if is_authenticated && let Some(provider) = sync_provider {
-            return provider.connection_args();
-        }
-        Ok(draft.project())
-    }
-}
-
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
@@ -294,11 +212,15 @@ mod tests {
 
     use std::io;
 
-    use super::{DraftStorageConnection, StorageConnectArgs, VaultStorageConnection};
+    use super::StorageConnectArgs;
     use crate::{
         DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode, OAuthFileConfigData,
         OauthFilePreset, ReplicationType, StorageProviderData, StorageProviderType,
         ValidationError,
+    };
+    use crate::{
+        DraftStorageConnection, GithubStorageDraft, OAuthRemoteStorageReference, OAuthStorageDraft,
+        VaultStorageConnection,
     };
     use crate::{
         EnrollmentProvider, LocalFolderConfigData, ProviderEnrollmentRequest,
@@ -433,77 +355,37 @@ mod tests {
 
     #[test]
     fn draft_and_vault_storage_choose_the_correct_precedence() -> anyhow::Result<()> {
+        let oauth = DraftStorageConnection::OAuth(OAuthStorageDraft {
+            preset: OauthFilePreset::ICloud,
+            credential: &StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
+            remote_reference: OAuthRemoteStorageReference::Resolved(" file-id ".into()),
+            file_name: &StoredOAuthRemoteFileName::FileName(" ".to_owned()),
+            alternate_name: &StoredOAuthRemoteFileName::FileName(" repo-fallback ".to_owned()),
+        });
         assert_eq!(
-            DraftStorageConnection {
-                provider_type: StorageProviderType::OauthFile,
-                github_pat: None,
-                github_repo: Some(" repo-fallback "),
-                oauth_preset: Some(OauthFilePreset::ICloud),
-                oauth_access_token: Some(" token "),
-                oauth_file_id: Some(" file-id "),
-                oauth_file_name: Some(" ")
-            }
-            .project(),
+            oauth.project(),
             StorageConnectArgs {
                 mode: "icloud".to_owned(),
                 pat: "token".to_owned(),
-                repo: "file-id\trepo-fallback".to_owned(),
+                repo: "file-id\trepo-fallback".to_owned()
             }
         );
-
         let provider = StorageProviderData::github_provider("gh", "team-vault", "pat");
         assert_eq!(
-            VaultStorageConnection {
-                local_vault_present: true,
-                is_authenticated: true,
-                sync_provider: Some(&provider),
-                draft: DraftStorageConnection {
-                    provider_type: StorageProviderType::Github,
-                    github_pat: Some("draft-pat"),
-                    github_repo: Some("draft-repo"),
-                    oauth_preset: None,
-                    oauth_access_token: None,
-                    oauth_file_id: None,
-                    oauth_file_name: None
-                }
-            }
-            .project()?,
+            VaultStorageConnection::LocalCache.project()?,
             StorageConnectArgs::local()
         );
         assert_eq!(
-            VaultStorageConnection {
-                local_vault_present: false,
-                is_authenticated: true,
-                sync_provider: Some(&provider),
-                draft: DraftStorageConnection {
-                    provider_type: StorageProviderType::Github,
-                    github_pat: Some("draft-pat"),
-                    github_repo: Some("draft-repo"),
-                    oauth_preset: None,
-                    oauth_access_token: None,
-                    oauth_file_id: None,
-                    oauth_file_name: None
-                }
-            }
-            .project()?
-            .repo,
+            VaultStorageConnection::AuthenticatedProvider(&provider)
+                .project()?
+                .repo,
             "team-vault"
         );
         assert_eq!(
-            VaultStorageConnection {
-                local_vault_present: false,
-                is_authenticated: false,
-                sync_provider: Some(&provider),
-                draft: DraftStorageConnection {
-                    provider_type: StorageProviderType::Github,
-                    github_pat: Some("draft-pat"),
-                    github_repo: Some("draft-repo"),
-                    oauth_preset: None,
-                    oauth_access_token: None,
-                    oauth_file_id: None,
-                    oauth_file_name: None
-                }
-            }
+            VaultStorageConnection::Draft(DraftStorageConnection::Github(GithubStorageDraft {
+                credential: &StoredGithubPat::Token("draft-pat".to_owned()),
+                repository: &StoredGithubRepository::Repository("draft-repo".to_owned()),
+            }))
             .project()?
             .repo,
             "draft-repo"
@@ -709,15 +591,10 @@ mod tests {
     #[test]
     fn github_draft_bytes_differ_intentionally_from_staged_normalization() -> anyhow::Result<()> {
         for (pat, repo) in [(" pat ", " repo "), ("\t", " "), ("", "")] {
-            let draft = DraftStorageConnection {
-                provider_type: StorageProviderType::Github,
-                github_pat: Some(pat),
-                github_repo: Some(repo),
-                oauth_preset: None,
-                oauth_access_token: None,
-                oauth_file_id: None,
-                oauth_file_name: None,
-            }
+            let draft = DraftStorageConnection::Github(GithubStorageDraft {
+                credential: &StoredGithubPat::Token(pat.to_owned()),
+                repository: &StoredGithubRepository::Repository(repo.to_owned()),
+            })
             .project();
             assert_eq!(draft.pat, pat);
             assert_eq!(draft.repo, repo);
