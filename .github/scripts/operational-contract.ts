@@ -62,8 +62,18 @@ export interface OperationalProbeOutcome {
   readonly stderr: string;
 }
 export enum OperationalProbeStream {
+  Ignore = "ignore",
   Pipe = "pipe",
   Inherit = "inherit",
+}
+enum OperationalProbeExecutable {
+  Awk = "awk",
+  Bash = "bash",
+  Jq = "jq",
+}
+interface OperationalSpawnRequest {
+  readonly executable: string;
+  readonly args: string[];
 }
 export class OperationalShellProbe {
   constructor(private readonly source: string) {}
@@ -98,9 +108,60 @@ export class OperationalCommandProbe {
       stderr: OperationalProbeStream;
     },
   ) {}
+  private spawn(request: OperationalSpawnRequest) {
+    const stdin =
+      this.request.stdin instanceof Blob
+        ? this.request.stdin
+        : OperationalProbeStream.Ignore;
+    switch (request.executable) {
+      case OperationalProbeExecutable.Awk:
+        return Bun.spawnSync({
+          cmd: ["awk", ...request.args],
+          stdin,
+          stdout: this.request.stdout,
+          stderr: this.request.stderr,
+        });
+      case OperationalProbeExecutable.Bash:
+        return Bun.spawnSync({
+          cmd: ["bash", ...request.args],
+          stdin,
+          stdout: this.request.stdout,
+          stderr: this.request.stderr,
+        });
+      case OperationalProbeExecutable.Jq:
+        return Bun.spawnSync({
+          cmd: ["jq", ...request.args],
+          stdin,
+          stdout: this.request.stdout,
+          stderr: this.request.stderr,
+        });
+      default:
+        return request.executable.endsWith(".rb")
+          ? Bun.spawnSync({
+              cmd: ["ruby", request.executable, ...request.args],
+              stdin,
+              stdout: this.request.stdout,
+              stderr: this.request.stderr,
+            })
+          : Bun.spawnSync({
+              cmd: ["bash", request.executable, ...request.args],
+              stdin,
+              stdout: this.request.stdout,
+              stderr: this.request.stderr,
+            });
+    }
+  }
   execute(): Result<OperationalProbeOutcome, OperationalContractFailure> {
+    const [executable, ...args] = this.request.cmd;
+    if (!executable)
+      return err({
+        kind: OperationalContractFailureKind.Command,
+        message: "Unable to execute empty operational contract command",
+      });
+    const originalEnvironment = { ...process.env };
     try {
-      const outcome = Bun.spawnSync(this.request);
+      if (this.request.env) Object.assign(process.env, this.request.env);
+      const outcome = this.spawn({ executable, args });
       return ok({
         exitCode: outcome.exitCode,
         stdout: outcome.stdout ? outcome.stdout.toString() : "",
@@ -111,6 +172,9 @@ export class OperationalCommandProbe {
         kind: OperationalContractFailureKind.Command,
         message: "Unable to execute operational contract command",
       });
+    } finally {
+      for (const key of Object.keys(process.env)) delete process.env[key];
+      Object.assign(process.env, originalEnvironment);
     }
   }
 }
