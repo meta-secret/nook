@@ -6,6 +6,7 @@
 //! Destructive identity and device recovery persistence.
 use crate::IdentityDbWriteIdentityDirectory;
 use crate::KeyringDbWriteKeyring;
+use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{device_access, event_db, identity_record, indexed_db};
 use crate::{IdbPutStringRequest, NookDatabase};
@@ -18,11 +19,14 @@ use rexie::Rexie;
 use rexie::{Store, Transaction, TransactionMode};
 use std::rc::Rc;
 mod cleanup;
+mod target;
+pub(crate) use target::{RecoveryTarget, RetiredInstallation};
 mod planning;
+use cleanup::RecoveryCleanupState;
 pub(crate) use cleanup::{LocalIdentityRecovery, PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY};
 use planning::{RecoveryPlanning, RecoveryState};
 pub(crate) struct LocalIdentityRecoveryRequest {
-    pub(crate) expected_app_id: Option<nook_core::AppId>,
+    pub(crate) target: RecoveryTarget,
 }
 struct RecoveryMarkerPolicy {
     clear_simple_genesis: bool,
@@ -98,13 +102,13 @@ impl RecoveryMarkers<'_> {
             true
         } else {
             match NookDatabase::load_pending_genesis(store).await? {
-                None => false,
-                Some(pending)
-                    if state.retired_identity_id.as_ref() == Some(&pending.identity_id) =>
+                SimpleGenesisProgress::NotPending => false,
+                SimpleGenesisProgress::Pending(pending)
+                    if state.scope.retires_identity(&pending.identity_id) =>
                 {
                     true
                 }
-                Some(pending)
+                SimpleGenesisProgress::Pending(pending)
                     if state
                         .keyring
                         .entries()
@@ -113,7 +117,7 @@ impl RecoveryMarkers<'_> {
                 {
                     false
                 }
-                Some(_) => {
+                SimpleGenesisProgress::Pending(_) => {
                     return Err(NookError::Database(
                         "Pending Simple genesis has no recoverable identity owner".to_owned(),
                     ));
@@ -213,7 +217,7 @@ impl RecoveryDeletion {
 }
 impl LocalIdentityRecoveryRequest {
     pub(crate) async fn execute(self) -> Result<LocalIdentityRecovery, NookError> {
-        let expected_app_id = self.expected_app_id;
+        let target = self.target;
         // Best-effort legacy migration preserves known reconciliation keys. A
         // corrupt or future-incompatible directory must never block destructive
         // device recovery.
@@ -225,7 +229,9 @@ impl LocalIdentityRecoveryRequest {
         let store = transaction.store("vault").map_err(|error| {
             NookError::IndexedDb(format!("Identity reset store error: {error:?}"))
         })?;
-        if let Some(recovery) = LocalIdentityRecovery::load_pending(&store).await? {
+        if let RecoveryCleanupState::Pending(recovery) =
+            LocalIdentityRecovery::load_pending(&store).await?
+        {
             // The identity transaction has already committed. Resume its recorded
             // cleanup target even after reload, when the retired app ID is no
             // longer available to the UI and another surviving identity is selected.
@@ -236,7 +242,7 @@ impl LocalIdentityRecoveryRequest {
         }
         let state = RecoveryPlanning {
             store: &store,
-            expected_app_id: expected_app_id.as_ref(),
+            target: &target,
         }
         .prepare()
         .await?;
@@ -270,7 +276,7 @@ impl PreparedLocalIdentityRecovery {
             reconciliation_keys,
         } = self;
         let recovery = LocalIdentityRecovery {
-            retired_app_id: state.retired_app_id.clone(),
+            retired_app_id: state.scope.retired_installation(),
             has_remaining_local_identities: !state.keyring.entries().is_empty(),
         };
         state.write(&store).await?;
@@ -293,6 +299,7 @@ impl PreparedLocalIdentityRecovery {
 #[cfg(test)]
 mod tests {
     use super::{RecoveryDeletion, RecoveryMarkerPolicy};
+    use crate::storage::identity_record::SimpleGenesisProgress;
     use crate::storage::{device_access, event_db, identity_record, indexed_db};
     use identity_record::simple_genesis;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -372,6 +379,7 @@ mod tests {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_tests {
+    use super::RecoveryTarget;
     use super::{
         LocalIdentityRecovery, LocalIdentityRecoveryRequest, PreparedLocalIdentityRecovery,
         RecoveryMarkers, RecoveryPlanning,
@@ -417,7 +425,7 @@ mod browser_tests {
                 .map_err(|error| NookError::IndexedDb(format!("Fixture store error: {error:?}")))?;
             let state = RecoveryPlanning {
                 store: &store,
-                expected_app_id: None,
+                target: &RecoveryTarget::Unspecified,
             }
             .prepare()
             .await?;
@@ -475,7 +483,7 @@ mod browser_tests {
             StoredStringRecord::MissingKey
         ));
         let resumed = LocalIdentityRecoveryRequest {
-            expected_app_id: None,
+            target: RecoveryTarget::Unspecified,
         }
         .execute()
         .await?;

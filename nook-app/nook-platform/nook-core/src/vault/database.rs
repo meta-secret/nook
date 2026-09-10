@@ -28,6 +28,12 @@ impl Default for Database {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum SecretRemoval {
+    AlreadyAbsent,
+    Removed(SecretRecord),
+}
+
 impl Database {
     #[must_use]
     pub fn new() -> Self {
@@ -76,8 +82,11 @@ impl Database {
         );
     }
 
-    pub fn remove(&mut self, key: &SecretId) -> Option<SecretRecord> {
-        self.records.remove(key)
+    pub fn remove(&mut self, key: &SecretId) -> SecretRemoval {
+        match self.records.remove(key) {
+            Some(record) => SecretRemoval::Removed(record),
+            None => SecretRemoval::AlreadyAbsent,
+        }
     }
 
     pub fn remove_and_zeroize(&mut self, key: &SecretId) -> bool {
@@ -196,7 +205,7 @@ mod tests {
 
     use std::{fs, io, path};
 
-    use super::Database;
+    use super::{Database, SecretRemoval};
     use crate::secret_types::StoredRecordPayload;
     use crate::vault_wire::StoredVaultYaml;
     use crate::{ApiKeySecret, SecretId, SecretType, SecretValue, StoredSecretRecord};
@@ -349,12 +358,14 @@ mod tests {
     fn remove_returns_previous_value() -> anyhow::Result<()> {
         let mut db = sample_db();
         assert_eq!(
-            db.remove(&sid("github.com"))
-                .ok_or_else(|| io::Error::other("removed record must exist"))?
-                .data,
+            match db.remove(&sid("github.com")) {
+                SecretRemoval::Removed(record) => record.data,
+                SecretRemoval::AlreadyAbsent =>
+                    return Err(io::Error::other("removed record must exist").into()),
+            },
             api_key("hunter2")
         );
-        assert_eq!(db.remove(&sid("github.com")), None);
+        assert_eq!(db.remove(&sid("github.com")), SecretRemoval::AlreadyAbsent);
         assert_eq!(db.list().len(), 1);
         Ok(())
     }

@@ -9,6 +9,7 @@
 //! Corrupt or future descriptive metadata must never block device-key unlock.
 
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
+use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::{IdbPutStringRequest, NookDatabase, NookError, SaveWrappedDeviceIdentityRequest};
 use js_sys::Date;
@@ -232,6 +233,7 @@ impl AppPasskeyNameUpdate<'_> {
 mod tests {
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use crate::storage::identity_record;
+    use crate::storage::identity_record::PriorAppAuthorization;
     use futures_util::future;
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use nook_core::AppKey;
@@ -716,7 +718,7 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
@@ -748,7 +750,7 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Work",
         })
         .await?;
@@ -804,7 +806,7 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &app_key,
             record: &wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;

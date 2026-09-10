@@ -15,9 +15,13 @@ use nook_core::{
 use rexie::TransactionMode;
 mod directory_migration;
 mod lookup;
+mod transition_context;
 pub(crate) use lookup::{
     LocalIdentityProjection, ProtectedIdentityLookup, ProtectedLocalIdentity,
     SelectedIdentityRecord, StoredIdentityProtection, StoredIdentityRecord,
+};
+pub(crate) use transition_context::{
+    IdentityMigrationSelection, PreviousLocalSelection, PriorAppAuthorization,
 };
 mod genesis_cleanup;
 mod genesis_flow;
@@ -27,7 +31,7 @@ mod reconciliation;
 mod recovery;
 pub(crate) mod simple_genesis;
 mod staged_genesis;
-pub(crate) use genesis_flow::SimpleGenesisCompletion;
+pub(crate) use genesis_flow::{PendingSimpleGenesisFlow, SimpleGenesisCompletion};
 pub(crate) use handoff::{ExistingVaultImportCommit, IdentityHandoffCommit};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use keyring::LOCAL_IDENTITY_KEYRING_KEY;
@@ -54,7 +58,7 @@ pub(crate) struct IdentityDbMigrateDirectoryInStore<'a> {
 /// Named values required by NookDatabase::migrate_directory.
 pub(crate) struct IdentityDbMigrateDirectory<'a> {
     pub(crate) directory: IdentityDirectory,
-    pub(crate) preserved_identity_id: Option<&'a nook_core::IdentityId>,
+    pub(crate) selection: IdentityMigrationSelection<'a>,
 }
 
 /// Named values required by NookDatabase::write_identity_directory.
@@ -74,7 +78,7 @@ pub(crate) struct IdentityDbSaveProtectedLocalIdentity<'a> {
 pub(crate) struct IdentityDbSaveNewProtectedLocalIdentity<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
-    pub(crate) prior_app_key: Option<&'a nook_core::AppKey>,
+    pub(crate) prior_app_key: PriorAppAuthorization<'a>,
     pub(crate) label: &'a str,
 }
 
@@ -120,10 +124,13 @@ pub(crate) use reconciliation::{
 };
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY;
-pub(crate) use recovery::{LocalIdentityRecovery, LocalIdentityRecoveryRequest};
+pub(crate) use recovery::{
+    LocalIdentityRecovery, LocalIdentityRecoveryRequest, RecoveryTarget, RetiredInstallation,
+};
 pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
     OrdinarySimpleGenesisRequest, PendingSimpleGenesis, SimpleGenesisEventInput,
+    SimpleGenesisProgress,
 };
 pub(crate) use staged_genesis::StagedSimpleGenesisInput;
 
@@ -153,7 +160,7 @@ impl NookDatabase {
     fn decode_directory(raw: &str) -> Result<IdentityDirectory, NookError> {
         NookDatabase::migrate_directory(IdentityDbMigrateDirectory {
             directory: NookDatabase::decode_directory_value(raw)?,
-            preserved_identity_id: None,
+            selection: IdentityMigrationSelection::DirectorySelection,
         })
         .map(|migrated| migrated.directory)
     }
@@ -173,13 +180,15 @@ impl NookDatabase {
     ) -> Result<MigratedIdentityDirectory, NookError> {
         let IdentityDbMigrateDirectory {
             directory,
-            preserved_identity_id,
+            selection,
         } = request;
-        match preserved_identity_id {
-            Some(identity_id) => {
+        match selection {
+            IdentityMigrationSelection::PreserveGenesis(identity_id) => {
                 directory.migrate_legacy_duplicate_app_key_ownership_preserving(identity_id)
             }
-            None => directory.migrate_legacy_duplicate_app_key_ownership(),
+            IdentityMigrationSelection::DirectorySelection => {
+                directory.migrate_legacy_duplicate_app_key_ownership()
+            }
         }
         .map_err(|error| NookError::Database(error.to_string()))
     }

@@ -10,6 +10,7 @@ use crate::KeyringDbKeyringDeleteKey;
 use crate::KeyringDbKeyringReadString;
 use crate::KeyringDbLoadKeyringForStore;
 use crate::KeyringDbWriteKeyring;
+use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{self, event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
@@ -192,7 +193,7 @@ pub(super) struct ProtectedLegacySigners {
 impl LegacySignerProtection<'_> {
     pub(super) async fn protect(
         self,
-        prior_app_key: Option<&AppKey>,
+        prior_app_key: PriorAppAuthorization<'_>,
     ) -> Result<ProtectedLegacySigners, NookError> {
         let Self {
             store,
@@ -222,11 +223,11 @@ impl LegacySignerProtection<'_> {
         if existing.has_signing_seed() {
             return Ok(ProtectedLegacySigners { directory, keyring });
         }
-        let prior_app_key = prior_app_key.ok_or_else(|| {
-            NookError::Decryption(
+        let PriorAppAuthorization::Authorized(prior_app_key) = prior_app_key else {
+            return Err(NookError::Decryption(
                 i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned(),
-            )
-        })?;
+            ));
+        };
         let established_signing_public_key = IdentitySigningEvidence {
             directory: &directory,
             identity_id: &identity_id,
@@ -354,6 +355,7 @@ impl LocalIdentitySigner<'_> {
 #[cfg(test)]
 mod tests {
     use crate::storage;
+    use crate::storage::identity_record::PriorAppAuthorization;
     use crate::storage::{event_db, indexed_db};
     use nook_core::{
         AppKey, DeviceSigningPublicKey, IdentityRecord, LocalIdentityKeyringEntry, SigningIdentity,

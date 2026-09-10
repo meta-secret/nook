@@ -21,6 +21,7 @@ use crate::KeyringDbLoadKeyringForStore;
 use crate::KeyringDbValidateKeyringDirectoryBinding;
 use crate::KeyringDbWriteKeyring;
 use crate::storage::identity_record::IdentityDirectoryWrite;
+use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::{self, PENDING_SIMPLE_GENESIS_KEY, recovery};
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::storage::{event_db, indexed_db};
@@ -95,7 +96,7 @@ impl<'a> ProtectedIdentityPublication<'a> {
     }
     pub(crate) async fn save_new(
         mut self,
-        prior_app_key: Option<&AppKey>,
+        prior_app_key: PriorAppAuthorization<'_>,
     ) -> Result<ProtectedLocalIdentitySave, NookError> {
         IdentityTransitionAdmission { store: self.store }
             .check()
@@ -203,6 +204,7 @@ impl<'a> ProtectedIdentityPublication<'a> {
 mod publication;
 #[cfg(test)]
 mod tests {
+    use crate::storage::identity_record::PriorAppAuthorization;
 
     use crate::storage::identity_record::IdentityDirectoryWrite;
 
@@ -230,7 +232,7 @@ mod tests {
     struct PinIdentityFixture<'a> {
         label: &'a str,
         pin: &'a str,
-        prior_app_key: Option<&'a AppKey>,
+        prior_app_key: PriorAppAuthorization<'a>,
     }
     impl PinIdentityFixture<'_> {
         async fn create(
@@ -274,7 +276,7 @@ mod tests {
         let (app_key, wrapped, saved) = PinIdentityFixture {
             label: "Personal",
             pin: "original-pin",
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
         }
         .create()
         .await?;
@@ -371,7 +373,7 @@ mod tests {
             IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &first_key,
                 record: &first_wrapped,
-                prior_app_key: None,
+                prior_app_key: PriorAppAuthorization::Unavailable,
                 label: "Personal",
             },
         )
@@ -407,7 +409,7 @@ mod tests {
                 IdentityDbSaveNewProtectedLocalIdentity {
                     app_key: &second_key,
                     record: &second_wrapped,
-                    prior_app_key: None,
+                    prior_app_key: PriorAppAuthorization::Unavailable,
                     label: "Work"
                 }
             )
@@ -423,7 +425,7 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: Some(&first_key),
+            prior_app_key: PriorAppAuthorization::Authorized(&first_key),
             label: "Work",
         })
         .await?;
@@ -462,7 +464,7 @@ mod tests {
         let (first_key, first_wrapped, first) = PinIdentityFixture {
             label: "Personal",
             pin: "first-secret",
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
         }
         .create()
         .await?;
@@ -493,7 +495,7 @@ mod tests {
             IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &second_key,
                 record: &second_wrapped,
-                prior_app_key: Some(&first_key),
+                prior_app_key: PriorAppAuthorization::Authorized(&first_key),
                 label: "Work",
             },
         )
@@ -526,7 +528,7 @@ mod tests {
         let (app_key, wrapped, protected) = PinIdentityFixture {
             label: "Personal",
             pin: "first-secret",
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
         }
         .create()
         .await?;
@@ -580,7 +582,7 @@ mod tests {
         let (app_key, wrapped, protected) = PinIdentityFixture {
             label: "Personal",
             pin: "first-secret",
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
         }
         .create()
         .await?;
@@ -650,7 +652,7 @@ mod tests {
             IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &app_key,
                 record: &wrapped,
-                prior_app_key: None,
+                prior_app_key: PriorAppAuthorization::Unavailable,
                 label: "Personal",
             },
         )
@@ -727,7 +729,7 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
@@ -745,7 +747,7 @@ mod tests {
             IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &second_key,
                 record: &second_wrapped,
-                prior_app_key: Some(&first_key),
+                prior_app_key: PriorAppAuthorization::Authorized(&first_key),
                 label: "Work",
             },
         )
@@ -776,14 +778,14 @@ mod tests {
         let (first_key, _, first) = PinIdentityFixture {
             label: "Personal",
             pin: "first-secret",
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
         }
         .create()
         .await?;
         let (second_key, _, _) = PinIdentityFixture {
             label: "Work",
             pin: "second-secret",
-            prior_app_key: Some(&first_key),
+            prior_app_key: PriorAppAuthorization::Authorized(&first_key),
         }
         .create()
         .await?;
@@ -801,7 +803,7 @@ mod tests {
             IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &replacement_key,
                 record: &replacement_wrapped,
-                prior_app_key: Some(&second_key),
+                prior_app_key: PriorAppAuthorization::Authorized(&second_key),
                 label: "Replacement",
             },
         )
@@ -835,7 +837,7 @@ mod tests {
         let (app_key, _, protected) = PinIdentityFixture {
             label: "Personal",
             pin: "first-secret",
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
         }
         .create()
         .await?;
@@ -883,7 +885,7 @@ mod tests {
         let (app_key, wrapped, _) = PinIdentityFixture {
             label: "Personal",
             pin: "first-secret",
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
         }
         .create()
         .await?;

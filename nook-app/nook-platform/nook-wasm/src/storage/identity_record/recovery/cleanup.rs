@@ -10,19 +10,29 @@ use crate::storage::indexed_db::StoredStringRecord;
 use crate::{NookDatabase, NookError};
 use rexie::TransactionMode;
 
+use super::RetiredInstallation;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum RecoveryCleanupState {
+    Complete,
+    Pending(LocalIdentityRecovery),
+}
 
 pub(crate) const PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY: &str =
     "pending_local_identity_recovery_cleanup_v1";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub(crate) struct LocalIdentityRecovery {
-    pub(crate) retired_app_id: Option<nook_core::AppId>,
+    #[serde(default)]
+    pub(crate) retired_app_id: RetiredInstallation,
     pub(crate) has_remaining_local_identities: bool,
 }
 
 impl LocalIdentityRecovery {
-    pub(super) async fn load_pending(store: &rexie::Store) -> Result<Option<Self>, NookError> {
+    pub(super) async fn load_pending(
+        store: &rexie::Store,
+    ) -> Result<RecoveryCleanupState, NookError> {
         let key = serde_wasm_bindgen::to_value(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
             .map_err(|error| {
                 NookError::IndexedDb(format!("Recovery cleanup key error: {error:?}"))
@@ -35,14 +45,16 @@ impl LocalIdentityRecovery {
             })?
             .filter(|value| !value.is_undefined() && !value.is_null())
         else {
-            return Ok(None);
+            return Ok(RecoveryCleanupState::Complete);
         };
         let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
             NookError::IndexedDb(format!("Recovery cleanup value error: {error:?}"))
         })?;
-        serde_json::from_str(&raw).map(Some).map_err(|error| {
-            NookError::IndexedDb(format!("Recovery cleanup decode error: {error}"))
-        })
+        serde_json::from_str(&raw)
+            .map(RecoveryCleanupState::Pending)
+            .map_err(|error| {
+                NookError::IndexedDb(format!("Recovery cleanup decode error: {error}"))
+            })
     }
 
     pub(crate) async fn has_pending() -> Result<bool, NookError> {
@@ -81,7 +93,7 @@ impl LocalIdentityRecovery {
                 "Recovery cleanup completion store error: {error:?}"
             ))
         })?;
-        if let Some(pending) = Self::load_pending(&store).await? {
+        if let RecoveryCleanupState::Pending(pending) = Self::load_pending(&store).await? {
             if pending != self {
                 return Err(NookError::Database(
                     "Recovery cleanup target changed before completion".to_owned(),
@@ -121,7 +133,7 @@ mod tests {
         NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let recovery = LocalIdentityRecovery {
-            retired_app_id: Some(app_key.app_id().clone()),
+            retired_app_id: RetiredInstallation::App(app_key.app_id().clone()),
             has_remaining_local_identities: true,
         };
         let database = NookDatabase::open_nook_database().await?;
@@ -149,7 +161,7 @@ mod tests {
         assert!(LocalIdentityRecovery::has_pending().await?);
         for changed in [
             LocalIdentityRecovery {
-                retired_app_id: None,
+                retired_app_id: RetiredInstallation::Unattributed,
                 ..recovery.clone()
             },
             LocalIdentityRecovery {
@@ -190,7 +202,7 @@ mod tests {
         NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let recovery = LocalIdentityRecovery {
-            retired_app_id: Some(app_key.app_id().clone()),
+            retired_app_id: RetiredInstallation::App(app_key.app_id().clone()),
             has_remaining_local_identities: false,
         };
         let database = NookDatabase::open_nook_database().await?;
@@ -202,17 +214,20 @@ mod tests {
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         let key = serde_wasm_bindgen::to_value(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
-        let null = serde_wasm_bindgen::to_value(&Option::<String>::None)
+        let null = serde_wasm_bindgen::to_value(&())
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         store
             .put(&null, Some(&key))
             .await
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
-        assert_eq!(LocalIdentityRecovery::load_pending(&store).await?, None);
+        assert_eq!(
+            LocalIdentityRecovery::load_pending(&store).await?,
+            RecoveryCleanupState::Complete
+        );
         recovery.write_pending(&store).await?;
         assert_eq!(
             LocalIdentityRecovery::load_pending(&store).await?,
-            Some(recovery)
+            RecoveryCleanupState::Pending(recovery)
         );
         transaction
             .done()

@@ -390,9 +390,7 @@ async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_iden
         .await?;
 
     assert_eq!(pending.identity_id, first_identity_id);
-    let staged = pending
-        .staged_identity()
-        .ok_or_else(|| anyhow::anyhow!("staged identity is missing"))?;
+    let staged = pending.require_staged_identity()?;
     assert_eq!(
         staged.directory.identity_for_app_key(&extension_key)?,
         AppKeyIdentityMembership::Enrolled(first_identity_id),

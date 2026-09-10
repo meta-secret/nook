@@ -1,6 +1,7 @@
 //! Versioned persistence for independently protected local identity keys.
 
 use crate::IdentityDbWriteIdentityDirectory;
+use crate::storage::identity_record::PreviousLocalSelection;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::StoredStringRecord;
 use nook_core::LocalIdentityProtection;
@@ -395,7 +396,7 @@ impl NookDatabase {
 
 pub(crate) struct LocalIdentitySelection {
     pub(crate) selected_app_id: nook_core::AppId,
-    pub(crate) previous_app_id: Option<nook_core::AppId>,
+    pub(crate) previous: PreviousLocalSelection,
 }
 
 impl NookDatabase {
@@ -418,14 +419,15 @@ impl NookDatabase {
             directory: &directory,
         })
         .await?;
-        let previous_app_id = directory
-            .selected()
-            .ok()
-            .and_then(|identity| match keyring.entry(&identity.identity_id) {
-                LocalIdentityProtection::Protected(entry) => Some(entry),
-                LocalIdentityProtection::Unprotected => None,
-            })
-            .map(|entry| entry.app_id().clone());
+        let previous = match directory.selected() {
+            Ok(identity) => match keyring.entry(&identity.identity_id) {
+                LocalIdentityProtection::Protected(entry) => {
+                    PreviousLocalSelection::Selected(entry.app_id().clone())
+                }
+                LocalIdentityProtection::Unprotected => PreviousLocalSelection::Unselected,
+            },
+            Err(_) => PreviousLocalSelection::Unselected,
+        };
         let app_id = keyring
             .entry(&identity_id)
             .require_protected()
@@ -445,7 +447,7 @@ impl NookDatabase {
         })?;
         Ok(LocalIdentitySelection {
             selected_app_id: app_id,
-            previous_app_id,
+            previous,
         })
     }
 }

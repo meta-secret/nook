@@ -4,6 +4,7 @@ mod display_text;
 mod passkey_metadata;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::device_access::DeviceAccessProfileKey;
+use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::{ProtectedIdentityLookup, ProtectedLocalIdentity};
 use crate::storage::indexed_db::VaultUnlockHistory;
 use crate::{NookDatabase, SaveVaultBlobRequest};
@@ -638,6 +639,7 @@ pub async fn set_device_access_passkey_provider_label(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::identity_record::PriorAppAuthorization;
     use nook_core::{AppKey, DeviceId, IdentityRecord, IsoTimestamp};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -798,7 +800,7 @@ mod browser_tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
@@ -809,7 +811,7 @@ mod browser_tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Work",
         })
         .await?;

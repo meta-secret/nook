@@ -630,7 +630,8 @@ mod tests {
         let current = NookDatabase::load_identity_directory().await?;
         let pending = PendingSimpleGenesis::load_for_store(fixture.store_id.as_str())
             .await?
-            .ok_or_else(|| NookError::Database("Pending marker disappeared.".to_owned()))?;
+            .require_pending()
+            .map_err(|_| NookError::IndexedDb("Pending marker disappeared.".to_owned()))?;
         assert_eq!(current.identities().len(), 1);
         assert_eq!(current.selected()?.identity_id, pending_identity_id);
         assert!(current.selected()?.owns_vault(&fixture.store_id));

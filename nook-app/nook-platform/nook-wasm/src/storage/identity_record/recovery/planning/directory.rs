@@ -1,5 +1,7 @@
 //! Recovery directory evidence and fail-closed full-reset selection.
 use super::*;
+use crate::storage::identity_record::PriorAppAuthorization;
+use crate::storage::identity_record::RecoveryTarget;
 use crate::{NookDatabase, NookError};
 use nook_core::IdentityDirectory;
 pub(super) struct RecoveryDirectory {
@@ -46,6 +48,8 @@ impl RecoveryPlanning<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::identity_record::PriorAppAuthorization;
+    use crate::storage::identity_record::RecoveryTarget;
     use crate::storage::identity_record::{
         IDENTITY_DIRECTORY_KEY, recovery::LocalIdentityRecoveryRequest,
     };
@@ -71,14 +75,14 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Work",
         })
         .await?;
@@ -89,7 +93,7 @@ mod tests {
         .await?;
 
         let recovery = LocalIdentityRecoveryRequest {
-            expected_app_id: Some(first_key.app_id().clone()),
+            target: RecoveryTarget::App(first_key.app_id().clone()),
         }
         .execute()
         .await?;
@@ -124,21 +128,21 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Work",
         })
         .await?;
         NookDatabase::idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
 
         let recovery = LocalIdentityRecoveryRequest {
-            expected_app_id: Some(first_key.app_id().clone()),
+            target: RecoveryTarget::App(first_key.app_id().clone()),
         }
         .execute()
         .await?;

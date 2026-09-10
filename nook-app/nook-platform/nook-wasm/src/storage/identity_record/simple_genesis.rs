@@ -14,6 +14,7 @@ use nook_core::IdentityCreation;
 use nook_core::MemberLabelState;
 use nook_core::{IsoTimestamp, StoreId};
 mod event;
+mod wire;
 use crate::storage::identity_record;
 pub(crate) use event::SimpleGenesisEventInput;
 
@@ -28,8 +29,7 @@ use crate::{NookError, conversion};
 
 pub(crate) const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(try_from = "PendingSimpleGenesisWire")]
+#[derive(Clone, Debug)]
 pub(crate) struct PendingSimpleGenesis {
     pub(crate) store_id: nook_core::StoreId,
     pub(crate) identity_id: nook_core::IdentityId,
@@ -38,7 +38,7 @@ pub(crate) struct PendingSimpleGenesis {
     pub(crate) flow: PendingSimpleGenesisFlow,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum PendingSimpleGenesisEvent {
     AwaitingEvent,
@@ -67,133 +67,31 @@ pub(crate) struct PinnedSimpleGenesisEvent {
     pub(crate) signing_seed: String,
 }
 
-#[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-enum PendingSimpleGenesisEventWire {
-    AwaitingEvent,
-    LegacyEventPinned {
-        #[serde(rename = "eventYaml")]
-        event_yaml: String,
-    },
-    EventPinned {
-        #[serde(rename = "eventYaml")]
-        event_yaml: String,
-        #[serde(default, rename = "signingSeedEnvelope")]
-        signing_seed_envelope: Option<nook_core::AgeArmoredCiphertext>,
-        #[serde(default, rename = "signingSeed")]
-        signing_seed: Option<String>,
-        #[serde(default, rename = "memberSigningSeedEnvelopes")]
-        member_signing_seed_envelopes: Vec<nook_core::MemberDekEnvelope>,
-    },
+#[derive(Debug)]
+pub(crate) enum SimpleGenesisProgress {
+    NotPending,
+    Pending(PendingSimpleGenesis),
 }
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PendingSimpleGenesisWire {
-    store_id: nook_core::StoreId,
-    identity_id: nook_core::IdentityId,
-    #[serde(default = "PendingSimpleGenesisWire::legacy_timestamp")]
-    created_at: nook_core::IsoTimestamp,
-    #[serde(default)]
-    event_state: Option<PendingSimpleGenesisEventWire>,
-    #[serde(default)]
-    event_yaml: Option<String>,
-    #[serde(default)]
-    flow: Option<PendingSimpleGenesisFlow>,
-    #[serde(default)]
-    staged_identity: Option<StagedSimpleGenesisIdentity>,
-}
-
-impl TryFrom<PendingSimpleGenesisWire> for PendingSimpleGenesis {
-    type Error = &'static str;
-    fn try_from(wire: PendingSimpleGenesisWire) -> Result<Self, Self::Error> {
-        let event_state = match (wire.event_state, wire.event_yaml) {
-            (Some(PendingSimpleGenesisEventWire::AwaitingEvent), None) => {
-                PendingSimpleGenesisEvent::AwaitingEvent
-            }
-            (
-                Some(
-                    PendingSimpleGenesisEventWire::LegacyEventPinned { event_yaml }
-                    | PendingSimpleGenesisEventWire::EventPinned {
-                        event_yaml,
-                        signing_seed_envelope: None,
-                        signing_seed: None,
-                        ..
-                    },
-                ),
-                None,
-            )
-            | (None, Some(event_yaml)) => {
-                PendingSimpleGenesisEvent::LegacyEventPinned { event_yaml }
-            }
-            (
-                Some(PendingSimpleGenesisEventWire::EventPinned {
-                    event_yaml,
-                    signing_seed_envelope: None,
-                    signing_seed: Some(signing_seed),
-                    ..
-                }),
-                None,
-            ) => PendingSimpleGenesisEvent::LegacyUnsealedEventPinned {
-                event_yaml,
-                signing_seed,
-            },
-            (
-                Some(PendingSimpleGenesisEventWire::EventPinned {
-                    event_yaml,
-                    signing_seed_envelope: Some(signing_seed_envelope),
-                    signing_seed: None,
-                    member_signing_seed_envelopes,
-                }),
-                None,
-            ) => PendingSimpleGenesisEvent::EventPinned {
-                event_yaml,
-                signing_seed_envelope,
-                member_signing_seed_envelopes,
-            },
-            (
-                Some(PendingSimpleGenesisEventWire::EventPinned {
-                    signing_seed_envelope: Some(_),
-                    signing_seed: Some(_),
-                    ..
-                }),
-                None,
-            ) => {
-                return Err("pending Simple genesis has both sealed and unsealed signing seeds");
-            }
-            (None, None) => PendingSimpleGenesisEvent::AwaitingEvent,
-            (Some(_), Some(_)) => {
-                return Err("pending Simple genesis has both current and legacy event state");
-            }
-        };
-        let flow = match (wire.flow, wire.staged_identity) {
-            (Some(flow), None) => flow,
-            (None, Some(staged)) => PendingSimpleGenesisFlow::Staged(staged),
-            (None, None) => PendingSimpleGenesisFlow::Ordinary,
-            (Some(PendingSimpleGenesisFlow::Staged(current)), Some(legacy))
-                if current == legacy =>
-            {
-                PendingSimpleGenesisFlow::Staged(current)
-            }
-            (Some(_), Some(_)) => {
-                return Err("pending Simple genesis has both current and legacy flow state");
-            }
-        };
-        Ok(Self {
-            store_id: wire.store_id,
-            identity_id: wire.identity_id,
-            created_at: wire.created_at,
-            event_state,
-            flow,
-        })
+impl SimpleGenesisProgress {
+    pub(crate) fn require_pending(self) -> Result<PendingSimpleGenesis, NookError> {
+        match self {
+            Self::Pending(pending) => Ok(pending),
+            Self::NotPending => Err(NookError::IndexedDb(
+                "Pending Simple genesis is missing.".to_owned(),
+            )),
+        }
     }
 }
 
 impl PendingSimpleGenesis {
-    pub(crate) fn staged_identity(&self) -> Option<&StagedSimpleGenesisIdentity> {
+    pub(crate) fn require_staged_identity(
+        &self,
+    ) -> Result<&StagedSimpleGenesisIdentity, NookError> {
         match &self.flow {
-            PendingSimpleGenesisFlow::Ordinary => None,
-            PendingSimpleGenesisFlow::Staged(identity) => Some(identity),
+            PendingSimpleGenesisFlow::Staged(identity) => Ok(identity),
+            PendingSimpleGenesisFlow::Ordinary => Err(NookError::IndexedDb(
+                "Staged genesis identity is required.".to_owned(),
+            )),
         }
     }
 
@@ -202,23 +100,20 @@ impl PendingSimpleGenesis {
     }
 
     #[cfg(test)]
-    fn event_yaml(&self) -> Option<&str> {
+    fn event_yaml(&self) -> Result<&str, NookError> {
         match &self.event_state {
-            PendingSimpleGenesisEvent::AwaitingEvent => None,
+            PendingSimpleGenesisEvent::AwaitingEvent => Err(NookError::IndexedDb(
+                "Genesis event has not been pinned.".to_owned(),
+            )),
             PendingSimpleGenesisEvent::LegacyEventPinned { event_yaml }
             | PendingSimpleGenesisEvent::EventPinned { event_yaml, .. }
             | PendingSimpleGenesisEvent::LegacyUnsealedEventPinned { event_yaml, .. } => {
-                Some(event_yaml)
+                Ok(event_yaml)
             }
         }
     }
 }
 
-impl PendingSimpleGenesisWire {
-    fn legacy_timestamp() -> IsoTimestamp {
-        IsoTimestamp::from_trusted("1970-01-01T00:00:00.000Z".to_owned())
-    }
-}
 impl PendingSimpleGenesis {
     pub(super) fn decode(raw: &str) -> Result<Self, NookError> {
         serde_json::from_str(raw).map_err(|error| {
@@ -231,21 +126,27 @@ impl PendingSimpleGenesis {
             NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
         })
     }
-    pub(crate) async fn load_for_store(store_id: &str) -> Result<Option<Self>, NookError> {
+    pub(crate) async fn load_for_store(store_id: &str) -> Result<SimpleGenesisProgress, NookError> {
         if store_id.is_empty() {
-            return Ok(None);
+            return Ok(SimpleGenesisProgress::NotPending);
         }
         let store_id =
             StoreId::parse(store_id).map_err(|error| NookError::Database(error.to_string()))?;
-        let Some(pending) = PendingSimpleGenesis::load().await? else {
-            return Ok(None);
+        let SimpleGenesisProgress::Pending(pending) = PendingSimpleGenesis::load().await? else {
+            return Ok(SimpleGenesisProgress::NotPending);
         };
-        Ok((pending.store_id == store_id).then_some(pending))
+        Ok(if pending.store_id == store_id {
+            SimpleGenesisProgress::Pending(pending)
+        } else {
+            SimpleGenesisProgress::NotPending
+        })
     }
-    pub(crate) async fn load() -> Result<Option<Self>, NookError> {
+    pub(crate) async fn load() -> Result<SimpleGenesisProgress, NookError> {
         match NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
-            StoredStringRecord::MissingKey => Ok(None),
-            StoredStringRecord::Stored(raw) => PendingSimpleGenesis::decode(&raw).map(Some),
+            StoredStringRecord::MissingKey => Ok(SimpleGenesisProgress::NotPending),
+            StoredStringRecord::Stored(raw) => {
+                PendingSimpleGenesis::decode(&raw).map(SimpleGenesisProgress::Pending)
+            }
         }
     }
 }
@@ -510,7 +411,7 @@ mod tests {
         }
         .begin_or_resume()
         .await?;
-        assert_eq!(marker.event_yaml(), Some("signed-event\n"));
+        assert_eq!(marker.event_yaml()?, "signed-event\n");
         let upgraded = match NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
             StoredStringRecord::Stored(value) => Ok(value),
             StoredStringRecord::MissingKey => {

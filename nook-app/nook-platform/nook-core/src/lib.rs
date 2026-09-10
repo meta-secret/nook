@@ -86,7 +86,7 @@ pub use chrome_passwords_import::{
 };
 pub use credit_card::{CreditCardFields, CreditCardSecret};
 pub use dashlane_import::{DashlaneExport, DashlaneImportError, DashlaneImportPlan};
-pub use database::Database;
+pub use database::{Database, SecretRemoval};
 pub use device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,
     DeviceKeyProtectionVersion, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,

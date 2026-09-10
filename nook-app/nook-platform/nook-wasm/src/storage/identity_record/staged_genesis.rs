@@ -9,6 +9,7 @@ use super::LocalIdentityRecovery;
 use crate::BrowserTimestamp;
 use crate::StoredStringRecord;
 use crate::storage::identity_record::IdentityDirectoryWrite;
+use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use nook_core::AppKeyIdentityMembership;
 use nook_core::IsoTimestamp;
@@ -182,7 +183,7 @@ impl StagedSimpleGenesisInput<'_> {
         let pending = selected.borrow_mut().take().ok_or_else(|| {
             NookError::IndexedDb("Staged Simple genesis produced no result.".to_owned())
         })?;
-        let staged = pending.staged_identity().ok_or_else(|| {
+        let staged = pending.require_staged_identity().map_err(|_| {
             NookError::IndexedDb("Staged Simple genesis lost its identity state.".to_owned())
         })?;
         let identity = staged
@@ -211,6 +212,7 @@ impl StagedSimpleGenesisInput<'_> {
 #[cfg(test)]
 mod tests {
     use crate::storage::identity_record::IdentityDirectoryWrite;
+    use crate::storage::identity_record::SimpleGenesisProgress;
 
     use nook_core::{
         DirectoryCreationEnrollment, DirectoryOwnedVaultOpening, IdentityCreation,
@@ -398,11 +400,10 @@ mod tests {
             current.identity_for_app_key(&concurrent)?,
             AppKeyIdentityMembership::Enrolled(_)
         ));
-        assert!(
-            PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            PendingSimpleGenesis::load_for_store(pending.store_id.as_str()).await?,
+            SimpleGenesisProgress::NotPending
+        ));
         NookDatabase::clear_identity_directory_for_test().await?;
         NookDatabase::idb_delete_key(event_db::SIGNING_SEED_KEY).await
     }
@@ -469,10 +470,11 @@ mod tests {
         let current = NookDatabase::load_identity_directory().await?;
         let normalized = PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
             .await?
-            .ok_or_else(|| NookError::Database("Pending marker disappeared.".to_owned()))?;
+            .require_pending()
+            .map_err(|_| NookError::IndexedDb("Pending marker disappeared.".to_owned()))?;
         let staged = normalized
-            .staged_identity()
-            .ok_or_else(|| NookError::Database("Staged snapshots disappeared.".to_owned()))?;
+            .require_staged_identity()
+            .map_err(|_| NookError::Database("Staged snapshots disappeared.".to_owned()))?;
         assert_eq!(current.identities().len(), 1);
         assert_eq!(current.selected()?.identity_id, pending_identity_id);
         assert_eq!(staged.base_directory.identities().len(), 1);
@@ -516,8 +518,8 @@ mod tests {
         .begin_or_resume()
         .await?;
         let staged = pending
-            .staged_identity()
-            .ok_or_else(|| NookError::Database("Staged identity disappeared.".to_owned()))?;
+            .require_staged_identity()
+            .map_err(|_| NookError::Database("Staged identity disappeared.".to_owned()))?;
         let mut concurrent = staged.base_directory.clone();
         let resolved_identity = concurrent
             .create_identity(IdentityCreation {
@@ -549,11 +551,10 @@ mod tests {
         assert_eq!(published.identities().len(), 1);
         assert_eq!(published.selected()?.identity_id, pending.identity_id);
         assert!(published.selected()?.owns_vault(&pending.store_id));
-        assert!(
-            PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            PendingSimpleGenesis::load_for_store(pending.store_id.as_str()).await?,
+            SimpleGenesisProgress::NotPending
+        ));
         NookDatabase::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
         NookDatabase::clear_identity_directory_for_test().await
     }
@@ -642,11 +643,10 @@ mod tests {
         assert_eq!(published.identities().len(), 1);
         assert_eq!(published.selected()?.identity_id, pending_identity_id);
         assert!(published.selected()?.owns_vault(&pending.store_id));
-        assert!(
-            PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            PendingSimpleGenesis::load_for_store(pending.store_id.as_str()).await?,
+            SimpleGenesisProgress::NotPending
+        ));
         NookDatabase::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
         NookDatabase::clear_identity_directory_for_test().await
     }
@@ -751,11 +751,10 @@ mod tests {
             Err(NookError::Database(message)) if message.contains("more than one local identity")
         ));
         assert_eq!(NookDatabase::load_identity_directory().await?, normalized);
-        assert!(
-            PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
-                .await?
-                .is_some()
-        );
+        assert!(matches!(
+            PendingSimpleGenesis::load_for_store(pending.store_id.as_str()).await?,
+            SimpleGenesisProgress::Pending(_)
+        ));
         NookDatabase::clear_identity_directory_for_test().await
     }
 

@@ -19,6 +19,7 @@ use crate::NookDatabase;
 use crate::VaultSnapshotLookup;
 use crate::conversion::LoadedVault;
 use crate::storage::identity_record::IdentityDirectoryWrite;
+use crate::storage::identity_record::SimpleGenesisProgress;
 #[cfg(test)]
 use nook_core::AppKeyIdentityMembership;
 use nook_core::MemberLabelState;
@@ -52,6 +53,7 @@ impl NookError {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use crate::storage::identity_record::IdentityDirectoryWrite;
+    use crate::storage::identity_record::SimpleGenesisProgress;
 
     use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
@@ -219,7 +221,7 @@ mod tests {
         );
 
         manager
-            .complete_connected_identity(&extension, None)
+            .complete_connected_identity(&extension, SimpleGenesisProgress::NotPending)
             .await?;
         let committed = NookDatabase::load_identity_directory().await?;
         assert!(matches!(
@@ -679,7 +681,7 @@ impl NookVaultManager {
             )
             .await?;
         let pending_cleanup = match match completed_genesis {
-            Some(completed) => Ok(Some(completed)),
+            Some(completed) => Ok(SimpleGenesisProgress::Pending(completed)),
             None => PendingSimpleGenesis::load_for_store(&self.vault.store_id).await,
         } {
             Ok(pending) => pending,
@@ -709,17 +711,15 @@ impl NookVaultManager {
     async fn complete_connected_identity(
         &mut self,
         identity: &nook_core::DeviceIdentity,
-        pending_cleanup: Option<identity_record::PendingSimpleGenesis>,
+        pending_cleanup: SimpleGenesisProgress,
     ) -> Result<(), NookError> {
-        let staged_genesis = pending_cleanup
-            .as_ref()
-            .is_some_and(PendingSimpleGenesis::is_staged);
+        let staged_genesis = matches!(&pending_cleanup, SimpleGenesisProgress::Pending(pending) if pending.is_staged());
         if !staged_genesis {
             self.ensure_identity_after_connect(identity).await?;
         }
         self.finalize_existing_vault_import_handoff().await?;
         self.finalize_paired_vault_handoff().await?;
-        let Some(completed) = pending_cleanup else {
+        let SimpleGenesisProgress::Pending(completed) = pending_cleanup else {
             return Ok(());
         };
         let staged_handoff = completed.is_staged();

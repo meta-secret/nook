@@ -8,6 +8,7 @@ use crate::EventDbSaveEventBytes;
 use crate::EventDbSaveHeads;
 use crate::IdentityDbSetIdentityMemberSigningPublicKey;
 use crate::NookDatabase;
+use crate::storage::identity_record::PendingSimpleGenesisFlow;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::identity_record::StoredIdentityRecord;
 use nook_core::StoredSigningSeed;
@@ -60,7 +61,7 @@ impl SimpleGenesisOperationsInput<'_> {
                 members_key_ciphertext: envelopes.members_key,
             }]);
         };
-        let identity_record = if let Some(staged) = pending.staged_identity() {
+        let identity_record = if let PendingSimpleGenesisFlow::Staged(staged) = &pending.flow {
             staged
                 .directory
                 .identities()
@@ -109,7 +110,7 @@ impl NookVaultManager {
             return self.ensure_signing_identity().await;
         };
         let app_key = self.device_identity()?;
-        if let Some(seed) = pending.resume_signing_seed(&app_key)? {
+        if let StoredSigningSeed::Stored(seed) = pending.resume_signing_seed(&app_key)? {
             self.event_log.signing_seed = seed;
         }
         if self.event_log.signing_seed.is_empty() {
@@ -123,8 +124,8 @@ impl NookVaultManager {
             };
         }
         let signing = SigningIdentity::from_seed_hex_stored(&self.event_log.signing_seed)?;
-        let staged = pending.staged_identity().ok_or_else(|| {
-            NookError::Database("Staged Simple genesis state disappeared.".to_owned())
+        let staged = pending.require_staged_identity().map_err(|_| {
+            NookError::IndexedDb("Staged Simple genesis state disappeared.".to_owned())
         })?;
         let member = staged
             .directory

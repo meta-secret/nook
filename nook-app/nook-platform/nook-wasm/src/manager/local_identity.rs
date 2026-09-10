@@ -7,6 +7,9 @@ use crate::IdentityDbSaveProtectedLocalIdentity;
 use crate::manager::session::ExtensionHandoffState;
 use crate::storage::device_access::DeviceAccessProfileKey;
 use crate::storage::identity_record::LocalIdentitySigner;
+use crate::storage::identity_record::PreviousLocalSelection;
+use crate::storage::identity_record::PriorAppAuthorization;
+use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::SentinelFinalizationJournal;
 use crate::storage::indexed_db::StoredStringRecord;
@@ -33,7 +36,10 @@ impl NookVaultManager {
 
 impl NookVaultManager {
     async fn ensure_no_pending_vault_creation() -> Result<(), NookError> {
-        let simple_pending = PendingSimpleGenesis::load().await?.is_some();
+        let simple_pending = matches!(
+            PendingSimpleGenesis::load().await?,
+            SimpleGenesisProgress::Pending(_)
+        );
         let sentinel_pending = matches!(
             NookDatabase::load_sentinel_genesis_finalization_pending().await?,
             SentinelFinalizationJournal::Pending(_)
@@ -114,10 +120,10 @@ impl NookVaultManager {
         if changes_live_identity {
             self.finish_local_identity_activation(&selection.selected_app_id);
         }
-        Ok(selection
-            .previous_app_id
-            .map(|app_id| app_id.to_string())
-            .unwrap_or_default())
+        Ok(match selection.previous {
+            PreviousLocalSelection::Unselected => String::new(),
+            PreviousLocalSelection::Selected(app_id) => app_id.to_string(),
+        })
     }
 }
 
@@ -127,6 +133,8 @@ mod tests {
     use crate::manager::device_protection::{
         PendingExtensionIdentityEnrollment, PendingExtensionIdentityHandoff,
     };
+    use crate::storage::identity_record::PriorAppAuthorization;
+    use crate::storage::identity_record::SimpleGenesisProgress;
     use nook_core::{AppKey, SigningIdentity, StorageMode};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -392,7 +400,10 @@ impl NookVaultManager {
                     IdentityDbSaveNewProtectedLocalIdentity {
                         app_key: &app_key,
                         record: record,
-                        prior_app_key: prior_app_key.as_ref(),
+                        prior_app_key: match prior_app_key.as_ref() {
+                            Some(key) => PriorAppAuthorization::Authorized(key),
+                            None => PriorAppAuthorization::Unavailable,
+                        },
                         label: label,
                     },
                 )

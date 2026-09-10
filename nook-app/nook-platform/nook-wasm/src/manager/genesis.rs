@@ -4,6 +4,7 @@ use super::{NookVaultManager, VaultNameState};
 use crate::IdentityDbGenerateVaultDekForIdentity;
 use crate::NookDatabase;
 use crate::storage::identity_record;
+use crate::storage::identity_record::PendingSimpleGenesisFlow;
 use crate::storage::identity_record::StoredIdentityRecord;
 use crate::{NookError, NookSecretRecord};
 use nook_core::{DirectoryOwnedVaultOpening, IdentityVaultKeyOpening};
@@ -51,7 +52,7 @@ impl NookVaultManager {
         .begin_or_resume()
         .await?;
         self.vault.store_id = pending.store_id.to_string();
-        if let Some(staged) = pending.staged_identity() {
+        if let PendingSimpleGenesisFlow::Staged(staged) = &pending.flow {
             let keys = staged
                 .directory
                 .open_vault_dek_for_identity(DirectoryOwnedVaultOpening {

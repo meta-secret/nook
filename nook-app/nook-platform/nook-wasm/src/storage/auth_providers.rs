@@ -6,6 +6,7 @@
 //! transforms live in `nook_core`; this module adds the `IndexedDB` I/O and sealing.
 
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
+use crate::storage::identity_record::PriorAppAuthorization;
 use nook_core::{
     StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
     StoredOAuthRefreshCredential,
@@ -430,7 +431,7 @@ mod wasm_idb_tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &identity,
             record: &wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
@@ -733,7 +734,7 @@ mod wasm_idb_tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first,
             record: &wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
@@ -779,7 +780,7 @@ mod wasm_idb_tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &identity,
             record: &wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
@@ -825,7 +826,7 @@ mod wasm_idb_tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &identity,
             record: &wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;

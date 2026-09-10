@@ -8,6 +8,7 @@
 use super::directory_migration::PendingGenesisMigrationRejection;
 use super::genesis_flow::PendingSimpleGenesisFlow;
 use crate::IdentityDbMigrateDirectory;
+use crate::storage::identity_record::IdentityMigrationSelection;
 struct StagedGenesisPublication<'a> {
     store: &'a rexie::Store,
     pending: PendingSimpleGenesis,
@@ -46,14 +47,10 @@ impl SimpleGenesisCompletion<'_> {
             .transpose()?
             .unwrap_or_else(IdentityDirectory::empty);
         let migrate_staged = current.has_legacy_duplicate_app_key_ownership()
-            || pending.staged_identity().is_some_and(|staged| {
-                staged
-                    .base_directory
-                    .has_legacy_duplicate_app_key_ownership()
-            });
+            || matches!(&pending.flow, PendingSimpleGenesisFlow::Staged(staged) if staged.base_directory.has_legacy_duplicate_app_key_ownership());
         let current = NookDatabase::migrate_directory(IdentityDbMigrateDirectory {
             directory: current,
-            preserved_identity_id: Some(&pending.identity_id),
+            selection: IdentityMigrationSelection::PreserveGenesis(&pending.identity_id),
         })?
         .directory;
         if migrate_staged {
@@ -94,11 +91,11 @@ impl SimpleGenesisCompletion<'_> {
             .map_err(|error| {
                 NookError::IndexedDb(format!("Genesis identity write error: {error:?}"))
             })?;
-        let signing_seed = self.staged_signing_seed().ok_or_else(|| {
-            NookError::IndexedDb(
+        let Self::Staged { signing_seed, .. } = self else {
+            return Err(NookError::IndexedDb(
                 "Staged genesis completion is missing its signing seed.".to_owned(),
-            )
-        })?;
+            ));
+        };
         let seed_key =
             serde_wasm_bindgen::to_value(event_db::SIGNING_SEED_KEY).map_err(|error| {
                 NookError::IndexedDb(format!("Genesis signing key error: {error:?}"))

@@ -9,9 +9,11 @@ use super::{
     PinnedSimpleGenesisEvent,
 };
 use crate::StoredStringRecord;
+use crate::storage::identity_record::PendingSimpleGenesisFlow;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use crate::{NookError, storage::indexed_db};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
+use nook_core::StoredSigningSeed;
 use nook_core::VaultEvent;
 use nook_core::{AgeArmoredCiphertext, AppKey, MemberDekEnvelope, SigningIdentity};
 use std::{cell::RefCell, rc::Rc};
@@ -85,38 +87,37 @@ impl PendingSimpleGenesis {
         signing_seed: &str,
     ) -> Result<Vec<MemberDekEnvelope>, NookError> {
         let pending = self;
-        pending
-            .staged_identity()
-            .and_then(|staged| {
-                staged
-                    .directory
-                    .identities()
-                    .iter()
-                    .find(|identity| identity.identity_id == pending.identity_id)
+        let PendingSimpleGenesisFlow::Staged(staged) = &pending.flow else {
+            return Ok(Vec::new());
+        };
+        let Some(identity) = staged
+            .directory
+            .identities()
+            .iter()
+            .find(|identity| identity.identity_id == pending.identity_id)
+        else {
+            return Ok(Vec::new());
+        };
+        identity
+            .members
+            .iter()
+            .map(|member| {
+                Ok(nook_core::MemberDekEnvelope {
+                    app_id: member.app_id.clone(),
+                    envelope: member.public_key.seal_bytes(signing_seed.as_bytes())?,
+                })
             })
-            .map(|identity| {
-                identity
-                    .members
-                    .iter()
-                    .map(|member| {
-                        Ok(nook_core::MemberDekEnvelope {
-                            app_id: member.app_id.clone(),
-                            envelope: member.public_key.seal_bytes(signing_seed.as_bytes())?,
-                        })
-                    })
-                    .collect::<Result<Vec<_>, nook_core::MultiDeviceError>>()
-            })
-            .transpose()
+            .collect::<Result<Vec<_>, nook_core::MultiDeviceError>>()
             .map_err(|error| NookError::Database(error.to_string()))
-            .map(Option::unwrap_or_default)
     }
+
     pub(crate) fn resume_signing_seed(
         &self,
         app_key: &AppKey,
-    ) -> Result<Option<String>, NookError> {
+    ) -> Result<nook_core::StoredSigningSeed, NookError> {
         let pending = self;
         if !pending.is_staged() {
-            return Ok(None);
+            return Ok(StoredSigningSeed::Missing);
         }
         let PendingSimpleGenesisEvent::EventPinned {
             signing_seed_envelope,
@@ -124,7 +125,7 @@ impl PendingSimpleGenesis {
             ..
         } = &pending.event_state
         else {
-            return Ok(None);
+            return Ok(StoredSigningSeed::Missing);
         };
         member_signing_seed_envelopes
             .iter()
@@ -133,7 +134,7 @@ impl PendingSimpleGenesis {
                 || app_key.open_utf8(signing_seed_envelope),
                 |entry| app_key.open_utf8(&entry.envelope),
             )
-            .map(Some)
+            .map(StoredSigningSeed::Stored)
             .map_err(|error| NookError::Database(error.to_string()))
     }
     fn prepare_event(

@@ -7,6 +7,7 @@ use crate::manager::session::ExtensionHandoffState;
 use crate::storage::identity_record::{
     LocalIdentityRecoveryRequest, ProtectedIdentityLookup, ProtectedLocalIdentity,
 };
+use crate::storage::identity_record::{RecoveryTarget, RetiredInstallation};
 use crate::storage::{auth_providers, indexed_db};
 use crate::{NookDatabase, NookError};
 use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, DriveEventParent, StorageMode};
@@ -49,19 +50,22 @@ impl NookVaultManager {
         &mut self,
         expected_app_id: &str,
     ) -> Result<(), JsError> {
-        let expected_app_id = if expected_app_id.trim().is_empty() {
-            AppId::parse(&self.device.public_app_id()).ok()
+        let target = if expected_app_id.trim().is_empty() {
+            match AppId::parse(&self.device.public_app_id()) {
+                Ok(app_id) => RecoveryTarget::App(app_id),
+                Err(_) => RecoveryTarget::Unspecified,
+            }
         } else {
-            Some(AppId::parse(expected_app_id)?)
+            RecoveryTarget::App(AppId::parse(expected_app_id)?)
         };
         self.quiesce_for_local_recovery();
         let recovery =
             NookDatabase::delete_device_identity_for_recovery(LocalIdentityRecoveryRequest {
-                expected_app_id,
+                target,
             })
             .await?;
         if recovery.has_remaining_local_identities {
-            if let Some(app_id) = recovery.retired_app_id.as_ref() {
+            if let RetiredInstallation::App(app_id) = &recovery.retired_app_id {
                 AuthProviderDatabase::delete_auth_providers_for_app_id(app_id).await?;
             }
         } else {

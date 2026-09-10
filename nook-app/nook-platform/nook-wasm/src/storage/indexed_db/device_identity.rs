@@ -1,8 +1,10 @@
 use super::StoredStringRecord;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::identity_record;
+use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::identity_record::ProtectedLocalIdentity;
+use crate::storage::identity_record::RecoveryTarget;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::{IdbPutStringRequest, NookDatabase, ReadStringPreferringRequest};
 use nook_core::{AppId, WrappedDeviceIdentity};
@@ -283,6 +285,8 @@ impl NookDatabase {
 }
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
+    use crate::storage::identity_record::PriorAppAuthorization;
+    use crate::storage::identity_record::RecoveryTarget;
     use crate::storage::identity_record::simple_genesis;
     use crate::storage::{identity_record, indexed_db};
     use nook_core::{
@@ -389,14 +393,14 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: None,
+            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Work",
         })
         .await?;
@@ -457,7 +461,7 @@ mod tests {
 
         let recovery = NookDatabase::delete_device_identity_for_recovery(
             identity_record::LocalIdentityRecoveryRequest {
-                expected_app_id: Some(identity.app_id().clone()),
+                target: RecoveryTarget::App(identity.app_id().clone()),
             },
         )
         .await?;

@@ -2,6 +2,7 @@
 use super::genesis_flow::PendingSimpleGenesisFlow;
 use super::staged_genesis::StagedSimpleGenesisIdentity;
 use super::*;
+use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::{
     IdentityDbMigrateDirectory, IdentityDbMigrateDirectoryInStore, IdentityDbPersistPendingGenesis,
@@ -16,7 +17,7 @@ use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOp
 impl NookDatabase {
     pub(super) async fn load_pending_genesis(
         store: &rexie::Store,
-    ) -> Result<Option<PendingSimpleGenesis>, NookError> {
+    ) -> Result<SimpleGenesisProgress, NookError> {
         let pending_id =
             serde_wasm_bindgen::to_value(PENDING_SIMPLE_GENESIS_KEY).map_err(|error| {
                 NookError::IndexedDb(format!("Pending genesis key error: {error:?}"))
@@ -24,15 +25,14 @@ impl NookDatabase {
         let pending = store.get(pending_id).await.map_err(|error| {
             NookError::IndexedDb(format!("Pending genesis read error: {error:?}"))
         })?;
-        pending
-            .filter(|pending| !pending.is_undefined() && !pending.is_null())
-            .map(serde_wasm_bindgen::from_value::<String>)
-            .transpose()
-            .map_err(|error| {
-                NookError::IndexedDb(format!("Pending genesis value error: {error:?}"))
-            })?
-            .map(|raw| PendingSimpleGenesis::decode(&raw))
-            .transpose()
+        let Some(pending) = pending.filter(|pending| !pending.is_undefined() && !pending.is_null())
+        else {
+            return Ok(SimpleGenesisProgress::NotPending);
+        };
+        let raw = serde_wasm_bindgen::from_value::<String>(pending).map_err(|error| {
+            NookError::IndexedDb(format!("Pending genesis value error: {error:?}"))
+        })?;
+        PendingSimpleGenesis::decode(&raw).map(SimpleGenesisProgress::Pending)
     }
 }
 
@@ -145,14 +145,19 @@ impl NookDatabase {
         let pending = if directory.has_legacy_duplicate_app_key_ownership() {
             NookDatabase::load_pending_genesis(store).await?
         } else {
-            None
+            SimpleGenesisProgress::NotPending
         };
-        let preserved_identity_id = pending.as_ref().map(|pending| &pending.identity_id);
+        let selection = match &pending {
+            SimpleGenesisProgress::NotPending => IdentityMigrationSelection::DirectorySelection,
+            SimpleGenesisProgress::Pending(pending) => {
+                IdentityMigrationSelection::PreserveGenesis(&pending.identity_id)
+            }
+        };
         let migrated = NookDatabase::migrate_directory(IdentityDbMigrateDirectory {
             directory: directory,
-            preserved_identity_id: preserved_identity_id,
+            selection,
         })?;
-        if let Some(pending) = pending {
+        if let SimpleGenesisProgress::Pending(pending) = pending {
             let migrated_pending = pending
                 .migrate_directories()
                 .map_err(PendingGenesisMigrationRejection::into_cause)?;
@@ -269,6 +274,7 @@ impl NookDatabase {
 }
 #[cfg(test)]
 mod tests {
+    use crate::storage::identity_record::SimpleGenesisProgress;
     use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
     use super::*;
@@ -328,7 +334,8 @@ mod tests {
         );
         let pending = PendingSimpleGenesis::load_for_store(store_id.as_str())
             .await?
-            .ok_or_else(|| NookError::Database("Pending genesis marker is missing.".to_owned()))?;
+            .require_pending()
+            .map_err(|_| NookError::IndexedDb("Pending genesis marker is missing.".to_owned()))?;
         assert_eq!(pending.identity_id, pending_identity_id);
         NookDatabase::clear_identity_directory_for_test().await
     }
@@ -401,8 +408,8 @@ mod tests {
         }?;
         let normalized = PendingSimpleGenesis::decode(&normalized_raw)?;
         let staged = normalized
-            .staged_identity()
-            .ok_or_else(|| NookError::Database("Staged snapshots are missing.".to_owned()))?;
+            .require_staged_identity()
+            .map_err(|_| NookError::Database("Staged snapshots are missing.".to_owned()))?;
         assert_eq!(migrated.identities().len(), 1);
         assert_eq!(staged.base_directory.identities().len(), 1);
         assert_eq!(staged.directory.identities().len(), 1);

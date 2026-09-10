@@ -1,5 +1,6 @@
 //! Commit prepared identity and signing material in transaction order.
 use super::*;
+use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::StoredIdentityProtection;
 
 impl PreparedProtectedIdentity<'_> {
@@ -38,6 +39,7 @@ impl PreparedProtectedIdentity<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::identity_record::PriorAppAuthorization;
     use nook_core::{DeviceIdentityProtection, SigningIdentity};
     use wasm_bindgen_test::wasm_bindgen_test;
     #[cfg_attr(
@@ -65,7 +67,7 @@ mod tests {
             IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &first_key,
                 record: &first_wrapped,
-                prior_app_key: None,
+                prior_app_key: PriorAppAuthorization::Unavailable,
                 label: "Personal",
             },
         )
@@ -74,7 +76,7 @@ mod tests {
             IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &second_key,
                 record: &second_wrapped,
-                prior_app_key: None,
+                prior_app_key: PriorAppAuthorization::Unavailable,
                 label: "Work",
             },
         )
