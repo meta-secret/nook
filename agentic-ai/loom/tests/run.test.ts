@@ -1,18 +1,24 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { CommandOutputPolicy, RepositoryCommand } from '../src/lib/run.ts';
+import {
+  CommandOutputPolicy,
+  RepositoryCommand,
+  RepositoryNodeScript,
+} from '../src/lib/run.ts';
 
 const LARGE_OUTPUT_BYTES = 2 * 1024 * 1024;
 const EXCESSIVE_OUTPUT_BYTES = 17 * 1024 * 1024;
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
 
 describe('run command', () => {
   test('captures output larger than the platform default within an explicit bound', () => {
     const launch = new RepositoryCommand({
       command: 'node',
-      args: ['-e', `process.stdout.write('x'.repeat(${LARGE_OUTPUT_BYTES}))`],
-      rootDirectory: process.cwd(),
-      workingDirectory: process.cwd(),
+      script: RepositoryNodeScript.TestFixture,
+      args: ['output', String(LARGE_OUTPUT_BYTES)],
+      rootDirectory: REPOSITORY_ROOT,
+      workingDirectory: REPOSITORY_ROOT,
       outputPolicy: CommandOutputPolicy.GitHubApi,
     }).execute();
     assert(launch.isOk());
@@ -27,12 +33,10 @@ describe('run command', () => {
   test('fails closed when output exceeds the explicit bound', () => {
     const launch = new RepositoryCommand({
       command: 'node',
-      args: [
-        '-e',
-        `process.stdout.write('x'.repeat(${EXCESSIVE_OUTPUT_BYTES}))`,
-      ],
-      rootDirectory: process.cwd(),
-      workingDirectory: process.cwd(),
+      script: RepositoryNodeScript.TestFixture,
+      args: ['output', String(EXCESSIVE_OUTPUT_BYTES)],
+      rootDirectory: REPOSITORY_ROOT,
+      workingDirectory: REPOSITORY_ROOT,
       outputPolicy: CommandOutputPolicy.GitHubApi,
     }).execute();
     assert(launch.isErr());
@@ -42,9 +46,10 @@ describe('run command', () => {
   test('preserves subprocess signal termination', () => {
     const launch = new RepositoryCommand({
       command: 'node',
-      args: ['-e', "process.kill(process.pid, 'SIGTERM')"],
-      rootDirectory: process.cwd(),
-      workingDirectory: process.cwd(),
+      script: RepositoryNodeScript.TestFixture,
+      args: ['signal'],
+      rootDirectory: REPOSITORY_ROOT,
+      workingDirectory: REPOSITORY_ROOT,
     }).execute();
     assert(launch.isOk());
     const result = launch.value;
@@ -56,9 +61,10 @@ describe('run command', () => {
   test('rejects a working directory outside the repository root', () => {
     const launch = new RepositoryCommand({
       command: 'node',
-      args: ['-e', 'process.exit(0)'],
-      rootDirectory: process.cwd(),
-      workingDirectory: path.dirname(process.cwd()),
+      script: RepositoryNodeScript.TestFixture,
+      args: ['exit'],
+      rootDirectory: REPOSITORY_ROOT,
+      workingDirectory: path.dirname(REPOSITORY_ROOT),
     }).execute();
 
     assert(launch.isErr());

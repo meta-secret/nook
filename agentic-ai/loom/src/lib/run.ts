@@ -14,8 +14,8 @@ export class RepositoryCommand {
   constructor(private readonly request: RepositoryCommandRequest) {}
 
   execute(): Result<CommandOutput, RepositoryCommandFailure> {
-    const { command, args, rootDirectory, workingDirectory, outputPolicy } =
-      this.request;
+    const request = this.request;
+    const { command, rootDirectory, workingDirectory, outputPolicy } = request;
     const resolvedRoot = path.resolve(rootDirectory);
     const resolvedWorkingDirectory = path.resolve(workingDirectory);
     const relativeWorkingDirectory = path.relative(
@@ -42,34 +42,85 @@ export class RepositoryCommand {
     };
     let result;
     try {
-      const commandArgs = [...args];
       switch (command) {
         case 'bash':
-          result = spawnSync('bash', commandArgs, options);
+          switch (request.script) {
+            case RepositoryBashScript.UiDemoContract:
+              result = spawnSync(
+                'bash',
+                ['.github/scripts/ui-demo-contract.sh', ...request.args],
+                options,
+              );
+              break;
+          }
           break;
         case 'bun':
-          result = spawnSync('bun', commandArgs, options);
+          switch (request.script) {
+            case RepositoryBunScript.Loom:
+              result = spawnSync(
+                'bun',
+                [
+                  'run',
+                  '--cwd',
+                  'agentic-ai/loom',
+                  'loom',
+                  '--',
+                  ...request.args,
+                ],
+                options,
+              );
+              break;
+          }
           break;
         case 'bunx':
-          result = spawnSync('bunx', commandArgs, options);
+          switch (request.executable) {
+            case RepositoryBunxExecutable.Playwright:
+              result = spawnSync(
+                'bunx',
+                ['playwright', ...request.args],
+                options,
+              );
+              break;
+            case RepositoryBunxExecutable.Vitest:
+              result = spawnSync('bunx', ['vitest', ...request.args], options);
+              break;
+          }
           break;
         case 'cargo':
-          result = spawnSync('cargo', commandArgs, options);
+          result = spawnSync('cargo', [...request.args], options);
           break;
         case 'gh':
-          result = spawnSync('gh', commandArgs, options);
+          result = spawnSync('gh', [...request.args], options);
           break;
         case 'git':
-          result = spawnSync('git', commandArgs, options);
+          result = spawnSync('git', [...request.args], options);
           break;
         case 'node':
-          result = spawnSync('node', commandArgs, options);
+          switch (request.script) {
+            case RepositoryNodeScript.TestFixture:
+              result = spawnSync(
+                'node',
+                [
+                  'agentic-ai/loom/tests/repository-command.fixture.cjs',
+                  ...request.args,
+                ],
+                options,
+              );
+              break;
+            case RepositoryNodeScript.WorkbenchPublish:
+              result = spawnSync(
+                'node',
+                ['.github/scripts/workbench-publish.cjs', ...request.args],
+                options,
+              );
+              break;
+          }
           break;
         case 'task':
-          result = spawnSync('task', commandArgs, options);
+          result = spawnSync('task', [...request.args], options);
           break;
         case 'vale':
-          result = spawnSync('vale', commandArgs, options);
+          result = spawnSync('vale', [...request.args], options);
           break;
       }
     } catch {
@@ -104,13 +155,68 @@ export enum CommandOutputPolicy {
   GitHubApi = 'githubApi',
 }
 
-export type RepositoryCommandRequest = {
-  readonly command: RepositoryCommandExecutable;
-  readonly args: readonly string[];
+type RepositoryCommandLocation = {
   readonly rootDirectory: string;
   readonly workingDirectory: string;
   readonly outputPolicy?: CommandOutputPolicy;
 };
+
+type RepositoryBunCommandRequest = RepositoryCommandLocation & {
+  readonly command: 'bun';
+  readonly script: RepositoryBunScript;
+  readonly args: readonly string[];
+};
+
+type RepositoryBashCommandRequest = RepositoryCommandLocation & {
+  readonly command: 'bash';
+  readonly script: RepositoryBashScript;
+  readonly args: readonly string[];
+};
+
+type RepositoryBunxCommandRequest = RepositoryCommandLocation & {
+  readonly command: 'bunx';
+  readonly executable: RepositoryBunxExecutable;
+  readonly args: readonly string[];
+};
+
+type RepositoryNodeCommandRequest = RepositoryCommandLocation & {
+  readonly command: 'node';
+  readonly script: RepositoryNodeScript;
+  readonly args: readonly string[];
+};
+
+type RepositoryHostCommandRequest = RepositoryCommandLocation & {
+  readonly command: Exclude<
+    RepositoryCommandExecutable,
+    'bash' | 'bun' | 'bunx' | 'node'
+  >;
+  readonly args: readonly string[];
+};
+
+export type RepositoryCommandRequest =
+  | RepositoryBashCommandRequest
+  | RepositoryBunCommandRequest
+  | RepositoryBunxCommandRequest
+  | RepositoryNodeCommandRequest
+  | RepositoryHostCommandRequest;
+
+export enum RepositoryBashScript {
+  UiDemoContract = 'uiDemoContract',
+}
+
+export enum RepositoryBunScript {
+  Loom = 'loom',
+}
+
+export enum RepositoryBunxExecutable {
+  Playwright = 'playwright',
+  Vitest = 'vitest',
+}
+
+export enum RepositoryNodeScript {
+  TestFixture = 'testFixture',
+  WorkbenchPublish = 'workbenchPublish',
+}
 
 export type RepositoryCommandExecutable =
   'bash' | 'bun' | 'bunx' | 'cargo' | 'gh' | 'git' | 'node' | 'task' | 'vale';

@@ -9,7 +9,7 @@ import { RemoteTaskPresence } from '../codec/args/pr-land.ts';
 
 import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
 
-import { RepositoryCommand } from '../lib/run.ts';
+import { RepositoryBunScript, RepositoryCommand } from '../lib/run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
@@ -148,15 +148,8 @@ export class PullRequestValidationCommand {
 
     const prePushArgs: RepositoryCommandRequest = {
       command: 'bun',
-      args: [
-        'run',
-        '--cwd',
-        'agentic-ai/loom',
-        'loom',
-        '--',
-        '--default',
-        'prePush',
-      ],
+      script: RepositoryBunScript.Loom,
+      args: ['--default', 'prePush'],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,
     };

@@ -11,7 +11,7 @@ import {
   UntrustedYamlBoundary,
 } from './guards.ts';
 
-import { RepositoryCommand } from './run.ts';
+import { RepositoryBunxExecutable, RepositoryCommand } from './run.ts';
 
 import {
   type AgentStatsGitHubEvidenceRequest,
@@ -404,7 +404,8 @@ export class AgentStatisticsAssembly {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
     const listedArgs2: RepositoryCommandRequest = {
       command: 'bunx',
-      args: ['vitest', 'list'],
+      executable: RepositoryBunxExecutable.Vitest,
+      args: ['list'],
       rootDirectory: repoRoot,
       workingDirectory: appRoot,
     };
@@ -427,7 +428,8 @@ export class AgentStatisticsAssembly {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
     const listedArgs: RepositoryCommandRequest = {
       command: 'bunx',
-      args: ['playwright', 'test', '--list'],
+      executable: RepositoryBunxExecutable.Playwright,
+      args: ['test', '--list'],
       rootDirectory: repoRoot,
       workingDirectory: appRoot,
     };

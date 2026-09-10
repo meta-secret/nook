@@ -4,7 +4,7 @@ import type { PrePushRequest } from '../codec/args/pre-push.ts';
 
 import { ChangedCortexDensity } from '../lib/changed-cortex-density.ts';
 
-import { RepositoryCommand } from '../lib/run.ts';
+import { RepositoryBashScript, RepositoryCommand } from '../lib/run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
@@ -104,7 +104,8 @@ export class PrePushCommand {
 
     const contractArgs: RepositoryCommandRequest = {
       command: 'bash',
-      args: ['.github/scripts/ui-demo-contract.sh', baseSha],
+      script: RepositoryBashScript.UiDemoContract,
+      args: [baseSha],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,
     };
