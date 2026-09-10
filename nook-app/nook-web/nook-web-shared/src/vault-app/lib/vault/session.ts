@@ -85,6 +85,8 @@ export class VaultSessionActions {
         state.externalIdentityHandoff = { kind: BrowserIdentityHandoffKind.Inactive }
       }
     }
+    const architecture = state.refreshVaultArchitectureFromManager()
+    if (architecture.isErr()) return storageErr(architecture.error)
     try {
       set_vault_session_locked(false)
     } catch (failure) {
@@ -93,8 +95,6 @@ export class VaultSessionActions {
     state.isAuthenticated = true
     state.awaitingJoinApproval = false
     state.sessionExpiredByIdle = false
-    const architecture = state.refreshVaultArchitectureFromManager()
-    if (architecture.isErr()) return storageErr(architecture.error)
     log.info('vault session unlocked')
     void state.publishExtensionEventLogUpdate().then((publication) => {
       if (publication.isErr())

@@ -416,7 +416,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
-  async removeProvider(id: string): Promise<void> {
+  async removeProvider(id: string): Promise<Result<void, VaultStorageFailure>> {
     return new providersActions.VaultProviderActions(this).removeProvider({
       id,
     })

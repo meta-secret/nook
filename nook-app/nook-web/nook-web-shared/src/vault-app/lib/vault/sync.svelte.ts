@@ -429,8 +429,12 @@ export class VaultSyncActions {
     const health = state.localFolderHealth
     if (health.state !== NookLocalFolderHealthState.MultipleVaults) return
     const providerId = health.providerId
+    const removed = await state.removeProvider(providerId)
+    if (removed.isErr()) {
+      state.errorMsg = state.t(removed.error.translationKey)
+      return
+    }
     state.clearLocalFolderMultipleVaultsIssue()
-    await state.removeProvider(providerId)
   }
 
   async chooseReplacementLocalFolderForIssue(): Promise<void> {
@@ -438,10 +442,14 @@ export class VaultSyncActions {
     const health = state.localFolderHealth
     if (health.state !== NookLocalFolderHealthState.MultipleVaults) return
     const providerId = health.providerId
-    state.clearLocalFolderMultipleVaultsIssue()
     if (state.providers.some((provider) => provider.id === providerId)) {
-      await state.removeProvider(providerId)
+      const removed = await state.removeProvider(providerId)
+      if (removed.isErr()) {
+        state.errorMsg = state.t(removed.error.translationKey)
+        return
+      }
     }
+    state.clearLocalFolderMultipleVaultsIssue()
     state.errorMsg = ''
     state.openAdmin(AdminAccordionSection.Storage)
     state.beginAddProvider()

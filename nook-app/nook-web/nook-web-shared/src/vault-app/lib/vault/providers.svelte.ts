@@ -559,19 +559,18 @@ export class VaultProviderActions {
     state.errorMsg = ''
   }
 
-  async removeProvider({ id }: ProviderRemoval): Promise<void> {
+  async removeProvider({
+    id,
+  }: ProviderRemoval): Promise<Result<void, StorageOperationFailure>> {
     const state = this.state
     const target = state.providers.find((p) => p.id === id)
-    if (!target || target.type === 'local') return
+    if (!target || target.type === 'local') return storageOk(undefined)
 
     const persistence = await state.persistProviders({
       replace: true,
       providers: state.providers.filter((provider) => provider.id !== id),
     })
-    if (persistence.isErr()) {
-      state.errorMsg = state.t(persistence.error.translationKey)
-      return
-    }
+    if (persistence.isErr()) return storageErr(persistence.error)
     if (state.providers.length === 0 && state.isAuthenticated) {
       state.clearUnlockedSession()
     }
@@ -589,10 +588,7 @@ export class VaultProviderActions {
         try {
           await remove_local_folder_handle(folderHandle.handleId)
         } catch (failure) {
-          state.errorMsg = state.t(
-            new NativeVaultStorageFailure(failure).translationKey,
-          )
-          return
+          return storageErr(new NativeVaultStorageFailure(failure))
         }
       }
     }
@@ -602,6 +598,7 @@ export class VaultProviderActions {
       replacements: { label: target.label },
     }
     state.showSuccess(state.t(tArgs))
+    return storageOk(undefined)
   }
 }
 

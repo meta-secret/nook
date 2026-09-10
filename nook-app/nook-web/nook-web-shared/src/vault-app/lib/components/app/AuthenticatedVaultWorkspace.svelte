@@ -241,7 +241,10 @@
           onCancelAddProvider={() => vault.cancelAddProvider()}
           onBeginSetup={(setupRequest) => vault.beginProviderSetup(setupRequest)}
           onCancelSetup={() => vault.cancelProviderSetup()}
-          onRemoveProvider={(id) => vault.removeProvider(id)}
+          onRemoveProvider={async (id) => {
+            const removed = await vault.removeProvider(id)
+            if (removed.isErr()) vault.errorMsg = vault.t(removed.error.translationKey)
+          }}
           onAddPassword={(passwordRequest) =>
             vault.addVaultPassword(passwordRequest)}
           onUpdatePassword={(passwordRequest) =>

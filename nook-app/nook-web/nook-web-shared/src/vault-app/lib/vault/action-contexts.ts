@@ -326,7 +326,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   flushRemoteEventOutboxNow(
     request: EventOutboxRequest,
   ): Promise<Result<void, VaultStorageFailure>>
-  removeProvider(providerId: string): Promise<void>
+  removeProvider(providerId: string): Promise<Result<void, VaultStorageFailure>>
   ensureProviderSaved(): Promise<Result<void, VaultStorageFailure>>
   showSuccess(message: string): void
   stagedProviderLabel(): string
