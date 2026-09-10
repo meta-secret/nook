@@ -246,7 +246,9 @@ mod tests {
             super::revalidate_approved_authentication_workflow(
                 nook_companion_core::ApprovedAuthenticationWorkflowRevalidation {
                     approved: Default::default(),
-                    live: Default::default(),
+                    live: nook_companion_core::AuthenticationPageObservationFactsBatch {
+                        observations: Vec::new(),
+                    },
                 }
             ),
             nook_companion_core::ApprovedAuthenticationWorkflowDecision::Rejected

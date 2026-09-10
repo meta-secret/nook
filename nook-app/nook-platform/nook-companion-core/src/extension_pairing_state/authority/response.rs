@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "kind", deny_unknown_fields)]
 #[allow(clippy::large_enum_variant)]
 enum GrantAuthorityResponseWire {
-    NoMatchingAuthority,
-    MissingActiveAuthority,
-    InvalidStoredAuthority,
+    NoMatchingAuthority {},
+    MissingActiveAuthority {},
+    InvalidStoredAuthority {},
     Authorized { grant: StoredExtensionPairingGrant },
 }
 use tsify::Tsify;
@@ -38,13 +38,13 @@ impl GrantAuthorityResponseJson {
         let wire: GrantAuthorityResponseWire =
             serde_json::from_str(&self.0).map_err(|_| GrantAuthorityResponseError)?;
         let result = match wire {
-            GrantAuthorityResponseWire::NoMatchingAuthority => {
+            GrantAuthorityResponseWire::NoMatchingAuthority {} => {
                 ExtensionGrantAuthority::NoMatchingAuthority
             }
-            GrantAuthorityResponseWire::MissingActiveAuthority => {
+            GrantAuthorityResponseWire::MissingActiveAuthority {} => {
                 ExtensionGrantAuthority::MissingActiveAuthority
             }
-            GrantAuthorityResponseWire::InvalidStoredAuthority => {
+            GrantAuthorityResponseWire::InvalidStoredAuthority {} => {
                 ExtensionGrantAuthority::InvalidStoredAuthority
             }
             GrantAuthorityResponseWire::Authorized { grant } => {

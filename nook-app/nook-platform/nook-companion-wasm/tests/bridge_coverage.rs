@@ -73,7 +73,7 @@ fn oauth_support_export_covers_supported_unavailable_and_preview_states() {
     assert!(preview.is_unsupported());
     assert_eq!(
         preview.unsupported_reason(),
-        OAuthOriginUnsupportedReason::CloudflarePrPreview
+        nook_companion_core::OAuthOriginUnsupportedReason::CloudflarePrPreview
     );
     assert!(!preview.is_supported());
     let unavailable = resolve_oauth_origin_support(
@@ -93,6 +93,6 @@ fn oauth_support_export_covers_supported_unavailable_and_preview_states() {
     assert_eq!(supported.origin(), "https://simple.nokey.sh");
     assert_eq!(
         supported.unsupported_reason(),
-        OAuthOriginUnsupportedReason::UnregisteredOrigin
+        nook_companion_core::OAuthOriginUnsupportedReason::UnregisteredOrigin
     );
 }
