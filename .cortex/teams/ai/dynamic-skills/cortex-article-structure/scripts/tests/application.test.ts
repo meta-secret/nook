@@ -42,7 +42,7 @@ export class CortexArticleStructureApplicationScenario {
     };
     new CortexArticleResultAcceptance(acceptanceRequest).execute().match(
       (value) => {
-        expect(value).toBeUndefined();
+        expect({ value }).not.toHaveProperty('value');
       },
       (outcome) => {
         expect(outcome.message).toContain('semantic verification failed');
