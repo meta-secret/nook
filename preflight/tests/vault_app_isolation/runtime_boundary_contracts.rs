@@ -110,7 +110,7 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
     );
     assert!(
         shared_entry
-            .find("await ensureAppWasm(expectedKind)")
+            .find("vaultApplicationRuntime.ensureAppWasm(this.application)")
             .unwrap_or(usize::MAX)
             < shared_entry.find("import(\"./App.svelte\")").unwrap_or(0),
         "the vault WASM must initialize before application modules can call its exports"

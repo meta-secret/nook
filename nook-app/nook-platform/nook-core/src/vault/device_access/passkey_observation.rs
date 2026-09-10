@@ -1,7 +1,6 @@
 use crate::IsoTimestamp;
-use serde::de::{Error as DeserializeError, Visitor};
+use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -80,26 +79,7 @@ impl AuthenticatorGuidEvidence {
 pub struct DiscardedClientEnvironment;
 impl<'de> Deserialize<'de> for DiscardedClientEnvironment {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_any(Self)
-    }
-}
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: serde Visitor owns the inherited numeric method signatures"
-    )
-)]
-impl<'de> Visitor<'de> for DiscardedClientEnvironment {
-    type Value = Self;
-    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("a legacy client environment string or null")
-    }
-    fn visit_unit<E: DeserializeError>(self) -> Result<Self, E> {
-        Ok(self)
-    }
-    fn visit_str<E: DeserializeError>(self, _: &str) -> Result<Self, E> {
-        Ok(self)
+        IgnoredAny::deserialize(deserializer).map(|_| Self)
     }
 }
 

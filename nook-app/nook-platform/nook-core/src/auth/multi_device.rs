@@ -105,10 +105,11 @@ mod tests {
 
     use super::*;
     use crate::{
-        DeviceAuthorization, EventGraph, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
-        EventGraphDeviceAccessRequest, EventGraphInsert, EventGraphInsertion,
-        EventGraphVaultArchitecture, EventId, EventInsertStatus, IsoTimestamp, MemberLabel,
-        RecordTypeDeclaration, SentinelMemberRecordProjection,
+        CreateSentinelShareRecordsRequest, DeviceAuthorization, EventGraph,
+        EventGraphAuthorizationProjection, EventGraphDeviceAccess, EventGraphDeviceAccessRequest,
+        EventGraphInsert, EventGraphInsertion, EventGraphVaultArchitecture, EventId,
+        EventInsertStatus, IsoTimestamp, MemberLabel, RecordTypeDeclaration,
+        ResolveMemberRosterRequest, SentinelMemberRecordProjection,
         SentinelMemberRecordProjectionRequest, SigningIdentity, StoreId, VaultEvent,
         VaultEventBody, VaultEventSchemaVersion, VaultMetaGraphProjection,
         VaultMetaOperationApplier, VaultMetaOperationRequest,
