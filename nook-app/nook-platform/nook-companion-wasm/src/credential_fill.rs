@@ -1,7 +1,5 @@
 //! WASM-owned objects for portable credential-fill planning.
 
-use std::mem;
-
 use crate::page_form_policy::NookPageInputFieldObservation;
 use nook_companion_core::credential_fill::{self, field};
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -265,15 +263,17 @@ impl CredentialFillObservations {
         }
     }
 
-    pub fn add(&mut self, observation: &CredentialFillObservation) {
+    #[must_use]
+    pub fn add(mut self, observation: &CredentialFillObservation) -> Self {
         let Ok(fields) = &mut self.inner else {
-            return;
+            return self;
         };
         if fields.len() >= u32::from(Self::maximum_count()) as usize {
             self.inner = Err(credential_fill::CredentialFillRejection::TooManyObservedFields);
-            return;
+            return self;
         }
         fields.push(observation.as_core());
+        self
     }
 }
 
@@ -335,8 +335,16 @@ impl CredentialFillPlan {
 #[wasm_bindgen]
 impl CredentialFillPlan {
     #[must_use]
-    pub fn take_assignments(&mut self) -> Vec<CredentialFillAssignment> {
-        mem::take(&mut self.assignments)
+    /// Taking assignments consumes their plan owner.
+    /// ```compile_fail,E0382
+    /// use nook_companion_wasm::CredentialFillPlan;
+    /// fn consume_twice(plan: CredentialFillPlan) {
+    ///     let _ = plan.take_assignments();
+    ///     let _ = plan.take_assignments();
+    /// }
+    /// ```
+    pub fn take_assignments(self) -> Vec<CredentialFillAssignment> {
+        self.assignments
             .into_iter()
             .map(CredentialFillAssignment::from_core)
             .collect()
@@ -414,15 +422,18 @@ pub fn plan_companion_credential_fill(fields: &CredentialFillObservations) -> Cr
 mod tests {
     use super::*;
 
-    fn field(
+    struct CredentialObservationFixture<'a> {
         field_index: field::Index,
-        role: &CredentialFillFieldRole,
-    ) -> CredentialFillObservation {
-        CredentialFillObservation::credential(
-            &CredentialFillFieldIndex::from_core(field_index),
-            role,
-            &CredentialFillEditability::writable(),
-        )
+        role: &'a CredentialFillFieldRole,
+    }
+    impl CredentialObservationFixture<'_> {
+        fn observation(self) -> CredentialFillObservation {
+            CredentialFillObservation::credential(
+                &CredentialFillFieldIndex::from_core(self.field_index),
+                self.role,
+                &CredentialFillEditability::writable(),
+            )
+        }
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -504,21 +515,27 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn wasm_owned_objects_delegate_to_core_policy() -> Result<(), wasm_bindgen::JsError> {
         let mut fields = CredentialFillObservations::new();
-        fields.add(&field(
-            field::Index::ZERO,
-            &CredentialFillFieldRole::username(),
-        ));
-        fields.add(&field(
-            field::Index::ONE,
-            &CredentialFillFieldRole::current_password(),
-        ));
+        fields = fields.add(
+            &(CredentialObservationFixture {
+                field_index: field::Index::ZERO,
+                role: &CredentialFillFieldRole::username(),
+            })
+            .observation(),
+        );
+        fields = fields.add(
+            &(CredentialObservationFixture {
+                field_index: field::Index::ONE,
+                role: &CredentialFillFieldRole::current_password(),
+            })
+            .observation(),
+        );
 
         let result = plan_companion_credential_fill(&fields);
         assert_eq!(
             result.kind(),
             credential_fill::CredentialFillPlanningOutcome::Planned
         );
-        let mut plan = result.plan()?;
+        let plan = result.plan()?;
         let assignments = plan.take_assignments();
         assert_eq!(assignments.len(), 2);
         assert_eq!(assignments[0].field_index().as_core(), field::Index::ZERO);
@@ -531,7 +548,6 @@ mod tests {
             assignments[1].credential(),
             credential_fill::CredentialKind::CurrentPassword
         );
-        assert!(plan.take_assignments().is_empty());
         Ok(())
     }
 
@@ -545,7 +561,7 @@ mod tests {
             &CredentialFillEditability::readonly(),
         );
         let mut fields = CredentialFillObservations::new();
-        fields.add(&observation);
+        fields = fields.add(&observation);
 
         let result = plan_companion_credential_fill(&fields);
         assert_eq!(
@@ -563,15 +579,19 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn observation_overflow_is_typed_terminal_and_keeps_the_input_borrowed()
     -> Result<(), wasm_bindgen::JsError> {
-        let observation = field(field::Index::ZERO, &CredentialFillFieldRole::username());
+        let observation = (CredentialObservationFixture {
+            field_index: field::Index::ZERO,
+            role: &CredentialFillFieldRole::username(),
+        })
+        .observation();
         let expected_observation = observation.as_core();
         let mut fields = CredentialFillObservations::new();
         for _ in 0..u32::from(CredentialFillObservations::maximum_count()) {
-            fields.add(&observation);
+            fields = fields.add(&observation);
         }
 
-        fields.add(&observation);
-        fields.add(&observation);
+        fields = fields.add(&observation);
+        fields = fields.add(&observation);
         assert_eq!(observation.as_core(), expected_observation);
 
         for _ in 0..2 {
@@ -587,7 +607,7 @@ mod tests {
         }
 
         let mut reusable_fields = CredentialFillObservations::new();
-        reusable_fields.add(&observation);
+        reusable_fields = reusable_fields.add(&observation);
         let result = plan_companion_credential_fill(&reusable_fields);
         assert_eq!(
             result.kind(),

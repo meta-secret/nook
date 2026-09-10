@@ -277,22 +277,6 @@ impl VersionedAuthenticationDisclosureControlObservation {
             destination.path_identity == "/login" && destination.route_identity == "/login"
         })
     }
-
-    #[cfg(test)]
-    fn current_observation_mut(&mut self) -> &mut AuthenticationAdvanceControlObservation {
-        let AuthenticationDisclosureControlObservationBody::Current(body) = &mut self.body else {
-            unreachable!("current test observations always carry the version-one body");
-        };
-        &mut body.observation
-    }
-
-    #[cfg(test)]
-    fn set_generic_password_field_count(&mut self, count: AuthenticationFieldCount) {
-        let AuthenticationDisclosureControlObservationBody::Current(body) = &mut self.body else {
-            unreachable!("current test observations always carry the version-one body");
-        };
-        body.generic_password_field_count = count;
-    }
 }
 
 #[cfg(test)]
@@ -300,35 +284,116 @@ mod tests {
     use super::*;
     use crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
 
+    enum HostileControlAlteration {
+        InsecureOrigin,
+        InsecureDestination,
+        ForeignDestination,
+        RecoveryDestination,
+        ProviderLabel,
+        SignupForm,
+        ProviderIdentity,
+        StrongUsername,
+        SemanticSubmit,
+        GetSubmission,
+        AuthoredDestination,
+        Unowned,
+        Inert,
+        MultiplePasswords,
+        GenericPassword,
+        NewPassword,
+        OneTimeCode,
+        SubmitControl,
+        OversizedOrigin,
+    }
+    impl HostileControlAlteration {
+        fn apply(
+            self,
+            mut request: CurrentAuthenticationDisclosureControlRequest,
+        ) -> CurrentAuthenticationDisclosureControlRequest {
+            match self {
+                Self::InsecureOrigin => {
+                    request.observation.source_origin = "http://login.example.test".to_owned()
+                }
+                Self::InsecureDestination => {
+                    request.observation.destination_identity =
+                        "http://login.example.test/login".to_owned()
+                }
+                Self::ForeignDestination => {
+                    request.observation.destination_identity =
+                        "https://attacker.example/login".to_owned()
+                }
+                Self::RecoveryDestination => {
+                    request.observation.destination_identity =
+                        "https://login.example.test/recover".to_owned()
+                }
+                Self::ProviderLabel => request.observation.label = "Sign in with Google".to_owned(),
+                Self::SignupForm => request.observation.form_identity = "signup".to_owned(),
+                Self::ProviderIdentity => {
+                    request.observation.machine_identity = "provider".to_owned()
+                }
+                Self::StrongUsername => {
+                    request.observation.authentication_username =
+                        AuthenticationUsernameEvidence::Strong
+                }
+                Self::SemanticSubmit => {
+                    request.observation.semantics = PageControlSemantics::SemanticSubmit
+                }
+                Self::GetSubmission => {
+                    request.observation.submission_method = PageControlSubmissionMethod::Get
+                }
+                Self::AuthoredDestination => {
+                    request.observation.submission_destination_source =
+                        PageControlSubmissionDestinationSource::Authored
+                }
+                Self::Unowned => request.observation.ownership = PageControlOwnership::Unowned,
+                Self::Inert => request.observation.actionability = PageControlActionability::Inert,
+                Self::MultiplePasswords => request.observation.password_field_count = 2.into(),
+                Self::GenericPassword => request.generic_password_field_count = 1.into(),
+                Self::NewPassword => request.observation.new_password_field_count = 1.into(),
+                Self::OneTimeCode => request.observation.one_time_code_field_count = 1.into(),
+                Self::SubmitControl => request.observation.semantic_submit_control_count = 1.into(),
+                Self::OversizedOrigin => {
+                    request.observation.source_origin =
+                        "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
+                }
+            }
+            request
+        }
+    }
+
     struct ExactDisclosureControlScenario;
 
     impl ExactDisclosureControlScenario {
+        fn request(
+            actionability: PageControlActionability,
+        ) -> CurrentAuthenticationDisclosureControlRequest {
+            CurrentAuthenticationDisclosureControlRequest {
+                observation: AuthenticationAdvanceControlObservation {
+                    actionability,
+                    ownership: PageControlOwnership::OwnedForm,
+                    semantics: PageControlSemantics::Activation,
+                    authentication_username: AuthenticationUsernameEvidence::Explicit,
+                    password_field_count: 1.into(),
+                    new_password_field_count: 0.into(),
+                    one_time_code_field_count: 0.into(),
+                    semantic_submit_control_count: 0.into(),
+                    source_origin: "https://login.example.test".to_owned(),
+                    form_identity: String::new(),
+                    destination_identity: "https://login.example.test/login".to_owned(),
+                    label: "Sign in".to_owned(),
+                    machine_identity: String::new(),
+                    submission_method: PageControlSubmissionMethod::Absent,
+                    submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+                },
+                generic_password_field_count: 0.into(),
+            }
+        }
         fn control(
             actionability: PageControlActionability,
         ) -> VersionedAuthenticationDisclosureControlObservation {
-            VersionedAuthenticationDisclosureControlObservation::current(
-                CurrentAuthenticationDisclosureControlRequest {
-                    observation: AuthenticationAdvanceControlObservation {
-                        actionability,
-                        ownership: PageControlOwnership::OwnedForm,
-                        semantics: PageControlSemantics::Activation,
-                        authentication_username: AuthenticationUsernameEvidence::Explicit,
-                        password_field_count: 1.into(),
-                        new_password_field_count: 0.into(),
-                        one_time_code_field_count: 0.into(),
-                        semantic_submit_control_count: 0.into(),
-                        source_origin: "https://login.example.test".to_owned(),
-                        form_identity: String::new(),
-                        destination_identity: "https://login.example.test/login".to_owned(),
-                        label: "Sign in".to_owned(),
-                        machine_identity: String::new(),
-                        submission_method: PageControlSubmissionMethod::Absent,
-                        submission_destination_source:
-                            PageControlSubmissionDestinationSource::Omitted,
-                    },
-                    generic_password_field_count: 0.into(),
-                },
-            )
+            VersionedAuthenticationDisclosureControlObservation::current(Self::request(
+                actionability,
+            ))
         }
 
         fn assert_exact_activation_requires_https_and_rejects_hostile_variants() {
@@ -337,65 +402,30 @@ mod tests {
                 exact.classify(),
                 AuthenticationDisclosureControlDecision::AdvancesAuthentication
             );
-            let mutations: &[fn(&mut VersionedAuthenticationDisclosureControlObservation)] = &[
-                |value| {
-                    value.current_observation_mut().source_origin =
-                        "http://login.example.test".to_owned();
-                },
-                |value| {
-                    value.current_observation_mut().destination_identity =
-                        "http://login.example.test/login".to_owned();
-                },
-                |value| {
-                    value.current_observation_mut().destination_identity =
-                        "https://attacker.example/login".to_owned();
-                },
-                |value| {
-                    value.current_observation_mut().destination_identity =
-                        "https://login.example.test/recover".to_owned();
-                },
-                |value| value.current_observation_mut().label = "Sign in with Google".to_owned(),
-                |value| value.current_observation_mut().form_identity = "signup".to_owned(),
-                |value| value.current_observation_mut().machine_identity = "provider".to_owned(),
-                |value| {
-                    value.current_observation_mut().authentication_username =
-                        AuthenticationUsernameEvidence::Strong;
-                },
-                |value| {
-                    value.current_observation_mut().semantics =
-                        PageControlSemantics::SemanticSubmit;
-                },
-                |value| {
-                    value.current_observation_mut().submission_method =
-                        PageControlSubmissionMethod::Get;
-                },
-                |value| {
-                    value
-                        .current_observation_mut()
-                        .submission_destination_source =
-                        PageControlSubmissionDestinationSource::Authored;
-                },
-                |value| value.current_observation_mut().ownership = PageControlOwnership::Unowned,
-                |value| {
-                    value.current_observation_mut().actionability = PageControlActionability::Inert;
-                },
-                |value| value.current_observation_mut().password_field_count = 2.into(),
-                |value| value.set_generic_password_field_count(1.into()),
-                |value| value.current_observation_mut().new_password_field_count = 1.into(),
-                |value| value.current_observation_mut().one_time_code_field_count = 1.into(),
-                |value| {
-                    value
-                        .current_observation_mut()
-                        .semantic_submit_control_count = 1.into();
-                },
-                |value| {
-                    value.current_observation_mut().source_origin =
-                        "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
-                },
-            ];
-            for mutation in mutations {
-                let mut rejected = exact.clone();
-                mutation(&mut rejected);
+            for alteration in [
+                HostileControlAlteration::InsecureOrigin,
+                HostileControlAlteration::InsecureDestination,
+                HostileControlAlteration::ForeignDestination,
+                HostileControlAlteration::RecoveryDestination,
+                HostileControlAlteration::ProviderLabel,
+                HostileControlAlteration::SignupForm,
+                HostileControlAlteration::ProviderIdentity,
+                HostileControlAlteration::StrongUsername,
+                HostileControlAlteration::SemanticSubmit,
+                HostileControlAlteration::GetSubmission,
+                HostileControlAlteration::AuthoredDestination,
+                HostileControlAlteration::Unowned,
+                HostileControlAlteration::Inert,
+                HostileControlAlteration::MultiplePasswords,
+                HostileControlAlteration::GenericPassword,
+                HostileControlAlteration::NewPassword,
+                HostileControlAlteration::OneTimeCode,
+                HostileControlAlteration::SubmitControl,
+                HostileControlAlteration::OversizedOrigin,
+            ] {
+                let request = alteration.apply(Self::request(PageControlActionability::Actionable));
+                let rejected =
+                    VersionedAuthenticationDisclosureControlObservation::current(request);
                 assert_eq!(
                     rejected.classify(),
                     AuthenticationDisclosureControlDecision::DoesNotAdvanceAuthentication
