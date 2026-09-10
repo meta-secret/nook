@@ -221,7 +221,14 @@ const RESULT_SCHEMAS = {
     },
     exact,
   ),
-  ...STRUCTURAL_RESULT_SCHEMAS,
+  [WorkflowResultKind.StructuralExpertPlan]:
+    STRUCTURAL_RESULT_SCHEMAS[WorkflowResultKind.StructuralExpertPlan],
+  [WorkflowResultKind.CodeRefactoringEvidence]:
+    STRUCTURAL_RESULT_SCHEMAS[WorkflowResultKind.CodeRefactoringEvidence],
+  [WorkflowResultKind.CortexRefactoringEvidence]:
+    STRUCTURAL_RESULT_SCHEMAS[WorkflowResultKind.CortexRefactoringEvidence],
+  [WorkflowResultKind.SystemCoherenceSynthesis]:
+    STRUCTURAL_RESULT_SCHEMAS[WorkflowResultKind.SystemCoherenceSynthesis],
 };
 export type DecodedWorkflowTaskOutput = z.infer<
   (typeof RESULT_SCHEMAS)[keyof typeof RESULT_SCHEMAS]
