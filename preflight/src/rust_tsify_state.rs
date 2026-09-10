@@ -298,9 +298,9 @@ impl RustBoundaryState<'_> {
         violations: &mut Vec<Violation>,
     ) {
         for attribute in attributes {
-            if RustBoundaryState::tsify_type_override(attribute)
-                .as_deref()
-                .is_some_and(RustBoundaryState::contains_absence_sentinel)
+            if let TsifyOverride::Explicit(value) =
+                RustBoundaryState::tsify_type_override(attribute)
+                && RustBoundaryState::contains_absence_sentinel(&value)
             {
                 violations.push(Violation {
                     path: path.to_path_buf(),
@@ -312,22 +312,23 @@ impl RustBoundaryState<'_> {
 }
 
 impl RustBoundaryState<'_> {
-    fn tsify_type_override(attribute: &Attribute) -> Option<String> {
+    fn tsify_type_override(attribute: &Attribute) -> TsifyOverride {
         if !attribute.path().is_ident("tsify") {
-            return None;
+            return TsifyOverride::NotDeclared;
         }
-        let mut type_override = None;
-        attribute
-            .parse_nested_meta(|meta| {
-                if meta.path.is_ident("type") {
-                    type_override = Some(meta.value()?.parse::<LitStr>()?.value());
-                } else if meta.input.peek(Token![=]) {
-                    let _ = meta.value()?.parse::<Expr>()?;
-                }
-                Ok(())
-            })
-            .ok()?;
-        type_override
+        let mut type_override = TsifyOverride::NotDeclared;
+        let parsed = attribute.parse_nested_meta(|meta| {
+            if meta.path.is_ident("type") {
+                type_override = TsifyOverride::Explicit(meta.value()?.parse::<LitStr>()?.value());
+            } else if meta.input.peek(Token![=]) {
+                let _ = meta.value()?.parse::<Expr>()?;
+            }
+            Ok(())
+        });
+        match parsed {
+            Ok(()) => type_override,
+            Err(_) => TsifyOverride::InvalidAttribute,
+        }
     }
 }
 
@@ -422,4 +423,10 @@ value
         fs::remove_dir_all(root)?;
         Ok(())
     }
+}
+
+enum TsifyOverride {
+    NotDeclared,
+    Explicit(String),
+    InvalidAttribute,
 }

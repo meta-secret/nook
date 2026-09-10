@@ -25,7 +25,7 @@ impl DynamicWasmAliases<'_> {
         if node.kind() == "import_specifier"
             && !DynamicWasmAliases::node_is_type_only_import(node, source)
             && let Some(imported) = node.child_by_field_name("name")
-            && let Some(imported_name) = (JavaScriptLiteral {
+            && let Ok(imported_name) = (JavaScriptLiteral {
                 node: imported,
                 source: source,
             })
@@ -72,6 +72,7 @@ impl DynamicWasmAliases<'_> {
                     source: source,
                 })
                 .semantic_javascript_name()
+                .ok()
             }) {
                 for wasm_type in wasm_type_names {
                     if WasmModuleSources::is_wasm_export(module, wasm_type, source_path) {
@@ -84,7 +85,7 @@ impl DynamicWasmAliases<'_> {
         }
         if node.kind() == "import_specifier"
             && let Some(imported) = node.child_by_field_name("name")
-            && let Some(imported_name) = (JavaScriptLiteral {
+            && let Ok(imported_name) = (JavaScriptLiteral {
                 node: imported,
                 source: source,
             })

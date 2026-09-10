@@ -98,11 +98,11 @@ impl TypedJsonAssertionVisitor {
         })
     }
 
-    fn local_identifier(pattern: &Pat) -> Option<&syn::Ident> {
+    fn local_identifier(pattern: &Pat) -> IdentifierPattern<'_> {
         match pattern {
-            Pat::Ident(identifier) => Some(&identifier.ident),
+            Pat::Ident(identifier) => IdentifierPattern::Binding(&identifier.ident),
             Pat::Type(typed) => Self::local_identifier(&typed.pat),
-            _ => None,
+            _ => IdentifierPattern::OtherPattern,
         }
     }
 
@@ -145,24 +145,30 @@ impl TypedJsonAssertionVisitor {
         }
     }
 
-    fn indexed_root_identifier(expression: &Expr) -> Option<&syn::Ident> {
+    fn indexed_root_identifier(expression: &Expr) -> IdentifierPattern<'_> {
         match expression {
-            Expr::Path(path) if path.path.segments.len() == 1 => {
-                path.path.segments.first().map(|segment| &segment.ident)
-            }
+            Expr::Path(path) if path.path.segments.len() == 1 => match path.path.segments.first() {
+                Some(segment) => IdentifierPattern::Binding(&segment.ident),
+                None => IdentifierPattern::OtherPattern,
+            },
             Expr::Index(index) => Self::indexed_root_identifier(&index.expr),
             Expr::Group(value) => Self::indexed_root_identifier(&value.expr),
             Expr::Paren(value) => Self::indexed_root_identifier(&value.expr),
             Expr::Reference(value) => Self::indexed_root_identifier(&value.expr),
-            _ => None,
+            _ => IdentifierPattern::OtherPattern,
         }
     }
 
     fn receiver_is_json_value(&self, expression: &Expr) -> bool {
-        Self::indexed_root_identifier(expression).is_some_and(|identifier| {
-            let name = identifier.to_string();
-            name == "json" || name.ends_with("_json") || self.json_value_bindings.contains(&name)
-        })
+        match Self::indexed_root_identifier(expression) {
+            IdentifierPattern::Binding(identifier) => {
+                let name = identifier.to_string();
+                name == "json"
+                    || name.ends_with("_json")
+                    || self.json_value_bindings.contains(&name)
+            }
+            IdentifierPattern::OtherPattern => false,
+        }
     }
 
     fn macro_contains_untyped_json_assertion(&self, value: &Macro) -> bool {
@@ -220,7 +226,7 @@ impl<'ast> Visit<'ast> for TypedJsonAssertionVisitor {
 
     fn visit_local(&mut self, local: &'ast Local) {
         if self.in_test
-            && let Some(identifier) = Self::local_identifier(&local.pat)
+            && let IdentifierPattern::Binding(identifier) = Self::local_identifier(&local.pat)
             && (Self::type_is_json_value(&local.pat)
                 || local
                     .init
@@ -267,4 +273,9 @@ mod tests {
         assert_eq!(visitor.lines, vec![7, 8]);
         Ok(())
     }
+}
+
+enum IdentifierPattern<'ast> {
+    Binding(&'ast syn::Ident),
+    OtherPattern,
 }

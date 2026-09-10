@@ -117,7 +117,8 @@ impl SourceRepository<'_> {
                 continue;
             }
 
-            let Some(limit) = SourceRepository::source_line_limit(relative_path) else {
+            let SourceLimit::Governed(limit) = SourceRepository::source_line_limit(relative_path)
+            else {
                 continue;
             };
             let source = fs::read_to_string(&path)?;
@@ -231,7 +232,7 @@ impl SourceRepository<'_> {
                         || SourceRepository::is_cfg_test(&item_macro.attrs))
                         && item_macro.mac.path.is_ident("include") =>
                 {
-                    if let Some(path) =
+                    if let Ok(path) =
                         SourceRepository::included_source_path(include_directory, item_macro)
                     {
                         SourceRepository::record_external_unit_test_module(
@@ -273,9 +274,11 @@ impl SourceRepository<'_> {
 }
 
 impl SourceRepository<'_> {
-    fn included_source_path(include_directory: &Path, item_macro: &ItemMacro) -> Option<PathBuf> {
+    fn included_source_path(
+        include_directory: &Path,
+        item_macro: &ItemMacro,
+    ) -> Result<PathBuf, syn::Error> {
         syn::parse2::<LitStr>(item_macro.mac.tokens.clone())
-            .ok()
             .map(|path| include_directory.join(path.value()))
     }
 }
@@ -324,11 +327,12 @@ impl SourceRepository<'_> {
 
 impl SourceRepository<'_> {
     fn external_module_path(module_directory: &Path, module: &ItemMod) -> PathBuf {
-        if let Some(path) = module
-            .attrs
-            .iter()
-            .find_map(SourceRepository::path_attribute)
-        {
+        if let Some(path) = module.attrs.iter().find_map(|attribute| {
+            match SourceRepository::path_attribute(attribute) {
+                ModulePathAttribute::Declared(path) => Some(path),
+                ModulePathAttribute::Other | ModulePathAttribute::Malformed => None,
+            }
+        }) {
             return module_directory.join(path);
         }
 
@@ -343,20 +347,20 @@ impl SourceRepository<'_> {
 }
 
 impl SourceRepository<'_> {
-    fn path_attribute(attribute: &Attribute) -> Option<String> {
+    fn path_attribute(attribute: &Attribute) -> ModulePathAttribute {
         if !attribute.path().is_ident("path") {
-            return None;
+            return ModulePathAttribute::Other;
         }
         let Meta::NameValue(name_value) = &attribute.meta else {
-            return None;
+            return ModulePathAttribute::Malformed;
         };
         let Expr::Lit(expression) = &name_value.value else {
-            return None;
+            return ModulePathAttribute::Malformed;
         };
         let Lit::Str(path) = &expression.lit else {
-            return None;
+            return ModulePathAttribute::Malformed;
         };
-        Some(path.value())
+        ModulePathAttribute::Declared(path.value())
     }
 }
 
@@ -367,11 +371,13 @@ impl SourceRepository<'_> {
 }
 
 impl SourceRepository<'_> {
-    fn source_line_limit(path: &Path) -> Option<usize> {
-        let extension = path.extension()?.to_str()?;
-        SOURCE_EXTENSIONS
-            .contains(&extension)
-            .then_some(AUTHORED_SOURCE_LINE_LIMIT)
+    fn source_line_limit(path: &Path) -> SourceLimit {
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some(extension) if SOURCE_EXTENSIONS.contains(&extension) => {
+                SourceLimit::Governed(AUTHORED_SOURCE_LINE_LIMIT)
+            }
+            _ => SourceLimit::Excluded,
+        }
     }
 }
 
@@ -660,4 +666,14 @@ struct UnitTestModuleTraversal<'a> {
     items: &'a [Item],
     test_context: RustModuleContext,
     violations: &'a mut Vec<ExternalUnitTestModuleViolation>,
+}
+
+enum SourceLimit {
+    Governed(usize),
+    Excluded,
+}
+enum ModulePathAttribute {
+    Declared(String),
+    Other,
+    Malformed,
 }

@@ -3,13 +3,18 @@ impl TypeScriptApplicationState<'_> {
     pub(super) fn string_literal_value<'a>(
         node: tree_sitter::Node<'_>,
         source: &'a str,
-    ) -> Option<&'a str> {
+    ) -> LiteralValue<'a> {
         if !TypeScriptApplicationState::is_string_literal_expression(node) {
-            return None;
+            return LiteralValue::Nonliteral;
         }
-        node.utf8_text(source.as_bytes())
+        match node
+            .utf8_text(source.as_bytes())
             .ok()
             .and_then(|text| text.get(1..text.len().saturating_sub(1)))
+        {
+            Some(text) => LiteralValue::Text(text),
+            None => LiteralValue::Malformed,
+        }
     }
 }
 
@@ -96,4 +101,10 @@ impl TypeScriptApplicationState<'_> {
                 TypeScriptApplicationState::is_string_literal_type(child, source)
             })
     }
+}
+
+pub(super) enum LiteralValue<'source> {
+    Text(&'source str),
+    Nonliteral,
+    Malformed,
 }

@@ -11,7 +11,7 @@ impl ModuleTraversal {
         if WASM_MODULE_ALIASES.contains(&module) {
             return (self, true);
         }
-        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+        let Ok(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
             return (self, false);
         };
         if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
@@ -48,7 +48,7 @@ impl ModuleTraversal {
         if WASM_MODULE_ALIASES.contains(&module) {
             return (self, exported_name != "default");
         }
-        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+        let Ok(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
             return (self, false);
         };
         if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
@@ -102,7 +102,7 @@ impl ModuleTraversal {
                     .then(|| exported_name.to_owned()),
             );
         }
-        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+        let Ok(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
             return (self, None);
         };
         if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
@@ -152,7 +152,7 @@ impl ModuleTraversal {
         exported_name: &str,
         source_path: &Path,
     ) -> (Self, Option<String>) {
-        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+        let Ok(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
             return (self, None);
         };
         if !self
@@ -198,7 +198,7 @@ impl ModuleTraversal {
         source_path: &Path,
         wasm_type_names: &HashSet<String>,
     ) -> (Self, Option<String>) {
-        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+        let Ok(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
             return (self, None);
         };
         if !self

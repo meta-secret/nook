@@ -33,7 +33,8 @@ impl DirectWasmAliases<'_> {
             mut lines,
         } = self;
         if matches!(node.kind(), "import_statement" | "import_alias")
-            && let Some((binding, module)) = DirectWasmAliases::import_equals_binding(node, source)
+            && let Ok(ImportEqualsBinding { binding, module }) =
+                DirectWasmAliases::import_equals_binding(node, source)
             && (WasmModuleSources {
                 module: &module,
                 source_path: source_path,
@@ -49,7 +50,7 @@ impl DirectWasmAliases<'_> {
             };
         }
         if matches!(node.kind(), "import_statement" | "export_statement") {
-            if let Some(module) = DirectWasmAliases::module_specifier(node, source) {
+            if let Ok(module) = DirectWasmAliases::module_specifier(node, source) {
                 if node.kind() == "import_statement"
                     && (WasmModuleSources {
                         module: &module,
@@ -139,18 +140,30 @@ impl DirectWasmAliases<'_> {
     fn import_equals_binding(
         node: tree_sitter::Node<'_>,
         source: &str,
-    ) -> Option<(String, String)> {
-        let text = node.utf8_text(source.as_bytes()).ok()?.trim();
-        let assignment = text.strip_prefix("import ")?;
-        let (binding, required) = assignment.split_once('=')?;
+    ) -> Result<ImportEqualsBinding, ImportSyntaxFailure> {
+        let text = node
+            .utf8_text(source.as_bytes())
+            .map_err(|_| ImportSyntaxFailure::InvalidSource)?
+            .trim();
+        let assignment = text
+            .strip_prefix("import ")
+            .ok_or(ImportSyntaxFailure::NotImport)?;
+        let (binding, required) = assignment
+            .split_once('=')
+            .ok_or(ImportSyntaxFailure::MissingAssignment)?;
         let module = required
             .trim()
-            .strip_prefix("require(")?
+            .strip_prefix("require(")
+            .ok_or(ImportSyntaxFailure::NotRequire)?
             .trim_end_matches(';')
-            .strip_suffix(')')?
+            .strip_suffix(')')
+            .ok_or(ImportSyntaxFailure::UnterminatedRequire)?
             .trim()
             .trim_matches(['\'', '"']);
-        Some((binding.trim().to_owned(), module.to_owned()))
+        Ok(ImportEqualsBinding {
+            binding: binding.trim().to_owned(),
+            module: module.to_owned(),
+        })
     }
 }
 
@@ -197,13 +210,19 @@ impl DirectWasmAliases<'_> {
 }
 
 impl DirectWasmAliases<'_> {
-    fn module_specifier(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-        let source_node = node.child_by_field_name("source")?;
+    fn module_specifier(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> Result<String, ImportSyntaxFailure> {
+        let source_node = node
+            .child_by_field_name("source")
+            .ok_or(ImportSyntaxFailure::MissingModule)?;
         (JavaScriptLiteral {
             node: source_node,
             source: source,
         })
         .static_javascript_string()
+        .map_err(ImportSyntaxFailure::Literal)
     }
 }
 
@@ -221,7 +240,7 @@ impl DirectWasmAliases<'_> {
     ) -> (HashSet<String>, Vec<usize>) {
         if matches!(node.kind(), "import_specifier" | "export_specifier")
             && let Some(authored_name_node) = node.child_by_field_name("name")
-            && let Some(authored_name) = (JavaScriptLiteral {
+            && let Ok(authored_name) = (JavaScriptLiteral {
                 node: authored_name_node,
                 source: source,
             })
@@ -237,6 +256,7 @@ impl DirectWasmAliases<'_> {
                         source: source,
                     })
                     .semantic_javascript_name()
+                    .ok()
                 })
                 .is_some_and(|alias| alias != authored_name)
             {
@@ -276,4 +296,19 @@ pub(super) struct DirectAliasInventory {
     pub(super) wasm_class_bindings: HashMap<String, String>,
     pub(super) imported_callable_bindings: HashSet<String>,
     pub(super) lines: Vec<usize>,
+}
+
+struct ImportEqualsBinding {
+    binding: String,
+    module: String,
+}
+#[derive(Debug)]
+enum ImportSyntaxFailure {
+    InvalidSource,
+    NotImport,
+    MissingAssignment,
+    NotRequire,
+    UnterminatedRequire,
+    MissingModule,
+    Literal(crate::javascript_literals::JavaScriptLiteralFailure),
 }

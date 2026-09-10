@@ -5,27 +5,41 @@ pub struct JavaScriptLiteral<'scan> {
 use std::str::Chars;
 
 impl JavaScriptLiteral<'_> {
-    pub fn static_javascript_string(self) -> Option<String> {
+    pub fn static_javascript_string(self) -> Result<String, JavaScriptLiteralFailure> {
         let Self { node, source } = self;
         if node.kind() == "template_string" && self.contains_template_substitution() {
-            return None;
+            return Err(JavaScriptLiteralFailure::DynamicTemplate);
         }
-        let literal = node.utf8_text(source.as_bytes()).ok()?;
-        let delimiter = literal.chars().next()?;
-        if literal.chars().last()? != delimiter || !matches!(delimiter, '\'' | '"' | '`') {
-            return None;
+        let literal = node
+            .utf8_text(source.as_bytes())
+            .map_err(|_| JavaScriptLiteralFailure::InvalidSource)?;
+        let delimiter = literal
+            .chars()
+            .next()
+            .ok_or(JavaScriptLiteralFailure::InvalidDelimiter)?;
+        if literal
+            .chars()
+            .last()
+            .ok_or(JavaScriptLiteralFailure::InvalidDelimiter)?
+            != delimiter
+            || !matches!(delimiter, '\'' | '"' | '`')
+        {
+            return Err(JavaScriptLiteralFailure::InvalidDelimiter);
         }
         if delimiter == '"' {
-            return serde_json::from_str(literal).ok();
+            return serde_json::from_str(literal)
+                .map_err(|_| JavaScriptLiteralFailure::InvalidEscape);
         }
         JavaScriptLiteral::decode_javascript_escapes(&literal[1..literal.len() - 1])
     }
 }
 
 impl JavaScriptLiteral<'_> {
-    pub(super) fn semantic_javascript_name(self) -> Option<String> {
+    pub(super) fn semantic_javascript_name(self) -> Result<String, JavaScriptLiteralFailure> {
         let Self { node, source } = self;
-        let text = node.utf8_text(source.as_bytes()).ok()?;
+        let text = node
+            .utf8_text(source.as_bytes())
+            .map_err(|_| JavaScriptLiteralFailure::InvalidSource)?;
         if matches!(node.kind(), "string" | "template_string") {
             (JavaScriptLiteral {
                 node: node,
@@ -39,21 +53,23 @@ impl JavaScriptLiteral<'_> {
 }
 
 impl JavaScriptLiteral<'_> {
-    pub(super) fn callable_expression_name(self) -> Option<String> {
+    pub(super) fn callable_expression_name(self) -> Result<String, JavaScriptLiteralFailure> {
         let Self { node, source } = self;
         let property = match node.kind() {
-            "identifier" => Some(node),
-            "member_expression" => node.child_by_field_name("property"),
-            "subscript_expression" => node.child_by_field_name("index"),
-            _ => None,
+            "identifier" => node,
+            "member_expression" => node
+                .child_by_field_name("property")
+                .ok_or(JavaScriptLiteralFailure::MissingCallableName)?,
+            "subscript_expression" => node
+                .child_by_field_name("index")
+                .ok_or(JavaScriptLiteralFailure::MissingCallableName)?,
+            _ => return Err(JavaScriptLiteralFailure::UnsupportedCallable),
         };
-        property.and_then(|property| {
-            (JavaScriptLiteral {
-                node: property,
-                source: source,
-            })
-            .semantic_javascript_name()
+        (JavaScriptLiteral {
+            node: property,
+            source,
         })
+        .semantic_javascript_name()
     }
 }
 
@@ -67,7 +83,7 @@ impl JavaScriptLiteral<'_> {
 }
 
 impl JavaScriptLiteral<'_> {
-    fn decode_javascript_escapes(source: &str) -> Option<String> {
+    fn decode_javascript_escapes(source: &str) -> Result<String, JavaScriptLiteralFailure> {
         let mut decoded = String::with_capacity(source.len());
         let mut chars = source.chars();
         while let Some(character) = chars.next() {
@@ -75,7 +91,9 @@ impl JavaScriptLiteral<'_> {
                 decoded.push(character);
                 continue;
             }
-            let escape = chars.next()?;
+            let escape = chars
+                .next()
+                .ok_or(JavaScriptLiteralFailure::TruncatedEscape)?;
             match escape {
                 '\'' => decoded.push('\''),
                 '"' => decoded.push('"'),
@@ -99,24 +117,35 @@ impl JavaScriptLiteral<'_> {
                 other => decoded.push(other),
             }
         }
-        Some(decoded)
+        Ok(decoded)
     }
 }
 
 impl JavaScriptLiteral<'_> {
-    fn decode_unicode_escape(chars: &mut Chars<'_>) -> Option<char> {
+    fn decode_unicode_escape(chars: &mut Chars<'_>) -> Result<char, JavaScriptLiteralFailure> {
         if chars.clone().next() == Some('{') {
             chars.next();
             let mut value = 0_u32;
             let mut digits = 0;
             loop {
-                let character = chars.next()?;
+                let character = chars
+                    .next()
+                    .ok_or(JavaScriptLiteralFailure::TruncatedEscape)?;
                 if character == '}' {
-                    return (digits > 0).then(|| char::from_u32(value)).flatten();
+                    if digits == 0 {
+                        return Err(JavaScriptLiteralFailure::InvalidEscape);
+                    }
+                    return char::from_u32(value).ok_or(JavaScriptLiteralFailure::InvalidCodePoint);
                 }
                 value = value
-                    .checked_mul(16)?
-                    .checked_add(character.to_digit(16)?)?;
+                    .checked_mul(16)
+                    .ok_or(JavaScriptLiteralFailure::InvalidCodePoint)?
+                    .checked_add(
+                        character
+                            .to_digit(16)
+                            .ok_or(JavaScriptLiteralFailure::InvalidEscape)?,
+                    )
+                    .ok_or(JavaScriptLiteralFailure::InvalidCodePoint)?;
                 digits += 1;
             }
         }
@@ -125,13 +154,36 @@ impl JavaScriptLiteral<'_> {
 }
 
 impl JavaScriptLiteral<'_> {
-    fn decode_fixed_hex(chars: &mut Chars<'_>, digits: usize) -> Option<char> {
+    fn decode_fixed_hex(
+        chars: &mut Chars<'_>,
+        digits: usize,
+    ) -> Result<char, JavaScriptLiteralFailure> {
         let mut value = 0_u32;
         for _ in 0..digits {
             value = value
-                .checked_mul(16)?
-                .checked_add(chars.next()?.to_digit(16)?)?;
+                .checked_mul(16)
+                .ok_or(JavaScriptLiteralFailure::InvalidCodePoint)?
+                .checked_add(
+                    chars
+                        .next()
+                        .ok_or(JavaScriptLiteralFailure::TruncatedEscape)?
+                        .to_digit(16)
+                        .ok_or(JavaScriptLiteralFailure::InvalidEscape)?,
+                )
+                .ok_or(JavaScriptLiteralFailure::InvalidCodePoint)?;
         }
-        char::from_u32(value)
+        char::from_u32(value).ok_or(JavaScriptLiteralFailure::InvalidCodePoint)
     }
+}
+
+#[derive(Debug)]
+pub enum JavaScriptLiteralFailure {
+    DynamicTemplate,
+    InvalidSource,
+    InvalidDelimiter,
+    InvalidEscape,
+    TruncatedEscape,
+    InvalidCodePoint,
+    MissingCallableName,
+    UnsupportedCallable,
 }

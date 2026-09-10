@@ -41,9 +41,11 @@ impl TypeScriptApplicationState<'_> {
         let mut violations = Vec::new();
         for path in files {
             let contents = fs::read_to_string(&path)?;
-            for line in
-                TypeScriptApplicationState::undefined_token_lines(&contents, path.extension())
-                    .map_err(io::Error::other)?
+            for line in TypeScriptApplicationState::undefined_token_lines(
+                &contents,
+                language_dispatch::SourceLanguage::of_path(&path),
+            )
+            .map_err(io::Error::other)?
             {
                 violations.push(Violation {
                     path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
@@ -73,8 +75,11 @@ impl TypeScriptApplicationState<'_> {
         let mut violations = Vec::new();
         for path in files {
             let contents = fs::read_to_string(&path)?;
-            for line in TypeScriptApplicationState::null_token_lines(&contents, path.extension())
-                .map_err(io::Error::other)?
+            for line in TypeScriptApplicationState::null_token_lines(
+                &contents,
+                language_dispatch::SourceLanguage::of_path(&path),
+            )
+            .map_err(io::Error::other)?
             {
                 violations.push(Violation {
                     path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
@@ -107,9 +112,11 @@ impl TypeScriptApplicationState<'_> {
         let mut violations = Vec::new();
         for path in files {
             let contents = fs::read_to_string(&path)?;
-            for line in
-                TypeScriptApplicationState::mutable_void_state_lines(&contents, path.extension())
-                    .map_err(io::Error::other)?
+            for line in TypeScriptApplicationState::mutable_void_state_lines(
+                &contents,
+                language_dispatch::SourceLanguage::of_path(&path),
+            )
+            .map_err(io::Error::other)?
             {
                 violations.push(Violation {
                     path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
@@ -138,7 +145,7 @@ impl TypeScriptApplicationState<'_> {
             let contents = fs::read_to_string(&path)?;
             for line in TypeScriptApplicationState::generic_optional_state_lines(
                 &contents,
-                path.extension(),
+                language_dispatch::SourceLanguage::of_path(&path),
             )
             .map_err(io::Error::other)?
             {
@@ -175,7 +182,7 @@ impl TypeScriptApplicationState<'_> {
             let contents = fs::read_to_string(&path)?;
             for line in TypeScriptApplicationState::raw_string_discriminant_lines(
                 &contents,
-                path.extension(),
+                language_dispatch::SourceLanguage::of_path(&path),
             )
             .map_err(io::Error::other)?
             {
@@ -374,20 +381,21 @@ impl TypeScriptApplicationState<'_> {
                 .map(str::trim);
             let value = node.child_by_field_name("value");
             if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
-                && value
-                    .and_then(|literal| {
+                && value.is_some_and(|literal| {
+                    let literal_nodes::LiteralValue::Text(literal) =
                         TypeScriptApplicationState::string_literal_value(literal, source)
-                    })
-                    .is_some_and(|literal| {
-                        matches!(unregistered_values, UnregisteredDiscriminantPolicy::Reject)
-                            || name.is_some_and(|name| {
-                                TypeScriptApplicationState::enum_value_matches_discriminant(
-                                    enum_values,
-                                    literal,
-                                    name,
-                                )
-                            })
-                    })
+                    else {
+                        return false;
+                    };
+                    matches!(unregistered_values, UnregisteredDiscriminantPolicy::Reject)
+                        || name.is_some_and(|name| {
+                            TypeScriptApplicationState::enum_value_matches_discriminant(
+                                enum_values,
+                                literal,
+                                name,
+                            )
+                        })
+                })
             {
                 lines.push(first_line + node.start_position().row);
                 return;
@@ -397,32 +405,37 @@ impl TypeScriptApplicationState<'_> {
             let left = node.child_by_field_name("left");
             let right = node.child_by_field_name("right");
             if left.zip(right).is_some_and(|(left, right)| {
-                let (literal, discriminant) = if let Some(discriminant) =
-                    TypeScriptApplicationState::discriminant_name(left, source)
-                {
-                    (
-                        TypeScriptApplicationState::string_literal_value(right, source),
-                        Some(discriminant),
-                    )
-                } else if let Some(discriminant) =
-                    TypeScriptApplicationState::discriminant_name(right, source)
-                {
-                    (
-                        TypeScriptApplicationState::string_literal_value(left, source),
-                        Some(discriminant),
-                    )
-                } else {
-                    (None, None)
+                let (literal, discriminant) =
+                    if let crate::typescript_discriminants::DiscriminantName::Recognized(
+                        discriminant,
+                    ) = TypeScriptApplicationState::discriminant_name(left, source)
+                    {
+                        (
+                            TypeScriptApplicationState::string_literal_value(right, source),
+                            discriminant,
+                        )
+                    } else if let crate::typescript_discriminants::DiscriminantName::Recognized(
+                        discriminant,
+                    ) = TypeScriptApplicationState::discriminant_name(right, source)
+                    {
+                        (
+                            TypeScriptApplicationState::string_literal_value(left, source),
+                            discriminant,
+                        )
+                    } else {
+                        return false;
+                    };
+                let literal_nodes::LiteralValue::Text(value) = literal else {
+                    return false;
                 };
-                TypeScriptApplicationState::is_equality_comparison(node, left, right, source)
-                    && literal.zip(discriminant).is_some_and(|(value, name)| {
-                        matches!(unregistered_values, UnregisteredDiscriminantPolicy::Reject)
-                            || TypeScriptApplicationState::enum_value_matches_discriminant(
-                                enum_values,
-                                value,
-                                name,
-                            )
-                    })
+                TypeScriptApplicationState::is_equality_comparison(node, left, right, source) && {
+                    matches!(unregistered_values, UnregisteredDiscriminantPolicy::Reject)
+                        || TypeScriptApplicationState::enum_value_matches_discriminant(
+                            enum_values,
+                            value,
+                            discriminant,
+                        )
+                }
             }) {
                 lines.push(first_line + node.start_position().row);
                 return;
@@ -468,8 +481,10 @@ impl TypeScriptApplicationState<'_> {
     ) {
         if node.kind() == "enum_assignment"
             && let Some(value) = node.child_by_field_name("value")
-            && let Some(literal) = TypeScriptApplicationState::string_literal_value(value, source)
-            && let Some(enum_name) = TypeScriptApplicationState::enclosing_enum_name(node, source)
+            && let literal_nodes::LiteralValue::Text(literal) =
+                TypeScriptApplicationState::string_literal_value(value, source)
+            && let crate::typescript_discriminants::EnumContext::Named(enum_name) =
+                TypeScriptApplicationState::enclosing_enum_name(node, source)
         {
             values
                 .entry(literal.to_owned())

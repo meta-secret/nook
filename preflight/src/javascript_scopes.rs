@@ -3,18 +3,19 @@ pub(super) struct ScopedBinding {
     pub(super) scope_start: usize,
     pub(super) scope_end: usize,
     pub(super) declaration_end: usize,
-    pub(super) wasm_type: Option<String>,
-    pub(super) wasm_module: Option<String>,
+    pub(super) provenance: BindingProvenance,
 }
 
 impl ScopedBinding {
     pub(super) fn scoped_binding(
         binding: tree_sitter::Node<'_>,
         source: &str,
-        wasm_type: Option<String>,
-        wasm_module: Option<String>,
-    ) -> Option<ScopedBinding> {
-        let name = binding.utf8_text(source.as_bytes()).ok()?.to_owned();
+        provenance: BindingProvenance,
+    ) -> Result<ScopedBinding, ScopeAdmissionFailure> {
+        let name = binding
+            .utf8_text(source.as_bytes())
+            .map_err(|_| ScopeAdmissionFailure::InvalidSource)?
+            .to_owned();
         let mut ancestor = binding.parent();
         while let Some(node) = ancestor {
             if matches!(
@@ -26,14 +27,15 @@ impl ScopedBinding {
                     | "arrow_function"
                     | "method_definition"
             ) {
-                let body = node.child_by_field_name("body")?;
-                return Some(ScopedBinding {
+                let body = node
+                    .child_by_field_name("body")
+                    .ok_or(ScopeAdmissionFailure::MissingFunctionBody)?;
+                return Ok(ScopedBinding {
                     name,
                     scope_start: body.start_byte(),
                     scope_end: body.end_byte(),
                     declaration_end: body.start_byte(),
-                    wasm_type,
-                    wasm_module,
+                    provenance,
                 });
             }
             if matches!(node.kind(), "statement_block" | "switch_body" | "program") {
@@ -44,7 +46,7 @@ impl ScopedBinding {
         let is_var = ScopedBinding::binding_is_var(binding, source);
         let mut ancestor = binding.parent();
         let scope = loop {
-            let candidate = ancestor?;
+            let candidate = ancestor.ok_or(ScopeAdmissionFailure::NoEnclosingScope)?;
             let function_body = candidate.kind() == "statement_block"
                 && candidate.parent().is_some_and(|parent| {
                     matches!(
@@ -65,13 +67,16 @@ impl ScopedBinding {
             }
             ancestor = candidate.parent();
         };
-        Some(ScopedBinding {
+        Ok(ScopedBinding {
             name,
             scope_start: scope.start_byte(),
             scope_end: scope.end_byte(),
-            declaration_end: binding.parent()?.parent()?.end_byte(),
-            wasm_type,
-            wasm_module,
+            declaration_end: binding
+                .parent()
+                .and_then(|parent| parent.parent())
+                .ok_or(ScopeAdmissionFailure::MissingDeclaration)?
+                .end_byte(),
+            provenance,
         })
     }
 }
@@ -97,15 +102,18 @@ impl ScopedBinding {
         name: &str,
         source: &str,
         bindings: &'a [ScopedBinding],
-    ) -> Option<&'a ScopedBinding> {
-        bindings.iter().find(|binding| {
+    ) -> VisibleBinding<'a> {
+        match bindings.iter().find(|binding| {
             binding.name == name
                 && (binding.declaration_end <= reference.start_byte()
                     || ScopedBinding::reference_may_capture_later_binding(reference, binding))
                 && binding.scope_start <= reference.start_byte()
                 && reference.end_byte() <= binding.scope_end
                 && !ScopedBinding::nested_scope_shadows(reference, binding, name, source)
-        })
+        }) {
+            Some(binding) => VisibleBinding::Visible(binding),
+            None => VisibleBinding::OutsideScope,
+        }
     }
 }
 
@@ -143,7 +151,10 @@ impl ScopedBinding {
         source: &str,
         bindings: &[ScopedBinding],
     ) -> bool {
-        ScopedBinding::visible_scoped_binding(reference, name, source, bindings).is_some()
+        matches!(
+            ScopedBinding::visible_scoped_binding(reference, name, source, bindings),
+            VisibleBinding::Visible(_)
+        )
     }
 }
 
@@ -477,9 +488,13 @@ impl ScopedBinding {
         binding: &ScopedBinding,
         source: &str,
     ) -> bool {
-        ScopedBinding::deferred_function(reference, binding, source).is_none_or(|function| {
-            ScopedBinding::deferred_function_call_end(function, source).is_some()
-        })
+        match ScopedBinding::deferred_function(reference, binding, source) {
+            DeferredContext::Immediate => true,
+            DeferredContext::Function(function) => matches!(
+                ScopedBinding::deferred_function_call_end(function, source),
+                Invocation::CompletesAt(_)
+            ),
+        }
     }
 }
 
@@ -488,9 +503,13 @@ impl ScopedBinding {
         reference: tree_sitter::Node<'_>,
         binding: &ScopedBinding,
         source: &str,
-    ) -> Option<usize> {
-        ScopedBinding::deferred_function(reference, binding, source)
-            .and_then(|function| ScopedBinding::deferred_function_call_end(function, source))
+    ) -> Invocation {
+        match ScopedBinding::deferred_function(reference, binding, source) {
+            DeferredContext::Immediate => Invocation::NotObserved,
+            DeferredContext::Function(function) => {
+                ScopedBinding::deferred_function_call_end(function, source)
+            }
+        }
     }
 }
 
@@ -499,7 +518,7 @@ impl ScopedBinding {
         reference: tree_sitter::Node<'a>,
         binding: &ScopedBinding,
         source: &str,
-    ) -> Option<tree_sitter::Node<'a>> {
+    ) -> DeferredContext<'a> {
         let mut ancestor = reference.parent();
         while let Some(function) = ancestor {
             if matches!(
@@ -514,26 +533,30 @@ impl ScopedBinding {
                             source: source,
                         })
                         .semantic_javascript_name()
+                        .ok()
                     })
                     .is_some()
             {
-                return Some(function);
+                return DeferredContext::Function(function);
             }
             ancestor = function.parent();
         }
-        None
+        DeferredContext::Immediate
     }
 }
 
 impl ScopedBinding {
-    fn deferred_function_call_end(function: tree_sitter::Node<'_>, source: &str) -> Option<usize> {
-        let name = function.child_by_field_name("name").and_then(|node| {
+    fn deferred_function_call_end(function: tree_sitter::Node<'_>, source: &str) -> Invocation {
+        let Some(name) = function.child_by_field_name("name").and_then(|node| {
             (JavaScriptLiteral {
                 node: node,
                 source: source,
             })
             .semantic_javascript_name()
-        })?;
+            .ok()
+        }) else {
+            return Invocation::NotObserved;
+        };
         let mut root = function;
         while let Some(parent) = root.parent() {
             root = parent;
@@ -548,7 +571,7 @@ impl ScopedBinding {
         name: &str,
         after: usize,
         source: &str,
-    ) -> Option<usize> {
+    ) -> Invocation {
         if node.kind() == "call_expression"
             && node.start_byte() >= after
             && let Some(callee) = node.child_by_field_name("function")
@@ -557,16 +580,26 @@ impl ScopedBinding {
                 source: source,
             })
             .semantic_javascript_name()
+            .ok()
             .as_deref()
                 == Some(name)
             && ScopedBinding::root_binding_is_visible(callee, name, source)
         {
-            return Some(node.end_byte());
+            return Invocation::CompletesAt(node.end_byte());
         }
         let mut cursor = node.walk();
-        node.named_children(&mut cursor)
-            .filter_map(|child| ScopedBinding::function_call_after(child, name, after, source))
-            .min()
+        let mut earliest = Invocation::NotObserved;
+        for child in node.named_children(&mut cursor) {
+            if let Invocation::CompletesAt(end) =
+                ScopedBinding::function_call_after(child, name, after, source)
+            {
+                earliest = match earliest {
+                    Invocation::CompletesAt(previous) => Invocation::CompletesAt(previous.min(end)),
+                    Invocation::NotObserved => Invocation::CompletesAt(end),
+                };
+            }
+        }
+        earliest
     }
 }
 use crate::javascript_literals::JavaScriptLiteral;
@@ -574,4 +607,31 @@ use crate::javascript_literals::JavaScriptLiteral;
 pub(super) enum BindingInvalidation {
     Retained,
     Invalidated,
+}
+
+pub(super) enum BindingProvenance {
+    Callable,
+    Class(String),
+    Module(String),
+}
+
+#[derive(Debug)]
+pub(super) enum ScopeAdmissionFailure {
+    InvalidSource,
+    MissingFunctionBody,
+    NoEnclosingScope,
+    MissingDeclaration,
+}
+
+pub(super) enum VisibleBinding<'scope> {
+    Visible(&'scope ScopedBinding),
+    OutsideScope,
+}
+enum DeferredContext<'tree> {
+    Immediate,
+    Function(tree_sitter::Node<'tree>),
+}
+pub(super) enum Invocation {
+    NotObserved,
+    CompletesAt(usize),
 }

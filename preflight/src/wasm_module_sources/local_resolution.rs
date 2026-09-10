@@ -1,64 +1,89 @@
 use super::*;
 
 impl WasmModuleSources<'_> {
-    pub(super) fn resolve_module(module: &str, source_path: &Path) -> Option<PathBuf> {
+    pub(super) fn resolve_module(
+        module: &str,
+        source_path: &Path,
+    ) -> Result<PathBuf, ModuleResolutionFailure> {
         if Path::new(module).is_absolute() {
             return WasmModuleSources::resolve_local_module(Path::new(module));
         }
         if !module.starts_with('.') {
             return WasmModuleSources::configured_alias_path(module, source_path);
         }
-        let parent = source_path.parent()?;
+        let parent = source_path
+            .parent()
+            .ok_or(ModuleResolutionFailure::ParentlessSource)?;
         let unresolved = WasmModuleSources::normalize_local_module_path(&parent.join(module));
         let stripped = WasmModuleSources::strip_module_extension(unresolved.clone());
         if WasmModuleSources::is_known_wasm_path(&stripped) {
-            return Some(unresolved);
+            return Ok(unresolved);
         }
         WasmModuleSources::resolve_local_module(&unresolved)
     }
 }
 
 impl WasmModuleSources<'_> {
-    pub(super) fn configured_alias_path(module: &str, source_path: &Path) -> Option<PathBuf> {
+    pub(super) fn configured_alias_path(
+        module: &str,
+        source_path: &Path,
+    ) -> Result<PathBuf, ModuleResolutionFailure> {
         for ancestor in source_path.ancestors() {
-            if let Some(path) =
+            if let Ok(path) =
                 WasmModuleSources::tsconfig_alias_path(&ancestor.join("tsconfig.json"), module)
             {
                 return WasmModuleSources::resolve_local_module(&path);
             }
         }
-        source_path.ancestors().find_map(|ancestor| {
-            fs::read_dir(ancestor)
-                .ok()?
-                .filter_map(Result::ok)
-                .find_map(|entry| {
-                    let config = entry.path().join("tsconfig.json");
-                    let path = WasmModuleSources::tsconfig_alias_path(&config, module)?;
-                    WasmModuleSources::resolve_local_module(&path)
-                })
-        })
+        for ancestor in source_path.ancestors() {
+            let Ok(entries) = fs::read_dir(ancestor) else {
+                continue;
+            };
+            for entry in entries.filter_map(Result::ok) {
+                let config = entry.path().join("tsconfig.json");
+                if let Ok(path) = WasmModuleSources::tsconfig_alias_path(&config, module)
+                    && let Ok(resolved) = WasmModuleSources::resolve_local_module(&path)
+                {
+                    return Ok(resolved);
+                }
+            }
+        }
+        Err(ModuleResolutionFailure::UnresolvedAlias)
     }
 }
 
 impl WasmModuleSources<'_> {
-    pub(super) fn tsconfig_alias_path(config: &Path, module: &str) -> Option<PathBuf> {
+    pub(super) fn tsconfig_alias_path(
+        config: &Path,
+        module: &str,
+    ) -> Result<PathBuf, ModuleResolutionFailure> {
+        let source =
+            fs::read_to_string(config).map_err(ModuleResolutionFailure::ConfigurationRead)?;
         let value: TypeScriptAliasConfiguration =
-            serde_json::from_str(&fs::read_to_string(config).ok()?).ok()?;
-        let paths = value.compiler_options.paths;
-        paths.iter().find_map(|(alias, targets)| {
+            serde_json::from_str(&source).map_err(ModuleResolutionFailure::ConfigurationSyntax)?;
+        for (alias, targets) in &value.compiler_options.paths {
             let suffix = if let Some(prefix) = alias.strip_suffix('*') {
-                module.strip_prefix(prefix)?
+                let Some(suffix) = module.strip_prefix(prefix) else {
+                    continue;
+                };
+                suffix
             } else if alias == module {
                 ""
             } else {
-                return None;
+                continue;
             };
-            let target = targets.first()?.as_str();
+            let Some(target) = targets.first() else {
+                continue;
+            };
             let target = target.strip_suffix('*').unwrap_or(target);
-            Some(WasmModuleSources::normalize_local_module_path(
-                &config.parent()?.join(format!("{target}{suffix}")),
-            ))
-        })
+            let Some(parent) = config.parent() else {
+                continue;
+            };
+            return Ok(WasmModuleSources::normalize_local_module_path(
+                &parent.join(format!("{target}{suffix}")),
+            ));
+        }
+        Err(ModuleResolutionFailure::UnresolvedAlias)
     }
 }
 
@@ -72,25 +97,25 @@ impl WasmModuleSources<'_> {
 }
 
 impl WasmModuleSources<'_> {
-    pub(super) fn resolve_local_module(path: &Path) -> Option<PathBuf> {
+    pub(super) fn resolve_local_module(path: &Path) -> Result<PathBuf, ModuleResolutionFailure> {
         if path.is_file() {
-            return Some(path.to_path_buf());
+            return Ok(path.to_path_buf());
         }
         if path.extension().is_none() {
             for extension in MODULE_EXTENSIONS {
                 let candidate = path.with_extension(extension);
                 if candidate.is_file() {
-                    return Some(candidate);
+                    return Ok(candidate);
                 }
             }
             for extension in MODULE_EXTENSIONS {
                 let candidate = path.join(format!("index.{extension}"));
                 if candidate.is_file() {
-                    return Some(candidate);
+                    return Ok(candidate);
                 }
             }
         }
-        None
+        Err(ModuleResolutionFailure::ModuleNotFound)
     }
 }
 
@@ -238,4 +263,13 @@ struct TypeScriptAliasConfiguration {
 #[derive(serde::Deserialize)]
 struct TypeScriptAliasOptions {
     paths: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Debug)]
+pub(super) enum ModuleResolutionFailure {
+    ParentlessSource,
+    UnresolvedAlias,
+    ModuleNotFound,
+    ConfigurationRead(std::io::Error),
+    ConfigurationSyntax(serde_json::Error),
 }

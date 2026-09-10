@@ -17,16 +17,20 @@ impl TypeScriptApplicationState<'_> {
     pub(crate) fn enclosing_enum_name<'a>(
         mut node: tree_sitter::Node<'_>,
         source: &'a str,
-    ) -> Option<&'a str> {
+    ) -> EnumContext<'a> {
         while let Some(parent) = node.parent() {
             if parent.kind() == "enum_declaration" {
-                return parent
+                return match parent
                     .child_by_field_name("name")
-                    .and_then(|name| name.utf8_text(source.as_bytes()).ok());
+                    .and_then(|name| name.utf8_text(source.as_bytes()).ok())
+                {
+                    Some(name) => EnumContext::Named(name),
+                    None => EnumContext::Malformed,
+                };
             }
             node = parent;
         }
-        None
+        EnumContext::Outside
     }
 }
 
@@ -51,13 +55,28 @@ impl TypeScriptApplicationState<'_> {
     pub(crate) fn discriminant_name<'a>(
         node: tree_sitter::Node<'_>,
         source: &'a str,
-    ) -> Option<&'a str> {
+    ) -> DiscriminantName<'a> {
         let name_node = match node.kind() {
             "identifier" => node,
-            "member_expression" => node.child_by_field_name("property")?,
-            _ => return None,
+            "member_expression" => match node.child_by_field_name("property") {
+                Some(property) => property,
+                None => return DiscriminantName::Unrecognized,
+            },
+            _ => return DiscriminantName::Unrecognized,
         };
-        let name = name_node.utf8_text(source.as_bytes()).ok()?;
-        DISCRIMINANT_NAMES.contains(&name).then_some(name)
+        match name_node.utf8_text(source.as_bytes()) {
+            Ok(name) if DISCRIMINANT_NAMES.contains(&name) => DiscriminantName::Recognized(name),
+            _ => DiscriminantName::Unrecognized,
+        }
     }
+}
+
+pub(crate) enum EnumContext<'source> {
+    Named(&'source str),
+    Outside,
+    Malformed,
+}
+pub(crate) enum DiscriminantName<'source> {
+    Recognized(&'source str),
+    Unrecognized,
 }

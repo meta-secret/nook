@@ -34,13 +34,18 @@ impl WasmInstanceFactories<'_> {
                     source,
                     wasm_class_bindings,
                 )
+                .ok()
             })
             .or_else(|| {
-                WasmInstanceFactories::inferred_wasm_class(node, source, wasm_class_bindings)
+                WasmInstanceFactories::inferred_wasm_class(node, source, wasm_class_bindings).ok()
             })
-            && let Some(binding) = WasmInstanceFactories::callable_declaration_binding(node)
-            && let Some(mut factory) =
-                ScopedBinding::scoped_binding(binding, source, Some(wasm_type), None)
+            && let Ok(binding) = WasmInstanceFactories::callable_declaration_binding(node)
+            && let Some(mut factory) = ScopedBinding::scoped_binding(
+                binding,
+                source,
+                crate::javascript_scopes::BindingProvenance::Class(wasm_type),
+            )
+            .ok()
         {
             if matches!(
                 node.kind(),
@@ -70,43 +75,34 @@ impl WasmInstanceFactories<'_> {
 
 #[rustfmt::skip]
 impl WasmInstanceFactories<'_> {
-fn inferred_wasm_class(function: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>) -> Option<String> {
-    let body = function.child_by_field_name("body")?;
-    if body.kind() == "statement_block" {
-        WasmInstanceFactories::find_returned_wasm_class(body, source, classes)
-    } else {
-        WasmInstanceFactories::constructed_wasm_class(body, source, classes)
-    }
+fn inferred_wasm_class(function: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>) -> Result<String, FactoryResolutionFailure> {
+    let body = function.child_by_field_name("body").ok_or(FactoryResolutionFailure::MissingBody)?;
+    if body.kind() == "statement_block" { Self::find_returned_wasm_class(body, source, classes) } else { Self::constructed_wasm_class(body, source, classes) }
 }
 }
 
 #[rustfmt::skip]
 impl WasmInstanceFactories<'_> {
-fn find_returned_wasm_class(node: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>) -> Option<String> {
-    if node.kind() == "return_statement" {
-        return WasmInstanceFactories::constructed_wasm_class(node, source, classes);
-    }
-    if matches!(node.kind(), "function_declaration" | "function_expression" | "generator_function_declaration" | "generator_function" | "arrow_function") {
-        return None;
-    }
+fn find_returned_wasm_class(node: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>) -> Result<String, FactoryResolutionFailure> {
+    if node.kind() == "return_statement" { return Self::constructed_wasm_class(node, source, classes); }
+    if matches!(node.kind(), "function_declaration" | "function_expression" | "generator_function_declaration" | "generator_function" | "arrow_function") { return Err(FactoryResolutionFailure::NestedFunction); }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .find_map(|child| WasmInstanceFactories::find_returned_wasm_class(child, source, classes))
+    for child in node.named_children(&mut cursor) { if let Ok(class) = Self::find_returned_wasm_class(child, source, classes) { return Ok(class); } }
+    Err(FactoryResolutionFailure::NoConstructedClass)
 }
 }
 
 #[rustfmt::skip]
 impl WasmInstanceFactories<'_> {
-fn constructed_wasm_class(node: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>) -> Option<String> {
+fn constructed_wasm_class(node: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>) -> Result<String, FactoryResolutionFailure> {
     if node.kind() == "new_expression" {
-        return node
-            .child_by_field_name("constructor")
-            .and_then(|constructor| (JavaScriptLiteral { node: constructor, source: source }).semantic_javascript_name())
-            .and_then(|name| classes.get(&name).cloned());
+        let constructor = node.child_by_field_name("constructor").ok_or(FactoryResolutionFailure::MissingBinding)?;
+        let name = (JavaScriptLiteral { node: constructor, source }).semantic_javascript_name().map_err(FactoryResolutionFailure::Literal)?;
+        return classes.get(&name).cloned().ok_or(FactoryResolutionFailure::UnboundClass);
     }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .find_map(|child| WasmInstanceFactories::constructed_wasm_class(child, source, classes))
+    for child in node.named_children(&mut cursor) { if let Ok(class) = Self::constructed_wasm_class(child, source, classes) { return Ok(class); } }
+    Err(FactoryResolutionFailure::NoConstructedClass)
 }
 }
 
@@ -122,10 +118,10 @@ pub(super) fn collect_typed_wasm_instances(node: tree_sitter::Node<'_>, source: 
         })
         && let Ok(text) = annotation.utf8_text(source.as_bytes())
         && let Some(wasm_type) = classes.get(text.trim().trim_start_matches(':').trim())
-        && let Some(mut scoped) = ScopedBinding::scoped_binding(binding, source, Some(wasm_type.clone()), None)
+        && let Ok(mut scoped) = ScopedBinding::scoped_binding(binding, source, crate::javascript_scopes::BindingProvenance::Class(wasm_type.clone()))
     {
         if node.kind() == "public_field_definition"
-            && let Some(name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
+            && let Ok(name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
         {
             scoped.name = format!("this.{name}");
             if let Some(body) = node.parent() {
@@ -159,9 +155,10 @@ impl WasmInstanceFactories<'_> {
                     source: source,
                 })
                 .static_javascript_string()
+                .ok()
             })
         {
-            if let Some(local) = WasmInstanceFactories::default_import_binding(node, source)
+            if let Ok(local) = WasmInstanceFactories::default_import_binding(node, source)
                 && called_bindings.contains(&local)
                 && let Some(wasm_type) = WasmModuleSources::wasm_factory_return_type(
                     &module,
@@ -199,14 +196,26 @@ impl WasmInstanceFactories<'_> {
 }
 
 impl WasmInstanceFactories<'_> {
-    fn default_import_binding(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-        let clause = node
+    fn default_import_binding(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> Result<String, FactoryResolutionFailure> {
+        let text = node
             .utf8_text(source.as_bytes())
-            .ok()?
+            .map_err(|_| FactoryResolutionFailure::InvalidSource)?;
+        let clause = text
             .trim_start()
-            .strip_prefix("import ")?;
-        let binding = clause.split_whitespace().next()?.trim_end_matches(',');
-        (!matches!(binding, "type" | "{" | "*")).then(|| binding.to_owned())
+            .strip_prefix("import ")
+            .ok_or(FactoryResolutionFailure::NotDefaultImport)?;
+        let binding = clause
+            .split_whitespace()
+            .next()
+            .ok_or(FactoryResolutionFailure::MissingBinding)?
+            .trim_end_matches(',');
+        if matches!(binding, "type" | "{" | "*") {
+            return Err(FactoryResolutionFailure::NotDefaultImport);
+        }
+        Ok(binding.to_owned())
     }
 }
 
@@ -228,6 +237,7 @@ impl WasmInstanceFactories<'_> {
                     source: source,
                 })
                 .semantic_javascript_name()
+                .ok()
             })
         {
             for called in called_bindings
@@ -249,14 +259,14 @@ impl WasmInstanceFactories<'_> {
         if node.kind() == "import_specifier"
             && !WasmInstanceFactories::node_is_type_only_import(node, source)
             && let Some(imported_node) = node.child_by_field_name("name")
-            && let Some(imported_name) = (JavaScriptLiteral {
+            && let Ok(imported_name) = (JavaScriptLiteral {
                 node: imported_node,
                 source: source,
             })
             .semantic_javascript_name()
         {
             let local_node = node.child_by_field_name("alias").unwrap_or(imported_node);
-            if let Some(local_name) = (JavaScriptLiteral {
+            if let Ok(local_name) = (JavaScriptLiteral {
                 node: local_node,
                 source: source,
             })
@@ -307,13 +317,13 @@ impl WasmInstanceFactories<'_> {
             && let Some(property) = value
                 .child_by_field_name("property")
                 .or_else(|| value.child_by_field_name("index"))
-            && let Some(callable_name) = (JavaScriptLiteral {
+            && let Ok(callable_name) = (JavaScriptLiteral {
                 node: property,
                 source: source,
             })
             .semantic_javascript_name()
             && callable_names.contains(&callable_name)
-            && let Some(receiver_name) = (JavaScriptLiteral {
+            && let Ok(receiver_name) = (JavaScriptLiteral {
                 node: object,
                 source: source,
             })
@@ -343,7 +353,7 @@ impl WasmInstanceFactories<'_> {
     ) -> HashSet<String> {
         if matches!(node.kind(), "member_expression" | "subscript_expression")
             && let Some(object) = node.child_by_field_name("object")
-            && let Some(factory_name) = WasmInstanceFactories::called_identifier(object, source)
+            && let Ok(factory_name) = WasmInstanceFactories::called_identifier(object, source)
         {
             called_bindings.insert(factory_name);
         }
@@ -351,7 +361,7 @@ impl WasmInstanceFactories<'_> {
             && let Some(binding) = node
                 .child_by_field_name("name")
                 .or_else(|| node.child_by_field_name("left"))
-            && let Some(binding_name) = (JavaScriptLiteral {
+            && let Ok(binding_name) = (JavaScriptLiteral {
                 node: binding,
                 source: source,
             })
@@ -360,7 +370,7 @@ impl WasmInstanceFactories<'_> {
             && let Some(value) = node
                 .child_by_field_name("value")
                 .or_else(|| node.child_by_field_name("right"))
-            && let Some(factory_name) = WasmInstanceFactories::called_identifier(value, source)
+            && let Ok(factory_name) = WasmInstanceFactories::called_identifier(value, source)
         {
             called_bindings.insert(factory_name);
         }
@@ -378,37 +388,52 @@ impl WasmInstanceFactories<'_> {
 }
 
 impl WasmInstanceFactories<'_> {
-    fn called_identifier(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-        let node = WasmInstanceFactories::unwrap_transparent_expression(node);
+    fn called_identifier(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> Result<String, FactoryResolutionFailure> {
+        let node = Self::unwrap_transparent_expression(node);
         if node.kind() == "await_expression" {
             let mut cursor = node.walk();
-            return node
-                .named_children(&mut cursor)
-                .find_map(|child| WasmInstanceFactories::called_identifier(child, source));
+            for child in node.named_children(&mut cursor) {
+                if let Ok(name) = Self::called_identifier(child, source) {
+                    return Ok(name);
+                }
+            }
+            return Err(FactoryResolutionFailure::NotInvocation);
         }
         if node.kind() != "call_expression" {
-            return None;
+            return Err(FactoryResolutionFailure::NotInvocation);
         }
-        let function = node.child_by_field_name("function")?;
-        matches!(function.kind(), "identifier" | "member_expression")
-            .then(|| {
-                function
-                    .utf8_text(source.as_bytes())
-                    .ok()
-                    .map(str::to_owned)
-            })
-            .flatten()
+        let function = node
+            .child_by_field_name("function")
+            .ok_or(FactoryResolutionFailure::MissingBinding)?;
+        if !matches!(function.kind(), "identifier" | "member_expression") {
+            return Err(FactoryResolutionFailure::NotInvocation);
+        }
+        function
+            .utf8_text(source.as_bytes())
+            .map(str::to_owned)
+            .map_err(|_| FactoryResolutionFailure::InvalidSource)
     }
 }
 
 impl WasmInstanceFactories<'_> {
-    fn callable_declaration_binding(node: tree_sitter::Node<'_>) -> Option<tree_sitter::Node<'_>> {
-        node.child_by_field_name("name").or_else(|| {
-            let declarator = node.parent()?;
-            (declarator.kind() == "variable_declarator")
-                .then(|| declarator.child_by_field_name("name"))
-                .flatten()
-        })
+    fn callable_declaration_binding(
+        node: tree_sitter::Node<'_>,
+    ) -> Result<tree_sitter::Node<'_>, FactoryResolutionFailure> {
+        if let Some(name) = node.child_by_field_name("name") {
+            return Ok(name);
+        }
+        let declarator = node
+            .parent()
+            .ok_or(FactoryResolutionFailure::MissingBinding)?;
+        if declarator.kind() != "variable_declarator" {
+            return Err(FactoryResolutionFailure::MissingBinding);
+        }
+        declarator
+            .child_by_field_name("name")
+            .ok_or(FactoryResolutionFailure::MissingBinding)
     }
 }
 
@@ -417,15 +442,21 @@ impl WasmInstanceFactories<'_> {
         node: tree_sitter::Node<'_>,
         source: &str,
         wasm_class_bindings: &HashMap<String, String>,
-    ) -> Option<String> {
-        let annotation = node.utf8_text(source.as_bytes()).ok()?.trim();
+    ) -> Result<String, FactoryResolutionFailure> {
+        let annotation = node
+            .utf8_text(source.as_bytes())
+            .map_err(|_| FactoryResolutionFailure::InvalidSource)?
+            .trim();
         let actual = annotation.strip_prefix(':').unwrap_or(annotation).trim();
         let actual = actual
             .strip_prefix("Promise<")
             .and_then(|inner| inner.strip_suffix('>'))
             .unwrap_or(actual)
             .trim();
-        wasm_class_bindings.get(actual).cloned()
+        wasm_class_bindings
+            .get(actual)
+            .cloned()
+            .ok_or(FactoryResolutionFailure::UnboundClass)
     }
 }
 
@@ -471,4 +502,17 @@ impl WasmInstanceFactories<'_> {
         }
         node
     }
+}
+
+#[derive(Debug)]
+enum FactoryResolutionFailure {
+    MissingBody,
+    NestedFunction,
+    NoConstructedClass,
+    MissingBinding,
+    UnboundClass,
+    InvalidSource,
+    NotDefaultImport,
+    NotInvocation,
+    Literal(crate::javascript_literals::JavaScriptLiteralFailure),
 }

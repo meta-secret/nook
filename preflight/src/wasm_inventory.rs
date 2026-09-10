@@ -46,7 +46,7 @@ impl WasmInventory {
                     {
                         let name = function.sig.ident.to_string();
                         self.callable_names.insert(name.clone());
-                        if let Some(returned) =
+                        if let WasmReturnType::Named(returned) =
                             WasmTypeInventory::wasm_return_type(&function.sig.output)
                         {
                             self.types.free_returns.insert(name, returned);
@@ -80,7 +80,7 @@ impl WasmInventory {
                         {
                             let name = function.sig.ident.to_string();
                             self.callable_names.insert(name.clone());
-                            if let Some(owner) = &owner {
+                            if let ImplementationType::Named(owner) = &owner {
                                 self.types
                                     .methods
                                     .entry(owner.clone())
@@ -112,39 +112,47 @@ impl WasmInventory {
 }
 
 impl WasmTypeInventory {
-    fn wasm_return_type(output: &syn::ReturnType) -> Option<String> {
+    fn wasm_return_type(output: &syn::ReturnType) -> WasmReturnType {
         let syn::ReturnType::Type(_, ty) = output else {
-            return None;
+            return WasmReturnType::Unit;
         };
         let syn::Type::Path(path) = ty.as_ref() else {
-            return None;
+            return WasmReturnType::Unsupported;
         };
-        let segment = path.path.segments.last()?;
+        let Some(segment) = path.path.segments.last() else {
+            return WasmReturnType::Unsupported;
+        };
         if matches!(
             segment.ident.to_string().as_str(),
             "Result" | "Option" | "Promise"
         ) && let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments
         {
-            return arguments.args.iter().find_map(|argument| match argument {
-                syn::GenericArgument::Type(ty) => WasmTypeInventory::wasm_return_type(
-                    &syn::ReturnType::Type(RArrow::default(), Box::new(ty.clone())),
-                ),
-                _ => None,
-            });
+            for argument in &arguments.args {
+                if let syn::GenericArgument::Type(ty) = argument {
+                    let resolved = Self::wasm_return_type(&syn::ReturnType::Type(
+                        RArrow::default(),
+                        Box::new(ty.clone()),
+                    ));
+                    if matches!(resolved, WasmReturnType::Named(_)) {
+                        return resolved;
+                    }
+                }
+            }
+            return WasmReturnType::Unsupported;
         }
-        Some(segment.ident.to_string())
+        WasmReturnType::Named(segment.ident.to_string())
     }
 }
 
 impl WasmTypeInventory {
-    fn implementation_type_name(ty: &syn::Type) -> Option<String> {
+    fn implementation_type_name(ty: &syn::Type) -> ImplementationType {
         let syn::Type::Path(path) = ty else {
-            return None;
+            return ImplementationType::Unsupported;
         };
-        path.path
-            .segments
-            .last()
-            .map(|segment| segment.ident.to_string())
+        match path.path.segments.last() {
+            Some(segment) => ImplementationType::Named(segment.ident.to_string()),
+            None => ImplementationType::Unsupported,
+        }
     }
 }
 
@@ -228,4 +236,14 @@ pub(crate) struct WasmInventory {
     pub(crate) callable_names: HashSet<String>,
     pub(crate) type_names: HashSet<String>,
     pub(crate) types: WasmTypeInventory,
+}
+
+enum WasmReturnType {
+    Unit,
+    Named(String),
+    Unsupported,
+}
+enum ImplementationType {
+    Named(String),
+    Unsupported,
 }

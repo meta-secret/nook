@@ -130,7 +130,8 @@ impl ScopedCallableInventory {
         if !matches!(
             function.kind(),
             "member_expression" | "subscript_expression"
-        ) || DynamicWasmCallables::member_name(function, source).as_deref() != Some("then")
+        ) || !DynamicWasmCallables::member_name(function, source)
+            .is_ok_and(|name| name == "then")
         {
             return self;
         }
@@ -171,10 +172,10 @@ impl ScopedCallableInventory {
                 if pattern.kind() == "object_pattern" {
                     self = self.record_callable_pattern_bindings(pattern, &context);
                 } else if pattern.kind() == "identifier"
-                    && let Some(namespace) = DynamicWasmCallables::scoped_parameter_binding(
+                    && let Ok(namespace) = DynamicWasmCallables::scoped_parameter_binding(
                         pattern,
                         source,
-                        Some(module.clone()),
+                        crate::javascript_scopes::BindingProvenance::Module(module.clone()),
                     )
                 {
                     self.scoped_wasm_namespaces.push(namespace);
@@ -202,11 +203,12 @@ impl ScopedCallableInventory {
     ) -> Self {
         let mut cursor = pattern.walk();
         for child in pattern.named_children(&mut cursor) {
-            let (authored, binding) = DynamicWasmCallables::pattern_pair(child);
-            let (Some(authored), Some(binding)) = (authored, binding) else {
+            let PatternBinding::Pair { authored, binding } =
+                DynamicWasmCallables::pattern_pair(child)
+            else {
                 continue;
             };
-            let Some(authored_name) = (JavaScriptLiteral {
+            let Ok(authored_name) = (JavaScriptLiteral {
                 node: authored,
                 source: context.source,
             })
@@ -227,17 +229,25 @@ impl ScopedCallableInventory {
                 source: context.source,
             })
             .semantic_javascript_name()
-            .is_some_and(|binding_name| binding_name != authored_name)
+            .is_ok_and(|binding_name| binding_name != authored_name)
             {
                 self.lines
                     .push(context.first_line + authored.start_position().row);
             }
             let scoped = if matches!(context.binding, BindingContext::Parameter) {
-                DynamicWasmCallables::scoped_parameter_binding(binding, context.source, None)
+                DynamicWasmCallables::scoped_parameter_binding(
+                    binding,
+                    context.source,
+                    crate::javascript_scopes::BindingProvenance::Callable,
+                )
             } else {
-                ScopedBinding::scoped_binding(binding, context.source, None, None)
+                ScopedBinding::scoped_binding(
+                    binding,
+                    context.source,
+                    crate::javascript_scopes::BindingProvenance::Callable,
+                )
             };
-            if let Some(scoped) = scoped {
+            if let Ok(scoped) = scoped {
                 self.bindings.push(scoped);
             }
         }
@@ -246,24 +256,28 @@ impl ScopedCallableInventory {
 }
 
 impl DynamicWasmCallables<'_> {
-    fn pattern_pair(
-        child: tree_sitter::Node<'_>,
-    ) -> (Option<tree_sitter::Node<'_>>, Option<tree_sitter::Node<'_>>) {
-        if child.kind() == "pair_pattern" {
-            return (
+    fn pattern_pair(child: tree_sitter::Node<'_>) -> PatternBinding<'_> {
+        match child.kind() {
+            "pair_pattern" => match (
                 child.child_by_field_name("key"),
                 child.child_by_field_name("value"),
-            );
+            ) {
+                (Some(authored), Some(binding)) => PatternBinding::Pair { authored, binding },
+                _ => PatternBinding::Unsupported,
+            },
+            "shorthand_property_identifier_pattern" => PatternBinding::Pair {
+                authored: child,
+                binding: child,
+            },
+            "object_assignment_pattern" => match child.child_by_field_name("left") {
+                Some(binding) => PatternBinding::Pair {
+                    authored: binding,
+                    binding,
+                },
+                None => PatternBinding::Unsupported,
+            },
+            _ => PatternBinding::Unsupported,
         }
-        if child.kind() == "shorthand_property_identifier_pattern" {
-            return (Some(child), Some(child));
-        }
-        if child.kind() == "object_assignment_pattern"
-            && let Some(binding) = child.child_by_field_name("left")
-        {
-            return (Some(binding), Some(binding));
-        }
-        (None, None)
     }
 }
 
@@ -271,42 +285,49 @@ impl DynamicWasmCallables<'_> {
     fn scoped_parameter_binding(
         binding: tree_sitter::Node<'_>,
         source: &str,
-        wasm_module: Option<String>,
-    ) -> Option<ScopedBinding> {
-        let name = binding.utf8_text(source.as_bytes()).ok()?.to_owned();
+        provenance: crate::javascript_scopes::BindingProvenance,
+    ) -> Result<ScopedBinding, crate::javascript_scopes::ScopeAdmissionFailure> {
+        let name = binding
+            .utf8_text(source.as_bytes())
+            .map_err(|_| crate::javascript_scopes::ScopeAdmissionFailure::InvalidSource)?
+            .to_owned();
         let mut ancestor = binding.parent();
         while let Some(function) = ancestor {
             if matches!(
                 function.kind(),
                 "arrow_function" | "function_expression" | "generator_function"
             ) {
-                let body = function.child_by_field_name("body")?;
-                return Some(ScopedBinding {
+                let body = function
+                    .child_by_field_name("body")
+                    .ok_or(crate::javascript_scopes::ScopeAdmissionFailure::MissingFunctionBody)?;
+                return Ok(ScopedBinding {
                     name,
                     scope_start: body.start_byte(),
                     scope_end: body.end_byte(),
                     declaration_end: body.start_byte(),
-                    wasm_type: None,
-                    wasm_module,
+                    provenance,
                 });
             }
             ancestor = function.parent();
         }
-        None
+        Err(crate::javascript_scopes::ScopeAdmissionFailure::NoEnclosingScope)
     }
 }
 
 impl DynamicWasmCallables<'_> {
-    fn member_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-        node.child_by_field_name("property")
+    fn member_name(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> Result<String, crate::javascript_literals::JavaScriptLiteralFailure> {
+        let property = node
+            .child_by_field_name("property")
             .or_else(|| node.child_by_field_name("index"))
-            .and_then(|property| {
-                (JavaScriptLiteral {
-                    node: property,
-                    source: source,
-                })
-                .semantic_javascript_name()
-            })
+            .ok_or(crate::javascript_literals::JavaScriptLiteralFailure::MissingCallableName)?;
+        (JavaScriptLiteral {
+            node: property,
+            source,
+        })
+        .semantic_javascript_name()
     }
 }
 
@@ -314,4 +335,12 @@ impl DynamicWasmCallables<'_> {
 enum BindingContext {
     Declaration,
     Parameter,
+}
+
+enum PatternBinding<'tree> {
+    Pair {
+        authored: tree_sitter::Node<'tree>,
+        binding: tree_sitter::Node<'tree>,
+    },
+    Unsupported,
 }

@@ -455,7 +455,8 @@ impl TypeScriptDomainBoundary<'_> {
             }
 
             let function_line = index + 1;
-            let Some(body_start) = TypeScriptDomainBoundary::function_body_start(&lines, index)
+            let FunctionBody::Located(body_start) =
+                TypeScriptDomainBoundary::function_body_start(&lines, index)
             else {
                 index += 1;
                 continue;
@@ -623,7 +624,7 @@ impl TypeScriptDomainBoundary<'_> {
 }
 
 impl TypeScriptDomainBoundary<'_> {
-    pub(super) fn function_body_start(lines: &[&str], start: usize) -> Option<usize> {
+    pub(super) fn function_body_start(lines: &[&str], start: usize) -> FunctionBody {
         let mut parentheses = 0_i32;
         for (index, line) in lines.iter().enumerate().skip(start) {
             for character in line.chars() {
@@ -634,10 +635,10 @@ impl TypeScriptDomainBoundary<'_> {
                 }
             }
             if parentheses == 0 && line.trim_end().ends_with('{') {
-                return Some(index);
+                return FunctionBody::Located(index);
             }
         }
-        None
+        FunctionBody::Unterminated
     }
 }
 
@@ -682,32 +683,39 @@ impl TypeScriptDomainBoundary<'_> {
         arguments
             .iter()
             .all(|argument| TypeScriptDomainBoundary::is_typescript_identifier(argument))
-            && TypeScriptDomainBoundary::forwarded_parameters(declaration)
-                .is_some_and(|parameters| parameters == arguments)
+            && matches!(TypeScriptDomainBoundary::forwarded_parameters(declaration), ForwardedParameters::Identifiers(parameters) if parameters == arguments)
     }
 }
 
 impl TypeScriptDomainBoundary<'_> {
-    pub(super) fn forwarded_parameters(declaration: &str) -> Option<Vec<&str>> {
-        let open = declaration.find('(')?;
-        let close = declaration.rfind(')')?;
+    pub(super) fn forwarded_parameters(declaration: &str) -> ForwardedParameters<'_> {
+        let Some(open) = declaration.find('(') else {
+            return ForwardedParameters::Unsupported;
+        };
+        let Some(close) = declaration.rfind(')') else {
+            return ForwardedParameters::Unsupported;
+        };
         let parameters = declaration[open + 1..close].trim();
         if parameters.is_empty() {
-            return Some(Vec::new());
+            return ForwardedParameters::Identifiers(Vec::new());
         }
         if parameters.contains("=>") || parameters.contains(['{', '[', '<']) {
-            return None;
+            return ForwardedParameters::Unsupported;
         }
-        parameters
+        let mut identifiers = Vec::new();
+        for parameter in parameters
             .split(',')
             .map(str::trim)
             .filter(|parameter| !parameter.is_empty())
-            .map(|parameter| {
-                let end = parameter.find([':', '?']).unwrap_or(parameter.len());
-                let name = parameter[..end].trim();
-                TypeScriptDomainBoundary::is_typescript_identifier(name).then_some(name)
-            })
-            .collect()
+        {
+            let end = parameter.find([':', '?']).unwrap_or(parameter.len());
+            let name = parameter[..end].trim();
+            if !TypeScriptDomainBoundary::is_typescript_identifier(name) {
+                return ForwardedParameters::Unsupported;
+            }
+            identifiers.push(name);
+        }
+        ForwardedParameters::Identifiers(identifiers)
     }
 }
 
@@ -748,4 +756,13 @@ mod tests {
         let source = "const conflicts = $state.raw<NookSecurityConflict[]>([]);";
         assert!(TypeScriptDomainBoundary::inline_object_collection_state_lines(source).is_empty());
     }
+}
+
+enum FunctionBody {
+    Located(usize),
+    Unterminated,
+}
+enum ForwardedParameters<'source> {
+    Identifiers(Vec<&'source str>),
+    Unsupported,
 }
