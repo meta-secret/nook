@@ -266,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn projection_integrity_prioritizes_schema_and_conflict_states() -> EventResult<()> {
+    fn projection_integrity_prioritizes_schema_and_conflict_states() {
         let mut projection = VaultProjection::default();
         assert_eq!(projection.integrity(), ProjectionIntegrity::Resolved);
 
@@ -288,7 +288,6 @@ mod tests {
             projection.integrity(),
             ProjectionIntegrity::UnresolvedSchema
         );
-        Ok(())
     }
 
     #[test]

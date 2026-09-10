@@ -282,11 +282,8 @@ mod tests {
     }
 
     #[test]
-    fn event_id_typed_boundary_rejects_every_malformed_digest_shape() -> anyhow::Result<()> {
-        assert!(matches!(
-            serde_json::from_str::<EventId>("\"not-an-event-id\""),
-            Err(_)
-        ));
+    fn event_id_typed_boundary_rejects_every_malformed_digest_shape() {
+        assert!(serde_json::from_str::<EventId>("\"not-an-event-id\"").is_err());
         assert!(matches!(
             EventId::parse("sha256u:short"),
             Err(EventError::EventIdInvalidDigest { .. })
@@ -306,15 +303,11 @@ mod tests {
         assert_eq!(trusted.as_ref(), trusted.as_str());
         assert_eq!(trusted.to_string(), trusted.as_str());
         assert_eq!(trusted.clone().into_inner(), trusted.as_str());
-        Ok(())
     }
 
     #[test]
     fn signature_typed_boundary_rejects_malformed_and_unverified_values() -> anyhow::Result<()> {
-        assert!(matches!(
-            serde_json::from_str::<Ed25519Signature>("\"bad-signature\""),
-            Err(_)
-        ));
+        assert!(serde_json::from_str::<Ed25519Signature>("\"bad-signature\"").is_err());
         assert!(Ed25519Signature::parse("ed25519:not-hex").is_err());
         assert!(matches!(
             Ed25519Signature::parse("ed25519:00"),
