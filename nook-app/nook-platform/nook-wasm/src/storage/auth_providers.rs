@@ -5,11 +5,11 @@
 //! identity so nothing sensitive is stored in plaintext. Pure snapshot
 //! transforms live in `nook_core`; this module adds the `IndexedDB` I/O and sealing.
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record::PriorAppAuthorization;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::{
     StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
     StoredOAuthRefreshCredential,
@@ -18,7 +18,7 @@ use nook_core::{
 mod publication;
 mod rollback_projection;
 use crate::NookError;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::{IdbPutStringRequest, NookDatabase};
 use publication::ProviderSnapshotStore;
 pub(crate) use publication::{PresealedProviderSnapshotPublication, ProviderSnapshotPublication};
@@ -26,7 +26,7 @@ pub(crate) use publication::{PresealedProviderSnapshotPublication, ProviderSnaps
 use rexie::{ObjectStore, Rexie, TransactionMode};
 use serde_json::Value;
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::AuthProvidersSnapshotData;
 use nook_core::{DeviceIdentity, NormalizedAuthSnapshot};
 
@@ -989,5 +989,4 @@ mod wasm_idb_tests {
 
 pub(crate) use rollback_projection::{
     ProviderDbLegacySnapshotBelongsToIdentity, ProviderDbProjectionsMatch,
-    ProviderDbRequireCompatibleLegacySnapshot,
 };

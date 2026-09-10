@@ -66,7 +66,7 @@ function approvalFixture() {
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  wasm.approveExtensionDevice.mockResolvedValue(undefined)
+  wasm.approveExtensionDevice.mockImplementation(async () => {})
 })
 
 describe('extension vault approval', () => {

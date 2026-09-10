@@ -8,19 +8,19 @@
 //! This companion record is deliberately separate from `device_identity_wrapped`.
 //! Corrupt or future descriptive metadata must never block device-key unlock.
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::NookError;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record::PriorAppAuthorization;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db::StoredStringRecord;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::{IdbPutStringRequest, NookDatabase, SaveWrappedDeviceIdentityRequest};
 use js_sys::Date;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::AuthenticatorGuidEvidence;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::DiscardedClientEnvironment;
 use nook_core::IsoTimestamp;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -34,7 +34,7 @@ pub(crate) use nook_core::{
     PasskeyLastUsedAtEvidence,
 };
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use super::indexed_db;
 use super::indexed_db::{StringUpdateGuard, StringUpdateResult};
 
@@ -115,14 +115,13 @@ impl AppPasskeyCreation<'_> {
                     expected: credential_fingerprint,
                 },
                 update: move |profile: DeviceAccessProfile| {
-                    profile = profile.record_passkey_created(
+                    Ok(profile.record_passkey_created(
                         credential_fingerprint,
                         nook_name,
                         observation,
                         now,
                         ceremony,
-                    );
-                    Ok(profile)
+                    ))
                 },
             })
             .await
@@ -153,8 +152,7 @@ impl AppPasskeyUse<'_> {
                     expected: credential_fingerprint,
                 },
                 update: move |profile: DeviceAccessProfile| {
-                    profile = profile.record_passkey_used(credential_fingerprint, observation, now);
-                    Ok(profile)
+                    Ok(profile.record_passkey_used(credential_fingerprint, observation, now))
                 },
             })
             .await
@@ -219,7 +217,7 @@ impl AppPasskeyNameUpdate<'_> {
                     app_id,
                     expected: credential_fingerprint,
                 },
-                update: move |mut profile: DeviceAccessProfile| {
+                update: move |profile: DeviceAccessProfile| {
                     profile
                         .set_passkey_name(credential_fingerprint, normalized)
                         .map_err(|error| NookError::Database(error.to_string()))

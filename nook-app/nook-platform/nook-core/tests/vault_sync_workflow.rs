@@ -52,7 +52,7 @@ fn local_save_then_fan_out_replicates_to_all_providers() -> anyhow::Result<()> {
     ]);
 
     let completed = VaultSyncFanOut::new(local, remotes).run()?;
-    let (local, remotes, results) = (
+    let (_, remotes, results) = (
         completed.stores.local,
         completed.stores.remotes,
         completed.actions,
@@ -168,7 +168,7 @@ fn resolve_conflict_keep_local_then_fan_out_unifies_providers() -> anyhow::Resul
         MemoryVaultStore::with_blob(VaultSyncFixture::sample_yaml(1, "stale")?),
     )]);
     let completed = VaultSyncFanOut::new(local, remotes).run()?;
-    let (local, remotes, results) = (
+    let (_, remotes, results) = (
         completed.stores.local,
         completed.stores.remotes,
         completed.actions,

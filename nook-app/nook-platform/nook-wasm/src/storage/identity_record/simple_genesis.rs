@@ -68,7 +68,7 @@ pub(crate) enum SimpleGenesisProgress {
     Pending(PendingSimpleGenesis),
 }
 impl SimpleGenesisProgress {
-    #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+    #[cfg(test)]
     pub(crate) fn require_pending(self) -> Result<PendingSimpleGenesis, NookError> {
         match self {
             Self::Pending(pending) => Ok(pending),

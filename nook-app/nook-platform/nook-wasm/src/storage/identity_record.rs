@@ -9,7 +9,7 @@ use nook_core::MigratedIdentityDirectory;
 pub(crate) use crate::IdbPutStringRequest;
 pub(crate) use crate::NookDatabase;
 use crate::NookError;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db;
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, MultiDeviceError};
 use nook_core::{
@@ -915,5 +915,3 @@ pub(crate) use keyring::{
     KeyringDbEntryForAppIdFromStore, KeyringDbKeyringDeleteKey, KeyringDbKeyringReadString,
     KeyringDbLoadKeyringForStore, KeyringDbValidateKeyringDirectoryBinding, KeyringDbWriteKeyring,
 };
-
-pub(crate) use keyring::LegacyIdentityKeyMigration;

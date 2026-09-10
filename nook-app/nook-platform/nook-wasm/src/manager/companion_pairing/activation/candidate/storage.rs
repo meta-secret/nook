@@ -4,7 +4,7 @@ use super::{
     ActivationClock, CompanionPairingCandidateFailure, PairingActivationCandidate,
     PairingActivationStorageAdmission,
 };
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::ExtensionPairingDatabase;
 use crate::NookDatabase;
 

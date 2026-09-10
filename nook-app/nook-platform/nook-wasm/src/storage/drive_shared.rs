@@ -6,10 +6,10 @@
 //! files under that parent.
 
 use crate::DriveStorageClient;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::DriveStorageClientDriveError;
 use nook_core::i18n_keys;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use reqwest::Client;
 
 use super::drive::wire::{

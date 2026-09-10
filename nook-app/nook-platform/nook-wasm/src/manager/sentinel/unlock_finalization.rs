@@ -2,9 +2,9 @@
 
 use super::super::verified_access::VerifiedVaultAccessFlow;
 use super::super::{CeremonyState, NookVaultManager};
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::EventDbSaveEventBytes;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::NookDatabase;
 use crate::{NookError, NookSecretRecord};
 use nook_core::{

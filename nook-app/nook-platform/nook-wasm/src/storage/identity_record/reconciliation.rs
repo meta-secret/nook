@@ -5,11 +5,11 @@
 )]
 //! Vault-scoped reconciliation marker persistence and guarded cleanup.
 use super::super::indexed_db;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::IdbPutStringRequest;
 use crate::NookError;
 use crate::StoredStringRecord;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage;
 use crate::{IndexedDbUpdate, NookDatabase};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};

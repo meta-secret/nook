@@ -8,7 +8,7 @@ use super::{
     PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
     PinnedSimpleGenesisEvent,
 };
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::IdbPutStringRequest;
 use crate::StoredStringRecord;
 use crate::storage::identity_record::PendingSimpleGenesisFlow;

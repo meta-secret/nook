@@ -865,9 +865,4 @@ mod browser_tests {
     }
 }
 
-pub(crate) use options::{
-    BrowserPasskeyCreationOptions, BrowserPasskeyCreationOptionsStruct,
-    BrowserPasskeyPasskeyLabelWithPasskeyHandle, BrowserPasskeyPrfExtension,
-    BrowserPasskeyRecoveryOptionsStruct, BrowserPasskeyRequestOptions,
-    BrowserPasskeyRequestOptionsStruct, BrowserPasskeySetUint8ArrayField,
-};
+pub(crate) use options::{BrowserPasskeyCreationOptions, BrowserPasskeyRequestOptions};

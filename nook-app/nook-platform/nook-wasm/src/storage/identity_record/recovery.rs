@@ -8,11 +8,11 @@ use crate::IdentityDbWriteIdentityDirectory;
 use crate::KeyringDbWriteKeyring;
 use crate::NookDatabase;
 use crate::NookError;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage;
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::{device_access, event_db, identity_record, indexed_db};
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use identity_record::keyring;
 use identity_record::simple_genesis;
 use identity_record::{

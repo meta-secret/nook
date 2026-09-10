@@ -3,12 +3,14 @@
 use super::NookPrevalidatedCompanionPairingApproval;
 use crate::manager::NookExternalEventLogRecords;
 use nook_core::DeviceAuthorization;
+use nook_core::VaultEvent;
 use nook_core::{
     AuthEnvelopes, CheckedRemoteEvent, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId,
     LocalEventStore, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
 };
-use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope, VaultEvent};
+#[cfg(target_arch = "wasm32")]
+use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use std::collections::BTreeSet;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 

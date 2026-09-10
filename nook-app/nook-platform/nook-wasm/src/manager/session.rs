@@ -9,7 +9,7 @@ use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::application;
 use crate::{NookError, NookEventLogSyncIssue};
 
@@ -158,6 +158,11 @@ impl SearchCatalogState {
                 "Secret search catalog is unavailable.".to_owned(),
             )),
         }
+    }
+
+    #[cfg(test)]
+    pub(in crate::manager) fn is_ready(&self) -> bool {
+        matches!(self, Self::Ready(..))
     }
 }
 
@@ -553,6 +558,10 @@ pub(in crate::manager) enum ExtensionHandoffState {
 impl ExtensionHandoffState {
     pub(in crate::manager) fn clear(&mut self) {
         *self = Self::Idle;
+    }
+    #[cfg(test)]
+    pub(in crate::manager) fn is_empty(&self) -> bool {
+        matches!(self, Self::Idle)
     }
     pub(in crate::manager) fn into_recipient(self) -> Result<Zeroizing<String>, NookError> {
         match self {

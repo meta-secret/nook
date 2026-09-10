@@ -1,11 +1,11 @@
 use super::super::{CeremonyState, NookVaultManager, VaultNameState};
 use super::StoredSentinelGenesisDelivery;
 use crate::NookDatabase;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
 use crate::storage::indexed_db::SentinelFinalizationJournal;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db::StoredSentinelShareDelivery;
 
 use crate::{NookError, NookSentinelGenesisFinalizeResult};

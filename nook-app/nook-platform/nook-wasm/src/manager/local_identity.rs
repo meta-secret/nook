@@ -6,7 +6,7 @@ enum PriorLocalAuthorizer {
     Authorized(nook_core::AppKey),
 }
 use crate::AuthProviderDatabase;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::IdbPutStringRequest;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::IdentityDbSaveProtectedLocalIdentity;
@@ -23,9 +23,9 @@ use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::SentinelFinalizationJournal;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db::StoredStringRecord;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::{auth_providers, indexed_db};
 use crate::{NookDatabase, NookError};
 use identity_record::{LocalIdentityRecovery, PendingSimpleGenesis};
@@ -149,8 +149,6 @@ mod tests {
     use crate::manager::device_protection::{
         PendingExtensionIdentityEnrollment, PendingExtensionIdentityHandoff,
     };
-    use crate::storage::identity_record::PriorAppAuthorization;
-    use crate::storage::identity_record::SimpleGenesisProgress;
     use nook_core::{AppKey, SigningIdentity, StorageMode};
     use wasm_bindgen_test::wasm_bindgen_test;
 

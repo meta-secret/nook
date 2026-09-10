@@ -1,7 +1,6 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 type UnsupportedSharedStorageGrant = {
-  readonly kind: "unsupported";
   readonly reasonKey: string;
 };
 
@@ -80,9 +79,7 @@ export class OAuthFailure {
 
 /** Preserves the Rust-owned rejection projection without converting it to an exception. */
 export class SharedStorageGrantFailure {
-  constructor(
-    private readonly rejection: UnsupportedSharedStorageGrant,
-  ) {}
+  constructor(private readonly rejection: UnsupportedSharedStorageGrant) {}
   get translationKey() {
     return this.rejection.reasonKey;
   }

@@ -13,8 +13,8 @@ export const MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH = 65_536;
 const MISSING_FIELDS =
   'workflow structured result contains missing or extra fields';
 const error = (message: string) => ({
-  error: (issue: { readonly code: string; readonly input?: unknown }) =>
-    issue.code === 'invalid_type' && issue.input === undefined
+  error: (issue: { readonly code: string }) =>
+    issue.code === 'invalid_type' && Reflect.get(issue, 'input') === void 0
       ? MISSING_FIELDS
       : message,
 });

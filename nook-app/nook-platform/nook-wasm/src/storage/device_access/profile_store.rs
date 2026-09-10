@@ -9,7 +9,7 @@
 use crate::IdbPutStringRequest;
 use crate::NookDatabase;
 use crate::storage::identity_record::StoredIdentityProtection;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::{identity_record, indexed_db};
 use crate::{IndexedDbFallbackUpdate, IndexedDbMigration, NookError};
 use crate::{StoredStringRecord, StringRecordFallback};

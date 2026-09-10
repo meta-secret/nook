@@ -3,16 +3,20 @@
 use crate::BrowserDeviceAccessSnapshotForSessionWithProtected;
 use crate::BrowserDeviceVaultAccessForIdentity;
 use crate::NookDatabase;
+#[cfg(target_arch = "wasm32")]
+use crate::device_access;
 use crate::storage::identity_record;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::{ProtectedIdentityLookup, SelectedIdentityRecord};
 use crate::{
     NookError,
-    device_access::{self, NookDeviceAccessSnapshot, NookDeviceVaultAccess},
+    device_access::{NookDeviceAccessSnapshot, NookDeviceVaultAccess},
 };
+#[cfg(target_arch = "wasm32")]
+use nook_core::AppId;
 use nook_core::MemberLabelState;
 use nook_core::{
-    AppId, DeviceAccessProtectionKind, IdentityId, IdentitySelection, IdentityVaultAppGrant,
+    DeviceAccessProtectionKind, IdentityId, IdentitySelection, IdentityVaultAppGrant,
     IdentityVaultAppGrantKind, IdentityVaultLinks, IdentityVaultLinksRequest,
 };
 use wasm_bindgen::JsError;

@@ -397,14 +397,10 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
             a = outcome.device;
             Ok(outcome.event_id)
         }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
+        Err(rejected) => Err(rejected.cause),
     }?;
     {
         let outcome = push_device_outbox(a, providers);
-        a = outcome.device;
         providers = outcome.providers;
         Ok::<(), nook_core::VaultError>(())
     }?;
@@ -462,10 +458,7 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
             local = outcome.device;
             Ok(outcome.event_id)
         }
-        Err(rejected) => {
-            local = rejected.device;
-            Err(rejected.cause)
-        }
+        Err(rejected) => Err(rejected.cause),
     }?;
 
     remote_device.session.heads = vec![shared_head];
@@ -474,14 +467,10 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
             remote_device = outcome.device;
             Ok(outcome.event_id)
         }
-        Err(rejected) => {
-            remote_device = rejected.device;
-            Err(rejected.cause)
-        }
+        Err(rejected) => Err(rejected.cause),
     }?;
     {
         let outcome = push_device_outbox(remote_device, providers);
-        remote_device = outcome.device;
         providers = outcome.providers;
         Ok::<(), nook_core::VaultError>(())
     }?;
@@ -490,7 +479,6 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
     // flushing a new immutable event must not overwrite the remote event.
     {
         let outcome = push_device_outbox(local, providers);
-        local = outcome.device;
         providers = outcome.providers;
         Ok::<(), nook_core::VaultError>(())
     }?;

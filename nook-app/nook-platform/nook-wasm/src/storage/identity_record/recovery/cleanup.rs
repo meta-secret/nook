@@ -5,7 +5,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::{NookDatabase, NookError};

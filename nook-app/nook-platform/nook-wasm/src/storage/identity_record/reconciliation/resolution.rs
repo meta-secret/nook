@@ -5,14 +5,14 @@
 )]
 //! Identity persistence must complete before exact-marker cleanup becomes available.
 use super::super as identity_record;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use super::super::super::indexed_db;
 use super::VerifiedPreviousEpoch;
 use super::{
     IdentityReconciliationStore, NookError, PendingIdentityReconciliation,
     PendingIdentityReconciliationProgress,
 };
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::IdbPutStringRequest;
 use crate::NookDatabase;
 use crate::storage::identity_record::IdentityDirectoryWrite;

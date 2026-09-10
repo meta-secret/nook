@@ -7,31 +7,31 @@
 
 mod existing_vault;
 use crate::NookDatabase;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::manager::PendingExtensionIdentityEnrollment;
 use crate::storage::event_db;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db::StoredStringRecord;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::{IdbPutStringRequest, manager};
 use existing_vault::ExistingVaultHandoff;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::MemberLabelState;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 pub(crate) use nook_core::StoredSigningSeed;
 use nook_core::{
     DirectoryMemberSigningUpdate, DirectoryVaultEnrollment, IdentityMemberSigningUpdate,
 };
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 use rexie::TransactionMode;
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use super as identity_record;
 use super::IDENTITY_DIRECTORY_KEY;
 use super::{AuthorizerMemberSigning, AuthorizerSigningUpdate, HandoffSignerPublication};
 use crate::NookError;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage;
 
 pub(crate) enum IdentityHandoffOperation<'a> {

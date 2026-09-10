@@ -1,15 +1,15 @@
 use super::NookVaultManager;
 use crate::BrowserTimestamp;
 use crate::IdentityDbValidateVaultIdentityEnrollment;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db::ImportVaultLabel;
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::ImportVaultBlobRequest;
 use crate::NookDatabase;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 
 use crate::{NookError, NookSecretPage};

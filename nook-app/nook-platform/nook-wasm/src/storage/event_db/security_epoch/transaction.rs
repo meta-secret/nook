@@ -7,7 +7,7 @@
 use super::VaultEventPersistence;
 use crate::NookDatabase;
 use crate::NookError;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage;
 use crate::storage::indexed_db::StoredStringRecord;
 use nook_core::{EventId, LocalEventStore};

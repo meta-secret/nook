@@ -2,16 +2,21 @@
 
 mod display_text;
 mod passkey_metadata;
+#[cfg(target_arch = "wasm32")]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
+use crate::NookDatabase;
+#[cfg(target_arch = "wasm32")]
+use crate::SaveVaultBlobRequest;
 use crate::storage::device_access::DeviceAccessProfileKey;
+#[cfg(target_arch = "wasm32")]
 use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::{ProtectedIdentityLookup, ProtectedLocalIdentity};
 use crate::storage::indexed_db::VaultUnlockHistory;
-use crate::{NookDatabase, SaveVaultBlobRequest};
 use display_text::NookDeviceAccessTextValue;
 pub use display_text::{NookDeviceAccessText, NookDeviceAccessTextKind};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
+#[cfg(target_arch = "wasm32")]
 use nook_core::MemberLabelState;
 use nook_core::{
     AppId, DeviceAccessCredentialKind, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment,

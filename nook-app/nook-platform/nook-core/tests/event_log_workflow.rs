@@ -606,14 +606,8 @@ fn concurrent_adds_both_survive_after_union() -> VaultResult<()> {
         }
     }?;
     match b.union_from(&a) {
-        Ok(outcome) => {
-            b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
+        Ok(_) => Ok(()),
+        Err(rejected) => Err(rejected.cause),
     }?;
 
     let graph = a.session.store.load_graph(a.store_id())?;

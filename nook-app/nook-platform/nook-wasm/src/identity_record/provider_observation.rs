@@ -5,6 +5,7 @@ use crate::{
     BrowserProviderVaultIdentityObservationsFromProjection, NookDatabase,
     NookIdentityDirectorySnapshot,
 };
+#[cfg(target_arch = "wasm32")]
 use nook_core::MemberLabelState;
 use nook_core::{DeviceAccessProtectionKind, IdentityVaultAppGrant, IdentityVaultAppGrantKind};
 impl NookIdentityDirectorySnapshot {

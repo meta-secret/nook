@@ -1,14 +1,14 @@
 use super::StoredStringRecord;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::IdbPutStringRequest;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::identity_record;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::identity_record::ProtectedLocalIdentity;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record::RecoveryTarget;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::{NookDatabase, ReadStringPreferringRequest};

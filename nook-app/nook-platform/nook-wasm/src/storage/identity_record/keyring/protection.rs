@@ -7,7 +7,7 @@
 #[cfg(test)]
 use super as keyring;
 use super::ProtectedLocalIdentitySave;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use super::legacy;
 use super::signing::{
     CheckedIdentitySigningMaterial, IdentitySigningEvidence, IdentitySigningSource,
@@ -24,9 +24,9 @@ use crate::KeyringDbKeyringReadString;
 use crate::KeyringDbLoadKeyringForStore;
 use crate::KeyringDbValidateKeyringDirectoryBinding;
 use crate::KeyringDbWriteKeyring;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::{PENDING_SIMPLE_GENESIS_KEY, recovery};
@@ -237,6 +237,7 @@ mod tests {
         SigningSeedOrigin, keyring,
     };
     use crate::NookError;
+    #[cfg(target_arch = "wasm32")]
     use crate::storage;
     use keyring::LOCAL_IDENTITY_KEYRING_KEY;
     use keyring::LocalIdentitySigner;

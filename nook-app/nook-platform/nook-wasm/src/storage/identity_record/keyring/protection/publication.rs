@@ -1,6 +1,6 @@
 //! Commit prepared identity and signing material in transaction order.
 use super::*;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record::PriorAppAuthorization;
 #[cfg(test)]
 use crate::storage::identity_record::StoredIdentityProtection;

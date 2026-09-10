@@ -6,21 +6,21 @@
 //! Admission against the event store held by the handoff transaction.
 use super::ExistingVaultImportCommit;
 use crate::EventDbLoadLocalEventStoreFromStore;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::EventDbSaveEventBytes;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::EventDbSaveEventBytesToStore;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::IdbPutStringRequest;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::{event_db, identity_record};
 use crate::{NookDatabase, NookError};
 use nook_core::EventLookup;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::IdentityCreation;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::MemberLabelState;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 pub(crate) use nook_core::StoredSigningSeed;
 use nook_core::{DeviceAuthorization, EpochCheckpoint};
 use nook_core::{DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityVaultKeyOpening};

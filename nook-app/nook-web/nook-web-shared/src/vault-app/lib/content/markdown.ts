@@ -1,8 +1,8 @@
 import MarkdownIt from "markdown-it";
 
 const MarkdownItArgs: Exclude<
-  ConstructorParameters<typeof MarkdownIt>[0],
-  string | undefined
+  NonNullable<ConstructorParameters<typeof MarkdownIt>[0]>,
+  string
 > = {
   html: false,
   linkify: true,

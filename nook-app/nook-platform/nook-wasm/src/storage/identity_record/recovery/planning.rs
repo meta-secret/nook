@@ -18,7 +18,7 @@ use crate::{
     IdentityDbValidateVaultIdentityEnrollment,
 };
 use crate::{NookDatabase, NookError, ReadStringPreferringRequest};
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use identity_record::keyring;
 use nook_core::LocalIdentityKeyRetirement;
 use nook_core::LocalIdentityProtection;

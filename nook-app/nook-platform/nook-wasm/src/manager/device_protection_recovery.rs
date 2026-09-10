@@ -12,7 +12,7 @@ use crate::storage::identity_record::{
     LocalIdentityRecoveryRequest, ProtectedIdentityLookup, ProtectedLocalIdentity,
 };
 use crate::storage::identity_record::{RecoveryTarget, RetiredInstallation};
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::{auth_providers, indexed_db};
 use crate::{NookDatabase, NookError};
 use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, DriveEventParent, StorageMode};

@@ -7,7 +7,7 @@
 use super::{
     NookError, NookVaultManager, SearchCatalogRestore, SearchCatalogState, Zeroize, wasm_bindgen,
 };
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db;
 use crate::storage::indexed_db::SecretSearchBucketMutation;
 use crate::{NookDatabase, SaveSecretSearchCatalogBucketsRequest};

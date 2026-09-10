@@ -33,7 +33,7 @@ use nook_core::MemberLabelState;
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
 
 use crate::storage::identity_record;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::{event_db, indexed_db};
 use crate::{NookError, NookSecretRecord};
 use nook_core::{AssessConnectAccessRequest, VaultMetaState};

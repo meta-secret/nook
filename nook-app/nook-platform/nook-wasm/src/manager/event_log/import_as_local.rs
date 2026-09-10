@@ -1,10 +1,10 @@
 //! Import a provider/local-folder event log as an additional local vault.
 
 use super::NookVaultManager;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::SaveVaultBlobRequest;
 use crate::VaultSnapshotLookup;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db;
 use crate::{NookDatabase, NookError};
 use wasm_bindgen::JsError;

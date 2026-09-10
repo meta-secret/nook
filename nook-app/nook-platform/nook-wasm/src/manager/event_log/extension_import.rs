@@ -4,7 +4,7 @@ use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::identity_record::ProtectedLocalIdentity;
 use nook_core::ActiveVaultScope;
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db;
 use crate::{NookDatabase, NookError};
 use nook_core::{CheckedRemoteEvent, EventId, VaultEvent};

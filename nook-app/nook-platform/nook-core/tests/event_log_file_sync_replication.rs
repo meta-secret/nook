@@ -520,14 +520,8 @@ fn reconnect_after_mixed_offline_edits_converges_without_losing_either_branch() 
         }
     }?;
     match write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
+        Ok(_) => Ok(()),
+        Err(rejected) => Err(rejected.cause),
     }?;
 
     let live = live_secret_ids(&device_a)?;

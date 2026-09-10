@@ -7,11 +7,11 @@
 use super::NookVaultManager;
 use crate::BrowserTimestamp;
 use crate::VaultSnapshotLookup;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::indexed_db::ImportVaultLabel;
 use nook_core::ActiveVaultScope;
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::ImportVaultBlobRequest;
 use crate::NookDatabase;
 

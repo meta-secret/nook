@@ -82,7 +82,7 @@ export const MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS = 64
 
 export type AuthenticationWorkflowSnapshotMessage = Extract<
   ReturnType<typeof admit_authentication_workflow_snapshot_message>,
-  { kind: 'accepted' }
+  { message: AuthenticationWorkflowSnapshotView }
 >['message']
 
 /** Canonical protocol admission is owned by Rust; browser callers retain the decoded message. */

@@ -25,16 +25,21 @@ use crate::DriveStorageClient;
 use crate::GitHubStorageClient;
 use crate::LoggerState;
 use crate::NookDatabase;
+use crate::NookError;
 use crate::VaultMemberProjectionRequest;
+#[cfg(target_arch = "wasm32")]
+use crate::logger;
 use crate::storage::local_folder::LocalFolderHandles;
+#[cfg(target_arch = "wasm32")]
 use crate::storage::{auth_providers, indexed_db};
-use crate::{NookError, logger};
+#[cfg(target_arch = "wasm32")]
+use nook_core::VaultMember;
 use nook_core::{
     DeviceIdentity, DeviceIdentitySecret, DriveEventParent, ICloudEventTarget, MultiDeviceError,
     SelfRosterSync, SentinelGenesisPhase, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
     VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite, i18n_keys,
 };
-use nook_core::{EnsureSelfInRosterRequest, VaultMember, VaultMetaState};
+use nook_core::{EnsureSelfInRosterRequest, VaultMetaState};
 use std::mem;
 mod authenticator_enrollment;
 mod authenticator_fill;

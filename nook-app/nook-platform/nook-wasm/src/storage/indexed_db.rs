@@ -29,10 +29,10 @@
 mod atomic_string;
 mod device_identity;
 pub(crate) use atomic_string::{
-    GuardedKeyringEntryRequest, IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate,
-    StringRecordFallback, StringUpdateGuard, StringUpdateResult,
+    IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate, StringRecordFallback,
+    StringUpdateGuard, StringUpdateResult,
 };
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 pub(crate) use nook_core::ActiveVaultScope;
 mod local_vault;
 pub(crate) use local_vault::ImportVaultLabel;
@@ -42,11 +42,11 @@ pub(crate) use local_vault::VaultSnapshotLookup;
 #[path = "sentinel_storage.rs"]
 mod sentinel_storage;
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use crate::storage::identity_record;
 use crate::{NookDatabase, NookError};
 use js_sys::Date;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::{AppId, WrappedDeviceIdentity};
 use nook_core::{IsoTimestamp, VaultName, VaultStoreIdentity};
 use rexie::TransactionMode;
@@ -715,14 +715,15 @@ mod sentinel_genesis_storage_tests {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+pub(crate) use local_vault::UpsertRegistryEntryRequest;
 pub(crate) use local_vault::{
     ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SaveVaultBlobRequest,
-    SecretSearchBucketMutation, SetLocalVaultLabelRequest, UpsertRegistryEntryRequest,
+    SecretSearchBucketMutation, SetLocalVaultLabelRequest,
 };
 
 pub(crate) use device_identity::SaveWrappedDeviceIdentityRequest;
 
 pub(crate) use sentinel_storage::{
     SentinelDbLoadSentinelGenesisShareDelivery, SentinelDbSaveSentinelGenesisShareDelivery,
-    SentinelDbSentinelGenesisShareKey,
 };
