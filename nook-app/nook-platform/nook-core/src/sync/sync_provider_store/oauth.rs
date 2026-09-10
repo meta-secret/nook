@@ -13,6 +13,34 @@ use crate::{
 
 use super::{OAuthFileConfigData, StoredOAuthFileConfiguration};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OAuthStorageReference(String);
+impl From<String> for OAuthStorageReference {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+impl From<&str> for OAuthStorageReference {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+impl OAuthStorageReference {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OAuthRemoteStorageReference {
+    Unresolved,
+    Resolved(OAuthStorageReference),
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OAuthRemoteConfigurationUpdate {
+    Unchanged,
+    Updated(Box<OAuthFileConfigData>),
+}
+
 /// Borrowed fields used to project a Google access token into stored configuration.
 pub struct GoogleOAuthTokenInput<'a> {
     pub access_token: &'a str,
@@ -131,44 +159,42 @@ impl OAuthFileConfigData {
 
     /// Resolve the remote reference passed to the manager connect tuple.
     #[must_use]
-    pub fn remote_storage_ref(&self) -> Option<String> {
-        let config = self;
-        if config.preset == OauthFilePreset::ICloud
-            && let Some(target) = config
-                .icloud_share_target
-                .as_deref()
-                .and_then(|value| ConfigurationText(value).non_empty())
-                .map(str::to_owned)
+    pub fn remote_storage_ref(&self) -> OAuthRemoteStorageReference {
+        if self.preset == OauthFilePreset::ICloud
+            && let StoredICloudShareTarget::SharedTarget(target) = &self.icloud_share_target
+            && !target.trim().is_empty()
         {
-            return Some(target);
+            return OAuthRemoteStorageReference::Resolved(target.trim().into());
         }
-        if let Some(folder_id) = config
-            .folder_id
-            .as_deref()
-            .and_then(|value| ConfigurationText(value).non_empty())
-            .map(str::to_owned)
+        if let StoredGoogleDriveFolder::FolderId(folder) = &self.folder_id
+            && !folder.trim().is_empty()
         {
-            return Some(format!("shared:{folder_id}"));
+            return OAuthRemoteStorageReference::Resolved(
+                format!("shared:{}", folder.trim()).into(),
+            );
         }
-        config
-            .file_id
-            .as_deref()
-            .and_then(|value| ConfigurationText(value).non_empty())
-            .map(str::to_owned)
+        match &self.file_id {
+            StoredOAuthRemoteFileId::FileId(id) if !id.trim().is_empty() => {
+                OAuthRemoteStorageReference::Resolved(id.trim().into())
+            }
+            StoredOAuthRemoteFileId::FileId(_) | StoredOAuthRemoteFileId::Unresolved => {
+                OAuthRemoteStorageReference::Unresolved
+            }
+        }
     }
-
     /// Merge the manager-reported remote reference back into OAuth config.
     #[must_use]
-    pub fn with_remote_ref(&self, remote_ref: &str) -> Option<Self> {
-        let config = self;
+    pub fn with_remote_ref(&self, remote_ref: &str) -> OAuthRemoteConfigurationUpdate {
         let remote_ref = remote_ref.trim();
-        if remote_ref.is_empty() || config.file_id.as_deref() == Some(remote_ref) {
-            return None;
+        if remote_ref.is_empty()
+            || matches!(&self.file_id, StoredOAuthRemoteFileId::FileId(id) if id == remote_ref)
+        {
+            return OAuthRemoteConfigurationUpdate::Unchanged;
         }
-        Some(OAuthFileConfigData {
+        OAuthRemoteConfigurationUpdate::Updated(Box::new(OAuthFileConfigData {
             file_id: StoredOAuthRemoteFileId::FileId(remote_ref.to_owned()),
-            ..config.clone()
-        })
+            ..self.clone()
+        }))
     }
 }
 
@@ -190,11 +216,12 @@ mod tests {
         StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
     };
 
-    use std::io;
-
     use crate::{GoogleDriveMode, ICloudMode, OAuthFileConfigData, OauthFilePreset};
 
-    use super::{GoogleOAuthTokenInput, ICloudOAuthTokenInput, StoredOAuthFileConfiguration};
+    use super::{
+        GoogleOAuthTokenInput, ICloudOAuthTokenInput, OAuthRemoteConfigurationUpdate,
+        OAuthRemoteStorageReference, StoredOAuthFileConfiguration,
+    };
 
     #[test]
     fn google_drive_mode_switch_clears_scope_bound_credentials_and_targets() {
@@ -320,19 +347,26 @@ mod tests {
             file_id: StoredOAuthRemoteFileId::FileId("file-id".to_owned()),
             ..OAuthFileConfigData::default()
         };
-        assert_eq!(google.remote_storage_ref().as_deref(), Some("file-id"));
+        assert_eq!(
+            google.remote_storage_ref(),
+            OAuthRemoteStorageReference::Resolved("file-id".into())
+        );
         google.folder_id = StoredGoogleDriveFolder::FolderId(" shared-folder ".to_owned());
         assert_eq!(
-            google.remote_storage_ref().as_deref(),
-            Some("shared:shared-folder")
+            google.remote_storage_ref(),
+            OAuthRemoteStorageReference::Resolved("shared:shared-folder".into())
         );
 
-        let updated = google
-            .with_remote_ref(" manager-ref ")
-            .ok_or_else(|| io::Error::other("remote reference update must exist"))?;
+        let updated = google.with_remote_ref(" manager-ref ").updated()?;
         assert_eq!(updated.file_id.as_deref(), Some("manager-ref"));
-        assert!(updated.with_remote_ref("manager-ref").is_none());
-        assert!(updated.with_remote_ref(" ").is_none());
+        assert!(matches!(
+            updated.with_remote_ref("manager-ref"),
+            OAuthRemoteConfigurationUpdate::Unchanged
+        ));
+        assert!(matches!(
+            updated.with_remote_ref(" "),
+            OAuthRemoteConfigurationUpdate::Unchanged
+        ));
 
         let icloud = OAuthFileConfigData {
             preset: OauthFilePreset::ICloud,
@@ -343,8 +377,8 @@ mod tests {
             ..OAuthFileConfigData::default()
         };
         assert_eq!(
-            icloud.remote_storage_ref().as_deref(),
-            Some("icloud-share-v1:{}")
+            icloud.remote_storage_ref(),
+            OAuthRemoteStorageReference::Resolved("icloud-share-v1:{}".into())
         );
         Ok(())
     }
@@ -425,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_reference_blank_precedence_and_raw_equality_are_preserved() {
+    fn remote_reference_blank_precedence_and_raw_equality_are_preserved() -> anyhow::Result<()> {
         let mut config = OAuthFileConfigData {
             preset: OauthFilePreset::ICloud,
             icloud_share_target: StoredICloudShareTarget::SharedTarget("  ".to_owned()),
@@ -434,17 +468,32 @@ mod tests {
             ..OAuthFileConfigData::default()
         };
         assert_eq!(
-            config.remote_storage_ref().as_deref(),
-            Some("shared:folder")
+            config.remote_storage_ref(),
+            OAuthRemoteStorageReference::Resolved("shared:folder".into())
         );
         config.folder_id = StoredGoogleDriveFolder::FolderId("\t".to_owned());
-        assert_eq!(config.remote_storage_ref().as_deref(), Some("file"));
+        assert_eq!(
+            config.remote_storage_ref(),
+            OAuthRemoteStorageReference::Resolved("file".into())
+        );
         let updated = config.with_remote_ref(" file ");
         assert_eq!(
-            updated.as_ref().and_then(|value| value.file_id.as_deref()),
-            Some("file")
+            updated.updated()?.file_id,
+            StoredOAuthRemoteFileId::FileId("file".to_owned())
         );
         config.file_id = StoredOAuthRemoteFileId::FileId("file".to_owned());
-        assert!(config.with_remote_ref(" file ").is_none());
+        assert!(matches!(
+            config.with_remote_ref(" file "),
+            OAuthRemoteConfigurationUpdate::Unchanged
+        ));
+        Ok(())
+    }
+    impl OAuthRemoteConfigurationUpdate {
+        fn updated(self) -> anyhow::Result<OAuthFileConfigData> {
+            match self {
+                Self::Updated(config) => Ok(*config),
+                Self::Unchanged => anyhow::bail!("expected an updated OAuth configuration"),
+            }
+        }
     }
 }

@@ -4,7 +4,10 @@ use nook_core::{
     StorageConnectArgs, StorageProviderType, StoredLocalFolderConfiguration,
     StoredOAuthFileConfiguration,
 };
-use nook_core::{DraftStorageConnection, ProviderSelection, StagedStorageConnection};
+use nook_core::{
+    DraftStorageConnection, OAuthRemoteConfigurationUpdate, OAuthRemoteStorageReference,
+    ProviderSelection, StagedStorageConnection,
+};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -167,30 +170,35 @@ pub enum NookOAuthRemoteStorageReferenceState {
 }
 
 #[wasm_bindgen]
-pub struct NookOAuthRemoteStorageReference(Option<String>);
+pub struct NookOAuthRemoteStorageReference(OAuthRemoteStorageReference);
 
 #[wasm_bindgen]
 impl NookOAuthRemoteStorageReference {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookOAuthRemoteStorageReferenceState {
-        if self.0.is_some() {
-            NookOAuthRemoteStorageReferenceState::Resolved
-        } else {
-            NookOAuthRemoteStorageReferenceState::Unresolved
+        match &self.0 {
+            OAuthRemoteStorageReference::Unresolved => {
+                NookOAuthRemoteStorageReferenceState::Unresolved
+            }
+            OAuthRemoteStorageReference::Resolved(_) => {
+                NookOAuthRemoteStorageReferenceState::Resolved
+            }
         }
     }
-
     #[wasm_bindgen(getter)]
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("OAuth remote storage is unresolved"))
+        match &self.0 {
+            OAuthRemoteStorageReference::Resolved(value) => Ok(value.as_str().to_owned()),
+            OAuthRemoteStorageReference::Unresolved => {
+                Err(JsError::new("OAuth remote storage is unresolved"))
+            }
+        }
     }
 }
 
 impl NookOAuthRemoteStorageReference {
-    pub(super) const fn new(value: Option<String>) -> Self {
+    pub(super) const fn new(value: OAuthRemoteStorageReference) -> Self {
         Self(value)
     }
 }
@@ -203,30 +211,35 @@ pub enum NookOAuthRemoteConfigurationUpdateState {
 }
 
 #[wasm_bindgen]
-pub struct NookOAuthRemoteConfigurationUpdate(Option<nook_core::OAuthFileConfigData>);
+pub struct NookOAuthRemoteConfigurationUpdate(OAuthRemoteConfigurationUpdate);
 
 #[wasm_bindgen]
 impl NookOAuthRemoteConfigurationUpdate {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookOAuthRemoteConfigurationUpdateState {
-        if self.0.is_some() {
-            NookOAuthRemoteConfigurationUpdateState::Updated
-        } else {
-            NookOAuthRemoteConfigurationUpdateState::Rejected
+        match &self.0 {
+            OAuthRemoteConfigurationUpdate::Unchanged => {
+                NookOAuthRemoteConfigurationUpdateState::Rejected
+            }
+            OAuthRemoteConfigurationUpdate::Updated(_) => {
+                NookOAuthRemoteConfigurationUpdateState::Updated
+            }
         }
     }
-
     #[wasm_bindgen(getter)]
     pub fn config(&self) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("OAuth remote reference was rejected"))
+        match &self.0 {
+            OAuthRemoteConfigurationUpdate::Updated(value) => Ok((**value).clone()),
+            OAuthRemoteConfigurationUpdate::Unchanged => {
+                Err(JsError::new("OAuth remote reference was rejected"))
+            }
+        }
     }
 }
 
 impl NookOAuthRemoteConfigurationUpdate {
-    pub(super) const fn new(value: Option<nook_core::OAuthFileConfigData>) -> Self {
+    pub(super) const fn new(value: OAuthRemoteConfigurationUpdate) -> Self {
         Self(value)
     }
 }
@@ -276,30 +289,29 @@ pub enum NookGithubPatHintState {
 }
 
 #[wasm_bindgen]
-pub struct NookGithubPatHint(Option<String>);
+pub struct NookGithubPatHint(GithubPatMask);
 
 #[wasm_bindgen]
 impl NookGithubPatHint {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookGithubPatHintState {
-        if self.0.is_some() {
-            NookGithubPatHintState::Available
-        } else {
-            NookGithubPatHintState::Missing
+        match &self.0 {
+            GithubPatMask::NoToken => NookGithubPatHintState::Missing,
+            GithubPatMask::Hint(_) => NookGithubPatHintState::Available,
         }
     }
-
     #[wasm_bindgen(getter)]
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("GitHub PAT hint is unavailable"))
+        match &self.0 {
+            GithubPatMask::Hint(value) => Ok(value.clone()),
+            GithubPatMask::NoToken => Err(JsError::new("GitHub PAT hint is unavailable")),
+        }
     }
 }
 
 impl NookGithubPatHint {
-    pub(super) const fn new(value: Option<String>) -> Self {
+    pub(super) const fn new(value: GithubPatMask) -> Self {
         Self(value)
     }
 }
@@ -345,7 +357,10 @@ pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookS
         github_repo: None,
         oauth_preset: Some(config.preset),
         oauth_access_token: config.access_token.as_deref(),
-        oauth_file_id: remote_ref.as_deref(),
+        oauth_file_id: match &remote_ref {
+            OAuthRemoteStorageReference::Unresolved => None,
+            OAuthRemoteStorageReference::Resolved(reference) => Some(reference.as_str()),
+        },
         oauth_file_name: config.file_name.as_deref(),
     }
     .project()
@@ -373,12 +388,10 @@ pub fn draft_local_storage_args() -> NookStorageConnectArgs {
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHint {
-    NookGithubPatHint::new(
-        match nook_core::GithubPat::mask(pat.as_deref().unwrap_or_default()) {
-            GithubPatMask::NoToken => None,
-            GithubPatMask::Hint(hint) => Some(hint),
-        },
-    )
+    NookGithubPatHint::new(match pat {
+        nook_core::StoredGithubPat::Missing => GithubPatMask::NoToken,
+        nook_core::StoredGithubPat::Token(pat) => nook_core::GithubPat::mask(&pat),
+    })
 }
 
 #[cfg(test)]
@@ -480,26 +493,32 @@ mod tests {
         assert_eq!(selected.state(), NookProviderSelectionState::Selected);
         assert_eq!(selected.provider_id().unwrap(), "provider-1");
 
-        let unresolved = NookOAuthRemoteStorageReference::new(None);
+        let unresolved =
+            NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Unresolved);
         assert_eq!(
             unresolved.state(),
             NookOAuthRemoteStorageReferenceState::Unresolved
         );
         assert!(unresolved.value().is_err());
-        let resolved = NookOAuthRemoteStorageReference::new(Some("file-1".into()));
+        let resolved = NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Resolved(
+            "file-1".into(),
+        ));
         assert_eq!(
             resolved.state(),
             NookOAuthRemoteStorageReferenceState::Resolved
         );
         assert_eq!(resolved.value().unwrap(), "file-1");
 
-        let rejected = NookOAuthRemoteConfigurationUpdate::new(None);
+        let rejected =
+            NookOAuthRemoteConfigurationUpdate::new(OAuthRemoteConfigurationUpdate::Unchanged);
         assert_eq!(
             rejected.state(),
             NookOAuthRemoteConfigurationUpdateState::Rejected
         );
         assert!(rejected.config().is_err());
-        let updated = NookOAuthRemoteConfigurationUpdate::new(Some(config.clone()));
+        let updated = NookOAuthRemoteConfigurationUpdate::new(
+            OAuthRemoteConfigurationUpdate::Updated(Box::new(config.clone())),
+        );
         assert_eq!(
             updated.state(),
             NookOAuthRemoteConfigurationUpdateState::Updated
@@ -574,20 +593,24 @@ mod browser_tests {
         assert_eq!(selected.state(), NookProviderSelectionState::Selected);
         assert_eq!(selected.provider_id().unwrap(), "provider-1");
 
-        let unresolved = NookOAuthRemoteStorageReference::new(None);
+        let unresolved =
+            NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Unresolved);
         assert_eq!(
             unresolved.state(),
             NookOAuthRemoteStorageReferenceState::Unresolved
         );
         assert!(unresolved.value().is_err());
-        let resolved = NookOAuthRemoteStorageReference::new(Some("file-1".into()));
+        let resolved = NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Resolved(
+            "file-1".into(),
+        ));
         assert_eq!(
             resolved.state(),
             NookOAuthRemoteStorageReferenceState::Resolved
         );
         assert_eq!(resolved.value().unwrap(), "file-1");
 
-        let rejected = NookOAuthRemoteConfigurationUpdate::new(None);
+        let rejected =
+            NookOAuthRemoteConfigurationUpdate::new(OAuthRemoteConfigurationUpdate::Unchanged);
         assert_eq!(
             rejected.state(),
             NookOAuthRemoteConfigurationUpdateState::Rejected

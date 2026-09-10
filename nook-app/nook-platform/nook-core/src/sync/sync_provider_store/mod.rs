@@ -48,7 +48,10 @@ pub use catalog::{
     LocalProviderRowRequest,
 };
 pub use enrollment::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
-pub use oauth::{GoogleOAuthTokenInput, ICloudOAuthTokenInput};
+pub use oauth::{
+    GoogleOAuthTokenInput, ICloudOAuthTokenInput, OAuthRemoteConfigurationUpdate,
+    OAuthRemoteStorageReference, OAuthStorageReference,
+};
 pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
 pub use scope::{
     ActiveVaultProviderRows, ProviderEventFlushTarget, ProviderRows,
