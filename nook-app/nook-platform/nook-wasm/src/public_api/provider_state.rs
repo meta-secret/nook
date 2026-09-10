@@ -1,10 +1,10 @@
 use super::{NookStorageConnectArgs, wasm_bindgen};
-use nook_core::DraftStorageConnection;
 use nook_core::{
     ActiveProviderCredentialsProjection, ExistingVaultProviderReadiness, GithubPatMask,
     StorageConnectArgs, StorageProviderType, StoredLocalFolderConfiguration,
     StoredOAuthFileConfiguration,
 };
+use nook_core::{DraftStorageConnection, ProviderSelection};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -138,25 +138,24 @@ pub enum NookProviderSelectionState {
 }
 
 #[wasm_bindgen]
-pub struct NookProviderSelection(pub(super) Option<String>);
+pub struct NookProviderSelection(pub(super) ProviderSelection);
 
 #[wasm_bindgen]
 impl NookProviderSelection {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookProviderSelectionState {
-        if self.0.is_some() {
-            NookProviderSelectionState::Selected
-        } else {
-            NookProviderSelectionState::Missing
+        match &self.0 {
+            ProviderSelection::Selected(_) => NookProviderSelectionState::Selected,
+            ProviderSelection::Unavailable => NookProviderSelectionState::Missing,
         }
     }
-
     #[wasm_bindgen(getter, js_name = providerId)]
     pub fn provider_id(&self) -> Result<String, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("provider selection is missing"))
+        match &self.0 {
+            ProviderSelection::Selected(id) => Ok(id.as_str().to_owned()),
+            ProviderSelection::Unavailable => Err(JsError::new("provider selection is missing")),
+        }
     }
 }
 
@@ -471,13 +470,13 @@ mod tests {
             }
         );
 
-        let missing_selection = NookProviderSelection(None);
+        let missing_selection = NookProviderSelection(ProviderSelection::Unavailable);
         assert_eq!(
             missing_selection.state(),
             NookProviderSelectionState::Missing
         );
         assert!(missing_selection.provider_id().is_err());
-        let selected = NookProviderSelection(Some("provider-1".into()));
+        let selected = NookProviderSelection(ProviderSelection::Selected("provider-1".into()));
         assert_eq!(selected.state(), NookProviderSelectionState::Selected);
         assert_eq!(selected.provider_id().unwrap(), "provider-1");
 
@@ -563,13 +562,13 @@ mod browser_tests {
             }
         );
 
-        let missing_selection = NookProviderSelection(None);
+        let missing_selection = NookProviderSelection(ProviderSelection::Unavailable);
         assert_eq!(
             missing_selection.state(),
             NookProviderSelectionState::Missing
         );
         assert!(missing_selection.provider_id().is_err());
-        let selected = NookProviderSelection(Some("provider-1".into()));
+        let selected = NookProviderSelection(ProviderSelection::Selected("provider-1".into()));
         assert_eq!(selected.state(), NookProviderSelectionState::Selected);
         assert_eq!(selected.provider_id().unwrap(), "provider-1");
 

@@ -1,11 +1,11 @@
 use super::{NookProviderSelection, wasm_bindgen};
 use crate::{NookEnrollmentProvider, NookProviderReplicationCapability, NookVaultArchitecture};
 use nook_core::ProviderEnrollmentRequest;
-use nook_core::ProviderSelectionRequest;
 use nook_core::{
     GoogleOAuthTokenInput, ICloudOAuthTokenInput, ICloudShareRole, ICloudSharedTarget,
     OAuthFileConfigData, ProviderOauthPreset, VaultArchitecture,
 };
+use nook_core::{ProviderSelectionPolicy, ProviderSelectionRequest};
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
@@ -204,7 +204,7 @@ pub fn first_compatible_provider_id(
         ProviderSelectionRequest {
             providers: &snapshot.providers,
             replication_type,
-            preferred_id: None,
+            policy: ProviderSelectionPolicy::FirstCompatible,
         }
         .select(),
     )
@@ -221,7 +221,7 @@ pub fn first_compatible_provider_id_preferred(
         ProviderSelectionRequest {
             providers: &snapshot.providers,
             replication_type,
-            preferred_id: Some(preferred_id),
+            policy: ProviderSelectionPolicy::Prefer(preferred_id.into()),
         }
         .select(),
     )

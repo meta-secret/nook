@@ -18,13 +18,6 @@ use super::{
 /// Optional connection field interpreted with the persisted whitespace policy.
 struct ConnectionField<'a>(Option<&'a str>);
 
-/// Borrowed inputs for the existing preferred-then-first replication selection.
-pub struct ProviderSelectionRequest<'a> {
-    pub providers: &'a [StorageProviderData],
-    pub replication_type: ReplicationType,
-    pub preferred_id: Option<&'a str>,
-}
-
 /// Unauthenticated connection draft; its fields are configuration, not authorization.
 pub struct DraftStorageConnection<'a> {
     pub provider_type: StorageProviderType,
@@ -239,33 +232,6 @@ impl StorageProviderData {
     }
 }
 
-/// Select the preferred compatible provider, or the first compatible row.
-/// Returning the id lets host adapters retain their own object/reference while
-/// core owns the compatibility and ordering decision.
-impl ProviderSelectionRequest<'_> {
-    #[must_use]
-    pub fn select(self) -> Option<String> {
-        let Self {
-            providers,
-            replication_type,
-            preferred_id,
-        } = self;
-
-        preferred_id
-            .and_then(|preferred_id| {
-                providers.iter().find(|provider| {
-                    provider.id == preferred_id && provider.supports_replication(replication_type)
-                })
-            })
-            .or_else(|| {
-                providers
-                    .iter()
-                    .find(|provider| provider.supports_replication(replication_type))
-            })
-            .map(|provider| provider.id.clone())
-    }
-}
-
 impl DraftStorageConnection<'_> {
     #[must_use]
     pub fn project(self) -> StorageConnectArgs {
@@ -408,8 +374,7 @@ mod tests {
     use std::io;
 
     use super::{
-        DraftStorageConnection, ProviderSelectionRequest, StagedRemoteConnection,
-        StorageConnectArgs, VaultStorageConnection,
+        DraftStorageConnection, StagedRemoteConnection, StorageConnectArgs, VaultStorageConnection,
     };
     use crate::{
         DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode, OAuthFileConfigData,
@@ -420,6 +385,7 @@ mod tests {
         EnrollmentProvider, LocalFolderConfigData, ProviderEnrollmentRequest,
         ProviderSyncCheckpoint, SharedEnrollmentProvider, VaultArchitecture,
     };
+    use crate::{ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest};
 
     impl StorageProviderData {
         fn github_provider(id: &str, repo: &str, pat: &str) -> StorageProviderData {
@@ -666,21 +632,19 @@ mod tests {
             ProviderSelectionRequest {
                 providers: &providers,
                 replication_type: ReplicationType::Shared,
-                preferred_id: Some("github")
+                policy: ProviderSelectionPolicy::Prefer("github".into())
             }
-            .select()
-            .as_deref(),
-            Some("drive")
+            .select(),
+            ProviderSelection::Selected("drive".into())
         );
         assert_eq!(
             ProviderSelectionRequest {
                 providers: &providers,
                 replication_type: ReplicationType::Personal,
-                preferred_id: Some("github")
+                policy: ProviderSelectionPolicy::Prefer("github".into())
             }
-            .select()
-            .as_deref(),
-            Some("github")
+            .select(),
+            ProviderSelection::Selected("github".into())
         );
         assert!(!(providers[0]).supports_replication(ReplicationType::Shared));
         assert!((providers[1]).supports_replication(ReplicationType::Shared));
@@ -917,39 +881,38 @@ mod tests {
             StorageProviderData::github_provider("first", "repo", "pat"),
             StorageProviderData::github_provider("second", "repo", "pat"),
         ];
-        for (preferred_id, expected) in [
-            (None, Some("first")),
-            (Some("missing"), Some("first")),
-            (Some("second"), Some("second")),
+        for (policy, expected) in [
+            (ProviderSelectionPolicy::FirstCompatible, "first"),
+            (ProviderSelectionPolicy::Prefer("missing".into()), "first"),
+            (ProviderSelectionPolicy::Prefer("second".into()), "second"),
         ] {
             assert_eq!(
                 ProviderSelectionRequest {
                     providers: &providers,
                     replication_type: ReplicationType::Personal,
-                    preferred_id,
+                    policy,
                 }
-                .select()
-                .as_deref(),
-                expected
+                .select(),
+                ProviderSelection::Selected(expected.into())
             );
         }
         assert_eq!(
             ProviderSelectionRequest {
                 providers: &providers,
                 replication_type: ReplicationType::Shared,
-                preferred_id: Some("second"),
+                policy: ProviderSelectionPolicy::Prefer("second".into()),
             }
             .select(),
-            None
+            ProviderSelection::Unavailable
         );
         assert_eq!(
             ProviderSelectionRequest {
                 providers: &[],
                 replication_type: ReplicationType::Personal,
-                preferred_id: None,
+                policy: ProviderSelectionPolicy::FirstCompatible,
             }
             .select(),
-            None
+            ProviderSelection::Unavailable
         );
         assert_eq!(providers[0].id, "first");
         assert_eq!(providers[1].id, "second");

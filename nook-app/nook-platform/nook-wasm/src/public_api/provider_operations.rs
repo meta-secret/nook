@@ -57,12 +57,15 @@ pub fn local_provider_for_active_vault(
         ManagerStoreScopeRef::Store(store_id) => Some(store_id),
     };
     Ok(NookProviderSelection(
-        ProviderRows {
+        match (ProviderRows {
             providers: &snapshot.providers,
-        }
+        })
         .for_vault(active_store_id)
         .local()?
-        .map(|provider| provider.id),
+        {
+            Some(provider) => nook_core::ProviderSelection::Selected(provider.id.into()),
+            None => nook_core::ProviderSelection::Unavailable,
+        },
     ))
 }
 

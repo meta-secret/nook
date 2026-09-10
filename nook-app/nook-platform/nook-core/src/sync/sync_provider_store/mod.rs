@@ -26,6 +26,10 @@ pub use legacy_storage::LegacyAuthProvidersSnapshot;
 mod oauth;
 mod save;
 mod scope;
+mod selection;
+pub use selection::{
+    ProviderId, ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest,
+};
 mod state;
 mod state_storage;
 mod storage_args;
@@ -48,9 +52,8 @@ pub use scope::{
 };
 pub use state::*;
 pub use storage_args::{
-    DraftStorageConnection, ProviderLabelLabels, ProviderSelectionRequest,
-    ProviderStorageDetailLabels, StagedRemoteConnection, StorageConnectArgs,
-    VaultStorageConnection,
+    DraftStorageConnection, ProviderLabelLabels, ProviderStorageDetailLabels,
+    StagedRemoteConnection, StorageConnectArgs, VaultStorageConnection,
 };
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
