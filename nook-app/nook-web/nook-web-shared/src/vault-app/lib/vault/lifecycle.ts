@@ -1,3 +1,8 @@
+import {
+  LocaleCatalogSource,
+  SavedAppLocaleKind,
+  VaultLocaleActions,
+} from '$lib/vault/locale'
 import type { OAuthFailure } from '$lib/auth/oauth-failure'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { err as storageErr, ok as storageOk, type Result } from 'neverthrow'
@@ -22,13 +27,9 @@ import {
   ExternalDeviceIdentityAuthorizationMode,
   configured_vault_application,
   has_active_local_vault,
-  NookAppLocaleParse,
-  parse_app_locale,
   prepare_new_local_vault_slot,
   set_active_vault,
   set_vault_session_locked,
-  supported_app_locale_code,
-  type NookAppLocale,
   type NookVaultManager,
 } from '$app-wasm'
 import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
@@ -53,15 +54,6 @@ import { VaultDiscoveryTimeout } from '$lib/vault/vault-discovery-timeout'
 
 const log = browserLogRuntime.createLogger('vault-lifecycle')
 
-enum SavedAppLocaleKind {
-  Missing = 'missing',
-  Supported = 'supported',
-}
-
-type SavedAppLocale =
-  | { kind: SavedAppLocaleKind.Missing }
-  | { kind: SavedAppLocaleKind.Supported; locale: NookAppLocale }
-
 type DeviceIdentityInitialization = {
   readonly mode: DeviceIdentityInitializationMode
 }
@@ -77,20 +69,6 @@ type ExternalDeviceIdentityAuthorization = {
 export class VaultInitializationActions {
   constructor(private readonly state: VaultState) {}
 
-  private savedAppLocale(): SavedAppLocale {
-    const stored = localStorage.getItem('nook_locale')
-    if (!stored) {
-      return { kind: SavedAppLocaleKind.Missing }
-    }
-    const parsed = parse_app_locale(stored)
-    return parsed === NookAppLocaleParse.Unsupported
-      ? { kind: SavedAppLocaleKind.Missing }
-      : {
-          kind: SavedAppLocaleKind.Supported,
-          locale: supported_app_locale_code(parsed),
-        }
-  }
-
   async initOnce(): Promise<void> {
     const state = this.state
     log.info('app init started')
@@ -98,7 +76,12 @@ export class VaultInitializationActions {
     let deviceIdentityUnlocked = false
     if (!state.isVerifying) state.errorMsg = ''
     try {
-      const localeState = this.savedAppLocale()
+      const savedLocale = new VaultLocaleActions(state).savedAppLocale()
+      if (savedLocale.isErr()) {
+        state.errorMsg = state.t(savedLocale.error.translationKey)
+        return
+      }
+      const localeState = savedLocale.value
       const browserLocale = state.browserLocale.app_locale()
       const locale =
         localeState.kind === SavedAppLocaleKind.Supported
@@ -106,9 +89,13 @@ export class VaultInitializationActions {
           : browserLocale
       const initialLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
         newLocale: locale,
-        preferWasm: false,
+        catalogSource: LocaleCatalogSource.Bundled,
       }
-      await state.updateLocale(initialLocaleArgs)
+      const initialLocale = await state.updateLocale(initialLocaleArgs)
+      if (initialLocale.isErr()) {
+        state.errorMsg = state.t(initialLocale.error.translationKey)
+        return
+      }
       const catalogRefresh1 = await state.refreshLocalVaultCatalog()
       if (catalogRefresh1.isErr()) {
         state.errorMsg = state.t(catalogRefresh1.error.translationKey)
@@ -136,9 +123,13 @@ export class VaultInitializationActions {
       }
       const updateLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
         newLocale: locale,
-        preferWasm: true,
+        catalogSource: LocaleCatalogSource.Engine,
       }
-      await state.updateLocale(updateLocaleArgs)
+      const updatedLocale = await state.updateLocale(updateLocaleArgs)
+      if (updatedLocale.isErr()) {
+        state.errorMsg = state.t(updatedLocale.error.translationKey)
+        return
+      }
       const protectionStatus = await state.enqueueStorage(async () => {
         const admitted = state.admitManager()
         if (admitted.isErr()) return storageErr(admitted.error)

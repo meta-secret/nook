@@ -52,11 +52,6 @@ export type VaultEditRestriction =
       reason: string
     }
 
-export type VaultLocaleSelection = {
-  readonly newLocale: NookAppLocale
-  readonly preferWasm: boolean
-}
-
 export enum SyncProviderLabelKind {
   Idle = 'idle',
   Active = 'active',
@@ -344,12 +339,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     return new StorageProviderPresentation($state.snapshot(provider)).storageArgs()
   }
 
-  async updateLocale({ newLocale, preferWasm }: VaultLocaleSelection) {
-    const request: Parameters<localeActions.VaultLocaleActions['updateLocale']>[0] =
-      {
-        newLocale,
-        preferWasm,
-      }
+  async updateLocale(request: localeActions.LocaleUpdate) {
     return new localeActions.VaultLocaleActions(
       this.completeVaultState(),
     ).updateLocale(request)

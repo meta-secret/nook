@@ -43,22 +43,6 @@ type AdminPanelOpening = {
 export class VaultWorkspaceActions {
   constructor(private readonly state: UiActionsContext) {}
 
-  static pushWorkspaceRoute(route: WorkspaceRoute): void {
-    if (!('window' in globalThis)) return
-    const path = new WorkspaceLocation(route).path
-    const nextUrl = new URL(path, window.location.href)
-    if (
-      window.location.pathname === nextUrl.pathname &&
-      window.location.search === '' &&
-      window.location.hash === ''
-    ) {
-      return
-    }
-    const pushStateArgs: Parameters<typeof window.history.pushState>[0] = {}
-    window.history.pushState(pushStateArgs, '', path)
-    window.dispatchEvent(new PopStateEvent('popstate'))
-  }
-
   private applySettings({ section, accordion }: SettingsViewSelection): void {
     const state = this.state
     state.helpOpen = false
@@ -162,9 +146,7 @@ export class VaultWorkspaceActions {
     }
   }
 
-  private static workspaceRouteForSettings(
-    section: SettingsSection,
-  ): WorkspaceRoute {
+  private workspaceRouteForSettings(section: SettingsSection): WorkspaceRoute {
     switch (section) {
       case SettingsSection.DevicesAccess:
         return WorkspaceRoute.DevicesAccess
@@ -179,9 +161,13 @@ export class VaultWorkspaceActions {
 
   openSettings({ section, accordion }: OpenSettingsRequest): void {
     const state = this.state
-    VaultWorkspaceActions.pushWorkspaceRoute(
-      VaultWorkspaceActions.workspaceRouteForSettings(section),
-    )
+    const navigation = new WorkspaceLocation(
+      this.workspaceRouteForSettings(section),
+    ).navigate()
+    if (navigation.isErr()) {
+      state.errorMsg = state.t(navigation.error.translationKey)
+      return
+    }
     const applySettingsArgs4: Parameters<VaultWorkspaceActions['applySettings']>[0] =
       {
         section,
@@ -192,7 +178,11 @@ export class VaultWorkspaceActions {
 
   openAdmin({ accordion }: AdminPanelOpening): void {
     const state = this.state
-    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Admin)
+    const navigation = new WorkspaceLocation(WorkspaceRoute.Admin).navigate()
+    if (navigation.isErr()) {
+      state.errorMsg = state.t(navigation.error.translationKey)
+      return
+    }
     const applyAdminArgs2: Parameters<VaultWorkspaceActions['applyAdmin']>[0] = {
       accordion,
     }
@@ -201,7 +191,11 @@ export class VaultWorkspaceActions {
 
   closeSettings(): void {
     const state = this.state
-    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Vault)
+    const navigation = new WorkspaceLocation(WorkspaceRoute.Vault).navigate()
+    if (navigation.isErr()) {
+      state.errorMsg = state.t(navigation.error.translationKey)
+      return
+    }
     this.applyVault()
   }
 
@@ -285,14 +279,22 @@ export class VaultWorkspaceActions {
 
   openHelp(): void {
     const state = this.state
-    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Help)
+    const navigation = new WorkspaceLocation(WorkspaceRoute.Help).navigate()
+    if (navigation.isErr()) {
+      state.errorMsg = state.t(navigation.error.translationKey)
+      return
+    }
     state.settingsOpen = false
     state.helpOpen = true
   }
 
   closeHelp(): void {
     const state = this.state
-    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Vault)
+    const navigation = new WorkspaceLocation(WorkspaceRoute.Vault).navigate()
+    if (navigation.isErr()) {
+      state.errorMsg = state.t(navigation.error.translationKey)
+      return
+    }
     state.helpOpen = false
   }
 }

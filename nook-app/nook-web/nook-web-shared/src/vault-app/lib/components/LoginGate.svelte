@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { WorkspaceLocation } from '$lib/app/workspace-route'
   import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   type EnrollmentCodeUnlock = {
     readonly code: string
@@ -251,8 +252,12 @@
         ? currentRoute.route
         : WorkspaceRoute.Vault
     devicesAccessTrigger = trigger
+    const navigation = new WorkspaceLocation(WorkspaceRoute.DevicesAccess).navigate()
+    if (navigation.isErr()) {
+      vault.errorMsg = vault.t(navigation.error.translationKey)
+      return
+    }
     devicesAccessOpen = true
-    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.DevicesAccess)
     const applyWorkspaceRouteArgs: Parameters<
       VaultWorkspaceActions['applyWorkspaceRoute']
     >[0] = {
@@ -264,8 +269,12 @@
   }
 
   async function closeDevicesAccess(): Promise<void> {
+    const navigation = new WorkspaceLocation(devicesAccessReturnRoute).navigate()
+    if (navigation.isErr()) {
+      vault.errorMsg = vault.t(navigation.error.translationKey)
+      return
+    }
     devicesAccessOpen = false
-    VaultWorkspaceActions.pushWorkspaceRoute(devicesAccessReturnRoute)
     const applyWorkspaceRouteArgs2: Parameters<
       VaultWorkspaceActions['applyWorkspaceRoute']
     >[0] = {

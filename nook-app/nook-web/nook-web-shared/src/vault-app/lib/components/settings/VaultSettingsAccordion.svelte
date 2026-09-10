@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { LocaleCatalogSource } from '$lib/vault/locale'
   import type { DeviceMutationResult } from '$lib/vault/multi-device'
   type DeviceRename = { readonly authId: string; readonly label: string }
 
@@ -131,9 +132,14 @@
           if (parsed === NookAppLocaleParse.Unsupported) return
           const localeRequest: Parameters<typeof vault.updateLocale>[0] = {
             newLocale: supported_app_locale_code(parsed),
-            preferWasm: vault.hasManager,
+            catalogSource: vault.hasManager
+              ? LocaleCatalogSource.Engine
+              : LocaleCatalogSource.Bundled,
           }
-          void vault.updateLocale(localeRequest)
+          void vault.updateLocale(localeRequest).then((updated) => {
+            if (updated.isErr())
+              vault.errorMsg = vault.t(updated.error.translationKey)
+          })
         }}
       >
         <option value="en">English</option>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { WorkspaceLocation } from '$lib/app/workspace-route'
   type SecretAddModeChange = {
     readonly open: boolean
     readonly selection: SecretTypeSelection
@@ -141,7 +142,11 @@
   })
 
   async function closeDevicesAccess() {
-    VaultWorkspaceActions.pushWorkspaceRoute(devicesAccessReturnRoute)
+    const navigation = new WorkspaceLocation(devicesAccessReturnRoute).navigate()
+    if (navigation.isErr()) {
+      vault.errorMsg = vault.t(navigation.error.translationKey)
+      return
+    }
     const routeApplication: Parameters<
       VaultWorkspaceActions['applyWorkspaceRoute']
     >[0] = {
