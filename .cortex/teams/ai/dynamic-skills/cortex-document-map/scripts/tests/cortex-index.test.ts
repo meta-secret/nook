@@ -5,7 +5,6 @@ import {
 } from '../src/cortex-index.ts';
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { CortexNavigationIndex } from '../src/cortex-index.ts';
 
 test('extracts index metadata and renders markdown', () => {
   const documents = [
@@ -59,8 +58,7 @@ Model text.
 });
 
 test('renders the complete canonical Cortex context router', () => {
-  const renderArgs = { index: { documents: [] } };
-  const markdown = CortexNavigationIndex.renderCortexIndexMarkdown(renderArgs);
+  const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
   const canonicalRouter = readFileSync(
     new URL('../../../../../../knowledge-graph.md', import.meta.url),
     'utf8',

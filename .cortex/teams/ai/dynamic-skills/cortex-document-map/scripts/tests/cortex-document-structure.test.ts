@@ -1,5 +1,6 @@
 import { CortexMarkdownSyntaxAudit } from '../src/cortex-document-structure.ts';
 import path from 'node:path';
+import { ok } from 'neverthrow';
 
 import { expect, test } from 'bun:test';
 
@@ -49,7 +50,7 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
       })),
       excludedDocumentPaths: [],
     }).execute();
-    expect(result.findings).toEqual(expected);
+    expect(result.map((value) => value.findings)).toEqual(ok(expected));
     return expected;
   }
 
