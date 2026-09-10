@@ -1,0 +1,240 @@
+use super::*;
+
+/// Each recursive branch returns its visited set before the next sibling starts.
+#[derive(Default)]
+pub(super) struct ModuleTraversal {
+    modules: HashSet<PathBuf>,
+    symbols: HashSet<(PathBuf, String)>,
+}
+impl ModuleTraversal {
+    pub(super) fn any(mut self, module: &str, source_path: &Path) -> (Self, bool) {
+        if WASM_MODULE_ALIASES.contains(&module) {
+            return (self, true);
+        }
+        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+            return (self, false);
+        };
+        if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
+            resolved.clone(),
+        )) {
+            return (self, true);
+        }
+        if !self.modules.insert(resolved.clone()) {
+            return (self, false);
+        }
+        let Some(exports) = WasmModuleSources::local_forwarded_exports(&resolved) else {
+            return (self, false);
+        };
+        for export in exports {
+            let module = match export {
+                ForwardedExport::All { module }
+                | ForwardedExport::Named { module, .. }
+                | ForwardedExport::Namespace { module, .. } => module,
+            };
+            let found;
+            (self, found) = self.any(&module, &resolved);
+            if found {
+                return (self, true);
+            }
+        }
+        (self, false)
+    }
+    pub(super) fn symbol(
+        mut self,
+        module: &str,
+        exported_name: &str,
+        source_path: &Path,
+    ) -> (Self, bool) {
+        if WASM_MODULE_ALIASES.contains(&module) {
+            return (self, exported_name != "default");
+        }
+        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+            return (self, false);
+        };
+        if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
+            resolved.clone(),
+        )) {
+            return (self, exported_name != "default");
+        }
+        if !self
+            .symbols
+            .insert((resolved.clone(), exported_name.to_owned()))
+        {
+            return (self, false);
+        }
+        let Some(exports) = WasmModuleSources::local_forwarded_exports(&resolved) else {
+            return (self, false);
+        };
+        let explicit = exports.iter().any(|export| matches!(export, ForwardedExport::Named { exported, .. } if exported == exported_name));
+        for export in exports {
+            let found;
+            match export {
+                ForwardedExport::Named {
+                    exported,
+                    imported,
+                    module,
+                } if exported == exported_name => {
+                    (self, found) = self.symbol(&module, &imported, &resolved)
+                }
+                ForwardedExport::All { module } if !explicit => {
+                    (self, found) = self.symbol(&module, exported_name, &resolved)
+                }
+                _ => continue,
+            }
+            if found {
+                return (self, true);
+            }
+        }
+        (self, false)
+    }
+    pub(super) fn callable(
+        mut self,
+        module: &str,
+        exported_name: &str,
+        source_path: &Path,
+        callable_names: &HashSet<String>,
+    ) -> (Self, Option<String>) {
+        if WASM_MODULE_ALIASES.contains(&module) {
+            return (
+                self,
+                callable_names
+                    .contains(exported_name)
+                    .then(|| exported_name.to_owned()),
+            );
+        }
+        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+            return (self, None);
+        };
+        if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
+            resolved.clone(),
+        )) {
+            return (
+                self,
+                callable_names
+                    .contains(exported_name)
+                    .then(|| exported_name.to_owned()),
+            );
+        }
+        if !self
+            .symbols
+            .insert((resolved.clone(), exported_name.to_owned()))
+        {
+            return (self, None);
+        }
+        let Some(exports) = WasmModuleSources::local_forwarded_exports(&resolved) else {
+            return (self, None);
+        };
+        let explicit = exports.iter().any(|export| matches!(export, ForwardedExport::Named { exported, .. } if exported == exported_name));
+        for export in exports {
+            let found;
+            match export {
+                ForwardedExport::Named {
+                    exported,
+                    imported,
+                    module,
+                } if exported == exported_name => {
+                    (self, found) = self.callable(&module, &imported, &resolved, callable_names)
+                }
+                ForwardedExport::All { module } if !explicit => {
+                    (self, found) = self.callable(&module, exported_name, &resolved, callable_names)
+                }
+                _ => continue,
+            }
+            if found.is_some() {
+                return (self, found);
+            }
+        }
+        (self, None)
+    }
+    pub(super) fn namespace(
+        mut self,
+        module: &str,
+        exported_name: &str,
+        source_path: &Path,
+    ) -> (Self, Option<String>) {
+        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+            return (self, None);
+        };
+        if !self
+            .symbols
+            .insert((resolved.clone(), exported_name.to_owned()))
+        {
+            return (self, None);
+        }
+        let Some(exports) = WasmModuleSources::local_forwarded_exports(&resolved) else {
+            return (self, None);
+        };
+        for export in exports {
+            let found;
+            match export {
+                ForwardedExport::Namespace { exported, module } if exported == exported_name => {
+                    found = Self::default().any(&module, &resolved).1.then(|| {
+                        WasmModuleSources::resolve_module(&module, &resolved)
+                            .map_or(module, |path| path.to_string_lossy().into_owned())
+                    });
+                }
+                ForwardedExport::Named {
+                    exported,
+                    imported,
+                    module,
+                } if exported == exported_name => {
+                    (self, found) = self.namespace(&module, &imported, &resolved)
+                }
+                ForwardedExport::All { module } => {
+                    (self, found) = self.namespace(&module, exported_name, &resolved)
+                }
+                _ => continue,
+            }
+            if found.is_some() {
+                return (self, found);
+            }
+        }
+        (self, None)
+    }
+    pub(super) fn factory(
+        mut self,
+        module: &str,
+        exported_name: &str,
+        source_path: &Path,
+        wasm_type_names: &HashSet<String>,
+    ) -> (Self, Option<String>) {
+        let Some(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+            return (self, None);
+        };
+        if !self
+            .symbols
+            .insert((resolved.clone(), exported_name.to_owned()))
+        {
+            return (self, None);
+        }
+        if let Some(found) =
+            WasmModuleSources::local_factory_return_type(&resolved, exported_name, wasm_type_names)
+        {
+            return (self, Some(found));
+        }
+        let Some(exports) = WasmModuleSources::local_forwarded_exports(&resolved) else {
+            return (self, None);
+        };
+        for export in exports {
+            match export {
+                ForwardedExport::All { module } => {
+                    let found;
+                    (self, found) =
+                        self.factory(&module, exported_name, &resolved, wasm_type_names);
+                    if found.is_some() {
+                        return (self, found);
+                    }
+                }
+                ForwardedExport::Named {
+                    exported,
+                    imported,
+                    module,
+                } if exported == exported_name => {
+                    return self.factory(&module, &imported, &resolved, wasm_type_names);
+                }
+                _ => {}
+            }
+        }
+        (self, None)
+    }
+}
