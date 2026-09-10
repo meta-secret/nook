@@ -198,16 +198,6 @@ impl OAuthFileConfigData {
     }
 }
 
-/// A borrowed provider field with the existing whitespace/empty-value interpretation.
-pub(super) struct ConfigurationText<'a>(pub &'a str);
-
-impl<'a> ConfigurationText<'a> {
-    pub(super) fn non_empty(&self) -> Option<&'a str> {
-        let trimmed = self.0.trim();
-        (!trimmed.is_empty()).then_some(trimmed)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{

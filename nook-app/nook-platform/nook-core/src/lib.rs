@@ -283,7 +283,7 @@ pub use sync_provider_credentials::{
 pub use sync_provider_store::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup, ActiveVaultProviderRows,
-    ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection,
+    ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection, DuplicateCandidatePolicy,
     DuplicateProviderSelection, DuplicateSyncProvider, GithubStorageDraft, GoogleOAuthTokenInput,
     ICloudOAuthTokenInput, LegacyAuthProvidersSnapshot, LocalFolderConfigData,
     LocalProviderRowChange, LocalProviderRowOutcome, LocalProviderRowRequest,

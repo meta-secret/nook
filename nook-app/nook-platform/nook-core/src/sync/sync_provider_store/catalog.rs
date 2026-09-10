@@ -5,7 +5,9 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::{
-    ActiveVaultScope, ProviderSyncCheckpoint, StoredICloudShareTarget, StoredOAuthRemoteFileId,
+    ActiveVaultScope, DuplicateSyncProvider, ProviderId, ProviderSyncCheckpoint,
+    StoredICloudShareTarget, StoredLocalFolderDirectory, StoredOAuthAccessCredential,
+    StoredOAuthAccountIdentity, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
     SyncProviderTargetIdentity,
 };
 
@@ -21,10 +23,16 @@ use super::{
     StorageProviderData,
 };
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DuplicateCandidatePolicy {
+    IncludeAll,
+    Exclude(ProviderId),
+}
+
 pub struct DuplicateProviderSelection<'a> {
     pub providers: &'a [StorageProviderData],
     pub candidate: &'a StorageProviderData,
-    pub exclude_id: Option<&'a str>,
+    pub policy: DuplicateCandidatePolicy,
 }
 #[derive(Clone, Copy)]
 pub struct LocalProviderRowRequest<'a> {
@@ -32,7 +40,6 @@ pub struct LocalProviderRowRequest<'a> {
     pub new_id: &'a str,
     pub created_at: &'a str,
 }
-struct CatalogProviderText<'a>(Option<&'a str>);
 
 impl StorageProviderData {
     pub fn storage_detail(&self, labels: &ProviderStorageDetailLabels) -> String {
@@ -40,48 +47,82 @@ impl StorageProviderData {
         let provider_type = provider.provider_type;
         match provider_type {
             StorageProviderType::Local => labels.this_device_desc.clone(),
-            StorageProviderType::LocalFolder => provider
-                .local_folder
-                .as_ref()
-                .and_then(|folder| {
-                    CatalogProviderText(folder.directory_name.as_deref()).non_empty()
-                })
-                .unwrap_or_else(|| labels.local_folder_needs_reconnect.clone()),
-            StorageProviderType::OauthFile => {
-                let oauth = provider.oauth_file.as_ref();
-                let preset = oauth.map_or(OauthFilePreset::GoogleDrive, |oauth| oauth.preset);
-                let file = oauth
-                    .and_then(|oauth| CatalogProviderText(oauth.file_name.as_deref()).non_empty())
-                    .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
-                let account = match oauth {
-                    Some(oauth) => {
-                        match CatalogProviderText(oauth.account_email.as_deref()).non_empty() {
-                            Some(email) => email,
-                            None if CatalogProviderText(oauth.access_token.as_deref())
-                                .non_empty()
-                                .is_some() =>
-                            {
-                                match preset {
-                                    OauthFilePreset::ICloud => labels.icloud_signed_in.clone(),
-                                    OauthFilePreset::GoogleDrive => labels.google_signed_in.clone(),
-                                }
-                            }
-                            None => match preset {
-                                OauthFilePreset::ICloud => labels.icloud_not_signed_in.clone(),
-                                OauthFilePreset::GoogleDrive => labels.google_not_signed_in.clone(),
-                            },
+            StorageProviderType::LocalFolder => match &provider.local_folder {
+                StoredLocalFolderConfiguration::Configured(folder) => {
+                    match &folder.directory_name {
+                        StoredLocalFolderDirectory::DirectoryName(name)
+                            if !name.trim().is_empty() =>
+                        {
+                            name.trim().to_owned()
+                        }
+                        StoredLocalFolderDirectory::DirectoryName(_)
+                        | StoredLocalFolderDirectory::Unnamed => {
+                            labels.local_folder_needs_reconnect.clone()
                         }
                     }
-                    None => labels.google_not_signed_in.clone(),
+                }
+                StoredLocalFolderConfiguration::NotApplicable => {
+                    labels.local_folder_needs_reconnect.clone()
+                }
+            },
+            StorageProviderType::OauthFile => {
+                let (file, account) = match &provider.oauth_file {
+                    StoredOAuthFileConfiguration::Configured(oauth) => {
+                        let file = match &oauth.file_name {
+                            StoredOAuthRemoteFileName::FileName(name)
+                                if !name.trim().is_empty() =>
+                            {
+                                name.trim()
+                            }
+                            StoredOAuthRemoteFileName::FileName(_)
+                            | StoredOAuthRemoteFileName::Unresolved => DEFAULT_DRIVE_BACKUP_NAME,
+                        };
+                        let account = match &oauth.account_email {
+                            StoredOAuthAccountIdentity::Email(email)
+                                if !email.trim().is_empty() =>
+                            {
+                                email.trim()
+                            }
+                            StoredOAuthAccountIdentity::Email(_)
+                            | StoredOAuthAccountIdentity::Unknown => {
+                                match (&oauth.access_token, oauth.preset) {
+                                    (
+                                        StoredOAuthAccessCredential::AccessToken(token),
+                                        OauthFilePreset::ICloud,
+                                    ) if !token.trim().is_empty() => &labels.icloud_signed_in,
+                                    (
+                                        StoredOAuthAccessCredential::AccessToken(token),
+                                        OauthFilePreset::GoogleDrive,
+                                    ) if !token.trim().is_empty() => &labels.google_signed_in,
+                                    (_, OauthFilePreset::ICloud) => &labels.icloud_not_signed_in,
+                                    (_, OauthFilePreset::GoogleDrive) => {
+                                        &labels.google_not_signed_in
+                                    }
+                                }
+                            }
+                        };
+                        (file, account)
+                    }
+                    StoredOAuthFileConfiguration::NotApplicable => (
+                        DEFAULT_DRIVE_BACKUP_NAME,
+                        labels.google_not_signed_in.as_str(),
+                    ),
                 };
                 format!("{file} · {account}")
             }
             StorageProviderType::Github => {
-                let repo = CatalogProviderText(provider.github_repo.as_deref())
-                    .non_empty()
-                    .unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned());
-                let pat = match GithubPat::mask(provider.github_pat.as_deref().unwrap_or_default())
-                {
+                let repo = match &provider.github_repo {
+                    StoredGithubRepository::Repository(repo) if !repo.trim().is_empty() => {
+                        repo.trim()
+                    }
+                    StoredGithubRepository::Repository(_)
+                    | StoredGithubRepository::DefaultRepository => DEFAULT_GITHUB_REPO_NAME,
+                };
+                let masked = match &provider.github_pat {
+                    StoredGithubPat::Token(token) => GithubPat::mask(token),
+                    StoredGithubPat::Missing => GithubPatMask::NoToken,
+                };
+                let pat = match masked {
                     GithubPatMask::Hint(hint) => hint,
                     GithubPatMask::NoToken => labels.no_token_saved.clone(),
                 };
@@ -144,12 +185,20 @@ impl StorageProviderData {
                 SyncProviderTarget::LocalFolder(folder)
             }
             StorageProviderType::Github => SyncProviderTarget::Github(GithubSyncTarget {
-                repo: CatalogProviderText(provider.github_repo.as_deref())
-                    .non_empty()
-                    .unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned()),
-                pat: match CatalogProviderText(provider.github_pat.as_deref()).non_empty() {
-                    Some(pat) => pat,
-                    None => return SyncProviderTarget::Empty,
+                repo: match &provider.github_repo {
+                    StoredGithubRepository::Repository(repo) if !repo.trim().is_empty() => {
+                        repo.trim().to_owned()
+                    }
+                    StoredGithubRepository::Repository(_)
+                    | StoredGithubRepository::DefaultRepository => {
+                        DEFAULT_GITHUB_REPO_NAME.to_owned()
+                    }
+                },
+                pat: match &provider.github_pat {
+                    StoredGithubPat::Token(pat) if !pat.trim().is_empty() => pat.trim().to_owned(),
+                    StoredGithubPat::Token(_) | StoredGithubPat::Missing => {
+                        return SyncProviderTarget::Empty;
+                    }
                 },
             }),
             StorageProviderType::OauthFile => match &provider.oauth_file {
@@ -191,25 +240,29 @@ impl StorageProviderData {
 
 impl DuplicateProviderSelection<'_> {
     #[must_use]
-    pub fn find(self) -> Option<StorageProviderData> {
+    pub fn find(self) -> DuplicateSyncProvider {
         let Self {
             providers,
             candidate,
-            exclude_id,
+            policy,
         } = self;
         let candidate_key = candidate.target_key();
         if matches!(candidate_key, SyncProviderTargetIdentity::Unconfigured) {
-            return None;
+            return DuplicateSyncProvider::Unique;
         }
-        providers
-            .iter()
-            .find(|provider| {
-                if exclude_id.is_some_and(|excluded| provider.id == excluded) {
-                    return false;
-                }
-                provider.target_key() == candidate_key
-            })
-            .cloned()
+        match providers.iter().find(|provider| {
+            if let DuplicateCandidatePolicy::Exclude(excluded) = &policy
+                && provider.id == excluded.as_str()
+            {
+                return false;
+            }
+            provider.target_key() == candidate_key
+        }) {
+            Some(provider) => DuplicateSyncProvider::Duplicate {
+                provider: provider.clone(),
+            },
+            None => DuplicateSyncProvider::Unique,
+        }
     }
 }
 
@@ -285,16 +338,6 @@ impl AuthProvidersSnapshotData {
     }
 }
 
-impl CatalogProviderText<'_> {
-    fn non_empty(self) -> Option<String> {
-        let value = self.0;
-        value
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     struct GithubCatalogFixture<'a> {
@@ -331,8 +374,8 @@ mod tests {
     };
 
     use super::{
-        DuplicateProviderSelection, LocalProviderRowChange, LocalProviderRowOutcome,
-        LocalProviderRowRequest,
+        DuplicateCandidatePolicy, DuplicateProviderSelection, DuplicateSyncProvider,
+        LocalProviderRowChange, LocalProviderRowOutcome, LocalProviderRowRequest,
     };
     use crate::SyncProviderTargetIdentity;
 
@@ -449,18 +492,20 @@ mod tests {
         };
         let rows = vec![first.clone(), second];
         let original = rows.clone();
-        for (exclude_id, expected) in [
-            (None, "first"),
-            (Some("first"), "second"),
-            (Some("absent"), "first"),
+        for (policy, expected) in [
+            (DuplicateCandidatePolicy::IncludeAll, "first"),
+            (DuplicateCandidatePolicy::Exclude("first".into()), "second"),
+            (DuplicateCandidatePolicy::Exclude("absent".into()), "first"),
         ] {
             let found = DuplicateProviderSelection {
                 providers: &rows,
                 candidate: &first,
-                exclude_id,
+                policy,
             }
             .find();
-            assert_eq!(found.map(|row| row.id).as_deref(), Some(expected));
+            assert!(
+                matches!(found, DuplicateSyncProvider::Duplicate { provider } if provider.id == expected)
+            );
             assert_eq!(rows, original);
         }
     }
@@ -479,17 +524,12 @@ mod tests {
             pat: "github_pat_11AAAA",
         }
         .build();
-        assert_eq!(
-            DuplicateProviderSelection {
+        assert!(matches!(DuplicateProviderSelection {
                 providers: &[existing],
                 candidate: &candidate,
-                exclude_id: None
+                policy: DuplicateCandidatePolicy::IncludeAll
             }
-            .find()
-            .map(|provider| provider.id)
-            .as_deref(),
-            Some("gh-existing")
-        );
+            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "gh-existing"));
 
         let no_pat = StorageProviderData {
             github_pat: StoredGithubPat::Missing,
@@ -511,16 +551,16 @@ mod tests {
             pat: "github_pat_11AAAA",
         }
         .build();
-        assert!(
+        assert_eq!(
             DuplicateProviderSelection {
                 providers: slice::from_ref(&self_row),
                 candidate: &self_row,
-                exclude_id: Some("gh-self")
+                policy: DuplicateCandidatePolicy::Exclude("gh-self".into())
             }
-            .find()
-            .is_none()
+            .find(),
+            DuplicateSyncProvider::Unique
         );
-        assert!(
+        assert_eq!(
             DuplicateProviderSelection {
                 providers: &[GithubCatalogFixture {
                     id: "gh-a",
@@ -534,10 +574,10 @@ mod tests {
                     pat: "github_pat_11AAAA"
                 }
                 .build(),
-                exclude_id: None
+                policy: DuplicateCandidatePolicy::IncludeAll
             }
-            .find()
-            .is_none()
+            .find(),
+            DuplicateSyncProvider::Unique
         );
     }
 
@@ -548,21 +588,16 @@ mod tests {
             handle_id: "handle-1",
         }
         .build();
-        assert_eq!(
-            DuplicateProviderSelection {
+        assert!(matches!(DuplicateProviderSelection {
                 providers: &[folder],
                 candidate: &LocalFolderCatalogFixture {
                     id: "folder-b",
                     handle_id: "handle-1"
                 }
                 .build(),
-                exclude_id: None
+                policy: DuplicateCandidatePolicy::IncludeAll
             }
-            .find()
-            .map(|provider| provider.id)
-            .as_deref(),
-            Some("folder-a")
-        );
+            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "folder-a"));
 
         let mut private = OAuthCatalogFixture {
             id: "drive-private",
@@ -592,28 +627,18 @@ mod tests {
         shared_oauth.drive_mode = GoogleDriveMode::Shared;
         shared_oauth.folder_id = StoredGoogleDriveFolder::FolderId("folder-team".to_owned());
         let providers = vec![private.clone(), shared.clone()];
-        assert_eq!(
-            DuplicateProviderSelection {
+        assert!(matches!(DuplicateProviderSelection {
                 providers: &providers,
                 candidate: &private,
-                exclude_id: None
+                policy: DuplicateCandidatePolicy::IncludeAll
             }
-            .find()
-            .map(|provider| provider.id)
-            .as_deref(),
-            Some("drive-private")
-        );
-        assert_eq!(
-            DuplicateProviderSelection {
+            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "drive-private"));
+        assert!(matches!(DuplicateProviderSelection {
                 providers: &providers,
                 candidate: &shared,
-                exclude_id: None
+                policy: DuplicateCandidatePolicy::IncludeAll
             }
-            .find()
-            .map(|provider| provider.id)
-            .as_deref(),
-            Some("drive-shared")
-        );
+            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "drive-shared"));
         Ok(())
     }
 

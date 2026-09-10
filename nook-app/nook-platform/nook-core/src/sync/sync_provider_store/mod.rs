@@ -48,8 +48,8 @@ pub use active_credentials::{
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup,
 };
 pub use catalog::{
-    DuplicateProviderSelection, LocalProviderRowChange, LocalProviderRowOutcome,
-    LocalProviderRowRequest,
+    DuplicateCandidatePolicy, DuplicateProviderSelection, LocalProviderRowChange,
+    LocalProviderRowOutcome, LocalProviderRowRequest,
 };
 pub use enrollment::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
 pub use oauth::{
@@ -158,14 +158,6 @@ impl From<OAuthAccessTokenRef<'_>> for OAuthAccessToken {
 pub enum DuplicateSyncProvider {
     Unique,
     Duplicate { provider: StorageProvider },
-}
-impl From<Option<StorageProvider>> for DuplicateSyncProvider {
-    fn from(provider: Option<StorageProvider>) -> Self {
-        match provider {
-            Some(provider) => Self::Duplicate { provider },
-            None => Self::Unique,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

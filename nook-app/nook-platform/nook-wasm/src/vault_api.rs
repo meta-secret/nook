@@ -14,7 +14,7 @@ use nook_core::{
     ActiveProviderLoginSetup, AppId, DevicePublicKey, ProviderSaveOutcome, ProviderSaveSetup,
     VaultSyncAction,
 };
-use nook_core::{DuplicateProviderSelection, LocalProviderRowRequest};
+use nook_core::{DuplicateCandidatePolicy, DuplicateProviderSelection, LocalProviderRowRequest};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -328,14 +328,12 @@ pub fn find_duplicate_sync_provider(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
 ) -> nook_core::DuplicateSyncProvider {
-    nook_core::DuplicateSyncProvider::from(
-        DuplicateProviderSelection {
-            providers: &snapshot.providers,
-            candidate: &candidate,
-            exclude_id: None,
-        }
-        .find(),
-    )
+    DuplicateProviderSelection {
+        providers: &snapshot.providers,
+        candidate: &candidate,
+        policy: DuplicateCandidatePolicy::IncludeAll,
+    }
+    .find()
 }
 
 /// Find a duplicate while editing an existing provider.
@@ -347,14 +345,12 @@ pub fn find_duplicate_sync_provider_excluding(
     candidate: nook_core::StorageProviderData,
     exclude_id: &str,
 ) -> nook_core::DuplicateSyncProvider {
-    nook_core::DuplicateSyncProvider::from(
-        DuplicateProviderSelection {
-            providers: &snapshot.providers,
-            candidate: &candidate,
-            exclude_id: Some(exclude_id),
-        }
-        .find(),
-    )
+    DuplicateProviderSelection {
+        providers: &snapshot.providers,
+        candidate: &candidate,
+        policy: DuplicateCandidatePolicy::Exclude(exclude_id.into()),
+    }
+    .find()
 }
 
 /// Ensure a `local` provider row exists for the active vault, prepending one

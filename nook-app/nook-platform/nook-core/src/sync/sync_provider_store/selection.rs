@@ -33,7 +33,7 @@ pub enum ProviderSelection {
 pub struct ProviderSelectionRequest<'a> {
     pub providers: &'a [StorageProviderData],
     pub replication_type: ReplicationType,
-    pub policy: ProviderSelectionPolicy<'a>,
+    pub policy: ProviderSelectionPolicy,
 }
 impl ProviderSelectionRequest<'_> {
     #[must_use]

@@ -4,7 +4,9 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use super::oauth::ConfigurationText;
+use crate::{
+    DuplicateCandidatePolicy, DuplicateSyncProvider, ProviderSelection, StoredOAuthRemoteFileId,
+};
 use crate::{DuplicateProviderSelection, LocalProviderRowRequest};
 use crate::{ProviderRows, StoredICloudShareTarget};
 
@@ -104,23 +106,26 @@ impl ProviderSaveRequest {
 
     fn configured_drive_file(&self) -> String {
         let request = self;
-        let oauth = request.oauth_file.as_ref();
-        let shared_google_drive = oauth.is_some_and(|config| {
-            config.preset == OauthFilePreset::GoogleDrive
-                && (config.drive_mode == GoogleDriveMode::Shared
-                    || matches!(config.folder_id, StoredGoogleDriveFolder::FolderId(_)))
-        });
-        if shared_google_drive {
-            return oauth
-                .and_then(|config| config.file_name.as_deref())
-                .and_then(|value| ConfigurationText(value).non_empty())
-                .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME)
-                .to_owned();
+        if let StoredOAuthFileConfiguration::Configured(config) = &request.oauth_file
+            && config.preset == OauthFilePreset::GoogleDrive
+            && (config.drive_mode == GoogleDriveMode::Shared
+                || matches!(config.folder_id, StoredGoogleDriveFolder::FolderId(_)))
+        {
+            return match &config.file_name {
+                StoredOAuthRemoteFileName::FileName(name) if !name.trim().is_empty() => {
+                    name.trim().to_owned()
+                }
+                StoredOAuthRemoteFileName::FileName(_) | StoredOAuthRemoteFileName::Unresolved => {
+                    DEFAULT_DRIVE_BACKUP_NAME.to_owned()
+                }
+            };
         }
-        ConfigurationText(&request.github_repo)
-            .non_empty()
-            .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME)
-            .to_owned()
+        let requested = request.github_repo.trim();
+        if requested.is_empty() {
+            DEFAULT_DRIVE_BACKUP_NAME.to_owned()
+        } else {
+            requested.to_owned()
+        }
     }
 
     fn new_provider(
@@ -134,9 +139,12 @@ impl ProviderSaveRequest {
                 label: crate::ProviderLabel::Local.render(),
             })),
             StorageProviderType::Github => {
-                let repo = ConfigurationText(&request.github_repo)
-                    .non_empty()
-                    .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
+                let requested = request.github_repo.trim();
+                let repo = if requested.is_empty() {
+                    DEFAULT_GITHUB_REPO_NAME
+                } else {
+                    requested
+                };
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
                     label: crate::ProviderLabel::Github(&StoredGithubRepository::Repository(
@@ -150,16 +158,14 @@ impl ProviderSaveRequest {
             }
             StorageProviderType::OauthFile => {
                 let drive_file = request.configured_drive_file();
-                let mut oauth =
-                    request
-                        .oauth_file
-                        .as_ref()
-                        .cloned()
-                        .unwrap_or_else(|| OAuthFileConfigData {
-                            preset: request.oauth_preset,
-                            file_name: StoredOAuthRemoteFileName::FileName(drive_file.clone()),
-                            ..OAuthFileConfigData::default()
-                        });
+                let mut oauth = match &request.oauth_file {
+                    StoredOAuthFileConfiguration::Configured(config) => config.clone(),
+                    StoredOAuthFileConfiguration::NotApplicable => OAuthFileConfigData {
+                        preset: request.oauth_preset,
+                        file_name: StoredOAuthRemoteFileName::FileName(drive_file.clone()),
+                        ..OAuthFileConfigData::default()
+                    },
+                };
                 oauth.preset = request.oauth_preset;
                 oauth.file_name = StoredOAuthRemoteFileName::FileName(drive_file.clone());
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
@@ -174,10 +180,12 @@ impl ProviderSaveRequest {
                 Ok(provider)
             }
             StorageProviderType::LocalFolder => {
-                let folder = request
-                    .local_folder
-                    .as_ref()
-                    .ok_or(ProviderConstructionError::LocalFolderRequired)?;
+                let folder = match &request.local_folder {
+                    StoredLocalFolderConfiguration::Configured(folder) => folder,
+                    StoredLocalFolderConfiguration::NotApplicable => {
+                        return Err(ProviderConstructionError::LocalFolderRequired);
+                    }
+                };
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
                     label: crate::ProviderLabel::LocalFolder(&folder.directory_name).render(),
@@ -224,22 +232,14 @@ impl ActiveOAuthMerge<'_> {
                 StoredICloudShareTarget::SharedTarget(_) => active.icloud_share_target.clone(),
                 StoredICloudShareTarget::Personal => persisted.icloud_share_target.clone(),
             },
-            file_name: if persisted
-                .file_name
-                .as_deref()
-                .and_then(|value| ConfigurationText(value).non_empty())
-                .is_some()
-            {
-                persisted.file_name.clone()
-            } else if active
-                .file_name
-                .as_deref()
-                .and_then(|value| ConfigurationText(value).non_empty())
-                .is_some()
-            {
-                active.file_name.clone()
-            } else {
-                StoredOAuthRemoteFileName::FileName(drive_file.to_owned())
+            file_name: match (&persisted.file_name, &active.file_name) {
+                (StoredOAuthRemoteFileName::FileName(name), _) if !name.trim().is_empty() => {
+                    persisted.file_name.clone()
+                }
+                (_, StoredOAuthRemoteFileName::FileName(name)) if !name.trim().is_empty() => {
+                    active.file_name.clone()
+                }
+                _ => StoredOAuthRemoteFileName::FileName(drive_file.to_owned()),
             },
             account_email: match persisted.account_email {
                 StoredOAuthAccountIdentity::Email(_) => persisted.account_email.clone(),
@@ -256,7 +256,7 @@ struct OAuthUpdateTarget<'a> {
 }
 
 impl OAuthUpdateTarget<'_> {
-    fn id(&self) -> Option<String> {
+    fn id(&self) -> ProviderSelection {
         let providers = self.providers;
         let active_store_id = self.active_store_id;
         let active_oauth = self.active_oauth;
@@ -273,13 +273,18 @@ impl OAuthUpdateTarget<'_> {
             created_at: String::new(),
         };
         let sync_providers = ProviderRows { providers }.for_vault(active_store_id).sync();
-        DuplicateProviderSelection {
+        match (DuplicateProviderSelection {
             providers: &sync_providers,
             candidate: &candidate,
-            exclude_id: None,
-        }
+            policy: DuplicateCandidatePolicy::IncludeAll,
+        })
         .find()
-        .map(|provider| provider.id)
+        {
+            DuplicateSyncProvider::Unique => ProviderSelection::Unavailable,
+            DuplicateSyncProvider::Duplicate { provider } => {
+                ProviderSelection::Selected(provider.id.into())
+            }
+        }
     }
 }
 
@@ -313,7 +318,7 @@ impl ProviderSaveRequest {
             local: local_provider,
         } = request.active_provider_rows();
         let mut providers = request.snapshot.providers.clone();
-        let mut oauth_update_id = None;
+        let mut oauth_update_id = ProviderSelection::Unavailable;
 
         if request.setup.is_new() && provider_type != StorageProviderType::Local {
             let provider = match request.new_provider(provider_type) {
@@ -325,15 +330,16 @@ impl ProviderSaveRequest {
             let duplicate = DuplicateProviderSelection {
                 providers: &active_providers,
                 candidate: &provider,
-                exclude_id: None,
+                policy: DuplicateCandidatePolicy::IncludeAll,
             }
             .find();
-            if duplicate.is_some() && request.explicit_add {
+            if matches!(duplicate, DuplicateSyncProvider::Duplicate { .. }) && request.explicit_add
+            {
                 return ProviderSaveOutcome::Duplicate;
             }
-            if duplicate.is_none() {
+            if matches!(duplicate, DuplicateSyncProvider::Unique) {
                 if provider.provider_type == StorageProviderType::OauthFile {
-                    oauth_update_id = Some(provider.id.clone());
+                    oauth_update_id = ProviderSelection::Selected(provider.id.clone().into());
                 }
                 providers.push(provider);
             }
@@ -368,22 +374,24 @@ impl ProviderSaveRequest {
 
         let mut returned_oauth = StoredOAuthFileConfiguration::NotApplicable;
         if request.storage_mode == StorageProviderType::OauthFile
-            && let Some(active_oauth) = request.oauth_file.as_ref()
-            && active_oauth.file_id.as_deref().is_some()
+            && let StoredOAuthFileConfiguration::Configured(active_oauth) = &request.oauth_file
+            && matches!(active_oauth.file_id, StoredOAuthRemoteFileId::FileId(_))
         {
-            let target_id = oauth_update_id.or_else(|| {
-                OAuthUpdateTarget {
+            let target_id = match oauth_update_id {
+                ProviderSelection::Selected(id) => ProviderSelection::Selected(id),
+                ProviderSelection::Unavailable => OAuthUpdateTarget {
                     providers: &providers,
                     active_store_id,
                     active_oauth,
                 }
-                .id()
-            });
-            if let Some(target_id) = target_id {
+                .id(),
+            };
+            if let ProviderSelection::Selected(target_id) = target_id {
                 let drive_file = request.configured_drive_file();
                 for provider in &mut providers {
-                    if provider.id == target_id
-                        && let Some(persisted) = provider.oauth_file.as_ref()
+                    if provider.id == target_id.as_str()
+                        && let StoredOAuthFileConfiguration::Configured(persisted) =
+                            &provider.oauth_file
                     {
                         let merged = ActiveOAuthMerge {
                             persisted,
