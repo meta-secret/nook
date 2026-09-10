@@ -12,8 +12,8 @@ import {
 
 export class DelegationVisualizationRequestDecoder {
   private isTransportRecord(
-    value: unknown,
-  ): value is { readonly [key: string]: unknown } {
+    value: DelegationVisualizationTransportRecord,
+  ): boolean {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
 
@@ -34,9 +34,11 @@ export class DelegationVisualizationRequestDecoder {
     ) {
       return err(new DelegationVisualizationRequestDecodeError(''));
     }
-    let transport: unknown;
+    let transport: DelegationVisualizationRequestTransport;
     try {
-      transport = JSON.parse(serialized);
+      transport = JSON.parse(
+        serialized,
+      ) as DelegationVisualizationRequestTransport;
     } catch {
       return err(new DelegationVisualizationRequestDecodeError(''));
     }
@@ -141,7 +143,7 @@ export class DelegationVisualizationRequestDecoder {
   }
 
   private isDelegationTeam(
-    value: unknown,
+    value: string | false,
   ): value is DelegationVisualizationTeam {
     return (
       typeof value === 'string' &&
@@ -181,12 +183,12 @@ enum DelegationVisualizationTaskField {
 }
 
 type ExactRequestKeys = {
-  readonly value: unknown;
+  readonly value: DelegationVisualizationRequestTransport;
   readonly expected: readonly DelegationVisualizationRequestField[];
 };
 
 type ExactTaskKeys = {
-  readonly value: unknown;
+  readonly value: DelegationVisualizationTaskTransport;
   readonly expected: readonly DelegationVisualizationTaskField[];
 };
 
@@ -205,7 +207,23 @@ export class DelegationVisualizationRequestDecodeError {
 }
 
 type DecodeDelegationVisualizationTaskRequest = {
-  readonly candidate: unknown;
+  readonly candidate: DelegationVisualizationTaskTransport;
   readonly index: number;
   readonly priorTaskIds: ReadonlySet<string>;
 };
+
+type DelegationVisualizationTaskTransport = {
+  readonly id: string | false;
+  readonly team: string | false;
+  readonly description: string | false;
+  readonly dependencies: (string | false)[] | false;
+};
+
+type DelegationVisualizationRequestTransport = {
+  readonly kind: string | false;
+  readonly tasks: DelegationVisualizationTaskTransport[] | false;
+};
+
+type DelegationVisualizationTransportRecord =
+  | DelegationVisualizationRequestTransport
+  | DelegationVisualizationTaskTransport;
