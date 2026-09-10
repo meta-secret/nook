@@ -615,7 +615,7 @@ describe('service worker routing', () => {
       sendResponse,
     }
 
-    expect(routeExternalCompanionMessage(routingArgs)).toBe(true)
+    expect(await routeExternalCompanionMessage(routingArgs)).toBe(true)
     await flushResponses()
     expect(openCompanionLauncher).toHaveBeenCalledTimes(1)
     expect(openCompanionLauncher).toHaveBeenCalledWith(
@@ -671,7 +671,7 @@ describe('service worker routing', () => {
     const sendResponse = mock(() => {})
 
     expect(
-      routeExternalCompanionMessage({
+      await routeExternalCompanionMessage({
         dependencies,
         message: { type: 'nook:extension-pairing-approved' },
         sender: {
