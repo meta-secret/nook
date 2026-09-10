@@ -66,7 +66,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
-    'b1a958b0499e73241a967d5540c3615e66a91be43a4f1a53e9cdeccd8f85f417',
+    '998f45b0027db1f638e1f803c33eb3668199f7848d04c45c5fb337bda201dfe6',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
