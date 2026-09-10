@@ -299,7 +299,9 @@ export class ChangedCortexDensity {
       args: args.arguments,
       cwd: args.repoRoot,
     };
-    const output = HostCommand.run(commandArgs);
+    const outputLaunch = new HostCommand(commandArgs).execute();
+    if (outputLaunch.isErr()) return err(outputLaunch.error);
+    const output = outputLaunch.value;
     if (output.exitCode !== 0) {
       const [defaulted2 = 'command'] = [args.arguments[0]];
       const failureArgs: LoomFailureDetailArgs = {

@@ -122,10 +122,22 @@ export class StructuralExpertInvocation {
         session: runtime.session,
         signal: input.signal,
       };
-      execution =
+      const runtimeResult =
         await StructuralExpertRuntimeAuthority.executeStructuralExpert(
           executionRequest,
         );
+      if (runtimeResult.isErr()) {
+        const failureInput: FinalizeStructuralFailureInput = {
+          activityCount,
+          journal,
+          request,
+          runDirectory,
+        };
+        return StructuralExpertInvocation.finalizeStructuralFailure(
+          failureInput,
+        );
+      }
+      execution = runtimeResult.value;
     } catch {
       const failureInput: FinalizeStructuralFailureInput = {
         activityCount,

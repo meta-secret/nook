@@ -1,3 +1,5 @@
+import { ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { createHash, randomUUID } from 'node:crypto';
 
 import { existsSync } from 'node:fs';
@@ -523,13 +525,13 @@ class CountingRuntime implements AgentTaskRuntime<string, string> {
 
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     this.executionCount += 1;
-    return {
+    return ok({
       threadId: `thread-${invocation.task}`,
       output:
         ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput(),
-    };
+    });
   }
 
   dispose(): void {

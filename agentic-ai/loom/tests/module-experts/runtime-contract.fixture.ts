@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 
 import type { MakeDirectoryOptions } from 'node:fs';
@@ -187,13 +188,17 @@ export class ModuleExpertsRuntimeContractScenario {
       args: ['init'],
       cwd: root,
     };
-    expect(HostCommand.run(gitInit).exitCode).toBe(0);
+    const hostLaunch1 = new HostCommand(gitInit).execute();
+    assert(hostLaunch1.isOk());
+    expect(hostLaunch1.value.exitCode).toBe(0);
     const gitAdd: RunCommandArgs = {
       command: 'git',
       args: ['add', '.'],
       cwd: root,
     };
-    expect(HostCommand.run(gitAdd).exitCode).toBe(0);
+    const hostLaunch2 = new HostCommand(gitAdd).execute();
+    assert(hostLaunch2.isOk());
+    expect(hostLaunch2.value.exitCode).toBe(0);
     const gitCommit: RunCommandArgs = {
       command: 'git',
       args: [
@@ -207,13 +212,17 @@ export class ModuleExpertsRuntimeContractScenario {
       ],
       cwd: root,
     };
-    expect(HostCommand.run(gitCommit).exitCode).toBe(0);
+    const hostLaunch3 = new HostCommand(gitCommit).execute();
+    assert(hostLaunch3.isOk());
+    expect(hostLaunch3.value.exitCode).toBe(0);
     const gitRevision: RunCommandArgs = {
       command: 'git',
       args: ['rev-parse', 'HEAD'],
       cwd: root,
     };
-    const sourceCommit = HostCommand.run(gitRevision).stdout.trim();
+    const hostLaunch4 = new HostCommand(gitRevision).execute();
+    assert(hostLaunch4.isOk());
+    const sourceCommit = hostLaunch4.value.stdout.trim();
     const [entryPoint = ''] = [selected.publicEntryPoints[0]];
     const committedEntryContent = `committed:${entryPoint}\n`;
     await writeFile(

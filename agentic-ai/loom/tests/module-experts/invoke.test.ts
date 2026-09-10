@@ -1,3 +1,8 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  type AgentExecutionFailure,
+  AgentExecutionFailureKind,
+} from '../../src/agent-workflow/runtime.ts';
 import { ModuleExpertsInvokeScenario, REPO_ROOT } from './invoke.fixture.ts';
 export { ModuleExpertsInvokeScenario } from './invoke.fixture.ts';
 
@@ -80,7 +85,7 @@ class RecordingAgentRuntime implements AgentTaskRuntime<string, string> {
 
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     this.executionCount += 1;
     this.invocation = invocation;
     const observation: RuntimeActivityObservation = {
@@ -88,7 +93,7 @@ class RecordingAgentRuntime implements AgentTaskRuntime<string, string> {
       detail: 'Codex turn completed.',
     };
     await invocation.observe(observation);
-    return {
+    return ok({
       threadId: 'module-expert-thread',
       output: {
         summary: 'Core contract inspected.',
@@ -99,20 +104,23 @@ class RecordingAgentRuntime implements AgentTaskRuntime<string, string> {
         resultKind: WorkflowResultKind.ModuleExpertEvidence,
         continuation: ModuleExpertsInvokeScenario.moduleExpertContinuation(),
       },
-    };
+    });
   }
 }
 
 class FailingAgentRuntime implements AgentTaskRuntime<string, string> {
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     const observation: RuntimeActivityObservation = {
       activity: WorkflowRuntimeActivityKind.TurnFailed,
       detail: 'Codex turn failed.',
     };
     await invocation.observe(observation);
-    throw new Error('private runtime detail must not be recorded');
+    return err({
+      kind: AgentExecutionFailureKind.FailedTurn,
+      message: 'private runtime detail must not be recorded',
+    });
   }
 }
 
@@ -124,14 +132,14 @@ class InvalidCompletionAgentRuntime implements AgentTaskRuntime<
 
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     this.executionCount += 1;
     const observation: RuntimeActivityObservation = {
       activity: WorkflowRuntimeActivityKind.TurnCompleted,
       detail: 'Codex turn completed.',
     };
     await invocation.observe(observation);
-    return {
+    return ok({
       threadId: '',
       output: {
         resultKind: WorkflowResultKind.ModuleExpertEvidence,
@@ -142,7 +150,7 @@ class InvalidCompletionAgentRuntime implements AgentTaskRuntime<
         artifacts: [],
         continuation: ModuleExpertsInvokeScenario.moduleExpertContinuation(),
       },
-    };
+    });
   }
 }
 
@@ -152,7 +160,7 @@ class MissingContinuationAgentRuntime implements AgentTaskRuntime<
 > {
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     const observation: RuntimeActivityObservation = {
       activity: WorkflowRuntimeActivityKind.TurnCompleted,
       detail: 'Codex turn completed.',
@@ -170,9 +178,11 @@ class MissingContinuationAgentRuntime implements AgentTaskRuntime<
         artifacts: [],
       },
     };
-    return JSON.parse(
-      JSON.stringify(incompleteCompletion),
-    ) as AgentExecutionCompletion;
+    return ok(
+      JSON.parse(
+        JSON.stringify(incompleteCompletion),
+      ) as AgentExecutionCompletion,
+    );
   }
 }
 

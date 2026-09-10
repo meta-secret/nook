@@ -74,7 +74,9 @@ export class AgentTemporaryPath {
       args: ['rev-parse', 'HEAD'],
       cwd: request.repoRoot,
     };
-    const gitHead = HostCommand.run(gitHeadRequest);
+    const gitHeadLaunch = new HostCommand(gitHeadRequest).execute();
+    if (gitHeadLaunch.isErr()) return err(gitHeadLaunch.error);
+    const gitHead = gitHeadLaunch.value;
     const gitCommit = gitHead.stdout.trim();
     if (gitHead.exitCode !== 0 || !/^[0-9a-f]{40}$/.test(gitCommit)) {
       const failure: LoomFailureDetailArgs = {
@@ -94,8 +96,12 @@ export class AgentTemporaryPath {
       args: ['reflog', '--format=%H%x09%gs', 'HEAD'],
       cwd: request.repoRoot,
     };
-    const branchName = HostCommand.run(branchRequest).stdout.trim();
-    const reflog = HostCommand.run(reflogRequest).stdout;
+    const branchNameLaunch = new HostCommand(branchRequest).execute();
+    if (branchNameLaunch.isErr()) return err(branchNameLaunch.error);
+    const branchName = branchNameLaunch.value.stdout.trim();
+    const reflogLaunch = new HostCommand(reflogRequest).execute();
+    if (reflogLaunch.isErr()) return err(reflogLaunch.error);
+    const reflog = reflogLaunch.value.stdout;
     const taskAnchorSelection: TaskAnchorSelection = {
       currentCommit: gitCommit,
       branchName,

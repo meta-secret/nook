@@ -1,3 +1,4 @@
+import type { HostCommandFailure } from '../lib/run.ts';
 import { err, ok, type Result } from 'neverthrow';
 import type {
   PrLandPrRequest,
@@ -48,10 +49,12 @@ type PrLandMergeCheckArgs = {
   readonly prNumber: number;
 };
 
-export type PrLandFailure = {
-  readonly code: LoomFailureCode.CommandFailed;
-  readonly message: string;
-};
+export type PrLandFailure =
+  | HostCommandFailure
+  | {
+      readonly code: LoomFailureCode.CommandFailed;
+      readonly message: string;
+    };
 
 export class PullRequestDeliveryCommand {
   constructor(private readonly request: PrLandStatusArgs) {}
@@ -69,7 +72,9 @@ export class PullRequestDeliveryCommand {
       ],
       cwd: repoRoot,
     };
-    const view = HostCommand.run(viewArgs);
+    const viewLaunch = new HostCommand(viewArgs).execute();
+    if (viewLaunch.isErr()) return err(viewLaunch.error);
+    const view = viewLaunch.value;
     if (view.exitCode !== 0) {
       return err({
         code: LoomFailureCode.CommandFailed,
@@ -94,7 +99,9 @@ export class PullRequestDeliveryCommand {
       args: ['pr:ready', `PR=${prNumber}`],
       cwd: repoRoot,
     };
-    const result = HostCommand.run(resultArgs);
+    const resultLaunch = new HostCommand(resultArgs).execute();
+    if (resultLaunch.isErr()) return err(resultLaunch.error);
+    const result = resultLaunch.value;
     const passed = result.exitCode === 0;
     return ok({
       family: RequestFamily.PrLand,
@@ -150,7 +157,9 @@ export class PullRequestValidationCommand {
       ],
       cwd: repoRoot,
     };
-    const prePush = HostCommand.run(prePushArgs);
+    const prePushLaunch = new HostCommand(prePushArgs).execute();
+    if (prePushLaunch.isErr()) return err(prePushLaunch.error);
+    const prePush = prePushLaunch.value;
     if (prePush.exitCode !== 0) {
       return err({
         code: LoomFailureCode.CommandFailed,
@@ -164,7 +173,9 @@ export class PullRequestValidationCommand {
         args: ['remote', `TASK_NAME=${request.remoteTask.task}`],
         cwd: repoRoot,
       };
-      const remote = HostCommand.run(remoteArgs);
+      const remoteLaunch = new HostCommand(remoteArgs).execute();
+      if (remoteLaunch.isErr()) return err(remoteLaunch.error);
+      const remote = remoteLaunch.value;
       if (remote.exitCode !== 0) {
         return err({
           code: LoomFailureCode.CommandFailed,
@@ -186,7 +197,9 @@ export class PullRequestValidationCommand {
       args: validateArgs,
       cwd: repoRoot,
     };
-    const validated = HostCommand.run(validatedArgs);
+    const validatedLaunch = new HostCommand(validatedArgs).execute();
+    if (validatedLaunch.isErr()) return err(validatedLaunch.error);
+    const validated = validatedLaunch.value;
     if (validated.exitCode !== 0) {
       return err({
         code: LoomFailureCode.CommandFailed,

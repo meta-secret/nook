@@ -1,3 +1,6 @@
+import assert from 'node:assert/strict';
+import { type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { randomUUID } from 'node:crypto';
 
 import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
@@ -71,7 +74,9 @@ export class AgentWorkflowCodexRuntimeScenario {
   private constructor(private readonly request: string) {}
 
   static runGit(command: RunCommandArgs): string {
-    const result = HostCommand.run(command);
+    const hostLaunch1 = new HostCommand(command).execute();
+    assert(hostLaunch1.isOk());
+    const result = hostLaunch1.value;
     expect(result.exitCode).toBe(0);
     return result.stdout.trim();
   }
@@ -270,19 +275,25 @@ describe('Codex agent source stability', () => {
         sourceCommit,
         phase: AgentSourceStabilityPhase.BeforeAttempt,
       };
-      expect(() => AgentSourceSnapshot.assertStable(stableCheck)).not.toThrow();
+      const runtimeFailure1 = AgentSourceSnapshot.assertStable(stableCheck);
+      assert(runtimeFailure1.isOk());
 
       const wrongCommitCheck: AgentSourceStabilityCheck = {
         ...stableCheck,
         sourceCommit: '0000000000000000000000000000000000000000',
       };
-      expect(() => AgentSourceSnapshot.assertStable(wrongCommitCheck)).toThrow(
+      const runtimeFailure2 =
+        AgentSourceSnapshot.assertStable(wrongCommitCheck);
+      assert(runtimeFailure2.isErr());
+      expect(runtimeFailure2.error.message).toContain(
         'is not at immutable commit',
       );
 
       const untrackedPath = join(workingDirectory, 'untracked.txt');
       await writeFile(untrackedPath, 'drifted\n');
-      expect(() => AgentSourceSnapshot.assertStable(stableCheck)).toThrow(
+      const runtimeFailure3 = AgentSourceSnapshot.assertStable(stableCheck);
+      assert(runtimeFailure3.isErr());
+      expect(runtimeFailure3.error.message).toContain(
         'worktree is not clean before attempt',
       );
       await unlink(untrackedPath);
@@ -292,7 +303,9 @@ describe('Codex agent source stability', () => {
         ...stableCheck,
         phase: AgentSourceStabilityPhase.AfterAttempt,
       };
-      expect(() => AgentSourceSnapshot.assertStable(dirtyCheck)).toThrow(
+      const runtimeFailure4 = AgentSourceSnapshot.assertStable(dirtyCheck);
+      assert(runtimeFailure4.isErr());
+      expect(runtimeFailure4.error.message).toContain(
         'worktree is not clean after attempt',
       );
     } finally {
@@ -320,7 +333,9 @@ describe('Codex streamed turn terminal state', () => {
       observe: async () => {},
     };
 
-    const completion = await CodexTurn.collect(completedArgs);
+    const completionResult = await CodexTurn.collect(completedArgs);
+    assert(completionResult.isOk());
+    const completion = completionResult.value;
     expect(completion.threadId).toBe('streamed-thread');
     expect(completion.output.resultKind).toBe(
       WorkflowResultKind.CortexEvidence,
@@ -340,7 +355,9 @@ describe('Codex streamed turn terminal state', () => {
       expectedResultKind: WorkflowResultKind.CortexEvidence,
       observe: async () => {},
     };
-    await expect(CodexTurn.collect(unterminatedArgs)).rejects.toThrow(
+    const runtimeFailure5 = await CodexTurn.collect(unterminatedArgs);
+    assert(runtimeFailure5.isErr());
+    expect(runtimeFailure5.error.message).toContain(
       'without a thread identity or structured result',
     );
   });
@@ -378,9 +395,9 @@ describe('Codex streamed turn terminal state', () => {
         },
       };
 
-      await expect(CodexTurn.collect(collectArgs)).rejects.toThrow(
-        'Codex turn failed',
-      );
+      const runtimeFailure6 = await CodexTurn.collect(collectArgs);
+      assert(runtimeFailure6.isErr());
+      expect(runtimeFailure6.error.message).toContain('Codex turn failed');
       expect(
         observations.some(
           (observation) =>
@@ -410,7 +427,7 @@ describe('Codex streamed turn terminal state', () => {
       },
     };
 
-    await CodexTurn.collect(collectArgs);
+    assert((await CodexTurn.collect(collectArgs)).isOk());
 
     const sourceReads = observations.filter(
       (observation) =>
@@ -495,7 +512,7 @@ type FakeThreadEventStreamArgs = {
 class FailingStreamAgentRuntime implements AgentTaskRuntime<string, string> {
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     const events = [
       AgentWorkflowCodexRuntimeScenario.threadStartedEvent(),
       AgentWorkflowCodexRuntimeScenario.agentMessageEvent(),

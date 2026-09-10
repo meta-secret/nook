@@ -161,10 +161,21 @@ export class ModuleExpertInvocation {
         signal: args.signal,
         observe,
       };
-      trustedExecution =
+      const runtimeResult =
         await ModuleExpertRuntimeAuthority.executeModuleExpertAgent(
           executionArgs,
         );
+      if (runtimeResult.isErr()) {
+        const failureContext: FinalizeFailedAttemptContext = {
+          journal,
+          activityCount,
+          runDirectory,
+          profile,
+          request,
+        };
+        return ModuleExpertInvocation.finalizeFailedAttempt(failureContext);
+      }
+      trustedExecution = runtimeResult.value;
     } catch {
       const failureContext: FinalizeFailedAttemptContext = {
         journal,

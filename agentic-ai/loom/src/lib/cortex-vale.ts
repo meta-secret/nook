@@ -27,7 +27,9 @@ export class CortexValeInvocation {
       args: ['--version'],
       cwd: args.repoRoot,
     };
-    const version = HostCommand.run(versionArgs);
+    const versionLaunch = new HostCommand(versionArgs).execute();
+    if (versionLaunch.isErr()) return err(versionLaunch.error);
+    const version = versionLaunch.value;
     if (
       version.exitCode !== 0 ||
       version.stdout.trim() !== REQUIRED_VALE_VERSION
@@ -61,7 +63,9 @@ export class CortexValeInvocation {
       ],
       cwd: args.repoRoot,
     };
-    const lint = HostCommand.run(lintArgs);
+    const lintLaunch = new HostCommand(lintArgs).execute();
+    if (lintLaunch.isErr()) return err(lintLaunch.error);
+    const lint = lintLaunch.value;
     if (lint.exitCode === 0) return ok(undefined);
     return err({
       code: LoomFailureCode.CortexAuditFailed,

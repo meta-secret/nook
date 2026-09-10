@@ -1,3 +1,6 @@
+import assert from 'node:assert/strict';
+import { ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { randomUUID } from 'node:crypto';
 
 import { rm } from 'node:fs/promises';
@@ -179,11 +182,13 @@ const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
 class TrustedCompletionRuntime implements AgentTaskRuntime<string, string> {
-  async executeAgent(): Promise<AgentExecutionCompletion> {
-    return {
+  async executeAgent(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
+    return ok({
       threadId: 'trusted-thread',
       output: StructuralExpertsTrustedRuntimeScenario.codeEvidence(),
-    };
+    });
   }
 }
 
@@ -264,12 +269,17 @@ test('binds structural journal and completion authorities exactly once', async (
       StructuralExpertRuntimeAuthority.executeStructuralExpert(
         executionRequest,
       );
-    await expect(
-      StructuralExpertRuntimeAuthority.executeStructuralExpert(
+    const runtimeFailure1 =
+      await StructuralExpertRuntimeAuthority.executeStructuralExpert(
         executionRequest,
-      ),
-    ).rejects.toThrow('runtime session is invalid');
-    const execution = await executionPromise;
+      );
+    assert(runtimeFailure1.isErr());
+    expect(runtimeFailure1.error.message).toContain(
+      'runtime session is invalid',
+    );
+    const executionResult = await executionPromise;
+    assert(executionResult.isOk());
+    const execution = executionResult.value;
     const forgedAuthority = {
       kind: 'structural-expert-completion-authority',
     } as StructuralCompletionAuthority;

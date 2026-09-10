@@ -1,3 +1,6 @@
+import assert from 'node:assert/strict';
+import { ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { randomUUID } from 'node:crypto';
 
 import { existsSync } from 'node:fs';
@@ -141,13 +144,15 @@ type ExtendedModuleExpertInvocationRequest = ModuleExpertInvocationRequest & {
 class TrustedRuntimeCompletion implements AgentTaskRuntime<string, string> {
   executionCount = 0;
 
-  async executeAgent(): Promise<AgentExecutionCompletion> {
+  async executeAgent(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
     this.executionCount += 1;
-    return {
+    return ok({
       threadId: 'trusted-runtime-thread',
       output:
         ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput(),
-    };
+    });
   }
 }
 
@@ -205,9 +210,12 @@ test('rejects malformed direct session requests before parent or runtime authori
     signal: controller.signal,
     observe: async () => {},
   };
-  await expect(
-    ModuleExpertRuntimeAuthority.executeModuleExpertAgent(executeArgs),
-  ).rejects.toThrow('runtime session identity is invalid');
+  const runtimeFailure1 =
+    await ModuleExpertRuntimeAuthority.executeModuleExpertAgent(executeArgs);
+  assert(runtimeFailure1.isErr());
+  expect(runtimeFailure1.error.message).toContain(
+    'runtime session identity is invalid',
+  );
 });
 
 test('binds parent, session, journal, and completion authority exactly once', async () => {
@@ -345,10 +353,15 @@ test('binds parent, session, journal, and completion authority exactly once', as
     };
     const executionPromise =
       ModuleExpertRuntimeAuthority.executeModuleExpertAgent(executeArgs);
-    await expect(
-      ModuleExpertRuntimeAuthority.executeModuleExpertAgent(executeArgs),
-    ).rejects.toThrow('runtime session identity is invalid');
-    const execution = await executionPromise;
+    const runtimeFailure2 =
+      await ModuleExpertRuntimeAuthority.executeModuleExpertAgent(executeArgs);
+    assert(runtimeFailure2.isErr());
+    expect(runtimeFailure2.error.message).toContain(
+      'runtime session identity is invalid',
+    );
+    const executionResult = await executionPromise;
+    assert(executionResult.isOk());
+    const execution = executionResult.value;
     expect(runtime.executionCount).toBe(1);
 
     const reboundCompletion: AgentExecutionCompletion = {

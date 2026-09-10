@@ -37,7 +37,9 @@ export class GithubActionEvidenceApi {
       cwd: request.repoRoot,
       outputPolicy: CommandOutputPolicy.GitHubApi,
     };
-    const output = HostCommand.run(commandRequest);
+    const outputLaunch = new HostCommand(commandRequest).execute();
+    if (outputLaunch.isErr()) return err(outputLaunch.error);
+    const output = outputLaunch.value;
     if (output.exitCode !== 0) {
       return err({
         code: LoomFailureCode.CommandFailed,

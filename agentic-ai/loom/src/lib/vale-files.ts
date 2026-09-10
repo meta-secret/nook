@@ -1,3 +1,4 @@
+import type { HostCommandFailure } from './run.ts';
 import { err, ok, type Result } from 'neverthrow';
 import { lstatSync, realpathSync } from 'node:fs';
 import path from 'node:path';
@@ -82,7 +83,9 @@ export class ValeFileDiagnostics {
       args: ['--version'],
       cwd: args.repoRoot,
     };
-    const version = HostCommand.run(versionArgs);
+    const versionLaunch = new HostCommand(versionArgs).execute();
+    if (versionLaunch.isErr()) return err(versionLaunch.error);
+    const version = versionLaunch.value;
     if (
       new ValeVersionOutput(version).admission() ===
       ValeVersionAdmission.Rejected
@@ -102,7 +105,9 @@ export class ValeFileDiagnostics {
       ],
       cwd: args.repoRoot,
     };
-    const output = HostCommand.run(commandArgs);
+    const outputLaunch = new HostCommand(commandArgs).execute();
+    if (outputLaunch.isErr()) return err(outputLaunch.error);
+    const output = outputLaunch.value;
     if (output.signaled) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
@@ -425,10 +430,12 @@ type RequireExactFieldsArgs = {
   readonly label: string;
 };
 
-export type ValeFailure = {
-  readonly code: LoomFailureCode.CortexAuditFailed;
-  readonly message: string;
-};
+export type ValeFailure =
+  | HostCommandFailure
+  | {
+      readonly code: LoomFailureCode.CortexAuditFailed;
+      readonly message: string;
+    };
 
 export enum ValeVersionAdmission {
   Admitted = 'admitted',

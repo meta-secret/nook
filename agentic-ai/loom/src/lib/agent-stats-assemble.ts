@@ -48,7 +48,9 @@ export class AgentStatisticsAssembly {
       ],
       cwd: options.repoRoot,
     };
-    const prJson = HostCommand.run(prJsonArgs);
+    const prJsonLaunch = new HostCommand(prJsonArgs).execute();
+    if (prJsonLaunch.isErr()) return err(prJsonLaunch.error);
+    const prJson = prJsonLaunch.value;
     if (prJson.exitCode !== 0) {
       const loomFailureDetailArgs12: LoomFailureDetailArgs = {
         code: LoomFailureCode.CommandFailed,
@@ -147,7 +149,9 @@ export class AgentStatisticsAssembly {
       inventory = scratch.test_inventory.value;
     } else if (options.includeInventory) {
       const inventoryArgs = { repoRoot: options.repoRoot, headSha };
-      inventory = this.countTestInventory(inventoryArgs);
+      const measuredInventory = this.countTestInventory(inventoryArgs);
+      if (measuredInventory.isErr()) return err(measuredInventory.error);
+      inventory = measuredInventory.value;
     } else {
       inventory = {
         measured_at: new Date().toISOString(),
@@ -331,7 +335,9 @@ export class AgentStatisticsAssembly {
     return ok({ yaml, record });
   }
 
-  private countTestInventory(args: CountTestInventoryArgs): UntrustedYamlMap {
+  private countTestInventory(
+    args: CountTestInventoryArgs,
+  ): Result<UntrustedYamlMap, StatisticsAssemblyFailure> {
     const { repoRoot, headSha } = args;
 
     const measuredAt = new Date().toISOString();
@@ -340,26 +346,36 @@ export class AgentStatisticsAssembly {
       filter:
         'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)',
     };
-    const rust = this.countNextest(rustArgs);
+    const rustResult = this.countNextest(rustArgs);
+    if (rustResult.isErr()) return err(rustResult.error);
+    const rust = rustResult.value;
     const preflightArgs = { repoRoot, filter: 'package(preflight)' };
-    const preflight = this.countNextest(preflightArgs);
-    const webUnit = this.countVitest(repoRoot);
-    const e2e = this.countPlaywright(repoRoot);
+    const preflightResult = this.countNextest(preflightArgs);
+    if (preflightResult.isErr()) return err(preflightResult.error);
+    const preflight = preflightResult.value;
+    const webUnitResult = this.countVitest(repoRoot);
+    if (webUnitResult.isErr()) return err(webUnitResult.error);
+    const webUnit = webUnitResult.value;
+    const e2eResult = this.countPlaywright(repoRoot);
+    if (e2eResult.isErr()) return err(e2eResult.error);
+    const e2e = e2eResult.value;
     const byType = {
       rust,
       preflight,
       web_unit: webUnit,
       e2e,
     };
-    return {
+    return ok({
       measured_at: measuredAt,
       head_sha: headSha,
       by_type: byType,
       total: byType.rust + byType.preflight + byType.web_unit + byType.e2e,
-    };
+    });
   }
 
-  private countNextest(args: CountNextestArgs): number {
+  private countNextest(
+    args: CountNextestArgs,
+  ): Result<number, StatisticsAssemblyFailure> {
     const { repoRoot, filter } = args;
 
     const listedArgs3: RunCommandArgs = {
@@ -367,51 +383,61 @@ export class AgentStatisticsAssembly {
       args: ['nextest', 'list', '-E', filter, '--lib', '--tests'],
       cwd: path.join(repoRoot, 'nook-app'),
     };
-    const listed = HostCommand.run(listedArgs3);
+    const listedLaunch = new HostCommand(listedArgs3).execute();
+    if (listedLaunch.isErr()) return err(listedLaunch.error);
+    const listed = listedLaunch.value;
     if (listed.exitCode !== 0) {
-      return 0;
+      return ok(0);
     }
     const matches = listed.stdout.match(/^[^\s].*:/gm);
     if (!matches) {
-      return 0;
+      return ok(0);
     }
-    return matches.length;
+    return ok(matches.length);
   }
 
-  private countVitest(repoRoot: string): number {
+  private countVitest(
+    repoRoot: string,
+  ): Result<number, StatisticsAssemblyFailure> {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
     const listedArgs2: RunCommandArgs = {
       command: 'bunx',
       args: ['vitest', 'list'],
       cwd: appRoot,
     };
-    const listed = HostCommand.run(listedArgs2);
+    const listedLaunch = new HostCommand(listedArgs2).execute();
+    if (listedLaunch.isErr()) return err(listedLaunch.error);
+    const listed = listedLaunch.value;
     if (listed.exitCode !== 0) {
-      return 0;
+      return ok(0);
     }
     const lines = listed.stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
-    return lines.length;
+    return ok(lines.length);
   }
 
-  private countPlaywright(repoRoot: string): number {
+  private countPlaywright(
+    repoRoot: string,
+  ): Result<number, StatisticsAssemblyFailure> {
     const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
     const listedArgs: RunCommandArgs = {
       command: 'bunx',
       args: ['playwright', 'test', '--list'],
       cwd: appRoot,
     };
-    const listed = HostCommand.run(listedArgs);
+    const listedLaunch = new HostCommand(listedArgs).execute();
+    if (listedLaunch.isErr()) return err(listedLaunch.error);
+    const listed = listedLaunch.value;
     if (listed.exitCode !== 0) {
-      return 0;
+      return ok(0);
     }
     const matches = listed.stdout.match(/^\s+\d+/gm);
     if (!matches) {
-      return 0;
+      return ok(0);
     }
-    return matches.length;
+    return ok(matches.length);
   }
 
   private sumDurationSeconds(items: AgentStatisticsDurationEntries): number {

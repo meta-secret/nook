@@ -1,3 +1,8 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  type AgentExecutionFailure,
+  AgentExecutionFailureKind,
+} from '../../src/agent-workflow/runtime.ts';
 import { createHash, randomUUID } from 'node:crypto';
 
 import { rm } from 'node:fs/promises';
@@ -367,20 +372,25 @@ const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
 class SuccessfulCodeRuntime implements AgentTaskRuntime<string, string> {
-  async executeAgent(): Promise<AgentExecutionCompletion> {
-    return {
+  async executeAgent(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
+    return ok({
       threadId: 'code-thread',
       output: StructuralExpertsParentAuthorizationScenario.codeEvidence(),
-    };
+    });
   }
 }
 
 class FailedCortexRuntime implements AgentTaskRuntime<string, string> {
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     void invocation;
-    throw new Error('Raw runtime detail must not escape.');
+    return err({
+      kind: AgentExecutionFailureKind.FailedTurn,
+      message: 'Raw runtime detail must not escape.',
+    });
   }
 }
 
@@ -389,12 +399,12 @@ class RecordingSynthesisRuntime implements AgentTaskRuntime<string, string> {
 
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     this.instruction = invocation.execution.instruction;
-    return {
+    return ok({
       threadId: 'synthesis-thread',
       output: StructuralExpertsParentAuthorizationScenario.synthesisOutput(),
-    };
+    });
   }
 }
 

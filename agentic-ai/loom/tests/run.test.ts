@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { describe, expect, test } from 'bun:test';
 import { CommandOutputPolicy, HostCommand } from '../src/lib/run.ts';
 
@@ -6,12 +7,14 @@ const EXCESSIVE_OUTPUT_BYTES = 17 * 1024 * 1024;
 
 describe('run command', () => {
   test('captures output larger than the platform default within an explicit bound', () => {
-    const result = HostCommand.run({
+    const launch = new HostCommand({
       command: process.execPath,
       args: ['-e', `process.stdout.write('x'.repeat(${LARGE_OUTPUT_BYTES}))`],
       cwd: process.cwd(),
       outputPolicy: CommandOutputPolicy.GitHubApi,
-    });
+    }).execute();
+    assert(launch.isOk());
+    const result = launch.value;
 
     expect(result.exitCode).toBe(0);
     expect(result.signaled).toBe(false);
@@ -20,25 +23,27 @@ describe('run command', () => {
   });
 
   test('fails closed when output exceeds the explicit bound', () => {
-    expect(() =>
-      HostCommand.run({
-        command: process.execPath,
-        args: [
-          '-e',
-          `process.stdout.write('x'.repeat(${EXCESSIVE_OUTPUT_BYTES}))`,
-        ],
-        cwd: process.cwd(),
-        outputPolicy: CommandOutputPolicy.GitHubApi,
-      }),
-    ).toThrow('failed to start');
+    const launch = new HostCommand({
+      command: process.execPath,
+      args: [
+        '-e',
+        `process.stdout.write('x'.repeat(${EXCESSIVE_OUTPUT_BYTES}))`,
+      ],
+      cwd: process.cwd(),
+      outputPolicy: CommandOutputPolicy.GitHubApi,
+    }).execute();
+    assert(launch.isErr());
+    expect(launch.error.message).toContain('failed to start');
   });
 
   test('preserves subprocess signal termination', () => {
-    const result = HostCommand.run({
+    const launch = new HostCommand({
       command: process.execPath,
       args: ['-e', "process.kill(process.pid, 'SIGTERM')"],
       cwd: process.cwd(),
-    });
+    }).execute();
+    assert(launch.isOk());
+    const result = launch.value;
 
     expect(result.exitCode).toBe(1);
     expect(result.signaled).toBe(true);

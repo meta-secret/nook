@@ -1,3 +1,5 @@
+import type { Result } from 'neverthrow';
+import type { HostCommandFailure } from '../lib/run.ts';
 import type {
   AgentProfile,
   AgentTaskExecution,
@@ -54,5 +56,23 @@ export type AgentExecutionCompletion = {
 export interface AgentTaskRuntime<TTask extends string, TAgent extends string> {
   executeAgent(
     invocation: AgentExecutionInvocation<TTask, TAgent>,
-  ): Promise<AgentExecutionCompletion>;
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>>;
 }
+
+export enum AgentExecutionFailureKind {
+  WorkspacePolicy = 'workspacePolicy',
+  SourceCommit = 'sourceCommit',
+  DirtyWorktree = 'dirtyWorktree',
+  FailedTurn = 'failedTurn',
+  IncompleteTurn = 'incompleteTurn',
+  ResultKind = 'resultKind',
+  RuntimeSession = 'runtimeSession',
+  IsolationReceipt = 'isolationReceipt',
+  RuntimeBoundary = 'runtimeBoundary',
+}
+export type AgentExecutionFailure =
+  | HostCommandFailure
+  | {
+      readonly kind: AgentExecutionFailureKind;
+      readonly message: string;
+    };

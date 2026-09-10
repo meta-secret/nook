@@ -1,3 +1,6 @@
+import assert from 'node:assert/strict';
+import { ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { expect, test } from 'bun:test';
 import {
   StructuralAssessmentKind,
@@ -109,11 +112,13 @@ export class StructuralExpertsIsolationReceiptFixture {
 }
 
 class ReceiptRuntime implements AgentTaskRuntime<string, string> {
-  async executeAgent(): Promise<AgentExecutionCompletion> {
-    return {
+  async executeAgent(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
+    return ok({
       threadId: 'receipt-thread',
       output: StructuralExpertsIsolationReceiptFixture.codeEvidence(),
-    };
+    });
   }
 }
 
@@ -135,10 +140,12 @@ test('binds one structural isolation receipt to exact execution inputs', async (
       invocation,
       isolationRequest,
     };
-    const execution =
+    const executionResult =
       await StructuralExpertIsolationReceipts.executeIsolatedStructuralExpert(
         executionRequest,
       );
+    assert(executionResult.isOk());
+    const execution = executionResult.value;
     const reboundCompletion: IsolatedStructuralExpertExecution = {
       ...execution,
       completion: { ...execution.completion, threadId: 'rebound-thread' },

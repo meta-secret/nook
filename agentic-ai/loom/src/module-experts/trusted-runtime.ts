@@ -1,3 +1,8 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  type AgentExecutionFailure,
+  AgentExecutionFailureKind,
+} from '../agent-workflow/runtime.ts';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import {
@@ -316,12 +321,15 @@ export class ModuleExpertRuntimeAuthority {
 
   static async executeModuleExpertAgent(
     args: ExecuteModuleExpertAgentArgs,
-  ): Promise<TrustedModuleExpertExecution> {
+  ): Promise<Result<TrustedModuleExpertExecution, AgentExecutionFailure>> {
     const record = ModuleExpertRuntimeAuthority.MODULE_EXPERT_SESSIONS.get(
       args.session,
     );
     if (!record) {
-      throw new Error('Module expert runtime session identity is invalid.');
+      return err({
+        kind: AgentExecutionFailureKind.RuntimeSession,
+        message: 'Module expert runtime session identity is invalid.',
+      });
     }
     ModuleExpertRuntimeAuthority.MODULE_EXPERT_SESSIONS.delete(args.session);
     const invocation: AgentExecutionInvocation<string, string> = {
@@ -341,10 +349,13 @@ export class ModuleExpertRuntimeAuthority {
         invocation,
         selectedContextPaths: record.selectedContextPaths,
       };
-    const isolatedExecution =
+    const isolatedExecutionResult =
       await ModuleExpertIsolationReceipts.executeIsolatedModuleExpertAgent(
         executionArgs,
       );
+    if (isolatedExecutionResult.isErr())
+      return err(isolatedExecutionResult.error);
+    const isolatedExecution = isolatedExecutionResult.value;
     const consumeArgs: ConsumeIsolatedModuleExpertExecutionArgs<
       string,
       string
@@ -371,7 +382,7 @@ export class ModuleExpertRuntimeAuthority {
       authorityRecord,
     );
     const execution = { completion, authority };
-    return Object.freeze(execution);
+    return ok(Object.freeze(execution));
   }
 
   static consumeModuleExpertJournalAuthority(

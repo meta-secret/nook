@@ -3,47 +3,44 @@ import {
   type SpawnSyncOptionsWithStringEncoding,
 } from 'node:child_process';
 
-import {
-  LoomFailure,
-  LoomFailureCode,
-  LoomFailureDetailKind,
-} from '../loom-failure.ts';
+import { err, ok, type Result } from 'neverthrow';
+import { LoomFailureCode } from '../loom-failure.ts';
+
+const githubApiOutputBytes = 16 * 1024 * 1024;
 
 export class HostCommand {
-  private static readonly githubApiOutputBytes = 16 * 1024 * 1024;
-  private constructor() {}
-  static run(input: RunCommandArgs): CommandOutput {
-    const { command, args, cwd, outputPolicy } = input;
-    const defaultOptions: SpawnSyncOptionsWithStringEncoding = {
+  constructor(private readonly input: RunCommandArgs) {}
+
+  execute(): Result<CommandOutput, HostCommandFailure> {
+    const { command, args, cwd, outputPolicy } = this.input;
+    const options: SpawnSyncOptionsWithStringEncoding = {
       cwd,
       encoding: 'utf8',
+      ...(outputPolicy === CommandOutputPolicy.GitHubApi
+        ? { maxBuffer: githubApiOutputBytes }
+        : {}),
     };
-    const githubApiOptions: SpawnSyncOptionsWithStringEncoding = {
-      cwd,
-      encoding: 'utf8',
-      maxBuffer: HostCommand.githubApiOutputBytes,
-    };
-    const result =
-      outputPolicy === CommandOutputPolicy.GitHubApi
-        ? spawnSync(command, [...args], githubApiOptions)
-        : spawnSync(command, [...args], defaultOptions);
-    if (result.error) {
-      const loomFailureArgs = {
+    let result;
+    try {
+      result = spawnSync(command, [...args], options);
+    } catch {
+      return err({
         code: LoomFailureCode.CommandFailedToStart,
-        detail: {
-          kind: LoomFailureDetailKind.Text,
-          text: `${command} failed to start: ${result.error.message}`,
-        },
-      };
-      throw new LoomFailure(loomFailureArgs);
+        message: `${command} failed to start`,
+      });
     }
-    const exitCode = typeof result.status === 'number' ? result.status : 1;
-    return {
-      exitCode,
+    if (result.error) {
+      return err({
+        code: LoomFailureCode.CommandFailedToStart,
+        message: `${command} failed to start`,
+      });
+    }
+    return ok({
+      exitCode: typeof result.status === 'number' ? result.status : 1,
       signaled: typeof result.signal === 'string',
       stdout: typeof result.stdout === 'string' ? result.stdout : '',
       stderr: typeof result.stderr === 'string' ? result.stderr : '',
-    };
+    });
   }
 }
 
@@ -63,4 +60,9 @@ export type RunCommandArgs = {
   readonly args: readonly string[];
   readonly cwd: string;
   readonly outputPolicy?: CommandOutputPolicy;
+};
+
+export type HostCommandFailure = {
+  readonly code: LoomFailureCode.CommandFailedToStart;
+  readonly message: string;
 };

@@ -1,3 +1,5 @@
+import { err, ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../agent-workflow/runtime.ts';
 import { createHash } from 'node:crypto';
 import { ReadOnlyExpertCodexRuntime } from '../agent-workflow/codex-runtime.ts';
 import type { RunIsolatedReadOnlyExpertCodexRequest } from '../agent-workflow/codex-runtime.ts';
@@ -66,9 +68,11 @@ export class StructuralExpertIsolationReceipts {
     TAgent extends string,
   >(
     request: ExecuteIsolatedStructuralExpertRequest<TTask, TAgent>,
-  ): Promise<IsolatedStructuralExpertExecution> {
-    const completion =
+  ): Promise<Result<IsolatedStructuralExpertExecution, AgentExecutionFailure>> {
+    const completionResult =
       await ReadOnlyExpertCodexRuntime.executeIsolated(request);
+    if (completionResult.isErr()) return err(completionResult.error);
+    const completion = completionResult.value;
     const receiptValue =
       StructuralExpertIsolationReceipt.issue(AUTHORITY_ISSUANCE);
     const receipt: StructuralExpertIsolationReceipt = receiptValue;
@@ -87,7 +91,7 @@ export class StructuralExpertIsolationReceipts {
       completion,
       receipt,
     };
-    return Object.freeze(execution);
+    return ok(Object.freeze(execution));
   }
 
   static consumeIsolatedStructuralExpertExecution<

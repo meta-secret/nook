@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { access, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -122,7 +123,9 @@ test('materializes only exact shared formatter and lint tooling', async () => {
     command: 'git',
     cwd: REPO_ROOT,
   };
-  const sourceCommit = HostCommand.run(revisionRequest).stdout.trim();
+  const hostLaunch1 = new HostCommand(revisionRequest).execute();
+  assert(hostLaunch1.isOk());
+  const sourceCommit = hostLaunch1.value.stdout.trim();
   try {
     const [defaulted3 = ''] = [process.env.PATH];
     const isolationRequest: ReadOnlyExpertRuntimeIsolationRequest = {

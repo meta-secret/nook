@@ -1,3 +1,5 @@
+import { err, ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../agent-workflow/runtime.ts';
 import { createHash } from 'node:crypto';
 import { ModuleExpertCodexSdkAgentRuntime } from '../agent-workflow/codex-runtime.ts';
 import type {
@@ -64,13 +66,15 @@ export class ModuleExpertIsolationReceipts {
     TAgent extends string,
   >(
     args: ExecuteIsolatedModuleExpertAgentArgs<TTask, TAgent>,
-  ): Promise<IsolatedModuleExpertExecution> {
+  ): Promise<Result<IsolatedModuleExpertExecution, AgentExecutionFailure>> {
     const codexArgs = {
       invocation: args.invocation,
       selectedContextPaths: args.selectedContextPaths,
     };
-    const completion =
+    const completionResult =
       await ModuleExpertCodexSdkAgentRuntime.executeIsolated(codexArgs);
+    if (completionResult.isErr()) return err(completionResult.error);
+    const completion = completionResult.value;
     const receiptValue = ModuleExpertIsolationReceipt.issue(AUTHORITY_ISSUANCE);
     const receipt: ModuleExpertIsolationReceipt = receiptValue;
     const record: ModuleExpertIsolationReceiptRecord = {
@@ -84,7 +88,7 @@ export class ModuleExpertIsolationReceipts {
       record,
     );
     const execution = { completion, receipt };
-    return Object.freeze(execution);
+    return ok(Object.freeze(execution));
   }
 
   static consumeIsolatedModuleExpertExecution<

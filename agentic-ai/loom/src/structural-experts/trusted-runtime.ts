@@ -1,3 +1,8 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  type AgentExecutionFailure,
+  AgentExecutionFailureKind,
+} from '../agent-workflow/runtime.ts';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import {
@@ -312,10 +317,13 @@ export class StructuralExpertRuntimeAuthority {
 
   static async executeStructuralExpert(
     input: ExecuteStructuralExpertRequest,
-  ): Promise<TrustedStructuralExecution> {
+  ): Promise<Result<TrustedStructuralExecution, AgentExecutionFailure>> {
     const record = StructuralExpertRuntimeAuthority.SESSIONS.get(input.session);
     if (!record)
-      throw new Error('Structural expert runtime session is invalid.');
+      return err({
+        kind: AgentExecutionFailureKind.RuntimeSession,
+        message: 'Structural expert runtime session is invalid.',
+      });
     StructuralExpertRuntimeAuthority.SESSIONS.delete(input.session);
     const invocation: AgentExecutionInvocation<string, string> = {
       ...record.invocation,
@@ -326,10 +334,13 @@ export class StructuralExpertRuntimeAuthority {
       invocation,
       isolationRequest: record.isolationRequest,
     };
-    const isolatedExecution =
+    const isolatedExecutionResult =
       await StructuralExpertIsolationReceipts.executeIsolatedStructuralExpert(
         executionRequest,
       );
+    if (isolatedExecutionResult.isErr())
+      return err(isolatedExecutionResult.error);
+    const isolatedExecution = isolatedExecutionResult.value;
     const consumeRequest = {
       execution: isolatedExecution,
       invocation,
@@ -355,7 +366,7 @@ export class StructuralExpertRuntimeAuthority {
       completion,
       authority,
     };
-    return Object.freeze(trustedExecution);
+    return ok(Object.freeze(trustedExecution));
   }
 
   static consumeStructuralJournalAuthority(

@@ -1,3 +1,4 @@
+import type { HostCommandFailure } from '../lib/run.ts';
 import { err, ok, type Result } from 'neverthrow';
 import type { PrePushRequest } from '../codec/args/pre-push.ts';
 
@@ -25,7 +26,9 @@ export class PrePushCommand {
       args: ['format'],
       cwd: repoRoot,
     };
-    const format = HostCommand.run(formatArgs);
+    const formatLaunch = new HostCommand(formatArgs).execute();
+    if (formatLaunch.isErr()) return err(formatLaunch.error);
+    const format = formatLaunch.value;
     if (format.exitCode !== 0) {
       return err({
         code: LoomFailureCode.CommandFailed,
@@ -40,7 +43,9 @@ export class PrePushCommand {
         args: ['fetch', 'origin', 'main'],
         cwd: repoRoot,
       };
-      const fetch = HostCommand.run(fetchArgs);
+      const fetchLaunch = new HostCommand(fetchArgs).execute();
+      if (fetchLaunch.isErr()) return err(fetchLaunch.error);
+      const fetch = fetchLaunch.value;
       if (fetch.exitCode !== 0) {
         return err({
           code: LoomFailureCode.CommandFailed,
@@ -54,7 +59,9 @@ export class PrePushCommand {
       args: ['rev-parse', 'origin/main'],
       cwd: repoRoot,
     };
-    const base = HostCommand.run(baseArgs);
+    const baseLaunch = new HostCommand(baseArgs).execute();
+    if (baseLaunch.isErr()) return err(baseLaunch.error);
+    const base = baseLaunch.value;
     if (base.exitCode !== 0) {
       return err({
         code: LoomFailureCode.CommandFailed,
@@ -97,7 +104,9 @@ export class PrePushCommand {
       args: ['.github/scripts/ui-demo-contract.sh', baseSha],
       cwd: repoRoot,
     };
-    const contract = HostCommand.run(contractArgs);
+    const contractLaunch = new HostCommand(contractArgs).execute();
+    if (contractLaunch.isErr()) return err(contractLaunch.error);
+    const contract = contractLaunch.value;
     if (contract.exitCode !== 0) {
       return err({
         code: LoomFailureCode.CommandFailed,
@@ -113,7 +122,9 @@ export class PrePushCommand {
         args: ['add', '-u'],
         cwd: repoRoot,
       };
-      const stage = HostCommand.run(stageArgs);
+      const stageLaunch = new HostCommand(stageArgs).execute();
+      if (stageLaunch.isErr()) return err(stageLaunch.error);
+      const stage = stageLaunch.value;
       if (stage.exitCode !== 0) {
         return err({
           code: LoomFailureCode.CommandFailed,
@@ -142,8 +153,10 @@ export type PrePushReport = {
   readonly messages: string[];
 };
 
-export type PrePushFailure = {
-  readonly code:
-    LoomFailureCode.CommandFailed | LoomFailureCode.CortexAuditFailed;
-  readonly message: string;
-};
+export type PrePushFailure =
+  | HostCommandFailure
+  | {
+      readonly code:
+        LoomFailureCode.CommandFailed | LoomFailureCode.CortexAuditFailed;
+      readonly message: string;
+    };

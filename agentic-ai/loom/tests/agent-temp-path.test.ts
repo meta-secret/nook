@@ -147,7 +147,9 @@ describe('agent temporary paths', () => {
       args: ['rev-parse', 'HEAD'],
       cwd: repoRoot,
     };
-    const gitCommit = HostCommand.run(gitHeadRequest).stdout.trim();
+    const hostLaunch1 = new HostCommand(gitHeadRequest).execute();
+    assert(hostLaunch1.isOk());
+    const gitCommit = hostLaunch1.value.stdout.trim();
     const branchRequest: RunCommandArgs = {
       command: 'git',
       args: ['branch', '--show-current'],
@@ -158,10 +160,14 @@ describe('agent temporary paths', () => {
       args: ['reflog', '--format=%H%x09%gs', 'HEAD'],
       cwd: repoRoot,
     };
+    const hostLaunch3 = new HostCommand(reflogRequest).execute();
+    assert(hostLaunch3.isOk());
+    const hostLaunch2 = new HostCommand(branchRequest).execute();
+    assert(hostLaunch2.isOk());
     const selection: TaskAnchorSelection = {
       currentCommit: gitCommit,
-      branchName: HostCommand.run(branchRequest).stdout.trim(),
-      reflog: HostCommand.run(reflogRequest).stdout,
+      branchName: hostLaunch2.value.stdout.trim(),
+      reflog: hostLaunch3.value.stdout,
     };
     const taskAnchorCommit = new TaskAnchorHistory(selection).commit();
     const request: ResolveAgentTempPathRequest = {

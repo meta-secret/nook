@@ -1,3 +1,5 @@
+import { ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { randomUUID } from 'node:crypto';
 
 import { execFileSync } from 'node:child_process';
@@ -266,37 +268,39 @@ class ValidRuntime implements AgentTaskRuntime<string, string> {
   executionCount = 0;
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     this.executionCount += 1;
     await invocation.observe({
       activity: WorkflowRuntimeActivityKind.TurnCompleted,
       detail: 'Structural inspection completed.',
     });
-    return {
+    return ok({
       threadId: 'structural-thread',
       output: StructuralExpertsInvokeScenario.codeEvidence(),
-    };
+    });
   }
 }
 
 class InvalidCompletionRuntime implements AgentTaskRuntime<string, string> {
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     void invocation;
-    return {
+    return ok({
       threadId: '',
       output: StructuralExpertsInvokeScenario.codeEvidence(),
-    };
+    });
   }
 }
 
 class OutOfScopeEvidenceRuntime implements AgentTaskRuntime<string, string> {
-  async executeAgent(): Promise<AgentExecutionCompletion> {
-    return {
+  async executeAgent(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
+    return ok({
       threadId: 'out-of-scope-thread',
       output: StructuralExpertsInvokeScenario.outOfScopeCodeEvidence(),
-    };
+    });
   }
 }
 

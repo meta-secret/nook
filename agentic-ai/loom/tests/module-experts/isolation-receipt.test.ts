@@ -1,3 +1,6 @@
+import assert from 'node:assert/strict';
+import { ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { expect, test } from 'bun:test';
 import {
   AgentReasoningEffort,
@@ -56,12 +59,14 @@ export class ModuleExpertsIsolationReceiptFixture {
 }
 
 class ReceiptRuntime implements AgentTaskRuntime<string, string> {
-  async executeAgent(): Promise<AgentExecutionCompletion> {
-    return {
+  async executeAgent(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
+    return ok({
       threadId: 'receipt-thread',
       output:
         ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput(),
-    };
+    });
   }
 }
 
@@ -81,10 +86,12 @@ test('binds an isolation receipt to one exact completion and invocation', async 
       invocation,
       selectedContextPaths: [],
     };
-    const execution =
+    const executionResult =
       await ModuleExpertIsolationReceipts.executeIsolatedModuleExpertAgent(
         executeArgs,
       );
+    assert(executionResult.isOk());
+    const execution = executionResult.value;
     const mutatedCompletion: IsolatedModuleExpertExecution = {
       ...execution,
       completion: {

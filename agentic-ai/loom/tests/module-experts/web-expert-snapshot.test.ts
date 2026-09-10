@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {
   access,
   mkdir,
@@ -116,7 +117,9 @@ export class ModuleExpertsWebExpertSnapshotScenario {
   }
 
   static gitOutput(command: RunCommandArgs): string {
-    const result = HostCommand.run(command);
+    const hostLaunch1 = new HostCommand(command).execute();
+    assert(hostLaunch1.isOk());
+    const result = hostLaunch1.value;
     if (result.exitCode !== 0) throw new Error('Fixture Git command failed.');
     return result.stdout.trim();
   }

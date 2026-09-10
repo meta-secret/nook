@@ -1,3 +1,9 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  AgentExecutionFailureKind as CodexExecutionFailureKind,
+  type AgentExecutionFailure,
+} from './runtime.ts';
+export { AgentExecutionFailureKind as CodexExecutionFailureKind } from './runtime.ts';
 import { Codex } from '@openai/codex-sdk';
 import type {
   McpToolCallItem,
@@ -39,23 +45,15 @@ export type AgentSourceStabilityCheck = {
   readonly sourceCommit: string;
   readonly phase: AgentSourceStabilityPhase;
 };
-export enum CodexExecutionFailureKind {
-  WorkspacePolicy = 'workspacePolicy',
-  SourceCommit = 'sourceCommit',
-  DirtyWorktree = 'dirtyWorktree',
-  FailedTurn = 'failedTurn',
-  IncompleteTurn = 'incompleteTurn',
-  ResultKind = 'resultKind',
-}
 export type CodexExecutionFailureRequest = {
   readonly kind: CodexExecutionFailureKind;
   readonly message: string;
 };
-export class CodexExecutionFailure extends Error {
+export class CodexExecutionFailure {
+  readonly message: string;
   readonly kind: CodexExecutionFailureKind;
   constructor(request: CodexExecutionFailureRequest) {
-    super(request.message);
-    this.name = 'CodexExecutionFailure';
+    this.message = request.message;
     this.kind = request.kind;
   }
 }
@@ -79,7 +77,7 @@ export class ModuleExpertCodexSdkAgentRuntime<
 > implements AgentTaskRuntime<TTask, TAgent> {
   async executeAgent(
     invocation: AgentExecutionInvocation<TTask, TAgent>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     return ModuleExpertCodexSdkAgentRuntime.executeIsolated({
       invocation,
       selectedContextPaths: [],
@@ -87,7 +85,7 @@ export class ModuleExpertCodexSdkAgentRuntime<
   }
   static async executeIsolated<TTask extends string, TAgent extends string>(
     args: RunIsolatedModuleExpertCodexArgs<TTask, TAgent>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     const invocation = args.invocation;
     const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
       expertName: invocation.agentProfile.name,
@@ -96,18 +94,19 @@ export class ModuleExpertCodexSdkAgentRuntime<
       sourceCommit: invocation.sourceCommit,
       workingDirectory: invocation.workingDirectory,
     };
-    const isolationUse: ModuleExpertRuntimeIsolationUse<AgentExecutionCompletion> =
-      {
-        isolationRequest,
-        run: async (isolation) => {
-          const execution: GuardedAgentExecution<TTask, TAgent> = {
-            codex: new Codex(isolation.codexOptions),
-            invocation,
-            threadOptions: isolation.threadOptions,
-          };
-          return new GuardedCodexExecution(execution).execute();
-        },
-      };
+    const isolationUse: ModuleExpertRuntimeIsolationUse<
+      Result<AgentExecutionCompletion, AgentExecutionFailure>
+    > = {
+      isolationRequest,
+      run: async (isolation) => {
+        const execution: GuardedAgentExecution<TTask, TAgent> = {
+          codex: new Codex(isolation.codexOptions),
+          invocation,
+          threadOptions: isolation.threadOptions,
+        };
+        return new GuardedCodexExecution(execution).execute();
+      },
+    };
     return ModuleExpertIsolation.withModuleExpertRuntimeIsolation(isolationUse);
   }
 }
@@ -123,10 +122,12 @@ export class ReadOnlyExpertCodexRuntime<
   ) {}
   static executeIsolated<TTask extends string, TAgent extends string>(
     request: RunIsolatedReadOnlyExpertCodexRequest<TTask, TAgent>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     return new ReadOnlyExpertCodexRuntime(request).execute();
   }
-  async execute(): Promise<AgentExecutionCompletion> {
+  async execute(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
     const request = this.request;
     const isolation =
       await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
@@ -153,23 +154,28 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
   constructor(
     private readonly execution: GuardedAgentExecution<TTask, TAgent>,
   ) {}
-  async execute(): Promise<AgentExecutionCompletion> {
+  async execute(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
     const execution = this.execution;
     if (
       execution.invocation.agentProfile.workspacePolicy !==
       AgentWorkspacePolicy.ReadOnly
     ) {
-      throw new CodexExecutionFailure({
-        kind: CodexExecutionFailureKind.WorkspacePolicy,
-        message: 'Write-capable Codex workflow workers are not enabled.',
-      });
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.WorkspacePolicy,
+          message: 'Write-capable Codex workflow workers are not enabled.',
+        }),
+      );
     }
     const beforeAttempt: AgentSourceStabilityCheck = {
       workingDirectory: execution.invocation.workingDirectory,
       sourceCommit: execution.invocation.sourceCommit,
       phase: AgentSourceStabilityPhase.BeforeAttempt,
     };
-    AgentSourceSnapshot.assertStable(beforeAttempt);
+    const before = AgentSourceSnapshot.assertStable(beforeAttempt);
+    if (before.isErr()) return err(before.error);
     try {
       return await this.executeStable();
     } finally {
@@ -178,10 +184,13 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
         sourceCommit: execution.invocation.sourceCommit,
         phase: AgentSourceStabilityPhase.AfterAttempt,
       };
-      AgentSourceSnapshot.assertStable(afterAttempt);
+      const after = AgentSourceSnapshot.assertStable(afterAttempt);
+      if (after.isErr()) return err(after.error);
     }
   }
-  private async executeStable(): Promise<AgentExecutionCompletion> {
+  private async executeStable(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
     const execution = this.execution;
     const moduleExpertThreadOptionsArgs = {
       workingDirectory: execution.invocation.workingDirectory,
@@ -263,10 +272,12 @@ export class CodexTurn {
   private constructor(private readonly request: CollectCodexTurnArgs) {}
   static collect(
     request: CollectCodexTurnArgs,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     return new CodexTurn(request).complete();
   }
-  private async complete(): Promise<AgentExecutionCompletion> {
+  private async complete(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
     for await (const event of this.request.events) {
       if (event.type === 'thread.started')
         this.thread = this.text(event.thread_id);
@@ -287,29 +298,35 @@ export class CodexTurn {
       if (observation) await this.request.observe(observation);
     }
     if (this.termination === TurnTermination.Failed)
-      throw new CodexExecutionFailure({
-        kind: CodexExecutionFailureKind.FailedTurn,
-        message: 'Codex turn failed before a valid structured result.',
-      });
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.FailedTurn,
+          message: 'Codex turn failed before a valid structured result.',
+        }),
+      );
     if (
       this.termination !== TurnTermination.Completed ||
       this.thread.presence === TurnValuePresence.Missing ||
       this.output.presence === TurnValuePresence.Missing
     )
-      throw new CodexExecutionFailure({
-        kind: CodexExecutionFailureKind.IncompleteTurn,
-        message:
-          'Codex completed without a thread identity or structured result.',
-      });
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.IncompleteTurn,
+          message:
+            'Codex completed without a thread identity or structured result.',
+        }),
+      );
     const output = WorkflowResultSchema.decodeWorkflowTaskOutput(
       this.output.text,
     );
     if (output.resultKind !== this.request.expectedResultKind)
-      throw new CodexExecutionFailure({
-        kind: CodexExecutionFailureKind.ResultKind,
-        message: `Codex result kind ${output.resultKind} does not match ${this.request.expectedResultKind}.`,
-      });
-    return { threadId: this.thread.text, output };
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.ResultKind,
+          message: `Codex result kind ${output.resultKind} does not match ${this.request.expectedResultKind}.`,
+        }),
+      );
+    return ok({ threadId: this.thread.text, output });
   }
   private text(text: string): TurnText {
     return text.length === 0
@@ -319,36 +336,47 @@ export class CodexTurn {
 }
 export class AgentSourceSnapshot {
   private constructor(private readonly check: AgentSourceStabilityCheck) {}
-  static assertStable(check: AgentSourceStabilityCheck): void {
-    new AgentSourceSnapshot(check).assertCurrent();
+  static assertStable(
+    check: AgentSourceStabilityCheck,
+  ): Result<void, AgentExecutionFailure> {
+    return new AgentSourceSnapshot(check).assertCurrent();
   }
-  private assertCurrent(): void {
+  private assertCurrent(): Result<void, AgentExecutionFailure> {
     const check = this.check;
     const headCommand: RunCommandArgs = {
       command: 'git',
       args: ['rev-parse', 'HEAD'],
       cwd: check.workingDirectory,
     };
-    const head = HostCommand.run(headCommand);
+    const headLaunch = new HostCommand(headCommand).execute();
+    if (headLaunch.isErr()) return err(headLaunch.error);
+    const head = headLaunch.value;
     const actualHead = head.stdout.trim();
     if (head.exitCode !== 0 || actualHead !== check.sourceCommit) {
-      throw new CodexExecutionFailure({
-        kind: CodexExecutionFailureKind.SourceCommit,
-        message: `Codex agent source is not at immutable commit ${check.sourceCommit} ${check.phase}.`,
-      });
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.SourceCommit,
+          message: `Codex agent source is not at immutable commit ${check.sourceCommit} ${check.phase}.`,
+        }),
+      );
     }
     const statusCommand: RunCommandArgs = {
       command: 'git',
       args: ['status', '--porcelain', '--untracked-files=normal'],
       cwd: check.workingDirectory,
     };
-    const status = HostCommand.run(statusCommand);
+    const statusLaunch = new HostCommand(statusCommand).execute();
+    if (statusLaunch.isErr()) return err(statusLaunch.error);
+    const status = statusLaunch.value;
     if (status.exitCode !== 0 || status.stdout.trim().length > 0) {
-      throw new CodexExecutionFailure({
-        kind: CodexExecutionFailureKind.DirtyWorktree,
-        message: `Codex agent worktree is not clean ${check.phase}.`,
-      });
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.DirtyWorktree,
+          message: `Codex agent worktree is not clean ${check.phase}.`,
+        }),
+      );
     }
+    return ok(undefined);
   }
 }
 class CodexActivity {

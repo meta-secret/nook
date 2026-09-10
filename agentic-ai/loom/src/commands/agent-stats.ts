@@ -169,7 +169,9 @@ export class AgentStatisticsFileCommand {
       ],
       cwd: repoRoot,
     };
-    const published = HostCommand.run(publishedArgs);
+    const publishedLaunch = new HostCommand(publishedArgs).execute();
+    if (publishedLaunch.isErr()) return err(publishedLaunch.error);
+    const published = publishedLaunch.value;
     if (published.exitCode !== 0) {
       const loomFailureDetailArgs2: LoomFailureDetailArgs = {
         code: LoomFailureCode.CommandFailed,
