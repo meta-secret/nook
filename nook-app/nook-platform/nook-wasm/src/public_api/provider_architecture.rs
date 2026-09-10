@@ -27,7 +27,7 @@ pub fn google_oauth_tokens_to_config(
         &GoogleOAuthTokenInput {
             access_token,
             expires_at,
-            existing: existing.as_ref(),
+            existing: &existing,
         },
     ))
 }
@@ -42,8 +42,8 @@ pub fn icloud_oauth_tokens_to_config(
     Ok(OAuthFileConfigData::from_icloud_token(
         &ICloudOAuthTokenInput {
             access_token,
-            account_name: account_identity.as_deref(),
-            existing: existing.as_ref(),
+            account_name: &account_identity,
+            existing: &existing,
         },
     ))
 }

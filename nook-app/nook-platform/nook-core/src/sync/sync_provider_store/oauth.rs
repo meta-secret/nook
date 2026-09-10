@@ -11,20 +11,20 @@ use crate::{
     StoredOAuthRemoteFileId, StoredOAuthTokenExpiry,
 };
 
-use super::OAuthFileConfigData;
+use super::{OAuthFileConfigData, StoredOAuthFileConfiguration};
 
 /// Borrowed fields used to project a Google access token into stored configuration.
 pub struct GoogleOAuthTokenInput<'a> {
     pub access_token: &'a str,
     pub expires_at: &'a str,
-    pub existing: Option<&'a OAuthFileConfigData>,
+    pub existing: &'a StoredOAuthFileConfiguration,
 }
 
 /// Borrowed fields used to project a `CloudKit` token into stored configuration.
 pub struct ICloudOAuthTokenInput<'a> {
     pub access_token: &'a str,
-    pub account_name: Option<&'a str>,
-    pub existing: Option<&'a OAuthFileConfigData>,
+    pub account_name: &'a StoredOAuthAccountIdentity,
+    pub existing: &'a StoredOAuthFileConfiguration,
 }
 
 impl OAuthFileConfigData {
@@ -34,7 +34,10 @@ impl OAuthFileConfigData {
         let access_token = input.access_token;
         let expires_at = input.expires_at;
         let existing = input.existing;
-        let existing = existing.cloned().unwrap_or_default();
+        let existing = match existing {
+            StoredOAuthFileConfiguration::Configured(config) => config.clone(),
+            StoredOAuthFileConfiguration::NotApplicable => OAuthFileConfigData::default(),
+        };
         let drive_mode = existing.resolved_google_drive_mode();
         OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
@@ -57,7 +60,10 @@ impl OAuthFileConfigData {
         let access_token = input.access_token;
         let account_name = input.account_name;
         let existing = input.existing;
-        let existing = existing.cloned().unwrap_or_default();
+        let existing = match existing {
+            StoredOAuthFileConfiguration::Configured(config) => config.clone(),
+            StoredOAuthFileConfiguration::NotApplicable => OAuthFileConfigData::default(),
+        };
         let icloud_mode = existing.resolved_icloud_mode();
         OAuthFileConfigData {
             preset: OauthFilePreset::ICloud,
@@ -67,8 +73,10 @@ impl OAuthFileConfigData {
             file_id: existing.file_id,
             file_name: existing.file_name,
             account_email: match account_name {
-                Some(account_name) => StoredOAuthAccountIdentity::Email(account_name.to_owned()),
-                None => existing.account_email,
+                StoredOAuthAccountIdentity::Email(account_name) => {
+                    StoredOAuthAccountIdentity::Email(account_name.clone())
+                }
+                StoredOAuthAccountIdentity::Unknown => existing.account_email,
             },
             drive_mode: GoogleDriveMode::Private,
             folder_id: StoredGoogleDriveFolder::Root,
@@ -186,7 +194,7 @@ mod tests {
 
     use crate::{GoogleDriveMode, ICloudMode, OAuthFileConfigData, OauthFilePreset};
 
-    use super::{GoogleOAuthTokenInput, ICloudOAuthTokenInput};
+    use super::{GoogleOAuthTokenInput, ICloudOAuthTokenInput, StoredOAuthFileConfiguration};
 
     #[test]
     fn google_drive_mode_switch_clears_scope_bound_credentials_and_targets() {
@@ -237,7 +245,7 @@ mod tests {
         let google = OAuthFileConfigData::from_google_token(&GoogleOAuthTokenInput {
             access_token: "new-google-token",
             expires_at: "2026-07-20T00:00:00Z",
-            existing: Some(&google_existing),
+            existing: &StoredOAuthFileConfiguration::Configured(google_existing.clone()),
         });
         assert_eq!(
             google.access_token,
@@ -264,8 +272,8 @@ mod tests {
         };
         let icloud = OAuthFileConfigData::from_icloud_token(&ICloudOAuthTokenInput {
             access_token: "new-icloud-token",
-            account_name: Some("new@example.com"),
-            existing: Some(&icloud_existing),
+            account_name: &StoredOAuthAccountIdentity::Email("new@example.com".to_owned()),
+            existing: &StoredOAuthFileConfiguration::Configured(icloud_existing.clone()),
         });
         assert_eq!(
             icloud.access_token,
@@ -384,22 +392,22 @@ mod tests {
             account_email: StoredOAuthAccountIdentity::Email("retained".to_owned()),
             ..OAuthFileConfigData::default()
         };
-        for account_name in [None, Some("")] {
+        for (account_name, expected) in [
+            (StoredOAuthAccountIdentity::Unknown, "retained"),
+            (StoredOAuthAccountIdentity::Email(String::new()), ""),
+        ] {
             let projected = OAuthFileConfigData::from_icloud_token(&ICloudOAuthTokenInput {
                 access_token: " token ",
-                account_name,
-                existing: Some(&existing),
+                account_name: &account_name,
+                existing: &StoredOAuthFileConfiguration::Configured(existing.clone()),
             });
             assert_eq!(projected.access_token.as_deref(), Some(" token "));
-            assert_eq!(
-                projected.account_email.as_deref(),
-                Some(account_name.unwrap_or("retained"))
-            );
+            assert_eq!(projected.account_email.as_deref(), Some(expected));
         }
         let google = OAuthFileConfigData::from_google_token(&GoogleOAuthTokenInput {
             access_token: " token ",
             expires_at: " expiry ",
-            existing: None,
+            existing: &StoredOAuthFileConfiguration::NotApplicable,
         });
         assert_eq!(google.access_token.as_deref(), Some(" token "));
         assert_eq!(google.expires_at.as_deref(), Some(" expiry "));
