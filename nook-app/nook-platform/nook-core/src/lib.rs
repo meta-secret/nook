@@ -27,15 +27,17 @@ pub(crate) use auth::{
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
-    DEVICE_ACCESS_PROFILE_VERSION, DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS,
-    DeviceAccessCredentialKind, DeviceAccessIdentityObservation, DeviceAccessIdentityState,
-    DeviceAccessProfile, DeviceAccessProfileDecodeResult, DeviceAccessProfileTransitionError,
+    AuthenticatorGuidEvidence, DEVICE_ACCESS_PROFILE_VERSION,
+    DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessCredentialKind,
+    DeviceAccessIdentityObservation, DeviceAccessIdentityState, DeviceAccessProfile,
+    DeviceAccessProfileDecodeResult, DeviceAccessProfileTransitionError,
     DeviceAccessProfileVersion, DeviceAccessProtectionKind, DeviceAccessProviderLabelError,
-    IdentityVaultAppGrant, IdentityVaultAppGrantKind, IdentityVaultLinks,
-    IdentityVaultLinksRequest, PasskeyAccessProfile, PasskeyAuthenticatorAttachment,
-    PasskeyBackupState, PasskeyBrowserObservation, PasskeyCreatedAtEvidence,
-    PasskeyCreationCeremony, PasskeyKeeperKind, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
-    PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
+    DeviceCredentialProfile, DiscardedClientEnvironment, IdentityVaultAppGrant,
+    IdentityVaultAppGrantKind, IdentityVaultLinks, IdentityVaultLinksRequest, PasskeyAccessProfile,
+    PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyBrowserObservation,
+    PasskeyCreatedAtEvidence, PasskeyCreationCeremony, PasskeyKeeperKind,
+    PasskeyLastUsedAtEvidence, PasskeyMetadataUnrecorded, PasskeyObservedBrowser,
+    PasskeyObservedPlatform, PasskeyTransport, PersistedDeviceIdentityState, VerifiedVaultAccess,
 };
 pub use nook_auth2::MemberLabelState;
 pub use nook_auth2::RecordTypeDeclaration;
@@ -339,12 +341,13 @@ pub use vault_architecture::{
 };
 pub use vault_client_policy::{
     ActiveVaultStore, DeviceIdentityInitializationMode, DeviceProtectionStatus,
-    ExternalDeviceIdentityAuthorizationMode, JoinEnrollmentState, ProviderSyncFailureHandling,
-    ProviderSyncFreshness, ProviderSyncVisibility, RemoteVaultAssessDecision,
-    RemoteVaultRecoveryState, SentinelVaultUnlockState, UnauthenticatedSyncDecision,
-    VaultAccessObservation, VaultClientPolicy, VaultConnectGateDecision, VaultConnectProbeDecision,
-    VaultEditDecision, VaultStorageSyncDecision, VaultSwitchDecision, VaultSyncTimerStartDecision,
-    VaultSyncTimerTickDecision,
+    ExternalDeviceIdentityAuthorizationMode, InvalidDeviceProtectionStatus, JoinEnrollmentState,
+    ProviderSyncFailureHandling, ProviderSyncFreshness, ProviderSyncVisibility,
+    RemoteVaultAssessDecision, RemoteVaultRecoveryState, SentinelVaultUnlockState,
+    UnauthenticatedSyncDecision, VaultAccessObservation, VaultClientPolicy,
+    VaultConnectGateDecision, VaultConnectProbeDecision, VaultEditDecision, VaultEditMessage,
+    VaultEditTranslation, VaultStorageSyncDecision, VaultSwitchDecision,
+    VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
     LoadedVault, UnlockedVault, UnlockedVaultMaterial, VaultAccessStatus, VaultContent,
@@ -356,8 +359,8 @@ pub use vault_epoch_crypto::{
     VaultMetaRewrap,
 };
 pub use vault_event_session::{
-    VaultEpochRotated, VaultEventAppend, VaultEventAppended, VaultEventSession,
-    VaultEventSessionRejection, VaultOutboxFlush, VaultOutboxFlushed,
+    EventPublicationDestination, VaultEpochRotated, VaultEventAppend, VaultEventAppended,
+    VaultEventSession, VaultEventSessionRejection, VaultOutboxFlush, VaultOutboxFlushed,
     VaultSecurityEpochRotationInput,
 };
 pub use vault_format::{
@@ -378,7 +381,8 @@ pub use vault_search_catalog::{
     SecretSearchCatalogChangeCount, SecretSearchCatalogReconcile,
 };
 pub use vault_sentinel_genesis::{
-    SentinelGenesisOutput, SentinelGenesisPhase, StartSentinelGenesisArgs,
+    SentinelDeliveryNotPending, SentinelGenesisOutput, SentinelGenesisPhase,
+    StartSentinelGenesisArgs,
 };
 pub use vault_sentinel_unlock::SentinelUnlockSigning;
 pub use vault_session::{

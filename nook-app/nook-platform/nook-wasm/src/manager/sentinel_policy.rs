@@ -36,7 +36,9 @@ impl NookVaultManager {
     pub(in crate::manager) fn ensure_sentinel_architecture_from_shares(
         &mut self,
     ) -> Result<(), NookError> {
-        if let Some(policy) = Self::sentinel_policy_from_shares(&self.vault.meta)? {
+        if let SentinelConfiguration::Enabled(policy) =
+            Self::sentinel_policy_from_shares(&self.vault.meta)?
+        {
             self.vault.architecture.vault_type = VaultType::Sentinel;
             self.vault.architecture.sentinel = SentinelConfiguration::Enabled(policy);
         }
@@ -45,7 +47,7 @@ impl NookVaultManager {
 
     pub(super) fn sentinel_policy_from_shares(
         meta: &VaultMetaState,
-    ) -> Result<Option<nook_core::SentinelPolicy>, NookError> {
+    ) -> Result<SentinelConfiguration, NookError> {
         nook_core::SentinelPolicy::from_share_records(meta).map_err(Into::into)
     }
 

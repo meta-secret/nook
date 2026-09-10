@@ -95,8 +95,8 @@ impl<'a> VaultFormatDocument<'a> {
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
         VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         Ok(match vault.name {
-            Some(name) => VaultName::from_named(&name),
-            None => VaultName::Unnamed,
+            VaultName::Named(name) => VaultName::from_named(&name),
+            VaultName::Unnamed => VaultName::Unnamed,
         })
     }
 
@@ -110,10 +110,7 @@ impl<'a> VaultFormatDocument<'a> {
         let mut vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
         VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
-        vault.name = match VaultName::from_named(name) {
-            VaultName::Named(name) => Some(name),
-            VaultName::Unnamed => None,
-        };
+        vault.name = VaultName::from_named(name);
         serde_yaml::to_string(&vault)
             .map(VaultYamlBlob::from_trusted)
             .map_err(VaultFormatError::YamlSerialize)
@@ -156,10 +153,10 @@ impl<'a> VaultFormatDocument<'a> {
             serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseStoreId)?;
         VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
         match vault.store_id {
-            Some(id) => Ok(VaultStoreIdentity::Assigned(
+            VaultStoreIdentity::Assigned(id) => Ok(VaultStoreIdentity::Assigned(
                 crate::StoreId::parse(&id)?.to_string(),
             )),
-            None => Ok(VaultStoreIdentity::Unassigned),
+            VaultStoreIdentity::Unassigned => Ok(VaultStoreIdentity::Unassigned),
         }
     }
 
@@ -299,14 +296,8 @@ impl VaultRecordSet {
             VaultVersionWrite::Initial => 0,
             VaultVersionWrite::Version(version) => version.into(),
         };
-        vault.store_id = match Self::resolve_store_id(store_id)? {
-            VaultStoreIdentity::Assigned(store_id) => Some(store_id),
-            VaultStoreIdentity::Unassigned => None,
-        };
-        vault.name = match VaultName::from_ref(vault_name) {
-            VaultName::Named(name) => Some(name),
-            VaultName::Unnamed => None,
-        };
+        vault.store_id = Self::resolve_store_id(store_id)?;
+        vault.name = VaultName::from_ref(vault_name);
         vault.unlock = unlock.projection_unlock();
         vault.architecture = architecture.clone();
         vault.password_entries = password_entries.to_vec();

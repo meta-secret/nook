@@ -77,14 +77,18 @@ impl SentinelGenesisPhase {
     }
 
     #[must_use]
-    pub const fn complete_delivery(self) -> Option<Self> {
+    pub const fn complete_delivery(self) -> Result<Self, SentinelDeliveryNotPending> {
         if matches!(self, Self::DeliveringShares) {
-            Some(Self::Complete)
+            Ok(Self::Complete)
         } else {
-            None
+            Err(SentinelDeliveryNotPending)
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("Sentinel share delivery is not awaiting completion.")]
+pub struct SentinelDeliveryNotPending;
 
 /// Complete, persistable Sentinel genesis result. It contains no full-key device
 /// envelope. `keys` are intentionally not exposed here; callers open the new
@@ -219,11 +223,11 @@ mod tests {
         );
         assert_eq!(
             SentinelGenesisPhase::DeliveringShares.complete_delivery(),
-            Some(SentinelGenesisPhase::Complete)
+            Ok(SentinelGenesisPhase::Complete)
         );
         assert_eq!(
             SentinelGenesisPhase::ReadyToFinalize.complete_delivery(),
-            None
+            Err(SentinelDeliveryNotPending)
         );
         let owner = DeviceIdentity::generate()?;
         let (owner_signing, _) = SigningIdentity::generate()?;

@@ -94,7 +94,7 @@ impl NookVaultManager {
         else {
             return Ok(DeviceProtectionStatus::Missing);
         };
-        DeviceProtectionStatus::from_persisted(wrapped.protection_mode()).ok_or_else(|| {
+        DeviceProtectionStatus::from_persisted(wrapped.protection_mode()).map_err(|_| {
             NookError::IndexedDb(format!(
                 "Unsupported persisted device-protection status: {}",
                 wrapped.protection_mode()

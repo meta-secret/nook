@@ -12,6 +12,8 @@ use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::indexed_db::StoredStringRecord;
 use crate::{IdbPutStringRequest, NookDatabase, NookError, SaveWrappedDeviceIdentityRequest};
 use js_sys::Date;
+use nook_core::AuthenticatorGuidEvidence;
+use nook_core::DiscardedClientEnvironment;
 use nook_core::IsoTimestamp;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::{DeviceIdentityProtection, PasskeyProtectionInput};
@@ -267,10 +269,10 @@ mod tests {
                 attachment: PasskeyAuthenticatorAttachment::Platform,
                 transports: vec![PasskeyTransport::Internal],
                 backup_state: PasskeyBackupState::Eligible,
-                aaguid: Some("aaguid-one".to_owned()),
+                aaguid: AuthenticatorGuidEvidence::Reported("aaguid-one".to_owned()),
                 browser: self.browser,
                 platform: self.platform,
-                legacy_client_environment: None,
+                legacy_client_environment: DiscardedClientEnvironment,
             }
         }
     }
@@ -316,21 +318,13 @@ mod tests {
             PasskeyCreationCeremony::RegistrationOnly,
         );
         assert_eq!(
-            profile
-                .passkey
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("created passkey profile is missing"))?
-                .last_used_at,
+            profile.require_passkey()?.last_used_at,
             PasskeyLastUsedAtEvidence::NotYetObserved
         );
-        profile
-            .passkey
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("created passkey profile is missing"))?
-            .provider_label = "Bitwarden".to_owned();
+        profile.require_passkey_mut()?.provider_label = "Bitwarden".to_owned();
 
         let mut replacement = BrowserObservationFixture::SAFARI_MACOS.observe();
-        replacement.aaguid = Some("aaguid-two".to_owned());
+        replacement.aaguid = AuthenticatorGuidEvidence::Reported("aaguid-two".to_owned());
         replacement.transports = vec![PasskeyTransport::Hybrid];
         profile = profile.record_passkey_created(
             "passkey:replacement",
@@ -339,13 +333,13 @@ mod tests {
             IsoTimestamp::from_trusted("2026-02-01T00:00:00.000Z".to_owned()),
             PasskeyCreationCeremony::RegistrationAndAssertion,
         );
-        let passkey = profile
-            .passkey
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("replacement passkey profile is missing"))?;
+        let passkey = profile.require_passkey()?;
         assert_eq!(passkey.nook_name, "Replacement credential");
         assert!(passkey.provider_label.is_empty());
-        assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
+        assert_eq!(
+            passkey.observation.aaguid,
+            AuthenticatorGuidEvidence::Reported("aaguid-two".to_owned())
+        );
         assert_eq!(
             passkey.last_used_at,
             PasskeyLastUsedAtEvidence::Known {
@@ -357,22 +351,22 @@ mod tests {
             attachment: PasskeyAuthenticatorAttachment::Unknown,
             transports: Vec::new(),
             backup_state: PasskeyBackupState::BackedUp,
-            aaguid: None,
+            aaguid: AuthenticatorGuidEvidence::NotReported,
             browser: PasskeyObservedBrowser::Firefox,
             platform: PasskeyObservedPlatform::Linux,
-            legacy_client_environment: None,
+            legacy_client_environment: DiscardedClientEnvironment,
         };
         profile = profile.record_passkey_used(
             "passkey:replacement",
             usage,
             IsoTimestamp::from_trusted("2026-03-01T00:00:00.000Z".to_owned()),
         );
-        let passkey = profile
-            .passkey
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("used passkey profile is missing"))?;
+        let passkey = profile.require_passkey()?;
         assert_eq!(passkey.observation.transports, [PasskeyTransport::Hybrid]);
-        assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
+        assert_eq!(
+            passkey.observation.aaguid,
+            AuthenticatorGuidEvidence::Reported("aaguid-two".to_owned())
+        );
         assert_eq!(
             passkey.observation.backup_state,
             PasskeyBackupState::BackedUp
@@ -397,20 +391,16 @@ mod tests {
             IsoTimestamp::from_trusted("2026-01-01T00:00:00.000Z".to_owned()),
             PasskeyCreationCeremony::RegistrationOnly,
         );
-        profile
-            .passkey
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("created passkey profile is missing"))?
-            .provider_label = "Old provider".to_owned();
+        profile.require_passkey_mut()?.provider_label = "Old provider".to_owned();
 
         let recovered_observation = PasskeyBrowserObservation {
             attachment: PasskeyAuthenticatorAttachment::Unknown,
             transports: Vec::new(),
             backup_state: PasskeyBackupState::BackedUp,
-            aaguid: None,
+            aaguid: AuthenticatorGuidEvidence::NotReported,
             browser: PasskeyObservedBrowser::Firefox,
             platform: PasskeyObservedPlatform::Linux,
-            legacy_client_environment: None,
+            legacy_client_environment: DiscardedClientEnvironment,
         };
         profile = profile.record_passkey_used(
             "passkey:recovered",
@@ -418,10 +408,7 @@ mod tests {
             IsoTimestamp::from_trusted("2026-02-01T00:00:00.000Z".to_owned()),
         );
 
-        let passkey = profile
-            .passkey
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("recovered passkey profile is missing"))?;
+        let passkey = profile.require_passkey()?;
         assert_eq!(passkey.credential_fingerprint, "passkey:recovered");
         assert!(passkey.nook_name.is_empty());
         assert!(passkey.provider_label.is_empty());
@@ -449,24 +436,10 @@ mod tests {
             .set_passkey_provider_label("passkey:stale", "Bitwarden".to_owned())
             .expect_err("stale credential rejects");
         let mut profile = rejection.profile;
-        assert!(
-            profile
-                .passkey
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("current passkey profile is missing"))?
-                .provider_label
-                .is_empty()
-        );
+        assert!(profile.require_passkey()?.provider_label.is_empty());
 
         profile = profile.set_passkey_provider_label("passkey:current", "Bitwarden".to_owned())?;
-        assert_eq!(
-            profile
-                .passkey
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("current passkey profile is missing"))?
-                .provider_label,
-            "Bitwarden"
-        );
+        assert_eq!(profile.require_passkey()?.provider_label, "Bitwarden");
         Ok(())
     }
 
@@ -481,10 +454,7 @@ mod tests {
         profile =
             profile.set_passkey_provider_label("passkey:current", "Proton Pass".to_owned())?;
 
-        let passkey = profile
-            .passkey
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("recovered passkey profile is missing"))?;
+        let passkey = profile.require_passkey()?;
         assert_eq!(passkey.credential_fingerprint, "passkey:current");
         assert_eq!(passkey.provider_label, "Proton Pass");
         assert_eq!(passkey.created_at, PasskeyCreatedAtEvidence::Unavailable);
@@ -648,9 +618,9 @@ mod tests {
         .await?;
 
         let profile = DeviceAccessProfileKey::selected().await?.load().await?;
-        let passkey = profile.passkey.ok_or_else(|| {
-            NookError::Database("Recovered passkey profile is missing".to_owned())
-        })?;
+        let passkey = profile
+            .into_passkey()
+            .map_err(|_| NookError::Database("Recovered passkey profile is missing".to_owned()))?;
         assert_eq!(passkey.credential_fingerprint, credential_fingerprint);
         assert_eq!(passkey.provider_label, "Bitwarden");
         let _ = Rexie::delete("nook_db").await;
@@ -709,8 +679,8 @@ mod tests {
             .await?
             .load()
             .await?
-            .passkey
-            .ok_or_else(|| NookError::Database("Passkey profile is missing".to_owned()))?;
+            .into_passkey()
+            .map_err(|_| NookError::Database("Passkey profile is missing".to_owned()))?;
         assert_eq!(passkey.credential_fingerprint, current_fingerprint);
         assert_eq!(passkey.nook_name, "Current credential");
         let _ = Rexie::delete("nook_db").await;
@@ -801,8 +771,8 @@ mod tests {
             .await?;
         assert_eq!(
             first_profile
-                .passkey
-                .ok_or_else(|| NookError::Database("First passkey profile is missing".to_owned()))?
+                .into_passkey()
+                .map_err(|_| NookError::Database("First passkey profile is missing".to_owned()))?
                 .nook_name,
             "Personal passkey"
         );

@@ -72,15 +72,19 @@ pub enum ProviderSyncFreshness {
     Forced,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("unknown persisted device protection status")]
+pub struct InvalidDeviceProtectionStatus;
+
 impl DeviceProtectionStatus {
     #[must_use]
-    pub fn from_persisted(value: &str) -> Option<Self> {
+    pub fn from_persisted(value: &str) -> Result<Self, InvalidDeviceProtectionStatus> {
         match value {
-            "missing" => Some(Self::Missing),
-            "plaintext" => Some(Self::Plaintext),
-            "passkey" => Some(Self::Passkey),
-            "pin" => Some(Self::Pin),
-            _ => None,
+            "missing" => Ok(Self::Missing),
+            "plaintext" => Ok(Self::Plaintext),
+            "passkey" => Ok(Self::Passkey),
+            "pin" => Ok(Self::Pin),
+            _ => Err(InvalidDeviceProtectionStatus),
         }
     }
 
@@ -118,16 +122,31 @@ pub enum VaultEditDecision {
     BlockedByArchitecture,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum VaultEditMessage {
+    Allowed,
+    Blocked(String),
+}
+#[derive(Debug, PartialEq, Eq)]
+pub enum VaultEditTranslation {
+    Allowed,
+    Blocked(&'static str),
+}
+
 impl VaultEditDecision {
     #[must_use]
-    pub const fn translation_key(self) -> Option<&'static str> {
+    pub const fn translation_key(self) -> VaultEditTranslation {
         match self {
-            Self::Allowed => None,
-            Self::BlockedSecurityConflict => Some(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS),
-            Self::BlockedSyncConflict => Some(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS),
-            Self::BlockedByArchitecture => {
-                Some(i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
+            Self::Allowed => VaultEditTranslation::Allowed,
+            Self::BlockedSecurityConflict => {
+                VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
             }
+            Self::BlockedSyncConflict => {
+                VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
+            }
+            Self::BlockedByArchitecture => VaultEditTranslation::Blocked(
+                i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED,
+            ),
         }
     }
 }
@@ -169,14 +188,17 @@ impl VaultClientPolicy {
     }
 
     #[must_use]
-    pub fn edit_block_message(request: crate::EditBlockMessageRequest<'_>) -> Option<String> {
-        let translation_key = Self::edit_block_reason(crate::EditBlockReasonRequest {
+    pub fn edit_block_message(request: crate::EditBlockMessageRequest<'_>) -> VaultEditMessage {
+        let translation = Self::edit_block_reason(crate::EditBlockReasonRequest {
             security_conflict_count: request.security_conflict_count,
             has_sync_conflict: request.has_sync_conflict,
             architecture_allows_secret_creation: request.architecture_allows_secret_creation,
         })
-        .translation_key()?;
-        Some(TranslationCatalog::translate_from_catalog(
+        .translation_key();
+        let VaultEditTranslation::Blocked(translation_key) = translation else {
+            return VaultEditMessage::Allowed;
+        };
+        VaultEditMessage::Blocked(TranslationCatalog::translate_from_catalog(
             TranslateFromCatalogRequest {
                 catalog_json: request.catalog_json,
                 locale: request.locale,
@@ -289,17 +311,22 @@ mod tests {
         );
         assert_eq!(
             VaultEditDecision::BlockedSecurityConflict.translation_key(),
-            Some(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
+            VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
         );
         assert_eq!(
             VaultEditDecision::BlockedSyncConflict.translation_key(),
-            Some(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
+            VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
         );
         assert_eq!(
             VaultEditDecision::BlockedByArchitecture.translation_key(),
-            Some(i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
+            VaultEditTranslation::Blocked(
+                i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED
+            )
         );
-        assert_eq!(VaultEditDecision::Allowed.translation_key(), None);
+        assert_eq!(
+            VaultEditDecision::Allowed.translation_key(),
+            VaultEditTranslation::Allowed
+        );
         assert!(VaultClientPolicy::edits_blocked(
             crate::EditsBlockedRequest {
                 security_conflict_count: 1.into(),
@@ -321,9 +348,10 @@ mod tests {
                 architecture_allows_secret_creation: (false).into(),
                 catalog_json: AppLocale::get_translation_catalog("en"),
                 locale: "en"
-            })
-            .as_deref(),
-            Some("Security conflict detected. Sync from all devices before editing.")
+            }),
+            VaultEditMessage::Blocked(
+                "Security conflict detected. Sync from all devices before editing.".to_owned()
+            )
         );
         assert_eq!(
             VaultClientPolicy::edit_block_message(crate::EditBlockMessageRequest {
@@ -333,7 +361,7 @@ mod tests {
                 catalog_json: "{}",
                 locale: "en"
             }),
-            None
+            VaultEditMessage::Allowed
         );
     }
 
@@ -466,13 +494,16 @@ mod tests {
     fn persisted_device_protection_status_is_parsed_once_in_core() {
         assert_eq!(
             DeviceProtectionStatus::from_persisted("passkey"),
-            Some(DeviceProtectionStatus::Passkey)
+            Ok(DeviceProtectionStatus::Passkey)
         );
         assert_eq!(
             DeviceProtectionStatus::from_persisted("pin"),
-            Some(DeviceProtectionStatus::Pin)
+            Ok(DeviceProtectionStatus::Pin)
         );
-        assert_eq!(DeviceProtectionStatus::from_persisted("future"), None);
+        assert_eq!(
+            DeviceProtectionStatus::from_persisted("future"),
+            Err(InvalidDeviceProtectionStatus)
+        );
         assert_eq!(DeviceProtectionStatus::Unlocked.as_str(), "unlocked");
     }
 

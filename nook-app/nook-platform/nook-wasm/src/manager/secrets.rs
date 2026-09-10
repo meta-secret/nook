@@ -4,6 +4,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::{NookSecretPage, NookSecretRecord, NookSecretTypeFilter, NookTotpCode};
+use nook_core::EventPublicationDestination;
 use nook_core::LocalEventBytes;
 use nook_core::{
     SecretId, SecretValue, StorageMode, StoredRecordPayload, SymmetricKey, VaultOperation,
@@ -510,7 +511,7 @@ mod wasm_tests {
                     ),
                 }],
                 created_at: TS,
-                provider_id: Some("local-folder"),
+                destination: EventPublicationDestination::Provider("local-folder"),
             }) {
                 Ok(outcome) => {
                     session = outcome.session;
@@ -541,7 +542,7 @@ mod wasm_tests {
                 password_entries: Vec::new(),
             }],
             created_at: TS,
-            provider_id: Some("local-folder"),
+            destination: EventPublicationDestination::Provider("local-folder"),
         }) {
             Ok(outcome) => {
                 device_a = outcome.session;

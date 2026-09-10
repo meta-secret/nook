@@ -1,5 +1,6 @@
 //! Event-sourcing integration scenarios using the in-memory harness.
 
+use nook_core::EventPublicationDestination;
 use nook_core::LocalEventBytes;
 use nook_core::{
     DeviceId, LocalEventStore, ObservedHeads, SigningIdentity, VaultCrypto, VaultError,
@@ -92,7 +93,7 @@ fn unauthorized_append_and_rotation_do_not_publish() -> anyhow::Result<()> {
         .append_operations(nook_core::VaultEventAppend {
             operations: vec![trigger.clone()],
             created_at: TS,
-            provider_id: Some("github"),
+            destination: EventPublicationDestination::Provider("github"),
         }) {
         Ok(outcome) => {
             device.session = outcome.session;
@@ -118,7 +119,7 @@ fn unauthorized_append_and_rotation_do_not_publish() -> anyhow::Result<()> {
             rotated_meta_records: Vec::new(),
             rewrapped_password_entries: Vec::new(),
             created_at: TS,
-            provider_id: Some("github"),
+            destination: EventPublicationDestination::Provider("github"),
         }) {
         Ok(outcome) => {
             device.session = outcome.session;

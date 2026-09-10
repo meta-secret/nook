@@ -1,13 +1,15 @@
 //! Sentinel draft and share evidence projection, independent of the browser.
-use super::SentinelPolicy;
+use super::{SentinelConfiguration, SentinelPolicy};
 use crate::{MultiDeviceError, SentinelParticipantCount, SentinelThreshold, VaultMetaState};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use tsify::Tsify;
 impl SentinelPolicy {
-    pub fn from_share_records(meta: &VaultMetaState) -> Result<Option<Self>, MultiDeviceError> {
+    pub fn from_share_records(
+        meta: &VaultMetaState,
+    ) -> Result<SentinelConfiguration, MultiDeviceError> {
         if meta.sentinel_shares.is_empty() {
-            return Ok(None);
+            return Ok(SentinelConfiguration::Disabled);
         }
         let mut shares = meta.sentinel_shares.values();
         let first = shares
@@ -33,7 +35,7 @@ impl SentinelPolicy {
         }
         let share_count = SentinelParticipantCount::try_from(meta.sentinel_shares.len())
             .map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
-        Ok(Some(Self {
+        Ok(SentinelConfiguration::Enabled(Self {
             threshold,
             required_participants: required,
             ready_participants: share_count,

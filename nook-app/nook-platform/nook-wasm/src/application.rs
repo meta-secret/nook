@@ -13,16 +13,25 @@ use nook_core::VaultApplication;
 pub(crate) struct ConfiguredVaultApplication {
     application: nook_core::VaultApplication,
 }
+#[derive(Clone, Copy)]
+enum ApplicationConfiguration {
+    Unconfigured,
+    Configured(ConfiguredVaultApplication),
+}
+
 thread_local! {
-    static CONFIGURED_APPLICATION: Cell<Option<ConfiguredVaultApplication>> = const { Cell::new(None) };
+    static CONFIGURED_APPLICATION: Cell<ApplicationConfiguration> = const { Cell::new(ApplicationConfiguration::Unconfigured) };
 }
 
 impl ConfiguredVaultApplication {
     pub fn configure_vault_application(application: nook_core::VaultApplication) {
         CONFIGURED_APPLICATION.with(|configured| match configured.get() {
-            None => configured.set(Some(ConfiguredVaultApplication { application })),
-            Some(existing) if existing.application == application => {}
-            Some(existing) => panic!(
+            ApplicationConfiguration::Unconfigured => configured.set(
+                ApplicationConfiguration::Configured(ConfiguredVaultApplication { application }),
+            ),
+            ApplicationConfiguration::Configured(existing)
+                if existing.application == application => {}
+            ApplicationConfiguration::Configured(existing) => panic!(
                 "WASM application already configured as {}; cannot change it to {}",
                 existing.application.as_str(),
                 application.as_str()
@@ -34,27 +43,23 @@ impl ConfiguredVaultApplication {
 impl ConfiguredVaultApplication {
     #[must_use]
     pub fn configured_vault_application() -> nook_core::VaultApplication {
-        CONFIGURED_APPLICATION.with(|configured| {
-            #[cfg(test)]
-            return configured
-                .get()
-                .map(|configured| configured.application)
-                .unwrap_or(VaultApplication::UnifiedDevelopment);
-
-            #[cfg(not(test))]
-            configured
-                .get()
-                .map(|configured| configured.application)
-                .unwrap_or_else(|| {
-                    panic!("WASM application capability was not configured before use")
-                })
+        CONFIGURED_APPLICATION.with(|configured| match configured.get() {
+            ApplicationConfiguration::Configured(configured) => configured.application,
+            ApplicationConfiguration::Unconfigured => {
+                #[cfg(test)]
+                {
+                    VaultApplication::UnifiedDevelopment
+                }
+                #[cfg(not(test))]
+                panic!("WASM application capability was not configured before use")
+            }
         })
     }
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    use super::{configure_vault_application, configured_vault_application};
+    use super::ConfiguredVaultApplication;
     use nook_core::VaultApplication;
     use std::{panic, thread};
 

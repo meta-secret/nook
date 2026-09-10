@@ -1,11 +1,15 @@
+use serde::{Deserialize, Serialize};
+
 /// On-disk vault serialization format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultFormat {
     Yaml,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
 pub enum VaultStoreIdentity {
+    #[default]
     Unassigned,
     Assigned(String),
 }
@@ -16,8 +20,10 @@ pub enum VaultStoreIdentityRef<'a> {
     Assigned(&'a str),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
 pub enum VaultName {
+    #[default]
     Unnamed,
     Named(String),
 }
@@ -61,5 +67,16 @@ mod tests {
             VaultFormat::from_path("/data/user/nook-events.yaml"),
             VaultFormat::Yaml
         );
+    }
+}
+
+impl VaultStoreIdentity {
+    pub(super) fn is_unassigned(&self) -> bool {
+        matches!(self, Self::Unassigned)
+    }
+}
+impl VaultName {
+    pub(super) fn is_unnamed(&self) -> bool {
+        matches!(self, Self::Unnamed)
     }
 }

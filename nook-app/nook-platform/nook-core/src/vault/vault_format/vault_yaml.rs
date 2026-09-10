@@ -1,3 +1,4 @@
+use super::{VaultName, VaultStoreIdentity};
 use crate::RecordTypeDeclaration;
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
@@ -29,11 +30,11 @@ pub(super) struct StoredVaultYaml {
     #[serde(default, skip_serializing_if = "StoredVaultYaml::version_is_zero")]
     pub(super) vault_version: u64,
     /// Logical secret-store identity — same id on every provider replica of this vault.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(super) store_id: Option<String>,
+    #[serde(default, skip_serializing_if = "VaultStoreIdentity::is_unassigned")]
+    pub(super) store_id: VaultStoreIdentity,
     /// Human-readable vault label.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(super) name: Option<String>,
+    #[serde(default, skip_serializing_if = "VaultName::is_unnamed")]
+    pub(super) name: VaultName,
     /// Active unlock mechanism. Omitted on write when `Keys` (the default).
     #[serde(default, skip_serializing_if = "VaultUnlock::is_keys")]
     pub(super) unlock: VaultUnlock,

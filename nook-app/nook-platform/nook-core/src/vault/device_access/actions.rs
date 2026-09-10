@@ -7,7 +7,8 @@
 use super::{
     DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessIdentityState, DeviceAccessProfile,
     DeviceAccessProfileDecodeResult, DeviceAccessProfileVersionEnvelope,
-    DeviceAccessProtectionKind, DeviceAccessProviderLabelError, PasskeyAccessProfile,
+    DeviceAccessProtectionKind, DeviceAccessProviderLabelError, DeviceCredentialProfile,
+    PasskeyAccessProfile,
 };
 use crate::{
     AppId, IdentityDirectory, IdentityRecord, IdentityVaultBinding, StoreId, WrappedDeviceIdentity,
@@ -95,10 +96,12 @@ impl DeviceAccessProfile {
         }
         match serde_json::from_str::<DeviceAccessProfile>(raw) {
             Ok(profile)
-                if profile
-                    .passkey
-                    .as_ref()
-                    .is_none_or(|passkey| !passkey.credential_fingerprint.trim().is_empty()) =>
+                if match &profile.credential {
+                    DeviceCredentialProfile::Unrecorded => true,
+                    DeviceCredentialProfile::Passkey(passkey) => {
+                        !passkey.credential_fingerprint.trim().is_empty()
+                    }
+                } =>
             {
                 DeviceAccessProfileDecodeResult::Current(Box::new(profile))
             }
@@ -109,21 +112,26 @@ impl DeviceAccessProfile {
 
 impl DeviceAccessProtectionKind {
     #[must_use]
-    pub fn classify(record: Option<&WrappedDeviceIdentity>) -> Self {
+    pub fn classify(record: &WrappedDeviceIdentity) -> Self {
         match record {
-            None => Self::Missing,
-            Some(WrappedDeviceIdentity::PasskeyDerived(_)) => Self::PasskeyStandard,
-            Some(WrappedDeviceIdentity::PasskeyWrappedLocal(_)) => Self::PasskeyAntiHacker,
-            Some(WrappedDeviceIdentity::Pin(_)) => Self::PinOrPassphrase,
+            WrappedDeviceIdentity::PasskeyDerived(_) => Self::PasskeyStandard,
+            WrappedDeviceIdentity::PasskeyWrappedLocal(_) => Self::PasskeyAntiHacker,
+            WrappedDeviceIdentity::Pin(_) => Self::PinOrPassphrase,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PersistedDeviceIdentityState {
+    NotEstablished,
+    Established,
 }
 
 /// Captures the browser/session observations used to classify device identity state.
 pub struct DeviceAccessIdentityObservation<'a> {
     pub session_unlocked: DeviceSessionLockState,
     pub session_device_id: &'a str,
-    pub persisted_device_id: Option<&'a str>,
+    pub persisted_identity: PersistedDeviceIdentityState,
 }
 
 impl DeviceAccessIdentityObservation<'_> {
@@ -131,7 +139,12 @@ impl DeviceAccessIdentityObservation<'_> {
     pub fn identity_state(&self) -> DeviceAccessIdentityState {
         if matches!(self.session_unlocked, DeviceSessionLockState::Unlocked) {
             DeviceAccessIdentityState::Unlocked
-        } else if !self.session_device_id.trim().is_empty() || self.persisted_device_id.is_some() {
+        } else if !self.session_device_id.trim().is_empty()
+            || matches!(
+                self.persisted_identity,
+                PersistedDeviceIdentityState::Established
+            )
+        {
             DeviceAccessIdentityState::Locked
         } else {
             DeviceAccessIdentityState::Missing

@@ -27,6 +27,12 @@ pub struct VaultEventSession {
     pub signing_seed: String,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum EventPublicationDestination<'a> {
+    Local,
+    Provider(&'a str),
+}
+
 pub struct VaultSecurityEpochRotationInput<'a> {
     pub trigger: VaultOperation,
     pub new_keys: &'a crate::VaultKeys,
@@ -36,13 +42,13 @@ pub struct VaultSecurityEpochRotationInput<'a> {
     pub rotated_meta_records: Vec<StoredSecretRecord>,
     pub rewrapped_password_entries: Vec<crate::PasswordUnlockEntry>,
     pub created_at: &'a str,
-    pub provider_id: Option<&'a str>,
+    pub destination: EventPublicationDestination<'a>,
 }
 
 pub struct VaultEventAppend<'a> {
     pub operations: Vec<VaultOperation>,
     pub created_at: &'a str,
-    pub provider_id: Option<&'a str>,
+    pub destination: EventPublicationDestination<'a>,
 }
 #[derive(Debug)]
 pub struct VaultEventAppended {
@@ -150,7 +156,7 @@ impl VaultEventSession {
         };
         let event_id = prepared.events[0].event_id.clone();
         Ok(VaultEventAppended {
-            session: self.publish(prepared, input.provider_id),
+            session: self.publish(prepared, input.destination),
             event_id,
         })
     }
@@ -187,10 +193,14 @@ impl VaultEventSession {
         }
         Ok(PreparedSessionPublication { events: prepared })
     }
-    fn publish(mut self, prepared: PreparedSessionPublication, provider_id: Option<&str>) -> Self {
+    fn publish(
+        mut self,
+        prepared: PreparedSessionPublication,
+        destination: EventPublicationDestination<'_>,
+    ) -> Self {
         for event in prepared.events {
             self.heads = vec![event.event_id.to_string()];
-            if let Some(provider_id) = provider_id {
+            if let EventPublicationDestination::Provider(provider_id) = destination {
                 self.store = self.store.queue_outbox(crate::LocalOutboxWrite {
                     provider_id,
                     event: crate::LocalEventWrite {
@@ -307,7 +317,7 @@ impl VaultEventSession {
             rotated_meta_records,
             rewrapped_password_entries,
             created_at,
-            provider_id,
+            destination,
         } = input;
         let prepared: VaultResult<_> = (|| {
             let secrets =
@@ -355,7 +365,7 @@ impl VaultEventSession {
                 });
             }
         };
-        self = self.publish(prepared, provider_id);
+        self = self.publish(prepared, destination);
         self.key_epoch = trigger_id.to_string();
         Ok(VaultEpochRotated {
             session: self,

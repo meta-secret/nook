@@ -1,5 +1,6 @@
 //! Projection, epoch, and delivery integration scenarios.
 use super::*;
+use nook_core::EventPublicationDestination;
 
 #[test]
 fn concurrent_replace_creates_conflict() -> VaultResult<()> {
@@ -326,7 +327,7 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
                 rotated_meta_records: Vec::new(),
                 rewrapped_password_entries: Vec::new(),
                 created_at: TS,
-                provider_id: Some("github"),
+                destination: EventPublicationDestination::Provider("github"),
             }) {
             Ok(outcome) => {
                 device.session = outcome.session;
@@ -352,7 +353,7 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
             rotated_meta_records: Vec::new(),
             rewrapped_password_entries: Vec::new(),
             created_at: TS,
-            provider_id: Some("github"),
+            destination: EventPublicationDestination::Provider("github"),
         }) {
         Ok(outcome) => {
             device.session = outcome.session;

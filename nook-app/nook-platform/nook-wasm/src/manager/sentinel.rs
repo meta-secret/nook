@@ -9,6 +9,7 @@ use crate::NookDatabase;
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
 use crate::storage::indexed_db::{SentinelFinalizationJournal, StoredSentinelShareDelivery};
+use nook_core::SentinelConfiguration;
 use nook_core::{CreateSentinelShareRecordsRequest, DeviceId, SentinelShareEnvelope};
 use nook_core::{
     MultiDeviceError, SentinelConfiguration, SentinelGenesisPhase, SentinelUnlockSigning, StoreId,
@@ -193,7 +194,7 @@ impl NookVaultManager {
         self.sentinel_genesis_phase = self
             .sentinel_genesis_phase
             .complete_delivery()
-            .ok_or_else(|| JsError::new("Sentinel share delivery is not awaiting completion."))?;
+            .map_err(|error| JsError::new(&error.to_string()))?;
         Ok(self.sentinel_genesis_phase)
     }
 
@@ -436,7 +437,7 @@ impl NookVaultManager {
         self.application
             .validate_session_access(metadata.architecture.vault_type)?;
         let mut architecture = metadata.architecture;
-        if let Some(policy) = Self::sentinel_policy_from_shares(&meta)? {
+        if let SentinelConfiguration::Enabled(policy) = Self::sentinel_policy_from_shares(&meta)? {
             architecture.vault_type = VaultType::Sentinel;
             architecture.sentinel = SentinelConfiguration::Enabled(policy);
         }

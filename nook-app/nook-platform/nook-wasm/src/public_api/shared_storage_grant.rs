@@ -18,7 +18,13 @@ impl DriveStorageClient<'_> {
             joiner_identity,
             target,
         } = request;
-        let folder_id = target.id().unwrap_or_default().to_owned();
+        let folder_id = match &target {
+            SharedStorageGrantTarget::Unavailable => String::new(),
+            SharedStorageGrantTarget::Identified { storage_target_id }
+            | SharedStorageGrantTarget::Named {
+                storage_target_id, ..
+            } => storage_target_id.clone(),
+        };
         match DriveStorageClient::new(access_token)
             .share_folder_with_email(DriveStorageClientShareFolderWithEmail {
                 folder_id: &folder_id,
@@ -149,7 +155,8 @@ pub async fn prepare_shared_storage_grant(
             .automatic_grant_route();
             match (!token.is_empty(), route) {
                 (true, AutomaticSharedGrantRoute::GoogleDrive) => {
-                    if target.id().is_some_and(|id| !id.trim().is_empty()) {
+                    if matches!(&target, SharedStorageGrantTarget::Identified { storage_target_id } | SharedStorageGrantTarget::Named { storage_target_id, .. } if !storage_target_id.trim().is_empty())
+                    {
                         DriveStorageClient::grant_existing_drive_folder(ExistingDriveFolderGrant {
                             access_token: token,
                             instructions_key: instructions_key,

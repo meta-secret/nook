@@ -64,9 +64,9 @@ impl LocalAppProtection {
             .iter()
             .map(|entry| LocalAppProtection {
                 app_id: entry.app_id().clone(),
-                protection: nook_core::DeviceAccessProtectionKind::classify(Some(
+                protection: nook_core::DeviceAccessProtectionKind::classify(
                     entry.wrapped_app_key(),
-                )),
+                ),
             })
             .collect()
     }

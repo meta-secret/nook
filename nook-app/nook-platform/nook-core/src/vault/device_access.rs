@@ -20,6 +20,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use crate::{DeviceId, IsoTimestamp, StoreId};
 
 mod actions;
+mod credential_profile;
+pub use credential_profile::*;
 mod passkey_keeper;
 mod passkey_observation;
 
@@ -181,8 +183,12 @@ impl TryFrom<VerifiedVaultAccessWire> for VerifiedVaultAccess {
 #[serde(rename_all = "camelCase")]
 pub struct DeviceAccessProfile {
     pub version: DeviceAccessProfileVersion,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub passkey: Option<PasskeyAccessProfile>,
+    #[serde(
+        default,
+        rename = "passkey",
+        skip_serializing_if = "DeviceCredentialProfile::is_unrecorded"
+    )]
+    pub credential: DeviceCredentialProfile,
     #[serde(default)]
     pub verified_vaults: Vec<VerifiedVaultAccess>,
 }
@@ -203,7 +209,7 @@ impl Default for DeviceAccessProfile {
     fn default() -> Self {
         Self {
             version: DEVICE_ACCESS_PROFILE_VERSION,
-            passkey: None,
+            credential: DeviceCredentialProfile::Unrecorded,
             verified_vaults: Vec::new(),
         }
     }
@@ -244,21 +250,18 @@ impl DeviceAccessProfile {
         credential_fingerprint: &str,
         name: String,
     ) -> Result<Self, DeviceAccessProfileRejection> {
-        if self
-            .passkey
-            .as_ref()
-            .is_some_and(|passkey| passkey.credential_fingerprint != credential_fingerprint)
+        if matches!(&self.credential, DeviceCredentialProfile::Passkey(passkey) if passkey.credential_fingerprint != credential_fingerprint)
         {
             return Err(DeviceAccessProfileRejection {
                 profile: self,
                 cause: DeviceAccessProfileTransitionError::CredentialChanged,
             });
         }
-        if let Some(passkey) = self.passkey.as_mut() {
+        if let DeviceCredentialProfile::Passkey(passkey) = &mut self.credential {
             passkey.nook_name = name;
             return Ok(self);
         }
-        self.passkey = Some(PasskeyAccessProfile {
+        self.credential = DeviceCredentialProfile::Passkey(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
             nook_name: name,
             ..PasskeyAccessProfile::default()
@@ -271,21 +274,18 @@ impl DeviceAccessProfile {
         credential_fingerprint: &str,
         provider_label: String,
     ) -> Result<Self, DeviceAccessProfileRejection> {
-        if self
-            .passkey
-            .as_ref()
-            .is_some_and(|passkey| passkey.credential_fingerprint != credential_fingerprint)
+        if matches!(&self.credential, DeviceCredentialProfile::Passkey(passkey) if passkey.credential_fingerprint != credential_fingerprint)
         {
             return Err(DeviceAccessProfileRejection {
                 profile: self,
                 cause: DeviceAccessProfileTransitionError::CredentialChanged,
             });
         }
-        if let Some(passkey) = self.passkey.as_mut() {
+        if let DeviceCredentialProfile::Passkey(passkey) = &mut self.credential {
             passkey.provider_label = provider_label;
             return Ok(self);
         }
-        self.passkey = Some(PasskeyAccessProfile {
+        self.credential = DeviceCredentialProfile::Passkey(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
             provider_label,
             ..PasskeyAccessProfile::default()
@@ -301,7 +301,7 @@ impl DeviceAccessProfile {
         now: IsoTimestamp,
         ceremony: PasskeyCreationCeremony,
     ) -> Self {
-        self.passkey = Some(PasskeyAccessProfile {
+        self.credential = DeviceCredentialProfile::Passkey(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
             nook_name: nook_name.trim().to_owned(),
             provider_label: String::new(),
@@ -327,16 +327,15 @@ impl DeviceAccessProfile {
         observation: PasskeyBrowserObservation,
         now: IsoTimestamp,
     ) -> Self {
-        if let Some(mut passkey) = self
-            .passkey
-            .filter(|passkey| passkey.credential_fingerprint == credential_fingerprint)
-        {
-            passkey.last_used_at = PasskeyLastUsedAtEvidence::Known { timestamp: now };
-            passkey.observation = passkey.observation.merge_usage(observation);
-            self.passkey = Some(passkey);
-            return self;
+        if let DeviceCredentialProfile::Passkey(mut passkey) = self.credential {
+            if passkey.credential_fingerprint == credential_fingerprint {
+                passkey.last_used_at = PasskeyLastUsedAtEvidence::Known { timestamp: now };
+                passkey.observation = passkey.observation.merge_usage(observation);
+                self.credential = DeviceCredentialProfile::Passkey(passkey);
+                return self;
+            }
         }
-        self.passkey = Some(PasskeyAccessProfile {
+        self.credential = DeviceCredentialProfile::Passkey(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
             last_used_at: PasskeyLastUsedAtEvidence::Known { timestamp: now },
             observation,
@@ -512,19 +511,19 @@ mod tests {
         let pin = DeviceIdentityProtection::new(&identity.secret_string()).with_pin("six words")?;
 
         assert_eq!(
-            DeviceAccessProtectionKind::classify(None),
+            DeviceAccessProtectionKind::Missing,
             DeviceAccessProtectionKind::Missing
         );
         assert_eq!(
-            DeviceAccessProtectionKind::classify(Some(&standard)),
+            DeviceAccessProtectionKind::classify(&standard),
             DeviceAccessProtectionKind::PasskeyStandard
         );
         assert_eq!(
-            DeviceAccessProtectionKind::classify(Some(&anti_hacker)),
+            DeviceAccessProtectionKind::classify(&anti_hacker),
             DeviceAccessProtectionKind::PasskeyAntiHacker
         );
         assert_eq!(
-            DeviceAccessProtectionKind::classify(Some(&pin)),
+            DeviceAccessProtectionKind::classify(&pin),
             DeviceAccessProtectionKind::PinOrPassphrase
         );
         Ok(())
@@ -619,10 +618,7 @@ mod tests {
 
         profile = profile.set_passkey_name("passkey:first", "MacBook passkey".to_owned())?;
 
-        let passkey = profile
-            .passkey
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("passkey metadata is missing"))?;
+        let passkey = profile.require_passkey()?;
         assert_eq!(passkey.credential_fingerprint, "passkey:first");
         assert_eq!(passkey.nook_name, "MacBook passkey");
         Ok(())
@@ -639,18 +635,11 @@ mod tests {
             PasskeyCreationCeremony::RegistrationAndAssertion,
         );
         profile = profile.set_passkey_provider_label("passkey:first", "Proton Pass".to_owned())?;
-        let evidence = profile
-            .passkey
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("passkey metadata is missing"))?
-            .clone();
+        let evidence = profile.require_passkey()?.clone();
 
         profile = profile.set_passkey_name("passkey:first", "New name".to_owned())?;
 
-        let renamed = profile
-            .passkey
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("renamed passkey metadata is missing"))?;
+        let renamed = profile.require_passkey()?;
         assert_eq!(renamed.nook_name, "New name");
         assert_eq!(renamed.provider_label, evidence.provider_label);
         assert_eq!(renamed.created_at, evidence.created_at);
@@ -687,7 +676,7 @@ mod tests {
             (&DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "",
-                persisted_device_id: None,
+                persisted_identity: PersistedDeviceIdentityState::NotEstablished,
             })
                 .identity_state(),
             DeviceAccessIdentityState::Missing
@@ -696,7 +685,7 @@ mod tests {
             (&DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "",
-                persisted_device_id: Some("device-persisted"),
+                persisted_identity: PersistedDeviceIdentityState::Established,
             })
                 .identity_state(),
             DeviceAccessIdentityState::Locked
@@ -705,7 +694,7 @@ mod tests {
             (&DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "device-persisted",
-                persisted_device_id: Some("device-persisted"),
+                persisted_identity: PersistedDeviceIdentityState::Established,
             })
                 .identity_state(),
             DeviceAccessIdentityState::Locked
@@ -714,7 +703,7 @@ mod tests {
             (&DeviceAccessIdentityObservation {
                 session_unlocked: true.into(),
                 session_device_id: "device-session",
-                persisted_device_id: Some("device-persisted"),
+                persisted_identity: PersistedDeviceIdentityState::Established,
             })
                 .identity_state(),
             DeviceAccessIdentityState::Unlocked
@@ -723,7 +712,7 @@ mod tests {
             (&DeviceAccessIdentityObservation {
                 session_unlocked: true.into(),
                 session_device_id: "device-companion",
-                persisted_device_id: None,
+                persisted_identity: PersistedDeviceIdentityState::NotEstablished,
             })
                 .identity_state(),
             DeviceAccessIdentityState::Unlocked
@@ -732,7 +721,7 @@ mod tests {
             (&DeviceAccessIdentityObservation {
                 session_unlocked: false.into(),
                 session_device_id: "device-companion",
-                persisted_device_id: None,
+                persisted_identity: PersistedDeviceIdentityState::NotEstablished,
             })
                 .identity_state(),
             DeviceAccessIdentityState::Locked
@@ -768,10 +757,10 @@ mod tests {
             attachment: PasskeyAuthenticatorAttachment::Platform,
             transports: vec![PasskeyTransport::Internal],
             backup_state: PasskeyBackupState::Eligible,
-            aaguid: Some("aaguid-one".to_owned()),
+            aaguid: AuthenticatorGuidEvidence::Reported("aaguid-one".to_owned()),
             browser: PasskeyObservedBrowser::Safari,
             platform: PasskeyObservedPlatform::MacOs,
-            legacy_client_environment: None,
+            legacy_client_environment: DiscardedClientEnvironment,
         }
     }
 
@@ -796,10 +785,7 @@ mod tests {
             PasskeyCreationCeremony::RegistrationAndAssertion,
         );
 
-        let passkey = profile
-            .passkey
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("replacement passkey profile is missing"))?;
+        let passkey = profile.require_passkey()?;
         assert_eq!(passkey.nook_name, "Replacement credential");
         assert!(passkey.provider_label.is_empty());
         assert_eq!(
@@ -833,10 +819,7 @@ mod tests {
             timestamp("2026-03-01T00:00:00.000Z"),
         );
 
-        let passkey = profile
-            .passkey
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("passkey profile is missing"))?;
+        let passkey = profile.require_passkey()?;
         assert_eq!(passkey.observation.transports, [PasskeyTransport::Internal]);
         assert_eq!(
             passkey.observation.backup_state,
@@ -871,14 +854,7 @@ mod tests {
             DeviceAccessProfileTransitionError::CredentialChanged
         );
         let profile = rejection.profile;
-        assert!(
-            profile
-                .passkey
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("passkey profile is missing"))?
-                .provider_label
-                .is_empty()
-        );
+        assert!(profile.require_passkey()?.provider_label.is_empty());
         Ok(())
     }
 

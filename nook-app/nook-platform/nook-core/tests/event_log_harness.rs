@@ -4,6 +4,7 @@
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 use nook_auth2::{GenesisMembersRecordsRequest, VaultMember};
+use nook_core::EventPublicationDestination;
 use nook_core::LocalEventBytes;
 use nook_core::RecordTypeDeclaration;
 use nook_core::{
@@ -216,7 +217,7 @@ impl EventLogDevice {
         match self.session.append_operations(nook_core::VaultEventAppend {
             operations: ops,
             created_at: TS,
-            provider_id: Some("github"),
+            destination: EventPublicationDestination::Provider("github"),
         }) {
             Ok(appended) => {
                 self.session = appended.session;

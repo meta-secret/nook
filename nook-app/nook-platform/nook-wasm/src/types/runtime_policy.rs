@@ -1,5 +1,6 @@
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
+use nook_core::VaultEditMessage;
 use nook_core::{ActiveVaultStore, VaultAccessObservation, VaultClientPolicy, VaultSwitchDecision};
 
 #[wasm_bindgen]
@@ -121,14 +122,18 @@ impl NookVaultClientPolicy {
         catalog_json: &str,
         locale: &str,
     ) -> Result<String, wasm_bindgen::JsError> {
-        VaultClientPolicy::edit_block_message(nook_core::EditBlockMessageRequest {
+        match VaultClientPolicy::edit_block_message(nook_core::EditBlockMessageRequest {
             security_conflict_count: (security_conflict_count as usize).into(),
             has_sync_conflict: (has_sync_conflict).into(),
             architecture_allows_secret_creation: (architecture_allows_secret_creation).into(),
             catalog_json: catalog_json,
             locale: locale,
-        })
-        .ok_or_else(|| JsError::new("blocked vault edit decision requires a message"))
+        }) {
+            VaultEditMessage::Blocked(message) => Ok(message),
+            VaultEditMessage::Allowed => Err(JsError::new(
+                "blocked vault edit decision requires a message",
+            )),
+        }
     }
 
     #[wasm_bindgen]

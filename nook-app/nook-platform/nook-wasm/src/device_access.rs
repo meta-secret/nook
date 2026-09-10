@@ -16,6 +16,7 @@ use nook_core::{
     AppId, DeviceAccessCredentialKind, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment,
     PasskeyBackupState, StoreId,
 };
+use nook_core::{AuthenticatorGuidEvidence, DeviceCredentialProfile, PersistedDeviceIdentityState};
 pub use passkey_metadata::{NookPasskeyAttachmentState, NookPasskeyBackupState};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -401,9 +402,11 @@ impl NookDeviceAccessSnapshot {
         let identity_state = (&nook_core::DeviceAccessIdentityObservation {
             session_unlocked,
             session_device_id,
-            persisted_device_id: match &protected {
-                ProtectedIdentityLookup::Configured(identity) => Some(identity.app_id.as_str()),
-                ProtectedIdentityLookup::Unconfigured => None,
+            persisted_identity: match &protected {
+                ProtectedIdentityLookup::Configured(_) => PersistedDeviceIdentityState::Established,
+                ProtectedIdentityLookup::Unconfigured => {
+                    PersistedDeviceIdentityState::NotEstablished
+                }
             },
         })
             .identity_state();
@@ -417,10 +420,12 @@ impl NookDeviceAccessSnapshot {
         let protection = if session_uses_companion {
             DeviceAccessProtectionKind::CompanionSession
         } else {
-            nook_core::DeviceAccessProtectionKind::classify(match &protected {
-                ProtectedIdentityLookup::Configured(identity) => Some(&identity.wrapped_identity),
-                ProtectedIdentityLookup::Unconfigured => None,
-            })
+            match &protected {
+                ProtectedIdentityLookup::Configured(identity) => {
+                    DeviceAccessProtectionKind::classify(&identity.wrapped_identity)
+                }
+                ProtectedIdentityLookup::Unconfigured => DeviceAccessProtectionKind::Missing,
+            }
         };
         let (device_id, credential_id, user_handle_id) = if session_uses_companion {
             (session_device_id.to_owned(), String::new(), String::new())
@@ -462,11 +467,16 @@ impl NookDeviceAccessSnapshot {
         let passkey = if session_uses_companion {
             PasskeyAccessProfile::default()
         } else {
-            profile
-                .passkey
-                .clone()
-                .filter(|passkey| passkey.credential_fingerprint == credential_id)
-                .unwrap_or_default()
+            match &profile.credential {
+                DeviceCredentialProfile::Passkey(passkey)
+                    if passkey.credential_fingerprint == credential_id =>
+                {
+                    passkey.clone()
+                }
+                DeviceCredentialProfile::Passkey(_) | DeviceCredentialProfile::Unrecorded => {
+                    PasskeyAccessProfile::default()
+                }
+            }
         };
         let profiles = if device_id.is_empty() {
             Vec::new()
@@ -503,10 +513,14 @@ impl NookDeviceAccessSnapshot {
                 .collect(),
             backup_state: NookPasskeyBackupState::backup_state(passkey.observation.backup_state),
             aaguid: match passkey.observation.aaguid.clone() {
-                Some(aaguid) => NookDeviceAccessText::from_string(aaguid),
-                None => NookDeviceAccessText(NookDeviceAccessTextValue::Unknown),
+                AuthenticatorGuidEvidence::Reported(aaguid) => {
+                    NookDeviceAccessText::from_string(aaguid)
+                }
+                AuthenticatorGuidEvidence::NotReported => {
+                    NookDeviceAccessText(NookDeviceAccessTextValue::Unknown)
+                }
             },
-            keeper: nook_core::PasskeyKeeperKind::classify(passkey.observation.aaguid.as_deref()),
+            keeper: nook_core::PasskeyKeeperKind::classify(&passkey.observation.aaguid),
             observed_browser: passkey.observation.browser,
             observed_platform: passkey.observation.platform,
             vaults,
@@ -596,7 +610,9 @@ impl NookDeviceVaultAccess {
                 },
                 verified_at: match verified_at {
                     Some(timestamp) => NookDeviceAccessText::from_string(timestamp),
-                    None => NookDeviceAccessText(NookDeviceAccessTextValue::Unknown),
+                    AuthenticatorGuidEvidence::NotReported => {
+                        NookDeviceAccessText(NookDeviceAccessTextValue::Unknown)
+                    }
                 },
             });
         }

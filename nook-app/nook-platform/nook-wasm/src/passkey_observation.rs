@@ -1,6 +1,7 @@
 //! Best-effort, non-authoritative metadata reported by a `WebAuthn` ceremony.
 
 use js_sys::{Array, ArrayBuffer, Function, Uint8Array};
+use nook_core::AuthenticatorGuidEvidence;
 use nook_core::{
     PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyObservedBrowser,
     PasskeyObservedPlatform, PasskeyTransport,
@@ -54,7 +55,9 @@ impl BrowserPasskeyObservation<'_> {
             backup_state: authenticator_data
                 .as_deref()
                 .map_or(PasskeyBackupState::Unknown, Self::backup_state),
-            aaguid: authenticator_data.as_deref().and_then(Self::aaguid),
+            aaguid: authenticator_data
+                .as_deref()
+                .map_or(AuthenticatorGuidEvidence::NotReported, Self::aaguid),
             ..client_environment()
         }
     }
@@ -90,7 +93,7 @@ impl BrowserPasskeyObservation<'_> {
             backup_state: authenticator_data
                 .as_deref()
                 .map_or(PasskeyBackupState::Unknown, Self::backup_state),
-            aaguid: None,
+            aaguid: AuthenticatorGuidEvidence::NotReported,
             ..client_environment()
         }
     }
@@ -158,20 +161,20 @@ impl BrowserPasskeyObservation<'_> {
 }
 
 impl BrowserPasskeyObservation<'_> {
-    fn aaguid(data: &[u8]) -> Option<String> {
+    fn aaguid(data: &[u8]) -> AuthenticatorGuidEvidence {
         const FLAGS_INDEX: usize = 32;
         const ATTESTED_DATA: u8 = 0x40;
         const AAGUID_START: usize = 37;
         const AAGUID_END: usize = AAGUID_START + 16;
-        if data.get(FLAGS_INDEX).copied()? & ATTESTED_DATA == 0 || data.len() < AAGUID_END {
-            return None;
+        if data.len() < AAGUID_END || data[FLAGS_INDEX] & ATTESTED_DATA == 0 {
+            return AuthenticatorGuidEvidence::NotReported;
         }
         let bytes = &data[AAGUID_START..AAGUID_END];
         if bytes.iter().all(|byte| *byte == 0) {
-            return None;
+            return AuthenticatorGuidEvidence::NotReported;
         }
         let hex = hex::encode(bytes);
-        Some(format!(
+        AuthenticatorGuidEvidence::Reported(format!(
             "{}-{}-{}-{}-{}",
             &hex[0..8],
             &hex[8..12],
@@ -275,11 +278,14 @@ mod tests {
     fn formats_only_nonzero_attested_aaguid() {
         let mut data = vec![0; 53];
         data[32] = 0x40;
-        assert_eq!(BrowserPasskeyObservation::aaguid(&data), None);
+        assert_eq!(
+            BrowserPasskeyObservation::aaguid(&data),
+            AuthenticatorGuidEvidence::NotReported
+        );
         data[37..53].copy_from_slice(&[1; 16]);
         assert_eq!(
-            BrowserPasskeyObservation::aaguid(&data).as_deref(),
-            Some("01010101-0101-0101-0101-010101010101")
+            BrowserPasskeyObservation::aaguid(&data),
+            AuthenticatorGuidEvidence::Reported("01010101-0101-0101-0101-010101010101".to_owned())
         );
     }
 
@@ -379,10 +385,16 @@ mod tests {
             BrowserPasskeyObservation::backup_state(&[]),
             PasskeyBackupState::Unknown
         );
-        assert_eq!(BrowserPasskeyObservation::aaguid(&[0; 10]), None);
+        assert_eq!(
+            BrowserPasskeyObservation::aaguid(&[0; 10]),
+            AuthenticatorGuidEvidence::NotReported
+        );
         let mut not_attested = vec![0; 53];
         not_attested[32] = 0x08;
-        assert_eq!(BrowserPasskeyObservation::aaguid(&not_attested), None);
+        assert_eq!(
+            BrowserPasskeyObservation::aaguid(&not_attested),
+            AuthenticatorGuidEvidence::NotReported
+        );
     }
 
     #[wasm_bindgen_test]

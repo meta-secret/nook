@@ -4,7 +4,12 @@
 //! to a product name is browser-reported display help. It is never proof that
 //! Nook inventoried the keeper or opened an external password manager.
 
+use super::AuthenticatorGuidEvidence;
 use wasm_bindgen::prelude::wasm_bindgen;
+
+#[derive(Debug, thiserror::Error)]
+#[error("authenticator GUID is invalid or undisclosed")]
+struct InvalidAuthenticatorGuid;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -27,11 +32,11 @@ pub enum PasskeyKeeperKind {
 
 impl PasskeyKeeperKind {
     #[must_use]
-    pub fn classify(aaguid: Option<&str>) -> Self {
-        let Some(raw) = aaguid else {
+    pub fn classify(aaguid: &AuthenticatorGuidEvidence) -> Self {
+        let AuthenticatorGuidEvidence::Reported(raw) = aaguid else {
             return Self::Unknown;
         };
-        let Some(canonical) = Self::canonical_aaguid(raw) else {
+        let Ok(canonical) = Self::canonical_aaguid(raw) else {
             return Self::Unknown;
         };
         match canonical.as_str() {
@@ -55,14 +60,14 @@ impl PasskeyKeeperKind {
         }
     }
 
-    fn canonical_aaguid(raw: &str) -> Option<String> {
+    fn canonical_aaguid(raw: &str) -> Result<String, InvalidAuthenticatorGuid> {
         let compact: String = raw
             .chars()
             .filter(char::is_ascii_hexdigit)
             .map(|character| character.to_ascii_lowercase())
             .collect();
         if compact.len() != 32 || compact.bytes().all(|byte| byte == b'0') {
-            return None;
+            return Err(InvalidAuthenticatorGuid);
         }
         let mut canonical = String::with_capacity(36);
         for (index, character) in compact.chars().enumerate() {
@@ -71,18 +76,20 @@ impl PasskeyKeeperKind {
             }
             canonical.push(character);
         }
-        Some(canonical)
+        Ok(canonical)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::PasskeyKeeperKind;
+    use super::{AuthenticatorGuidEvidence, PasskeyKeeperKind};
 
     #[test]
     fn apple_passwords_hyphenated_guid_maps() {
         assert_eq!(
-            PasskeyKeeperKind::classify(Some("FBFC3007-154E-4ECC-8C0B-6E020557D7BD")),
+            PasskeyKeeperKind::classify(&AuthenticatorGuidEvidence::Reported(
+                "FBFC3007-154E-4ECC-8C0B-6E020557D7BD".to_owned()
+            )),
             PasskeyKeeperKind::ApplePasswords
         );
     }
@@ -90,7 +97,9 @@ mod tests {
     #[test]
     fn proton_pass_compact_guid_maps() {
         assert_eq!(
-            PasskeyKeeperKind::classify(Some("50726f746f6e5061737350726f746f6e")),
+            PasskeyKeeperKind::classify(&AuthenticatorGuidEvidence::Reported(
+                "50726f746f6e5061737350726f746f6e".to_owned()
+            )),
             PasskeyKeeperKind::ProtonPass
         );
     }
@@ -98,7 +107,9 @@ mod tests {
     #[test]
     fn google_password_manager_guid_maps() {
         assert_eq!(
-            PasskeyKeeperKind::classify(Some("ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4")),
+            PasskeyKeeperKind::classify(&AuthenticatorGuidEvidence::Reported(
+                "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4".to_owned()
+            )),
             PasskeyKeeperKind::GooglePasswordManager
         );
     }
@@ -106,7 +117,9 @@ mod tests {
     #[test]
     fn zero_guid_stays_unknown() {
         assert_eq!(
-            PasskeyKeeperKind::classify(Some("00000000-0000-0000-0000-000000000000")),
+            PasskeyKeeperKind::classify(&AuthenticatorGuidEvidence::Reported(
+                "00000000-0000-0000-0000-000000000000".to_owned()
+            )),
             PasskeyKeeperKind::Unknown
         );
     }
@@ -114,7 +127,7 @@ mod tests {
     #[test]
     fn missing_guid_stays_unknown() {
         assert_eq!(
-            PasskeyKeeperKind::classify(None),
+            PasskeyKeeperKind::classify(&AuthenticatorGuidEvidence::NotReported),
             PasskeyKeeperKind::Unknown
         );
     }
@@ -122,7 +135,9 @@ mod tests {
     #[test]
     fn unrecognized_guid_stays_unknown() {
         assert_eq!(
-            PasskeyKeeperKind::classify(Some("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")),
+            PasskeyKeeperKind::classify(&AuthenticatorGuidEvidence::Reported(
+                "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_owned()
+            )),
             PasskeyKeeperKind::Unknown
         );
     }

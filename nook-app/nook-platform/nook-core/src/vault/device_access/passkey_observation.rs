@@ -1,5 +1,7 @@
 use crate::IsoTimestamp;
+use serde::de::{Error as DeserializeError, Visitor};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -59,14 +61,52 @@ pub enum PasskeyBackupState {
     BackedUp,
 }
 
+/// Browser-reported authenticator identity evidence, never an authorization proof.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
+pub enum AuthenticatorGuidEvidence {
+    #[default]
+    NotReported,
+    Reported(String),
+}
+impl AuthenticatorGuidEvidence {
+    pub fn is_unreported(&self) -> bool {
+        matches!(self, Self::NotReported)
+    }
+}
+
+/// Historical English metadata is admitted as string/null and immediately discarded.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DiscardedClientEnvironment;
+impl<'de> Deserialize<'de> for DiscardedClientEnvironment {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(Self)
+    }
+}
+impl<'de> Visitor<'de> for DiscardedClientEnvironment {
+    type Value = Self;
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a legacy client environment string or null")
+    }
+    fn visit_unit<E: DeserializeError>(self) -> Result<Self, E> {
+        Ok(self)
+    }
+    fn visit_str<E: DeserializeError>(self, _: &str) -> Result<Self, E> {
+        Ok(self)
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyBrowserObservation {
     pub attachment: PasskeyAuthenticatorAttachment,
     pub transports: Vec<PasskeyTransport>,
     pub backup_state: PasskeyBackupState,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub aaguid: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "AuthenticatorGuidEvidence::is_unreported"
+    )]
+    pub aaguid: AuthenticatorGuidEvidence,
     #[serde(default)]
     pub browser: PasskeyObservedBrowser,
     #[serde(default)]
@@ -76,7 +116,7 @@ pub struct PasskeyBrowserObservation {
     // text into localized UI.
     #[doc(hidden)]
     #[serde(default, alias = "clientEnvironment", skip_serializing)]
-    pub legacy_client_environment: Option<String>,
+    pub legacy_client_environment: DiscardedClientEnvironment,
 }
 
 impl PasskeyBrowserObservation {
@@ -91,7 +131,7 @@ impl PasskeyBrowserObservation {
         if usage.backup_state != PasskeyBackupState::Unknown {
             self.backup_state = usage.backup_state;
         }
-        if self.aaguid.is_none() {
+        if matches!(self.aaguid, AuthenticatorGuidEvidence::NotReported) {
             self.aaguid = usage.aaguid;
         }
         if usage.browser != PasskeyObservedBrowser::Unknown {
@@ -124,19 +164,20 @@ pub enum PasskeyCreatedAtEvidence {
 #[serde(untagged)]
 pub(super) enum PasskeyCreatedAtEvidenceWire {
     Explicit(PasskeyCreatedAtEvidence),
-    Legacy(Option<IsoTimestamp>),
+    LegacyTimestamp(IsoTimestamp),
+    LegacyUnavailable,
 }
 impl Default for PasskeyCreatedAtEvidenceWire {
     fn default() -> Self {
-        Self::Legacy(None)
+        Self::LegacyUnavailable
     }
 }
 impl From<PasskeyCreatedAtEvidenceWire> for PasskeyCreatedAtEvidence {
     fn from(wire: PasskeyCreatedAtEvidenceWire) -> Self {
         match wire {
             PasskeyCreatedAtEvidenceWire::Explicit(evidence) => evidence,
-            PasskeyCreatedAtEvidenceWire::Legacy(Some(timestamp)) => Self::Known { timestamp },
-            PasskeyCreatedAtEvidenceWire::Legacy(None) => Self::Unavailable,
+            PasskeyCreatedAtEvidenceWire::LegacyTimestamp(timestamp) => Self::Known { timestamp },
+            PasskeyCreatedAtEvidenceWire::LegacyUnavailable => Self::Unavailable,
         }
     }
 }
@@ -156,19 +197,20 @@ pub enum PasskeyLastUsedAtEvidence {
 #[serde(untagged)]
 pub(super) enum PasskeyLastUsedAtEvidenceWire {
     Explicit(PasskeyLastUsedAtEvidence),
-    Legacy(Option<IsoTimestamp>),
+    LegacyTimestamp(IsoTimestamp),
+    LegacyUnavailable,
 }
 impl Default for PasskeyLastUsedAtEvidenceWire {
     fn default() -> Self {
-        Self::Legacy(None)
+        Self::LegacyUnavailable
     }
 }
 impl From<PasskeyLastUsedAtEvidenceWire> for PasskeyLastUsedAtEvidence {
     fn from(wire: PasskeyLastUsedAtEvidenceWire) -> Self {
         match wire {
             PasskeyLastUsedAtEvidenceWire::Explicit(evidence) => evidence,
-            PasskeyLastUsedAtEvidenceWire::Legacy(Some(timestamp)) => Self::Known { timestamp },
-            PasskeyLastUsedAtEvidenceWire::Legacy(None) => Self::Unavailable,
+            PasskeyLastUsedAtEvidenceWire::LegacyTimestamp(timestamp) => Self::Known { timestamp },
+            PasskeyLastUsedAtEvidenceWire::LegacyUnavailable => Self::Unavailable,
         }
     }
 }
@@ -183,10 +225,10 @@ mod tests {
             attachment: PasskeyAuthenticatorAttachment::Platform,
             transports: vec![PasskeyTransport::Internal],
             backup_state: PasskeyBackupState::Eligible,
-            aaguid: Some("aaguid-one".to_owned()),
+            aaguid: AuthenticatorGuidEvidence::Reported("aaguid-one".to_owned()),
             browser: PasskeyObservedBrowser::Safari,
             platform: PasskeyObservedPlatform::MacOs,
-            legacy_client_environment: None,
+            legacy_client_environment: DiscardedClientEnvironment,
         };
 
         creation = creation.merge_usage(PasskeyBrowserObservation {
@@ -202,7 +244,10 @@ mod tests {
         );
         assert_eq!(creation.transports, [PasskeyTransport::Internal]);
         assert_eq!(creation.backup_state, PasskeyBackupState::BackedUp);
-        assert_eq!(creation.aaguid.as_deref(), Some("aaguid-one"));
+        assert_eq!(
+            creation.aaguid,
+            AuthenticatorGuidEvidence::Reported("aaguid-one".to_owned())
+        );
         assert_eq!(creation.browser, PasskeyObservedBrowser::Firefox);
         assert_eq!(creation.platform, PasskeyObservedPlatform::Linux);
     }
