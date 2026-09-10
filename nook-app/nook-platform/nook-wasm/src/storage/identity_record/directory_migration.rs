@@ -6,6 +6,7 @@ use crate::{
     IdentityDbMigrateDirectory, IdentityDbMigrateDirectoryInStore, IdentityDbPersistPendingGenesis,
     NookDatabase, NookError,
 };
+use nook_core::MemberLabelState;
 use nook_core::{
     DirectoryLegacyMigration, IdentityDirectory, LegacyDirectoryBase, MigratedIdentityDirectory,
     MultiDeviceError,
@@ -281,7 +282,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Pending genesis",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;
@@ -290,7 +291,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Selected",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;
@@ -340,7 +341,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Pending genesis",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;
@@ -349,7 +350,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Selected",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;

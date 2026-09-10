@@ -6,6 +6,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::RecordTypeDeclaration;
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
 use crate::{
@@ -438,7 +439,7 @@ mod tests {
             vec![
                     StoredSecretRecord {
                         key: Self::sid("github.com"),
-                        secret_type: Some(SecretType::Login),
+                        secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
                         value: StoredRecordPayload::from_trusted(
                             "-----BEGIN AGE ENCRYPTED FILE-----\nline1\nline2\n-----END AGE ENCRYPTED FILE-----"
                                 .to_owned(),
@@ -446,7 +447,7 @@ mod tests {
                     },
                     StoredSecretRecord {
                         key: Self::sid("work-vpn"),
-                        secret_type: Some(SecretType::ApiKey),
+                        secret_type: RecordTypeDeclaration::Secret(SecretType::ApiKey),
                         value: StoredRecordPayload::from_trusted(
                             "-----BEGIN AGE ENCRYPTED FILE-----\nsecret\n-----END AGE ENCRYPTED FILE-----"
                                 .to_owned(),

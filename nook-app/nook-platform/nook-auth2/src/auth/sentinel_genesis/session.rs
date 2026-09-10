@@ -12,6 +12,7 @@ use super::{
     SentinelGenesisParticipantResponse, SentinelGenesisPolicy, SentinelGenesisRequest,
     SentinelGenesisShareDelivery,
 };
+use crate::MemberLabelState;
 use crate::{
     BuildMembersRecordsRequest, CreateSentinelRootShareRecordsForRecipientsRequest,
     SentinelShareEnvelope,
@@ -369,7 +370,11 @@ impl ReadySentinelGenesis<'_> {
                     device_id: participant.device_id.clone(),
                     public_key: participant.encryption_public_key.clone(),
                     enrolled_at: String::new(),
-                    label: (!participant.label.is_empty()).then(|| participant.label.clone()),
+                    label: if participant.label.is_empty() {
+                        MemberLabelState::Unnamed
+                    } else {
+                        MemberLabelState::Named(participant.label.clone())
+                    },
                 })
             })
             .collect::<MultiDeviceResult<Vec<_>>>()?;

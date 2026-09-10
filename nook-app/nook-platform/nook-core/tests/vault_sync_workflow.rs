@@ -3,6 +3,7 @@
 //! Two (or more) [`MemoryVaultStore`] values stand in for local `IndexedDB` and
 //! sync providers — no browser or network required.
 
+use nook_core::RecordTypeDeclaration;
 use nook_core::{VaultStoreIdentity, VaultStoreIdentityRef, VaultVersionWrite};
 
 use nook_core::{
@@ -21,7 +22,7 @@ impl VaultSyncFixture {
         Ok(VaultRecordSet::serialize_yaml_with_unlock(
         &[StoredSecretRecord {
             key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(format!(
                 "-----BEGIN AGE ENCRYPTED FILE-----\n{armor_line}\n-----END AGE ENCRYPTED FILE-----"
             )),
@@ -108,8 +109,7 @@ fn same_version_divergence_surfaces_conflict_without_mutating_stores() -> anyhow
 fn stale_revision_write_reports_remote_changed_without_overwriting() -> anyhow::Result<()> {
     let local_save_blob = VaultSyncFixture::sample_yaml(3, "local-save")?;
     let concurrent_remote_blob = VaultSyncFixture::sample_yaml(3, "remote-save")?;
-    let remote =
-        MemoryVaultStore::with_blob_and_revision(concurrent_remote_blob.clone(), "rev-2");
+    let remote = MemoryVaultStore::with_blob_and_revision(concurrent_remote_blob.clone(), "rev-2");
 
     let result = remote.write_if_revision_matches_or_same_content(
         &local_save_blob,

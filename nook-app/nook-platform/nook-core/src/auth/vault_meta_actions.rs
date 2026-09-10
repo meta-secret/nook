@@ -1,5 +1,6 @@
 //! Owned actions for replaying and projecting vault metadata.
 
+use crate::MemberLabelState;
 use crate::{EpochMetadataState, EventGraph, MemberLabel, SymmetricKey, VaultOperation};
 use nook_auth2::BuildMembersRecordsRequest;
 use nook_auth2::{
@@ -433,7 +434,11 @@ impl<'a> SentinelMemberRecordProjection<'a> {
                     device_id: participant.device_id.clone(),
                     public_key: participant.encryption_public_key.clone(),
                     enrolled_at: participant.enrolled_at.clone(),
-                    label: (!participant.label.is_empty()).then(|| participant.label.clone()),
+                    label: if participant.label.is_empty() {
+                        MemberLabelState::Unnamed
+                    } else {
+                        MemberLabelState::Named(participant.label.clone())
+                    },
                 })
             })
             .collect::<MultiDeviceResult<Vec<_>>>()?;

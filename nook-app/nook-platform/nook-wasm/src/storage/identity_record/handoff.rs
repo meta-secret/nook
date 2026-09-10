@@ -10,6 +10,7 @@ use crate::manager::PendingExtensionIdentityEnrollment;
 use crate::storage::event_db;
 use crate::{IdbPutStringRequest, NookDatabase, manager};
 use existing_vault::ExistingVaultHandoff;
+use nook_core::MemberLabelState;
 use nook_core::{
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
     IdentityCreation, IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
@@ -289,7 +290,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Authorizer",
                 app_key: &authorizer,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         directory = resolved_identity.directory;

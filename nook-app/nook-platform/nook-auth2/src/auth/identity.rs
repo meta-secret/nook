@@ -11,6 +11,7 @@ enum CommittedVaultKeys {
     VaultNotCreated,
 }
 
+use crate::MemberLabelState;
 use std::fmt;
 
 use crate::errors::{MultiDeviceError, MultiDeviceResult, ValidationError, ValidationResult};
@@ -71,8 +72,8 @@ pub struct IdentityMember {
     pub public_key: DevicePublicKey,
     #[serde(default, skip_serializing_if = "DeviceSigningPublicKey::is_empty")]
     pub signing_public_key: DeviceSigningPublicKey,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "MemberLabelState::is_unnamed")]
+    pub label: MemberLabelState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -215,7 +216,7 @@ impl IdentityRecord {
     pub fn create_with_app_key(
         label: impl Into<String>,
         app_key: &AppKey,
-        member_label: Option<String>,
+        member_label: MemberLabelState,
     ) -> MultiDeviceResult<Self> {
         Ok(Self {
             identity_id: IdentityId::generate()?,
@@ -638,13 +639,14 @@ mod tests {
     fn identity_generates_dek_for_members() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let second_key = AppKey::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         identity = identity.add_member(IdentityMember {
             app_id: second_key.app_id().clone(),
             auth_id: second_key.auth_id(),
             public_key: second_key.public_key(),
             signing_public_key: DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         })?;
         let store = StoreId::parse("store_abcdefghijk")?;
         let opened_identity = identity.generate_vault_dek(store.clone())?;
@@ -705,13 +707,14 @@ mod tests {
     fn member_remove_keeps_at_least_one_app_key() -> anyhow::Result<()> {
         let first = AppKey::generate()?;
         let second = AppKey::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &first, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &first, MemberLabelState::Unnamed)?;
         identity = identity.add_member(IdentityMember {
             app_id: second.app_id().clone(),
             auth_id: second.auth_id(),
             public_key: second.public_key(),
             signing_public_key: DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         })?;
         let store_id = crate::StoreId::generate()?;
         let opened_identity = identity.generate_vault_dek(store_id.clone())?;
@@ -744,7 +747,8 @@ mod tests {
     #[test]
     fn member_signing_key_migrates_from_unavailable_and_persists() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let legacy_json = serde_json::to_string(&identity)?;
         let legacy: IdentityRecord = serde_json::from_str(&legacy_json)?;
         assert!(legacy.members[0].signing_public_key.is_empty());

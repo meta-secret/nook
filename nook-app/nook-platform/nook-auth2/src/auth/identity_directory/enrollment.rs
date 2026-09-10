@@ -2,6 +2,7 @@
 use super::*;
 #[cfg(test)]
 use crate::IdentityVaultBinding;
+use crate::MemberLabelState;
 impl IdentityDirectory {
     /// Enroll an authenticated installation into the identity that owns the
     /// paired vault, independent of the currently selected identity.
@@ -71,7 +72,7 @@ impl IdentityDirectory {
                 auth_id: new_app_key.auth_id(),
                 public_key: new_app_key.public_key(),
                 signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-                label: None,
+                label: MemberLabelState::Unnamed,
             };
             Ok(IdentityEnrollmentPreparation::Grant(
                 PreparedIdentityMembership {
@@ -132,7 +133,7 @@ impl IdentityDirectory {
             return self.create_identity(IdentityCreation {
                 label,
                 app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             });
         }
         let selected = match self.selected() {
@@ -174,7 +175,7 @@ impl IdentityDirectory {
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         };
         let directory = self
             .take_identity(&identity_id)?
@@ -197,7 +198,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &website_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let identity_id = resolved_identity.identity_id;
@@ -241,7 +242,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &website_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let owner_id = resolved_identity.identity_id;
@@ -257,7 +258,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Work",
             app_key: &website_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let selected_id = resolved_identity.identity_id;
@@ -294,7 +295,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &authorizer,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         directory = directory.add_selected_member(IdentityMember {
@@ -302,7 +303,7 @@ mod tests {
             auth_id: revoked.auth_id(),
             public_key: revoked.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         })?;
         let store_id = crate::StoreId::generate()?;
         let opened_identity = directory.open_or_generate_vault_dek(IdentityVaultKeyOpening {

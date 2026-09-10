@@ -20,6 +20,7 @@ use crate::conversion::LoadedVault;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 #[cfg(test)]
 use nook_core::AppKeyIdentityMembership;
+use nook_core::MemberLabelState;
 use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
@@ -172,7 +173,7 @@ mod tests {
                 .create_identity(IdentityCreation {
                     label: "Personal",
                     app_key: &owner_key,
-                    member_label: None,
+                    member_label: MemberLabelState::Unnamed,
                 })
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
             directory = resolved_identity.directory;

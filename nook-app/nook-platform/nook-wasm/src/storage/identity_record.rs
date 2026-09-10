@@ -1,5 +1,7 @@
 //! Local identity-directory persistence, independent of vault `store_id`.
 use nook_core::AppKeyIdentityMembership;
+use nook_core::LocalIdentityProtection;
+use nook_core::MemberLabelState;
 use nook_core::MigratedIdentityDirectory;
 
 use crate::storage::indexed_db;
@@ -147,7 +149,10 @@ impl NookDatabase {
                 .find(|entry| entry.app_id() == app_id),
             None => match directory.selection() {
                 IdentitySelection::Empty => None,
-                IdentitySelection::Selected(identity_id) => keyring.entry(identity_id),
+                IdentitySelection::Selected(identity_id) => match keyring.entry(identity_id) {
+                    LocalIdentityProtection::Protected(entry) => Some(entry),
+                    LocalIdentityProtection::Unprotected => None,
+                },
             },
         };
         let protected = match entry {
@@ -570,7 +575,7 @@ impl NookDatabase {
                     .create_identity(IdentityCreation {
                         label,
                         app_key,
-                        member_label: None,
+                        member_label: MemberLabelState::Unnamed,
                     })
                     .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
                 directory = resolved_identity.directory;
@@ -687,8 +692,9 @@ mod tests {
     async fn migrates_legacy_record_then_persists_multiple_identities() -> Result<(), NookError> {
         NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
-        let legacy = IdentityRecord::create_with_app_key("Personal", &app_key, None)
-            .map_err(|error| NookError::Database(error.to_string()))?;
+        let legacy =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)
+                .map_err(|error| NookError::Database(error.to_string()))?;
         let legacy_id = legacy.identity_id.clone();
         let raw = serde_json::to_string(&legacy)
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
@@ -723,7 +729,7 @@ mod tests {
                 .create_identity(IdentityCreation {
                     label: "Work",
                     app_key: &work_key,
-                    member_label: None,
+                    member_label: MemberLabelState::Unnamed,
                 })
                 .map(IdentityDirectoryWrite::from)
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))
@@ -778,7 +784,7 @@ mod tests {
                 .create_identity(IdentityCreation {
                     label: "Work",
                     app_key: &second_key,
-                    member_label: None,
+                    member_label: MemberLabelState::Unnamed,
                 })
                 .map(IdentityDirectoryWrite::from)
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))
@@ -811,7 +817,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Personal",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;
@@ -828,7 +834,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Work",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;
@@ -881,7 +887,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Personal",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         directory = resolved_identity.directory;
@@ -921,8 +927,9 @@ mod tests {
     async fn current_directory_wins_over_stale_legacy_record() -> Result<(), NookError> {
         NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
-        let legacy = IdentityRecord::create_with_app_key("Legacy", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let legacy =
+            IdentityRecord::create_with_app_key("Legacy", &app_key, MemberLabelState::Unnamed)
+                .map_err(NookDatabase::map_domain_error)?;
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: LEGACY_IDENTITY_RECORD_KEY,
             value: &serde_json::to_string(&legacy)
@@ -934,7 +941,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Personal",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         current = resolved_identity.directory;
@@ -943,7 +950,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Work",
                 app_key: &work_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         current = resolved_identity.directory;
@@ -968,8 +975,9 @@ mod tests {
     async fn invalid_current_directory_preserves_legacy_record() -> Result<(), NookError> {
         NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
-        let legacy = IdentityRecord::create_with_app_key("Legacy", &app_key, None)
-            .map_err(NookDatabase::map_domain_error)?;
+        let legacy =
+            IdentityRecord::create_with_app_key("Legacy", &app_key, MemberLabelState::Unnamed)
+                .map_err(NookDatabase::map_domain_error)?;
         NookDatabase::idb_put_string(IdbPutStringRequest {
             key: LEGACY_IDENTITY_RECORD_KEY,
             value: &serde_json::to_string(&legacy)

@@ -11,6 +11,7 @@
 )]
 
 #[cfg(test)]
+use crate::MemberLabelState;
 use crate::{DeviceIdentityProtection, PasskeyProtectionInput, PasskeyRecordMetadata};
 use serde::{Deserialize, Serialize};
 use std::{error, fmt};
@@ -375,8 +376,13 @@ mod tests {
         let work_key = AppKey::generate()?;
         let personal_store = StoreId::generate()?;
         let work_store = StoreId::generate()?;
-        let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
-        let mut work = IdentityRecord::create_with_app_key("Work", &work_key, None)?;
+        let mut personal = IdentityRecord::create_with_app_key(
+            "Personal",
+            &personal_key,
+            MemberLabelState::Unnamed,
+        )?;
+        let mut work =
+            IdentityRecord::create_with_app_key("Work", &work_key, MemberLabelState::Unnamed)?;
         let opened_identity = personal.generate_vault_dek(personal_store.clone())?;
         personal = opened_identity.identity;
         let opened_identity = work.generate_vault_dek(work_store)?;
@@ -403,7 +409,11 @@ mod tests {
         let personal_key = AppKey::generate()?;
         let personal_store = StoreId::generate()?;
         let unknown_store = StoreId::generate()?;
-        let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
+        let mut personal = IdentityRecord::create_with_app_key(
+            "Personal",
+            &personal_key,
+            MemberLabelState::Unnamed,
+        )?;
         let opened_identity = personal.generate_vault_dek(personal_store)?;
         personal = opened_identity.identity;
         let directory = IdentityDirectory::from_records(vec![personal], IdentitySelection::Empty)?;
@@ -423,7 +433,8 @@ mod tests {
     fn selected_vault_grants_a_member_with_both_dek_envelopes() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let store_id = StoreId::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let opened_identity = identity.generate_vault_dek(store_id.clone())?;
         identity = opened_identity.identity;
 
@@ -444,7 +455,8 @@ mod tests {
     {
         let app_key = AppKey::generate()?;
         let store_id = StoreId::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let opened_identity = identity.generate_vault_dek(store_id.clone())?;
         identity = opened_identity.identity;
         let vault = identity

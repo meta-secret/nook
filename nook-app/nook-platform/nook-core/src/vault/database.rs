@@ -5,6 +5,7 @@
 //! YAML storage enters and leaves through this struct, so encryption boundaries
 //! stay localised.
 
+use crate::RecordTypeDeclaration;
 use crate::{AgeArmoredCiphertext, VaultFormat};
 use crate::{SecretId, multi_device, vault_format};
 
@@ -125,9 +126,11 @@ impl Database {
             .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?;
         let mut records = HashMap::new();
         for stored in user_records {
-            let secret_type = stored.secret_type.ok_or(DatabaseError::MissingSecretType {
-                key: stored.key.clone(),
-            })?;
+            let RecordTypeDeclaration::Secret(secret_type) = stored.secret_type else {
+                return Err(DatabaseError::MissingSecretType {
+                    key: stored.key.clone(),
+                });
+            };
             let decrypted =
                 crypto.decrypt_value(&AgeArmoredCiphertext::parse(stored.value.as_str())?)?;
             let value = SecretValue::from_yaml_str(secret_type, decrypted.as_str())?;
@@ -159,7 +162,7 @@ impl Database {
             let yaml = record.data.to_yaml()?;
             stored_records.push(StoredSecretRecord {
                 key: record.id.clone(),
-                secret_type: Some(record.secret_type),
+                secret_type: RecordTypeDeclaration::Secret(record.secret_type),
                 value: StoredRecordPayload::from_age_armored(crypto.encrypt_value(&yaml)?),
             });
         }
@@ -529,14 +532,14 @@ mod tests {
 
         let missing = StoredSecretRecord {
             key: sid("missing"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_age_armored(ciphertext.clone()),
         };
         assert!(Database::from_stored_records_with_crypto(&[missing], &crypto).is_err());
 
         let mismatched = StoredSecretRecord {
             key: sid("mismatched"),
-            secret_type: Some(SecretType::SeedPhrase),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::SeedPhrase),
             value: StoredRecordPayload::from_age_armored(ciphertext),
         };
         assert!(Database::from_stored_records_with_crypto(&[mismatched], &crypto).is_err());

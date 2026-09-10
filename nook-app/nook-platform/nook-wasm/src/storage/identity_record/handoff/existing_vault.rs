@@ -11,6 +11,7 @@ use crate::EventDbSaveEventBytesToStore;
 use crate::storage::{event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
 use nook_core::DeviceAuthorization;
+use nook_core::MemberLabelState;
 use nook_core::{
     DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
     IdentityVaultKeyOpening,
@@ -219,7 +220,7 @@ mod tests {
                 .create_identity(IdentityCreation {
                     label: "Imported",
                     app_key: &identity,
-                    member_label: None,
+                    member_label: MemberLabelState::Unnamed,
                 })
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
             material = resolved_identity.directory;
@@ -573,7 +574,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Pending",
                 app_key: &fixture.identity,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         directory = resolved_identity.directory;
@@ -582,7 +583,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Concurrent duplicate",
                 app_key: &fixture.identity,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         directory = resolved_identity.directory;

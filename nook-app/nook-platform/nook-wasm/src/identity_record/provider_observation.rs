@@ -5,6 +5,7 @@ use crate::{
     BrowserProviderVaultIdentityObservationsFromProjection, NookDatabase,
     NookIdentityDirectorySnapshot,
 };
+use nook_core::MemberLabelState;
 use nook_core::{
     AppId, DeviceAccessProtectionKind, IdentityVaultAppGrant, IdentityVaultAppGrantKind,
 };
@@ -168,10 +169,15 @@ mod tests {
         let current_key = AppKey::generate()?;
         let other_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
-        let current = IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
+        let current = IdentityRecord::create_with_app_key(
+            "Personal",
+            &current_key,
+            MemberLabelState::Unnamed,
+        )?;
         let current_id = current.identity_id.clone();
         let current_entry = keyring_entry(&current, &current_key)?;
-        let mut other = IdentityRecord::create_with_app_key("Work", &other_key, None)?;
+        let mut other =
+            IdentityRecord::create_with_app_key("Work", &other_key, MemberLabelState::Unnamed)?;
         let opened_identity = other
             .generate_vault_dek(store_id.clone())
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
@@ -200,10 +206,15 @@ mod tests {
         let current_key = AppKey::generate()?;
         let linked_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
-        let current = IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
+        let current = IdentityRecord::create_with_app_key(
+            "Personal",
+            &current_key,
+            MemberLabelState::Unnamed,
+        )?;
         let current_id = current.identity_id.clone();
         let current_entry = keyring_entry(&current, &current_key)?;
-        let mut linked = IdentityRecord::create_with_app_key("Work", &linked_key, None)?;
+        let mut linked =
+            IdentityRecord::create_with_app_key("Work", &linked_key, MemberLabelState::Unnamed)?;
         let opened_identity = linked
             .generate_vault_dek(store_id.clone())
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
@@ -225,7 +236,8 @@ mod tests {
     {
         let app_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
-        let mut base = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut base =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let opened_identity = base
             .generate_vault_dek(store_id.clone())
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;

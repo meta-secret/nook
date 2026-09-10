@@ -1,5 +1,6 @@
 //! Directory ownership while an identity record undergoes a consuming transition.
 use super::{IdentityDirectory, IdentitySelection};
+use crate::MemberLabelState;
 use crate::{
     AppKey, IdentityId, IdentityMember, IdentityMemberSigningUpdate, IdentityRecord,
     IdentityRecordRejection, IdentityVaultKeys, MultiDeviceError, VaultKeys,
@@ -21,7 +22,7 @@ impl IdentityDirectoryRejection {
 pub struct IdentityCreation<'a> {
     pub label: &'a str,
     pub app_key: &'a AppKey,
-    pub member_label: Option<String>,
+    pub member_label: MemberLabelState,
 }
 
 pub struct IdentityDirectoryResolution {

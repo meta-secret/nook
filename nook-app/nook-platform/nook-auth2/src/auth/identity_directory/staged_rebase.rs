@@ -1,5 +1,6 @@
 //! Three-way rebase policy for staged vault-creation identity ownership.
 
+use crate::MemberLabelState;
 use crate::{
     DirectoryCreationEnrollment, DirectoryOwnedVaultOpening, IdentityCreation,
     IdentityVaultKeyOpening,
@@ -152,7 +153,7 @@ mod tests {
         let resolved_identity = base.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &owner,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         base = resolved_identity.directory;
         let identity_id = resolved_identity.identity_id;
@@ -170,7 +171,7 @@ mod tests {
         let resolved_identity = current.create_identity(IdentityCreation {
             label: "Work",
             app_key: &concurrent,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         current = resolved_identity.directory;
         let concurrent_id = resolved_identity.identity_id;
@@ -201,7 +202,7 @@ mod tests {
         let resolved_identity = base.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &owner,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         base = resolved_identity.directory;
         let identity_id = resolved_identity.identity_id;
@@ -245,7 +246,7 @@ mod tests {
         let resolved_identity = base.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &owner,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         base = resolved_identity.directory;
         let identity_id = resolved_identity.identity_id;
@@ -260,7 +261,7 @@ mod tests {
         let resolved_identity = current.create_identity(IdentityCreation {
             label: "Work",
             app_key: &overlapping,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         current = resolved_identity.directory;
 

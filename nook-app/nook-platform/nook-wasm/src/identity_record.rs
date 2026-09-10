@@ -9,6 +9,7 @@ use crate::{
     NookError,
     device_access::{self, NookDeviceAccessSnapshot, NookDeviceVaultAccess},
 };
+use nook_core::MemberLabelState;
 use nook_core::{
     AppId, DeviceAccessProtectionKind, IdentityId, IdentitySelection, IdentityVaultAppGrant,
     IdentityVaultAppGrantKind, IdentityVaultLinks, IdentityVaultLinksRequest,
@@ -101,7 +102,7 @@ pub(crate) struct BrowserSelectedVaultCurrentAppGranted<'a> {
 #[derive(Clone)]
 pub struct NookIdentityMemberSnapshot {
     app_id: String,
-    label: Option<String>,
+    label: MemberLabelState,
     current_browser: bool,
     local_protection: nook_core::DeviceAccessProtectionKind,
 }
@@ -146,15 +147,16 @@ impl NookIdentityMemberSnapshot {
     #[wasm_bindgen(getter, js_name = labelKind)]
     pub fn label_kind(&self) -> NookIdentityMemberLabelKind {
         match self.label {
-            Some(_) => NookIdentityMemberLabelKind::Known,
-            None => NookIdentityMemberLabelKind::Unknown,
+            MemberLabelState::Named(_) => NookIdentityMemberLabelKind::Known,
+            MemberLabelState::Unnamed => NookIdentityMemberLabelKind::Unknown,
         }
     }
 
     pub fn label(&self) -> Result<String, wasm_bindgen::JsError> {
-        self.label
-            .clone()
-            .ok_or_else(|| JsError::new("Identity member label is unknown"))
+        match &self.label {
+            MemberLabelState::Named(label) => Ok(label.clone()),
+            MemberLabelState::Unnamed => Err(JsError::new("Identity member label is unknown")),
+        }
     }
 }
 
@@ -659,8 +661,11 @@ mod tests {
     #[wasm_bindgen_test]
     fn identity_snapshot_enumerates_public_members_and_vault_ids() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
-        let mut record =
-            IdentityRecord::create_with_app_key("Personal", &app_key, Some("MacBook".to_owned()))?;
+        let mut record = IdentityRecord::create_with_app_key(
+            "Personal",
+            &app_key,
+            MemberLabelState::Named("MacBook".to_owned()),
+        )?;
         let store_id = nook_core::StoreId::generate()?;
         let opened_identity = record
             .generate_vault_dek(store_id.clone())
@@ -717,7 +722,8 @@ mod tests {
     #[wasm_bindgen_test]
     fn unmatched_live_session_does_not_select_persisted_identity() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
-        let record = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let record =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let persisted = IdentitySelection::Selected(record.identity_id.clone());
 
         assert!(matches!(
@@ -742,7 +748,11 @@ mod tests {
     fn selected_vault_context_resolves_current_browser() -> anyhow::Result<()> {
         let personal_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
-        let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
+        let mut personal = IdentityRecord::create_with_app_key(
+            "Personal",
+            &personal_key,
+            MemberLabelState::Unnamed,
+        )?;
         let opened_identity = personal
             .generate_vault_dek(store_id.clone())
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
@@ -788,8 +798,10 @@ mod tests {
     fn selected_vault_context_keeps_other_browser_identity_without_current() -> anyhow::Result<()> {
         let work_key = AppKey::generate()?;
         let travel_key = AppKey::generate()?;
-        let work = IdentityRecord::create_with_app_key("Work", &work_key, None)?;
-        let travel = IdentityRecord::create_with_app_key("Travel", &travel_key, None)?;
+        let work =
+            IdentityRecord::create_with_app_key("Work", &work_key, MemberLabelState::Unnamed)?;
+        let travel =
+            IdentityRecord::create_with_app_key("Travel", &travel_key, MemberLabelState::Unnamed)?;
         let local_protections = [LocalAppProtection {
             app_id: work_key.app_id().clone(),
             protection: DeviceAccessProtectionKind::PinOrPassphrase,
@@ -845,7 +857,8 @@ mod tests {
     fn selected_vault_context_rejects_current_member_without_vault_grant() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let opened_identity = identity
             .generate_vault_dek(store_id.clone())
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;

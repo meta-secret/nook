@@ -2,6 +2,7 @@
 use super::*;
 #[cfg(test)]
 use crate::IdentityVaultBinding;
+use crate::MemberLabelState;
 
 impl IdentityRecord {
     pub fn reconcile_legacy_vault_member(
@@ -181,7 +182,8 @@ mod tests {
     #[test]
     fn stale_dek_observation_cannot_overwrite_rotated_epoch() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let store = StoreId::parse("store_abcdefghijk")?;
         let opened_identity = identity.generate_vault_dek(store.clone())?;
         identity = opened_identity.identity;
@@ -253,13 +255,14 @@ mod tests {
     fn reconciliation_excludes_identity_member_revoked_from_vault() -> anyhow::Result<()> {
         let active = AppKey::generate()?;
         let revoked = AppKey::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &active, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &active, MemberLabelState::Unnamed)?;
         identity = identity.add_member(IdentityMember {
             app_id: revoked.app_id().clone(),
             auth_id: revoked.auth_id(),
             public_key: revoked.public_key(),
             signing_public_key: DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         })?;
         let store = StoreId::parse("store_abcdefghijk")?;
         let opened_identity = identity.generate_vault_dek(store.clone())?;
@@ -302,7 +305,8 @@ mod tests {
     #[test]
     fn same_dek_epoch_accepts_an_advanced_event_checkpoint() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let store = StoreId::parse("store_abcdefghijk")?;
         let opened_identity = identity.generate_vault_dek(store.clone())?;
         identity = opened_identity.identity;

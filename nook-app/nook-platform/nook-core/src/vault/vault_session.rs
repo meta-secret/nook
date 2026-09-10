@@ -6,6 +6,7 @@
 )]
 
 use crate::AgeArmoredCiphertext;
+use crate::RecordTypeDeclaration;
 
 use crate::errors::{SessionError, VaultResult};
 use crate::{
@@ -186,7 +187,7 @@ impl VaultUserRecordBatch {
     pub fn replace(self, state: &mut VaultMetaState) {
         state.secrets.clear();
         for record in self.records {
-            if let Some(secret_type) = record.secret_type {
+            if let RecordTypeDeclaration::Secret(secret_type) = record.secret_type {
                 state
                     .secrets
                     .insert(record.key, (secret_type, record.value));
@@ -246,7 +247,7 @@ mod tests {
         let new_id = SecretId::from_vault_record("secret_new0000001");
         let user_records = vec![StoredSecretRecord {
             key: new_id.clone(),
-            secret_type: Some(SecretType::ApiKey),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::ApiKey),
             value: StoredRecordPayload::from_age_armored(ciphertext),
         }];
 

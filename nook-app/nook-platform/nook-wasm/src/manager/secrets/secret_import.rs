@@ -5,6 +5,7 @@
 )]
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
+use nook_core::RecordTypeDeclaration;
 use nook_core::{
     AgeArmoredCiphertext, SecretImportUnsupportedRecordCount, SecretValue, SymmetricKey,
     VaultOperation,
@@ -107,9 +108,12 @@ impl<'a> CoalescedSecretImport<'a> {
                         .find(|(_, existing)| existing == &fingerprint)
                 })
         {
-            let secret_type = record.secret_type.ok_or_else(|| {
-                NookError::Database(format!("Secret {} is missing its type.", record.key))
-            })?;
+            let RecordTypeDeclaration::Secret(secret_type) = record.secret_type else {
+                return Err(NookError::Database(format!(
+                    "Secret {} is missing its type.",
+                    record.key
+                )));
+            };
             let ciphertext = AgeArmoredCiphertext::parse(record.value.as_str())?;
             let mut plaintext = crypto.decrypt_value(&ciphertext)?;
             let mut existing = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
@@ -598,7 +602,7 @@ mod import_tests {
             yaml.zeroize_plaintext();
             let record = StoredSecretRecord {
                 key: nook_core::SecretId::generate()?,
-                secret_type: Some(value.secret_type()),
+                secret_type: RecordTypeDeclaration::Secret(value.secret_type()),
                 value: StoredRecordPayload::from_age_armored(encrypted),
             };
             value.zeroize_plaintext();
@@ -672,7 +676,7 @@ mod import_tests {
     )]
     fn malformed_existing_record_rejects_preparation() -> anyhow::Result<()> {
         let mut fixture = ImportFixture::new()?;
-        fixture.record.secret_type = None;
+        fixture.record.secret_type = RecordTypeDeclaration::Undeclared;
         let original = fixture.record.clone();
         match fixture.prepare("same note\n\n## LastPass\n- group: Personal") {
             Err(NookError::Database(message)) => {

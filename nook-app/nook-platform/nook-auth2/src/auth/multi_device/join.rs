@@ -8,6 +8,7 @@ use super::{
     AuthRecordIssuance, DeviceIdentity, DeviceSigningPublicKey, JoinRequest, StoredRecordPayload,
     StoredSecretRecord, SymmetricKey,
 };
+use crate::RecordTypeDeclaration;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{
     BuildMembersRecordsRequest, GenesisMembersRecordsRequest, MemberFromIdentityRequest,
@@ -55,7 +56,7 @@ impl<'a> JoinRequestIssuance<'a> {
         };
         Ok(StoredSecretRecord {
             key: SecretId::from_vault_record(self.identity.device_id().as_str()),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(
                 serde_json::to_string(&request).map_err(MultiDeviceError::JoinRequestSerialize)?,
             ),

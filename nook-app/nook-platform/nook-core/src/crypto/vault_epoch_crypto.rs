@@ -6,6 +6,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
+use crate::RecordTypeDeclaration;
 use crate::{EncryptedSecretPayload, SecretValue};
 use nook_auth2::{
     BuildMembersRecordsRequest, GenesisMembersRecordsRequest, PendingJoinForDeviceRequest,
@@ -51,11 +52,12 @@ impl<'a> SecretEpochReencryption<'a> {
         let new_crypto = VaultCrypto::new(new_secrets_key)?;
         let mut out = Vec::new();
         for record in records {
-            let secret_type = record
-                .secret_type
-                .ok_or(VaultEpochError::MissingSecretType {
+            let RecordTypeDeclaration::Secret(secret_type) = record.secret_type else {
+                return Err(VaultEpochError::MissingSecretType {
                     key: record.key.to_string(),
-                })?;
+                }
+                .into());
+            };
             let armored =
                 AgeArmoredCiphertext::from_trusted_armored(record.value.as_str().to_owned());
             let mut plaintext = old_crypto.decrypt_value(&armored)?;
@@ -265,7 +267,7 @@ mod tests {
         )?;
         let record = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_testtoken1"),
-            secret_type: Some(SecretType::ApiKey),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::ApiKey),
             value: StoredRecordPayload::from_age_armored(
                 VaultCrypto::new(&old_key)?.encrypt_value(
                     SecretValue::ApiKey(ApiKeySecret {

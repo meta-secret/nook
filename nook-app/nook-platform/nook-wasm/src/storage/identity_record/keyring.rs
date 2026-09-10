@@ -1,6 +1,7 @@
 //! Versioned persistence for independently protected local identity keys.
 
 use crate::IdentityDbWriteIdentityDirectory;
+use nook_core::LocalIdentityProtection;
 
 use crate::NookDatabase;
 use crate::storage::{event_db, indexed_db};
@@ -251,7 +252,10 @@ impl NookDatabase {
         let IdentitySelection::Selected(identity_id) = directory.selection() else {
             return Ok(None);
         };
-        Ok(keyring.entry(identity_id).cloned())
+        Ok(match keyring.entry(identity_id) {
+            LocalIdentityProtection::Protected(entry) => Some(entry.clone()),
+            LocalIdentityProtection::Unprotected => None,
+        })
     }
 }
 
@@ -403,13 +407,15 @@ impl NookDatabase {
         let previous_app_id = directory
             .selected()
             .ok()
-            .and_then(|identity| keyring.entry(&identity.identity_id))
+            .and_then(|identity| match keyring.entry(&identity.identity_id) {
+                LocalIdentityProtection::Protected(entry) => Some(entry),
+                LocalIdentityProtection::Unprotected => None,
+            })
             .map(|entry| entry.app_id().clone());
         let app_id = keyring
             .entry(&identity_id)
-            .ok_or_else(|| {
-                NookError::Database("Selected identity has no protected local keyring".to_owned())
-            })?
+            .require_protected()
+            .map_err(NookDatabase::map_domain_error)?
             .app_id()
             .clone();
         directory = directory

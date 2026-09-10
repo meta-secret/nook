@@ -10,6 +10,7 @@ use super::{
     AppKey, AuthEnvelopes, JoinRequest, StoredSecretRecord, SymmetricKey, VaultKeys,
     VaultMetaRecord, VaultMetaState,
 };
+use crate::RecordTypeDeclaration;
 use crate::errors::{AgeCryptoError, MultiDeviceError, MultiDeviceResult};
 use crate::{
     AgeArmoredCiphertext, AppId, AuthKeyId, CompactToken, DevicePublicKey, SecretId,
@@ -265,7 +266,7 @@ impl<'a> AuthRecordIssuance<'a> {
         };
         Ok(StoredSecretRecord {
             key: SecretId::from_vault_record(self.auth_id.as_str()),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(
                 serde_json::to_string(&envelopes)
                     .map_err(MultiDeviceError::AuthEnvelopesSerialize)?,

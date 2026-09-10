@@ -10,6 +10,8 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::MemberLabelState;
+use crate::RecordTypeDeclaration;
 use crate::{MemberLabel, VaultOperation};
 use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use nook_auth2::{
@@ -502,14 +504,17 @@ mod tests {
         let second = AppKey::generate()?;
         let (current_signing, _) = SigningIdentity::generate()?;
         let (second_signing, _) = SigningIdentity::generate()?;
-        let mut identity =
-            IdentityRecord::create_with_app_key("Personal", &current, Some("Browser".to_owned()))?;
+        let mut identity = IdentityRecord::create_with_app_key(
+            "Personal",
+            &current,
+            MemberLabelState::Named("Browser".to_owned()),
+        )?;
         identity = identity.add_member(crate::IdentityMember {
             app_id: second.app_id().clone(),
             auth_id: second.auth_id(),
             public_key: second.public_key(),
             signing_public_key: second_signing.public_key(),
-            label: Some("Phone".to_owned()),
+            label: MemberLabelState::Named("Phone".to_owned()),
         })?;
         let keys = crate::VaultKeys::generate()?;
         let operations = (SimpleIdentityGenesisOperationsInput {
@@ -750,7 +755,7 @@ mod tests {
         let before = meta.clone();
         let invalid = StoredSecretRecord {
             key: SecretId::from_vault_record("sentinel_share:0123456789abcdef"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(r#"{"version":3}"#.to_owned()),
         };
         let operation = VaultOperation::EpochCheckpoint {

@@ -11,6 +11,7 @@ use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use nook_core::AppKeyIdentityMembership;
 use nook_core::IsoTimestamp;
+use nook_core::MemberLabelState;
 use nook_core::{
     DirectoryCreationEnrollment, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
     IdentityCreation, IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
@@ -62,7 +63,7 @@ impl StagedSimpleGenesisInput<'_> {
                     .create_identity(IdentityCreation {
                         label: self.label,
                         app_key: live_owner,
-                        member_label: None,
+                        member_label: MemberLabelState::Unnamed,
                     })
                     .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
                 directory = created.directory;
@@ -371,7 +372,7 @@ mod tests {
                 .create_identity(IdentityCreation {
                     label: "Concurrent",
                     app_key: &concurrent_update,
-                    member_label: None,
+                    member_label: MemberLabelState::Unnamed,
                 })
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
             directory = resolved_identity.directory;
@@ -423,7 +424,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Pending",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         directory = resolved_identity.directory;
@@ -432,7 +433,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Concurrent duplicate",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         directory = resolved_identity.directory;
@@ -497,7 +498,7 @@ mod tests {
                 .create_identity(IdentityCreation {
                     label: "Pending",
                     app_key: &initial_key,
-                    member_label: None,
+                    member_label: MemberLabelState::Unnamed,
                 })
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
             directory = resolved_identity.directory;
@@ -522,7 +523,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Concurrent duplicate",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         concurrent = resolved_identity.directory;
@@ -574,7 +575,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Pending",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;
@@ -583,7 +584,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Concurrent duplicate",
                 app_key: &app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;
@@ -668,7 +669,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Pending",
                 app_key: &legacy_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;
@@ -677,7 +678,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Legacy duplicate",
                 app_key: &legacy_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         legacy = resolved_identity.directory;
@@ -697,7 +698,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Candidate overlap",
                 app_key: &candidate_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         candidate = resolved_identity.directory;
@@ -775,7 +776,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Selected",
                 app_key: &selected_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         base = resolved_identity.directory;
@@ -784,7 +785,7 @@ mod tests {
             .create_identity(IdentityCreation {
                 label: "Other",
                 app_key: &overlapping_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         base = resolved_identity.directory;

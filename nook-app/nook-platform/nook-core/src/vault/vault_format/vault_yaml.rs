@@ -1,3 +1,4 @@
+use crate::RecordTypeDeclaration;
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, PasswordUnlockEntry, SecretId,
@@ -75,7 +76,7 @@ impl AuthYamlRecord {
             .unwrap_or(self.pk_id);
         Ok(StoredSecretRecord {
             key: SecretId::from_vault_record(&pk_id),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(
                 serde_json::to_string(&AuthEnvelopes {
                     secrets_key: AgeArmoredCiphertext::from_trusted_armored(self.secrets_key),
@@ -94,7 +95,7 @@ impl MembersYamlRecord {
             .unwrap_or(self.pk_id);
         Ok(StoredSecretRecord {
             key: SecretId::from_vault_record(&AuthKeyId::parse(&pk_id)?.member_record_key()),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(self.ciphertext),
         })
     }
@@ -108,7 +109,7 @@ impl StoredVaultYaml {
             // serialization boundary defensive even if a caller accidentally
             // mixes an IndexedDB wrapper into the vault record collection.
             if Self::is_local_device_wrapper(record.value.as_str()) {
-                if record.secret_type.is_some() {
+                if !record.secret_type.is_undeclared() {
                     return Err(VaultFormatError::InvalidAuthRecord(
                         "browser-local device wrapper cannot be a typed vault secret".to_owned(),
                     ));
@@ -256,7 +257,7 @@ mod tests {
         let records = vec![
             StoredSecretRecord {
                 key: VaultYamlTestData::sid("github.com"),
-                secret_type: Some(SecretType::Login),
+                secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
                 value: StoredRecordPayload::from_trusted("encrypted-user-secret".to_owned()),
             },
             VaultYamlTestData::auth_to_stored_record(AuthYamlRecord {
@@ -270,7 +271,7 @@ mod tests {
             })?,
             StoredSecretRecord {
                 key: VaultYamlTestData::sid(join_id),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(serde_json::to_string(&join_request)?),
             },
         ];
@@ -298,7 +299,7 @@ mod tests {
         let auth_id = format!("key_{}", "c".repeat(64));
         let records = vec![StoredSecretRecord {
             key: VaultYamlTestData::sid(&format!("member:{auth_id}")),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(
                 "-----BEGIN AGE ENCRYPTED FILE-----\nline\n-----END AGE ENCRYPTED FILE-----"
                     .to_owned(),
@@ -322,7 +323,7 @@ mod tests {
     fn invalid_reserved_sentinel_share_never_enters_secret_yaml() {
         let invalid = StoredSecretRecord {
             key: VaultYamlTestData::sid("sentinel_share:0123456789abcdef"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(r#"{"version":3}"#.to_owned()),
         };
         assert!(matches!(
@@ -357,7 +358,7 @@ mod tests {
         );
         let invalid_typed = StoredSecretRecord {
             key: VaultYamlTestData::sid("typed_wrapper_shape"),
-            secret_type: Some(SecretType::Login),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
             value: StoredRecordPayload::from_trusted(
                 r#"{"version":4,"protection":"passkey-wrapped-local","credentialId":7,"userHandle":"local","prfInput":"local","kdf":"HKDF-SHA256"}"#.to_owned(),
             ),
@@ -375,7 +376,7 @@ mod tests {
             .enumerate()
             .map(|(index, value)| StoredSecretRecord {
                 key: VaultYamlTestData::sid(&format!("device_identity_wrapped_{index}")),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(value),
             })
             .collect::<Vec<_>>();

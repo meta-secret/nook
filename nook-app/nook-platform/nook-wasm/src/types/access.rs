@@ -2,6 +2,7 @@ use super::wasm_bindgen;
 use crate::BrowserPasskeyRequestOptions;
 use crate::passkey_browser;
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions};
+use nook_core::MemberLabelState;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -203,7 +204,7 @@ impl NookVaultMember {
             device_id: member.device_id.to_string(),
             public_key: member.public_key.as_str().to_owned(),
             enrolled_at: member.enrolled_at,
-            label: member.label.unwrap_or_default(),
+            label: member.label.into_display_text(),
         }
     }
 

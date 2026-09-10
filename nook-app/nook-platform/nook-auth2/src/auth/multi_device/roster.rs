@@ -1,6 +1,8 @@
 //! Encrypted vault-member roster storage and member lifecycle operations.
 
 use super::{DeviceIdentity, JoinRequest, MemberEntry, VaultMember, VaultMetaRecord};
+use crate::MemberLabelState;
+use crate::RecordTypeDeclaration;
 use crate::{
     AgeArmoredCiphertext, AuthKeyId, MultiDeviceError, MultiDeviceResult, SecretId,
     StoredRecordPayload, StoredSecretRecord, SymmetricKey, VaultCrypto,
@@ -71,7 +73,7 @@ impl VaultMember {
             device_id: identity.device_id().to_owned(),
             public_key: identity.public_key(),
             enrolled_at: enrolled_at.to_owned(),
-            label: None,
+            label: MemberLabelState::Unnamed,
         }
     }
 }
@@ -85,7 +87,7 @@ impl TryFrom<JoinRequest> for VaultMember {
             device_id: join.device_id,
             public_key: join.public_key,
             enrolled_at: join.requested_at,
-            label: None,
+            label: MemberLabelState::Unnamed,
         })
     }
 }
@@ -163,7 +165,7 @@ impl VaultMember {
             let entry = MemberEntry::from(member);
             records.push(StoredSecretRecord {
                 key: SecretId::from_vault_record(&entry.pk_id.member_record_key()),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_age_armored(MemberEntry::encrypt_member_entry(
                     EncryptMemberEntryRequest {
                         entry: &entry,
@@ -288,9 +290,9 @@ impl VaultMember {
             return Err(MultiDeviceError::DeviceNotFound);
         }
         let updated_label = if trimmed.is_empty() {
-            None
+            MemberLabelState::Unnamed
         } else {
-            Some(trimmed.to_owned())
+            MemberLabelState::Named(trimmed.to_owned())
         };
         let roster = roster
             .into_iter()
@@ -395,7 +397,7 @@ mod tests {
     fn user_secret_record(id: &str, value: &str) -> StoredSecretRecord {
         StoredSecretRecord {
             key: SecretId::from_vault_record(id),
-            secret_type: Some(SecretType::Login),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
             value: StoredRecordPayload::from_trusted(value.to_owned()),
         }
     }

@@ -6,6 +6,7 @@ use crate::storage::device_access::DeviceAccessProfileKey;
 use crate::{NookDatabase, SaveVaultBlobRequest};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
+use nook_core::MemberLabelState;
 use nook_core::{
     AppId, DeviceAccessCredentialKind, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment,
     PasskeyBackupState, StoreId,
@@ -669,8 +670,13 @@ mod tests {
         let current_store = nook_core::StoreId::generate()?;
         let companion_store = nook_core::StoreId::generate()?;
         let unrelated_store = nook_core::StoreId::generate()?;
-        let mut current = IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
-        let mut companion = IdentityRecord::create_with_app_key("Work", &companion_key, None)?;
+        let mut current = IdentityRecord::create_with_app_key(
+            "Personal",
+            &current_key,
+            MemberLabelState::Unnamed,
+        )?;
+        let mut companion =
+            IdentityRecord::create_with_app_key("Work", &companion_key, MemberLabelState::Unnamed)?;
         let opened_identity = current
             .generate_vault_dek(current_store.clone())
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
@@ -706,8 +712,13 @@ mod tests {
         let work_key = AppKey::generate()?;
         let personal_store = nook_core::StoreId::generate()?;
         let work_store = nook_core::StoreId::generate()?;
-        let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
-        let mut work = IdentityRecord::create_with_app_key("Work", &work_key, None)?;
+        let mut personal = IdentityRecord::create_with_app_key(
+            "Personal",
+            &personal_key,
+            MemberLabelState::Unnamed,
+        )?;
+        let mut work =
+            IdentityRecord::create_with_app_key("Work", &work_key, MemberLabelState::Unnamed)?;
         let opened_identity = personal
             .generate_vault_dek(personal_store.clone())
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
@@ -852,8 +863,12 @@ mod browser_tests {
             .map_err(|error| NookError::Database(error.to_string()))?;
         let store_id = nook_core::StoreId::generate()
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let mut identity = IdentityRecord::create_with_app_key("Companion", &companion_key, None)
-            .map_err(|error| NookError::Database(error.to_string()))?;
+        let mut identity = IdentityRecord::create_with_app_key(
+            "Companion",
+            &companion_key,
+            MemberLabelState::Unnamed,
+        )
+        .map_err(|error| NookError::Database(error.to_string()))?;
         let opened_identity = identity
             .generate_vault_dek(store_id.clone())
             .map_err(|error| NookError::Database(error.to_string()))?;

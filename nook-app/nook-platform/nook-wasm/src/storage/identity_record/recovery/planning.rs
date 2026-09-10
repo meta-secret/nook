@@ -14,6 +14,8 @@ use crate::{
 };
 use identity_record::keyring;
 use nook_core::LocalIdentityKeyRetirement;
+use nook_core::LocalIdentityProtection;
+use nook_core::MemberLabelState;
 use nook_core::RecoveryRetirement;
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, LocalIdentityKeyring};
 pub(super) struct RecoveryState {
@@ -160,7 +162,10 @@ impl RecoveryPlanning<'_> {
                     .map_err(|error| NookError::Database(error.to_string()))?;
                 let surviving_selection = match prior_selection {
                     IdentitySelection::Selected(identity_id)
-                        if keyring.entry(&identity_id).is_some() =>
+                        if matches!(
+                            keyring.entry(&identity_id),
+                            LocalIdentityProtection::Protected(_)
+                        ) =>
                     {
                         Some(identity_id)
                     }
@@ -796,7 +801,7 @@ mod tests {
                     auth_id: peer_key.auth_id(),
                     public_key: peer_key.public_key(),
                     signing_public_key: DeviceSigningPublicKey::Unavailable,
-                    label: None,
+                    label: MemberLabelState::Unnamed,
                 })
                 .map(IdentityDirectoryWrite::from)
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))

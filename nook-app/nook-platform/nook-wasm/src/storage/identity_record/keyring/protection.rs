@@ -24,6 +24,7 @@ use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::{self, PENDING_SIMPLE_GENESIS_KEY, recovery};
 use crate::storage::{event_db, indexed_db};
 use crate::{IdbPutStringRequest, NookDatabase, NookError, SaveWrappedDeviceIdentityRequest};
+use nook_core::MemberLabelState;
 use nook_core::{
     AppKey, IdentityDirectory, IdentityId, IdentitySelection, LocalIdentityKeyring,
     LocalIdentityKeyringEntry, WrappedDeviceIdentity,
@@ -117,7 +118,7 @@ impl<'a> ProtectedIdentityPublication<'a> {
             .create_identity(IdentityCreation {
                 label: self.label,
                 app_key: self.app_key,
-                member_label: None,
+                member_label: MemberLabelState::Unnamed,
             })
             .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         self.directory = created.directory;
@@ -431,9 +432,8 @@ mod tests {
         assert_eq!(
             migrated
                 .entry(&first.identity.identity_id)
-                .ok_or_else(|| {
-                    NookError::Database("Migrated legacy keyring entry is missing".to_owned())
-                })?
+                .require_protected()
+                .map_err(NookDatabase::map_domain_error)?
                 .open_signing_seed(&first_key)
                 .map_err(|error| NookError::Database(error.to_string()))?,
             ProtectedSigningMaterial::Opened(SigningSeedHex::from_trusted(legacy_seed))

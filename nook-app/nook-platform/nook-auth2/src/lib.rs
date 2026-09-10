@@ -22,7 +22,9 @@
 //! those mechanisms resolve. Storage providers and replication stay outside
 //! this crate.
 
-pub mod errors;
+mod member_label;
+pub use member_label::MemberLabelState;
+mod errors;
 
 mod auth;
 mod crypto;
@@ -67,8 +69,9 @@ pub use auth::identity_directory::{
 pub use auth::local_identity_keyring::{
     IdentitySigningSeedProtection, KeyringEntryRejection, KeyringRejection,
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
-    ProtectedIdentityKeyring, ProtectedSigningEntry, ProtectedSigningMaterial,
-    RemovedLocalIdentityKey, SigningSeedProtection, WrappedAppKeyReplacement,
+    LocalIdentityProtection, ProtectedIdentityKeyring, ProtectedSigningEntry,
+    ProtectedSigningMaterial, RemovedLocalIdentityKey, SigningSeedProtection,
+    WrappedAppKeyReplacement,
 };
 #[cfg(any(test, feature = "mock-passkey"))]
 pub use auth::mock_passkey::{
@@ -125,7 +128,7 @@ pub use ids::{
     STORE_ID_PREFIX, SecretId, StoreId,
 };
 pub use multi_device_api::*;
-pub use records::{SecretType, StoredRecordPayload, StoredSecretRecord};
+pub use records::{RecordTypeDeclaration, SecretType, StoredRecordPayload, StoredSecretRecord};
 pub use wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, MemberLabel, OpaqueCiphertext,

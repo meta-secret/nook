@@ -3,6 +3,8 @@ use super::{
     DeviceSigningPublicKey, SENTINEL_SHARE_RECORD_PREFIX, SecretId, SecretType,
     SentinelShareEnvelope, Serialize, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
 };
+use crate::MemberLabelState;
+use crate::RecordTypeDeclaration;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppId, AuthKeyId, DeviceId};
 use age::secrecy::ExposeSecret;
@@ -15,8 +17,8 @@ pub const MEMBER_RECORD_PREFIX: &str = "member:";
 pub struct MemberEntry {
     pub pk_id: AuthKeyId,
     pub pk: DevicePublicKey,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "MemberLabelState::is_unnamed")]
+    pub label: MemberLabelState,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub enrolled_at: String,
 }
@@ -27,7 +29,7 @@ pub struct VaultMember {
     pub device_id: DeviceId,
     pub public_key: DevicePublicKey,
     pub enrolled_at: String,
-    pub label: Option<String>,
+    pub label: MemberLabelState,
 }
 
 /// Public Sentinel roster entry retained while materializing event-only vaults.
@@ -101,7 +103,10 @@ impl StoredSecretRecord {
         }
         Ok(VaultMetaRecord::Secret(
             self.key.clone(),
-            self.secret_type.unwrap_or(SecretType::SecureNote),
+            match self.secret_type {
+                RecordTypeDeclaration::Secret(kind) => kind,
+                RecordTypeDeclaration::Undeclared => SecretType::SecureNote,
+            },
             self.value.clone(),
         ))
     }
@@ -113,12 +118,12 @@ impl VaultMetaRecord {
         Ok(match self {
             Self::Secret(id, secret_type, payload) => StoredSecretRecord {
                 key: id.clone(),
-                secret_type: Some(*secret_type),
+                secret_type: RecordTypeDeclaration::Secret(*secret_type),
                 value: payload.clone(),
             },
             Self::Auth(auth_id, envelopes) => StoredSecretRecord {
                 key: SecretId::from_vault_record(auth_id.as_str()),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(
                     serde_json::to_string(envelopes)
                         .map_err(MultiDeviceError::AuthEnvelopesSerialize)?,
@@ -126,19 +131,19 @@ impl VaultMetaRecord {
             },
             Self::Join(_, join) => StoredSecretRecord {
                 key: SecretId::from_vault_record(join.device_id.as_str()),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(
                     serde_json::to_string(join).map_err(MultiDeviceError::JoinRequestSerialize)?,
                 ),
             },
             Self::Member(auth_id, payload) => StoredSecretRecord {
                 key: SecretId::from_vault_record(&auth_id.member_record_key()),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: payload.clone(),
             },
             Self::SentinelShare(device_id, share) => StoredSecretRecord {
                 key: SecretId::from_vault_record(&DeviceId::sentinel_share_record_key(device_id)),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(
                     serde_json::to_string(share)
                         .map_err(MultiDeviceError::SentinelShareSerialize)?,
@@ -261,7 +266,7 @@ impl VaultMetaState {
         for (id, (secret_type, payload)) in &self.secrets {
             records.push(StoredSecretRecord {
                 key: id.clone(),
-                secret_type: Some(*secret_type),
+                secret_type: RecordTypeDeclaration::Secret(*secret_type),
                 value: payload.clone(),
             });
         }
@@ -282,7 +287,7 @@ impl VaultMetaState {
         for (auth_id, payload) in &self.members {
             records.push(StoredSecretRecord {
                 key: SecretId::from_vault_record(&auth_id.member_record_key()),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: payload.clone(),
             });
         }

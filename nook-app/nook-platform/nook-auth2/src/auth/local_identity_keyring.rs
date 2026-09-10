@@ -46,6 +46,22 @@ impl SigningSeedProtectionState {
     }
 }
 
+pub enum LocalIdentityProtection<'a> {
+    Protected(&'a LocalIdentityKeyringEntry),
+    Unprotected,
+}
+
+impl<'a> LocalIdentityProtection<'a> {
+    pub fn require_protected(self) -> MultiDeviceResult<&'a LocalIdentityKeyringEntry> {
+        match self {
+            Self::Protected(entry) => Ok(entry),
+            Self::Unprotected => Err(MultiDeviceError::InvalidDeviceIdentity(
+                "Identity has no protected local keyring entry".to_owned(),
+            )),
+        }
+    }
+}
+
 pub const LOCAL_IDENTITY_KEYRING_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -287,10 +303,15 @@ impl LocalIdentityKeyring {
     }
 
     #[must_use]
-    pub fn entry(&self, identity_id: &IdentityId) -> Option<&LocalIdentityKeyringEntry> {
-        self.entries
+    pub fn entry(&self, identity_id: &IdentityId) -> LocalIdentityProtection<'_> {
+        match self
+            .entries
             .iter()
             .find(|entry| entry.identity_id() == identity_id)
+        {
+            Some(entry) => LocalIdentityProtection::Protected(entry),
+            None => LocalIdentityProtection::Unprotected,
+        }
     }
 
     pub fn protect_signing_seed(
@@ -347,7 +368,10 @@ impl LocalIdentityKeyring {
     }
 
     pub fn insert(mut self, entry: LocalIdentityKeyringEntry) -> Result<Self, KeyringRejection> {
-        let cause = if self.entry(entry.identity_id()).is_some() {
+        let cause = if matches!(
+            self.entry(entry.identity_id()),
+            LocalIdentityProtection::Protected(_)
+        ) {
             Some(MultiDeviceError::DuplicateIdentity {
                 identity_id: entry.identity_id().to_string(),
             })

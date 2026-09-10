@@ -9,6 +9,7 @@ mod admission;
 use super::IdentityDirectory;
 #[cfg(test)]
 use crate::IdentityRecordRejection;
+use crate::MemberLabelState;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{
     AppId, IdentityDirectoryRejection, IdentityId, IdentityMember, IdentityMemberKeyBinding,
@@ -254,7 +255,7 @@ impl IdentityRecord {
             if existing.signing_public_key.is_empty() {
                 existing.signing_public_key = incoming.signing_public_key;
             }
-            if existing.label.is_none() {
+            if existing.label.is_unnamed() {
                 existing.label = incoming.label;
             }
         } else {
@@ -278,7 +279,7 @@ mod tests {
                 auth_id: app.auth_id(),
                 public_key: app.public_key(),
                 signing_public_key: DeviceSigningPublicKey::Unavailable,
-                label: None,
+                label: MemberLabelState::Unnamed,
             }
         }
     }
@@ -287,7 +288,8 @@ mod tests {
     fn member_merge_inserts_new_app_without_changing_existing_member() -> anyhow::Result<()> {
         let owner = AppKey::generate()?;
         let peer = AppKey::generate()?;
-        let mut record = IdentityRecord::create_with_app_key("Personal", &owner, None)?;
+        let mut record =
+            IdentityRecord::create_with_app_key("Personal", &owner, MemberLabelState::Unnamed)?;
         let existing = record.members[0].clone();
         let incoming = IdentityMember::fixture(&peer);
         record = record.merge_legacy_member(incoming.clone())?;
@@ -299,14 +301,15 @@ mod tests {
     fn member_merge_completes_missing_metadata_and_preserves_existing_values() -> anyhow::Result<()>
     {
         let owner = AppKey::generate()?;
-        let mut record = IdentityRecord::create_with_app_key("Personal", &owner, None)?;
+        let mut record =
+            IdentityRecord::create_with_app_key("Personal", &owner, MemberLabelState::Unnamed)?;
         let mut incoming = IdentityMember::fixture(&owner);
         incoming.signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
-        incoming.label = Some("First label".to_owned());
+        incoming.label = MemberLabelState::Named("First label".to_owned());
         record = record.merge_legacy_member(incoming.clone())?;
         assert_eq!(record.members, vec![incoming.clone()]);
         let mut later = incoming.clone();
-        later.label = Some("Later label".to_owned());
+        later.label = MemberLabelState::Named("Later label".to_owned());
         record = record.merge_legacy_member(later)?;
         record = record.merge_legacy_member(IdentityMember::fixture(&owner))?;
         assert_eq!(record.members, vec![incoming]);
@@ -317,7 +320,8 @@ mod tests {
     fn member_merge_rejects_conflicting_material_before_mutation() -> anyhow::Result<()> {
         let owner = AppKey::generate()?;
         let other = AppKey::generate()?;
-        let mut record = IdentityRecord::create_with_app_key("Personal", &owner, None)?;
+        let mut record =
+            IdentityRecord::create_with_app_key("Personal", &owner, MemberLabelState::Unnamed)?;
         record.members[0].signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
         let before = record.clone();
         let mut wrong_auth = IdentityMember::fixture(&owner);
@@ -359,18 +363,20 @@ mod tests {
     fn merges_legacy_duplicate_owners_into_selected_identity() -> anyhow::Result<()> {
         let shared = AppKey::generate()?;
         let other = AppKey::generate()?;
-        let mut personal = IdentityRecord::create_with_app_key("Personal", &shared, None)?;
+        let mut personal =
+            IdentityRecord::create_with_app_key("Personal", &shared, MemberLabelState::Unnamed)?;
         let store_id = crate::StoreId::generate()?;
         let opened_identity = personal.generate_vault_dek(store_id.clone())?;
         personal = opened_identity.identity;
         let expected = opened_identity.keys;
-        let mut work = IdentityRecord::create_with_app_key("Work", &shared, None)?;
+        let mut work =
+            IdentityRecord::create_with_app_key("Work", &shared, MemberLabelState::Unnamed)?;
         work = work.add_member(IdentityMember {
             app_id: other.app_id().clone(),
             auth_id: other.auth_id(),
             public_key: other.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         })?;
         let selected_id = work.identity_id.clone();
         let legacy = IdentityDirectory {
@@ -404,7 +410,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &AppKey::generate()?,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let expected = directory.clone();
@@ -426,14 +432,14 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Pending genesis",
             app_key: &shared,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let pending_identity_id = resolved_identity.identity_id;
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Selected",
             app_key: &shared,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let selected_identity_id = resolved_identity.identity_id;
@@ -459,14 +465,14 @@ mod tests {
         let resolved_identity = base.create_identity(IdentityCreation {
             label: "Pending",
             app_key: &legacy_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         base = resolved_identity.directory;
         let preserved_id = resolved_identity.identity_id;
         let resolved_identity = base.create_identity(IdentityCreation {
             label: "Legacy duplicate",
             app_key: &legacy_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         base = resolved_identity.directory;
         base = base.select(&preserved_id)?;
@@ -480,7 +486,7 @@ mod tests {
         let resolved_identity = candidate.create_identity(IdentityCreation {
             label: "Candidate overlap",
             app_key: &candidate_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         candidate = resolved_identity.directory;
 
@@ -500,9 +506,11 @@ mod tests {
     #[test]
     fn transitive_signing_conflict_returns_every_original_record() -> anyhow::Result<()> {
         let app = AppKey::generate()?;
-        let first = IdentityRecord::create_with_app_key("First", &app, None)?;
-        let mut second = IdentityRecord::create_with_app_key("Second", &app, None)?;
-        let mut third = IdentityRecord::create_with_app_key("Third", &app, None)?;
+        let first = IdentityRecord::create_with_app_key("First", &app, MemberLabelState::Unnamed)?;
+        let mut second =
+            IdentityRecord::create_with_app_key("Second", &app, MemberLabelState::Unnamed)?;
+        let mut third =
+            IdentityRecord::create_with_app_key("Third", &app, MemberLabelState::Unnamed)?;
         second.members[0].signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
         third.members[0].signing_public_key = DeviceSigningPublicKey::parse(&"22".repeat(32))?;
         let original = IdentityDirectory {
@@ -525,8 +533,9 @@ mod tests {
     #[test]
     fn cancel_prepared_legacy_merge_returns_unmodified_directory() -> anyhow::Result<()> {
         let app = AppKey::generate()?;
-        let first = IdentityRecord::create_with_app_key("First", &app, None)?;
-        let second = IdentityRecord::create_with_app_key("Second", &app, None)?;
+        let first = IdentityRecord::create_with_app_key("First", &app, MemberLabelState::Unnamed)?;
+        let second =
+            IdentityRecord::create_with_app_key("Second", &app, MemberLabelState::Unnamed)?;
         let selected = first.identity_id.clone();
         let original = IdentityDirectory {
             selection: IdentitySelection::Selected(selected.clone()),

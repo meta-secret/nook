@@ -1,5 +1,6 @@
 //! Retirement and selection transitions for local identity recovery.
 use super::*;
+use crate::MemberLabelState;
 
 pub enum RecoveryRetirement {
     RetireInstallation(crate::AppId),
@@ -106,7 +107,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &inaccessible_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let identity_id = resolved_identity.identity_id;
@@ -116,7 +117,7 @@ mod tests {
             auth_id: peer_key.auth_id(),
             public_key: peer_key.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         })?;
         let opened_identity =
             directory.open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
@@ -137,7 +138,7 @@ mod tests {
         let rejected = match directory.create_identity(IdentityCreation {
             label: "Stale",
             app_key: &inaccessible_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         }) {
             Err(rejected) => rejected,
             Ok(_) => anyhow::bail!("Rejected identity transition unexpectedly succeeded"),
@@ -147,7 +148,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Peer",
             app_key: &peer_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let replacement_key = AppKey::generate()?;
@@ -163,14 +164,14 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "First",
             app_key: &first_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let first_id = resolved_identity.identity_id;
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Second",
             app_key: &second_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let second_id = resolved_identity.identity_id;
@@ -190,7 +191,7 @@ mod tests {
         let rejected = match directory.create_identity(IdentityCreation {
             label: "Retired",
             app_key: &second_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         }) {
             Err(rejected) => rejected,
             Ok(_) => anyhow::bail!("Rejected identity transition unexpectedly succeeded"),
@@ -208,7 +209,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &local_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let identity_id = resolved_identity.identity_id;
@@ -217,7 +218,7 @@ mod tests {
             auth_id: peer_key.auth_id(),
             public_key: peer_key.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         })?;
         directory = directory.retire_local_identity_key(LocalIdentityKeyRetirement {
             identity_id: &identity_id,

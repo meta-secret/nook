@@ -4,6 +4,7 @@
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 use nook_auth2::{GenesisMembersRecordsRequest, VaultMember};
+use nook_core::RecordTypeDeclaration;
 use nook_core::{
     AgeArmoredCiphertext, SecretFingerprint, Sha256Hex, SymmetricKey, VaultError, VaultFormat,
     VaultStoreIdentityRef, VaultSyncError, VaultVersionWrite,
@@ -179,7 +180,7 @@ impl EventLogDevice {
         let live = self.project()?.live_secrets(&graph);
         let mut passwords = BTreeSet::new();
         for record in live.values() {
-            if record.secret_type != Some(SecretType::Login) {
+            if record.secret_type != RecordTypeDeclaration::Secret(SecretType::Login) {
                 continue;
             }
             let plaintext = self

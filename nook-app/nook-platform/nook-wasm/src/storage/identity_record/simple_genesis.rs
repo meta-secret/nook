@@ -10,6 +10,7 @@ use crate::IdentityDbEnsureLocalIdentityForAppKey;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::{IdbPutStringRequest, IndexedDbUpdate, NookDatabase};
 use nook_core::IdentityCreation;
+use nook_core::MemberLabelState;
 use nook_core::{IsoTimestamp, StoreId};
 mod event;
 use crate::storage::identity_record;
@@ -382,7 +383,7 @@ mod tests {
                 .create_identity(IdentityCreation {
                     label: "Work",
                     app_key: &selected_key,
-                    member_label: None,
+                    member_label: MemberLabelState::Unnamed,
                 })
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
             directory = resolved_identity.directory;

@@ -12,6 +12,8 @@ use crate::KeyringDbLoadKeyringForStore;
 use crate::KeyringDbWriteKeyring;
 use crate::storage::{self, event_db, identity_record};
 use crate::{IdbPutStringRequest, NookDatabase, NookError};
+use nook_core::LocalIdentityProtection;
+use nook_core::MemberLabelState;
 use nook_core::ProtectedSigningMaterial;
 use nook_core::{
     AppId, AppKey, DeviceSigningPublicKey, IdentityDirectory, IdentityId, IdentitySelection,
@@ -36,7 +38,7 @@ pub(super) struct IdentitySigningEvidence<'a> {
 }
 pub(super) struct IdentitySigningSource<'a> {
     pub(super) store: &'a Store,
-    pub(super) existing: Option<&'a LocalIdentityKeyringEntry>,
+    pub(super) existing: LocalIdentityProtection<'a>,
     pub(super) app_key: &'a AppKey,
     pub(super) origin: SigningSeedOrigin,
     pub(super) established: &'a DeviceSigningPublicKey,
@@ -83,7 +85,7 @@ impl IdentitySigningSource<'_> {
         let app_key = self.app_key;
         let legacy_signing_public_key = self.established;
         let seed = match existing {
-            Some(entry) if entry.has_signing_seed() => match entry
+            LocalIdentityProtection::Protected(entry) if entry.has_signing_seed() => match entry
                 .open_signing_seed(app_key)
                 .map_err(|error| NookError::Database(error.to_string()))?
             {
@@ -94,7 +96,9 @@ impl IdentitySigningSource<'_> {
                     ));
                 }
             },
-            Some(_) | None if matches!(self.origin, SigningSeedOrigin::MigrateLegacy) => {
+            LocalIdentityProtection::Protected(_) | LocalIdentityProtection::Unprotected
+                if matches!(self.origin, SigningSeedOrigin::MigrateLegacy) =>
+            {
                 match NookDatabase::keyring_read_string(KeyringDbKeyringReadString {
                     store: store,
                     key: event_db::SIGNING_SEED_KEY,
@@ -122,13 +126,13 @@ impl IdentitySigningSource<'_> {
                     }
                 }
             }
-            Some(_) => {
+            LocalIdentityProtection::Protected(_) => {
                 return Err(NookError::Database(
                     "Existing protected identity cannot mint replacement signing material"
                         .to_owned(),
                 ));
             }
-            None => SigningIdentity::generate()
+            LocalIdentityProtection::Unprotected => SigningIdentity::generate()
                 .map_err(|error| NookError::Database(error.to_string()))?
                 .1
                 .as_str()
@@ -208,9 +212,10 @@ impl LegacySignerProtection<'_> {
             ));
         };
         let identity_id = identity_id.clone();
-        let existing = keyring.entry(&identity_id).ok_or_else(|| {
-            NookError::Database("Legacy signing seed owner has no local keyring entry".to_owned())
-        })?;
+        let existing = keyring
+            .entry(&identity_id)
+            .require_protected()
+            .map_err(NookDatabase::map_domain_error)?;
         if existing.has_signing_seed() {
             return Ok(ProtectedLegacySigners { directory, keyring });
         }
@@ -292,7 +297,7 @@ impl LocalIdentitySigner<'_> {
         let vaults = evidence.vaults()?;
         let signing = IdentitySigningSource {
             store: &store,
-            existing: Some(existing),
+            existing: LocalIdentityProtection::Protected(existing),
             app_key,
             origin: SigningSeedOrigin::MigrateLegacy,
             established: &established,
@@ -386,7 +391,7 @@ mod tests {
             })?;
             let result = IdentitySigningSource {
                 store: &store,
-                existing: None,
+                existing: LocalIdentityProtection::Unprotected,
                 app_key: &app_key,
                 origin: SigningSeedOrigin::MigrateLegacy,
                 established: &self.established,
@@ -475,8 +480,9 @@ mod tests {
         let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let wrapped = DeviceIdentityProtection::new(&app_key.secret_string())
             .with_pin("legacy identity pin")?;
-        let identity = IdentityRecord::create_with_app_key("Legacy", &app_key, None)
-            .map_err(|error| NookError::Database(error.to_string()))?;
+        let identity =
+            IdentityRecord::create_with_app_key("Legacy", &app_key, MemberLabelState::Unnamed)
+                .map_err(|error| NookError::Database(error.to_string()))?;
         let entry = LocalIdentityKeyringEntry::legacy(
             identity.identity_id,
             app_key.app_id().clone(),
@@ -492,7 +498,7 @@ mod tests {
 
         let result = IdentitySigningSource {
             store: &store,
-            existing: Some(&entry),
+            existing: LocalIdentityProtection::Protected(&entry),
             app_key: &app_key,
             origin: SigningSeedOrigin::MigrateLegacy,
             established: &DeviceSigningPublicKey::Unavailable,

@@ -1,5 +1,6 @@
 //! End-to-end vault workflows mirroring the WASM session save path.
 
+use nook_core::RecordTypeDeclaration;
 use nook_core::{AgeArmoredCiphertext, SecretRecord, SecretRecordFilter};
 use std::io;
 
@@ -121,7 +122,10 @@ fn passkey_round_trips_through_encrypted_vault_storage() -> anyhow::Result<()> {
     database.insert(sid("passkey-example"), expected.clone());
 
     let stored = database.to_stored_records_with_crypto(&crypto)?;
-    assert_eq!(stored[0].secret_type, Some(SecretType::Passkey));
+    assert_eq!(
+        stored[0].secret_type,
+        RecordTypeDeclaration::Secret(SecretType::Passkey)
+    );
     assert!(!stored[0].value.as_str().contains("alice@example.com"));
     assert!(!stored[0].value.as_str().contains("login.example.com"));
 

@@ -4,6 +4,7 @@ use nook_auth2::{
     GenesisMembersRecordsRequest, RenameVaultMemberRequest, ReplaceMemberRecordsRequest,
     ResolveMemberRosterRequest, RevokeVaultMemberRequest, VaultMember,
 };
+use nook_core::MemberLabelState;
 use std::io;
 
 use nook_core::{
@@ -267,7 +268,10 @@ fn rename_member_label_survives_yaml_roundtrip() -> anyhow::Result<()> {
         members_key: &keys.members_key,
     })?;
     assert_eq!(roster.len(), 1);
-    assert_eq!(roster[0].label.as_deref(), Some("Kitchen iPad"));
+    assert_eq!(
+        roster[0].label,
+        MemberLabelState::Named("Kitchen iPad".to_owned())
+    );
     Ok(())
 }
 

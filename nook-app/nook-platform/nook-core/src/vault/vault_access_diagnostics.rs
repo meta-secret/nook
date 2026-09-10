@@ -11,6 +11,7 @@
 //! age ciphertext parser as normal unlock, but it never returns plaintext keys,
 //! private device material, or decrypted secret values.
 
+use crate::RecordTypeDeclaration;
 use crate::{EpochPasswordState, EventId, ProjectionEpoch};
 use nook_auth2::{DeviceJoinStatus, PendingJoinForDeviceRequest, VaultMetaState};
 use nook_event_log::GenesisImportRequest;
@@ -455,7 +456,7 @@ mod tests {
 
             Ok(StoredSecretRecord {
                 key: SecretId::from_vault_record(id),
-                secret_type: Some(SecretType::ApiKey),
+                secret_type: RecordTypeDeclaration::Secret(SecretType::ApiKey),
                 value: StoredRecordPayload::from_age_armored(
                     crypto.encrypt_value(
                         SecretValue::ApiKey(ApiKeySecret {
@@ -658,7 +659,7 @@ mod tests {
         let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.push(StoredSecretRecord {
             key: SecretId::from_vault_record("secret_corrupt01"),
-            secret_type: Some(SecretType::ApiKey),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::ApiKey),
             value: StoredRecordPayload::from_trusted("not age".to_owned()),
         });
 

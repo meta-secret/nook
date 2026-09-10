@@ -37,6 +37,8 @@ pub use device_access::{
     PasskeyCreationCeremony, PasskeyKeeperKind, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
     PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
 };
+pub use nook_auth2::MemberLabelState;
+pub use nook_auth2::RecordTypeDeclaration;
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, dashlane_import, google_authenticator_import,
@@ -122,9 +124,9 @@ pub use nook_app_common::{AppLocale, SupportedAppLocale};
 pub use nook_auth2::{
     ContextBoundSentinelUnlock, IdentitySigningSeedProtection, KeyringEntryRejection,
     KeyringRejection, LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring,
-    LocalIdentityKeyringEntry, ProtectedIdentityKeyring, ProtectedSigningEntry,
-    ProtectedSigningMaterial, RemovedLocalIdentityKey, SentinelUnlockPolicy, SentinelUnlockQuorum,
-    SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
+    LocalIdentityKeyringEntry, LocalIdentityProtection, ProtectedIdentityKeyring,
+    ProtectedSigningEntry, ProtectedSigningMaterial, RemovedLocalIdentityKey, SentinelUnlockPolicy,
+    SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
     SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
     SigningSeedProtection, WrappedAppKeyReplacement,
 };
@@ -413,7 +415,7 @@ mod test_support {
         Ok(VaultRecordSet::serialize_yaml_with_unlock(
             &[crate::StoredSecretRecord {
                 key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(format!(
                     "-----BEGIN AGE ENCRYPTED FILE-----\n{armor_line}\n-----END AGE ENCRYPTED FILE-----"
                 )),

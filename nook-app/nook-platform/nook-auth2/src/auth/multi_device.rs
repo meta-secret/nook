@@ -1,3 +1,4 @@
+use crate::RecordTypeDeclaration;
 use crate::{
     AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey, SecretId,
     SecretType, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
@@ -64,7 +65,7 @@ mod tests {
     fn user_secret_record(id: &str, value: &str) -> StoredSecretRecord {
         StoredSecretRecord {
             key: SecretId::from_vault_record(id),
-            secret_type: Some(SecretType::Login),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
             value: StoredRecordPayload::from_trusted(value.to_owned()),
         }
     }

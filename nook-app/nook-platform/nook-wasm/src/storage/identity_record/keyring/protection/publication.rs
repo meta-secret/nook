@@ -85,12 +85,14 @@ mod tests {
         assert_eq!(keyring.entries().len(), 2);
         let first_signing_public_key = keyring
             .entry(&first.identity.identity_id)
-            .ok_or_else(|| NookError::Database("First keyring entry is missing".to_owned()))?
+            .require_protected()
+            .map_err(NookDatabase::map_domain_error)?
             .signing_public_key(&first_key)
             .map_err(|error| NookError::Database(error.to_string()))?;
         let second_signing_public_key = keyring
             .entry(&second.identity.identity_id)
-            .ok_or_else(|| NookError::Database("Second keyring entry is missing".to_owned()))?
+            .require_protected()
+            .map_err(NookDatabase::map_domain_error)?
             .signing_public_key(&second_key)
             .map_err(|error| NookError::Database(error.to_string()))?;
         assert_ne!(first_signing_public_key, second_signing_public_key);

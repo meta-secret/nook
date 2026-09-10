@@ -5,6 +5,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::RecordTypeDeclaration;
 use crate::{DatabaseError, MultiDeviceError, VaultMetaRecord, VaultName, VaultStoreIdentity};
 use nook_auth2::{
     AssessConnectAccessRequest, CreateSentinelShareRecordsRequest, SentinelShareEnvelope,
@@ -240,7 +241,7 @@ impl<'a> VaultContent<'a> {
 
     fn validate_user_secret_types(records: &[StoredSecretRecord]) -> VaultResult<()> {
         for record in records {
-            if record.secret_type.is_none()
+            if record.secret_type.is_undeclared()
                 && matches!((record).classify()?, VaultMetaRecord::Secret(..))
             {
                 return Err(DatabaseError::MissingSecretType {
@@ -311,7 +312,7 @@ mod tests {
     fn encrypted_unlock_rejects_user_rows_without_a_secret_type() -> anyhow::Result<()> {
         let record = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_missing_type"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(
                 "-----BEGIN AGE ENCRYPTED FILE-----\ninvalid".to_owned(),
             ),

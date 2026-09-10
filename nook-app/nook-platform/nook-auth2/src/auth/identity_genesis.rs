@@ -3,6 +3,7 @@
 use super::identity::IdentityRecord;
 use super::multi_device::{AuthRecordIssuance, VaultKeys, VaultMember};
 use crate::BuildMembersRecordsRequest;
+use crate::MemberLabelState;
 use crate::{MultiDeviceError, MultiDeviceResult, StoredSecretRecord};
 
 /// Authorize every member of an identity in a new Simple vault.
@@ -73,13 +74,14 @@ mod tests {
     fn genesis_authorizes_every_identity_member() -> anyhow::Result<()> {
         let first = AppKey::generate()?;
         let second = AppKey::generate()?;
-        let mut identity = IdentityRecord::create_with_app_key("Personal", &first, None)?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &first, MemberLabelState::Unnamed)?;
         identity = identity.add_member(IdentityMember {
             app_id: second.app_id().clone(),
             auth_id: second.auth_id(),
             public_key: second.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: Some("Phone".to_owned()),
+            label: MemberLabelState::Named("Phone".to_owned()),
         })?;
         let keys = crate::VaultKeys::generate()?;
         let records =

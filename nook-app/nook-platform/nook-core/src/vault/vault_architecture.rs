@@ -11,6 +11,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::RecordTypeDeclaration;
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{StoredSecretRecord, VaultMetaRecord};
 use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
@@ -657,7 +658,7 @@ mod tests {
     fn malformed_sentinel_share_prefix_fails_closed_for_every_vault_type() {
         let malformed = StoredSecretRecord {
             key: SecretId::from_vault_record("sentinel_share:0123456789abcdef"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted("not-a-share-envelope".to_owned()),
         };
         let sentinel = VaultArchitecture::sentinel_personal(

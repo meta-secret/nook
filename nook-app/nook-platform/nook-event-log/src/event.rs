@@ -1,5 +1,6 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
+use nook_auth2::RecordTypeDeclaration;
 use std::{fmt, str};
 
 use crate::canonical::{Ed25519Signature, EventId};
@@ -81,7 +82,7 @@ impl EncryptedSecretPayload {
     pub fn to_stored(&self) -> StoredSecretRecord {
         StoredSecretRecord {
             key: self.id.clone(),
-            secret_type: Some(self.secret_type),
+            secret_type: RecordTypeDeclaration::Secret(self.secret_type),
             value: StoredRecordPayload::from_trusted(self.ciphertext.as_str().to_owned()),
         }
     }
@@ -656,7 +657,7 @@ mod tests {
     fn reserved_sentinel_checkpoint_key_is_architecture_evidence() {
         let malformed_share = StoredSecretRecord {
             key: SecretId::from_vault_record("sentinel_share:not-a-device"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted("malformed".to_owned()),
         };
         let operation = VaultOperation::EpochCheckpoint {

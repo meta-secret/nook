@@ -7,6 +7,7 @@
 
 use super::identity::{IdentityMember, IdentityVaultDek, IdentityVaultDekEpoch, MemberDekEnvelope};
 use super::multi_device::{AppKey, VaultKeys};
+use crate::MemberLabelState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum IdentityVaultGrantReconciliation {
@@ -73,8 +74,10 @@ mod tests {
         fn new() -> anyhow::Result<Self> {
             let app = AppKey::generate()?;
             let second = AppKey::generate()?;
-            let mut identity = IdentityRecord::create_with_app_key("Personal", &app, None)?;
-            let peer = IdentityRecord::create_with_app_key("Peer", &second, None)?;
+            let mut identity =
+                IdentityRecord::create_with_app_key("Personal", &app, MemberLabelState::Unnamed)?;
+            let peer =
+                IdentityRecord::create_with_app_key("Peer", &second, MemberLabelState::Unnamed)?;
             identity.members.extend(peer.members);
             let opened_identity =
                 identity.generate_vault_dek(StoreId::parse("store_abcdefghijk")?)?;

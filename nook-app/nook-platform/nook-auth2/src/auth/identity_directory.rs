@@ -1,7 +1,8 @@
 //! Portable identity collection and active-identity selection policy.
 mod enrollment;
 mod recovery;
-pub use recovery::RecoveryRetirement;
+pub use crate::MemberLabelState;
+use recovery::RecoveryRetirement;
 
 /// Membership of an admitted app key in the local identity directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -266,7 +267,7 @@ impl IdentityDirectory {
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         };
         let record = match IdentityRecord::synthesize_from_legacy_vault(
             label,
@@ -590,14 +591,14 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: " Personal ",
             app_key: &app_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let personal = resolved_identity.identity_id;
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Work",
             app_key: &app_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let work = resolved_identity.identity_id;
@@ -618,7 +619,7 @@ mod tests {
         let rejected = match directory.create_identity(IdentityCreation {
             label: "   ",
             app_key: &app_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         }) {
             Err(rejected) => rejected,
             Ok(_) => anyhow::bail!("Empty label was accepted"),
@@ -635,7 +636,8 @@ mod tests {
     #[test]
     fn rejects_invalid_persisted_state() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
-        let record = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let record =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let duplicate = record.clone();
         assert!(
             IdentityDirectory::from_records(vec![record, duplicate], IdentitySelection::Empty,)
@@ -651,10 +653,11 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &app_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
-        let other = IdentityRecord::create_with_app_key("Other", &app_key, None)?;
+        let other =
+            IdentityRecord::create_with_app_key("Other", &app_key, MemberLabelState::Unnamed)?;
         assert!(directory.replace_selected(other).is_err());
         Ok(())
     }
@@ -666,7 +669,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &app_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let owner_id = resolved_identity.identity_id;
@@ -680,7 +683,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Work",
             app_key: &app_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
 
@@ -720,7 +723,7 @@ mod tests {
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Personal",
             app_key: &app_key,
-            member_label: None,
+            member_label: MemberLabelState::Unnamed,
         })?;
         directory = resolved_identity.directory;
         let personal = resolved_identity.identity_id;
@@ -733,7 +736,7 @@ mod tests {
                 auth_id: app_key.auth_id(),
                 public_key: app_key.public_key(),
                 signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-                label: None,
+                label: MemberLabelState::Unnamed,
             },
             store_id.clone(),
             app_key

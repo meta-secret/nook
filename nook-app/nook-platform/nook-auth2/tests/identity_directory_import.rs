@@ -2,6 +2,7 @@ use crate::{
     DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityCreation,
     IdentityVaultKeyOpening,
 };
+use nook_auth2::MemberLabelState;
 use nook_auth2::{
     AgeArmoredCiphertext, AppKey, IdentityDirectory, IdentityVaultDekEpoch,
     IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, StoreId, VaultKeys,
@@ -28,7 +29,7 @@ fn imported_vault_reuses_identity_that_owns_app_key() -> anyhow::Result<()> {
     let resolved_identity = directory.create_identity(IdentityCreation {
         label: "Personal",
         app_key: &app_key,
-        member_label: None,
+        member_label: MemberLabelState::Unnamed,
     })?;
     directory = resolved_identity.directory;
     let identity_id = resolved_identity.identity_id;
