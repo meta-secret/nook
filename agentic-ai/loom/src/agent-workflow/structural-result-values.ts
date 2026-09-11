@@ -4,7 +4,9 @@ import type { UntrustedYamlNode } from '../lib/guards.ts';
 const missingFields = 'structural result contains missing or extra fields';
 export const structuralError = (message: string) => ({
   error: (issue: { readonly code: string }) =>
-    issue.code === 'invalid_type' ? missingFields : message,
+    issue.code === 'invalid_type' && Reflect.get(issue, 'input') === void 0
+      ? missingFields
+      : message,
 });
 export const structuralObjectError = { error: missingFields };
 
@@ -73,15 +75,18 @@ export const structuralPaths = (minimum = 1) =>
       'structural paths are invalid',
     );
 
-export type ParseStructuralRequest<T> = {
+type ParseStructuralRequest<T> = {
   readonly schema: z.ZodType<T>;
   readonly input: UntrustedYamlNode;
 };
 
-export function parseStructural<T>(request: ParseStructuralRequest<T>): T {
-  const result = request.schema.safeParse(request.input);
-  if (result.success) return result.data;
-  throw new Error(
-    `Invalid workflow structured result: ${result.error.issues.length > 0 ? result.error.issues[0]!.message : missingFields}.`,
-  );
+export class StructuralResultCodec {
+  private constructor() {}
+  static decode<T>(request: ParseStructuralRequest<T>): T {
+    const result = request.schema.safeParse(request.input);
+    if (result.success) return result.data;
+    throw new Error(
+      `Invalid workflow structured result: ${result.error.issues.length > 0 ? result.error.issues[0]!.message : missingFields}.`,
+    );
+  }
 }

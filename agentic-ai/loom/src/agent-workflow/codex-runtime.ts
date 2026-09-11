@@ -431,9 +431,17 @@ export class CodexTurn {
             'Codex completed without a thread identity or structured result.',
         }),
       );
-    const output = WorkflowResultSchema.decodeWorkflowTaskOutput(
-      state.output.text,
-    );
+    let output: AgentExecutionCompletion['output'];
+    try {
+      output = WorkflowResultSchema.decodeWorkflowTaskOutput(state.output.text);
+    } catch {
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.RuntimeBoundary,
+          message: 'Codex structured result could not be decoded.',
+        }),
+      );
+    }
     if (output.resultKind !== this.request.expectedResultKind)
       return err(
         new CodexExecutionFailure({

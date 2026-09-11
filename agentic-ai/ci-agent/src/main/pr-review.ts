@@ -481,10 +481,23 @@ class PullRequestReviewAttemptBeforeDeadline<T> {
       }, remainingMs);
       Promise.resolve()
         .then(() => input.operation(controller.signal))
-        .then((value) => {
-          clearTimeout(timer);
-          resolve({ completed: true, value });
-        });
+        .then(
+          (value) => {
+            clearTimeout(timer);
+            resolve({ completed: true, value });
+          },
+          () => {
+            clearTimeout(timer);
+            resolve({
+              completed: true,
+              value: err({
+                kind: CiFailureKind.Github,
+                message:
+                  'Exact-head review operation rejected before returning a typed outcome.',
+              }),
+            });
+          },
+        );
     });
   }
 }

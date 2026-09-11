@@ -243,11 +243,27 @@ export class ModuleExpertIsolation {
         use.isolationRequest,
       );
     if (isolation.isErr()) return err(isolation.error);
+    let outcome: Result<TResult, TFailure>;
     try {
-      return await use.run(isolation.value);
-    } finally {
-      await isolation.value.dispose();
+      outcome = await use.run(isolation.value);
+    } catch (failure) {
+      try {
+        await isolation.value.dispose();
+      } catch {
+        // A rejected run remains the primary failure.
+      }
+      throw failure;
     }
+    try {
+      await isolation.value.dispose();
+    } catch {
+      if (outcome.isErr()) return outcome;
+      return err({
+        kind: ExpertIsolationFailureKind.Cleanup,
+        message: 'Expert isolation cleanup failed.',
+      });
+    }
+    return outcome;
   }
 
   static moduleExpertThreadOptions(

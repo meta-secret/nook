@@ -1,8 +1,4 @@
-import {
-  assertSuccess,
-  assertFailure,
-  assertAsyncFailure,
-} from "./result-assertions.js";
+import { CiResultAssertions } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -54,13 +50,13 @@ describe("resolveAgentTask", () => {
   it("prefers AGENT_PROMPT when set", () => {
     process.env.AGENT_PROMPT = "  Ship the feature  ";
     assert.equal(
-      assertSuccess(new AgentPromptEnvironment(process.env).resolveAgentTask()),
+      CiResultAssertions.assertSuccess(new AgentPromptEnvironment(process.env).resolveAgentTask()),
       "Ship the feature",
     );
   });
 
   it("throws when the explicit prompt is missing", () => {
-    assertFailure(
+    CiResultAssertions.assertFailure(
       new AgentPromptEnvironment(process.env).resolveAgentTask(),
       /AGENT_PROMPT is required/,
     );
@@ -100,7 +96,7 @@ describe("loadPrompt", () => {
     process.env.AGENT_PROMPT = "bounded task";
     try {
       assert.equal(
-        await new AgentPrompt(config).load().then(assertSuccess),
+        await new AgentPrompt(config).load().then(CiResultAssertions.assertSuccess),
         "Trusted: bounded task",
       );
     } finally {
@@ -146,11 +142,11 @@ describe("loadPrompt", () => {
       .digest("hex");
     try {
       assert.equal(
-        await new AgentPrompt(config).load().then(assertSuccess),
+        await new AgentPrompt(config).load().then(CiResultAssertions.assertSuccess),
         `Trusted plan:\n${plan}`,
       );
       await writeFile(join(repoRoot, ".nook-workbench-plan.md"), "changed");
-      await assertAsyncFailure(
+      await CiResultAssertions.assertAsyncFailure(
         new AgentPrompt(config).load(),
         /plan hash changed/,
       );
@@ -183,11 +179,11 @@ describe("loadPrompt", () => {
     };
     try {
       assert.equal(
-        await new AgentPrompt(config).load().then(assertSuccess),
+        await new AgentPrompt(config).load().then(CiResultAssertions.assertSuccess),
         "Report:\nserde 1.0 -> 1.1\n",
       );
       process.env.RUST_DEPS_OUTDATED_REPORT = join(parent, "secrets.env");
-      await assertAsyncFailure(
+      await CiResultAssertions.assertAsyncFailure(
         new AgentPrompt(config).load(),
         /path is invalid/,
       );

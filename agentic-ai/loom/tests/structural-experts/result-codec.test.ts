@@ -664,6 +664,32 @@ test('requires an explicit exact nonempty-findings or none-with-reason assessmen
   }
 });
 
+test('reports present structural values with their type-specific error', () => {
+  const malformedSummary = {
+    ...StructuralExpertsResultCodecScenario.codeEvidence(),
+    summary: 123,
+  };
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(malformedSummary),
+    ),
+  ).toThrow('structural result string is invalid');
+
+  const valid = StructuralExpertsResultCodecScenario.codeEvidence();
+  const malformedArray = {
+    ...valid,
+    continuation: {
+      ...valid.continuation,
+      proposedSlices: { unexpected: 'object' },
+    },
+  };
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(malformedArray),
+    ),
+  ).toThrow('structural result array is invalid');
+});
+
 type AssessmentReplacementInput = {
   readonly assessment: UntrustedYamlMap;
   readonly field: string;

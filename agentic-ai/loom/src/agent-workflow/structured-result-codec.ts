@@ -11,7 +11,7 @@ import {
   type UntrustedYamlNode,
 } from '../lib/guards.ts';
 import { STRUCTURAL_RESULT_SCHEMAS } from './structural-result-codec.ts';
-import { parseStructural } from './structural-result-values.ts';
+import { StructuralResultCodec } from './structural-result-values.ts';
 
 export const MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH = 65_536;
 const MISSING_FIELDS =
@@ -283,7 +283,10 @@ export class WorkflowResultSchema {
     const kind = envelope.data.resultKind;
     const schema = RESULT_SCHEMAS[kind];
     if (kind in STRUCTURAL_RESULT_SCHEMAS)
-      return parseStructural<DecodedWorkflowTaskOutput>({ schema, input });
+      return StructuralResultCodec.decode<DecodedWorkflowTaskOutput>({
+        schema,
+        input,
+      });
     const decoded = schema.safeParse(input);
     if (!decoded.success)
       throw new Error(

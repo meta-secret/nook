@@ -376,6 +376,35 @@ describe('Codex streamed turn terminal state', () => {
     );
   });
 
+  test('returns a typed failure for malformed completed output', async () => {
+    const malformedMessage: ThreadEvent = {
+      type: 'item.completed',
+      item: {
+        id: 'malformed-structured-message',
+        type: 'agent_message',
+        text: 'not-json',
+      },
+    };
+    const streamArgs: FakeThreadEventStreamArgs = {
+      events: [
+        AgentWorkflowCodexRuntimeScenario.threadStartedEvent(),
+        malformedMessage,
+        AgentWorkflowCodexRuntimeScenario.turnCompletedEvent(),
+      ],
+    };
+    const result = await new CodexTurn({
+      events:
+        AgentWorkflowCodexRuntimeScenario.fakeThreadEventStream(streamArgs),
+      expectedResultKind: WorkflowResultKind.CortexEvidence,
+      observe: async () => {},
+    }).collect();
+
+    assert(result.isErr());
+    expect(result.error.message).toBe(
+      'Codex structured result could not be decoded.',
+    );
+  });
+
   test('keeps turn failure authoritative across event ordering', async () => {
     const sequences: readonly (readonly ThreadEvent[])[] = [
       [

@@ -1,4 +1,4 @@
-import { assertSuccess } from "./result-assertions.js";
+import { CiResultAssertions } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { access, chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -97,7 +97,7 @@ describe("implementation working tree", () => {
     try {
       await mkdir(repoRoot);
       await execFileAsync("git", ["-C", repoRoot, "init"]);
-      await new CiRepository(repoRoot).configureGitForCi().then(assertSuccess);
+      await new CiRepository(repoRoot).configureGitForCi().then(CiResultAssertions.assertSuccess);
       await writeFile(join(repoRoot, "README.md"), "base\n");
       await execFileAsync("git", ["-C", repoRoot, "add", "README.md"]);
       await execFileAsync("git", ["-C", repoRoot, "commit", "-m", "base"]);
@@ -111,7 +111,7 @@ describe("implementation working tree", () => {
       assert.equal(
         await new CiRepository(repoRoot)
           .hasWorkingTreeChanges()
-          .then(assertSuccess),
+          .then(CiResultAssertions.assertSuccess),
         false,
       );
     } finally {
@@ -162,7 +162,7 @@ describe("implementation working tree", () => {
           fixBranch: "fix/dependency-update",
           runId: "42",
         })
-        .then(assertSuccess);
+        .then(CiResultAssertions.assertSuccess);
 
       await assert.rejects(access(marker), /ENOENT/);
       const { stdout } = await execFileAsync("git", [
@@ -216,14 +216,14 @@ describe("implementation working tree", () => {
       assert.equal(
         await new CiRepository(repoRoot)
           .hasWorkingTreeChanges()
-          .then(assertSuccess),
+          .then(CiResultAssertions.assertSuccess),
         false,
       );
       await writeFile(join(repoRoot, "README.md"), "authored change\n");
       assert.equal(
         await new CiRepository(repoRoot)
           .hasWorkingTreeChanges()
-          .then(assertSuccess),
+          .then(CiResultAssertions.assertSuccess),
         true,
       );
     } finally {

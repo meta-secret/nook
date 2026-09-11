@@ -68,10 +68,17 @@ export class AgentWait<T> {
 
     const deadline = new AgentDeadline<T>(label, options.timeoutMs);
     const scheduled = deadline.schedule();
-    const outcome = await Promise.race([wait(), scheduled.outcome]);
-    scheduled.cancel();
-    clearInterval(heartbeat);
-    return outcome;
+    try {
+      return await Promise.race([wait(), scheduled.outcome]);
+    } catch {
+      return err({
+        kind: CiFailureKind.Agent,
+        message: `${label} failed before returning a typed outcome`,
+      });
+    } finally {
+      scheduled.cancel();
+      clearInterval(heartbeat);
+    }
   }
 }
 

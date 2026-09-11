@@ -1,8 +1,4 @@
-import {
-  assertSuccess,
-  assertFailure,
-  assertAsyncFailure,
-} from "./result-assertions.js";
+import { CiResultAssertions } from "./result-assertions.js";
 import { ok } from "neverthrow";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
@@ -42,7 +38,7 @@ const OTHER_SHA = "b".repeat(40);
 const execFileAsync = promisify(execFile);
 
 test("rust dependency update profile selects strict isolation", () => {
-  const profile = assertSuccess(
+  const profile = CiResultAssertions.assertSuccess(
     new CiFixProfileName("rust-dependency-update").parse(),
   );
   assert.equal(
@@ -51,11 +47,11 @@ test("rust dependency update profile selects strict isolation", () => {
   );
   assert.equal(
     new DependencyFixIsolationForFixProfile(
-      assertSuccess(new CiFixProfileName().parse()),
+      CiResultAssertions.assertSuccess(new CiFixProfileName().parse()),
     ).execute(),
     AgentIsolation.Legacy,
   );
-  assertFailure(
+  CiResultAssertions.assertFailure(
     new CiFixProfileName("rust-dependency-update-typo").parse(),
     /Unsupported CI_AGENT_FIX_PROFILE/,
   );
@@ -149,14 +145,14 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
               return ok();
             },
           })
-          .then(assertSuccess);
+          .then(CiResultAssertions.assertSuccess);
         assert.deepEqual(names, ["docker:ecosystem:fuzz", "hive:verify"]);
 
         return ok();
       },
     })
       .execute()
-      .then(assertSuccess);
+      .then(CiResultAssertions.assertSuccess);
     assert.equal(
       await readFile(log, "utf8"),
       `buildx build --network none .\nbuildx create --name ${builder} --driver docker-container --bootstrap\nbuildx rm --force ${builder}\nrun --network none image\n`,
@@ -189,7 +185,7 @@ test("validation rejection restores the host environment and removes isolation",
         throw new Error("runner rejected");
       },
     }).execute();
-    assertFailure(outcome, /Isolated dependency validation rejected/);
+    CiResultAssertions.assertFailure(outcome, /Isolated dependency validation rejected/);
     assert.deepEqual(hostEnvironment, originalEnvironment);
     await assert.rejects(readFile(isolatedHome), { code: "ENOENT" });
   } finally {
@@ -231,7 +227,7 @@ test("baseline Git state mutations fail closed", () => {
     { currentHeadSha: OTHER_SHA, currentIndexTreeSha: baseline.indexTreeSha },
     { currentHeadSha: baseline.headSha, currentIndexTreeSha: SHA },
   ])
-    assertFailure(
+    CiResultAssertions.assertFailure(
       new DependencyFixAssertRepositoryBaselineUnchanged({
         baseline,
         ...current,
@@ -251,7 +247,7 @@ test("baseline Git state mutations fail closed", () => {
       configuration: `${gitMetadata.configuration}local\0file:.git/config\0core.hookspath\nattacker-hooks\0`,
     },
   ])
-    assertFailure(
+    CiResultAssertions.assertFailure(
       new DependencyFixAssertGitMetadataBaselineUnchanged({
         baseline: gitMetadata,
         current,
@@ -276,14 +272,14 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       .assertRustDependencyUpdateChangeSet({
         changes: allowed.map((path) => ({ path, status: " M" })),
       })
-      .then(assertSuccess);
+      .then(CiResultAssertions.assertSuccess);
     const rejects = (
       path: string,
       status: string,
       message: RegExp,
       lookup = async () => ok(""),
     ) =>
-      assertAsyncFailure(
+      CiResultAssertions.assertAsyncFailure(
         new DependencyFixRepository(root).assertRustDependencyUpdateChangeSet({
           changes: [{ path, status }],
           baselineModeForPath: lookup,
@@ -306,7 +302,7 @@ test("dependency update scope accepts only regular Rust mission files", async ()
         baselineModeForPath: async () => ok(""),
         baselineContentForPath: async () => ok(pinned),
       })
-      .then(assertSuccess);
+      .then(CiResultAssertions.assertSuccess);
     await writeFile(
       join(root, "nook-app/nook-platform/Cargo.toml"),
       'serde = { git = "https://evil.example/serde" }\n',
@@ -350,7 +346,7 @@ test("persisted Git authentication config fails without exposing values", () => 
     },
     { key: "credential.https://github.com.helper", value: "store" },
   ])
-    assertFailure(
+    CiResultAssertions.assertFailure(
       new GitConfiguration([entry]).assertCredentialFree(),
       (error) => {
         assert.match(error.message, /credential detected/);
@@ -382,7 +378,7 @@ test("publication outcomes and exact identity fail closed", async () => {
     [CiFixOutcomeKind.Skipped, CiFixOutcomeKind.Published],
   );
   assert.equal(
-    assertSuccess(
+    CiResultAssertions.assertSuccess(
       new DependencyFixAssertPublishedFixIdentity(PUBLISHED_IDENTITY).execute(),
     ),
     SHA,
@@ -395,7 +391,7 @@ test("publication outcomes and exact identity fail closed", async () => {
     { actualBaseRef: "release" },
   ] as const;
   for (const mismatch of mismatches)
-    assertFailure(
+    CiResultAssertions.assertFailure(
       new DependencyFixAssertPublishedFixIdentity({
         ...PUBLISHED_IDENTITY,
         ...mismatch,
@@ -416,7 +412,7 @@ test("publication outcomes and exact identity fail closed", async () => {
         }),
       fetchRemoteHeadSha: async () => ok(remoteHeadSha),
     }).execute();
-  assert.equal(assertSuccess(await verify(SHA)), SHA);
-  await assertAsyncFailure(verify(OTHER_SHA), /remote branch SHA/);
-  await assertAsyncFailure(verify(SHA, OTHER_SHA), /PR head SHA/);
+  assert.equal(CiResultAssertions.assertSuccess(await verify(SHA)), SHA);
+  await CiResultAssertions.assertAsyncFailure(verify(OTHER_SHA), /remote branch SHA/);
+  await CiResultAssertions.assertAsyncFailure(verify(SHA, OTHER_SHA), /PR head SHA/);
 });

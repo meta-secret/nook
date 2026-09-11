@@ -1,8 +1,4 @@
-import {
-  assertSuccess,
-  assertFailure,
-  assertAsyncFailure,
-} from "./result-assertions.js";
+import { CiResultAssertions } from "./result-assertions.js";
 import { ok, err, type Result } from "neverthrow";
 import { CiFailureKind, type CiFailure } from "../main/failure.js";
 import assert from "node:assert/strict";
@@ -83,7 +79,7 @@ test("trusted budget rejection is exported for blocked worklog publication", () 
       message:
         "Implemented diff exceeds the 2000 authored-addition budget: 2001",
     } satisfies CiFailure;
-    assertSuccess(
+    CiResultAssertions.assertSuccess(
       new AgentImplementationRecordTrustedBudgetBlocker({
         error: error,
         outputPath: output,
@@ -110,7 +106,7 @@ test("oversized implementation is rejected before push", async () => {
     events.push("budget");
     return err(budgetError);
   };
-  await assertAsyncFailure(
+  await CiResultAssertions.assertAsyncFailure(
     new AgentImplementationPreserveImplementedBranchBeforePrPreserve(
       args,
     ).execute(),
@@ -130,7 +126,7 @@ test("budget measurement errors abort before branch preservation", async () => {
     events.push("budget");
     return err(measurementError);
   };
-  await assertAsyncFailure(
+  await CiResultAssertions.assertAsyncFailure(
     new AgentImplementationPreserveImplementedBranchBeforePrPreserve(
       args,
     ).execute(),
@@ -146,7 +142,7 @@ test("bounded implementation keeps the normal push, budget, and PR creation path
       new ImplementDeliveryArgs(events).execute(),
     )
       .execute()
-      .then(assertSuccess),
+      .then(CiResultAssertions.assertSuccess),
     73,
   );
 
@@ -175,7 +171,7 @@ test("legacy implement short-circuits an existing PR and otherwise delivers once
     mode: CiImplementationMode.LegacyMonolithic,
   })
     .execute()
-    .then(assertSuccess);
+    .then(CiResultAssertions.assertSuccess);
   assert.deepEqual(existingEvents, ["find-pr"]);
 
   const legacyEvents: string[] = [];
@@ -196,7 +192,7 @@ test("legacy implement short-circuits an existing PR and otherwise delivers once
     mode: CiImplementationMode.LegacyMonolithic,
   })
     .execute()
-    .then(assertSuccess);
+    .then(CiResultAssertions.assertSuccess);
   assert.deepEqual(legacyEvents, ["find-pr", "edit", "deliver"]);
 
   const editOnlyEvents: string[] = [];
@@ -208,14 +204,14 @@ test("legacy implement short-circuits an existing PR and otherwise delivers once
     mode: CiImplementationMode.EditOnly,
   })
     .execute()
-    .then(assertSuccess);
+    .then(CiResultAssertions.assertSuccess);
   assert.deepEqual(editOnlyEvents, ["edit"]);
 });
 
 describe("resolveImplementPrTarget", () => {
   it("keeps standalone work based on main", () => {
     assert.deepEqual(
-      assertSuccess(
+      CiResultAssertions.assertSuccess(
         new AgentImplementationResolveImplementPrTarget({
           branch: "agent/workbench-feature-42",
           baseBranch: "main",
@@ -232,7 +228,7 @@ describe("resolveImplementPrTarget", () => {
   });
 
   it("rejects stacked and malformed targets", () => {
-    assertFailure(
+    CiResultAssertions.assertFailure(
       new AgentImplementationResolveImplementPrTarget({
         branch: "codex/feature-successor",
         baseBranch: "codex/feature-predecessor",
@@ -240,7 +236,7 @@ describe("resolveImplementPrTarget", () => {
       }).execute(),
       /Only standalone implement PRs are supported/,
     );
-    assertFailure(
+    CiResultAssertions.assertFailure(
       new AgentImplementationResolveImplementPrTarget({
         branch: "codex/feature successor",
         baseBranch: "main",
@@ -264,12 +260,12 @@ test("a changed implementation consumes delivery before an asynchronous effect",
     },
   })
     .execute()
-    .then(assertSuccess);
+    .then(CiResultAssertions.assertSuccess);
   assert.equal(result.kind, CiChangeKind.Deliverable);
   if (result.kind !== CiChangeKind.Deliverable) return;
   const alias = result.change;
-  await result.change.deliver().then(assertSuccess);
-  await assertAsyncFailure(alias.deliver(), /already been consumed/);
+  await result.change.deliver().then(CiResultAssertions.assertSuccess);
+  await CiResultAssertions.assertAsyncFailure(alias.deliver(), /already been consumed/);
   assert.equal(deliveries, 1);
 });
 test("skipped edits never expose a delivery capability", async () => {
@@ -285,6 +281,6 @@ test("skipped edits never expose a delivery capability", async () => {
     },
   })
     .execute()
-    .then(assertSuccess);
+    .then(CiResultAssertions.assertSuccess);
   assert.deepEqual(result, { kind: CiChangeKind.Skipped });
 });

@@ -1,4 +1,4 @@
-import { assertSuccess, assertAsyncFailure } from "./result-assertions.js";
+import { CiResultAssertions } from "./result-assertions.js";
 import { ok, err } from "neverthrow";
 import { CiFailureKind } from "../main/failure.js";
 import assert from "node:assert/strict";
@@ -96,7 +96,7 @@ test("review request honors the circuit breaker across all comments", async () =
       }).execute(),
     )
       .execute()
-      .then(assertSuccess);
+      .then(CiResultAssertions.assertSuccess);
   assert.equal(result.state, ReviewRequestState.CircuitBreaker);
   assert.equal(requests, 0);
 });
@@ -125,7 +125,7 @@ test("acknowledged stabilization permits a review request", async () => {
       }).execute(),
     )
       .execute()
-      .then(assertSuccess);
+      .then(CiResultAssertions.assertSuccess);
 
   assert.equal(result.state, ReviewRequestState.Requested);
   assert.equal(requests, 1);
@@ -146,7 +146,7 @@ test("provider unavailability remains not-requested", async () => {
       }).execute(),
     )
       .execute()
-      .then(assertSuccess);
+      .then(CiResultAssertions.assertSuccess);
   assert.equal(result.state, ReviewRequestState.NotRequested);
   assert.equal(result.requested, false);
 });
@@ -154,7 +154,7 @@ test("provider unavailability remains not-requested", async () => {
 test("review request detects revision drift after feedback inspection", async () => {
   let reads = 0;
   let requests = 0;
-  await assertAsyncFailure(
+  await CiResultAssertions.assertAsyncFailure(
     new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
         readRevision: async () => {
@@ -183,7 +183,7 @@ test("review request detects revision drift after feedback inspection", async ()
 test("review request bounds stalled feedback inspection", async () => {
   const signals: AbortSignal[] = [];
   let requests = 0;
-  await assertAsyncFailure(
+  await CiResultAssertions.assertAsyncFailure(
     new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
         inspectFeedback: (_revision, signal) => {
@@ -212,7 +212,7 @@ test("review request bounds stalled feedback inspection", async () => {
 test("review request bounds stalled revision verification", async () => {
   const signals: AbortSignal[] = [];
   let reads = 0;
-  await assertAsyncFailure(
+  await CiResultAssertions.assertAsyncFailure(
     new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
         readRevision: (signal) => {
@@ -231,7 +231,7 @@ test("review request bounds stalled revision verification", async () => {
 
 test("review request bounds a stalled provider request", async () => {
   const signals: AbortSignal[] = [];
-  await assertAsyncFailure(
+  await CiResultAssertions.assertAsyncFailure(
     new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
       new PrReviewRequestInput({
         requestReview: (_revision, signal) => {
@@ -244,6 +244,29 @@ test("review request bounds a stalled provider request", async () => {
     /review request did not complete.*without a confirmed review outcome/,
   );
   assert.equal(signals[0]?.aborted, true);
+});
+
+test("review request returns rejected operations as typed failures", async () => {
+  const rejectedOperations: readonly Partial<RequestInput>[] = [
+    { readRevision: async () => Promise.reject(new Error("read failed")) },
+    {
+      inspectFeedback: async () =>
+        Promise.reject(new Error("inspection failed")),
+    },
+    {
+      requestReview: async () => Promise.reject(new Error("request failed")),
+    },
+  ];
+  for (const rejected of rejectedOperations) {
+    await CiResultAssertions.assertAsyncFailure(
+      new PullRequestReviewRequestExactHeadReviewWithCircuitBreaker(
+        new PrReviewRequestInput(rejected).execute(),
+      ).execute(),
+      (failure) =>
+        failure.kind === CiFailureKind.Github &&
+        failure.message.includes("rejected before returning a typed outcome"),
+    );
+  }
 });
 
 test("stabilizeExactHeadReview waits once and accepts clean feedback", async () => {

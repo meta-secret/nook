@@ -33,68 +33,69 @@ const EVIDENCE = z
   .min(1, 'structural result array is invalid')
   .max(100, 'structural result array is invalid');
 
-export function findingAssessment<T extends StructuralFindingCategory>(
-  category: T,
-) {
-  const finding = z.strictObject(
-    {
-      findingId: STRUCTURAL_ID,
-      category: z.literal(
-        category,
-        structuralError('structural closed vocabulary is invalid'),
-      ),
-      severity: z.enum(
-        StructuralFindingSeverity,
-        structuralError('structural closed vocabulary is invalid'),
-      ),
-      disposition: z.enum(
-        StructuralFindingDisposition,
-        structuralError('structural closed vocabulary is invalid'),
-      ),
-      summary: structuralText(),
-      evidence: EVIDENCE,
-      affectedPaths: structuralPaths(),
-      currentOwner: structuralText(),
-      proposedOwner: structuralText(),
-      preservedInvariants: structuralStrings(),
-      validation: structuralStrings(),
-      unresolvedDecision: structuralText(),
-    },
-    structuralObjectError,
-  );
-  return z.discriminatedUnion(
-    'kind',
-    [
-      z.strictObject(
-        {
-          kind: z.literal(StructuralAssessmentKind.Findings),
-          findings: z
-            .array(
-              finding,
-              structuralError('structural result array is invalid'),
-            )
-            .min(1, 'structural result array is invalid')
-            .max(100, 'structural result array is invalid')
-            .transform(
-              (values) =>
-                values as [
-                  z.infer<typeof finding>,
-                  ...z.infer<typeof finding>[],
-                ],
-            ),
-        },
-        structuralObjectError,
-      ),
-      z.strictObject(
-        {
-          kind: z.literal(StructuralAssessmentKind.None),
-          reason: structuralText(),
-        },
-        structuralObjectError,
-      ),
-    ],
-    structuralError('structural closed vocabulary is invalid'),
-  );
+export class StructuralEvidenceCodec {
+  private constructor() {}
+  static findingAssessment<T extends StructuralFindingCategory>(category: T) {
+    const finding = z.strictObject(
+      {
+        findingId: STRUCTURAL_ID,
+        category: z.literal(
+          category,
+          structuralError('structural closed vocabulary is invalid'),
+        ),
+        severity: z.enum(
+          StructuralFindingSeverity,
+          structuralError('structural closed vocabulary is invalid'),
+        ),
+        disposition: z.enum(
+          StructuralFindingDisposition,
+          structuralError('structural closed vocabulary is invalid'),
+        ),
+        summary: structuralText(),
+        evidence: EVIDENCE,
+        affectedPaths: structuralPaths(),
+        currentOwner: structuralText(),
+        proposedOwner: structuralText(),
+        preservedInvariants: structuralStrings(),
+        validation: structuralStrings(),
+        unresolvedDecision: structuralText(),
+      },
+      structuralObjectError,
+    );
+    return z.discriminatedUnion(
+      'kind',
+      [
+        z.strictObject(
+          {
+            kind: z.literal(StructuralAssessmentKind.Findings),
+            findings: z
+              .array(
+                finding,
+                structuralError('structural result array is invalid'),
+              )
+              .min(1, 'structural result array is invalid')
+              .max(100, 'structural result array is invalid')
+              .transform(
+                (values) =>
+                  values as [
+                    z.infer<typeof finding>,
+                    ...z.infer<typeof finding>[],
+                  ],
+              ),
+          },
+          structuralObjectError,
+        ),
+        z.strictObject(
+          {
+            kind: z.literal(StructuralAssessmentKind.None),
+            reason: structuralText(),
+          },
+          structuralObjectError,
+        ),
+      ],
+      structuralError('structural closed vocabulary is invalid'),
+    );
+  }
 }
 
 const INSTRUCTION = z.strictObject(

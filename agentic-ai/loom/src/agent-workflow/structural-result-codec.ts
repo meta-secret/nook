@@ -9,7 +9,7 @@ import {
   WorkflowResultKind,
 } from './domain.ts';
 import {
-  findingAssessment,
+  StructuralEvidenceCodec,
   INSTRUCTION_CLASSIFICATIONS,
   EXTRACTION_CANDIDATES,
 } from './structural-evidence-codec.ts';
@@ -146,33 +146,49 @@ const AUTHORIZATIONS = z
   );
 
 const CODE_ASSESSMENTS = {
-  architectureFindings: findingAssessment(
+  architectureFindings: StructuralEvidenceCodec.findingAssessment(
     StructuralFindingCategory.Architecture,
   ),
-  designFindings: findingAssessment(StructuralFindingCategory.Design),
-  codeQualityFindings: findingAssessment(StructuralFindingCategory.CodeQuality),
-  typeSafetyFindings: findingAssessment(StructuralFindingCategory.TypeSafety),
-  testFindings: findingAssessment(StructuralFindingCategory.Tests),
-  dependencyDirectionFindings: findingAssessment(
+  designFindings: StructuralEvidenceCodec.findingAssessment(
+    StructuralFindingCategory.Design,
+  ),
+  codeQualityFindings: StructuralEvidenceCodec.findingAssessment(
+    StructuralFindingCategory.CodeQuality,
+  ),
+  typeSafetyFindings: StructuralEvidenceCodec.findingAssessment(
+    StructuralFindingCategory.TypeSafety,
+  ),
+  testFindings: StructuralEvidenceCodec.findingAssessment(
+    StructuralFindingCategory.Tests,
+  ),
+  dependencyDirectionFindings: StructuralEvidenceCodec.findingAssessment(
     StructuralFindingCategory.DependencyDirection,
   ),
 };
 const CORTEX_ASSESSMENTS = {
-  conflicts: findingAssessment(StructuralFindingCategory.AuthorityConflict),
-  obsoleteClaims: findingAssessment(StructuralFindingCategory.ObsoleteClaim),
-  historicalClaims: findingAssessment(
+  conflicts: StructuralEvidenceCodec.findingAssessment(
+    StructuralFindingCategory.AuthorityConflict,
+  ),
+  obsoleteClaims: StructuralEvidenceCodec.findingAssessment(
+    StructuralFindingCategory.ObsoleteClaim,
+  ),
+  historicalClaims: StructuralEvidenceCodec.findingAssessment(
     StructuralFindingCategory.HistoricalClaim,
   ),
-  duplications: findingAssessment(StructuralFindingCategory.Duplication),
-  complexityFindings: findingAssessment(StructuralFindingCategory.Complexity),
-  knowledgeGraphImpacts: findingAssessment(
+  duplications: StructuralEvidenceCodec.findingAssessment(
+    StructuralFindingCategory.Duplication,
+  ),
+  complexityFindings: StructuralEvidenceCodec.findingAssessment(
+    StructuralFindingCategory.Complexity,
+  ),
+  knowledgeGraphImpacts: StructuralEvidenceCodec.findingAssessment(
     StructuralFindingCategory.KnowledgeGraph,
   ),
 };
 class StructuralFindingAssessmentSequence {
   constructor(
     private readonly assessments: readonly z.infer<
-      ReturnType<typeof findingAssessment>
+      ReturnType<typeof StructuralEvidenceCodec.findingAssessment>
     >[],
   ) {}
 

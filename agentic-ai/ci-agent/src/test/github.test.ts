@@ -1,4 +1,4 @@
-import { assertSuccess } from "./result-assertions.js";
+import { CiResultAssertions } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -130,7 +130,7 @@ test("createFixPr leaves the PR body free of automatic merge control markers", a
         fixLabel: "focused issue",
         baseBranch: "codex/predecessor",
       })
-      .then(assertSuccess);
+      .then(CiResultAssertions.assertSuccess);
     assert.equal(prNumber, 347);
     assert.equal(createdBase, "codex/predecessor");
     assert.equal(createdBody, "## Summary\n\nOpen this PR for review.");

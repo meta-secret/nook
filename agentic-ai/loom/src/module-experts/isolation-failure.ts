@@ -1,5 +1,6 @@
 export enum ExpertIsolationFailureKind {
   Authentication = 'isolationAuthentication',
+  Cleanup = 'isolationCleanup',
   SourceCommit = 'isolationSourceCommit',
   Profile = 'isolationProfile',
   Snapshot = 'isolationSnapshot',
