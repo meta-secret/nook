@@ -4,6 +4,9 @@ import { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/ex
 
 export type ExtensionStorageProviderIdentities =
   ExtensionStorageProviderPayload[]
+type ProviderCredentialTransport =
+  StorageProvider | ExtensionStorageProviderPayload
+type ProviderCredentialTransports = ProviderCredentialTransport[]
 
 export enum ProviderCredentialFailure {
   InvalidIdentity = 'invalid-provider-identity',
@@ -47,8 +50,7 @@ class SerializedProviderField {
 }
 
 export class ProviderCredentialBuffer {
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection is retained for credential cleanup.
-  constructor(private readonly providers: StorageProvider[]) {}
+  constructor(private readonly providers: ProviderCredentialTransports) {}
   identities(): Result<
     ExtensionStorageProviderIdentities,
     ProviderCredentialFailure
@@ -105,7 +107,7 @@ export class ProviderCredentialBuffer {
     args: StageProviderCredentialsArgs,
   ): Promise<Result<StorageProvider[], ProviderCredentialFailure>> {
     // Only the external structured-clone and WASM admission boundaries may reject.
-    let staged: StorageProvider[]
+    let staged: ProviderCredentialTransports
     try {
       if (
         new SerializedProviderField(this.providers).admission() !==
@@ -117,7 +119,12 @@ export class ProviderCredentialBuffer {
       return err(ProviderCredentialFailure.InvalidTransport)
     }
     try {
-      return ok(await args.decode(staged))
+      const admitted: StorageProvider[] = await Reflect.apply(
+        args.decode,
+        undefined,
+        [staged],
+      )
+      return ok(admitted)
     } catch {
       return err(ProviderCredentialFailure.AdmissionRejected)
     } finally {

@@ -50,6 +50,9 @@ export class AttachedAuthenticationWidget {
       throw new Error('Widget must be attached before activation')
     return new AttachedAuthenticationWidget(element)
   }
+  get mountedElement(): HTMLElement {
+    return this.element
+  }
   detach(): void {
     if (this.state === WidgetHostKind.Detached) return
     this.state = WidgetHostKind.Detached

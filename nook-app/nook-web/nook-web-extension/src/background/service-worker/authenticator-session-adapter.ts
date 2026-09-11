@@ -1,11 +1,17 @@
 import { err, ok, type Result } from 'neverthrow'
-import type { ExtensionSessionTransportFailure } from './session-document'
+import type {
+  ExtensionSessionTransportFailure,
+  ExtensionSessionTransportResult,
+} from './session-document'
 import type { WebsiteAuthenticatorBackupAttachMessageMode } from '../../lib/enrollment-messages'
 import {
   extensionSessionGrantIdentity,
   type StoredExtensionPairingGrant,
 } from '../pairing-grants'
-import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
+import {
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  type ExtensionSessionTransportRequest,
+} from '../../offscreen/session-request-adapter'
 import { extensionPairingIdentity } from './pairing-identity'
 
 import {
@@ -44,6 +50,12 @@ export class AuthenticatorSessionFailure {
 type AuthenticatorSessionError =
   ExtensionSessionTransportFailure | AuthenticatorSessionFailure
 
+type AuthenticatorSessionTransport = {
+  sendSessionMessage(
+    message: ExtensionSessionTransportRequest,
+  ): Promise<ExtensionSessionTransportResult<unknown>>
+}
+
 type AuthenticatorCodeFromSessionArgs = {
   grant: StoredExtensionPairingGrant
   secretId: string
@@ -74,7 +86,7 @@ type SelectedAuthenticatorPageAcknowledgedArgs = {
 
 export class ExtensionAuthenticatorSession {
   private readonly readiness = companionWasmReady
-  constructor(private readonly pairing: typeof extensionPairingIdentity) {}
+  constructor(private readonly pairing: AuthenticatorSessionTransport) {}
 
   async authenticatorCodeFromSession({
     grant,

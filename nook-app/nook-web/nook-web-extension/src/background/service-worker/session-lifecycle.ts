@@ -23,7 +23,7 @@ type AuthenticationSurfaceDeliveryRequest = {
 }
 
 /** Owns the browser runtime resources shared by these interactions. */
-class ExtensionSessionLifecycle {
+export class ExtensionSessionLifecycle {
   private readonly document = new ExtensionSessionDocumentOwner()
 
   async ensureExtensionSessionDocument(): Promise<

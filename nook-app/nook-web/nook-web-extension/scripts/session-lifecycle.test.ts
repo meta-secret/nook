@@ -9,16 +9,17 @@ describe('ensureExtensionSessionDocument', () => {
     })
     globalThis.chrome = {
       offscreen: {
+        Reason: { WORKERS: 'WORKERS' },
         createDocument: () => {
           createAttempts += 1
           return Promise.reject('single offscreen document')
         },
       },
     } as typeof chrome
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await extensionSessionLifecycle.ensureExtensionSessionDocument()
+    await new ExtensionSessionLifecycle().ensureExtensionSessionDocument()
     expect(createAttempts).toBe(1)
   })
 })

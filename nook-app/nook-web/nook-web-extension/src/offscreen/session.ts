@@ -79,6 +79,10 @@ type SessionExpirySchedule =
       lease: ActiveExtensionSessionLease
     }
 
+type ExtensionSessionExpiryMessage = {
+  type: ExtensionSessionLifecycleMessageType.Expired
+}
+
 let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
 let managerAvailability: VaultManagerAvailability = {
   kind: VaultManagerAvailabilityKind.Locked,
@@ -178,10 +182,9 @@ function scheduleSessionExpiry(generation: number): void {
         sessionMessageDispatcher.replaceOperations(
           new SessionOperationFailure(SessionOperationFailureKind.Locked),
         )
-        const expiryMessage: Parameters<typeof chrome.runtime.sendMessage>[0] =
-          {
-            type: ExtensionSessionLifecycleMessageType.Expired,
-          }
+        const expiryMessage: ExtensionSessionExpiryMessage = {
+          type: ExtensionSessionLifecycleMessageType.Expired,
+        }
         void chrome.runtime.sendMessage(expiryMessage)
       },
     }),
@@ -252,11 +255,11 @@ async function handleCompanionIdentityHandoff(
     try {
       const activeManager = await getManager()
       consumed = true
-      const response: CompanionIdentityHandoffResponse =
-        await endpoint.authorize_and_seal(
-          activeManager,
-          message.payload.authorization,
-        )
+      const response: CompanionIdentityHandoffResponse = await Reflect.apply(
+        endpoint.authorize_and_seal,
+        endpoint,
+        [activeManager, message.payload.authorization],
+      )
       const renewal = renewSessionExpiry(generation)
       if (renewal.isErr())
         return err(
@@ -290,9 +293,9 @@ async function handleCompanionIdentityDiscovery(
           }
         : {
             kind: CompanionDiscoveryEndpointKind.Initial,
-            endpoint: new NookCompanionExtensionEndpoint(
+            endpoint: Reflect.construct(NookCompanionExtensionEndpoint, [
               message.payload.presence,
-            ),
+            ]),
           }
 
     try {

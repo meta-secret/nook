@@ -239,7 +239,7 @@ describe('websiteLoginOptions', () => {
   test('withholds direct account results invalidated during lookup', async () => {
     const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
-    const { websiteAuthenticatorOptions } =
+    const { authenticatorEnrollmentOperations } =
       await import('../src/background/service-worker/authenticator-operations')
     let currentChecks = 0
     const authorizationIsCurrent = mock(() => ++currentChecks === 1)
@@ -276,15 +276,16 @@ describe('websiteLoginOptions', () => {
     })
 
     currentChecks = 0
-    const authenticatorResponse = await websiteAuthenticatorOptions({
-      message,
-      sender,
-      dependencies: {
-        ...authorization,
-        availableWebsiteGrants: mock(() => Promise.resolve({ grants: [] })),
-        authenticatorAccounts: mock(() => Promise.resolve(ok([]))),
-      },
-    })
+    const authenticatorResponse =
+      await authenticatorEnrollmentOperations.websiteAuthenticatorOptions({
+        message,
+        sender,
+        dependencies: {
+          ...authorization,
+          availableWebsiteGrants: mock(() => Promise.resolve({ grants: [] })),
+          authenticatorAccounts: mock(() => Promise.resolve(ok([]))),
+        },
+      })
     expect(authenticatorResponse).toEqual({
       ok: false,
       reason: 'authenticator-locked',

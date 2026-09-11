@@ -427,7 +427,12 @@ export class VaultInitializationActions {
           }
         }
         const failureMessage = state.errorMsg;
-        set_vault_session_locked(true);
+        try {
+          set_vault_session_locked(true);
+        } catch {
+          // The in-memory session still has to be cleared when browser-backed
+          // session storage is unavailable during failure compensation.
+        }
         state.clearUnlockedSession(false);
         state.deviceId = "";
         state.devicePublicKey = "";

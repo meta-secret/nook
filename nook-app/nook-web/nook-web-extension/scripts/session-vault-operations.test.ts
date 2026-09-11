@@ -178,7 +178,7 @@ describe('extension vault import operations', () => {
       value: 'vault',
     })
     expect(state.saved).toBe(false)
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('saves the locked vault provider snapshot without requiring unlock', async () => {
@@ -205,7 +205,7 @@ describe('extension vault import operations', () => {
     })
     expect(state.operationOrder).toEqual(['activate', 'import'])
     expect(state.activatedAppId).toBe('device')
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('preserves another unlocked identity instead of rebinding it', async () => {
@@ -228,7 +228,7 @@ describe('extension vault import operations', () => {
     expect(state.operationOrder).toEqual([])
     expect(state.deviceId).toBe('other-device')
     expect(state.protection).toBe(DeviceProtectionStatus.Unlocked)
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('scrubs decoded provider credentials when event import rejects', async () => {
@@ -247,7 +247,7 @@ describe('extension vault import operations', () => {
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
     expect(state.operationOrder).toEqual(['activate', 'import'])
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('restores the prior locked identity selection when import rejects', async () => {
@@ -269,7 +269,7 @@ describe('extension vault import operations', () => {
     expect(state.deviceId).toBe('other-device')
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('aborts before event and provider mutation when identity activation rejects', async () => {
@@ -289,7 +289,7 @@ describe('extension vault import operations', () => {
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
     expect(state.operationOrder).toEqual(['activate'])
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 })
 

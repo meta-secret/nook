@@ -218,7 +218,10 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const remove = mock(() => {})
-  widgetState.attachHost({ remove } as unknown as HTMLElement)
+  widgetState.attachHost({
+    isConnected: true,
+    remove,
+  } as unknown as HTMLElement)
   saveOfferState.watchPage({
     offer: { offerId: 'rejected-save-offer' } as WebsiteLoginSaveOfferView,
     startedAt: 1,

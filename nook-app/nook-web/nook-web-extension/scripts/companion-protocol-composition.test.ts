@@ -387,7 +387,9 @@ describe('generated companion protocol composition', () => {
       website,
       structuredClone(admission.response),
     )
-    const committed = await adopted.commit(website)
+    const records = await website.connect('local', '', '')
+    for (const record of records) record.free()
+    const committed = adopted.after_verified_connect(website)
     committed.confirm(website)
 
     expect(response.encryptedEnvelope).toContain('BEGIN AGE ENCRYPTED FILE')

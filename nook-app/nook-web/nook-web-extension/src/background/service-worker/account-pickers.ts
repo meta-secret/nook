@@ -389,7 +389,10 @@ class AccountPickerSessions {
               if (error) reject(new Error(error.message))
               else resolve()
             }
-            const removeArgs: Parameters<typeof tabs.remove> = [tabId, removed]
+            const removeArgs: Parameters<typeof tabs.remove> = [
+              [tabId],
+              removed,
+            ]
             tabs.remove(...removeArgs)
           }),
       ),

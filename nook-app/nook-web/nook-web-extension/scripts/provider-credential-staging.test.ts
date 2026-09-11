@@ -101,7 +101,7 @@ describe('provider credential staging', () => {
       }),
     ).resolves.toEqual({ ok: true })
     expect(observedDuringHandoff).toBe('github_pat_snapshot_secret')
-    expect(providers[0]).not.toHaveProperty('githubPat')
+    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
   test('scrubs a raw IPC snapshot after failed handoff', async () => {
@@ -111,7 +111,7 @@ describe('provider credential staging', () => {
         return err(ProviderCredentialFailure.AdmissionRejected)
       }),
     ).resolves.toEqual(err(ProviderCredentialFailure.AdmissionRejected))
-    expect(providers[0]).not.toHaveProperty('githubPat')
+    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
   test('continues scrubbing after malformed OAuth transport', () => {
@@ -121,7 +121,7 @@ describe('provider credential staging', () => {
       { githubPat: 'github_pat_following_secret' },
     ]
     new ProviderCredentialBuffer(providers).clear()
-    expect(providers[2]).not.toHaveProperty('githubPat')
+    expect(providers[2]?.githubPat).toEqual({ state: 'missing' })
   })
 
   test('rejects values outside serialized external data', async () => {

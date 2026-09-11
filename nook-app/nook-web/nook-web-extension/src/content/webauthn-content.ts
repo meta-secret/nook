@@ -76,6 +76,11 @@ type WebAuthnPageResponseDelivery = {
   value?: unknown
 }
 
+type WebsitePasskeyRuntimeMessage =
+  | WebsitePasskeyOptionsMessage
+  | WebsitePasskeyPerformMessage
+  | WebsitePasskeyCancelMessage
+
 function respond({
   requestId,
   action,
@@ -91,10 +96,10 @@ function respond({
   window.postMessage(nookTypedArgs0_0, location.origin)
 }
 
-function runtimeMessage<T>(message: unknown): Promise<T> {
+function runtimeMessage<T>(message: WebsitePasskeyRuntimeMessage): Promise<T> {
   // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
-    void chrome.runtime.sendMessage<T>(message, (response) => {
+    void chrome.runtime.sendMessage(message, (response: T) => {
       const error = chrome.runtime.lastError?.message
       if (error) reject(new Error(error))
       else resolve(response)

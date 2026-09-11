@@ -9,7 +9,8 @@ Object.assign(globalThis, {
 })
 
 await companionWasmReady
-const enrollmentFlow = await import('../src/content/enrollment-flow')
+const { authenticatorEnrollmentInteraction } =
+  await import('../src/content/enrollment-flow')
 const delivered = <Response>(response: Response) => ({
   kind: 'delivered' as const,
   response,
@@ -49,14 +50,16 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }
   const candidate = { sourceLabel: 'Nook', otpauthUri: uri.value }
 
-  const enrollment = enrollmentFlow.beginEnrollmentCeremony({
-    host,
-    section,
-    vaultStoreId: 'vault-1',
-    otpauthUri: uri,
-    candidate,
-  })
-  expect(enrollmentFlow.enrollmentScanBlocked()).toBe(true)
+  const enrollment = authenticatorEnrollmentInteraction.beginEnrollmentCeremony(
+    {
+      host,
+      section,
+      vaultStoreId: 'vault-1',
+      otpauthUri: uri,
+      candidate,
+    },
+  )
+  expect(authenticatorEnrollmentInteraction.enrollmentScanBlocked()).toBe(true)
   await enrollment
 
   expect(order).toEqual(['stage', 'confirm'])
@@ -88,9 +91,13 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
     BROWSER_MESSAGE_KEYS.WidgetEnrollSaved,
   )
   expect(section.replaceChildren).toHaveBeenCalledOnce()
-  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(true)
-  expect(enrollmentFlow.enrollmentScanBlocked()).toBe(false)
-  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(false)
+  expect(authenticatorEnrollmentInteraction.enrollmentCeremonyActive()).toBe(
+    true,
+  )
+  expect(authenticatorEnrollmentInteraction.enrollmentScanBlocked()).toBe(false)
+  expect(authenticatorEnrollmentInteraction.enrollmentCeremonyActive()).toBe(
+    false,
+  )
 })
 
 test('immediate authenticator save reports confirmation failure truthfully', async () => {
@@ -99,7 +106,7 @@ test('immediate authenticator save reports confirmation failure truthfully', asy
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }
   const candidate = { sourceLabel: 'Nook', otpauthUri: uri.value }
 
-  await enrollmentFlow.beginEnrollmentCeremony({
+  await authenticatorEnrollmentInteraction.beginEnrollmentCeremony({
     host,
     section,
     vaultStoreId: 'vault-1',
@@ -115,5 +122,7 @@ test('immediate authenticator save reports confirmation failure truthfully', asy
   expect(host.description.textContent).toBe(
     BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
   )
-  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(false)
+  expect(authenticatorEnrollmentInteraction.enrollmentCeremonyActive()).toBe(
+    false,
+  )
 })

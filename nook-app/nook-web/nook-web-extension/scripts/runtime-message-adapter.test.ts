@@ -365,6 +365,8 @@ describe('runtime message adapters', () => {
         newPasswordFieldCount: 0,
         genericPasswordFieldCount: 0,
         oneTimeCodeFieldCount: 0,
+        actionablePasswordFieldCount: 0,
+        readonlyPasswordFieldCount: 0,
       },
       ceremony: {
         oneTimeCodeProgression: 'advance-control-required',
@@ -381,11 +383,12 @@ describe('runtime message adapters', () => {
       authenticator: {
         authenticatorSetup: 'absent',
         backupCodesCopy: '',
-        passkeyControl: 'present',
-        passkeyAccountAvailability: 'ready',
-        matchingPasskeyAccountCount: 2,
+        passkeyControl: 'absent',
+        passkeyAccountAvailability: 'unavailable',
+        matchingPasskeyAccountCount: 0,
         detailedPasskeyControl: { kind: 'absent' },
       },
+      credentialSubmission: { kind: 'absent' },
       detailedAdvanceControl: { kind: 'absent' },
     }
     const response = {

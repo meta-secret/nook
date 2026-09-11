@@ -244,7 +244,7 @@ function handleAuthenticationMutations(
   records: AuthenticationMutationRecords,
 ): void {
   if (widgetState.host.kind === WidgetHostKind.Attached) {
-    const mountedHost = widgetState.host.element
+    const mountedHost = widgetState.host.mountedElement
     const mountedHostWasRemoved = records.some(
       (record) =>
         record.type === 'childList' &&
@@ -260,7 +260,7 @@ function handleAuthenticationMutations(
   }
   const mountedHost =
     widgetState.host.kind === WidgetHostKind.Attached
-      ? widgetState.host.element
+      ? widgetState.host.mountedElement
       : false
   const renderedWorkflow =
     widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
@@ -299,7 +299,7 @@ function handleAuthenticationMutations(
 
 function handleViewportChange(): void {
   if (widgetState.host.kind !== WidgetHostKind.Attached) return
-  const host = widgetState.host.element
+  const host = widgetState.host.mountedElement
   const rect = host.getBoundingClientRect()
   const clampRequest: Parameters<
     typeof authenticationWidgetPosition.clampWidgetPosition

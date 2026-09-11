@@ -497,7 +497,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
 
     expect(payload.providers).toEqual([])
-    expect(providers[0]).not.toHaveProperty('githubPat')
+    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
   })
@@ -546,7 +546,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     )
     expect(handled).toBe(false)
     expect(payload.providers).toEqual([])
-    expect(providers[0]).not.toHaveProperty('githubPat')
+    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
   test('rejects a vault import without a provider array', async () => {
@@ -580,10 +580,11 @@ describe('ExtensionSessionMessageDispatcher', () => {
       payload,
     })
 
-    expect(response).toEqual({
-      ok: false,
-      error: 'invalid-provider-payload',
-    })
+    expect(response).toEqual(
+      err(
+        new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+      ),
+    )
     expect(handled).toBe(false)
     expect(payload.providers).toEqual([])
   })
@@ -631,7 +632,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
 
     expect(payload.providers).toEqual([])
-    expect(providers[0]).not.toHaveProperty('githubPat')
+    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
     await expect(response).resolves.toEqual(ok({ ok: true }))
     expect(handledGithubPat).toBe('github_pat_accepted_secret')
   })
@@ -760,7 +761,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     )
     await decodedProviders
     await Promise.resolve()
-    expect(stagedProviders[0]).not.toHaveProperty('githubPat')
+    expect(stagedProviders[0]?.githubPat).toEqual({ state: 'missing' })
 
     releaseBlocker()
     await expect(blockerResponse).resolves.toEqual(ok({ ok: true }))
@@ -828,7 +829,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     await importRejection
     await Promise.resolve()
     expect(handledTypes).toEqual([ExtensionSessionMessageType.CreatePin])
-    expect(stagedProviders[0]).not.toHaveProperty('githubPat')
+    expect(stagedProviders[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
   test('cancels a running import when the session generation changes', async () => {
@@ -883,7 +884,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
     )
     expect(handledTypes).toEqual([])
-    expect(stagedProviders[0]).not.toHaveProperty('githubPat')
+    expect(stagedProviders[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
   test('rejects foreign and malformed runtime messages without hanging', async () => {
