@@ -64,6 +64,14 @@ class DockerizedRustContract {
     expect(this.read(".github/scripts/remote-task-batch.sh")).toContain(
       'loom:verify) run_with_timeout "$timeout_minutes" task preflight:loom-verify',
     );
+    const dockerignore = this.read(".dockerignore").split("\n");
+    const generatedWasm =
+      "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm";
+    expect(dockerignore).toContain(`${generatedWasm}*`);
+    expect(dockerignore.indexOf(`!${generatedWasm}/.gitignore`)).toBeGreaterThan(
+      dockerignore.indexOf(`${generatedWasm}*`),
+    );
+    expect(dockerignore).toContain("**/node_modules");
   }
 
   arcCacheSelection(): void {
