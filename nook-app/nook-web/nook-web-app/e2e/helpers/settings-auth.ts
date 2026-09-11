@@ -414,6 +414,7 @@ export async function authorizeDeviceProtection(
   page: Page,
   opts?: { storeId?: string },
 ) {
+  await keepVaultIdleLockDisabled(page)
   const overlay = page.getByTestId('passkey-auth-overlay')
   const loginGate = page.getByTestId('login-gate')
   const vaultPicker = page.getByTestId('login-vault-picker')

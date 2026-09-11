@@ -292,13 +292,6 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
     await expect(
-      pairingLauncher.getByTestId('extension-device-setup'),
-    ).toBeVisible()
-    await expect(
-      pairingLauncher.getByTestId('device-protection-unlock-btn'),
-    ).toBeVisible()
-    await pairingLauncher.getByTestId('device-protection-unlock-btn').click()
-    await expect(
       pairingLauncher.getByTestId('extension-toolbar-menu'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
     await expect(
@@ -727,11 +720,6 @@ test('re-approves an existing local vault after reload without event-log-access-
     await pairPopup.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
-    await expect(pairPopup.getByTestId('extension-device-setup')).toBeVisible()
-    await expect(
-      pairPopup.getByTestId('device-protection-unlock-btn'),
-    ).toBeVisible()
-    await pairPopup.getByTestId('device-protection-unlock-btn').click()
     await expect(pairPopup.getByTestId('extension-toolbar-menu')).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })

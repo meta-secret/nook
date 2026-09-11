@@ -10,6 +10,7 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
+  LOCAL_FOLDER_PROVIDER_TYPE,
   LocalFolderPresentation,
   LocalFolderHandleKind,
   type LocalFolderHandle,
@@ -184,11 +185,13 @@ export class ProviderConnectionActions {
         state.errorMsg = state.t(I18N_KEYS.ErrorsCloudSyncProviderRequired);
         return;
       }
-      const request = new ProviderEventOutbox(provider).request();
-      const flushed = await state.flushRemoteEventOutboxNow(request);
-      if (flushed.isErr()) {
-        state.errorMsg = state.t(flushed.error.translationKey);
-        return;
+      if (provider.type !== LOCAL_FOLDER_PROVIDER_TYPE) {
+        const request = new ProviderEventOutbox(provider).request();
+        const flushed = await state.flushRemoteEventOutboxNow(request);
+        if (flushed.isErr()) {
+          state.errorMsg = state.t(flushed.error.translationKey);
+          return;
+        }
       }
       const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] =
         {

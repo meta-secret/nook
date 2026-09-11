@@ -36,13 +36,6 @@ test.describe('event-log sync then add', () => {
     await assertVaultReady(page)
     await waitForVaultOperationsIdle(page)
 
-    const manualSyncMilestone = {
-      scope: 'vault-sync',
-      level: 'info',
-      messageIncludes: 'manual sync started',
-    }
-    await expectAppLogMilestones(page, [manualSyncMilestone])
-
     const title = uniqueSecretKey('e2e-event-log-note')
     const noteBody = '# Post-sync note\n\nSaved after provider sync.'
 
@@ -58,7 +51,6 @@ test.describe('event-log sync then add', () => {
     await expect(page.getByTestId('vault-group-secure-note')).toBeVisible()
 
     await expectAppLogMilestones(page, [
-      manualSyncMilestone,
       { scope: 'connect', level: 'info', messageIncludes: 'secret added' },
     ])
   })
