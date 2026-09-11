@@ -8,7 +8,7 @@ use super::wasm_bindgen;
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_storage_providers(
-    #[wasm_bindgen(unchecked_param_type = "unknown")] snapshot: nook_core::AuthProvidersSnapshotData,
+    snapshot: nook_core::AuthProvidersSnapshotData,
 ) -> nook_core::AuthProvidersSnapshotData {
     snapshot
 }
