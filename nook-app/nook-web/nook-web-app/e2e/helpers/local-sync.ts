@@ -198,13 +198,17 @@ export async function installOauthFileRemoteForLocalE2e(
       opts.fileName,
     ),
   ] = [existingStub]
-  if ('vaultYaml' in opts) {
+  if (typeof opts.vaultYaml === 'string') {
     stub.setVaultYaml(opts.vaultYaml)
   }
   await stub.install(page, {
-    vaultYaml: opts.vaultYaml,
+    ...(typeof opts.vaultYaml === 'string'
+      ? { vaultYaml: opts.vaultYaml }
+      : {}),
     fileName: opts.fileName,
-    accessToken: opts.accessToken,
+    ...(typeof opts.accessToken === 'string'
+      ? { accessToken: opts.accessToken }
+      : {}),
   })
 }
 
@@ -217,7 +221,7 @@ export async function stubGithubVaultForLocalE2e(
   const [
     stub = createLocalE2eGithubVaultStub(((v) => (v ? v : ''))(opts.vaultYaml)),
   ] = [existingStub]
-  if ('vaultYaml' in opts && !existingStub) {
+  if (typeof opts.vaultYaml === 'string' && !existingStub) {
     stub.setVaultYaml(opts.vaultYaml)
   }
   await stub.install(page, opts)
@@ -295,7 +299,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
       page: Page,
       opts: { repoName: string; vaultYaml?: string; username?: string },
     ) {
-      if ('vaultYaml' in opts) {
+      if (typeof opts.vaultYaml === 'string') {
         if (opts.vaultYaml !== vaultYaml) {
           bumpSha()
         }
@@ -446,7 +450,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
             return
           }
           const stored = eventFiles.get(relativePath)
-          if (eventFiles.has(relativePath)) {
+          if (typeof stored === 'string') {
             const encoded = Buffer.from(stored, 'utf8').toString('base64')
             await route.fulfill({
               status: 200,

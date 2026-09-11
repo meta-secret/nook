@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import fs from 'node:fs/promises'
+import { LogLevel } from '$lib/runtime/log'
 import { UI_TIMEOUT_MS } from './environment'
 
 export type NookLogEntry = {
@@ -48,29 +49,18 @@ async function readNookLogEntries(
   page: Page,
   limit: number,
 ): Promise<NookLogEntry[]> {
-  return page.evaluate(async (lim) => {
-    const log = (
-      window as Window & {
-        __nookLog?: {
-          dump: (opts?: { limit?: number }) => Promise<
-            {
-              ts: string
-              level: string
-              scope: string
-              message: string
-              data?: string
-            }[]
-          >
-        }
-      }
-    ).__nookLog
-    if (!log) throw new Error('__nookLog is not available on the page')
-    return log.dump({
-      minLevel: 'trace',
-      limit: lim,
-      offset: 0,
-    })
-  }, limit)
+  return page.evaluate(
+    async ({ lim, minLevel }) => {
+      const log = window.__nookLog
+      if (!log) throw new Error('__nookLog is not available on the page')
+      return log.dump({
+        minLevel,
+        limit: lim,
+        offset: 0,
+      })
+    },
+    { lim: limit, minLevel: LogLevel.Trace },
+  )
 }
 
 export async function readNookLogSnapshot(
@@ -225,10 +215,15 @@ export async function waitForPersistedAppLog(
       { timeout: ((...[v = UI_TIMEOUT_MS * 2]) => v)(options?.timeoutMs) },
     )
     .toBe(true)
-  if (searchState.kind === LogSearchStateKind.Searching) {
+  const entries = await readNookLogEntries(
+    page,
+    ((...[v = 500]) => v)(options?.limit),
+  )
+  const found = findAppLogEntry(entries, filter)
+  if (found.kind === AppLogEntryLookupKind.Missing) {
     throw new Error('persisted app log poll completed without a matching entry')
   }
-  return searchState.entry
+  return found.entry
 }
 
 /** Wait for each persisted log milestone in order (see `.cortex/shared/references/logging.md`). */

@@ -53,7 +53,9 @@ export function activeAuthProviderSeedScope(
 }
 
 export enum AuthProviderHookFailure {
+  HookUnavailable = 'hook-unavailable',
   ReadFailed = 'read-failed',
+  WriteFailed = 'write-failed',
 }
 
 type AuthProviderBrowserHooks = {
@@ -220,7 +222,8 @@ async function appendSealedAuthProviders(
           __nookAuthProviders?: AuthProviderBrowserHooks
         }
       ).__nookAuthProviders
-      if (!hook) return { ok: false as const, failure: failures.Unavailable }
+      if (!hook)
+        return { ok: false as const, failure: failures.HookUnavailable }
       const snapshot = await hook.loadAuthProviders()
       if (snapshot.isErr())
         return { ok: false as const, failure: failures.ReadFailed }
@@ -420,7 +423,7 @@ async function activeAuthProviderStateKey(page: Page): Promise<string> {
       }
     })
   })
-  if (!key.ok) expect.fail(key.error)
+  if (!key.ok) throw new Error(key.error)
   return key.value
 }
 
@@ -501,7 +504,8 @@ export class AuthProviderBrowserFixture {
       const hook = (
         window as Window & { __nookAuthProviders?: AuthProviderBrowserHooks }
       ).__nookAuthProviders
-      if (!hook) return { ok: false as const, failure: failures.Unavailable }
+      if (!hook)
+        return { ok: false as const, failure: failures.HookUnavailable }
       const snapshot = await hook.loadAuthProviders()
       return snapshot.isErr()
         ? { ok: false as const, failure: failures.ReadFailed }
@@ -520,18 +524,25 @@ export async function saveAuthProvidersInBrowser(
   const providers = snapshot.providers.map((provider) =>
     storedProvider(provider, seedScope),
   )
+  const activeStoreId =
+    seedScope.kind === AuthProviderSeedScopeKind.ActiveVault
+      ? seedScope.storeId
+      : false
   const stored = await page.evaluate(
-    async ({ providers, seedScope, activeVaultKind, failures }) => {
+    async ({ providers, activeStoreId, failures }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
         }
       ).__nookAuthProviders
-      if (!hook) return { ok: false as const, failure: failures.Unavailable }
-      const activeVaultStoreId =
-        seedScope.kind === activeVaultKind
-          ? hook.activeVaultScope(seedScope.storeId)
-          : hook.unselectedVaultScope()
+      if (!hook)
+        return { ok: false as const, failure: failures.HookUnavailable }
+      let activeVaultStoreId: ActiveVaultScope
+      if (typeof activeStoreId === 'string') {
+        activeVaultStoreId = hook.activeVaultScope(activeStoreId)
+      } else {
+        activeVaultStoreId = hook.unselectedVaultScope()
+      }
       const authProvidersSnapshot: AuthProvidersSnapshot = {
         providers,
         activeVaultStoreId,
@@ -543,8 +554,7 @@ export async function saveAuthProvidersInBrowser(
     },
     {
       providers,
-      seedScope,
-      activeVaultKind: AuthProviderSeedScopeKind.ActiveVault,
+      activeStoreId,
       failures: AuthProviderHookFailure,
     },
   )

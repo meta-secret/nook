@@ -171,7 +171,7 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
         ? UnlockMethod.Password
         : UnlockMethod.Keys
   const activeEnvelope = passwordEntries[0]?.envelope
-  const passwordEnvelopeCiphertext =
+  const passwordEnvelopeCiphertext: PasswordEnvelopeCiphertextState =
     typeof activeEnvelope?.ciphertext === 'string'
       ? {
           kind: PasswordEnvelopeCiphertextStateKind.Present,
@@ -282,7 +282,9 @@ export function parseVaultEventLogSnapshot(
         case 'secret-replaced': {
           if (operation.old_id) secrets.delete(operation.old_id)
           const stored = eventSecretToStored(operation.new_secret)
-          if (stored) secrets.set(stored.id, stored)
+          if (stored.kind === EventSecretParseKind.Valid) {
+            secrets.set(stored.secret.id, stored.secret)
+          }
           break
         }
         case 'secret-conflict-resolved':

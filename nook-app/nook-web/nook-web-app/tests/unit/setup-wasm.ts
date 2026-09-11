@@ -18,23 +18,27 @@ const originalFetch = globalThis.fetch?.bind(globalThis)
 
 Reflect.deleteProperty(WebAssembly, 'instantiateStreaming')
 
-globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-  const url = typeof input === 'string' ? input : input.toString()
-  if (url.endsWith('/nook-wasm/nook_wasm_bg.wasm')) {
-    return new Response(readFileSync(wasmPath), {
-      headers: { 'Content-Type': 'application/wasm' },
-    })
-  }
-  if (url.includes('nook_companion_wasm_bg.wasm')) {
-    return new Response(readFileSync(companionWasmPath), {
-      headers: { 'Content-Type': 'application/wasm' },
-    })
-  }
-  if (!originalFetch) {
-    throw new Error(`No fetch implementation available for ${url}`)
-  }
-  return originalFetch(input, init)
-}
+const wasmFetch: typeof globalThis.fetch = Object.assign(
+  async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString()
+    if (url.endsWith('/nook-wasm/nook_wasm_bg.wasm')) {
+      return new Response(readFileSync(wasmPath), {
+        headers: { 'Content-Type': 'application/wasm' },
+      })
+    }
+    if (url.includes('nook_companion_wasm_bg.wasm')) {
+      return new Response(readFileSync(companionWasmPath), {
+        headers: { 'Content-Type': 'application/wasm' },
+      })
+    }
+    if (!originalFetch) {
+      throw new Error(`No fetch implementation available for ${url}`)
+    }
+    return originalFetch(input, init)
+  },
+  { preconnect: globalThis.fetch.preconnect },
+)
+globalThis.fetch = wasmFetch
 
 await initNookWasm()
 configure_vault_application(VaultApplication.UnifiedDevelopment)

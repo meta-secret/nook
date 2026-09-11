@@ -74,7 +74,7 @@ export type ChromeMessage = { message: string }
 
 export type DemoChromeStubArgs = {
   localizedMessages: Record<string, ChromeMessage>
-  loginSaveCreateDecision: NookWebsiteLoginSaveDecision
+  loginSaveCreateDecision: NookWebsiteLoginSaveDecision.Create
   sufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
   insufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
   generatePasswordMessageType: GeneratePasswordRequestType
@@ -433,20 +433,22 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             },
           }
         }
-        case 'nook:website-login-save-offer':
+        case 'nook:website-login-save-offer': {
+          const offer: StagedSaveOffer = {
+            offerId: 'demo-save-offer',
+            decision: loginSaveCreateDecision,
+            vaultStoreId: 'demo-vault',
+            vaultName: 'Demo vault',
+          }
           stagedOffer = {
             kind: StagedOfferKind.Present,
-            offer: {
-              offerId: 'demo-save-offer',
-              decision: loginSaveCreateDecision,
-              vaultStoreId: 'demo-vault',
-              vaultName: 'Demo vault',
-            },
+            offer,
           }
           return {
             kind: loginSaveResponses.offerAvailable,
-            offer: stagedOffer.offer,
+            offer,
           }
+        }
         case 'nook:website-login-save-pending':
           return stagedOffer.kind === StagedOfferKind.Present
             ? {

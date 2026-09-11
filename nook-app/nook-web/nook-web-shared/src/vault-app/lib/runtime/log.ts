@@ -53,6 +53,8 @@ type RuntimeFailureDetails = {
   readonly stack?: string;
 };
 
+type BrowserLogFetchArguments = Parameters<typeof globalThis.fetch>;
+
 export class RuntimeFailure {
   readonly message: string;
   readonly stack?: string;
@@ -545,24 +547,30 @@ class BrowserLogRuntime {
     if (globalThis.fetch === marker.__nookFetchOuter) return;
 
     const originalFetch = globalThis.fetch.bind(globalThis);
-    // eslint-disable-next-line max-params -- Fetch owns this positional callback signature.
-    const wrapped: typeof globalThis.fetch = async (input, init) => {
-      const response = await originalFetch(input, init);
-      if (!response.ok) {
-        const url = this.sanitizeLogUrl(this.resolveFetchUrl(input));
-        if (!this.isIgnoredErrorSource(url)) {
-          const captureDiagnosticArgs3: Parameters<
-            typeof this.captureDiagnostic
-          >[0] = {
-            level: LogLevel.Warn,
-            scope: "fetch",
-            message: `HTTP ${response.status} ${response.statusText} url=${url} method=${((...[v = "GET"]) => v)(init?.method)}`,
-          };
-          this.captureDiagnostic(captureDiagnosticArgs3);
-        }
-      }
-      return response;
+    const fetchStatics: Pick<typeof globalThis.fetch, "preconnect"> = {
+      preconnect: globalThis.fetch.preconnect,
     };
+    const wrapped: typeof globalThis.fetch = Object.assign(
+      async (...browserLogFetchArguments: BrowserLogFetchArguments) => {
+        const [input, init] = browserLogFetchArguments;
+        const response = await originalFetch(...browserLogFetchArguments);
+        if (!response.ok) {
+          const url = this.sanitizeLogUrl(this.resolveFetchUrl(input));
+          if (!this.isIgnoredErrorSource(url)) {
+            const captureDiagnosticArgs3: Parameters<
+              typeof this.captureDiagnostic
+            >[0] = {
+              level: LogLevel.Warn,
+              scope: "fetch",
+              message: `HTTP ${response.status} ${response.statusText} url=${url} method=${((...[v = "GET"]) => v)(init?.method)}`,
+            };
+            this.captureDiagnostic(captureDiagnosticArgs3);
+          }
+        }
+        return response;
+      },
+      fetchStatics,
+    );
     marker.__nookFetchOuter = wrapped;
     globalThis.fetch = wrapped;
   }

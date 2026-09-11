@@ -1,5 +1,3 @@
-import type { Result } from 'neverthrow'
-import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import { expect, test } from './fixtures'
 import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
@@ -8,38 +6,6 @@ import { installMockPasskeyRuntime } from './passkey-mock'
 const SIMPLE_APP_URL = (
   process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
 ).replace(/\/+$/, '')
-
-type DebugVault = {
-  admitManager(): Result<
-    {
-      vaultArchitecture: {
-        constructor: {
-          simple(
-            deviceMode: number,
-            replicationType: number,
-          ): {
-            free(): void
-          }
-          sentinel(
-            deviceMode: number,
-            replicationType: number,
-            threshold: number,
-            requiredParticipants: number,
-            readyParticipants: number,
-          ): { free(): void }
-        }
-        device_mode: number
-        replication_type: number
-        free(): void
-      }
-      set_vault_architecture(value: { free(): void }): void
-      device_id: string
-      device_public_key: string
-      device_signing_public_key_js(): Promise<string>
-    },
-    VaultStorageFailure
-  >
-}
 
 type RejectedPairingRuntime = {
   sendMessage(
@@ -104,7 +70,7 @@ test('exposes only the project capability and rejects the opposite vault type', 
   }
 
   const error = await page.evaluate((simpleApp) => {
-    const vault: DebugVault | undefined = window.__nookVault
+    const vault = window.__nookVault
     if (!vault) return 'Vault debug hooks are unavailable'
     const admission = vault.admitManager()
     if (admission.isErr()) return admission.error.translationKey
@@ -165,7 +131,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await createLocalVaultOnLogin(extensionPage, 'Isolated extension device')
   await expect(extensionPage.getByTestId('vault-panel')).toBeVisible()
   const extensionDevice = await extensionPage.evaluate(async () => {
-    const vault: DebugVault | undefined = window.__nookVault
+    const vault = window.__nookVault
     if (!vault)
       return { ok: false as const, error: 'Vault debug hooks are unavailable' }
     const admission = vault.admitManager()

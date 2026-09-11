@@ -107,14 +107,8 @@ export function hasLiveSyncCredential(
   return liveSyncCredential(id).length > 0
 }
 
-type OAuthFileRemoteHandle =
-  | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
-  | ReturnType<typeof createLocalE2eFileSyncVaultStub>
 type GithubRemoteHandle = ReturnType<typeof createLocalE2eGithubVaultStub>
 type ICloudRemoteHandle = ReturnType<typeof createLocalE2eICloudVaultStub>
-
-export type SyncRemoteHandle =
-  OAuthFileRemoteHandle | ICloudRemoteHandle | GithubRemoteHandle
 
 export type LocalFileSyncE2eTarget = {
   providerId: E2eSyncProviderId.File | E2eSyncProviderId.Local

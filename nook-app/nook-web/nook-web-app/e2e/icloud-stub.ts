@@ -48,7 +48,7 @@ export function createLocalE2eICloudVaultStub(
       page: Page,
       opts?: { vaultYaml?: string; fileName?: string },
     ) {
-      if (opts && 'vaultYaml' in opts) {
+      if (typeof opts?.vaultYaml === 'string') {
         vaultYaml = opts.vaultYaml
       }
       if (opts?.fileName) {

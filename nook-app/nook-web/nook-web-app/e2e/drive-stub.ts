@@ -114,7 +114,8 @@ export function createLocalE2eGoogleDriveVaultStub(
     return event.kind === EventMultipartParseKind.Valid
       ? {
           kind: DriveEventUploadParseKind.Valid,
-          ...event,
+          digest: event.digest,
+          content: event.content,
           parentId: parseParentsFromBody(body),
         }
       : { kind: DriveEventUploadParseKind.Invalid }
@@ -148,7 +149,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         sharedPermissionStatus?: number
       },
     ) {
-      if (opts && 'vaultYaml' in opts) {
+      if (typeof opts?.vaultYaml === 'string') {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {

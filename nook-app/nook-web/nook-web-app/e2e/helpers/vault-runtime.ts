@@ -45,7 +45,7 @@ export async function clearBrowserVault(page: Page) {
     }
     return { ok: true as const, value: true }
   })
-  if (!cleared.ok) expect.fail(cleared.error)
+  if (!cleared.ok) throw new Error(cleared.error)
   const clearedThroughManager = cleared.value
   await page.evaluate(
     (vaultAlreadyCleared) =>
