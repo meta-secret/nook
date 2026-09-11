@@ -86,13 +86,21 @@ export async function createLocalVaultOnLogin(
   // Deferred passkey: empty create may show the top-right overlay first.
   const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
   const readySurface = page.getByTestId(readyTestId)
+  const vaultError = page.getByTestId('vault-error')
   await expect
     .poll(
       async () =>
-        (await passkeyOverlay.isVisible()) || (await readySurface.isVisible()),
+        (await passkeyOverlay.isVisible()) ||
+        (await readySurface.isVisible()) ||
+        (await vaultError.isVisible()),
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
+  if (await vaultError.isVisible()) {
+    throw new Error(
+      `Local vault creation failed: ${await vaultError.innerText()}`,
+    )
+  }
   if (await passkeyOverlay.isVisible()) {
     const createChoice = page.getByTestId('device-protection-create-new-choice')
     if (await createChoice.isVisible()) {
