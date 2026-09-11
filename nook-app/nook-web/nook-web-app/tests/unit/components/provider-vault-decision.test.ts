@@ -194,7 +194,7 @@ test('initializes a pristine device without accessing identity-protected provide
 
   expect(state.providers).toEqual([])
   expect(state.providersLoaded).toBe(true)
-  expect(applyActiveProviderCredentials).toHaveBeenCalledOnce()
+  expect(applyActiveProviderCredentials).not.toHaveBeenCalled()
   expect(state.admitManager).not.toHaveBeenCalled()
 })
 

@@ -388,7 +388,6 @@ export class VaultProviderActions {
     const state = this.state;
     state.providers = [];
     state.providersLoaded = true;
-    state.applyActiveProviderCredentials();
     log.debug("pristine device providers initialized");
   }
 
