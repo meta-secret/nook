@@ -101,7 +101,6 @@ export class VaultInitializationActions {
       }
       const catalogRefresh1 = await state.refreshLocalVaultCatalog();
       if (catalogRefresh1.isErr()) {
-        log.warn("app init diagnostic: local vault catalog rejected");
         state.errorMsg = state.t(catalogRefresh1.error.translationKey);
         return;
       }
@@ -144,7 +143,6 @@ export class VaultInitializationActions {
         }
       });
       if (protectionStatus.isErr()) {
-        log.warn("app init diagnostic: device protection status rejected");
         state.deviceProtectionStatus = DeviceProtectionStatus.Error;
         state.errorMsg = state.t(protectionStatus.error.translationKey);
         return;
@@ -162,7 +160,6 @@ export class VaultInitializationActions {
         }
       });
       if (protectionMode.isErr()) {
-        log.warn("app init diagnostic: device protection mode rejected");
         state.errorMsg = state.t(protectionMode.error.translationKey);
         return;
       }
@@ -197,9 +194,6 @@ export class VaultInitializationActions {
             },
           );
           if (authorization.isErr()) {
-            log.warn(
-              "app init diagnostic: automatic device authorization rejected",
-            );
             state.errorMsg = state.t(authorization.error.translationKey);
             return;
           }
@@ -227,9 +221,6 @@ export class VaultInitializationActions {
             },
           );
           if (authorization.isErr()) {
-            log.warn(
-              "app init diagnostic: automatic device authorization rejected",
-            );
             state.errorMsg = state.t(authorization.error.translationKey);
             return;
           }
@@ -261,7 +252,6 @@ export class VaultInitializationActions {
       }
       const continued = await this.continueInitializationAfterDeviceUnlock();
       if (continued.isErr()) {
-        log.warn("app init diagnostic: authorized continuation rejected");
         if (deviceIdentityUnlocked) {
           const locked = await state.lockDeviceProtection();
           if (locked.isErr()) {
@@ -274,7 +264,6 @@ export class VaultInitializationActions {
       }
       state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
     } catch (error) {
-      log.warn("app init diagnostic: initialization exception");
       if (
         state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
         deviceIdentityUnlocked
@@ -295,7 +284,6 @@ export class VaultInitializationActions {
     } finally {
       state.deviceAuthorizationInProgress = false;
       state.isInitializing = false;
-      log.info("app init diagnostic: initialization settled");
     }
   }
 
@@ -622,22 +610,14 @@ class DeviceInitializationContinuation {
   > {
     const state = this.state;
     const current = this.requireCurrentManager();
-    if (current.isErr()) {
-      log.warn("app init diagnostic: authorized manager admission rejected");
-      return storageErr(current.error);
-    }
+    if (current.isErr()) return storageErr(current.error);
     const initialization: DeviceIdentityInitialization = {
       mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
     };
     const initialized = await new VaultInitializationActions(
       state,
     ).initDeviceIdentity(initialization);
-    if (initialized.isErr()) {
-      log.warn(
-        "app init diagnostic: authorized identity initialization rejected",
-      );
-      return storageErr(initialized.error);
-    }
+    if (initialized.isErr()) return storageErr(initialized.error);
     const pending = await state.enqueueStorage(async () => {
       const admittedManager = state.admitManager();
       if (admittedManager.isErr()) return storageErr(admittedManager.error);
@@ -649,12 +629,7 @@ class DeviceInitializationContinuation {
         return storageErr(new NativeVaultStorageFailure(nativeFailure));
       }
     });
-    if (pending.isErr()) {
-      log.warn(
-        "app init diagnostic: pending sentinel finalization lookup rejected",
-      );
-      return storageErr(pending.error);
-    }
+    if (pending.isErr()) return storageErr(pending.error);
     if (pending.value) {
       const rawResult = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
@@ -667,10 +642,7 @@ class DeviceInitializationContinuation {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       });
-      if (rawResult.isErr()) {
-        log.warn("app init diagnostic: pending sentinel finalization rejected");
-        return storageErr(rawResult.error);
-      }
+      if (rawResult.isErr()) return storageErr(rawResult.error);
       const applyFinalizeResultArgs: Parameters<
         sentinelGenesisActions.SentinelGenesisActions["applyFinalizeResult"]
       >[0] = { result: rawResult.value };
@@ -682,13 +654,9 @@ class DeviceInitializationContinuation {
       ensureLocalRow: true,
     };
     const loadedProviders2 = await state.loadProviders(loadProvidersArgs2);
-    if (loadedProviders2.isErr()) {
-      log.warn("app init diagnostic: authorized provider load rejected");
-      return storageErr(loadedProviders2.error);
-    }
+    if (loadedProviders2.isErr()) return storageErr(loadedProviders2.error);
     const catalogRefresh3 = await state.refreshLocalVaultCatalog();
     if (catalogRefresh3.isErr()) {
-      log.warn("app init diagnostic: authorized local vault catalog rejected");
       return storageErr(catalogRefresh3.error);
     }
     if (
@@ -701,19 +669,16 @@ class DeviceInitializationContinuation {
       try {
         await set_active_vault(state.activeVault.storeId);
       } catch (failure) {
-        log.warn("app init diagnostic: active vault selection rejected");
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       const activeVaultPersistence = await state.syncActiveVaultStoreIdToAuth();
       if (activeVaultPersistence.isErr()) {
-        log.warn("app init diagnostic: active vault persistence rejected");
         return storageErr(activeVaultPersistence.error);
       }
     }
     try {
       state.localVaultPresent = await has_active_local_vault();
     } catch (failure) {
-      log.warn("app init diagnostic: active local vault lookup rejected");
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     if (state.localVaultPresent) {
@@ -730,14 +695,10 @@ class DeviceInitializationContinuation {
       state.storageMode = LOCAL_PROVIDER_TYPE;
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
       if (passwordRefresh1.isErr()) {
-        log.warn("app init diagnostic: login password metadata rejected");
         return storageErr(passwordRefresh1.error);
       }
       const presentation = await new LoginUnlockPresentation(state).refresh();
-      if (presentation.isErr()) {
-        log.warn("app init diagnostic: unlock assessment rejected");
-        return storageErr(presentation.error);
-      }
+      if (presentation.isErr()) return storageErr(presentation.error);
     }
     const autoUnlock = !hasPendingEnrollment && state.shouldAutoUnlock();
     if (autoUnlock) {
@@ -751,12 +712,11 @@ class DeviceInitializationContinuation {
             state.errorMsg = state.t(result.error.translationKey);
         });
       }
-    } else {
+    } else if (!hasPendingEnrollment) {
+      // Enrollment owns its first device/provider sync after the password admits
+      // this browser to the vault; no roster authority exists before that step.
       const devices = await state.refreshDeviceState();
-      if (devices.isErr()) {
-        log.warn("app init diagnostic: device state refresh rejected");
-        return storageErr(devices.error);
-      }
+      if (devices.isErr()) return storageErr(devices.error);
     }
 
     const enrollment = state.enrollmentLinkState;
@@ -770,10 +730,7 @@ class DeviceInitializationContinuation {
     }
     if (state.isAuthenticated) {
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();
-      if (localSaveSync.isErr()) {
-        log.warn("app init diagnostic: authenticated fan-out sync rejected");
-        return storageErr(localSaveSync.error);
-      }
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
       state.startVaultSync();
     }
     log.info("app init finished");

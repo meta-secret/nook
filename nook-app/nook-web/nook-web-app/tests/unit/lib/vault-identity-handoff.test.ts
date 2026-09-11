@@ -20,6 +20,7 @@ import {
 import { VaultState } from '$lib/vault.svelte'
 import { VaultInitializationActions } from '$lib/vault/lifecycle'
 import { BrowserIdentityHandoffKind } from '$lib/vault/identity-handoff'
+import { EnrollmentLinkKind } from '$lib/vault/state/lifecycle.svelte'
 import {
   NativeVaultStorageFailure,
   VaultStorageFailure,
@@ -134,6 +135,41 @@ class IdentityHandoffFixture {
 afterEach(() => vi.restoreAllMocks())
 
 describe('external browser identity handoff commit ownership', () => {
+  test('defers device synchronization until pending enrollment is admitted', async () => {
+    const fixture = new IdentityHandoffFixture()
+    try {
+      const synchronizationFailure = new VaultStorageFailure(
+        VaultStorageFailureKind.OperationFailed,
+      )
+      fixture.state.deviceAuthorizationInProgress = true
+      fixture.state.enrollmentLinkState = {
+        kind: EnrollmentLinkKind.Pending,
+        payload: 'pending-enrollment',
+      }
+      vi.spyOn(
+        fixture.manager,
+        'has_pending_sentinel_genesis_finalization',
+      ).mockResolvedValue(false)
+      vi.spyOn(fixture.state, 'loadProviders').mockResolvedValue(ok())
+      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
+        ok(),
+      )
+      const refreshDeviceState = vi
+        .spyOn(fixture.state, 'refreshDeviceState')
+        .mockResolvedValue(err(synchronizationFailure))
+
+      const continued =
+        await fixture.lifecycle.continueInitializationAfterDeviceUnlock()
+
+      expect(continued.isOk()).toBe(true)
+      expect(refreshDeviceState).not.toHaveBeenCalled()
+      expect(fixture.state.enrollmentFromUrlPending).toBe(true)
+      expect(fixture.state.prefillEnrollmentCode).toBe('pending-enrollment')
+    } finally {
+      fixture.dispose()
+    }
+  })
+
   test('exposes recovery when persisted protection status cannot be read', async () => {
     const fixture = new IdentityHandoffFixture()
     try {
