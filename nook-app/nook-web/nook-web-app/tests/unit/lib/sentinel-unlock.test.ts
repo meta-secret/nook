@@ -57,6 +57,7 @@ class SentinelFinalizationFixture {
   }
   readonly state = {
     hasManager: true,
+    isInitializing: false,
     isVerifying: false,
     isAuthenticated: false,
     deviceProtectionReady: true,
@@ -174,7 +175,7 @@ class SentinelFinalizationFixture {
 }
 
 describe('Sentinel quorum completion presentation', () => {
-  test('lists stored deliveries only after device protection is ready', async () => {
+  test('lists stored deliveries only after device protection is ready and quiescent', async () => {
     const locked = new SentinelFinalizationFixture()
     locked.state.deviceProtectionReady = false
     const lockedView = render(SentinelUnlockParticipantHelper, {
@@ -189,6 +190,36 @@ describe('Sentinel quorum completion presentation', () => {
     ).not.toHaveBeenCalled()
     lockedView.unmount()
     locked.dispose()
+
+    const initializing = new SentinelFinalizationFixture()
+    initializing.state.isInitializing = true
+    const initializingView = render(SentinelUnlockParticipantHelper, {
+      vault: initializing.state as unknown as VaultState,
+    })
+
+    await tick()
+
+    expect(initializing.state.initDeviceIdentity).not.toHaveBeenCalled()
+    expect(
+      initializing.manager.list_sentinel_genesis_share_deliveries,
+    ).not.toHaveBeenCalled()
+    initializingView.unmount()
+    initializing.dispose()
+
+    const verifying = new SentinelFinalizationFixture()
+    verifying.state.isVerifying = true
+    const verifyingView = render(SentinelUnlockParticipantHelper, {
+      vault: verifying.state as unknown as VaultState,
+    })
+
+    await tick()
+
+    expect(verifying.state.initDeviceIdentity).not.toHaveBeenCalled()
+    expect(
+      verifying.manager.list_sentinel_genesis_share_deliveries,
+    ).not.toHaveBeenCalled()
+    verifyingView.unmount()
+    verifying.dispose()
 
     const ready = new SentinelFinalizationFixture()
     const readyView = render(SentinelUnlockParticipantHelper, {

@@ -25,6 +25,7 @@
   } = $props()
 
   let actionBusy = $state(false)
+  let automaticScanStarted = $state(false)
   let loaded = $state(false)
   let open = $state(false)
   let selectedDelivery = $state<GenesisDeliverySelection>({
@@ -33,6 +34,7 @@
   let request = $state('')
   let response = $state('')
   let copied = $state(false)
+  let deliveryRefreshInFlight = false
 
   const visible = $derived(
     showWhenEmpty || (loaded && vault.sentinelStoredDeliveries.length > 0),
@@ -50,11 +52,20 @@
   })
 
   $effect(() => {
-    if (!vault.deviceProtectionReady) return
+    if (
+      automaticScanStarted ||
+      !vault.deviceProtectionReady ||
+      vault.isInitializing ||
+      vault.isVerifying
+    )
+      return
+    automaticScanStarted = true
     untrack(() => void refreshDeliveries())
   })
 
   async function refreshDeliveries() {
+    if (deliveryRefreshInFlight) return
+    deliveryRefreshInFlight = true
     try {
       const listed = await new SentinelUnlockActions(
         vault,
@@ -87,6 +98,7 @@
           : { kind: GenesisDeliverySelectionKind.NotSelected }
       }
     } finally {
+      deliveryRefreshInFlight = false
       loaded = true
     }
   }

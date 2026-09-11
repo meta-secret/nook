@@ -177,7 +177,7 @@ test.describe('vault password envelope (local)', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('onboard-error')).toContainText(
-      'does not match',
+      'Failed to issue code.',
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     await expect(page.getByTestId('onboarding-link-url')).toHaveCount(0)

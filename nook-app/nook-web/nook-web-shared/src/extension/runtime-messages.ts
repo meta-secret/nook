@@ -73,7 +73,12 @@ export enum ExtensionPairingApprovedMessageAdmissionFailure {
   DeviceLabel = "invalid-pairing-grant-device-label",
   DevicePublicKey = "invalid-pairing-grant-device-public-key",
   DeviceSigningPublicKey = "invalid-pairing-grant-device-signing-public-key",
-  EventLogRecords = "invalid-pairing-grant-event-log-records",
+  EventLogRecordEvent = "invalid-pairing-grant-event-log-record-event",
+  EventLogRecordEventId = "invalid-pairing-grant-event-log-record-event-id",
+  EventLogRecordPath = "invalid-pairing-grant-event-log-record-path",
+  EventLogRecordSchemaVersion = "invalid-pairing-grant-event-log-record-schema-version",
+  EventLogRecordsEmpty = "invalid-pairing-grant-event-log-records-empty",
+  EventLogRecordsNotArray = "invalid-pairing-grant-event-log-records-not-array",
   MessageEnvelope = "invalid-pairing-grant-message-envelope",
   Payload = "invalid-pairing-grant-payload",
   Providers = "invalid-pairing-grant-providers",
@@ -179,34 +184,63 @@ export enum ExtensionPairingApprovedMessageType {
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class ExtensionPairingApprovedMessage {
-  static isExtensionEventLogRecord(
+  static parseExtensionEventLogRecord(
     value: unknown,
-  ): value is ExtensionEventLogRecord {
-    if (!value || typeof value !== "object") return false;
+  ): Result<
+    ExtensionEventLogRecord,
+    ExtensionPairingApprovedMessageAdmissionFailure
+  > {
+    if (!value || typeof value !== "object")
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
+      );
     const record = value as Record<string, unknown>;
-    return (
-      typeof record.eventId === "string" &&
-      record.eventId.length > 0 &&
-      typeof record.path === "string" &&
-      record.path.length > 0 &&
-      ExtensionPairingApprovedMessage.isExtensionEventObject(record.event) &&
-      "schema_version" in record.event &&
-      typeof record.event.schema_version === "number"
-    );
+    if (typeof record.eventId !== "string" || record.eventId.length === 0)
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEventId,
+      );
+    if (typeof record.path !== "string" || record.path.length === 0)
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordPath,
+      );
+    if (!ExtensionPairingApprovedMessage.isExtensionEventObject(record.event))
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
+      );
+    if (
+      !("schema_version" in record.event) ||
+      typeof record.event.schema_version !== "number"
+    )
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordSchemaVersion,
+      );
+    return ok(value as ExtensionEventLogRecord);
   }
   static isExtensionEventObject(
     value: unknown,
   ): value is Record<string, unknown> {
     return Boolean(value) && typeof value === "object";
   }
-  static isExtensionEventLogRecords(
+  static parseExtensionEventLogRecords(
     value: unknown,
-  ): value is ExtensionEventLogRecord[] {
-    return (
-      Array.isArray(value) &&
-      value.length > 0 &&
-      value.every(ExtensionPairingApprovedMessage.isExtensionEventLogRecord)
-    );
+  ): Result<
+    ExtensionEventLogRecord[],
+    ExtensionPairingApprovedMessageAdmissionFailure
+  > {
+    if (!Array.isArray(value))
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsNotArray,
+      );
+    if (value.length === 0)
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsEmpty,
+      );
+    for (const record of value) {
+      const admitted =
+        ExtensionPairingApprovedMessage.parseExtensionEventLogRecord(record);
+      if (admitted.isErr()) return err(admitted.error);
+    }
+    return ok(value);
   }
   private constructor() {}
   declare readonly type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved;
@@ -238,16 +272,11 @@ export class ExtensionPairingApprovedMessage {
       message.payload,
     );
     if (payload.isErr()) return err(payload.error);
-    if (
-      !("eventLogRecords" in message) ||
-      !ExtensionPairingApprovedMessage.isExtensionEventLogRecords(
-        message.eventLogRecords,
-      )
-    ) {
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecords,
+    const records =
+      ExtensionPairingApprovedMessage.parseExtensionEventLogRecords(
+        "eventLogRecords" in message ? message.eventLogRecords : false,
       );
-    }
+    if (records.isErr()) return err(records.error);
     return ok(message as ExtensionPairingApprovedMessage);
   }
   static is(message: unknown): message is ExtensionPairingApprovedMessage {

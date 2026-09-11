@@ -360,7 +360,7 @@ describe('extension pairing approved message', () => {
     ).toBe(true)
   })
 
-  test('classifies invalid approved grant clauses without payload values', () => {
+  test('classifies empty approved grant event records without payload values', () => {
     const message = approvalDeliveryArgs().message
     const admission = ExtensionPairingApprovedMessageSchema.parse({
       ...message,
@@ -368,9 +368,43 @@ describe('extension pairing approved message', () => {
     })
 
     expect(admission.isErr() ? admission.error : 'admitted').toBe(
-      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecords,
+      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsEmpty,
     )
   })
+
+  test.each([
+    [
+      false,
+      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsNotArray,
+    ],
+    [
+      [{ path: 'events/one', event: { schema_version: 3 } }],
+      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEventId,
+    ],
+    [
+      [{ eventId: 'one', event: { schema_version: 3 } }],
+      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordPath,
+    ],
+    [
+      [{ eventId: 'one', path: 'events/one', event: false }],
+      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
+    ],
+    [
+      [{ eventId: 'one', path: 'events/one', event: {} }],
+      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordSchemaVersion,
+    ],
+  ] as const)(
+    'classifies event record clause %#',
+    (eventLogRecords, failure) => {
+      const message = approvalDeliveryArgs().message
+      const admission = ExtensionPairingApprovedMessageSchema.parse({
+        ...message,
+        eventLogRecords,
+      })
+
+      expect(admission.isErr() ? admission.error : 'admitted').toBe(failure)
+    },
+  )
 
   test('rejects Sentinel grants before extension persistence', () => {
     expect(
