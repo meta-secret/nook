@@ -44,14 +44,6 @@ fn docker_script_fixture(
     Ok(fixture)
 }
 
-fn process_is_executing(pid: &str) -> anyhow::Result<bool> {
-    let status = Command::new("ps")
-        .args(["-o", "stat=", "-p", pid])
-        .output()?;
-    let state = String::from_utf8(status.stdout)?;
-    Ok(status.status.success() && !matches!(state.trim_start().chars().next(), Some('Z' | 'X')))
-}
-
 #[test]
 fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
 -> anyhow::Result<()> {
@@ -609,10 +601,20 @@ fi
     );
     assert_eq!(fs::read_to_string(&command_marker)?, "ok");
     let child_pid = fs::read_to_string(&child_pid_file)?;
-    assert!(
-        !process_is_executing(child_pid.trim())?,
-        "timed Docker child {child_pid:?} survived process-group cleanup"
-    );
+    let check = Command::new("bash")
+        .args([
+            "-c",
+            r#"kill -0 "$1" 2>/dev/null || exit 1; state="$(ps -o stat= -p "$1")" || exit 2
+case "$state" in Z*|X*) exit 1;; *) exit 0;; esac"#,
+            "nook-process-check",
+            child_pid.trim(),
+        ])
+        .status()?;
+    match check.code() {
+        Some(1) => {}
+        Some(0) => panic!("timed Docker child {child_pid:?} survived process-group cleanup"),
+        status => panic!("process inspection failed with status {status:?}"),
+    }
     let calls = fs::read_to_string(&docker_log)?;
     assert!(
         !calls
