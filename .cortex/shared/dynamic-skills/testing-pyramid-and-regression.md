@@ -109,10 +109,18 @@ Use this procedure for a failing web or extension e2e scenario.
    - When generated WASM is unavailable locally, use the existing hosted
      `web:verify` route.
    - Do not bypass the generated boundary with a local build override.
-5. Keep the browser assertion and rerun the applicable e2e gate.
+5. Keep the browser assertion and rerun the applicable e2e gate remotely.
    - For a browser-only defect, cover the closest deterministic unit contract
      and retain the browser-level regression.
    - Unit evidence narrows the repair loop. It does not replace e2e acceptance.
+   - After unit and type checks pass, dispatch the existing Remote workflow
+     once with `TASK_NAME=ci:pr:e2e`.
+   - That task builds one shared image and runs the stable, unstable, isolation,
+     and extension suites as separate parallel jobs.
+   - The matrix keeps fail-fast disabled and aggregates every suite result.
+   - Collect every failing job's saved evidence before the next repair.
+   - Add the applicable unit regressions before dispatching the next parallel
+     e2e run.
 
 **Prohibited actions**
 
