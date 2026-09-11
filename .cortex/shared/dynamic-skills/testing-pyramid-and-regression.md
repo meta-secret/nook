@@ -76,6 +76,53 @@ Finding a root cause is not completion. Every bug fix must include behavior-focu
 - **Web UI or browser extension:** Add a Playwright e2e test reproducing the exact user sequence.
 - **Cross-layer bugs:** Cover both the narrow Rust/WASM policy boundary and the visible website/extension flow.
 
+### Unit-first browser failure loop
+
+Use this procedure for a failing web or extension e2e scenario.
+
+**Required actions**
+
+1. Read the saved job output, app logs, error context, and Playwright trace.
+   Identify the first failing behavior and its owning boundary before changing
+   code.
+2. Select the smallest applicable existing regression framework.
+   - Zero-vault DOM and authentication behavior uses
+     [`companion-dom-authentication-simulation.ts`](../../../nook-app/nook-web/nook-web-app/tests/unit/lib/companion-dom-authentication-simulation.ts)
+     and
+     [`companion-credential-fill-simulation.ts`](../../../nook-app/nook-web/nook-web-app/tests/unit/lib/companion-credential-fill-simulation.ts).
+   - Extension delivery and session lifecycle use the existing focused
+     extension suites, including
+     [`service-worker-routing.test.ts`](../../../nook-app/nook-web/nook-web-extension/scripts/service-worker-routing.test.ts).
+   - Extension-to-vault protocol behavior uses the real endpoint composition
+     in
+     [`companion-protocol-composition.test.ts`](../../../nook-app/nook-web/nook-web-extension/scripts/companion-protocol-composition.test.ts).
+   - Use only the frameworks that exercise the failing ownership boundary.
+3. Before fixing the defect, add multiple behavior-focused regressions at that
+   boundary.
+   - Cover the ordinary success path and the relevant rejection or edge path.
+   - Exercise actual transport contracts such as typed `Result` values.
+   - Do not use permissive mocks that return a shape production cannot return.
+   - Demonstrate that the regression fails against the old behavior when
+     feasible and passes with the fix.
+4. Make the smallest owning correction and run the focused unit and type
+   checks before another e2e run.
+   - When generated WASM is unavailable locally, use the existing hosted
+     `web:verify` route.
+   - Do not bypass the generated boundary with a local build override.
+5. Keep the browser assertion and rerun the applicable e2e gate.
+   - For a browser-only defect, cover the closest deterministic unit contract
+     and retain the browser-level regression.
+   - Unit evidence narrows the repair loop. It does not replace e2e acceptance.
+
+**Prohibited actions**
+
+- Do not weaken assertions, increase timeouts, or skip a failing scenario as
+  the fix.
+- Do not create a new test framework when an existing owner can express the
+  behavior.
+- Do not measure coverage quality by test count alone. Require meaningful
+  contract and branch evidence.
+
 ### 90% Rust line coverage floor
 
 The portable Rust crates (`nook-app-common`, `nook-authenticator-domain`,

@@ -79,6 +79,8 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; explicit manual runs only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
+- A failed browser scenario follows the canonical
+  [unit-first browser failure loop](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#unit-first-browser-failure-loop).
 - Before integration, the Web worker runs the applicable focused proof for the
   behavior it changes, deterministically formats every allowed web or web-owned
   Cortex file, and commits one coherent exact handoff. The worker promptly

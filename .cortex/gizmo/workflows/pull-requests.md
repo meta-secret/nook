@@ -742,6 +742,9 @@ gate. See [quality](../../teams/sre/workflows/quality.md#fix-check-findings--not
 2. For **e2e / web failures**, read persisted app logs before changing code.
    Use the Playwright `nook-app-logs.json` attachment. Local sources include
    `fetchAppLogs(page)`, `/app-logs`, and `dumpNookLogs(page)`.
+   Follow the canonical
+   [unit-first browser failure loop](../../shared/dynamic-skills/testing-pyramid-and-regression.md#unit-first-browser-failure-loop)
+   before dispatching another e2e run.
 3. Dispatch the root cause to its responsible team.
 4. Continue from the verified fix commit and run `task loom:pre-push`. Return any
    team-owned formatter diff for a fresh team commit. Continue from it, rerun
