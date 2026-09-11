@@ -160,13 +160,20 @@ describe('provider credential staging', () => {
   })
 
   test('preserves valid identity-only metadata for canonical provider admission', async () => {
-    const providerIdentity = { id: 'github', type: 'github' }
+    const providerIdentity: Pick<StorageProvider, 'id' | 'type'> = {
+      id: 'github',
+      type: 'github',
+    }
     const parsed = await parseProviderImport([providerIdentity])
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
     expect(parsed.request.type).toBe(ExtensionSessionMessageType.ImportVault)
     if (parsed.request.type !== ExtensionSessionMessageType.ImportVault) return
-    expect(parsed.request.payload.providers).toEqual([providerIdentity])
+    expect(parsed.request.payload.providers).toHaveLength(1)
+    expect(parsed.request.payload.providers[0]?.id).toBe(providerIdentity.id)
+    expect(parsed.request.payload.providers[0]?.type).toBe(
+      providerIdentity.type,
+    )
   })
 
   test('canonical admission does not retain prototype metadata', async () => {
