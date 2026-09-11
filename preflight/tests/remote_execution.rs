@@ -94,10 +94,6 @@ fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one validation contract verifies dispatch and review ordering"
-)]
 fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
