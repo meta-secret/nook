@@ -142,8 +142,9 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
-    use js_sys::{Array, JsString, Object, Reflect};
+    use js_sys::{Array, JSON, JsString, Object, Reflect};
     use serde_wasm_bindgen::Serializer;
+    use tsify::Tsify;
     use wasm_bindgen_test::*;
 
     #[derive(Serialize)]
@@ -259,9 +260,15 @@ mod wasm_tests {
             path: "events/fixture.yaml".to_owned(),
             event: event.clone(),
         }]);
-        let array: Array = records
-            .to_array()
-            .serialize(&Serializer::new().serialize_maps_as_objects(true))?
+        let array = Array::new();
+        for record in records.to_array() {
+            array.push(record.into_js()?.as_ref());
+        }
+        let transport = JSON::stringify(&array)
+            .map_err(|_| JsError::new("failed to encode event records for browser transport"))?;
+        let transport: String = transport.into();
+        let array: Array = JSON::parse(&transport)
+            .map_err(|_| JsError::new("failed to decode event records after browser transport"))?
             .unchecked_into();
         assert_eq!(array.length(), 1);
         let record: Object = array.get(0).unchecked_into();

@@ -12,7 +12,7 @@ pub struct ExternalEventLogRecord {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, tsify::Tsify)]
-#[tsify(into_wasm_abi)]
+#[tsify(into_wasm_abi, hashmap_as_object)]
 #[serde(rename_all = "camelCase")]
 pub struct EventLogStorageRecord {
     pub event_id: String,
