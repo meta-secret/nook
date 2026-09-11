@@ -769,10 +769,10 @@ class DockerizedRustContract {
       tasks: z.record(
         z.string(),
         z.object({
-          deps: z.array(z.string()).optional(),
+          deps: z.array(z.string()).default([]),
           cmds: z
             .array(z.union([z.string(), z.object({ task: z.string() })]))
-            .optional(),
+            .default([]),
         }),
       ),
     });
@@ -780,7 +780,7 @@ class DockerizedRustContract {
       Bun.YAML.parse(this.read("nook-app/Taskfile.yml")),
     ).tasks;
     expect(
-      (tasks["_test:parallel"]?.cmds ?? []).map((command) =>
+      tasks["_test:parallel"].cmds.map((command) =>
         typeof command === "string" ? command : command.task,
       ),
     ).toEqual(["_compile:parallel", "_unit:parallel"]);
@@ -792,9 +792,9 @@ class DockerizedRustContract {
       "_extension:test:parallel",
       "_web:test:parallel",
     ]);
-    expect(tasks["_test:parallel"]?.deps).toBeUndefined();
+    expect(tasks["_test:parallel"].deps).toEqual([]);
     expect(
-      (tasks["_lint:parallel"]?.cmds ?? []).map((command) =>
+      tasks["_lint:parallel"].cmds.map((command) =>
         typeof command === "string" ? command : command.task,
       ),
     ).toContain("_extension:lint:parallel");
