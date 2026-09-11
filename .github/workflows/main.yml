@@ -378,6 +378,7 @@ jobs:
 
   web:
     name: Verify web build
+    timeout-minutes: 10
     needs: [wasm]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:

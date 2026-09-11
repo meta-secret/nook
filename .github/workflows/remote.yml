@@ -70,6 +70,7 @@ jobs:
     if: >-
       (inputs.tasks != '' && inputs.task != '') ||
       ((inputs.task != 'rust-cache:promote' || inputs.tasks != '') &&
+      (inputs.tasks || inputs.task) != 'web:verify' &&
       (inputs.tasks || inputs.task) != 'web:build' &&
       (inputs.tasks || inputs.task) != 'web:e2e' &&
       (inputs.tasks || inputs.task) != 'web:e2e:debug' &&
@@ -178,6 +179,30 @@ jobs:
           path: ${{ runner.temp }}/nook-e2e-artifacts
           if-no-files-found: warn
           retention-days: 15
+  web-verify:
+    if: >-
+      (inputs.tasks == '' || inputs.task == '') &&
+      (inputs.tasks || inputs.task) == 'web:verify'
+    name: Remote / web:verify
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
+          cache-write: "false"
+          main-cache-only: "true"
+          isolated-cache-write: "true"
+      - name: Run web verification and production builds
+        run: task web:verify
+
   web-e2e-image:
     if: >-
       (inputs.tasks == '' || inputs.task == '') &&

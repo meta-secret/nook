@@ -86,7 +86,7 @@ RUN git init -q \
 # results, so lint/check/tests run in parallel with the builds without weakening either gate.
 FROM nook-web-source AS nook-web-verify
 
-RUN CI=1 task _ci:pr \
+RUN CI=1 timeout --kill-after=10s 10m task _ci:pr \
     && install -d /opt/nook \
     && touch /opt/nook/web-verified
 
