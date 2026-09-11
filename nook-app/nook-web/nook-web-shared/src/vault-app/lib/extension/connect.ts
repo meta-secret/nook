@@ -140,9 +140,32 @@ export enum ExtensionPairingDeliveryKind {
   Rejected = "rejected",
 }
 
-export type ExtensionPairingDelivery = {
-  readonly kind: ExtensionPairingDeliveryKind;
-};
+export enum ExtensionPairingRejectionReason {
+  AuthenticationSurfaceRefreshFailed = "authentication-surface-refresh-failed",
+  EventLogAccessNotGranted = "event-log-access-not-granted",
+  EventLogImportFailed = "event-log-import-failed",
+  ExtensionSessionDocumentClosed = "extension-session-document-closed",
+  ExtensionSessionDocumentClosureFailed = "extension-session-document-closure-failed",
+  ExtensionSessionDocumentCreationFailed = "extension-session-document-creation-failed",
+  ExtensionSessionDocumentObservationFailed = "extension-session-document-observation-failed",
+  ExtensionSessionDeliveryFailed = "extension-session-delivery-failed",
+  ExtensionVaultImportFailed = "extension-vault-import-failed",
+  ForbiddenSender = "forbidden-sender",
+  InvalidPairingGrant = "invalid-pairing-grant",
+  InvalidProviderPayload = "invalid-provider-payload",
+}
+
+export type ExtensionPairingDelivery =
+  | {
+      readonly kind: Exclude<
+        ExtensionPairingDeliveryKind,
+        ExtensionPairingDeliveryKind.Rejected
+      >;
+    }
+  | {
+      readonly kind: ExtensionPairingDeliveryKind.Rejected;
+      readonly reason?: ExtensionPairingRejectionReason;
+    };
 
 type ExtensionIdentityHandoffResponse = {
   ok?: boolean;
@@ -366,6 +389,22 @@ class ExtensionConnectionBrowser {
         response.reason === "auth-provider-plaintext-migration-required") ||
         ("error" in response &&
           response.error === "auth-provider-plaintext-migration-required"));
+    const responseReason =
+      response &&
+      typeof response === "object" &&
+      "reason" in response &&
+      typeof response.reason === "string"
+        ? response.reason
+        : "";
+    const admittedReason = Object.values(ExtensionPairingRejectionReason).find(
+      (reason) => reason === responseReason,
+    );
+    if (!migrationRequired && admittedReason) {
+      return {
+        kind: ExtensionPairingDeliveryKind.Rejected,
+        reason: admittedReason,
+      };
+    }
     return {
       kind: migrationRequired
         ? ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired

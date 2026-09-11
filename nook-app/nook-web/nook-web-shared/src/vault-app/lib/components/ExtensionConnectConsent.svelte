@@ -30,6 +30,7 @@
   let approved = $state(false)
   let error = $state('')
   let handoffError = $state('')
+  let handoffRejectionReason = $state('')
 
   function scopeTranslationKey(scope: ExtensionConnectScope): I18nKey {
     switch (scope) {
@@ -64,6 +65,7 @@
     vault.isSaving = true
     error = ''
     handoffError = ''
+    handoffRejectionReason = ''
     vault.errorMsg = ''
     try {
       const approval = new ExtensionVaultApproval(vault, request)
@@ -90,6 +92,7 @@
           )
           break
         case ExtensionPairingDeliveryKind.Rejected:
+          handoffRejectionReason = delivery.value.reason ?? ''
           handoffError = vault.t(I18N_KEYS.ExtensionConsentGrantRejected)
           break
       }
@@ -232,6 +235,7 @@
   {#if handoffError}
     <p
       class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+      data-extension-pairing-rejection-reason={handoffRejectionReason}
       role="alert"
     >
       {handoffError}
