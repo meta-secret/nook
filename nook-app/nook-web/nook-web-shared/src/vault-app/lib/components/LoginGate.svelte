@@ -475,6 +475,7 @@
       untrack(() => void vault.prepareLocalLogin())
     }
     if (
+      vault.deviceProtectionReady &&
       !deviceAuthorizationPending &&
       !vault.isAuthenticated &&
       (vault.syncProviders.length > 0 || vault.localVaultPresent)

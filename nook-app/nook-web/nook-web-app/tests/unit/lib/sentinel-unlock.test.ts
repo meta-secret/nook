@@ -6,6 +6,7 @@ import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/svelte'
+import { tick } from 'svelte'
 import {
   NookSentinelUnlockSessionStatus,
   SentinelVaultUnlockState,
@@ -57,6 +58,7 @@ class SentinelFinalizationFixture {
     hasManager: true,
     isVerifying: false,
     isAuthenticated: false,
+    deviceProtectionReady: true,
     errorMsg: '',
     sentinelUnlockSession: this.previous,
     sentinelUnlockRequest: 'current ceremony request',
@@ -171,6 +173,27 @@ class SentinelFinalizationFixture {
 }
 
 describe('Sentinel quorum completion presentation', () => {
+  test('refreshes Sentinel status only after device protection is ready', async () => {
+    const locked = new SentinelFinalizationFixture()
+    locked.state.deviceProtectionReady = false
+    const lockedView = locked.renderLogin(LoginSurface.Gate)
+
+    await tick()
+
+    expect(locked.state.refreshSentinelUnlockStatus).not.toHaveBeenCalled()
+    lockedView.unmount()
+    locked.dispose()
+
+    const ready = new SentinelFinalizationFixture()
+    const readyView = ready.renderLogin(LoginSurface.Gate)
+
+    await vi.waitFor(() => {
+      expect(ready.state.refreshSentinelUnlockStatus).toHaveBeenCalledOnce()
+    })
+    readyView.unmount()
+    ready.dispose()
+  })
+
   test('clears stale readiness and request after terminal rejection without restarting', async () => {
     const fixture = new SentinelFinalizationFixture()
     fixture.manager.finalize_sentinel_unlock.mockRejectedValue(
