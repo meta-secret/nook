@@ -213,41 +213,54 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('rejects an affirmative Gizmo implementation grant', async () => {
-    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
-    const cortexRoot = join(fixtureRoot, '.cortex');
-    try {
-      await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
-      await symlink(
-        join(REPO_ROOT, '.cortex/teams'),
-        join(cortexRoot, 'teams'),
-      );
-      await writeFile(
-        join(cortexRoot, 'AGENTS.md'),
-        await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8'),
-        'utf8',
-      );
-      const gizmoAuthority = await readFile(
-        join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
-        'utf8',
-      );
-      await writeFile(
-        join(cortexRoot, 'gizmo/AGENTS.md'),
-        gizmoAuthority.replace(
-          'Gizmo does not:\n\n- implement or repair team-owned work;',
-          'Gizmo may:\n\n- implement or repair team-owned work;',
-        ),
-        'utf8',
-      );
+  test('rejects drift of the Gizmo prohibition heading or implementation boundary', async () => {
+    const drifts = [
+      {
+        current: 'Gizmo does not:',
+        replacement: 'Gizmo may:',
+      },
+      {
+        current: '- implement or repair team-owned work;',
+        replacement:
+          '- implement or repair team-owned work when requested;\n\n## Relocated marker\n\n- implement or repair team-owned work;',
+      },
+    ] as const;
+    for (const drift of drifts) {
+      const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
+      const cortexRoot = join(fixtureRoot, '.cortex');
+      try {
+        await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+        await symlink(
+          join(REPO_ROOT, '.cortex/teams'),
+          join(cortexRoot, 'teams'),
+        );
+        await writeFile(
+          join(cortexRoot, 'AGENTS.md'),
+          await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8'),
+          'utf8',
+        );
+        const gizmoAuthority = await readFile(
+          join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
+          'utf8',
+        );
+        expect(gizmoAuthority).toContain(drift.current);
+        await writeFile(
+          join(cortexRoot, 'gizmo/AGENTS.md'),
+          gizmoAuthority.replace(drift.current, drift.replacement),
+          'utf8',
+        );
 
-      const report = TeamAgentContract.auditTeamAgents({
-        repoRoot: fixtureRoot,
-      });
-      expect(report.findings.map((finding) => finding.code)).toContain(
-        'invalid-cortex-gizmo-authority',
-      );
-    } finally {
-      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+        const report = TeamAgentContract.auditTeamAgents({
+          repoRoot: fixtureRoot,
+        });
+        expect(report.findings).toContainEqual({
+          code: 'invalid-cortex-gizmo-authority',
+          path: '.cortex/gizmo/AGENTS.md',
+          message: `Canonical Gizmo authority is missing marker: ${drift.current}`,
+        });
+      } finally {
+        await rm(fixtureRoot, REMOVE_RECURSIVELY);
+      }
     }
   });
 

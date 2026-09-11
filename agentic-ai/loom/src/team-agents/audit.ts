@@ -141,6 +141,22 @@ export class TeamAgentContract {
         });
       }
     }
+    if (!gizmoSource.includes(`\n${GIZMO_PROHIBITION_HEADING}\n`)) {
+      findings.push({
+        code: 'invalid-cortex-gizmo-authority',
+        path: GIZMO_AUTHORITY_PATH,
+        message: `Canonical Gizmo authority is missing marker: ${GIZMO_PROHIBITION_HEADING}`,
+      });
+    }
+    const gizmoProhibitionSection =
+      TeamAgentContract.gizmoProhibitionSection(gizmoSource);
+    if (!gizmoProhibitionSection.includes(GIZMO_IMPLEMENTATION_PROHIBITION)) {
+      findings.push({
+        code: 'invalid-cortex-gizmo-authority',
+        path: GIZMO_AUTHORITY_PATH,
+        message: `Canonical Gizmo authority is missing marker: ${GIZMO_IMPLEMENTATION_PROHIBITION}`,
+      });
+    }
     for (const skillPath of CORTEX_AUTHORING_SKILL_PATHS) {
       if (!existsSync(join(request.repoRoot, skillPath))) {
         const finding: TeamAuthorityAuditFinding = {
@@ -231,6 +247,17 @@ export class TeamAgentContract {
       normalize(path) === path
     );
   }
+
+  private static gizmoProhibitionSection(source: string): string {
+    const headingMarker = `\n${GIZMO_PROHIBITION_HEADING}\n`;
+    const headingStart = source.indexOf(headingMarker);
+    if (headingStart < 0) return '';
+    const bodyStart = headingStart + headingMarker.length;
+    const nextSectionStart = source.indexOf('\n## ', bodyStart);
+    return nextSectionStart < 0
+      ? source.slice(bodyStart)
+      : source.slice(bodyStart, nextSectionStart);
+  }
 }
 
 export type TeamAuthorityAuditFinding = {
@@ -280,10 +307,14 @@ const TEAM_AUTHORITY_MARKERS = [
 
 const GIZMO_AUTHORITY_MARKERS = [
   'single root delivery owner',
-  'Gizmo does not:\n\n- implement or repair team-owned work;',
   'exactly one team identity',
   'final verdict is bound to the exact pull-request head',
 ] as const;
+
+const GIZMO_PROHIBITION_HEADING = 'Gizmo does not:';
+
+const GIZMO_IMPLEMENTATION_PROHIBITION =
+  '- implement or repair team-owned work;';
 
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
