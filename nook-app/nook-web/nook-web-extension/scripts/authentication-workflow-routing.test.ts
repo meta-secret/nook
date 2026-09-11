@@ -4,6 +4,8 @@ import {
   authenticationWorkflowMessageResponse,
   type AuthenticationWorkflowRoutingDependencies,
 } from '../src/background/service-worker/authentication-workflow-routing'
+import { MatchingPasskeyAvailabilityKind } from '../src/background/service-worker/passkey-availability'
+import { AuthenticationWorkflowSnapshotKind } from '../src/background/vault-runtime'
 
 const message = {
   type: 'nook:authentication-workflow-snapshot',
@@ -21,6 +23,28 @@ const message = {
   },
 } as unknown as AuthenticationWorkflowSnapshotMessage
 const sender = {} as chrome.runtime.MessageSender
+type WorkflowSnapshotRequest = Parameters<
+  AuthenticationWorkflowRoutingDependencies['authenticationWorkflowSnapshot']
+>[0]
+
+function workflowDependencies(
+  overrides: Partial<AuthenticationWorkflowRoutingDependencies>,
+): AuthenticationWorkflowRoutingDependencies {
+  return {
+    companionWasmReady: Promise.resolve(),
+    authenticationPasskeyEvidenceIsSafe: () => true,
+    matchingPasskeyAvailabilityForOriginSafe: async () => ({
+      kind: MatchingPasskeyAvailabilityKind.Unavailable,
+    }),
+    authenticationWorkflowSnapshot: async () => ({
+      kind: AuthenticationWorkflowSnapshotKind.NoMatch,
+    }),
+    authenticationWorkflowSavedLoginCapability: () => 'unavailable',
+    authenticationWorkflowRequiresLoginMatchAvailability: () => false,
+    websiteLoginMatchAvailability: async () => ({ kind: 'unavailable' }),
+    ...overrides,
+  }
+}
 
 describe('authentication workflow routing', () => {
   test('waits for companion WASM before classifying cold-start passkey evidence', async () => {
@@ -29,7 +53,7 @@ describe('authentication workflow routing', () => {
       resolveReady = resolve
     })
     const events: string[] = []
-    const dependencies = {
+    const dependencies = workflowDependencies({
       companionWasmReady: ready,
       authenticationPasskeyEvidenceIsSafe: () => {
         events.push('evidence-classified')
@@ -37,18 +61,26 @@ describe('authentication workflow routing', () => {
       },
       matchingPasskeyAvailabilityForOriginSafe: async () => {
         events.push('passkeys-counted')
-        return { kind: 'ready', accountCount: 2 }
+        return {
+          kind: MatchingPasskeyAvailabilityKind.Ready,
+          accountCount: 2,
+        }
       },
-      authenticationWorkflowSnapshot: async ({ observations }) => {
+      authenticationWorkflowSnapshot: async ({
+        observations,
+      }: WorkflowSnapshotRequest) => {
         events.push(
           `snapshot:${observations[0]?.authenticator.matchingPasskeyAccountCount}`,
         )
-        return { kind: 'matched', snapshot: { observationIndex: 0 } }
+        return {
+          kind: AuthenticationWorkflowSnapshotKind.Matched,
+          snapshot: { observationIndex: 0 },
+        }
       },
       authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
       authenticationWorkflowRequiresLoginMatchAvailability: () => true,
       websiteLoginMatchAvailability: async () => ({ kind: 'ready', count: 2 }),
-    } as unknown as AuthenticationWorkflowRoutingDependencies
+    })
 
     const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
       {
@@ -76,22 +108,20 @@ describe('authentication workflow routing', () => {
   })
 
   test('bounds matching passkey account counts before classification', async () => {
-    const dependencies = {
-      companionWasmReady: Promise.resolve(),
-      authenticationPasskeyEvidenceIsSafe: () => true,
+    const dependencies = workflowDependencies({
       matchingPasskeyAvailabilityForOriginSafe: async () => ({
-        kind: 'ready',
+        kind: MatchingPasskeyAvailabilityKind.Ready,
         accountCount: 101,
       }),
-      authenticationWorkflowSnapshot: async ({ observations }) => {
+      authenticationWorkflowSnapshot: async ({
+        observations,
+      }: WorkflowSnapshotRequest) => {
         expect(observations[0]?.authenticator.matchingPasskeyAccountCount).toBe(
           100,
         )
-        return { kind: 'no-match' }
+        return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
       },
-      authenticationWorkflowSavedLoginCapability: () => 'unavailable',
-      websiteLoginMatchAvailability: async () => ({ kind: 'unavailable' }),
-    } as unknown as AuthenticationWorkflowRoutingDependencies
+    })
 
     const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
       {
@@ -109,15 +139,13 @@ describe('authentication workflow routing', () => {
 
   test('preserves a matched workflow when optional login availability fails', async () => {
     for (const failure of ['rejected', 'timeout', 'invalid-response']) {
-      const dependencies = {
-        companionWasmReady: Promise.resolve(),
-        authenticationPasskeyEvidenceIsSafe: () => true,
+      const dependencies = workflowDependencies({
         matchingPasskeyAvailabilityForOriginSafe: async () => ({
-          kind: 'ready',
+          kind: MatchingPasskeyAvailabilityKind.Ready,
           accountCount: 2,
         }),
         authenticationWorkflowSnapshot: async () => ({
-          kind: 'matched',
+          kind: AuthenticationWorkflowSnapshotKind.Matched,
           snapshot: { observationIndex: 0, action: 4 },
         }),
         authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
@@ -125,7 +153,7 @@ describe('authentication workflow routing', () => {
         websiteLoginMatchAvailability: async () => {
           throw new Error(failure)
         },
-      } as AuthenticationWorkflowRoutingDependencies
+      })
       const request: Parameters<
         typeof authenticationWorkflowMessageResponse
       >[0] = {
@@ -151,15 +179,14 @@ describe('authentication workflow routing', () => {
 
   test('does not probe saved-login availability for ordinary Continue workflows', async () => {
     let availabilityCalls = 0
-    const dependencies = {
-      companionWasmReady: Promise.resolve(),
+    const dependencies = workflowDependencies({
       authenticationPasskeyEvidenceIsSafe: () => false,
       matchingPasskeyAvailabilityForOriginSafe: async () => ({
-        kind: 'ready',
+        kind: MatchingPasskeyAvailabilityKind.Ready,
         accountCount: 0,
       }),
       authenticationWorkflowSnapshot: async () => ({
-        kind: 'matched',
+        kind: AuthenticationWorkflowSnapshotKind.Matched,
         snapshot: { observationIndex: 0, action: 0 },
       }),
       authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
@@ -168,7 +195,7 @@ describe('authentication workflow routing', () => {
         availabilityCalls += 1
         return { kind: 'ready', count: 1 }
       },
-    } as AuthenticationWorkflowRoutingDependencies
+    })
     const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
       { message, sender, dependencies }
 
@@ -182,19 +209,18 @@ describe('authentication workflow routing', () => {
   })
 
   test('contains a synchronous evidence-classifier exception', async () => {
-    const dependencies = {
-      companionWasmReady: Promise.resolve(),
+    const dependencies = workflowDependencies({
       authenticationPasskeyEvidenceIsSafe: () => {
         throw new Error('WASM not initialized')
       },
       matchingPasskeyAvailabilityForOriginSafe: async () => ({
-        kind: 'ready',
+        kind: MatchingPasskeyAvailabilityKind.Ready,
         accountCount: 0,
       }),
-      authenticationWorkflowSnapshot: async () => ({ kind: 'no-match' }),
-      authenticationWorkflowSavedLoginCapability: () => 'unavailable',
-      websiteLoginMatchAvailability: async () => ({ kind: 'unavailable' }),
-    } as unknown as AuthenticationWorkflowRoutingDependencies
+      authenticationWorkflowSnapshot: async () => ({
+        kind: AuthenticationWorkflowSnapshotKind.NoMatch,
+      }),
+    })
 
     const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
       {
@@ -212,21 +238,21 @@ describe('authentication workflow routing', () => {
 
   test('preserves non-passkey classification when lookup is unavailable', async () => {
     const observedAvailability: string[] = []
-    const dependencies = {
-      companionWasmReady: Promise.resolve(),
-      authenticationPasskeyEvidenceIsSafe: () => true,
+    const dependencies = workflowDependencies({
       matchingPasskeyAvailabilityForOriginSafe: async () => ({
-        kind: 'unavailable',
+        kind: MatchingPasskeyAvailabilityKind.Unavailable,
       }),
-      authenticationWorkflowSnapshot: async ({ observations }) => {
+      authenticationWorkflowSnapshot: async ({
+        observations,
+      }: WorkflowSnapshotRequest) => {
         observedAvailability.push(
           ((v) => (v ? v : ''))(
             observations[0]?.authenticator.passkeyAccountAvailability,
           ),
         )
-        return { kind: 'no-match' }
+        return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
       },
-    } as unknown as AuthenticationWorkflowRoutingDependencies
+    })
 
     await expect(
       authenticationWorkflowMessageResponse({ message, sender, dependencies }),
