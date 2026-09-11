@@ -93,14 +93,19 @@ impl AuthenticationControlIdentity<'_> {
                 .eq(["appleauth", "auth", "authorize", "signin"]);
         let has_unknown_login_route_segment =
             segments.iter().enumerate().any(|(index, segment)| {
-                let tails = &segments[index + 1..];
+                let mut tails = segments.iter().skip(index + 1).map(String::as_str);
+                let has_local_tail = match (tails.next(), tails.next()) {
+                    (None, None) => true,
+                    (Some(tail), None) => is_local_tail(tail),
+                    _ => false,
+                };
                 AuthenticationRouteIdentity::new(segment).indicates_login()
-                    && (!segments[..index].iter().all(|prefix| {
+                    && (!segments.iter().take(index).all(|prefix| {
                         matches!(
                             prefix.as_str(),
                             "account" | "auth" | "authentication" | "common" | "users"
                         ) || is_version(prefix)
-                    }) || !(tails.is_empty() || matches!(tails, [tail] if is_local_tail(tail))))
+                    }) || !has_local_tail)
             });
         AuthenticationControlIdentity::new(identity).names_provider(ProviderNameScope::Registered)
             || identity.split(['?', '#']).any(|metadata| {
@@ -127,18 +132,18 @@ impl AuthenticationControlIdentity<'_> {
         let identity = self.identity;
         let tokens = identity.split_whitespace().collect::<Vec<_>>();
         tokens.iter().enumerate().any(|(index, token)| {
+            let tail = || tokens.iter().skip(index + 1).copied();
+            let is_credential_tail = tail().eq(["email"])
+                || tail().eq(["password"])
+                || tail().eq(["email", "address"])
+                || tail().eq(["your", "email"])
+                || tail().eq(["your", "email", "address"])
+                || tail().eq(["your", "password", "to", "sign", "in"]);
             matches!(
                 *token,
                 "with" | "using" | "via" | "use" | "choose" | "select"
             ) && index + 1 < tokens.len()
-                && !matches!(
-                    &tokens[index + 1..],
-                    ["email" | "password"]
-                        | ["email", "address"]
-                        | ["your", "email"]
-                        | ["your", "email", "address"]
-                        | ["your", "password", "to", "sign", "in"]
-                )
+                && !is_credential_tail
         })
     }
     pub(super) fn is_microsoft_primary_sign_in(&self) -> bool {

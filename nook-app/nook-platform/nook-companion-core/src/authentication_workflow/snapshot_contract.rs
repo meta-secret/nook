@@ -267,7 +267,12 @@ mod tests {
             };
             let index = u32::from(snapshot.observation_index) as usize;
             prop_assert!(index < self.observations.len());
-            let mut source = self.observations[index]
+            let Some(observation) = self.observations.get(index) else {
+                return Err(TestCaseError::fail(
+                    "matched observation index must be present",
+                ));
+            };
+            let mut source = observation
                 .classify_authentication_workflow()
                 .snapshot()
                 .map_err(|error| TestCaseError::fail(error.to_string()))?;
@@ -303,8 +308,13 @@ mod tests {
             if let AuthenticationWorkflowMatch::Matched(snapshot) = original {
                 let index = u32::from(snapshot.observation_index) as usize;
                 prop_assert!(index < self.observations.len());
+                let Some(observation) = self.observations.get(index).copied() else {
+                    return Err(TestCaseError::fail(
+                        "matched observation index must be present",
+                    ));
+                };
                 let mut with_duplicate = self.clone();
-                with_duplicate.observations.push(self.observations[index]);
+                with_duplicate.observations.push(observation);
                 prop_assert_eq!(with_duplicate.classify(), original);
             }
             Ok(())

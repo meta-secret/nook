@@ -214,8 +214,11 @@ mod tests {
         else {
             panic!("expected observed login control");
         };
-        controls[0].password_field_count = 0.into();
-        controls[0].submission_method = PageControlSubmissionMethod::Get;
+        let Some(control) = controls.first_mut() else {
+            panic!("expected one observed login control");
+        };
+        control.password_field_count = 0.into();
+        control.submission_method = PageControlSubmissionMethod::Get;
         assert!(matches!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![facts.clone()],
@@ -248,13 +251,16 @@ mod tests {
         else {
             panic!("expected observed login control");
         };
-        controls[0].authentication_username = AuthenticationUsernameEvidence::Explicit;
-        controls[0].password_field_count = 0.into();
-        controls[0].source_origin = "https://login.live.com".to_owned();
-        controls[0].form_identity.clear();
-        controls[0].destination_identity = "https://login.live.com/".to_owned();
-        controls[0].label = "Next".to_owned();
-        controls[0].submission_method = PageControlSubmissionMethod::Post;
+        let Some(control) = controls.first_mut() else {
+            panic!("expected one observed login control");
+        };
+        control.authentication_username = AuthenticationUsernameEvidence::Explicit;
+        control.password_field_count = 0.into();
+        control.source_origin = "https://login.live.com".to_owned();
+        control.form_identity.clear();
+        control.destination_identity = "https://login.live.com/".to_owned();
+        control.label = "Next".to_owned();
+        control.submission_method = PageControlSubmissionMethod::Post;
         assert!(matches!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![facts.clone()],
@@ -306,7 +312,10 @@ mod tests {
         let observation = password_login();
         let control = match &observation.detailed_advance_control {
             AuthenticationDetailedAdvanceControlObservation::Observed(controls) => {
-                controls[0].clone()
+                let Some(control) = controls.first() else {
+                    panic!("expected one observed login control");
+                };
+                control.clone()
             }
             AuthenticationDetailedAdvanceControlObservation::Absent => unreachable!(),
         };
@@ -734,9 +743,12 @@ mod tests {
             if let AuthenticationDetailedAdvanceControlObservation::Observed(controls) =
                 &mut facts.detailed_advance_control
             {
-                controls[0].form_identity.clear();
-                controls[0].destination_identity = "https://example.test/session".to_owned();
-                controls[0].label = label.to_owned();
+                let Some(control) = controls.first_mut() else {
+                    panic!("expected one observed login control");
+                };
+                control.form_identity.clear();
+                control.destination_identity = "https://example.test/session".to_owned();
+                control.label = label.to_owned();
             }
             assert!(matches!(
                 AuthenticationPageObservationFactsBatch {
@@ -933,8 +945,10 @@ mod tests {
             AuthenticationWorkflowMatch::NoMatch
         );
 
-        let last = signals.len() - 1;
-        signals[last] = "oninput=this.form.submit()".to_owned();
+        let Some(last_signal) = signals.last_mut() else {
+            panic!("handler signal fixture must not be empty");
+        };
+        *last_signal = "oninput=this.form.submit()".to_owned();
         let kept_submit = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
                 one_time_code_field_count: 1.into(),

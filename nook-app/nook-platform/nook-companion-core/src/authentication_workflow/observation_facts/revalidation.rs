@@ -91,7 +91,9 @@ impl ApprovedAuthenticationWorkflowRevalidation {
         if !AuthenticationObservationBindingToken::authentication_page_observation_facts_match_binding(&binding, &live) {
             return Rejected;
         }
-        let approved_facts = &approved.observations[0];
+        let Some(approved_facts) = approved.observations.first() else {
+            return Rejected;
+        };
         if selected
             .ceremony
             .authentication_context

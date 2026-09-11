@@ -16,22 +16,22 @@ impl AuthenticationControlText<'_> {
     pub fn expand_identity_text(&self) -> String {
         let value = self.value;
         let mut with_breaks = String::with_capacity(value.len() * 2);
-        let chars: Vec<char> = value.chars().collect();
-        for (index, c) in chars.iter().enumerate() {
-            if index > 0 {
-                let prev = chars[index - 1];
-                let needs_break = (prev.is_ascii_lowercase() && c.is_ascii_uppercase())
-                    || (prev.is_ascii_alphabetic() && c.is_ascii_digit())
-                    || (prev.is_ascii_digit() && c.is_ascii_alphabetic());
+        let mut previous: Option<char> = None;
+        for current in value.chars() {
+            if let Some(prev) = previous {
+                let needs_break = (prev.is_ascii_lowercase() && current.is_ascii_uppercase())
+                    || (prev.is_ascii_alphabetic() && current.is_ascii_digit())
+                    || (prev.is_ascii_digit() && current.is_ascii_alphabetic());
                 if needs_break {
                     with_breaks.push(' ');
                 }
             }
-            if matches!(*c, '_' | '-' | '.' | '/' | '#') {
+            if matches!(current, '_' | '-' | '.' | '/' | '#') {
                 with_breaks.push(' ');
             } else {
-                with_breaks.push(*c);
+                with_breaks.push(current);
             }
+            previous = Some(current);
         }
         with_breaks
             .split_whitespace()
@@ -47,10 +47,7 @@ impl AuthenticationControlText<'_> {
     }
     pub(crate) fn contains_word_phrase(&self, phrase: &str) -> bool {
         let haystack = self.value;
-        let Some(mut start) = haystack.find(phrase) else {
-            return false;
-        };
-        loop {
+        for (start, _) in haystack.match_indices(phrase) {
             let end = start + phrase.len();
             let before_ok = start == 0
                 || !haystack
@@ -67,14 +64,8 @@ impl AuthenticationControlText<'_> {
             if before_ok && after_ok {
                 return true;
             }
-            let next = haystack[start + 1..]
-                .find(phrase)
-                .map(|offset| start + 1 + offset);
-            match next {
-                Some(index) => start = index,
-                None => return false,
-            }
         }
+        false
     }
     const fn is_word_byte(byte: u8) -> bool {
         byte.is_ascii_alphanumeric() || byte == b'_'

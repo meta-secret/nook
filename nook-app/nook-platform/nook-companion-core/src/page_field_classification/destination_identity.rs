@@ -50,12 +50,14 @@ impl CanonicalControlDestination {
     fn has_valid_percent_encoding(value: &str) -> bool {
         let bytes = value.as_bytes();
         let mut index = 0;
-        while index < bytes.len() {
-            if bytes[index] == b'%' {
-                if index + 2 >= bytes.len()
-                    || !bytes[index + 1].is_ascii_hexdigit()
-                    || !bytes[index + 2].is_ascii_hexdigit()
-                {
+        while let Some(byte) = bytes.get(index) {
+            if *byte == b'%' {
+                let valid_hex_pair = matches!(
+                    (bytes.get(index + 1), bytes.get(index + 2)),
+                    (Some(first), Some(second))
+                        if first.is_ascii_hexdigit() && second.is_ascii_hexdigit()
+                );
+                if !valid_hex_pair {
                     return false;
                 }
                 index += 3;

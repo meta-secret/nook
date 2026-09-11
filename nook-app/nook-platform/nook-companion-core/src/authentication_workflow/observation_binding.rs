@@ -85,8 +85,11 @@ mod tests {
         ));
 
         let mut get_route = approved.clone();
+        let Some(get_route_observation) = get_route.observations.first_mut() else {
+            anyhow::bail!("bound password fixture must contain one observation");
+        };
         let AuthenticationCredentialSubmissionObservation::Observed(submission) =
-            &mut get_route.observations[0].credential_submission
+            &mut get_route_observation.credential_submission
         else {
             unreachable!();
         };
@@ -96,8 +99,11 @@ mod tests {
         ));
 
         let mut inert_route = approved.clone();
+        let Some(inert_route_observation) = inert_route.observations.first_mut() else {
+            anyhow::bail!("bound password fixture must contain one observation");
+        };
         let AuthenticationCredentialSubmissionObservation::Observed(submission) =
-            &mut inert_route.observations[0].credential_submission
+            &mut inert_route_observation.credential_submission
         else {
             unreachable!();
         };
@@ -108,12 +114,11 @@ mod tests {
         ));
 
         let mut readonly = approved;
-        readonly.observations[0]
-            .fields
-            .actionable_password_field_count = 0.into();
-        readonly.observations[0]
-            .fields
-            .readonly_password_field_count = 1.into();
+        let Some(readonly_observation) = readonly.observations.first_mut() else {
+            anyhow::bail!("bound password fixture must contain one observation");
+        };
+        readonly_observation.fields.actionable_password_field_count = 0.into();
+        readonly_observation.fields.readonly_password_field_count = 1.into();
         assert!(!AuthenticationObservationBindingToken::authentication_page_observation_facts_match_binding(
             &binding, &readonly
         ));
@@ -132,7 +137,10 @@ mod tests {
         );
 
         let mut incomplete = bound_password_observation();
-        incomplete.observations[0]
+        let Some(incomplete_observation) = incomplete.observations.first_mut() else {
+            panic!("bound password fixture must contain one observation");
+        };
+        incomplete_observation
             .fields
             .actionable_password_field_count = 0.into();
         assert!(

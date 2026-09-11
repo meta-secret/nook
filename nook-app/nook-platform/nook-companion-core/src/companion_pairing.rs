@@ -203,7 +203,7 @@ impl CompanionPairingRequest {
             && !scopes
                 .iter()
                 .enumerate()
-                .any(|(index, scope)| scopes[..index].contains(scope))
+                .any(|(index, scope)| scopes.iter().take(index).any(|prior| prior == scope))
     }
 
     fn validate_at(
