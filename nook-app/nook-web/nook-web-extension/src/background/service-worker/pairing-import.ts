@@ -389,8 +389,15 @@ export async function importLocalEventLogUpdateWithDependencies({
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
+    const authorityDelivery = await sendSession(authorityRequest)
+    if (authorityDelivery.isErr()) {
+      return {
+        ok: false,
+        reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+      }
+    }
     const authority = decode_extension_grant_authority_response(
-      JSON.stringify(await sendSession(authorityRequest)),
+      JSON.stringify(authorityDelivery.value),
       vaultStoreId,
     )
     switch (authority.kind) {

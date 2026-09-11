@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
+import { err, ok } from 'neverthrow'
 import {
   decode_extension_grant_authority_response,
   type ExtensionGrantAuthority,
@@ -6,6 +7,10 @@ import {
 import { ExtensionPairingApprovedMessageAdmissionFailure } from '../../nook-web-shared/src/extension/runtime-messages'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
+import {
+  ExtensionSessionTransportFailure,
+  ExtensionSessionTransportFailureKind,
+} from '../src/background/service-worker/session-document'
 import {
   extensionPairingGrantPolicyReady,
   extensionSessionGrantIdentity,
@@ -96,11 +101,11 @@ describe('extension pairing grant transport', () => {
           ) {
             expect(events).toEqual(['ensure'])
             events.push('classify')
-            return { kind: 'Authorized', grant: storedGrant }
+            return ok({ kind: 'Authorized', grant: storedGrant })
           }
           expect(message.type).toBe(ExtensionSessionMessageType.UpdateVault)
           events.push('update')
-          return { ok: true }
+          return ok({ ok: true })
         },
       })
       expect(events).toEqual(
@@ -223,21 +228,27 @@ describe('extension pairing grant transport', () => {
             message.type !== ExtensionSessionMessageType.ClassifyGrantAuthority
           )
             throw new Error('unexpected session update')
-          if (scenario === 'transport-failed') throw new Error('unavailable')
-          if (scenario === 'malformed-response') return {}
+          if (scenario === 'transport-failed') {
+            return err(
+              new ExtensionSessionTransportFailure(
+                ExtensionSessionTransportFailureKind.DeliveryFailed,
+              ),
+            )
+          }
+          if (scenario === 'malformed-response') return ok({})
           expect(message.payload).toEqual({
             stored_json: JSON.stringify(await loadPairingStorage()),
             vault_store_id: 'unpaired-vault',
             queue: { kind: 'message-default' },
           })
-          return {
+          return ok({
             kind:
               scenario === 'missing-active'
                 ? 'MissingActiveAuthority'
                 : scenario === 'malformed'
                   ? 'InvalidStoredAuthority'
                   : 'NoMatchingAuthority',
-          }
+          })
         },
       )
       const response = await importLocalEventLogUpdateWithDependencies({

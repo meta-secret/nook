@@ -460,10 +460,10 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       replacementPopupPage.getByTestId('extension-device-setup'),
     ).toBeVisible()
     await expect(
-      replacementPopupPage.getByTestId('device-protection-use-existing-choice'),
+      replacementPopupPage.getByTestId('device-protection-unlock-btn'),
     ).toBeVisible()
     await replacementPopupPage
-      .getByTestId('device-protection-use-existing-choice')
+      .getByTestId('device-protection-unlock-btn')
       .click()
     await expect(
       replacementPopupPage.getByTestId('extension-toolbar-menu'),
