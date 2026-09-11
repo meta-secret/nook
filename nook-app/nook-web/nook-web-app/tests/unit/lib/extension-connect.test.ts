@@ -8,6 +8,7 @@ import {
   ExtensionIdentityRequestSource,
   ExtensionConnectRequestStateKind,
   ExtensionPairingDeliveryKind,
+  ExtensionPairingRejectionReason,
   extensionConnectionBrowser,
 } from '$lib/extension/connect'
 import {
@@ -313,6 +314,27 @@ describe('extension pairing approved message', () => {
     await vi.runAllTimersAsync()
     await expect(delivery).resolves.toEqual({
       kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
+    })
+  })
+
+  test('preserves companion runtime startup rejection', async () => {
+    const sendMessage = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) => {
+        args[2]({
+          ok: false,
+          reason: ExtensionPairingRejectionReason.ExtensionRuntimeUnavailable,
+        })
+      },
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+
+    await expect(
+      extensionConnectionBrowser.deliverExtensionPairingApproval(
+        approvalDeliveryArgs(),
+      ),
+    ).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.Rejected,
+      reason: ExtensionPairingRejectionReason.ExtensionRuntimeUnavailable,
     })
   })
 

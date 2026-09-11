@@ -149,10 +149,12 @@ export enum ExtensionPairingRejectionReason {
   ExtensionSessionDocumentCreationFailed = "extension-session-document-creation-failed",
   ExtensionSessionDocumentObservationFailed = "extension-session-document-observation-failed",
   ExtensionSessionDeliveryFailed = "extension-session-delivery-failed",
+  ExtensionRuntimeUnavailable = "extension-runtime-unavailable",
   ExtensionVaultImportFailed = "extension-vault-import-failed",
   ForbiddenSender = "forbidden-sender",
   InvalidPairingGrant = "invalid-pairing-grant",
   InvalidProviderPayload = "invalid-provider-payload",
+  PairingGrantAdmissionFailed = "pairing-grant-admission-failed",
 }
 
 export type ExtensionPairingDelivery =

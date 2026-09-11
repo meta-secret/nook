@@ -14,8 +14,10 @@ Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
 })
 const {
+  ExtensionPairingIngress,
   importLocalEventLogUpdateWithDependencies,
   LocalEventLogUpdateFailure,
+  PairingIngressFailure,
 } = await import('../src/background/service-worker/pairing-import')
 const { classifySessionGrantAuthority } =
   await import('../src/offscreen/session-operations')
@@ -40,6 +42,26 @@ const storedGrant: StoredExtensionPairingGrant = {
 }
 
 describe('extension pairing grant transport', () => {
+  test('reports companion runtime startup failure before grant admission', async () => {
+    const ingress = new ExtensionPairingIngress(
+      Promise.reject(new Error('runtime unavailable')),
+    )
+
+    await expect(ingress.admit({})).resolves.toEqual({
+      kind: 'rejected',
+      reason: PairingIngressFailure.RuntimeUnavailable,
+    })
+  })
+
+  test('rejects malformed grants after companion runtime startup', async () => {
+    const ingress = new ExtensionPairingIngress(Promise.resolve())
+
+    await expect(ingress.admit({})).resolves.toEqual({
+      kind: 'rejected',
+      reason: PairingIngressFailure.InvalidGrant,
+    })
+  })
+
   test.each(['created', 'failed'] as const)(
     'ensures a closed receiver before classification: %s',
     async (receiver) => {

@@ -21,16 +21,63 @@ import { backgroundVaultRuntime } from '../vault-runtime'
 import { extensionPairingIdentity } from './pairing-identity'
 import { extensionSessionLifecycle } from './session-lifecycle'
 
+export enum PairingIngressFailure {
+  AdmissionFailed = 'pairing-grant-admission-failed',
+  InvalidGrant = 'invalid-pairing-grant',
+  RuntimeUnavailable = 'extension-runtime-unavailable',
+}
+
+enum PairingIngressAdmissionKind {
+  Admitted = 'admitted',
+  Rejected = 'rejected',
+}
+
+type PairingIngressAdmission =
+  | {
+      readonly kind: PairingIngressAdmissionKind.Admitted
+      readonly message: ExtensionPairingApprovedMessage
+    }
+  | {
+      readonly kind: PairingIngressAdmissionKind.Rejected
+      readonly reason: PairingIngressFailure
+    }
+
+export class ExtensionPairingIngress {
+  constructor(private readonly runtimeReady: Promise<void>) {}
+
+  async admit(message: unknown): Promise<PairingIngressAdmission> {
+    try {
+      await this.runtimeReady
+    } catch {
+      return {
+        kind: PairingIngressAdmissionKind.Rejected,
+        reason: PairingIngressFailure.RuntimeUnavailable,
+      }
+    }
+    try {
+      return ExtensionPairingApprovedMessageSchema.is(message)
+        ? { kind: PairingIngressAdmissionKind.Admitted, message }
+        : {
+            kind: PairingIngressAdmissionKind.Rejected,
+            reason: PairingIngressFailure.InvalidGrant,
+          }
+    } catch {
+      return {
+        kind: PairingIngressAdmissionKind.Rejected,
+        reason: PairingIngressFailure.AdmissionFailed,
+      }
+    }
+  }
+}
+
+const extensionPairingIngress = new ExtensionPairingIngress(companionWasmReady)
+
 export async function importPairingAfterCompanionReady(message: unknown) {
-  if (!ExtensionPairingApprovedMessageSchema.is(message)) {
-    return { ok: false, reason: 'invalid-pairing-grant' }
+  const admission = await extensionPairingIngress.admit(message)
+  if (admission.kind === PairingIngressAdmissionKind.Rejected) {
+    return { ok: false, reason: admission.reason }
   }
-  try {
-    await companionWasmReady
-  } catch {
-    return { ok: false, reason: 'invalid-pairing-grant' }
-  }
-  return importApprovedPairing(message)
+  return importApprovedPairing(admission.message)
 }
 
 type ReconcilePairingStorageArgs = {
