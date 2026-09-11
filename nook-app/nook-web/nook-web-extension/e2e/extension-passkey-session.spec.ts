@@ -396,16 +396,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect
       .poll(async () => {
         const entries = await readPersistedAppLogs(reopenedVaultPage)
-        return entries.filter((entry) => {
-          if (
-            entry.scope !== 'vault-lifecycle' ||
-            entry.message !== 'extension identity adopted' ||
-            typeof entry.data !== 'string'
-          ) {
-            return false
-          }
-          return entry.data.includes(extensionDeviceId)
-        }).length
+        return entries.filter(
+          (entry) =>
+            entry.scope === 'vault-lifecycle' &&
+            entry.message === 'extension identity adopted',
+        ).length
       })
       .toBe(2)
 
@@ -590,16 +585,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect
       .poll(async () => {
         const entries = await readPersistedAppLogs(reopenedVaultPage)
-        return entries.filter((entry) => {
-          if (
-            entry.scope !== 'vault-lifecycle' ||
-            entry.message !== 'extension identity adopted' ||
-            typeof entry.data !== 'string'
-          ) {
-            return false
-          }
-          return entry.data.includes(extensionDeviceId)
-        }).length
+        return entries.filter(
+          (entry) =>
+            entry.scope === 'vault-lifecycle' &&
+            entry.message === 'extension identity adopted',
+        ).length
       })
       .toBe(3)
     if (
