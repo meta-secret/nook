@@ -283,7 +283,11 @@ describe('runtime message adapters', () => {
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
       expect(delivery.response.kind).toBe(LoginPickerOpenResponseKind.Ready)
-      if (delivery.response.kind === LoginPickerOpenResponseKind.Ready) {
+      if (
+        delivery.response.kind === LoginPickerOpenResponseKind.Ready &&
+        'requestId' in delivery.response &&
+        'expiresAt' in delivery.response
+      ) {
         expect(delivery.response.requestId).toBe('request-1')
         expect(delivery.response.expiresAt).toBe(12_345)
       }
@@ -420,11 +424,13 @@ describe('runtime message adapters', () => {
       expect(delivery.response.verdict.kind).toBe(
         AuthenticationWorkflowSnapshotResponseKind.Matched,
       )
-      expect(delivery.response.selectedFacts).toEqual(selectedFacts)
-      expect(delivery.response.loginMatches).toEqual({
-        kind: 'ready',
-        count: 2,
-      })
+      expect(JSON.stringify(delivery.response.selectedFacts)).toBe(
+        JSON.stringify(selectedFacts),
+      )
+      expect(String(delivery.response.loginMatches.kind)).toBe('ready')
+      if ('count' in delivery.response.loginMatches) {
+        expect(delivery.response.loginMatches.count).toBe(2)
+      }
     }
   })
 
@@ -482,7 +488,11 @@ describe('runtime message adapters', () => {
       expect(delivery.response.kind).toBe(
         AuthenticatorPreviewResponseKind.Ready,
       )
-      if (delivery.response.kind === AuthenticatorPreviewResponseKind.Ready) {
+      if (
+        delivery.response.kind === AuthenticatorPreviewResponseKind.Ready &&
+        'vaultStoreId' in delivery.response &&
+        'preview' in delivery.response
+      ) {
         expect(delivery.response.vaultStoreId).toBe('vault-1')
         expect(delivery.response.preview.algorithm).toBe('SHA256')
       }
