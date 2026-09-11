@@ -3,11 +3,13 @@ import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { describe, expect, test, vi } from 'vitest'
 import {
   DeviceProtectionStatus,
+  NookSyncConflictReviewState,
   type NookProviderVaultDecisionProjection,
   type NookVaultManager,
   ProviderVaultDecision,
   ProviderVaultDecisionReason,
   ProviderVaultIdentityEligibility,
+  VaultSyncConflictKind,
 } from '$app-wasm'
 import type {
   ProviderActionsContext,
@@ -177,6 +179,32 @@ test('selected local target survives loading the selected identity providers', a
   expect(state.providers).toEqual([identityProvider])
   expect(openActiveVault).toHaveBeenCalledWith('store-a')
   expect(openActiveVault).not.toHaveBeenCalledWith('store-b')
+})
+
+test('clears verification after remote conflict import returns before manager admission', async () => {
+  const state = {
+    syncConflictReview: {
+      state: NookSyncConflictReviewState.RequiresDecision,
+      conflictKind: VaultSyncConflictKind.StoreId,
+      remote_store_id: () => 'store-remote',
+      isPendingProvider: false,
+      providerLabel: 'Backup',
+      remoteYaml: '',
+    },
+    isVerifying: false,
+    errorMsg: '',
+    hasManager: false,
+    t: (request: string) => request,
+  } as SyncActionsContext
+
+  await new SyncConflictActions(state).resolveSyncConflictImportRemote({
+    identitySelection: {
+      kind: ProviderVaultIdentitySelectionKind.NotSelected,
+    },
+  })
+
+  expect(state.isVerifying).toBe(false)
+  expect(state.errorMsg).toBe(I18N_KEYS.ErrorsManagerUninitialized)
 })
 
 test('initializes a pristine device without accessing identity-protected providers', () => {

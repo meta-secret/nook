@@ -9,7 +9,10 @@ import {
 import { err, ok, type Result } from 'neverthrow'
 import {
   DeviceProtectionStatus,
+  DeviceProtectionDeviceModeState,
   ExternalDeviceIdentityAuthorizationMode,
+  NookClientRunModeUtil,
+  NookRuntimeConfig,
   NookVaultManager,
   type NookAdoptedExtensionIdentityHandoff,
   type NookCommittedExtensionIdentityHandoff,
@@ -156,6 +159,57 @@ describe('external browser identity handoff commit ownership', () => {
           new Error('identity directory cannot be read'),
         ).translationKey,
       )
+    } finally {
+      fixture.dispose()
+    }
+  })
+
+  test('relocks automatic authorization when typed initialization continuation fails', async () => {
+    const fixture = new IdentityHandoffFixture()
+    try {
+      const continuationFailure = new VaultStorageFailure(
+        VaultStorageFailureKind.OperationFailed,
+      )
+      fixture.state.clearManager()
+      fixture.state.runtimeConfig = new NookRuntimeConfig(
+        NookClientRunModeUtil.parse('production'),
+        true,
+      )
+      localStorage.removeItem('nook_e2e_manual_passkey')
+      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
+        ok(fixture.manager),
+      )
+      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
+      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
+        ok(),
+      )
+      vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
+        DeviceProtectionStatus.Passkey,
+      )
+      vi.spyOn(
+        fixture.manager,
+        'device_protection_device_mode',
+      ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
+      vi.spyOn(
+        fixture.manager,
+        'unlock_device_protection_with_passkey',
+      ).mockImplementation(async () => {})
+      vi.spyOn(
+        fixture.lifecycle,
+        'continueInitializationAfterDeviceUnlock',
+      ).mockResolvedValue(err(continuationFailure))
+      const lockDeviceProtection = vi
+        .spyOn(fixture.state, 'lockDeviceProtection')
+        .mockResolvedValue(ok())
+
+      await fixture.lifecycle.initOnce()
+
+      expect(lockDeviceProtection).toHaveBeenCalledOnce()
+      expect(fixture.state.deviceProtectionStatus).not.toBe(
+        DeviceProtectionStatus.Unlocked,
+      )
+      expect(fixture.state.errorMsg).toBe(continuationFailure.translationKey)
+      expect(fixture.state.deviceAuthorizationInProgress).toBe(false)
     } finally {
       fixture.dispose()
     }
