@@ -131,6 +131,8 @@ Document the exact external requirement when the boundary is not
 self-evident. Keep the boundary function limited to decoding, delegation, and
 encoding. A conventional name alone does not establish an exception.
 
+### Presentation edges
+
 Svelte component handlers and lifecycle callbacks belong to the component only
 when they use that component's state or interaction contract. Shared behavior
 moves to its meaningful domain or application owner.

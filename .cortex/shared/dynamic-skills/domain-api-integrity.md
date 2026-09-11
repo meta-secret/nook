@@ -127,6 +127,8 @@ a boolean for immediate control flow. Named domain decisions return semantic
 enums or discriminated outcomes, even when they have two alternatives. Do not pass a mechanical boolean onward as a
 domain-state, policy, mode, or command parameter.
 
+### Fixed edge contracts
+
 Compiler-required signatures, traits, generated bindings, and externally fixed
 callbacks may retain their owned shape. Keep adapters thin and delegate to an
 API that follows this contract.
