@@ -453,7 +453,9 @@ class PullRequestAuditAuditWorkflows {
             if (
               jobs.value.some(
                 (job) =>
-                  job.status !== undefined && job.conclusion !== "skipped",
+                  typeof job.status === "string" &&
+                  job.status.length > 0 &&
+                  job.conclusion !== "skipped",
               )
             ) {
               applicableRuns.push(candidate);

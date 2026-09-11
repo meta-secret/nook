@@ -323,8 +323,8 @@ class PrAuditCreateMockOctokit {
                         event: "pull_request",
                         head_sha: headSha,
                         created_at: "2026-08-08T00:02:00Z",
-                        conclusion: "success",
-                        status: "completed",
+                        conclusion: MockJobConclusion.Success,
+                        status: MockRunStatus.Completed,
                         pull_requests: [
                           { number: 410, base: { ref: workflowBaseBranch } },
                         ],
