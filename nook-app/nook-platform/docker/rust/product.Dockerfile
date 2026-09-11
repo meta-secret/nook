@@ -894,4 +894,4 @@ WORKDIR /meta-secret/nook
 COPY nook-app/nook-platform/ nook-app/nook-platform/
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
-RUN RUSTC_WRAPPER= cargo kani --package nook-replication
+RUN RUSTC_WRAPPER= timeout --kill-after=10s 3m cargo kani --package nook-replication

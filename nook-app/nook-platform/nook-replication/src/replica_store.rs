@@ -31,6 +31,16 @@ pub enum ReplicaInsertStatus {
     Conflict,
 }
 
+impl ReplicaEventBytes<'_> {
+    fn immutable_insert_status(self, incoming: &[u8]) -> ReplicaInsertStatus {
+        match self {
+            Self::UnknownEvent => ReplicaInsertStatus::Inserted,
+            Self::Stored(bytes) if bytes == incoming => ReplicaInsertStatus::Duplicate,
+            Self::Stored(_) => ReplicaInsertStatus::Conflict,
+        }
+    }
+}
+
 pub struct ReplicaEventWrite<Id> {
     pub event_id: Id,
     #[cfg_attr(
@@ -126,14 +136,22 @@ where
             event_id,
             bytes: storage_bytes,
         } = request;
-        let status = match self.events.entry(event_id) {
-            Entry::Occupied(entry) if entry.get() == &storage_bytes => {
-                ReplicaInsertStatus::Duplicate
-            }
-            Entry::Occupied(_) => ReplicaInsertStatus::Conflict,
-            Entry::Vacant(entry) => {
+        let entry = self.events.entry(event_id);
+        let existing = match &entry {
+            Entry::Occupied(entry) => ReplicaEventBytes::Stored(entry.get()),
+            Entry::Vacant(_) => ReplicaEventBytes::UnknownEvent,
+        };
+        let status = existing.immutable_insert_status(&storage_bytes);
+        let status = match (status, entry) {
+            (ReplicaInsertStatus::Inserted, Entry::Vacant(entry)) => {
                 entry.insert(storage_bytes);
                 ReplicaInsertStatus::Inserted
+            }
+            (ReplicaInsertStatus::Duplicate, Entry::Occupied(_)) => ReplicaInsertStatus::Duplicate,
+            (ReplicaInsertStatus::Conflict, Entry::Occupied(_)) => ReplicaInsertStatus::Conflict,
+            (ReplicaInsertStatus::Inserted, Entry::Occupied(_))
+            | (ReplicaInsertStatus::Duplicate | ReplicaInsertStatus::Conflict, Entry::Vacant(_)) => {
+                unreachable!("immutable insert classification must agree with entry occupancy")
             }
         };
         ReplicaWrite {
@@ -609,40 +627,45 @@ mod loom_tests {
 
 #[cfg(kani)]
 mod kani_proofs {
-    use super::{ReplicaEventWrite, ReplicaInsertStatus, ReplicaStore};
+    use super::{ReplicaEventBytes, ReplicaInsertStatus};
+
+    struct ImmutableInsertStatusScenario {
+        has_existing: bool,
+        same_payload: bool,
+    }
+
+    impl ImmutableInsertStatusScenario {
+        fn symbolic() -> Self {
+            Self {
+                has_existing: kani::any(),
+                same_payload: kani::any(),
+            }
+        }
+
+        fn verify(self) {
+            let existing = [7_u8];
+            let incoming = [if self.same_payload { 7 } else { 9 }];
+            let existing_state = if self.has_existing {
+                ReplicaEventBytes::Stored(&existing)
+            } else {
+                ReplicaEventBytes::UnknownEvent
+            };
+            let status = existing_state.immutable_insert_status(&incoming);
+
+            assert_eq!(status == ReplicaInsertStatus::Inserted, !self.has_existing);
+            assert_eq!(
+                status == ReplicaInsertStatus::Duplicate,
+                self.has_existing && self.same_payload
+            );
+            assert_eq!(
+                status == ReplicaInsertStatus::Conflict,
+                self.has_existing && !self.same_payload
+            );
+        }
+    }
 
     #[kani::proof]
     fn immutable_insert_status_covers_every_existing_state() {
-        let has_existing = kani::any::<bool>();
-        let same_payload = kani::any::<bool>();
-        let existing = [7_u8];
-        let incoming = [if same_payload { 7 } else { 9 }];
-        let store = if has_existing {
-            ReplicaStore::new()
-                .put_event(ReplicaEventWrite {
-                    event_id: 1_u8,
-                    bytes: existing.to_vec(),
-                })
-                .store
-        } else {
-            ReplicaStore::new()
-        };
-        let expected_status = if !has_existing {
-            ReplicaInsertStatus::Inserted
-        } else if same_payload {
-            ReplicaInsertStatus::Duplicate
-        } else {
-            ReplicaInsertStatus::Conflict
-        };
-
-        assert_eq!(
-            store
-                .put_event(ReplicaEventWrite {
-                    event_id: 1_u8,
-                    bytes: incoming.to_vec()
-                })
-                .status,
-            expected_status
-        );
+        ImmutableInsertStatusScenario::symbolic().verify();
     }
 }
