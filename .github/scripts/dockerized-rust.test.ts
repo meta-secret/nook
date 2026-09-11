@@ -560,6 +560,21 @@ class DockerizedRustContract {
   }
 
   e2eCompletion(): void {
+    const remoteWorkflow = this.read(".github/workflows/remote.yml");
+    expect(remoteWorkflow).toContain("web:e2e) task _ci:main:web:e2e-only ;;");
+    expect(remoteWorkflow).not.toContain("web:e2e) task _web:test:e2e ;;");
+    const webPackage = z
+      .object({ scripts: z.object({ "test:e2e": z.string() }) })
+      .parse(
+        JSON.parse(this.read("nook-app/nook-web/nook-web-app/package.json")),
+      );
+    expect(webPackage.scripts["test:e2e"]).toContain(
+      "bun run test:e2e:stable || failed=1",
+    );
+    expect(webPackage.scripts["test:e2e"]).toContain(
+      "bun run test:e2e:unstable || failed=1",
+    );
+    expect(webPackage.scripts["test:e2e"]).toContain('exit "$failed"');
     const workflowSchema = z.object({
       jobs: z.record(
         z.string(),

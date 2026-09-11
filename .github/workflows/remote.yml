@@ -232,7 +232,7 @@ jobs:
           set -euo pipefail
           case "$REMOTE_CONTAINER_TASK" in
             web:build) task _web:build ;;
-            web:e2e) task _web:test:e2e ;;
+            web:e2e) task _ci:main:web:e2e-only ;;
             web:e2e:debug) NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug ;;
             extension:e2e) task _extension:test:e2e ;;
             check) task _check ;;
