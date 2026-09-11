@@ -3,6 +3,16 @@
 PR Steward performs the mechanical pull-request lifecycle after Gizmo Prime
 has prepared a coherent exact head and supplied an operation packet.
 
+## GitHub operations outside a pull request
+
+- Execute repository discovery, authentication checks, workflow-run queries,
+  and logs only for the target named in the parent packet.
+- Execute GitHub-backed Task, Loom, and script commands on behalf of Gizmo.
+- Assemble GitHub statistics from parent-provided inputs and return the artifact.
+- Publish Workbench content only when Gizmo supplies the exact source and path.
+- Preserve expected-blob checks and return conflicts without editing the record.
+- Gizmo retains content authorship, interpretation, and lifecycle decisions.
+
 ## Outcome
 
 The named pull-request operation completes against the packet's exact head.

@@ -77,8 +77,8 @@ Report the blocker instead of reporting an intermediate state as complete.
      operation packet.
    - Authorize PR Steward to trigger the repository-owned exact-head review and
      validation path.
-   - Use `task remote TASK_NAME=web:build` for a remote web build.
-   - Use `task remote TASK_NAME=web:e2e` for remote browser validation.
+   - Have PR Steward use `task remote TASK_NAME=web:build` for a remote web build.
+   - Have PR Steward use `task remote TASK_NAME=web:e2e` for remote browser validation.
    - Route every finding to its functional owner.
    - Sequence the responsible writer in the current checkout.
    - Push the corrected head and obtain fresh exact-head evidence.

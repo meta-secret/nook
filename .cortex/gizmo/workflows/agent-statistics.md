@@ -22,16 +22,20 @@ It is not a free-form task diary.
    validation run, retrigger, and merge attempt as it happens.
 3. Gizmo authorizes PR Steward to squash-merge the implementation PR after the
    readiness verdict succeeds.
-4. Gizmo assembles `stats/ai-agent/<pr-number>.yaml` with Loom after merge.
+4. Gizmo authorizes PR Steward to assemble `stats/ai-agent/<pr-number>.yaml`
+   with Loom after merge.
 5. Gizmo compares the record with one or two recent comparable records.
-6. Gizmo publishes the YAML to Workbench `main` with Loom.
+6. Gizmo authorizes PR Steward to publish the approved YAML to Workbench
+   `main` with Loom.
 7. Gizmo opens a separate build-performance PR when waste or regression is
    actionable.
 
 ## Mechanical entrypoint — Loom
 
 - Keep judgment in this document.
-- Run assemble, validate, and publish through Loom YAML requests.
+- Gizmo prepares Loom YAML requests and owns their interpretation.
+- PR Steward runs GitHub-backed assemble and publish requests.
+- Local validation without GitHub access remains with the responsible owner.
 - Scratch JSON must include:
   - `started_at`;
   - `change_surface`;

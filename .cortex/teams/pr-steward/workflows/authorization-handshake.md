@@ -6,14 +6,19 @@ second delivery state machine.
 
 ## Required actions
 
-1. **Send one operation packet.** Gizmo names the repository, base ref,
-   branch, pull-request number, expected head SHA, current scope, requested
-   operation, and required evidence.
+1. **Send one operation packet.** Gizmo names the repository, target, requested
+   operation, current scope, and required evidence.
+   - PR operations include the base ref, branch, PR number, and expected head.
+   - Repository or workflow-run operations name the repository or run identity.
+     Do not invent a PR or head when neither applies.
+   - Workbench publication names the exact parent-authored source, destination,
+     commit message, and expected blob SHA when replacing a mutable record.
+   - GitHub-backed Task, Loom, and script invocations require the same packet.
    - A reactive observation packet covers one check-observation iteration.
      It includes initial, relevant-event, and five-minute-inactivity snapshots.
      This permits no mutation or readiness verdict.
-2. **Confirm the live target.** PR Steward re-reads the pull request and exact
-   head before acting.
+2. **Confirm the live target.** PR Steward verifies the named target before
+   acting. For PR operations, re-read the pull request and exact head.
    - A mismatch is a blocker. PR Steward never infers authority for a new
      head, branch, repository, or operation.
 3. **Perform the named operation.** PR Steward returns the observed head SHA,
@@ -56,8 +61,8 @@ second delivery state machine.
 
 ## Validation
 
-The packet and the returned evidence identify one pull request and one exact
-head.
+The packet and returned evidence identify the same repository and target.
+Revision-dependent operations identify one exact head.
 Every mutation has an explicit parent authorization.
 An admin merge has a separate packet with path-policy evidence.
 Gizmo retains the readiness, merge, and completion verdicts.
