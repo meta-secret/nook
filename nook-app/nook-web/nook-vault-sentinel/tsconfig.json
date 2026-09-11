@@ -18,13 +18,15 @@
       "$vault-shared": ["../nook-web-shared/src/vault-app"],
       "$vault-shared/*": ["../nook-web-shared/src/vault-app/*"],
       "$web-shared/*": ["../nook-web-shared/src/*"],
-      "$app-wasm": ["../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm"]
+      "$app-wasm": [
+        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.d.ts"
+      ]
     }
   },
   "include": [
     "src/**/*.ts",
-    "../nook-web-shared/src/**/*.ts",
-    "../nook-web-shared/src/**/*.svelte",
+    "../nook-web-shared/src/vault-app/**/*.ts",
+    "../nook-web-shared/src/vault-app/**/*.svelte",
     "**/*.ts",
     "**/*.svelte",
     "**/*.js",

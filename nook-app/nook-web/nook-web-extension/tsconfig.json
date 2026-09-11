@@ -7,16 +7,9 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "target": "ES2023",
-    "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
-    "types": [
-      "svelte",
-      "chrome"
-    ],
+    "types": ["svelte", "chrome"],
     "moduleDetection": "force",
     "noUnusedLocals": true,
     "noUnusedParameters": true
@@ -27,12 +20,7 @@
     "src/**/*.svelte",
     "../nook-web-shared/src/components/NookIcon.svelte",
     "../nook-web-shared/src/extension/**/*.ts",
-    "../nook-web-shared/src/vault-app/lib/nook-wasm/**/*.d.ts",
-    "**/*.ts",
-    "**/*.svelte",
-    "**/*.js",
-    "**/*.mjs",
-    "**/*.cjs"
+    "../nook-web-shared/src/vault-app/lib/nook-wasm/**/*.d.ts"
   ],
   "exclude": [
     "**/node_modules/**",
