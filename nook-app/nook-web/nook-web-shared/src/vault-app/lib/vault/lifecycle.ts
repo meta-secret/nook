@@ -101,6 +101,7 @@ export class VaultInitializationActions {
       }
       const catalogRefresh1 = await state.refreshLocalVaultCatalog();
       if (catalogRefresh1.isErr()) {
+        log.warn("app init diagnostic: local vault catalog rejected");
         state.errorMsg = state.t(catalogRefresh1.error.translationKey);
         return;
       }
@@ -143,6 +144,7 @@ export class VaultInitializationActions {
         }
       });
       if (protectionStatus.isErr()) {
+        log.warn("app init diagnostic: device protection status rejected");
         state.deviceProtectionStatus = DeviceProtectionStatus.Error;
         state.errorMsg = state.t(protectionStatus.error.translationKey);
         return;
@@ -160,6 +162,7 @@ export class VaultInitializationActions {
         }
       });
       if (protectionMode.isErr()) {
+        log.warn("app init diagnostic: device protection mode rejected");
         state.errorMsg = state.t(protectionMode.error.translationKey);
         return;
       }
@@ -194,6 +197,9 @@ export class VaultInitializationActions {
             },
           );
           if (authorization.isErr()) {
+            log.warn(
+              "app init diagnostic: automatic device authorization rejected",
+            );
             state.errorMsg = state.t(authorization.error.translationKey);
             return;
           }
@@ -221,6 +227,9 @@ export class VaultInitializationActions {
             },
           );
           if (authorization.isErr()) {
+            log.warn(
+              "app init diagnostic: automatic device authorization rejected",
+            );
             state.errorMsg = state.t(authorization.error.translationKey);
             return;
           }
@@ -252,6 +261,7 @@ export class VaultInitializationActions {
       }
       const continued = await this.continueInitializationAfterDeviceUnlock();
       if (continued.isErr()) {
+        log.warn("app init diagnostic: authorized continuation rejected");
         if (deviceIdentityUnlocked) {
           const locked = await state.lockDeviceProtection();
           if (locked.isErr()) {
@@ -285,6 +295,7 @@ export class VaultInitializationActions {
     } finally {
       state.deviceAuthorizationInProgress = false;
       state.isInitializing = false;
+      log.info("app init diagnostic: initialization settled");
     }
   }
 
