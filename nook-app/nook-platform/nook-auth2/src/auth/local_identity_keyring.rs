@@ -603,6 +603,48 @@ mod tests {
     }
 
     #[test]
+    fn signing_seed_protection_wire_preserves_legacy_and_protected_states() -> anyhow::Result<()> {
+        let ProtectedEntryFixture {
+            entry,
+            app_key,
+            signing_public_key,
+        } = ProtectedEntryFixture::new()?;
+        let protected_wire = serde_json::to_value(&entry)?;
+        let protected: LocalIdentityKeyringEntry = serde_json::from_value(protected_wire.clone())?;
+
+        assert!(protected.has_signing_seed());
+        assert_eq!(protected.signing_public_key(&app_key)?, signing_public_key);
+
+        let mut omitted_wire = protected_wire.clone();
+        let serde_json::Value::Object(omitted_fields) = &mut omitted_wire else {
+            anyhow::bail!("local identity keyring entry did not serialize as an object");
+        };
+        omitted_fields.remove("signingSeedEnvelope");
+        let omitted: LocalIdentityKeyringEntry = serde_json::from_value(omitted_wire)?;
+        assert_eq!(
+            omitted.open_signing_seed(&app_key)?,
+            ProtectedSigningMaterial::LegacySeedRequired
+        );
+        assert!(
+            serde_json::to_value(&omitted)?
+                .get("signingSeedEnvelope")
+                .is_none()
+        );
+
+        let mut null_wire = protected_wire;
+        let serde_json::Value::Object(null_fields) = &mut null_wire else {
+            anyhow::bail!("local identity keyring entry did not serialize as an object");
+        };
+        null_fields.insert("signingSeedEnvelope".to_owned(), serde_json::Value::Null);
+        let explicit_null: LocalIdentityKeyringEntry = serde_json::from_value(null_wire)?;
+        assert_eq!(
+            explicit_null.open_signing_seed(&app_key)?,
+            ProtectedSigningMaterial::LegacySeedRequired
+        );
+        Ok(())
+    }
+
+    #[test]
     fn replacing_wrapped_app_key_preserves_protected_signing_seed() -> anyhow::Result<()> {
         let ProtectedEntryFixture {
             mut entry,

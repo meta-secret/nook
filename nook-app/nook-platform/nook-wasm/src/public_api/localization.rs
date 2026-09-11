@@ -223,20 +223,18 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> Result<String, wasm_bindgen::JsError> {
     TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
         locale,
         wasm_catalog_json: TranslationCatalogSource::Supplied(wasm_catalog_json),
     })
+    .map_err(Into::into)
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_translation_catalog(locale: &str) -> String {
-    TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
-        locale,
-        wasm_catalog_json: TranslationCatalogSource::Bundled,
-    })
+    AppLocale::get_translation_catalog(locale).to_owned()
 }
 
 #[cfg(test)]
@@ -294,7 +292,8 @@ mod tests {
         );
         assert!(!resolve_error_message(&catalog, "en", "unknown error").is_empty());
         assert!(merge_translation_catalogs("{}", "{}").is_ok());
-        assert!(!resolve_translation_catalog("en", &catalog).is_empty());
+        assert!(resolve_translation_catalog("en", &catalog).is_ok());
+        assert!(resolve_translation_catalog("en", "{").is_err());
         assert!(!default_translation_catalog("en").is_empty());
     }
 }

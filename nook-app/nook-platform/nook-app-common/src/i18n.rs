@@ -397,9 +397,13 @@ impl TranslationCatalog {
 
 /// Resolves the active catalog for a locale. The embedded catalog is used as the
 /// overlay so bundled keys win when a caller supplies a stale wasm catalog.
+///
+/// Returns an error when a supplied catalog cannot be parsed or merged.
 impl TranslationCatalog {
     #[must_use]
-    pub fn resolve_translation_catalog(request: ResolveTranslationCatalogRequest<'_>) -> String {
+    pub fn resolve_translation_catalog(
+        request: ResolveTranslationCatalogRequest<'_>,
+    ) -> serde_json::Result<String> {
         let ResolveTranslationCatalogRequest {
             locale,
             wasm_catalog_json,
@@ -411,9 +415,8 @@ impl TranslationCatalog {
                     base_json: wasm_catalog,
                     overlay_json: bundled,
                 })
-                .unwrap_or_else(|_| bundled.to_owned())
             }
-            TranslationCatalogSource::Bundled => bundled.to_owned(),
+            TranslationCatalogSource::Bundled => Ok(bundled.to_owned()),
         }
     }
 }
@@ -638,13 +641,13 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_translation_catalog_overlays_bundled_keys() {
+    fn test_resolve_translation_catalog_overlays_bundled_keys() -> serde_json::Result<()> {
         let stale_ru = r#"{"provider_picker":{"this_device":"Это устройство","github":"GitHub"}}"#;
         let resolved =
             TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
                 locale: "ru",
                 wasm_catalog_json: TranslationCatalogSource::Supplied(stale_ru),
-            });
+            })?;
         assert_eq!(
             TranslationCatalog::lookup_translation(LookupTranslationRequest {
                 catalog_json: &resolved,
@@ -658,6 +661,25 @@ mod tests {
                 key: i18n_keys::PROVIDER_PICKER_THIS_DEVICE
             }),
             TranslationLookup::Found("Это устройство".to_owned())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_translation_catalog_rejects_malformed_supplied_catalog() {
+        assert!(
+            TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
+                locale: "en",
+                wasm_catalog_json: TranslationCatalogSource::Supplied("{"),
+            })
+            .is_err()
+        );
+        assert!(
+            TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
+                locale: "en",
+                wasm_catalog_json: TranslationCatalogSource::Bundled,
+            })
+            .is_ok()
         );
     }
 
