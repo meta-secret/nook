@@ -190,9 +190,12 @@ describe('local data recovery support', () => {
     vi.stubGlobal('navigator', {
       locks: {
         request: async (
-          _name: string,
-          operation: () => Promise<Result<void, VaultStorageFailure>>,
-        ) => operation(),
+          ...request: [
+            string,
+            LockOptions,
+            () => Promise<Result<void, VaultStorageFailure>>,
+          ]
+        ) => request[2](),
       },
     })
     class RecoveryChannel {

@@ -20,7 +20,6 @@ import {
 import { VaultState } from '$lib/vault.svelte'
 import { VaultInitializationActions } from '$lib/vault/lifecycle'
 import { BrowserIdentityHandoffKind } from '$lib/vault/identity-handoff'
-import { EnrollmentLinkKind } from '$lib/vault/state/lifecycle.svelte'
 import {
   NativeVaultStorageFailure,
   VaultStorageFailure,
@@ -142,10 +141,7 @@ describe('external browser identity handoff commit ownership', () => {
         VaultStorageFailureKind.OperationFailed,
       )
       fixture.state.deviceAuthorizationInProgress = true
-      fixture.state.enrollmentLinkState = {
-        kind: EnrollmentLinkKind.Pending,
-        payload: 'pending-enrollment',
-      }
+      fixture.state.pendingEnrollmentFromUrl = 'pending-enrollment'
       vi.spyOn(
         fixture.manager,
         'has_pending_sentinel_genesis_finalization',

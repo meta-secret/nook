@@ -24,6 +24,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   document.body.replaceChildren()
+  document.querySelector('aside[aria-label="Nook passkey"]')?.remove()
   Reflect.deleteProperty(globalThis, 'chrome')
   vi.restoreAllMocks()
 })
