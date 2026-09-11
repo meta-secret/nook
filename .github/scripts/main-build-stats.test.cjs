@@ -13,7 +13,7 @@ const {
 function fixture() {
   return {
     run: {
-      name: 'Main',
+      name: 'CI',
       workflow_id: 77,
       id: 123456,
       run_attempt: 1,
@@ -427,7 +427,7 @@ test('workflow records completed trusted Main runs in Nook Workbench', () => {
   )
   assert.match(
     collector,
-    /workflow_run:\n\s+workflows: \[Main\]\n\s+types: \[completed\]\n\s+branches: \[main\]/,
+    /workflow_run:\n\s+workflows: \[CI\]\n\s+types: \[completed\]\n\s+branches: \[main\]/,
   )
   assert.match(collector, /github\.event\.workflow_run\.event == 'push'/)
   assert.match(collector, /github\.event\.workflow_run\.head_branch == 'main'/)

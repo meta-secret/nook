@@ -34,8 +34,8 @@ function githubFixture({ artifacts, runs }) {
 function mainRun(overrides = {}) {
   return {
     id: 41,
-    name: 'Main',
-    path: '.github/workflows/main.yml@refs/heads/main',
+    name: 'CI',
+    path: '.github/workflows/ci.yml@refs/heads/main',
     head_branch: 'main',
     head_sha: BASE_SHA,
     event: 'push',

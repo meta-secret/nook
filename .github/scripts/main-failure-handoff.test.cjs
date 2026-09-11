@@ -15,7 +15,7 @@ function run(overrides = {}) {
   return {
     id: 30190000000,
     run_attempt: 1,
-    name: 'Main',
+    name: 'CI',
     event: 'push',
     head_branch: 'main',
     head_sha: 'abcdef0123456789abcdef0123456789abcdef01',
@@ -363,7 +363,7 @@ test('handoff workflow trusts default-branch code and writes only Workbench', ()
   )
   assert.match(
     workflow,
-    /workflow_run:\n\s+workflows: \[Main\]\n\s+types: \[completed\]\n\s+branches: \[main\]/,
+    /workflow_run:\n\s+workflows: \[CI\]\n\s+types: \[completed\]\n\s+branches: \[main\]/,
   )
   assert.match(
     workflow,

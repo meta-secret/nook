@@ -10,7 +10,7 @@ name: PR validation handoff
 
 on:
   workflow_run:
-    workflows: [PR]
+    workflows: [CI]
     types: [completed]
 
 permissions:
@@ -49,8 +49,8 @@ jobs:
             })
             const workflowPath = run.path?.replace(/@[^@]+$/, '')
             if (
-              run.name !== 'PR' ||
-              workflowPath !== '.github/workflows/pr.yml' ||
+              run.name !== 'CI' ||
+              workflowPath !== '.github/workflows/ci.yml' ||
               run.event !== 'pull_request' ||
               run.status !== 'completed' ||
               run.conclusion !== 'success' ||
@@ -67,6 +67,13 @@ jobs:
               per_page: 100,
             })
 
+            const productRequest = jobs.find((job) =>
+              job.name === 'PR validation / Validate explicit CI request' &&
+              job.conclusion === 'success',
+            )
+            if (!productRequest) return
+            core.setOutput('eligible', 'true')
+
             const currentAttempt = run.run_attempt
             if (!Number.isSafeInteger(currentAttempt) || currentAttempt <= 0) {
               core.setFailed(`Run ${runId} has an invalid attempt: ${currentAttempt}`)
@@ -74,7 +81,7 @@ jobs:
             }
 
             const hasSuccessfulJob = (requiredName, allowEarlierAttempt) => {
-              const matchingJobs = jobs.filter((candidate) => candidate.name === requiredName)
+              const matchingJobs = jobs.filter((candidate) => candidate.name === `PR validation / ${requiredName}`)
               const currentJob = matchingJobs.find(
                 (candidate) => candidate.run_attempt === currentAttempt,
               )
@@ -133,12 +140,14 @@ jobs:
             core.setOutput('pr-number', String(pullRequest.number))
 
       - name: Checkout validated PR base
+        if: steps.source.outputs.eligible == 'true'
         uses: actions/checkout@v7
         with:
           ref: ${{ steps.source.outputs.base-sha }}
           fetch-depth: 0
 
       - name: Recreate validated PR merge tree
+        if: steps.source.outputs.eligible == 'true'
         env:
           HEAD_SHA: ${{ steps.source.outputs.head-sha }}
         run: |
@@ -149,14 +158,16 @@ jobs:
           git read-tree --reset -u "$merge_tree"
 
       - name: Derive exact validation keys
+        if: steps.source.outputs.eligible == 'true'
         id: keys
         run: |
           {
-            echo "native=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}"
-            echo "wasm=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}"
+            echo "native=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/ci.yml', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}"
+            echo "wasm=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/ci.yml', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Download validated native handoff
+        if: steps.source.outputs.eligible == 'true'
         uses: actions/download-artifact@v8
         with:
           name: pr-rust-${{ steps.source.outputs.run-id }}
@@ -166,6 +177,7 @@ jobs:
           run-id: ${{ steps.source.outputs.run-id }}
 
       - name: Download validated WASM handoff
+        if: steps.source.outputs.eligible == 'true'
         uses: actions/download-artifact@v8
         with:
           name: pr-wasm-${{ steps.source.outputs.run-id }}
@@ -175,6 +187,7 @@ jobs:
           run-id: ${{ steps.source.outputs.run-id }}
 
       - name: Validate and attest promoted handoffs
+        if: steps.source.outputs.eligible == 'true'
         env:
           HEAD_SHA: ${{ steps.source.outputs.head-sha }}
           NATIVE_KEY: ${{ steps.keys.outputs.native }}
@@ -219,7 +232,7 @@ jobs:
                 source_run_id: $source_run_id,
                 source_head_sha: $head_sha,
                 source_pr_number: $pr_number,
-                source_workflow: ".github/workflows/pr.yml",
+                source_workflow: ".github/workflows/ci.yml",
                 producer_jobs_verified: true
               }' > "$output"
           }
@@ -227,6 +240,7 @@ jobs:
           manifest wasm "$WASM_KEY" "$wasm/nook-validation-manifest.json"
 
       - name: Publish trusted native handoff
+        if: steps.source.outputs.eligible == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.keys.outputs.native }}
@@ -235,6 +249,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish trusted WASM handoff
+        if: steps.source.outputs.eligible == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.keys.outputs.wasm }}

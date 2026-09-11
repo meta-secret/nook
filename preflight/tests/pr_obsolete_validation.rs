@@ -84,11 +84,11 @@ fn obsolete_validation_cancellation_is_marker_free_and_head_bound() -> Result<()
         !root.join(".github/workflows/pr-obsolete-validation.yml").exists(),
         "native workflow concurrency must replace the cancellation worker"
     );
-    for path in [".github/workflows/pr.yml", ".github/workflows/rust-ecosystem.yml"] {
+    for path in [".github/workflows/ci.yml"] {
         let workflow = root.read(path)?;
         for required in [
-            "types: [labeled, synchronize, edited]",
-            "cancel-in-progress: true",
+            "types: [opened, synchronize, reopened, labeled, edited, closed]",
+            "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
             "github.event.changes.base.ref.from != ''",
             "if: github.event",
             "github.event.label.name == 'ci:validate'",

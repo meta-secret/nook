@@ -31,7 +31,7 @@ Nook separates iterative evidence from merge authorization.
    - Provide repeatable debugging evidence.
    - Do not authorize merge.
 2. **Complete PR validation**
-   - Runs through `.github/workflows/pr.yml`.
+   - Runs through `.github/workflows/ci.yml` and its reusable PR component.
    - Starts only after Gizmo explicitly requests validation for the integrated
      pushed head.
    - Provides the exact-head checks and deployment required for readiness.

@@ -128,7 +128,7 @@ function normalizeJob(job) {
   )
   return {
     id: requireInteger(job.id, 'job.id'),
-    name: requireString(job.name, 'job.name'),
+    name: requireString(job.name, 'job.name').replace(/^Main validation \/ /, ''),
     status: requireString(job.status, 'job.status'),
     ...(job.conclusion ? { conclusion: job.conclusion } : {}),
     ...(job.runner_name ? { runner_name: job.runner_name } : {}),
@@ -361,8 +361,8 @@ function buildMainBuildStats({
   cacheTelemetry = [],
   recordedAt,
 }) {
-  if (run.name !== 'Main')
-    throw new Error(`expected Main workflow, got ${run.name}`)
+  if (run.name !== 'CI')
+    throw new Error(`expected CI workflow, got ${run.name}`)
   if (run.event !== 'push')
     throw new Error(`expected push event, got ${run.event}`)
   if (run.head_branch !== 'main')

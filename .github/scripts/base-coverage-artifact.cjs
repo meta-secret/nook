@@ -1,5 +1,5 @@
-const MAIN_WORKFLOW_NAME = 'Main'
-const MAIN_WORKFLOW_PATH = '.github/workflows/main.yml'
+const MAIN_WORKFLOW_NAME = 'CI'
+const MAIN_WORKFLOW_PATH = '.github/workflows/ci.yml'
 const BaseCoverageArtifactKind = Object.freeze({
   Found: 'found',
   Unavailable: 'unavailable',
@@ -46,8 +46,8 @@ async function findBaseCoverageArtifact({
     })
     const workflowPath = run.path?.replace(/@[^@]+$/, '')
     if (
-      run.name === MAIN_WORKFLOW_NAME &&
-      workflowPath === MAIN_WORKFLOW_PATH &&
+      ((run.name === MAIN_WORKFLOW_NAME && workflowPath === MAIN_WORKFLOW_PATH) ||
+        (run.name === 'Main' && workflowPath === '.github/workflows/main.yml')) &&
       run.head_branch === defaultBranch &&
       run.head_sha === baseSha &&
       run.event === 'push'

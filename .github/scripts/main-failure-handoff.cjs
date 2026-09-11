@@ -34,7 +34,7 @@ function requireTimestamp(value, label) {
 
 function requireMainRun(run) {
   if (!run || typeof run !== 'object') throw new Error('run must be an object')
-  if (run.name !== 'Main') throw new Error(`expected Main workflow, got ${run.name}`)
+  if (run.name !== 'CI') throw new Error(`expected CI workflow, got ${run.name}`)
   if (run.event !== 'push') throw new Error(`expected push event, got ${run.event}`)
   if (run.head_branch !== 'main') {
     throw new Error(`expected main branch, got ${run.head_branch}`)

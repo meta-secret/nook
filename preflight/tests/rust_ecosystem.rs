@@ -108,7 +108,7 @@ impl DependencyPolicyCacheContract {
 #[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
     let entry =
-        RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem.yml")?;
+        RepositoryFixture::repository_root().read(".github/workflows/ci.yml")?;
     let checks =
         RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml")?;
     let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml")?;
@@ -152,27 +152,18 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     assert!(
         entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
-        "Thin rust-ecosystem.yml must call the shared Rust ecosystem checks"
+        "Central ci.yml must call the shared Rust ecosystem checks"
     );
     assert!(
-        entry.contains("agentic-ai/minds/**"),
-        "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
+        entry.contains("agentic-ai/minds/*"),
+        "Central ci.yml must keep labeled minds-only PR coverage"
     );
     for marker in [
-        "github.rest.pulls.listFiles",
-        "const isIgnoredByProductWorkflow",
-        "path.startsWith('.cortex/')",
-        "path.startsWith('.cursor/')",
-        "path === '.github/workflows/web-research.yml'",
-        "path.startsWith('agentic-ai/')",
-        "path.startsWith('nook-app/nook-web/nook-web-research/')",
-        "files.every((file) => isIgnoredByProductWorkflow(file.filename))",
-        "needs.validation-request.outputs.should-run == 'true'",
+        "needs.scope.outputs.product == 'false'",
+        "needs.scope.outputs.minds == 'true'",
+        "github.event.label.name == 'ci:validate'",
     ] {
-        assert!(
-            entry.contains(marker),
-            "Thin rust-ecosystem.yml must defer only paths handled by pr.yml: missing {marker}"
-        );
+        assert!(entry.contains(marker), "central CI routing missing: {marker}");
     }
     assert!(
         main.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml")
@@ -190,22 +181,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                 == 5,
         "trusted native/ecosystem Rust jobs must use configured ARC while forks fall back hosted"
     );
-    assert!(
-        !entry.contains("\n  push:"),
-        "Thin rust-ecosystem.yml must not start a second Main-push run"
-    );
-    for marker in [
-        "- \"!agentic-ai/**\"",
-        "- \"agentic-ai/minds/**\"",
-        "product-paths:",
-        "git diff --name-only \"$BEFORE_SHA\" \"$AFTER_SHA\"",
-        "if: needs.product-paths.outputs.changed == 'true'",
-    ] {
-        assert!(
-            main.contains(marker),
-            "Main must route minds pushes while gating product jobs: missing {marker}"
-        );
-    }
+    assert!(entry.contains("branches: [main]"));
+    assert!(main.contains("workflow_call:") && main.contains("if: inputs.product_changed"));
     assert!(
         dependency_policy.contains("name: Dependency policy and RustSec")
             && dependency_policy.contains("timeout-minutes: 5"),
@@ -213,7 +190,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     assert!(
         !entry.contains("Run dependency policy") && !entry.contains("Bake rust-dependency-policy"),
-        "Thin rust-ecosystem.yml must not duplicate dependency-policy steps"
+        "Central ci.yml must not duplicate dependency-policy steps"
     );
 
     for marker in [
@@ -619,7 +596,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "{relative} must deny unwrap in tests"
         );
     }
-    assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
+    assert!(readiness.contains("workflowFile: \"ci.yml\""));
     assert!(readiness.contains("new PullRequestChangedPath(path).isMainPrIgnoredPath()"));
     Ok(())
 }

@@ -12,6 +12,7 @@ export class ArcWorkflowPlacementContract {
   constructor(private readonly root: string) {}
   async assert(): Promise<Result<void, OperationalContractFailure>> {
     const hostedUntrustedBoundary = new Set([
+      "ci.yml#scope",
       "hive.yml#verify-fork",
       "hive.yml#console-untrusted",
       "web-research.yml#validate-untrusted",
@@ -65,8 +66,9 @@ export class ArcWorkflowPlacementContract {
           ]);
           const { if: condition = "" } = job;
           if (
-            !condition.includes("head.repo.full_name") ||
-            !condition.includes("dependabot[bot]")
+            identity !== "ci.yml#scope" &&
+            (!condition.includes("head.repo.full_name") ||
+              !condition.includes("dependabot[bot]"))
           ) {
             return err({
               kind: OperationalContractFailureKind.Requirement,
