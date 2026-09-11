@@ -93,6 +93,7 @@ COPY --from=nook-formatter \
   bun.lock \
   prettier-default.json \
   prettier-shared-typescript.json \
+  prettier-skill.json \
   prettier-web.json \
   format.sh \
   /opt/nook-formatter/

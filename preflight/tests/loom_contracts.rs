@@ -259,7 +259,10 @@ fn loom_workflow_audits_every_cortex_change() {
         "task preflight:format-contract",
         "task loom:cortex-audit",
     ] {
-        assert!(dockerfile.contains(task), "Docker policy must retain `{task}`");
+        assert!(
+            dockerfile.contains(task),
+            "Docker policy must retain `{task}`"
+        );
     }
     assert!(
         workflow.contains("run: task ci:repository-policy:trusted")

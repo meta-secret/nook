@@ -125,6 +125,7 @@ tasks:
       vars: [IMPLEMENTATION_REPO_ROOT, FORMAT_CHANGED_FILES]
     cmds:
       - |
+        bash <<'FORMAT_BASH'
         set -euo pipefail
         inputs="$(mktemp -d)"
         output="$(mktemp -d)"
@@ -170,3 +171,4 @@ tasks:
           test -f "$output/$path" && test ! -L "$output/$path"
           cp -- "$output/$path" "$implementation/$path"
         done <"$inputs/files"
+        FORMAT_BASH

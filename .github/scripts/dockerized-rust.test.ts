@@ -24,12 +24,6 @@ const tasksSchema = z.object({
   }),
 });
 
-const formatterTasksSchema = z.object({
-  tasks: z.object({
-    "ci:format:implementation": z.object({ cmds: z.array(z.string()) }),
-  }),
-});
-
 interface GitFixtureCommand {
   cwd: string;
   args: string[];
@@ -61,6 +55,9 @@ class DockerizedRustContract {
     );
     expect(ecosystem.match(/cache-selection: native/g)).toHaveLength(1);
     expect(this.read(".github/formatting/Dockerfile")).toContain(
+      "prettier-skill.json",
+    );
+    expect(this.read("agentic-ai/minds/hive/Dockerfile")).toContain(
       "prettier-skill.json",
     );
     const audit = this.read(".github/docker/rust-maintenance.hcl");
@@ -258,11 +255,6 @@ class DockerizedRustContract {
   `,
         { mode: 0o755 },
       );
-      const task = formatterTasksSchema.parse(
-        Bun.YAML.parse(this.read(".task/ci-workflows.yml")),
-      );
-      const script = task.tasks["ci:format:implementation"].cmds[0];
-      if (!script) throw new Error("Formatter task missing");
       const files = join(temporary, "files");
       for (const scenario of [
         "complete",
@@ -282,8 +274,12 @@ class DockerizedRustContract {
         writeFileSync(files, `${path}\0`);
         writeFileSync(dockerLog, "");
         const result = spawnSync(
-          "bash",
-          ["-c", script.replaceAll("{{.REPO_ROOT}}", this.root)],
+          "task",
+          [
+            "--taskfile",
+            join(this.root, "Taskfile.yml"),
+            "ci:format:implementation",
+          ],
           {
             cwd: this.root,
             encoding: "utf8",
@@ -291,6 +287,7 @@ class DockerizedRustContract {
               ...process.env,
               PATH: `${bin}:${process.env.PATH}`,
               FORMAT_CHANGED_FILES: files,
+              REPO_ROOT: this.root,
               IMPLEMENTATION_REPO_ROOT: implementation,
               DOCKER_LOG: dockerLog,
               FORMAT_EXPORT_MODE: scenario,
