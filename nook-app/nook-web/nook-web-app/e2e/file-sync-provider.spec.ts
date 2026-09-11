@@ -18,12 +18,14 @@ import {
   waitForVaultSyncIdle,
 } from './helpers'
 import {
+  E2eSyncProviderId,
   connectSyncGenesisDevice,
   connectSyncJoinerDevice,
   createSyncTarget,
   installSyncRemote,
   installSyncRemoteOnPages,
   waitForSyncRemoteState,
+  type LocalFileSyncE2eTarget,
   type SyncE2eTarget,
 } from './sync-provider'
 
@@ -34,7 +36,7 @@ test.describe('file sync provider event log', () => {
   let contextB: BrowserContext
   let deviceA: Page
   let deviceB: Page
-  let target: SyncE2eTarget
+  let target: LocalFileSyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
     contextA = await createIsolatedContext(browser)
@@ -43,7 +45,7 @@ test.describe('file sync provider event log', () => {
     deviceB = await contextB.newPage()
     await disableVaultIdleLock(deviceA)
     await disableVaultIdleLock(deviceB)
-    target = createSyncTarget('', 'file-sync', 'file')
+    target = createSyncTarget('', 'file-sync', E2eSyncProviderId.File)
     await installSyncRemoteOnPages([deviceA, deviceB], target)
   })
 
@@ -167,7 +169,7 @@ test.describe('file sync provider event log', () => {
 })
 
 function createIsolatedFileTarget(prefix: string, tokenSuffix: string) {
-  const target = createSyncTarget('', prefix, 'file')
+  const target = createSyncTarget('', prefix, E2eSyncProviderId.File)
   return {
     ...target,
     pat: `ya29.e2e_${tokenSuffix}_${Date.now()}`,

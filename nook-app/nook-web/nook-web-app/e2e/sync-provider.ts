@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test'
-import type { createLocalE2eGithubVaultStub } from './helpers'
 import { expect } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
+import { createLocalE2eGithubVaultStub } from './helpers/local-sync'
 import { createLocalE2eICloudVaultStub } from './icloud-stub'
 import { createE2eRemoteName } from './sync-stub'
 import {
@@ -14,13 +14,6 @@ import {
 export enum E2eSyncProviderId {
   File = 'file',
   Local = 'local',
-  GoogleDrive = 'google-drive',
-  ICloud = 'icloud',
-  GitHub = 'github',
-}
-
-enum E2eSyncStubBackend {
-  File = 'file',
   GoogleDrive = 'google-drive',
   ICloud = 'icloud',
   GitHub = 'github',
@@ -77,22 +70,6 @@ export const E2E_SYNC_PROVIDERS: Record<E2eSyncProviderId, E2eSyncProviderDef> =
     },
   }
 
-function stubBackendId(providerId: E2eSyncProviderId): E2eSyncStubBackend {
-  if (
-    providerId === E2eSyncProviderId.File ||
-    providerId === E2eSyncProviderId.Local
-  ) {
-    return E2eSyncStubBackend.File
-  }
-  if (providerId === E2eSyncProviderId.GoogleDrive) {
-    return E2eSyncStubBackend.GoogleDrive
-  }
-  if (providerId === E2eSyncProviderId.ICloud) {
-    return E2eSyncStubBackend.ICloud
-  }
-  return E2eSyncStubBackend.GitHub
-}
-
 /** Which sync backend to exercise — set per CI job via `NOOK_E2E_SYNC_PROVIDER`. */
 export function resolveE2eSyncProvider(): E2eSyncProviderId {
   const [raw = E2eSyncProviderId.File] = [
@@ -130,41 +107,89 @@ export function hasLiveSyncCredential(
   return liveSyncCredential(id).length > 0
 }
 
-export type SyncRemoteHandle =
-  | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
-  | ReturnType<typeof createLocalE2eFileSyncVaultStub>
-  | ReturnType<typeof createLocalE2eICloudVaultStub>
-  | ReturnType<typeof createLocalE2eGithubVaultStub>
-
 type OAuthFileRemoteHandle =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
   | ReturnType<typeof createLocalE2eFileSyncVaultStub>
 type GithubRemoteHandle = ReturnType<typeof createLocalE2eGithubVaultStub>
+type ICloudRemoteHandle = ReturnType<typeof createLocalE2eICloudVaultStub>
 
-/** Remote target for e2e sync — `pat` is access token, `repoName` is the remote file/repo id. */
-export type SyncE2eTarget = {
-  providerId: E2eSyncProviderId
+export type SyncRemoteHandle =
+  OAuthFileRemoteHandle | ICloudRemoteHandle | GithubRemoteHandle
+
+export type LocalFileSyncE2eTarget = {
+  providerId: E2eSyncProviderId.File | E2eSyncProviderId.Local
   pat: string
   repoName: string
-  stub?: SyncRemoteHandle
+  stub: ReturnType<typeof createLocalE2eFileSyncVaultStub>
 }
 
-function createStubHandle(
-  providerId: E2eSyncProviderId,
-  initialYaml: string,
-  remoteId: string,
-): SyncRemoteHandle {
-  const backend = stubBackendId(providerId)
-  if (backend === E2eSyncStubBackend.File) {
-    return createLocalE2eFileSyncVaultStub(initialYaml, remoteId)
-  }
-  if (backend === E2eSyncStubBackend.ICloud) {
-    return createLocalE2eICloudVaultStub(initialYaml, remoteId)
-  }
-  return createLocalE2eGoogleDriveVaultStub(initialYaml, remoteId)
+export type GoogleDriveSyncE2eTarget = {
+  providerId: E2eSyncProviderId.GoogleDrive
+  pat: string
+  repoName: string
+  stub: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
+}
+
+export type OAuthFileSyncE2eTarget =
+  LocalFileSyncE2eTarget | GoogleDriveSyncE2eTarget
+
+export type ICloudSyncE2eTarget = {
+  providerId: E2eSyncProviderId.ICloud
+  pat: string
+  repoName: string
+  stub: ICloudRemoteHandle
+}
+
+export type GithubSyncE2eTarget = {
+  providerId: E2eSyncProviderId.GitHub
+  pat: string
+  repoName: string
+  stub?: GithubRemoteHandle
+}
+
+/** Remote target for e2e sync — `pat` is access token, `repoName` is the remote file/repo id. */
+export type SyncE2eTarget =
+  | LocalFileSyncE2eTarget
+  | GoogleDriveSyncE2eTarget
+  | ICloudSyncE2eTarget
+  | GithubSyncE2eTarget
+
+export function isOauthFileSyncTarget(
+  target: SyncE2eTarget,
+): target is LocalFileSyncE2eTarget | GoogleDriveSyncE2eTarget {
+  return (
+    target.providerId === E2eSyncProviderId.File ||
+    target.providerId === E2eSyncProviderId.Local ||
+    target.providerId === E2eSyncProviderId.GoogleDrive
+  )
 }
 
 /** One isolated remote vault per suite — provider chosen by env or override. */
+export function createSyncTarget(
+  initialYaml: string,
+  prefix: string,
+  providerId: E2eSyncProviderId.File | E2eSyncProviderId.Local,
+): LocalFileSyncE2eTarget
+export function createSyncTarget(
+  initialYaml: string,
+  prefix: string,
+  providerId: E2eSyncProviderId.GoogleDrive,
+): GoogleDriveSyncE2eTarget
+export function createSyncTarget(
+  initialYaml: string,
+  prefix: string,
+  providerId: E2eSyncProviderId.ICloud,
+): ICloudSyncE2eTarget
+export function createSyncTarget(
+  initialYaml: string,
+  prefix: string,
+  providerId: E2eSyncProviderId.GitHub,
+): GithubSyncE2eTarget
+export function createSyncTarget(
+  initialYaml?: string,
+  prefix?: string,
+  providerId?: E2eSyncProviderId,
+): SyncE2eTarget
 export function createSyncTarget(
   initialYaml = '',
   prefix?: string,
@@ -172,12 +197,38 @@ export function createSyncTarget(
 ): SyncE2eTarget {
   const def = e2eSyncProviderDef(providerId)
   const remoteId = createE2eRemoteName(((...[v = providerId]) => v)(prefix))
-  const stub = createStubHandle(providerId, initialYaml, remoteId)
+  if (
+    providerId === E2eSyncProviderId.File ||
+    providerId === E2eSyncProviderId.Local
+  ) {
+    return {
+      pat: def.stubCredential,
+      repoName: remoteId,
+      providerId,
+      stub: createLocalE2eFileSyncVaultStub(initialYaml, remoteId),
+    }
+  }
+  if (providerId === E2eSyncProviderId.GoogleDrive) {
+    return {
+      pat: def.stubCredential,
+      repoName: remoteId,
+      providerId,
+      stub: createLocalE2eGoogleDriveVaultStub(initialYaml, remoteId),
+    }
+  }
+  if (providerId === E2eSyncProviderId.ICloud) {
+    return {
+      pat: def.stubCredential,
+      repoName: remoteId,
+      providerId,
+      stub: createLocalE2eICloudVaultStub(initialYaml, remoteId),
+    }
+  }
   return {
-    providerId,
     pat: def.stubCredential,
     repoName: remoteId,
-    stub,
+    providerId,
+    stub: createLocalE2eGithubVaultStub(initialYaml),
   }
 }
 
@@ -186,26 +237,27 @@ export async function installSyncRemote(
   target: SyncE2eTarget,
   vaultYaml?: string,
 ) {
-  const backend = stubBackendId(target.providerId)
-  if (backend === E2eSyncStubBackend.File) {
-    await (
-      target.stub as ReturnType<typeof createLocalE2eFileSyncVaultStub>
-    ).install(page, {
+  if (
+    target.providerId === E2eSyncProviderId.File ||
+    target.providerId === E2eSyncProviderId.Local ||
+    target.providerId === E2eSyncProviderId.GoogleDrive
+  ) {
+    await target.stub.install(page, {
       fileName: target.repoName,
       vaultYaml,
       accessToken: target.pat,
     })
     return
   }
-  if (backend === E2eSyncStubBackend.ICloud) {
-    await (
-      target.stub as ReturnType<typeof createLocalE2eICloudVaultStub>
-    ).install(page, { fileName: target.repoName, vaultYaml })
+  if (target.providerId === E2eSyncProviderId.ICloud) {
+    await target.stub.install(page, { fileName: target.repoName, vaultYaml })
     return
   }
-  await (
-    target.stub as ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
-  ).install(page, { fileName: target.repoName, vaultYaml })
+  if (!target.stub) return
+  await target.stub.install(page, {
+    repoName: target.repoName,
+    vaultYaml,
+  })
 }
 
 export async function installSyncRemoteOnPages(
@@ -229,7 +281,7 @@ export async function waitForSyncRemoteState(
   options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<VaultYamlSnapshot> {
   return waitForVaultEventLogSnapshot(
-    () => ((v) => (v ? v : []))(target.stub?.getEventFileContents()),
+    () => target.stub?.getEventFileContents() || [],
     predicate,
     {
       timeoutMs: ((...[v = 30_000]) => v)(options?.timeoutMs),
@@ -239,28 +291,23 @@ export async function waitForSyncRemoteState(
 }
 
 export async function connectSyncVault(page: Page, target: SyncE2eTarget) {
-  const backend = stubBackendId(target.providerId)
   if (
-    backend === E2eSyncStubBackend.GoogleDrive ||
-    backend === E2eSyncStubBackend.File
+    target.providerId === E2eSyncProviderId.GoogleDrive ||
+    target.providerId === E2eSyncProviderId.File ||
+    target.providerId === E2eSyncProviderId.Local
   ) {
     const { connectGoogleDriveVault } = await import('./helpers')
     await connectGoogleDriveVault(
       page,
       target.pat,
       target.repoName,
-      target.stub as OAuthFileRemoteHandle,
+      target.stub,
     )
     return
   }
-  if (backend === E2eSyncStubBackend.GitHub) {
+  if (target.providerId === E2eSyncProviderId.GitHub) {
     const { connectGithubVault } = await import('./helpers')
-    await connectGithubVault(
-      page,
-      target.pat,
-      target.repoName,
-      target.stub as GithubRemoteHandle,
-    )
+    await connectGithubVault(page, target.pat, target.repoName, target.stub)
     return
   }
   throw new Error(
@@ -272,10 +319,10 @@ export async function connectSyncGenesisDevice(
   page: Page,
   target: SyncE2eTarget,
 ) {
-  const backend = stubBackendId(target.providerId)
   if (
-    backend === E2eSyncStubBackend.GoogleDrive ||
-    backend === E2eSyncStubBackend.File
+    target.providerId === E2eSyncProviderId.GoogleDrive ||
+    target.providerId === E2eSyncProviderId.File ||
+    target.providerId === E2eSyncProviderId.Local
   ) {
     const {
       clearBrowserVault,
@@ -304,15 +351,13 @@ export async function connectSyncGenesisDevice(
     }
     await assertVaultReady(page)
     const genesisYaml = await readLocalVaultYamlFromIdb(page)
-    const remote = target.stub as OAuthFileRemoteHandle
-    if (remote) {
-      remote.setVaultYaml(genesisYaml)
-      await remote.install(page, {
-        fileName: target.repoName,
-        vaultYaml: genesisYaml,
-        accessToken: target.pat,
-      })
-    }
+    const remote = target.stub
+    remote.setVaultYaml(genesisYaml)
+    await remote.install(page, {
+      fileName: target.repoName,
+      vaultYaml: genesisYaml,
+      accessToken: target.pat,
+    })
     await reloadUnlockWithSyncProvider(page, {
       providers: [
         {
@@ -328,13 +373,13 @@ export async function connectSyncGenesisDevice(
     await disableVaultIdleLock(page)
     return
   }
-  if (backend === E2eSyncStubBackend.GitHub) {
+  if (target.providerId === E2eSyncProviderId.GitHub) {
     const { connectGithubGenesisDevice } = await import('./helpers')
     await connectGithubGenesisDevice(
       page,
       target.pat,
       target.repoName,
-      target.stub as never,
+      target.stub,
     )
     return
   }
@@ -347,31 +392,29 @@ export async function connectSyncJoinerDevice(
   page: Page,
   target: SyncE2eTarget,
 ) {
-  const backend = stubBackendId(target.providerId)
   if (
-    backend === E2eSyncStubBackend.GoogleDrive ||
-    backend === E2eSyncStubBackend.File
+    target.providerId === E2eSyncProviderId.GoogleDrive ||
+    target.providerId === E2eSyncProviderId.File ||
+    target.providerId === E2eSyncProviderId.Local
   ) {
-    const remote = target.stub as OAuthFileRemoteHandle
+    const remote = target.stub
     const { assertGenesisVaultOnSyncRemote, connectLocalE2eJoinerDevice } =
       await import('./helpers')
     await assertGenesisVaultOnSyncRemote(remote)
-    if (remote) {
-      await remote.install(page, {
-        fileName: target.repoName,
-        accessToken: target.pat,
-      })
-    }
+    await remote.install(page, {
+      fileName: target.repoName,
+      accessToken: target.pat,
+    })
     await connectLocalE2eJoinerDevice(page, target.repoName, target.pat)
     return
   }
-  if (backend === E2eSyncStubBackend.GitHub) {
+  if (target.providerId === E2eSyncProviderId.GitHub) {
     const { connectGithubJoinerDevice } = await import('./helpers')
     await connectGithubJoinerDevice(
       page,
       target.pat,
       target.repoName,
-      target.stub as never,
+      target.stub,
     )
     return
   }

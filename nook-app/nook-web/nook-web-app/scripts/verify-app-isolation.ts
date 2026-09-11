@@ -106,11 +106,23 @@ const workerUrl = `${pathToFileURL(join(siteRoot, '_worker.js')).href}?verify=${
 // This URL is derived solely from the local build output directory above.
 // eslint-disable-next-line no-unsanitized/method
 const pagesWorker = (await import(workerUrl)).default as PagesWorker
-let staticAssetRequests = 0
+class StaticAssetRequestCensus {
+  private count = 0
+
+  record(): void {
+    this.count += 1
+  }
+
+  current(): number {
+    return this.count
+  }
+}
+
+const staticAssetRequests = new StaticAssetRequestCensus()
 const workerEnv = {
   ASSETS: {
     async fetch(): Promise<Response> {
-      staticAssetRequests += 1
+      staticAssetRequests.record()
       return new Response('asset')
     },
   },
@@ -140,7 +152,7 @@ for (const path of [
     throw new Error(`Pages Function must return an uncached 404 for ${path}.`)
   }
 }
-if (staticAssetRequests !== 0) {
+if (staticAssetRequests.current() !== 0) {
   throw new Error('Retired app routes must not reach Pages static assets.')
 }
 for (const path of ['/', '/sitemap.xml']) {
@@ -152,7 +164,7 @@ for (const path of ['/', '/sitemap.xml']) {
     throw new Error(`Pages Function must delegate ${path} to static assets.`)
   }
 }
-if (staticAssetRequests !== 2) {
+if (staticAssetRequests.current() !== 2) {
   throw new Error('Public landing routes must remain static asset requests.')
 }
 

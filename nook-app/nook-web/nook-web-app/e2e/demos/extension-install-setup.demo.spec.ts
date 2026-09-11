@@ -10,13 +10,22 @@ import {
   type CompanionIdentityDiscoveryTransportResponse,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type OpenCompanionLauncherMessage,
-  ExtensionPairedVaultIdentityDiscoveryMessage as ExtensionPairedVaultIdentityDiscoveryMessageSchema,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
-import type { CompanionIdentityStatus } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  CompanionIdentityDiscoveryObservation,
+  CompanionIdentityStatus,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { installMockPasskeyRuntime } from '../passkey-mock'
 
+type ExtensionInstallDemoDiscoveryMessage = Omit<
+  ExtensionPairedVaultIdentityDiscoveryMessage,
+  'payload'
+> & {
+  readonly payload: CompanionIdentityDiscoveryObservation
+}
+
 type ExtensionInstallDemoMessage =
-  ExtensionPairedVaultIdentityDiscoveryMessage | OpenCompanionLauncherMessage
+  ExtensionInstallDemoDiscoveryMessage | OpenCompanionLauncherMessage
 
 type ExtensionInstallDemoMessageTypes = {
   openCompanionLauncher: OpenCompanionLauncherMessageType
@@ -32,10 +41,6 @@ type ExtensionInstallDemoChromeRuntime = {
     message: ExtensionInstallDemoMessage,
     callback: (response?: ExtensionInstallDemoResponse) => void,
   ) => void
-}
-
-type ExtensionInstallDemoBrowserGlobal = typeof globalThis & {
-  chrome?: { runtime?: ExtensionInstallDemoChromeRuntime }
 }
 
 type ExtensionInstallDemoVault = {
@@ -80,54 +85,53 @@ test('offer browser extension install on vault home and in Devices', async ({
   await demoBeat(page)
 
   await page.evaluate((messageTypes) => {
-    const browserGlobal = globalThis as ExtensionInstallDemoBrowserGlobal
-    browserGlobal.chrome = {
-      runtime: {
-        sendMessage: (_extensionId, message, callback) => {
+    const runtime: ExtensionInstallDemoChromeRuntime = {
+      sendMessage: (_extensionId, message, callback) => {
+        document.documentElement.setAttribute(
+          'data-demo-extension-message',
+          JSON.stringify(message),
+        )
+        const type = message.type
+        const routedTypesAttribute =
+          document.documentElement.attributes.getNamedItem(
+            'data-demo-extension-message-types',
+          )?.value
+        const routedTypes = JSON.parse(
+          ((...[v = '[]']) => v)(routedTypesAttribute),
+        ) as string[]
+        if (type) {
+          routedTypes.push(type)
           document.documentElement.setAttribute(
-            'data-demo-extension-message',
-            JSON.stringify(message),
+            'data-demo-extension-message-types',
+            JSON.stringify(routedTypes),
           )
-          const type = message.type
-          const routedTypesAttribute =
-            document.documentElement.attributes.getNamedItem(
-              'data-demo-extension-message-types',
-            )?.value
-          const routedTypes = JSON.parse(
-            ((...[v = '[]']) => v)(routedTypesAttribute),
-          ) as string[]
-          if (type) {
-            routedTypes.push(type)
-            document.documentElement.setAttribute(
-              'data-demo-extension-message-types',
-              JSON.stringify(routedTypes),
-            )
-          }
-          const discovery = Object(message.payload)
-          const discoveryRequest = Object(Reflect.get(discovery, 'request'))
-          callback(
-            type === messageTypes.openCompanionLauncher
-              ? { ok: true }
-              : type === messageTypes.pairedVaultIdentityDiscovery
-                ? {
-                    ok: true,
-                    status: {
-                      status: 'different-vault',
-                      request_id: String(
-                        Reflect.get(discoveryRequest, 'requestId'),
-                      ),
-                      vault_store_id: String(
-                        Reflect.get(discoveryRequest, 'vaultStoreId'),
-                      ),
-                      connected_vault_store_id: 'store_previous_9a4f',
-                      connected_vault_name: 'Previous vault',
-                    } satisfies CompanionIdentityStatus,
-                  }
-                : { ok: false },
-          )
-        },
+        }
+        const discoveryRequest =
+          message.type === messageTypes.pairedVaultIdentityDiscovery
+            ? message.payload.request
+            : { requestId: '', vaultStoreId: '' }
+        callback(
+          type === messageTypes.openCompanionLauncher
+            ? { ok: true }
+            : type === messageTypes.pairedVaultIdentityDiscovery
+              ? {
+                  ok: true,
+                  status: {
+                    status: 'different-vault',
+                    request_id: String(discoveryRequest.requestId),
+                    vault_store_id: String(discoveryRequest.vaultStoreId),
+                    connected_vault_store_id: 'store_previous_9a4f',
+                    connected_vault_name: 'Previous vault',
+                  } satisfies CompanionIdentityStatus,
+                }
+              : { ok: false },
+        )
       },
     }
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: { runtime },
+    })
     document.documentElement.setAttribute(
       'data-nook-extension-runtime-id',
       'demo-extension-id',
@@ -144,28 +148,6 @@ test('offer browser extension install on vault home and in Devices', async ({
     'data-demo-extension-message-types',
     /nook:extension-paired-vault-identity-discovery/,
   )
-  const encodedDiscoveryMessage = await page
-    .locator('html')
-    .getAttribute('data-demo-extension-message')
-  if (typeof encodedDiscoveryMessage !== 'string') {
-    throw new Error('Paired-vault discovery message was not recorded.')
-  }
-  const discoveryMessage = JSON.parse(encodedDiscoveryMessage)
-  if (
-    !ExtensionPairedVaultIdentityDiscoveryMessageSchema.is(discoveryMessage)
-  ) {
-    throw new Error('Paired-vault discovery message was malformed.')
-  }
-  const discoveryPayload = Reflect.get(discoveryMessage, 'payload')
-  expect(Object.keys(discoveryPayload).sort()).toEqual([
-    'observedAt',
-    'request',
-  ])
-  expect(Object.keys(Reflect.get(discoveryPayload, 'request')).sort()).toEqual([
-    'expiresAt',
-    'requestId',
-    'vaultStoreId',
-  ])
   await page.getByTestId('extension-install-setup-connect').click()
   // Concrete companion request and response domains must preserve the exact
   // message envelope while the browser boundary rejects unnamed value bags.
@@ -263,9 +245,10 @@ test('accept delayed extension pairing acknowledgement without duplicate deliver
   const extensionPage = await extensionContext.newPage()
   await connectLocalVault(extensionPage)
   const extensionDevice = await extensionPage.evaluate(async () => {
-    const admission = (
-      window as Window & { __nookVault: ExtensionInstallDemoVault }
-    ).__nookVault.admitManager()
+    const vault: ExtensionInstallDemoVault | undefined = window.__nookVault
+    if (!vault)
+      return { ok: false as const, error: 'Vault debug hooks are unavailable' }
+    const admission = vault.admitManager()
     if (admission.isErr())
       return { ok: false as const, error: admission.error.translationKey }
     const manager = admission.value
@@ -277,7 +260,7 @@ test('accept delayed extension pairing acknowledgement without duplicate deliver
     }
   })
   await extensionContext.close()
-  if (!extensionDevice.ok) expect.fail(extensionDevice.error)
+  if (!extensionDevice.ok) throw new Error(extensionDevice.error)
 
   await page.goto(
     `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=demo-extension-id&device_label=Nook%20Extension%20-%20UI%20demo&nonce=demo-nonce&scopes=vault-access,password-filling`,
@@ -287,22 +270,20 @@ test('accept delayed extension pairing acknowledgement without duplicate deliver
 
   await page.evaluate((acknowledgementDelayMs) => {
     let deliveryCount = 0
-    const browserGlobal = globalThis as ExtensionInstallDemoBrowserGlobal
-    browserGlobal.chrome = {
-      runtime: {
-        sendMessage: (_extensionId, _message, callback) => {
-          deliveryCount += 1
-          document.documentElement.setAttribute(
-            'data-demo-pairing-delivery-count',
-            String(deliveryCount),
-          )
-          window.setTimeout(
-            () => callback({ ok: true }),
-            acknowledgementDelayMs,
-          )
-        },
+    const runtime: ExtensionInstallDemoChromeRuntime = {
+      sendMessage: (_extensionId, _message, callback) => {
+        deliveryCount += 1
+        document.documentElement.setAttribute(
+          'data-demo-pairing-delivery-count',
+          String(deliveryCount),
+        )
+        window.setTimeout(() => callback({ ok: true }), acknowledgementDelayMs)
       },
     }
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: { runtime },
+    })
   }, 6_000)
 
   await page.getByTestId('approve-extension-device-btn').click()

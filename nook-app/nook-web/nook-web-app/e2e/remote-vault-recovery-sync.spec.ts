@@ -19,20 +19,21 @@ import {
 } from './helpers'
 import {
   createSyncTarget,
+  E2eSyncProviderId,
   installSyncRemote,
   resetSyncRemote,
   waitForSyncRemoteState,
-  type SyncE2eTarget,
+  type LocalFileSyncE2eTarget,
 } from './sync-provider'
 
 test.describe('remote vault recovery (local-first sync)', () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
-  let target: SyncE2eTarget
+  let target: LocalFileSyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
-    target = createSyncTarget('', 'remote-recovery')
+    target = createSyncTarget('', 'remote-recovery', E2eSyncProviderId.File)
     vaultPage = await browser.newPage()
     await installPasskeyMock(vaultPage)
     await installSyncRemote(vaultPage, target)

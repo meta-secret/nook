@@ -16,8 +16,9 @@ import {
   createSyncTarget,
   e2eSyncProviderDef,
   installSyncRemote,
+  isOauthFileSyncTarget,
   resolveE2eSyncProvider,
-  type SyncE2eTarget,
+  type OAuthFileSyncE2eTarget,
 } from './sync-provider'
 
 const providerId = resolveE2eSyncProvider()
@@ -27,10 +28,16 @@ test.describe(`${providerLabel} vault`, () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
-  let target: SyncE2eTarget
+  let target: OAuthFileSyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
-    target = createSyncTarget('', 'sync-vault')
+    const syncTarget = createSyncTarget('', 'sync-vault', providerId)
+    if (!isOauthFileSyncTarget(syncTarget)) {
+      throw new Error(
+        `sync-vault requires an OAuth file provider, received ${syncTarget.providerId}`,
+      )
+    }
+    target = syncTarget
     vaultPage = await browser.newPage()
     await installPasskeyMock(vaultPage)
     await installSyncRemote(vaultPage, target)

@@ -41,6 +41,14 @@ type DebugVault = {
   >
 }
 
+type RejectedPairingRuntime = {
+  sendMessage(
+    extensionId: string,
+    message: { readonly type: string },
+    callback: (response: { readonly ok: false }) => void,
+  ): void
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
@@ -96,9 +104,9 @@ test('exposes only the project capability and rejects the opposite vault type', 
   }
 
   const error = await page.evaluate((simpleApp) => {
-    const admission = (
-      window as Window & { __nookVault: DebugVault }
-    ).__nookVault.admitManager()
+    const vault: DebugVault | undefined = window.__nookVault
+    if (!vault) return 'Vault debug hooks are unavailable'
+    const admission = vault.admitManager()
     if (admission.isErr()) return admission.error.translationKey
     const manager = admission.value
     const current = manager.vaultArchitecture
@@ -157,9 +165,10 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await createLocalVaultOnLogin(extensionPage, 'Isolated extension device')
   await expect(extensionPage.getByTestId('vault-panel')).toBeVisible()
   const extensionDevice = await extensionPage.evaluate(async () => {
-    const admission = (
-      window as Window & { __nookVault: DebugVault }
-    ).__nookVault.admitManager()
+    const vault: DebugVault | undefined = window.__nookVault
+    if (!vault)
+      return { ok: false as const, error: 'Vault debug hooks are unavailable' }
+    const admission = vault.admitManager()
     if (admission.isErr())
       return { ok: false as const, error: admission.error.translationKey }
     const manager = admission.value
@@ -174,7 +183,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
     }
   })
   await extensionContext.close()
-  if (!extensionDevice.ok) expect.fail(extensionDevice.error)
+  if (!extensionDevice.ok) throw new Error(extensionDevice.error)
   await page.getByTestId('header-lock-vault-btn').click()
   await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -190,21 +199,17 @@ test('keeps extension routing and local session behavior app-specific', async ({
     timeout: UI_TIMEOUT_MS,
   })
   await page.evaluate(() => {
-    const browserWindow = window as Window & {
-      chrome?: { runtime?: unknown }
+    const runtime: RejectedPairingRuntime = {
+      sendMessage: (
+        _extensionId: string,
+        _message: { readonly type: string },
+        callback: (response: { readonly ok: false }) => void,
+      ) => callback({ ok: false }),
     }
-    const chrome = ((v) => (v ? v : {}))(browserWindow.chrome)
-    Object.defineProperty(chrome, 'runtime', {
+    Object.defineProperty(globalThis, 'chrome', {
       configurable: true,
-      value: {
-        sendMessage: (
-          _extensionId: string,
-          _message: unknown,
-          callback: (response: unknown) => void,
-        ) => callback({ ok: false }),
-      },
+      value: { runtime },
     })
-    if (!browserWindow.chrome) browserWindow.chrome = chrome
   })
   await page.getByTestId('approve-extension-device-btn').click()
   await expect(

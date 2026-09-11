@@ -8,9 +8,9 @@ import {
   configuredGithubSyncTimeoutMs,
 } from './environment'
 import {
-  GithubE2eTarget,
   assertNoVaultError,
   triggerVaultSyncRefresh,
+  type GithubE2eTarget,
   waitForGithubVaultState,
 } from './github-sync'
 import {

@@ -183,10 +183,17 @@ test.describe('login unlock flow (local-first)', () => {
     try {
       await expect(reviewIdentities).toBeFocused()
     } catch (error) {
-      const activeElement = await page.evaluate(() => ({
-        tag: document.activeElement?.tagName.toLowerCase() ?? 'absent',
-        testId: document.activeElement?.getAttribute('data-testid') ?? 'absent',
-      }))
+      const activeElement = await page.evaluate(() => {
+        const active = document.activeElement
+        return active
+          ? {
+              tag: active.tagName.toLowerCase(),
+              testId: ((value) => (value ? value : 'absent'))(
+                active.getAttribute('data-testid'),
+              ),
+            }
+          : { tag: 'absent', testId: 'absent' }
+      })
       await test.info().attach('identity-focus-state.json', {
         body: Buffer.from(JSON.stringify(activeElement)),
         contentType: 'application/json',

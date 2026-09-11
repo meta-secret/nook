@@ -68,7 +68,7 @@ export const demoDomainEnumArgs = {
     pendingUnavailable: 'unavailable',
     completed: 'completed',
   } satisfies DemoLoginSaveResponses,
-}
+} as const
 
 export type ChromeMessage = { message: string }
 
@@ -91,6 +91,7 @@ export type DemoChromeStubArgs = {
     fillTotpAction: AuthenticationWorkflowAction.FillTotp
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
     saveBackupCodesAction: AuthenticationWorkflowAction.SaveBackupCodes
+    explicitUserApproval: AuthenticationApprovalRequirement
   }
   authenticatorProtocol: {
     optionsMessageType: WebsiteAuthenticatorOptionsMessageType
@@ -612,12 +613,20 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       }
     }
     const observedFacts = observations[observationIndex]
+    const observedAuthenticator =
+      observedFacts &&
+      typeof observedFacts === 'object' &&
+      'authenticator' in observedFacts &&
+      observedFacts.authenticator &&
+      typeof observedFacts.authenticator === 'object'
+        ? observedFacts.authenticator
+        : {}
     const selectedFacts =
       passkeyPilotFlow && observedFacts
         ? {
             ...observedFacts,
             authenticator: {
-              ...observedFacts.authenticator,
+              ...observedAuthenticator,
               passkeyAccountAvailability: 'ready',
             },
           }

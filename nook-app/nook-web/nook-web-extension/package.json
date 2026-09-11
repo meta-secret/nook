@@ -9,7 +9,7 @@
     "e2e:mock-auth:build": "bun e2e/mock-auth/build.ts",
     "package:deployment": "bun scripts/deployment-package.ts",
     "check": "test -e node_modules || ln -s ../nook-web-app/node_modules node_modules; node ../nook-web-app/scripts/generate-i18n-keys.mjs --check && bun run lint && bun run typecheck && bun run test:unit",
-    "typecheck": "node_modules/.bin/svelte-check --tsconfig tsconfig.json && node_modules/.bin/tsc -p tsconfig.authored.json --noEmit",
+    "typecheck": "../nook-web-app/node_modules/.bin/svelte-check --tsconfig tsconfig.json && ../nook-web-app/node_modules/.bin/tsc -p tsconfig.authored.json --noEmit",
     "test:unit": "bun test scripts src/lib",
     "format": "../nook-web-app/node_modules/.bin/prettier --write .",
     "format:check": "../nook-web-app/node_modules/.bin/prettier --check .",

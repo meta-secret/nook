@@ -1,7 +1,7 @@
 import {
-  createLocalE2eGithubVaultStub,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   type GithubE2eTarget,
+  type VaultEventLogRemote,
 } from './helpers'
 import {
   waitForVaultEventLogSnapshot,
@@ -9,7 +9,7 @@ import {
 } from './vault-yaml'
 
 export type StubSyncTarget = GithubE2eTarget & {
-  stub: ReturnType<typeof createLocalE2eGithubVaultStub>
+  stub: VaultEventLogRemote
 }
 
 /** Unique remote id per suite — no live provider registration or cleanup. */

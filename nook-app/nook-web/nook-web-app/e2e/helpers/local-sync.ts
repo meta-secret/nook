@@ -12,9 +12,9 @@ import {
 import {
   E2E_GITHUB_ONBOARD_PROVIDER,
   E2E_OAUTH_ONBOARD_PROVIDER,
-  E2eOauthSyncProvider,
   seedExtraGithubProviders,
   seedExtraOauthFileProviders,
+  type E2eOauthSyncProvider,
 } from './auth-providers'
 import {
   keepVaultIdleLockDisabled,
@@ -27,8 +27,8 @@ import {
   sleep,
 } from './environment'
 import {
-  GithubE2eTarget,
   flushRemoteEventsToSyncProviders,
+  type GithubE2eTarget,
 } from './github-sync'
 import {
   assertVaultReady,

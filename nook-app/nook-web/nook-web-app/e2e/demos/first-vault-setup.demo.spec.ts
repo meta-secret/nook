@@ -1,6 +1,5 @@
 import { expect, test } from '../fixtures'
 import { LOCAL_PROVIDER_TYPE } from '../../../nook-web-shared/src/vault-app/lib/auth/provider-types'
-import type { StorageProviderType } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   clearBrowserVault,
   connectLocalVault,
@@ -10,12 +9,6 @@ import {
 } from '../helpers'
 
 const DEMO_BEAT_MS = 700
-
-type DemoVaultWindow = Window & {
-  __nookVault: {
-    storageMode: StorageProviderType
-  }
-}
 
 test('open a new local vault without an empty-device sync error', async ({
   page,
@@ -40,9 +33,11 @@ test('open a new local vault without an empty-device sync error', async ({
       timeout: UI_TIMEOUT_MS,
     })
     .toBe(true)
-  const storageMode = await page.evaluate(
-    () => (window as DemoVaultWindow).__nookVault.storageMode,
-  )
+  const storageMode = await page.evaluate(() => {
+    const vault = window.__nookVault
+    if (!vault) throw new Error('Vault debug hooks are unavailable')
+    return vault.storageMode
+  })
   expect(storageMode).toBe(LOCAL_PROVIDER_TYPE)
   await page.waitForTimeout(DEMO_BEAT_MS)
 

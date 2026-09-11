@@ -23,15 +23,18 @@ import {
   GITHUB_SYNC_TIMEOUT_MS,
   sleep,
 } from './environment'
-import { createLocalE2eGithubVaultStub } from './local-sync'
 import { assertVaultReady } from './settings-auth'
 import { waitForVaultOperationsIdle } from './vault-runtime'
+
+export type VaultEventLogRemote = {
+  getEventFileContents(): string[]
+}
 
 export type GithubE2eTarget = {
   pat: string
   repoName: string
   /** In-memory GitHub REST stub — avoids api.github.com (PR/main CI). */
-  stub?: ReturnType<typeof createLocalE2eGithubVaultStub>
+  stub?: VaultEventLogRemote
 }
 
 export { fetchGithubVaultYaml }

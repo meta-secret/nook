@@ -3,7 +3,7 @@ const GITHUB_FETCH_TIMEOUT_MS = 30_000
 const GITHUB_RATE_LIMIT_MAX_WAIT_MS = 5 * 60_000
 
 type RepoContext = {
-  headers: Record<string, string>
+  headers: ReturnType<typeof githubApiHeaders>
   repo: string
   login: string
 }

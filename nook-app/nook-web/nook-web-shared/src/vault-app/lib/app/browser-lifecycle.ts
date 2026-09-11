@@ -49,9 +49,13 @@ type BrowserDebugHooks = {
   __nookAuthProviders: AuthProviderDebugHooks;
 };
 
-export type VaultDebugWindow = Window & {
-  readonly __nookVault?: VaultState;
-};
+declare global {
+  interface Window {
+    readonly __nookVault?: VaultState;
+  }
+}
+
+export type VaultDebugWindow = Window;
 
 type ApplicationDocumentUpdate = {
   readonly colorMode: ColorMode;

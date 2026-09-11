@@ -12,6 +12,7 @@ import {
   waitForVaultOperationsIdle,
 } from './helpers'
 import {
+  E2eSyncProviderId,
   connectSyncGenesisDevice,
   createSyncTarget,
   installSyncRemote,
@@ -58,7 +59,11 @@ test.describe('event-log sync then add', () => {
   test('saving an event-backed secret appends only events and leaves a stale remote vault blob untouched', async ({
     page,
   }) => {
-    const target = createSyncTarget('', 'nook-stale-file', 'file')
+    const target = createSyncTarget(
+      '',
+      'nook-stale-file',
+      E2eSyncProviderId.File,
+    )
     const { stub } = target
     if (!stub) throw new Error('expected the file sync stub')
 

@@ -167,7 +167,7 @@ export function createLocalE2eFileSyncVaultStub(
       if (opts?.fileName) {
         fileName = opts.fileName
       }
-      if (opts && 'vaultYaml' in opts) {
+      if (typeof opts?.vaultYaml === 'string') {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {

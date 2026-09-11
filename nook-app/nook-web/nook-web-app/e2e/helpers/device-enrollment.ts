@@ -19,13 +19,17 @@ import {
   configuredGithubSyncTimeoutMs,
 } from './environment'
 import {
-  GithubE2eTarget,
   assertNoVaultErrors,
   triggerVaultSyncRefresh,
+  type GithubE2eTarget,
+  type VaultEventLogRemote,
   waitForGithubVaultState,
   waitForSyncRemoteVaultState,
 } from './github-sync'
-import { E2eOauthFileStub, createLocalE2eGithubVaultStub } from './local-sync'
+import {
+  createLocalE2eGithubVaultStub,
+  type E2eOauthFileStub,
+} from './local-sync'
 import {
   assertEnrolledVaultOnGithub,
   assertGenesisVaultOnGithub,
@@ -50,6 +54,11 @@ import {
 } from './vault-runtime'
 import { createLocalVaultOnLogin } from './vault-setup'
 import { refreshJoinerVaultOnLoginGate } from './joiner-vault-refresh'
+import {
+  E2eSyncProviderId,
+  installSyncRemote,
+  type SyncE2eTarget,
+} from '../sync-provider'
 
 export async function expectEmptyLocalFolderRejected(
   page: Page,
@@ -205,7 +214,7 @@ export async function sendJoinRequest(
   page: Page,
   pat: string,
   repoName: string,
-  stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
+  stub?: VaultEventLogRemote,
 ) {
   await page.getByTestId('join-enrollment-confirm').click()
   await waitForVaultOperationsIdle(page)
@@ -369,20 +378,13 @@ async function refreshGithubVaultOnLoginGate(page: Page) {
   await waitForVaultOperationsIdle(page)
 }
 
-export type JoinerVaultReadyTarget = {
-  pat: string
-  repoName: string
-  providerId?: string
-  stub?: {
-    install: (page: Page, opts: Record<string, unknown>) => Promise<void>
-  }
-}
+export type JoinerVaultReadyTarget = SyncE2eTarget
 
 export function isOauthFileJoinerTarget(target: JoinerVaultReadyTarget) {
   return (
-    target.providerId === 'file' ||
-    target.providerId === 'local' ||
-    target.providerId === 'google-drive'
+    target.providerId === E2eSyncProviderId.File ||
+    target.providerId === E2eSyncProviderId.Local ||
+    target.providerId === E2eSyncProviderId.GoogleDrive
   )
 }
 
@@ -487,14 +489,7 @@ export async function waitForJoinerVaultReady({
   target,
   testInfo,
 }: WaitForJoinerVaultReadyRequest) {
-  if (target.stub) {
-    await target.stub.install(
-      page,
-      isOauthFileJoinerTarget(target)
-        ? { fileName: target.repoName }
-        : { repoName: target.repoName },
-    )
-  }
+  await installSyncRemote(page, target)
   if (isOauthFileJoinerTarget(target)) {
     await installGoogleOAuthMock(page, target.pat)
   }

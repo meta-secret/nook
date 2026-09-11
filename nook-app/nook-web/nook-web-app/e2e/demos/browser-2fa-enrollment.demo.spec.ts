@@ -19,6 +19,33 @@ async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
+enum DemoSignalPhase {
+  Initializing = 'initializing',
+  Pending = 'pending',
+  Complete = 'complete',
+}
+
+type DemoSignalState =
+  | { readonly phase: DemoSignalPhase.Initializing }
+  | { readonly phase: DemoSignalPhase.Pending; readonly resolve: () => void }
+  | { readonly phase: DemoSignalPhase.Complete }
+
+class DemoBootstrapSignal {
+  private state: DemoSignalState = { phase: DemoSignalPhase.Initializing }
+  readonly pending = new Promise<void>((resolve) => {
+    this.state = { phase: DemoSignalPhase.Pending, resolve }
+  })
+
+  complete(): void {
+    const state = this.state
+    if (state.phase !== DemoSignalPhase.Pending) {
+      throw new Error(`Cannot complete bootstrap signal from ${state.phase}`)
+    }
+    this.state = { phase: DemoSignalPhase.Complete }
+    state.resolve()
+  }
+}
+
 test('saves a confirmed authenticator without website success evidence', async ({
   page,
 }) => {
@@ -44,52 +71,18 @@ test('saves a confirmed authenticator without website success evidence', async (
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
-  enum BootstrapStartSignalKind {
-    WaitingForHandler = 'waiting-for-handler',
-    Ready = 'ready',
-  }
-
-  type BootstrapStartSignal =
-    | { kind: BootstrapStartSignalKind.WaitingForHandler }
-    | { kind: BootstrapStartSignalKind.Ready; signal: () => void }
-  let bootstrapStartSignal: BootstrapStartSignal = {
-    kind: BootstrapStartSignalKind.WaitingForHandler,
-  }
-  const wasmBootstrapStarted = new Promise<void>((resolve) => {
-    bootstrapStartSignal = {
-      kind: BootstrapStartSignalKind.Ready,
-      signal: resolve,
-    }
-  })
-  enum BootstrapReleaseSignalKind {
-    Blocked = 'blocked',
-    Releasable = 'releasable',
-  }
-
-  type BootstrapReleaseSignal =
-    | { kind: BootstrapReleaseSignalKind.Blocked }
-    | { kind: BootstrapReleaseSignalKind.Releasable; release: () => void }
-  let bootstrapReleaseSignal: BootstrapReleaseSignal = {
-    kind: BootstrapReleaseSignalKind.Blocked,
-  }
-  const wasmBootstrapReleased = new Promise<void>((resolve) => {
-    bootstrapReleaseSignal = {
-      kind: BootstrapReleaseSignalKind.Releasable,
-      release: resolve,
-    }
-  })
+  const wasmBootstrapStarted = new DemoBootstrapSignal()
+  const wasmBootstrapReleased = new DemoBootstrapSignal()
   await page.route(/nook_wasm_bg.*\.wasm$/, async (route) => {
-    if (bootstrapStartSignal.kind === BootstrapStartSignalKind.Ready) {
-      bootstrapStartSignal.signal()
-    }
-    await wasmBootstrapReleased
+    wasmBootstrapStarted.complete()
+    await wasmBootstrapReleased.pending
     await route.continue().catch(() => {})
   })
 
   // Replace the document while the real app bootstrap is active. This covers
   // the stale mount-target race while retaining a real origin for enrollment.
   await page.goto('/app/', { waitUntil: 'commit' })
-  await wasmBootstrapStarted
+  await wasmBootstrapStarted.pending
   await page.setContent(`<!doctype html>
     <html>
       <head>
@@ -153,9 +146,7 @@ test('saves a confirmed authenticator without website success evidence', async (
         </main>
       </body>
     </html>`)
-  if (bootstrapReleaseSignal.kind === BootstrapReleaseSignalKind.Releasable) {
-    bootstrapReleaseSignal.release()
-  }
+  wasmBootstrapReleased.complete()
   const replacementChildCount = await page
     .locator('[data-bootstrap-sentinel="replacement-root"]')
     .evaluate((root) => root.children.length)

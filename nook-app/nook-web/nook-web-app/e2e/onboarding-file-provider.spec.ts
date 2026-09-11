@@ -24,9 +24,11 @@ import {
   UI_TIMEOUT_MS,
 } from './helpers'
 import {
+  E2eSyncProviderId,
   createSyncTarget,
   installSyncRemote,
   waitForSyncRemoteState,
+  type LocalFileSyncE2eTarget,
   type SyncE2eTarget,
 } from './sync-provider'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
@@ -40,7 +42,7 @@ test.describe('file sync provider onboarding', () => {
   let contextB: BrowserContext
   let deviceA: Page
   let deviceB: Page
-  let target: SyncE2eTarget
+  let target: LocalFileSyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
     contextA = await createIsolatedContext(browser)
@@ -58,7 +60,7 @@ test.describe('file sync provider onboarding', () => {
         }
       })
     }
-    target = createSyncTarget('', 'onboarding-file', 'file')
+    target = createSyncTarget('', 'onboarding-file', E2eSyncProviderId.File)
   })
 
   test.afterAll(async () => {
@@ -269,19 +271,15 @@ test.describe('iCloud provider modes', () => {
     await page.addInitScript(() => {
       const container = {
         setUpAuth: async () => {},
-        whenUserSignsIn: () => new Promise(() => {}),
+        whenUserSignsIn: () => new Promise<never>(() => {}),
       }
-      ;(
-        window as typeof window & {
-          CloudKit?: {
-            configure: () => void
-            getDefaultContainer: () => typeof container
-          }
-        }
-      ).CloudKit = {
-        configure: () => {},
-        getDefaultContainer: () => container,
-      }
+      Object.defineProperty(window, 'CloudKit', {
+        configurable: true,
+        value: {
+          configure: () => {},
+          getDefaultContainer: () => container,
+        },
+      })
     })
     await page.goto('/app/')
     await clearBrowserVault(page)

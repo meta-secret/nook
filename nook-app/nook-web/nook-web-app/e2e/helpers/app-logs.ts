@@ -442,7 +442,9 @@ export async function attachNookLogsForTest(
     }
     const body = JSON.stringify(payload, (_key, value) => value, 2)
     const attachmentName =
-      options?.attachmentName ?? NookAppLogAttachmentName.Primary
+      options && options.attachmentName
+        ? options.attachmentName
+        : NookAppLogAttachmentName.Primary
     const attachmentPath = testInfo.outputPath(attachmentName)
     await fs.writeFile(attachmentPath, body)
     await testInfo.attach(attachmentName, {
