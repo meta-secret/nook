@@ -1,5 +1,5 @@
 import { err, ok, type Result } from 'neverthrow'
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { ProviderSyncFailureHandling, ProviderSyncVisibility } from '$app-wasm'
 import { LOCAL_FOLDER_PROVIDER_TYPE } from '$lib/auth/provider-types'
 import type { StorageProvider } from '$lib/auth/providers'
@@ -39,13 +39,27 @@ function localFolderProvider(): StorageProvider {
   } as StorageProvider
 }
 
+function vaultState(): VaultState {
+  const browserWindow = globalThis.window
+  Reflect.deleteProperty(globalThis, 'window')
+  try {
+    return new VaultState()
+  } finally {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      writable: true,
+      value: browserWindow,
+    })
+  }
+}
+
 function providerConnectionScenario(
   synchronize: (
     state: VaultState,
   ) => ProviderConnectionOutcome | Promise<ProviderConnectionOutcome>,
 ): ProviderConnectionScenario {
   const provider = localFolderProvider()
-  const state = new VaultState()
+  const state = vaultState()
   state.isVerifying = false
   state.addProviderOpen = true
   state.providers = [provider]
@@ -80,6 +94,8 @@ function providerConnectionScenario(
     syncProviderById,
   }
 }
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('local-folder provider connection', () => {
   test('synchronizes a healthy folder exactly once without a preflush', async () => {
