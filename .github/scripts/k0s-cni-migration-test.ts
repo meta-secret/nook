@@ -66,8 +66,8 @@ class CniMigrationFixture {
       '{"plugins":[{"type":"bridge","ipMasq":true}]}\n',
     );
     if (prepared3.isErr()) return err(prepared3.error);
-    const sudo = join(mockBin, "sudo");
-    const prepared4 = new FixtureFile(sudo).write(
+    const fixtureCommand = join(mockBin, "fixture-command");
+    const prepared4 = new FixtureFile(fixtureCommand).write(
       `#!/usr/bin/env bash
 set -euo pipefail
 if test "\${1:-}" = -n; then shift; fi
@@ -93,19 +93,24 @@ esac
 `,
     );
     if (prepared4.isErr()) return err(prepared4.error);
-    const prepared7 = new FixtureFile(sudo).makeExecutable();
+    const prepared7 = new FixtureFile(fixtureCommand).makeExecutable();
     if (prepared7.isErr()) return err(prepared7.error);
     const harness = join(work, "harness.sh");
     const migration = new CniMigrationSource().read();
     if (migration.isErr()) return err(migration.error);
+    const fixtureMigration = migration.value.replaceAll(
+      "sudo -n ",
+      `${JSON.stringify(fixtureCommand)} `,
+    );
     const prepared5 = new FixtureFile(harness).write(
       `#!/usr/bin/env bash
 set -euo pipefail
+export MOCK_LOG=${JSON.stringify(log)}
 cni_config=${cni}
 cni_config_next=""
 cni_was_unmasqueraded=true
 remote_dir=${work}
-${migration.value}
+${fixtureMigration}
 `,
     );
     if (prepared5.isErr()) return err(prepared5.error);

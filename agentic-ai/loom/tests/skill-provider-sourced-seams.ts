@@ -136,7 +136,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/k0s-cni-migration-test.ts',
-    'a30edf07fc77baa8ecda6894b9f0845f04754a5b814fa0a3d50fcbac71736a81',
+    '95a0b4d0988be5f2948a1bf8e7895c14d0bb7b405d30c619d93481f272baf0ba',
   ],
   [
     '.github/scripts/k0s-firewall-rollback-test.ts',
