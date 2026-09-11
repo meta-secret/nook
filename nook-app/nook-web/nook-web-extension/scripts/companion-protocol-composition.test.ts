@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import { rejects } from 'node:assert/strict'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import {
   IDBCursor,
@@ -513,9 +514,11 @@ describe('generated companion protocol composition', () => {
       throw new Error('expected unlocked transaction')
     }
     mismatched.request.transaction.status.app_key.appKey.appId = 'app-mismatch'
-    await expect(
+    // Await through the event loop so wasm-bindgen can deliver its rejection.
+    await rejects(
       first.endpoint.authorize_and_seal(extension, mismatched),
-    ).rejects.toThrow()
+      Error,
+    )
     expect(() =>
       first.endpoint.authorize_and_seal(
         extension,
@@ -527,12 +530,13 @@ describe('generated companion protocol composition', () => {
   test('consumes stale authorization and concurrent discovery', async () => {
     const stale = beginHandoff('request-stale')
     stale.authorization.observedAt = 200
-    await expect(
+    await rejects(
       stale.endpoint.authorize_and_seal(
         extension,
         structuredClone(stale.authorization),
       ),
-    ).rejects.toThrow()
+      Error,
+    )
     expect(() =>
       stale.endpoint.authorize_and_seal(
         extension,
@@ -570,8 +574,9 @@ describe('generated companion protocol composition', () => {
       response,
     ) satisfies CompanionIdentityHandoffResponse
     forged.request.transaction.discovery.request.requestId = 'request-forged'
-    await expect(first.pending.finish(first.website, forged)).rejects.toThrow(
-      'does not match the active request',
+    await rejects(
+      first.pending.finish(first.website, forged),
+      /does not match the active request/,
     )
     expect(() =>
       first.pending.finish(first.website, structuredClone(response)),
