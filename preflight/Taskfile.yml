@@ -73,6 +73,7 @@ tasks:
     dir: "{{.REPO_ROOT}}"
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.test.sh"
+      - test -f "{{.REPO_ROOT}}/.github/scripts/dockerized-rust.test.ts"
       - bun test ./.github/scripts/dockerized-rust.test.ts
 
   preflight:export:
