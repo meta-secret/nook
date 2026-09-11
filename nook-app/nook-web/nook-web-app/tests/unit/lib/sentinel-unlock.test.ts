@@ -42,6 +42,10 @@ class SentinelFinalizationFixture {
   readonly previousFree = vi.spyOn(this.previous, 'free')
   readonly currentFree = vi.spyOn(this.current, 'free')
   readonly openVault = vi.fn()
+  readonly storedDeliveriesRequest = {
+    resolve: vi.fn(async () => []),
+    free: vi.fn(),
+  }
   readonly manager = {
     vaultStoreId: '',
     finalize_sentinel_unlock: vi.fn(
@@ -51,7 +55,9 @@ class SentinelFinalizationFixture {
     sentinel_unlock_status: vi.fn(
       () => SentinelVaultUnlockState.AwaitingShares,
     ),
-    list_sentinel_genesis_share_deliveries: vi.fn(async () => []),
+    sentinel_stored_deliveries_request: vi.fn(
+      () => this.storedDeliveriesRequest,
+    ),
     start_sentinel_unlock: vi.fn(),
     connect: vi.fn(),
   }
@@ -192,7 +198,7 @@ describe('Sentinel quorum completion presentation', () => {
     expect(fixture.state.waitForStorageChain).not.toHaveBeenCalled()
     expect(fixture.state.initDeviceIdentity).not.toHaveBeenCalled()
     expect(
-      fixture.manager.list_sentinel_genesis_share_deliveries,
+      fixture.manager.sentinel_stored_deliveries_request,
     ).not.toHaveBeenCalled()
     view.unmount()
     fixture.dispose()
@@ -210,7 +216,7 @@ describe('Sentinel quorum completion presentation', () => {
 
     expect(locked.state.initDeviceIdentity).not.toHaveBeenCalled()
     expect(
-      locked.manager.list_sentinel_genesis_share_deliveries,
+      locked.manager.sentinel_stored_deliveries_request,
     ).not.toHaveBeenCalled()
     lockedView.unmount()
     locked.dispose()
@@ -226,7 +232,7 @@ describe('Sentinel quorum completion presentation', () => {
 
     expect(initializing.state.initDeviceIdentity).not.toHaveBeenCalled()
     expect(
-      initializing.manager.list_sentinel_genesis_share_deliveries,
+      initializing.manager.sentinel_stored_deliveries_request,
     ).not.toHaveBeenCalled()
     initializingView.unmount()
     initializing.dispose()
@@ -242,7 +248,7 @@ describe('Sentinel quorum completion presentation', () => {
 
     expect(verifying.state.initDeviceIdentity).not.toHaveBeenCalled()
     expect(
-      verifying.manager.list_sentinel_genesis_share_deliveries,
+      verifying.manager.sentinel_stored_deliveries_request,
     ).not.toHaveBeenCalled()
     verifyingView.unmount()
     verifying.dispose()
@@ -259,7 +265,7 @@ describe('Sentinel quorum completion presentation', () => {
     expect(syncing.state.waitForStorageChain).not.toHaveBeenCalled()
     expect(syncing.state.initDeviceIdentity).not.toHaveBeenCalled()
     expect(
-      syncing.manager.list_sentinel_genesis_share_deliveries,
+      syncing.manager.sentinel_stored_deliveries_request,
     ).not.toHaveBeenCalled()
     syncingView.unmount()
     syncing.dispose()
@@ -280,7 +286,7 @@ describe('Sentinel quorum completion presentation', () => {
     })
     expect(ready.state.initDeviceIdentity).not.toHaveBeenCalled()
     expect(
-      ready.manager.list_sentinel_genesis_share_deliveries,
+      ready.manager.sentinel_stored_deliveries_request,
     ).not.toHaveBeenCalled()
 
     releaseStorageChain()
@@ -288,8 +294,10 @@ describe('Sentinel quorum completion presentation', () => {
     await vi.waitFor(() => {
       expect(ready.state.initDeviceIdentity).toHaveBeenCalledOnce()
       expect(
-        ready.manager.list_sentinel_genesis_share_deliveries,
+        ready.manager.sentinel_stored_deliveries_request,
       ).toHaveBeenCalledOnce()
+      expect(ready.storedDeliveriesRequest.resolve).toHaveBeenCalledOnce()
+      expect(ready.storedDeliveriesRequest.free).toHaveBeenCalledOnce()
     })
     readyView.unmount()
     ready.dispose()
@@ -301,9 +309,7 @@ describe('Sentinel quorum completion presentation', () => {
     const pendingListing = new Promise<never[]>((resolve) => {
       finishListing = () => resolve([])
     })
-    fixture.manager.list_sentinel_genesis_share_deliveries.mockReturnValue(
-      pendingListing,
-    )
+    fixture.storedDeliveriesRequest.resolve.mockReturnValue(pendingListing)
     const view = render(SentinelUnlockParticipantHelper, {
       vault: fixture.vault,
       expanded: true,
@@ -312,8 +318,9 @@ describe('Sentinel quorum completion presentation', () => {
 
     await vi.waitFor(() => {
       expect(
-        fixture.manager.list_sentinel_genesis_share_deliveries,
+        fixture.manager.sentinel_stored_deliveries_request,
       ).toHaveBeenCalledOnce()
+      expect(fixture.storedDeliveriesRequest.resolve).toHaveBeenCalledOnce()
     })
 
     const toggle = view.getByTestId('sentinel-unlock-participant-toggle')
@@ -321,13 +328,33 @@ describe('Sentinel quorum completion presentation', () => {
     await fireEvent.click(toggle)
 
     expect(
-      fixture.manager.list_sentinel_genesis_share_deliveries,
+      fixture.manager.sentinel_stored_deliveries_request,
     ).toHaveBeenCalledOnce()
+    expect(fixture.storedDeliveriesRequest.free).not.toHaveBeenCalled()
 
+    view.unmount()
     finishListing()
     await vi.waitFor(() => {
-      expect(view.getByTestId('sentinel-unlock-no-deliveries')).toBeTruthy()
+      expect(fixture.storedDeliveriesRequest.free).toHaveBeenCalledOnce()
     })
+    fixture.dispose()
+  })
+
+  test('frees a failed stored-deliveries request', async () => {
+    const fixture = new SentinelFinalizationFixture()
+    fixture.storedDeliveriesRequest.resolve.mockRejectedValue(
+      new Error('stored delivery read failed'),
+    )
+    const view = render(SentinelUnlockParticipantHelper, {
+      vault: fixture.vault,
+      expanded: true,
+    })
+
+    await vi.waitFor(() => {
+      expect(fixture.storedDeliveriesRequest.resolve).toHaveBeenCalledOnce()
+      expect(fixture.storedDeliveriesRequest.free).toHaveBeenCalledOnce()
+    })
+    expect(fixture.state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
     view.unmount()
     fixture.dispose()
   })
