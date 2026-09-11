@@ -9,6 +9,7 @@ tasks:
   skills:install:
     desc: Install the executable-skill workspace with its frozen lockfile.
     silent: true
+    deps: [loom:install]
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/package-gate-cli.ts" install "{{.REPO_ROOT}}"
 
@@ -93,7 +94,7 @@ tasks:
   loom:check:
     desc: Typecheck Loom.
     dir: agentic-ai/loom
-    deps: [loom:install, skills:install]
+    deps: [skills:install]
     cmds:
       - bun run check
 
