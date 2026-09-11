@@ -412,7 +412,6 @@ jobs:
       github.event.label.name == 'ci:full-e2e')
     needs: [validation-request, wasm]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
     outputs:
       ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}
       ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}
