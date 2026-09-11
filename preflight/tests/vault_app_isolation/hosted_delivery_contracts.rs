@@ -253,7 +253,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "Preserve the secret-free hosted validation boundary",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
-        "types: [labeled]",
+        "types: [labeled, synchronize, edited]",
         "name: Validate explicit CI request",
         "name: Reject unsupported label events",
         "ui-demos-enabled: ${{ 'false' }}",
@@ -437,13 +437,13 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let linear_ui_demo = (root).read(".github/workflows/linear-ui-demo.yml");
     assert!(
         pr.contains(
-            "group: pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}"
+            "&& github.event.pull_request.number || format('ignored-{0}', github.run_id)"
         )
             && linear_ui_demo.contains(
-                "format('pr-{0}-{1}', github.event.pull_request.number, github.event.pull_request.head.sha)"
+                "format('pr-{0}', github.event.pull_request.number)"
             )
             && linear_ui_demo.contains("cancel-in-progress: true"),
-        "PR validation must isolate replacement heads while the trusted close workflow cancels the current exact-head group"
+        "PR validation must share its PR concurrency group with trusted close cancellation"
     );
     assert!(
         linear_ui_demo.contains(

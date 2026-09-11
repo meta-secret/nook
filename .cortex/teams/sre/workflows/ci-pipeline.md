@@ -20,10 +20,6 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Trigger: Explicit `ci:validate` / `ci:full-e2e` label
   - Purpose: Exact-head PR gate, including Rust ecosystem jobs
   - GitHub PAT: No
-- **[`pr-obsolete-validation.yml`](../../../../.github/workflows/pr-obsolete-validation.yml)**
-  - Trigger: `pull_request_target` on synchronize or base-ref edit
-  - Purpose: Cancel obsolete PR, Rust ecosystem, and Web research runs
-  - GitHub PAT: No
 - **[`repository-policy.yml`](../../../../.github/workflows/repository-policy.yml)**
   - Trigger: Every PR; path-filtered Main changes
   - Purpose: Source architecture plus conditional Loom verification
@@ -112,18 +108,6 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Keep independent long-running gates on separate ARC Pods.
 - Combine jobs only when measured setup savings exceed lost parallelism.
 
-**`pr-obsolete-validation.yml`**
-
-- Runs trusted default-branch code without checking out pull-request code.
-- Handles head synchronization and base-ref edits.
-- Ignores edits that do not change the base ref.
-- Grants only `actions: write`, `contents: read`, and `pull-requests: read`.
-- Cancels active PR, Rust ecosystem, and Web research runs for obsolete heads.
-- Cancels stale-base PR and Rust ecosystem runs after a base retarget.
-- Creates no transition marker, comment, or backfill state.
-- Performs no review request or review wait.
-- Its bounded inspection window serves only the Actions registration race.
-
 **`repository-policy.yml`**
 
 - Runs preflight and Loom policy for every pull request and Main push.
@@ -167,7 +151,7 @@ See [issues](../../../gizmo/workflows/issues.md),
 **`linear-ui-demo.yml`**
 
 - Runs from the trusted default branch.
-- Claims the current `pr-<number>-<head-sha>` concurrency group on close to cancel in-flight validation.
+- Claims the current `pr-<number>` concurrency group on close to cancel in-flight validation.
 - Keeps artifact publication disabled.
 - Keeps the retained publisher implementation available for later re-enable.
 - Completes or cancels matching Linear issues created before publication was
@@ -279,8 +263,12 @@ flowchart LR
 Cancellation is scoped to work that a newer run actually supersedes:
 
 - PR validation uses `pr-<number>`. A push makes earlier exact-head evidence
-  stale. The next explicit validation request cancels an older active run for
-  that PR.
+  stale. Native concurrency cancels the older active run on synchronization
+  or a base-ref edit. These events skip every validation job.
+- Unrelated labels and non-base edits use isolated concurrency groups.
+- Rust specialist PR runs use the same cancellation-only event pattern.
+- Web research already cancels earlier runs through native concurrency.
+- Existing path filters still apply. Filtered events cannot cancel a run.
 - Separate PRs continue to receive independent required checks.
 - Do not replace this with a global PR group, which would cancel other contributors' required checks on push.
 - Main is serialized: an active run completes to protect its cache writers, while the single pending slot coalesces bursts to the newest merged revision.

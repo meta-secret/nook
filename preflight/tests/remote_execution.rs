@@ -773,7 +773,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
     let remote_doc = RepositoryFixture::repository_root()
         .read(".cortex/teams/sre/workflows/remote-execution.md");
 
-    assert!(pr.contains("types: [labeled]"));
+    assert!(pr.contains("types: [labeled, synchronize, edited]"));
     assert!(
         !pr.contains("types: [labeled, closed]"),
         "PR validation must not create a close-triggered source run"
