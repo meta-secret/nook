@@ -9,6 +9,7 @@ import {
   saveAuthProvidersInBrowser,
   unlockVaultOnLogin,
 } from './helpers'
+import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 type LocalVaultRegistryEntry = {
   store_id?: string
@@ -84,6 +85,14 @@ async function seedScopedSyncProviders(
   storeA: string,
   storeB: string,
 ) {
+  const driveStub = createLocalE2eGoogleDriveVaultStub(
+    '',
+    'nook-multi-vault-a.yaml',
+  )
+  await driveStub.install(page, {
+    accessToken: 'ya29.e2e_file_sync_token',
+    fileName: 'nook-multi-vault-a.yaml',
+  })
   await saveAuthProvidersInBrowser(
     page,
     {
