@@ -411,7 +411,7 @@ tasks:
     desc: Run both local-provider Playwright projects, optionally selecting one NOOK_E2E_SHARD.
     cmds:
       - |
-        set -u
+        set -eu
         set --
         if [ -n "${NOOK_E2E_SHARD:-}" ]; then
           case "$NOOK_E2E_SHARD" in

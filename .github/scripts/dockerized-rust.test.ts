@@ -638,12 +638,12 @@ class DockerizedRustContract {
       mkdirSync(bin);
       writeFileSync(
         join(bin, "task"),
-        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PROBE_LOG"\ncase "$*" in *"$FAILURE"*) exit 1;; esac\n',
+        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PROBE_LOG"\nif [ -n "$FAILURE" ]; then case "$*" in *"$FAILURE"*) exit 1;; esac; fi\n',
         { mode: 0o755 },
       );
       writeFileSync(
         join(bin, "bun"),
-        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PROBE_LOG"\ncase "$*" in *"$FAILURE"*) exit 1;; esac\n',
+        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PROBE_LOG"\nif [ -n "$FAILURE" ]; then case "$*" in *"$FAILURE"*) exit 1;; esac; fi\n',
         { mode: 0o755 },
       );
       for (const scenario of [
@@ -663,6 +663,22 @@ class DockerizedRustContract {
           expected: ["_ci:main:core", "_extension:test:e2e"],
         },
       ]) {
+        const successfulProbe = join(temporary, "successful-probe.log");
+        writeFileSync(successfulProbe, "");
+        const successful = spawnSync("bash", ["-c", scenario.script], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH}`,
+            FAILURE: "",
+            PROBE_LOG: successfulProbe,
+          },
+        });
+        expect(successful.status, successful.stderr).toBe(0);
+        const successfulOutput = readFileSync(successfulProbe, "utf8");
+        for (const expected of scenario.expected) {
+          expect(successfulOutput).toContain(expected);
+        }
         for (const failure of scenario.failures) {
           const probe = join(temporary, "probe.log");
           writeFileSync(probe, "");
@@ -682,6 +698,29 @@ class DockerizedRustContract {
           }
         }
       }
+      const setupProbe = join(temporary, "setup-probe.log");
+      writeFileSync(setupProbe, "");
+      const invalidSetup = spawnSync(
+        "bash",
+        [
+          "-c",
+          grouped.replaceAll(
+            "{{.WEB_ROOT}}",
+            join(temporary, "missing-working-directory"),
+          ),
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH}`,
+            FAILURE: "",
+            PROBE_LOG: setupProbe,
+          },
+        },
+      );
+      expect(invalidSetup.status).not.toBe(0);
+      expect(readFileSync(setupProbe, "utf8")).toBe("");
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }
