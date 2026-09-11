@@ -767,13 +767,13 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         .context("PR workflow must keep the UI demo job")?;
     let full_e2e = pr
         .split_once("\n  full-e2e:\n")
-        .and_then(|(_, tail)| tail.split_once("\n  full-extension-e2e:\n"))
-        .map(|(job, _)| job)
+        .map(|(_, job)| job)
         .context("PR workflow must keep the full browser e2e job")?;
     let full_extension_e2e = pr
-        .split_once("\n  full-extension-e2e:\n")
-        .map(|(_, job)| job)
-        .context("PR workflow must keep the full extension e2e job")?;
+        .split_once("\n  extension-e2e:\n")
+        .and_then(|(_, tail)| tail.split_once("\n  preview:\n"))
+        .map(|(job, _)| job)
+        .context("PR workflow must keep the extension e2e job")?;
     let full_e2e_request = "inputs.full_e2e_requested";
     assert!(
         full_e2e.contains(full_e2e_request) && full_extension_e2e.contains(full_e2e_request),

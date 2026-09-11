@@ -178,9 +178,15 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
             && pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
             && checks
-                .matches("github.event.pull_request.head.repo.full_name == github.repository")
+                .lines()
+                .filter(|line| line.trim_start().starts_with("runs-on:")
+                    && line.contains(
+                        "github.event.pull_request.head.repo.full_name == github.repository"
+                    )
+                    && line.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+                    && line.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'"))
                 .count()
-                == 5,
+                == 3,
         "trusted native/ecosystem Rust jobs must use configured ARC while forks fall back hosted"
     );
     assert!(entry.contains("branches: [main]"));
@@ -197,15 +203,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
 
     for marker in [
         "Run dependency policy",
-        "Bake rust-ecosystem-deterministic",
-        "Bake rust-fuzz-smoke",
+        "Run deterministic tests, fuzz smoke, and Kani in parallel",
         "Bake rust-dylint",
-        "Bake Kani bounded proofs",
         "task docker:ecosystem:dependency-policy",
-        "task docker:ecosystem:deterministic",
-        "task docker:ecosystem:fuzz",
+        "task docker:ecosystem:smoke",
         "task docker:ecosystem:dylint",
-        "task docker:ecosystem:kani",
         "nook-docker-setup",
         "NOOK_SCCACHE_ACCESS_KEY",
         "FUZZ_SECONDS",
@@ -222,9 +224,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     }
     for selection in [
         "ecosystem-policy-tools",
-        "ecosystem-deterministic",
-        "ecosystem-fuzz",
-        "ecosystem-kani",
+        "ecosystem-smoke",
         "ecosystem-dylint",
     ] {
         assert_eq!(
@@ -247,7 +247,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                 "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}"
             )
             .count(),
-        5,
+        3,
         "every Bake-backed ecosystem job must seed Main and isolate PR cache writes"
     );
     let docker_tasks =
@@ -342,7 +342,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     }
     assert!(
         !checks.contains("model-checking/kani-github-action")
-            && checks.contains("task docker:ecosystem:kani"),
+            && docker_tasks.contains("task docker:ecosystem:kani & kani_pid=$!"),
         "Kani proof compilation must run through the BuildKit-cached Task target"
     );
 

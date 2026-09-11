@@ -25,7 +25,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 - PR replacement and close events use native concurrency.
 - Base-only edits and close events start no classifier or validation jobs.
 - Main runs remain serialized to protect cache publication.
-- Runner jobs have a ten-minute maximum. The five Rust ecosystem jobs use
+- Runner jobs have a ten-minute maximum. The three Rust ecosystem jobs use
   five minutes. Existing shorter limits remain in place.
 - Privileged completion publishers remain separate trusted workflows.
 - Manual remote execution and release workflows remain separate.
@@ -113,6 +113,11 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Rust domain unit tests + coverage, no-opt WASM, web/unit tests, all three web builds.
 - Shared Rust ecosystem gates via `rust-ecosystem-checks.yml`.
 - Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
+- Deterministic tests, fuzz smoke, and Kani share one runner and run concurrently.
+- Each check reports its result; any failure fails the shared job.
+- PR native coverage owns replication unit tests with snapshot updates disabled.
+- The deterministic check retains doctests and Loom.
+- Other callers retain the full deterministic suite by default.
 - Unlabeled pushes skip product validation.
 - `ci:validate` or `ci:full-e2e` remains active across subsequent commits.
 - Headless UI-demo execution is temporarily disabled.
@@ -201,6 +206,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Runs pinned Docker format/Clippy and behavior tests against Neo4j.
 - Checks k0s manifests and the Taskfile command surface.
 - Main alone publishes the shared Hive dependency cache.
+- Console images warm observer-export dependencies from manifests and the lockfile.
+- The exporter then rebuilds from the exact Hive source before generating the console contract.
 
 **`release.yml`**
 
@@ -556,7 +563,7 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 
-- **Label effect:** Adds two `Full browser e2e shard (N/2)` jobs, the stable `Full browser e2e (main fix)` join, and `Full extension e2e (main fix)` to the PR workflow.
+- **Label effect:** Adds two `Full browser e2e shard (N/2)` jobs, the stable `Full browser e2e (main fix)` join, and selects the full suite in the existing `Extension e2e` job.
 - **WASM artifact sharing:**
   - A dedicated producer verifies WASM once and uploads only its generated package.
   - Preview and both browser jobs download that artifact instead of recompiling Rust.
@@ -865,7 +872,10 @@ authenticator-domain to 90 percent.
 - It also retains the UI-demo job in `needs` for observable skip handling.
 - A disabled or non-required skip is permitted.
 - An enabled, required demo failure blocks preview.
-- Optional web and extension e2e consumers need both WASM jobs and receive only a fully verified handoff.
+- Optional web and extension e2e consumers start after the exact-source browser image is ready.
+- Node verification runs concurrently and remains mandatory for preview and readiness.
+- One Extension e2e job selects the full suite when requested, otherwise the focused authentication regression.
+- Preview requires the extension result when either full or authentication coverage is required.
 - A separate `Rust coverage report` job declares `needs: rust`, downloads the native handoff directly, and performs reporting without occupying or delaying the preview runner.
 
 **Rerun and artifact rules:**
@@ -938,7 +948,8 @@ authenticator-domain to 90 percent.
 - PR CI assigns native Rust to one runner and WASM to another.
 - The small generated WASM package feeds parallel browser-free preview validation as soon as clippy/build finishes.
 - Required Node tests continue on the producer; preview deployment is blocked until that producer succeeds.
-- Optional browser-e2e consumers wait for the fully verified producer.
+- PR browser-e2e consumers wait for the browser image producer.
+- Required Node verification remains a separate preview and readiness gate.
 - Native Rust separately uploads the coverage handoff consumed by the small Rust-dependent reporting job.
 - The preview job never waits for native coverage.
 - It runs without browser e2e. Trusted sources deploy Cloudflare previews and

@@ -67,6 +67,7 @@ jobs:
     with:
       fuzz_seconds: "20"
       isolated_cache_write: "true"
+      native_coverage_provided: true
 
   rust:
     name: Native Rust verification
@@ -659,14 +660,14 @@ jobs:
               })
             }
 
-  auth-sensitive-extension-e2e:
-    name: Authentication-sensitive extension e2e
+  extension-e2e:
+    name: Extension e2e
     if: >-
-      needs.verify.outputs.auth-sensitive-e2e-required == 'true' &&
+      (inputs.full_e2e_requested || needs.verify.outputs.auth-sensitive-e2e-required == 'true') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       inputs.validation_requested
-    needs: [validation-request, verify, wasm-node-test]
+    needs: [validation-request, verify]
     runs-on: nook-k0s-container
     timeout-minutes: 10
     container:
@@ -675,7 +676,14 @@ jobs:
         username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     steps:
+      - name: Run full extension suite
+        if: inputs.full_e2e_requested
+        working-directory: /meta-secret/nook
+        run: task _extension:test:e2e
+        env:
+          CI: true
       - name: Run the focused real-extension authentication regression
+        if: ${{ !inputs.full_e2e_requested }}
         working-directory: /meta-secret/nook
         run: task _extension:test:e2e:file
         env:
@@ -689,7 +697,7 @@ jobs:
       inputs.validation_requested
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]
+    needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
@@ -703,7 +711,8 @@ jobs:
           UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}
           UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
           AUTH_SENSITIVE_E2E_REQUIRED: ${{ needs.verify.outputs.auth-sensitive-e2e-required }}
-          AUTH_SENSITIVE_E2E_RESULT: ${{ needs.auth-sensitive-extension-e2e.result }}
+          EXTENSION_E2E_RESULT: ${{ needs.extension-e2e.result }}
+          FULL_E2E_REQUESTED: ${{ inputs.full_e2e_requested }}
         run: |
           set -euo pipefail
           failed=0
@@ -727,10 +736,10 @@ jobs:
             echo "::error::Headless UI demo finished with $UI_DEMO_RESULT"
             failed=1
           fi
-          echo "Authentication-sensitive extension e2e=$AUTH_SENSITIVE_E2E_RESULT (required=$AUTH_SENSITIVE_E2E_REQUIRED)"
-          if [ "$AUTH_SENSITIVE_E2E_REQUIRED" = "true" ] \
-            && [ "$AUTH_SENSITIVE_E2E_RESULT" != "success" ]; then
-            echo "::error::Authentication-sensitive extension e2e finished with $AUTH_SENSITIVE_E2E_RESULT"
+          echo "Extension e2e=$EXTENSION_E2E_RESULT (full=$FULL_E2E_REQUESTED, auth=$AUTH_SENSITIVE_E2E_REQUIRED)"
+          if { [ "$FULL_E2E_REQUESTED" = "true" ] || [ "$AUTH_SENSITIVE_E2E_REQUIRED" = "true" ]; } \
+            && [ "$EXTENSION_E2E_RESULT" != "success" ]; then
+            echo "::error::Extension e2e finished with $EXTENSION_E2E_RESULT"
             failed=1
           fi
           test "$failed" -eq 0
@@ -910,7 +919,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       inputs.full_e2e_requested
-    needs: [verify, wasm-node-test]
+    needs: verify
     runs-on: nook-k0s-container
     timeout-minutes: 10
     container:
@@ -923,7 +932,7 @@ jobs:
       matrix:
         shard: [1, 2]
     steps:
-      - name: Local-provider web e2e from verified WASM
+      - name: Local-provider web e2e from built WASM
         working-directory: /meta-secret/nook
         run: task _ci:main:web:e2e-only
         env:
@@ -949,24 +958,3 @@ jobs:
         env:
           SHARD_RESULT: ${{ needs.full-e2e-shard.result }}
         run: test "$SHARD_RESULT" = "success"
-
-  full-extension-e2e:
-    name: Full extension e2e (main fix)
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login != 'dependabot[bot]' &&
-      inputs.full_e2e_requested
-    needs: [verify, wasm-node-test]
-    runs-on: nook-k0s-container
-    timeout-minutes: 10
-    container:
-      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-      credentials:
-        username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-        password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-    steps:
-      - name: Extension e2e from verified WASM
-        working-directory: /meta-secret/nook
-        run: task _extension:test:e2e
-        env:
-          CI: true

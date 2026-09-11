@@ -32,6 +32,166 @@ interface GitFixtureCommand {
 class DockerizedRustContract {
   private readonly root = resolve(import.meta.dir, "../..");
 
+  previewGates(): void {
+    const workflow = z
+      .object({
+        jobs: z.record(
+          z.string(),
+          z.object({
+            needs: z.union([z.string(), z.array(z.string())]).optional(),
+            if: z.string().optional(),
+            steps: z
+              .array(
+                z.object({
+                  run: z.string().optional(),
+                  if: z.string().optional(),
+                }),
+              )
+              .optional(),
+          }),
+        ),
+      })
+      .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
+    const preview = workflow.jobs.preview;
+    const script = z.string().parse(preview?.steps?.[0]?.run);
+    expect(preview?.needs).toContain("wasm-node-test");
+    expect(preview?.needs).toContain("extension-e2e");
+    expect(Object.keys(workflow.jobs)).not.toContain(
+      "auth-sensitive-extension-e2e",
+    );
+    expect(Object.keys(workflow.jobs)).not.toContain("full-extension-e2e");
+    const extension = workflow.jobs["extension-e2e"];
+    expect(extension?.if).toContain(
+      "inputs.full_e2e_requested || needs.verify.outputs.auth-sensitive-e2e-required == 'true'",
+    );
+    expect(extension?.steps).toEqual([
+      { if: "inputs.full_e2e_requested", run: "task _extension:test:e2e" },
+      {
+        if: "${{ !inputs.full_e2e_requested }}",
+        run: "task _extension:test:e2e:file",
+      },
+    ]);
+    for (const job of ["extension-e2e", "full-e2e-shard"]) {
+      expect(workflow.jobs[job]?.needs).not.toContain("wasm-node-test");
+      expect(workflow.jobs[job]?.needs).toContain("verify");
+    }
+    for (const full of ["true", "false"]) {
+      for (const auth of ["true", "false"]) {
+        for (const result of ["success", "failure", "cancelled", "skipped"]) {
+          for (const node of ["success", "failure", "cancelled", "skipped"]) {
+            const run = spawnSync("bash", ["-c", script], {
+              encoding: "utf8",
+              env: {
+                ...process.env,
+                NATIVE_RESULT: "success",
+                WASM_RESULT: "success",
+                WEB_RESULT: "success",
+                WASM_NODE_RESULT: node,
+                UI_DEMOS_ENABLED: "false",
+                UI_DEMO_REQUIRED: "false",
+                UI_DEMO_RESULT: "skipped",
+                AUTH_SENSITIVE_E2E_REQUIRED: auth,
+                FULL_E2E_REQUESTED: full,
+                EXTENSION_E2E_RESULT: result,
+              },
+            });
+            expect(run.status === 0, run.stdout).toBe(
+              (result === "success" ||
+                (full === "false" && auth === "false")) &&
+                node === "success",
+            );
+          }
+        }
+      }
+    }
+  }
+
+  ecosystemResults(): void {
+    const tasks = z
+      .object({
+        tasks: z.object({
+          "docker:ecosystem:smoke": z.object({ cmds: z.array(z.string()) }),
+        }),
+      })
+      .parse(
+        Bun.YAML.parse(this.read("nook-app/nook-platform/docker/Taskfile.yml")),
+      );
+    const script = z
+      .string()
+      .parse(tasks.tasks["docker:ecosystem:smoke"].cmds[0]);
+    const temporary = mkdtempSync(join(tmpdir(), "nook-ecosystem-results-"));
+    try {
+      writeFileSync(
+        join(temporary, "task"),
+        '#!/bin/sh\ncase ",$FAILURES," in *",$1,"*) exit 1 ;; *) exit 0 ;; esac\n',
+        { mode: 0o755 },
+      );
+      for (let failures = 0; failures < 8; failures += 1) {
+        const selected = [];
+        if (failures & 1) selected.push("docker:ecosystem:deterministic");
+        if (failures & 2) selected.push("docker:ecosystem:fuzz");
+        if (failures & 4) selected.push("docker:ecosystem:kani");
+        const run = spawnSync("bash", ["-e", "-c", script], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${temporary}:${process.env.PATH}`,
+            FAILURES: selected.join(","),
+          },
+        });
+        expect(run.status === 0, run.stdout).toBe(failures === 0);
+        expect(run.stdout).toContain("Deterministic tests");
+        expect(run.stdout).toContain("Fuzz smoke");
+        expect(run.stdout).toContain("Kani proofs");
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+
+  coverageAndExporter(): void {
+    const pr = this.read(".github/workflows/pr.yml");
+    const checks = this.read(".github/workflows/rust-ecosystem-checks.yml");
+    const product = this.read(
+      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
+    expect(pr).toContain("native_coverage_provided: true");
+    expect(checks).toContain("type: boolean\n        default: false");
+    expect(product).toContain("ARG NATIVE_COVERAGE_PROVIDED=false");
+    expect(product).toContain(
+      "true) INSTA_UPDATE=no cargo test --locked -p nook-replication --doc",
+    );
+    expect(product).toContain(
+      "false) INSTA_UPDATE=no cargo test --locked -p nook-replication ;;",
+    );
+    expect(product).toContain(
+      "INSTA_UPDATE=no cargo llvm-cov nextest --no-clean --profile ci -p nook-replication",
+    );
+    expect(product).toContain(
+      "RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release",
+    );
+    const hive = this.read("agentic-ai/minds/hive/Dockerfile");
+    const dependencies = hive
+      .split("FROM fetched-dependencies AS observer-contract-dependencies")[1]
+      ?.split(
+        "FROM observer-contract-dependencies AS observer-contract-exporter",
+      )[0];
+    expect(dependencies).toContain(
+      "COPY --from=chef-planner /build/recipe.json recipe.json",
+    );
+    expect(dependencies).toContain("cargo chef cook --locked");
+    expect(dependencies).toContain(
+      "--features observer-contract-export --bin hive-export-observer-contract",
+    );
+    expect(dependencies).not.toContain("COPY hive/src");
+    expect(hive).toContain(
+      "FROM observer-contract-dependencies AS observer-contract-exporter\nCOPY hive/src hive/src",
+    );
+    expect(hive).toContain(
+      "--bin hive-export-observer-contract -- --output /observer-contract",
+    );
+  }
+
   workflowTooling(): void {
     for (const file of readdirSync(join(this.root, ".github/workflows"))) {
       if (!file.endsWith(".yml")) continue;
@@ -48,9 +208,24 @@ class DockerizedRustContract {
     expect(ecosystem).toContain("SCCACHE_OPTIONAL:");
     expect(ecosystem).toContain("'dependabot[bot]') && '1' || ''");
     expect(ecosystem.match(/uses: docker\/setup-buildx-action/g)).toHaveLength(
-      5,
+      3,
     );
-    expect(ecosystem.match(/cache-selection: ecosystem-/g)).toHaveLength(5);
+    expect(ecosystem.match(/cache-selection: ecosystem-/g)).toHaveLength(3);
+    let routedJobs = 0;
+    for (const line of ecosystem.split("\n")) {
+      if (!line.trimStart().startsWith("runs-on:")) continue;
+      routedJobs += 1;
+      expect(line).toContain(
+        "github.event.pull_request.head.repo.full_name == github.repository",
+      );
+      expect(line).toContain(
+        "github.event.pull_request.user.login != 'dependabot[bot]'",
+      );
+      expect(line).toContain(
+        "(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'",
+      );
+    }
+    expect(routedJobs).toBe(3);
 
     expect(this.read(".github/formatting/Dockerfile")).toContain(
       "prettier-skill.json",
@@ -68,9 +243,9 @@ class DockerizedRustContract {
     const generatedWasm =
       "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm";
     expect(dockerignore).toContain(`${generatedWasm}*`);
-    expect(dockerignore.indexOf(`!${generatedWasm}/.gitignore`)).toBeGreaterThan(
-      dockerignore.indexOf(`${generatedWasm}*`),
-    );
+    expect(
+      dockerignore.indexOf(`!${generatedWasm}/.gitignore`),
+    ).toBeGreaterThan(dockerignore.indexOf(`${generatedWasm}*`));
     expect(dockerignore).toContain("**/node_modules");
   }
 
@@ -100,6 +275,7 @@ class DockerizedRustContract {
         "ecosystem-policy-tools",
         "ecosystem-deterministic",
         "ecosystem-kani",
+        "ecosystem-smoke",
       ]) {
         const script = selection.run
           .replaceAll("${{ inputs.cache-selection }}", profile)
@@ -144,7 +320,12 @@ class DockerizedRustContract {
         expect(calls).not.toContain("-git-");
         if (profile === "connection-only" || profile === "hive")
           expect(calls).toBe("");
-        if (profile.startsWith("ecosystem-")) {
+        if (profile === "ecosystem-smoke") {
+          expect(calls.trim().split("\n")).toHaveLength(3);
+          expect(calls).toContain("nook-rust-ecosystem-deterministic-");
+          expect(calls).toContain("nook-rust-ecosystem-fuzz-");
+          expect(calls).toContain("nook-rust-ecosystem-kani-");
+        } else if (profile.startsWith("ecosystem-")) {
           expect(calls.trim().split("\n")).toHaveLength(1);
           expect(calls).toContain(`nook-rust-${profile}-`);
         }
@@ -393,6 +574,18 @@ class DockerizedRustContract {
 }
 
 const contract = new DockerizedRustContract();
+test(
+  "PR browser scheduling preserves covering extension and Node gates",
+  contract.previewGates.bind(contract),
+);
+test(
+  "grouped ecosystem reports every result and fails for any failed check",
+  contract.ecosystemResults.bind(contract),
+);
+test(
+  "PR dedup retains standalone coverage and source-correct Hive exports",
+  contract.coverageAndExporter.bind(contract),
+);
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
   contract.workflowTooling.bind(contract),
