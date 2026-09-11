@@ -86,21 +86,20 @@ fn obsolete_validation_cancellation_is_marker_free_and_head_bound() -> Result<()
             .exists(),
         "native workflow concurrency must replace the cancellation worker"
     );
-    for path in [".github/workflows/ci.yml"] {
-        let workflow = root.read(path)?;
-        for required in [
-            "types: [opened, synchronize, reopened, labeled, edited, closed]",
-            "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
-            "github.event.changes.base.ref.from != ''",
-            "if: github.event",
-            "github.event.label.name == 'ci:validate'",
-        ] {
-            assert!(workflow.contains(required), "{path} is missing {required}");
-        }
-        assert!(
-            !workflow.contains("github.rest.actions.cancelWorkflowRun"),
-            "{path} must use native concurrency"
-        );
+    let path = ".github/workflows/ci.yml";
+    let workflow = root.read(path)?;
+    for required in [
+        "types: [opened, synchronize, reopened, labeled, edited, closed]",
+        "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        "github.event.changes.base.ref.from != ''",
+        "if: github.event",
+        "github.event.label.name == 'ci:validate'",
+    ] {
+        assert!(workflow.contains(required), "{path} is missing {required}");
     }
+    assert!(
+        !workflow.contains("github.rest.actions.cancelWorkflowRun"),
+        "{path} must use native concurrency"
+    );
     Ok(())
 }
