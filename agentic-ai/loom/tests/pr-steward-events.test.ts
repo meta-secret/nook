@@ -13,12 +13,9 @@ import {
   PrStewardEventObserver,
   PrStewardInvocationCodec,
   PrStewardCredentialFile,
-  PrStewardSubscriptionGuard,
-  PrStewardSubscriptionGuardKind,
-} from '../src/pr-steward-events.ts';
-import type {
-  PrStewardSlowConsumerObservation,
-  PrStewardSubscriptionControl,
+  PrStewardBoundedMessageStream,
+  PrStewardSubscriptionKind,
+  PrStewardSubscriptionOverloadError,
 } from '../src/pr-steward-events.ts';
 import {
   PR_STEWARD_REPOSITORY,
@@ -91,14 +88,6 @@ class UnexpectedPrReader implements PrStewardAssignedPrReader {
 
   async read(_request: PrStewardAssignedPrRequest): Promise<never> {
     throw this.#error;
-  }
-}
-
-class FixtureSubscription implements PrStewardSubscriptionControl {
-  unsubscribed = false;
-
-  unsubscribe(): void {
-    this.unsubscribed = true;
   }
 }
 
@@ -220,41 +209,59 @@ describe('PR Steward credentials and invocation codec', () => {
 });
 
 describe('exact-head routing observations', () => {
-  test('unsubscribes when the assigned subscription becomes a slow consumer', async () => {
-    const assigned = new FixtureSubscription();
-    const unrelated = new FixtureSubscription();
-    const observations =
-      (async function* (): AsyncIterable<PrStewardSlowConsumerObservation> {
-        yield { subscription: unrelated, pending: 5 };
-        yield { subscription: assigned, pending: 6 };
-      })();
-    const outcome = await new PrStewardSubscriptionGuard({
-      observations,
-      subscription: assigned,
-    }).monitor();
+  test('admits four messages and synchronously unsubscribes on overflow', async () => {
+    const messages = new PrStewardBoundedMessageStream();
+    let unsubscribed = 0;
+    const unsubscribe = (): void => {
+      unsubscribed += 1;
+    };
+    messages.admit({ data: encoder.encode('0'), unsubscribe });
+    const iterator = messages[Symbol.asyncIterator]();
+    const first = await iterator.next();
+    if (first.done) throw new Error('expected first admitted message');
+    for (let index = 1; index < 5; index += 1)
+      messages.admit({ data: encoder.encode(String(index)), unsubscribe });
+    expect(unsubscribed).toBe(1);
+    const admitted = [new TextDecoder().decode(first.value.data)];
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) break;
+      admitted.push(new TextDecoder().decode(next.value.data));
+    }
+    expect(admitted).toEqual(['0', '1', '2', '3']);
+    const outcome = messages.outcome();
     expect(outcome).toEqual({
-      kind: PrStewardSubscriptionGuardKind.Overloaded,
-      pending: 6,
+      kind: PrStewardSubscriptionKind.Overloaded,
+      pending: 4,
     });
-    expect(assigned.unsubscribed).toBe(true);
-    expect(unrelated.unsubscribed).toBe(false);
+    if (outcome.kind !== PrStewardSubscriptionKind.Overloaded)
+      throw new Error('expected overload outcome');
+    const failure = new PrStewardSubscriptionOverloadError({
+      pending: outcome.pending,
+    });
+    expect(failure.pending).toBe(4);
+    expect(failure.message).toContain('4 pending messages');
   });
 
-  test('leaves the subscription active when the status stream closes normally', async () => {
-    const subscription = new FixtureSubscription();
-    const closed: readonly PrStewardSlowConsumerObservation[] = [];
-    const observations =
-      (async function* (): AsyncIterable<PrStewardSlowConsumerObservation> {
-        for (const observation of closed) yield observation;
-      })();
-    const outcome = await new PrStewardSubscriptionGuard({
-      observations,
-      subscription,
-    }).monitor();
-    expect(outcome).toEqual({
-      kind: PrStewardSubscriptionGuardKind.Closed,
+  test('settles admitted messages before reporting normal closure', async () => {
+    const messages = new PrStewardBoundedMessageStream();
+    let unsubscribed = false;
+    messages.admit({
+      data: encoder.encode('admitted'),
+      unsubscribe: () => {
+        unsubscribed = true;
+      },
     });
-    expect(subscription.unsubscribed).toBe(false);
+    messages.terminate({ kind: PrStewardSubscriptionKind.Closed });
+    const admitted: string[] = [];
+    for await (const message of messages)
+      admitted.push(new TextDecoder().decode(message.data));
+    expect(admitted).toEqual(['admitted']);
+    const outcome = messages.outcome();
+    expect(outcome).toEqual({
+      kind: PrStewardSubscriptionKind.Closed,
+    });
+    expect(unsubscribed).toBe(false);
   });
 
   test.each([
@@ -569,7 +576,7 @@ describe('exact-head routing observations', () => {
     ).rejects.toBe(failure);
   });
 
-  test('bounds concurrent observations while continuing message consumption', async () => {
+  test('processes one admitted observation at a time', async () => {
     const reader = new PendingPrReader();
     const event = cloudEvent({
       event: 'pull_request',
@@ -580,7 +587,7 @@ describe('exact-head routing observations', () => {
       reader,
     });
     await Bun.sleep(0);
-    expect(reader.reads).toBe(4);
+    expect(reader.reads).toBe(1);
     reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
     expect(await observation).toHaveLength(5);
   });
@@ -619,7 +626,7 @@ describe('exact-head routing observations', () => {
     ).toMatchObject([{ eventId: 'first' }, { eventId: 'second' }]);
   });
 
-  test('settles and discards pending work before propagating stream failure', async () => {
+  test('settles admitted work before propagating stream failure', async () => {
     const reader = new PendingPrReader();
     const failure = new Error('stream failure');
     const lines: string[] = [];
@@ -640,7 +647,7 @@ describe('exact-head routing observations', () => {
     expect(reader.reads).toBe(1);
     reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
     await expect(observation).rejects.toBe(failure);
-    expect(lines).toHaveLength(0);
+    expect(lines).toHaveLength(1);
   });
 });
 
