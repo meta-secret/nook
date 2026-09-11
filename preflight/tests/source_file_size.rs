@@ -109,11 +109,11 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
     );
     assert!(workflow.contains("pull_request:"));
     assert!(
-        !workflow.contains("fetch-depth")
+        workflow.contains("fetch-depth: 0")
             && !workflow.contains("BASELINE_SHA")
             && !workflow.contains("git diff")
             && !workflow.contains("policy-paths"),
-        "repository policy must validate the checked-out tree without base comparison or path classification"
+        "repository policy must fetch identifier history while validating the full tree without inline base comparison or path classification"
     );
     assert!(
         workflow.contains("github.event.pull_request.head.repo.full_name != github.repository")

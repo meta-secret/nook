@@ -235,13 +235,13 @@ fn loom_workflow_audits_every_cortex_change() {
         "repository policy must validate every PR and Main tree"
     );
     assert!(
-        !workflow.contains("fetch-depth")
+        workflow.contains("fetch-depth: 0")
             && !workflow.contains("BASELINE_SHA")
             && !workflow.contains("BEFORE_SHA")
             && !workflow.contains("git diff")
             && !workflow.contains("policy-paths")
             && !workflow.contains("cortex_markdown_only"),
-        "repository policy must not fetch or classify a base comparison"
+        "repository policy must fetch identifier history without inline base comparison or path classification"
     );
     assert!(
         !workflow.contains("arc-manifest-contract.ts")
