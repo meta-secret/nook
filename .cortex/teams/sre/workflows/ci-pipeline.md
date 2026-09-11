@@ -97,6 +97,7 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`pr.yml`**
 
+- Web verification has a ten-minute job limit.
 - Rust domain unit tests + coverage, no-opt WASM, web/unit tests, all three web builds.
 - Shared Rust ecosystem gates via `rust-ecosystem-checks.yml`.
 - Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
@@ -147,6 +148,8 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`rust-ecosystem.yml`**
 
+- Each shared ecosystem job has a five-minute limit.
+- Scheduled and manual fuzz smoke use the same 20-second budget per target.
 - Thin entry points outside the product PR pipeline.
 - Weekly schedule and `workflow_dispatch`.
 - Labeled `agentic-ai/minds/**` PRs only, because `pr.yml` ignores `agentic-ai/**`.
@@ -172,6 +175,7 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`main.yml`**
 
+- Web verification has a ten-minute job limit.
 - Calls the shared Rust ecosystem jobs in parallel with product verification.
 - Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
 - Classifies changed paths and skips the product job chain for minds-only pushes.

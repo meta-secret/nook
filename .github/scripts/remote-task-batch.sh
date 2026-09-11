@@ -7,6 +7,7 @@ task_timeout_minutes() {
     preflight) echo 15 ;;
     loom:verify) echo 15 ;;
     rust:ci|hive:verify) echo 20 ;;
+    web:verify) echo 10 ;;
     web:build) echo 25 ;;
     web:e2e|web:e2e:debug|extension:e2e) echo 30 ;;
     check|ci:pr) echo 35 ;;

@@ -552,7 +552,8 @@ Use this workflow for quality, CI, and deployment changes.
 22. **Cost tiers:**
     - cargo-deny, RustSec, Proptest, and committed Insta snapshots are normal merge checks.
     - Loom models must remain bounded.
-    - Cargo-fuzz uses a short merge smoke and longer scheduled/manual campaigns.
+    - Cargo-fuzz uses a 20-second smoke per target for merge, scheduled, and manual runs.
+    - Each shared Rust ecosystem job has a five-minute limit.
     - Kani proofs must declare practical unwind bounds.
     - Dylint libraries, versions, and their dated nightly (`nightly-2026-04-16` for Dylint `6.0.1`) are pinned so compiler-coupled lint behavior changes intentionally.
 

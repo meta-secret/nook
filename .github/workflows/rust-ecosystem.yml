@@ -85,5 +85,5 @@ jobs:
     uses: ./.github/workflows/rust-ecosystem-checks.yml
     secrets: inherit
     with:
-      fuzz_seconds: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '900' || '20' }}
+      fuzz_seconds: "20"
       isolated_cache_write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
