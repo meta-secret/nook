@@ -247,6 +247,7 @@ printf 'baseline\n' >"$fixture_root/README.md"
   FORMAT_TEST_NESTED_SCRIPTS_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts" \
   HIVE_SEALED_GUEST=1 \
   NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
+  REPO_ROOT="$fixture_root" \
   PATH="$fixture_root/bin:$PATH" \
     bash .github/scripts/format-host-apply.sh >/dev/null
   test "$(git hash-object nook-app/nook-platform/src/child.rs)" = "$(git rev-parse HEAD:nook-app/nook-platform/src/child.rs)"
@@ -289,6 +290,7 @@ cmp -s "$fixture_root/expected-rust.log" "$fixture_root/actual-rust.log" \
   FORMAT_TEST_NESTED_SCRIPTS_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts" \
   HIVE_SEALED_GUEST=1 \
   NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
+  REPO_ROOT="$fixture_root" \
   PATH="$fixture_root/bin:$PATH" \
     bash .github/scripts/format-host-apply.sh >/dev/null
 )
