@@ -135,6 +135,7 @@ export async function startLoginServer() {
 export async function registerWebsitePasskeyThroughExtension(
   page: Page,
 ): Promise<string> {
+  await page.bringToFront()
   const ceremony = page.evaluate(async () => {
     const credential = (await navigator.credentials.create({
       publicKey: {
@@ -169,6 +170,7 @@ export async function assertWebsitePasskeyThroughExtension({
   page,
   credentialId,
 }: WebsitePasskeyAssertionBrowserFlow): Promise<void> {
+  await page.bringToFront()
   const ceremony = page.evaluate(async (id) => {
     const rawId = Uint8Array.from(
       atob(
