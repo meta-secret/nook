@@ -102,7 +102,7 @@
 </script>
 
 <div class="space-y-6">
-  {#if showAccessGate || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
+  {#if showAccessGate || vault.errorMsg || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
     {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
       <LoginGate
         {vault}
@@ -143,23 +143,23 @@
             vault.errorMsg = vault.t(removed.error.translationKey)
         }}
       />
-      <VaultStatusBar
-        {vault}
-        storageMode={vault.storageMode}
-        githubRepo={vault.githubRepo}
-        lastSync={vault.lastSync}
-        isSyncing={vault.isSyncActivityVisible}
-        successMsg={vault.successMsg}
-        errorMsg={vault.errorMsg}
-        {appVersion}
-        label="Nook"
-        showSyncStatus={false}
-        showStorageIcon={false}
-        variant={VaultStatusBarVariant.Quiet}
-        onDismissSuccess={() => vault.dismissSuccess()}
-        onDismissError={() => vault.dismissError()}
-      />
     {/if}
+    <VaultStatusBar
+      {vault}
+      storageMode={vault.storageMode}
+      githubRepo={vault.githubRepo}
+      lastSync={vault.lastSync}
+      isSyncing={vault.isSyncActivityVisible}
+      successMsg={vault.successMsg}
+      errorMsg={vault.errorMsg}
+      {appVersion}
+      label="Nook"
+      showSyncStatus={false}
+      showStorageIcon={false}
+      variant={VaultStatusBarVariant.Quiet}
+      onDismissSuccess={() => vault.dismissSuccess()}
+      onDismissError={() => vault.dismissError()}
+    />
     {#if showPasskeyOverlay}
       <PasskeyAuthOverlay {vault} onDismiss={onDismissPasskey} />
     {/if}
