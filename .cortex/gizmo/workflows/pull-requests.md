@@ -612,7 +612,7 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
   recurring follow-up to continue PR monitoring later.
 - Use reactive Steward hints with host-bounded waits. Do not poll GitHub
   routinely or persist a wait plan as Codex scheduling state.
-  Steward's five-minute merged-or-closed check is the narrow exception.
+  Steward's five-minute-inactivity completion check is the narrow exception.
 - "Merge when ready" is a terminal delivery instruction. Test the PR, authorize
   PR Steward to monitor its exact-head checks and substantive review state, and
   authorize a squash merge as soon as Gizmo's readiness verdict succeeds.

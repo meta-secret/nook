@@ -6,8 +6,6 @@ import {
   readFileSync,
 } from 'node:fs';
 
-import { type Msg, type MsgCallback, wsconnect } from '@nats-io/nats-core';
-
 import {
   UntrustedYamlPropertyPresence,
   UntrustedYamlBoundary,
@@ -22,10 +20,7 @@ import {
   PrStewardSource,
 } from './pr-steward-contract.ts';
 
-import {
-  PrStewardGithubPrReader,
-  PrStewardGithubUnavailableError,
-} from './pr-steward-github.ts';
+import { PrStewardGithubUnavailableError } from './pr-steward-github.ts';
 
 import type { UntrustedYamlMap, UntrustedYamlNode } from './lib/guards.ts';
 
@@ -35,12 +30,10 @@ import type {
   PrStewardUrl,
 } from './pr-steward-contract.ts';
 
-import type { PrStewardAssignedPrReader, PrStewardAssignedPullRequest } from './pr-steward-github.ts';
+import type { PrStewardAssignedPrReader } from './pr-steward-github.ts';
 
-import { PrStewardCompletion } from './pr-steward-completion.ts';
 import { PrStewardOutput } from './pr-steward-output.ts';
 import { PrStewardDeliveries } from './pr-steward-deliveries.ts';
-import { PrStewardInvocationCodec } from './pr-steward-invocation.ts';
 
 export class WebhookProperty {
   private constructor(
@@ -221,7 +214,6 @@ export type PrStewardSubscriptionAdmission = {
   readonly data: Uint8Array;
   readonly unsubscribe: () => void;
 };
-type PrStewardSubscriptionCallbackArguments = Parameters<MsgCallback<Msg>>;
 export type PrStewardSubscriptionOutcome =
   PrStewardSubscriptionTermination | PrStewardSubscriptionOverload;
 type PrStewardSubscriptionOverloadRequest = { readonly pending: number };
@@ -755,6 +747,7 @@ type PrStewardObservationRequest = {
   readonly messages: AsyncIterable<{ readonly data: Uint8Array }>;
   readonly pullRequest: PrStewardPullRequest;
   readonly write: (line: string) => void;
+  readonly activity: (event: { readonly checkEvent: boolean }) => void;
 };
 
 type PrStewardMessage = { readonly data: Uint8Array };
@@ -773,6 +766,12 @@ export class PrStewardEventObserver {
       if (deliveries.contains(message)) continue;
       const record = await this.#observeMessage({ request, message });
       if (record === false || !output.shouldEmit({ record })) continue;
+      if (record.kind === PrStewardRecordKind.Routing)
+        request.activity({
+          checkEvent: record.source === PrStewardSource.CheckRun ||
+            record.source === PrStewardSource.CheckSuite ||
+            record.source === PrStewardSource.WorkflowRun,
+        });
       request.write(PrStewardNdjsonCodec.encode(record));
       if (record.kind === PrStewardRecordKind.Routing)
         deliveries.remember(message);
@@ -885,110 +884,13 @@ export class PrStewardEventObserver {
   }
 }
 
-export class PrStewardEventCli {
-  private constructor(private readonly request: readonly string[]) {}
-
-  static main(arguments_: readonly string[] = process.argv): Promise<void> {
-    return new PrStewardEventCli(arguments_).execute();
-  }
-
-  private async execute(): Promise<void> {
-    const arguments_ = this.request;
-    const invocation = PrStewardInvocationCodec.parse(arguments_.slice(2));
-    const credential = PrStewardCredentialFile.load(invocation.credentialPath);
-    const connection = await wsconnect({
-      servers: PR_STEWARD_ENDPOINT,
-      user: credential.username,
-      pass: credential.password,
-      name: `pr-steward-${process.pid}`,
-      ignoreClusterUpdates: true,
-    });
-    const messages = new PrStewardBoundedMessageStream();
-    const subscription = connection.subscribe(PR_STEWARD_SUBJECT, {
-      callback: (
-        ...[error, message]: PrStewardSubscriptionCallbackArguments
-      ) => {
-        if (error instanceof Error) {
-          messages.terminate({
-            kind: PrStewardSubscriptionKind.Failed,
-            error,
-          });
-          return;
-        }
-        messages.admit({
-          data: message.data,
-          unsubscribe: () => subscription.unsubscribe(),
-        });
-      },
-    });
-    void connection.closed().then((error) => {
-      messages.terminate(
-        error instanceof Error
-          ? { kind: PrStewardSubscriptionKind.Failed, error }
-          : { kind: PrStewardSubscriptionKind.Closed },
-      );
-    });
-    let stopping = false;
-    let draining: Promise<void> | false = false;
-    const terminal: { result: PrStewardAssignedPullRequest | false } = { result: false };
-    const reader = PrStewardGithubPrReader.create();
-    const stop = (): void => {
-      if (stopping) return;
-      stopping = true;
-      completion.stop();
-      draining = connection.drain().catch(() => {
-        process.exitCode = 1;
-      });
-    };
-    const completion = new PrStewardCompletion({
-      reader,
-      target: { repository: PR_STEWARD_REPOSITORY, pullRequest: invocation.pullRequest },
-      finished: (result) => {
-        terminal.result = result;
-        stop();
-      },
-      failed: (error) => {
-        messages.terminate({ kind: PrStewardSubscriptionKind.Failed, error });
-      },
-    });
-    process.once('SIGINT', stop);
-    process.once('SIGTERM', stop);
-    try {
-      await new PrStewardEventObserver({
-        reader,
-      }).observe({
-        messages,
-        pullRequest: invocation.pullRequest,
-        write: (line) => {
-          process.stdout.write(line);
-        },
-      });
-      const outcome = messages.outcome();
-      if (outcome.kind === PrStewardSubscriptionKind.Overloaded)
-        throw new PrStewardSubscriptionOverloadError({
-          pending: outcome.pending,
-        });
-      const closeError = await connection.closed();
-      if (closeError) throw new Error('NATS connection closed unexpectedly');
-      if (draining !== false) await draining;
-      if (terminal.result !== false && process.exitCode !== 1)
-        process.stderr.write(
-          `PR Steward finished: ${terminal.result.state} ${terminal.result.url.value} head=${terminal.result.headSha}\n`,
-        );
-    } finally {
-      completion.stop();
-      if (!stopping) await connection.close();
-      process.removeListener('SIGINT', stop);
-      process.removeListener('SIGTERM', stop);
-    }
-  }
-}
-
 if (import.meta.main) {
-  PrStewardEventCli.main().catch((cause) => {
-    const message =
-      cause instanceof Error ? cause.message : 'subscription failed';
-    process.stderr.write(`PR Steward event subscription failed: ${message}\n`);
-    process.exitCode = 1;
-  });
+  import('./pr-steward-cli.ts')
+    .then(({ PrStewardEventCli }) => PrStewardEventCli.main())
+    .catch((cause) => {
+      const message =
+        cause instanceof Error ? cause.message : 'subscription failed';
+      process.stderr.write(`PR Steward event subscription failed: ${message}\n`);
+      process.exitCode = 1;
+    });
 }

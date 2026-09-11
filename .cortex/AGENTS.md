@@ -382,7 +382,7 @@ not mission completion.
   for repository work.
 - Plan sequencing and host-bounded waits inside the active task.
   Use reactive event hints instead of routine GitHub polling.
-  PR Steward's five-minute terminal check is the narrow read-only exception.
+  PR Steward's five-minute-inactivity check is the narrow read-only exception.
   Do not materialize this ephemeral plan as a Codex scheduled task.
 - Repository-owned GitHub Actions, Workbench automation fields, and Hive
   reconciliation are separate systems governed by their existing authorities.

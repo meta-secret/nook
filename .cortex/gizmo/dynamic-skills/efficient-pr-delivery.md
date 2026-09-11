@@ -75,7 +75,7 @@ Delivery rules:
   follow-up to finish delivery later.
 - Use reactive Steward hints with host-bounded waits. Do not poll GitHub
   routinely or persist a wait plan as Codex scheduling state.
-  Steward's five-minute merged-or-closed check is the narrow exception.
+  Steward's five-minute-inactivity completion check is the narrow exception.
 - Treat "merge when ready" as an instruction to test the PR, monitor its
   exact-head evidence, and merge in the same delivery task after readiness.
 - Do not monitor the resulting Main workflow unless the user explicitly

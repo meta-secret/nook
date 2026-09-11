@@ -139,6 +139,7 @@ class PrStewardEventFixture {
   }): Promise<readonly string[]> {
     const lines: string[] = [];
     await new PrStewardEventObserver({ reader: request.reader }).observe({
+      activity: () => {},
       messages: (async function* () {
         for (const item of request.data) yield { data: item };
       })(),
@@ -531,6 +532,7 @@ describe('exact-head routing observations', () => {
     const failure = new Error('operational failure');
     await expect(
       new PrStewardEventObserver({ reader: new FixturePrReader() }).observe({
+        activity: () => {},
         messages: (async function* () {
           yield { data: valid };
         })(),
@@ -542,6 +544,7 @@ describe('exact-head routing observations', () => {
     ).rejects.toBe(failure);
     await expect(
       new PrStewardEventObserver({ reader: new FixturePrReader() }).observe({
+        activity: () => {},
         messages: (async function* () {
           yield { data: valid };
           throw failure;
@@ -596,6 +599,7 @@ describe('exact-head routing observations', () => {
     const reader = new OrderedPrReader();
     const lines: string[] = [];
     const observation = new PrStewardEventObserver({ reader }).observe({
+      activity: () => {},
       messages: (async function* () {
         yield {
           data: cloudEvent({
@@ -631,6 +635,7 @@ describe('exact-head routing observations', () => {
     const failure = new Error('stream failure');
     const lines: string[] = [];
     const observation = new PrStewardEventObserver({ reader }).observe({
+      activity: () => {},
       messages: (async function* () {
         yield {
           data: cloudEvent({

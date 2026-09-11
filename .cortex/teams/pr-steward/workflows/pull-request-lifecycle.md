@@ -74,7 +74,9 @@ PR Steward returns observable evidence or a bounded blocker.
 
 ## Reactive observation
 
-Gizmo may run PR Steward as a mission-scoped child while delivery is active.
+Gizmo starts a fresh PR Steward child for each check-observation iteration.
+Each child subscribes before reading its initial GitHub snapshot. That snapshot
+freezes the iteration head. A changed head is a blocker, never a new assignment.
 
 ### Required actions
 
@@ -109,7 +111,7 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
    - Emit a sanitized blocker for attributable malformed input, then continue.
    - Treat the notification as a prompt to perform only the next operation
      that Gizmo authorizes.
-3. Stop when Gizmo directs or the five-minute check observes merged or closed.
+3. Stop when iteration checks complete, the PR closes, or Gizmo directs.
    - For a requested stop, send Ctrl-C to the same foreground PTY. It receives
      `SIGINT`, drains NATS, and exits with status zero.
    - An operating-system termination may use `SIGTERM` against the direct
@@ -149,26 +151,33 @@ from these hints. The subscriber does not summarize or decide readiness.
 
 ### Active-task waiting
 
-- Let the subscriber wait on NATS without periodic output.
-- Use a harness wait that wakes on output when available.
-- Otherwise use the longest bounded PTY read allowed by the host.
-- An empty PTY read is not a state change. Do not notify Gizmo or query GitHub.
-- Reconcile relevant hints only within the current operation packet.
-- The subscriber checks the assigned PR every five minutes (300,000 ms).
-  This narrow terminal check runs inside the process without waking reasoning.
-- An open PR emits nothing. Merged or closed means this observer has finished.
-  Passing checks alone do not finish it.
-- A terminal result drains NATS, then emits one completion line on stderr.
-  The line contains the terminal state, canonical PR URL, and observed head.
-  Standard output remains exclusively the existing v2 NDJSON protocol.
-- Complete the child task after successful exit and one compact parent handoff.
-  Child completion does not declare mission readiness or authorize a merge.
-- Failed terminal observation reports a sanitized error and exits nonzero.
-  No retry or alternate observation path is introduced.
-- Stop clears the timer. Pending reads cannot report completion after stop.
-- Keep the required final direct reconciliation before Gizmo's verdict.
-- Report a new blocker, changed actionable result, or terminal outcome once.
-- Do not repeat unchanged evidence or wake Gizmo for transport activity.
+- Keep the subscription active during one check-observation iteration.
+- Read an initial snapshot after subscribing. Already-completed checks can end
+  the iteration immediately.
+- Valid, newly routed current-head notifications reset the inactivity deadline.
+  Suppressed duplicate payloads, stale events, and foreign traffic do not reset it.
+- Current-head check-run, check-suite, and workflow-run hints trigger a fresh
+  completion snapshot. Other valid routes reset inactivity without that query.
+- The process checks elapsed time against the last relevant notification.
+  Only more than five minutes without one permits an idle completion query.
+- An incomplete snapshot stays silent. After an idle query, wait another five
+  minutes before another idle query. Do not create a hot loop or wake reasoning.
+- Event activity invalidates an in-flight idle result. Check observations never
+  overlap. Stop clears the timer and invalidates pending completion callbacks.
+- A nonempty rollup completes when every check has a terminal result.
+  Failed conclusions complete the iteration too. They do not establish readiness.
+- Empty rollups remain pending. Unknown states or unavailable evidence fail closed.
+  One GraphQL snapshot uses complete aggregate counts instead of paginated nodes.
+  The rollup commit must equal the snapshot head. Group totals must match counts.
+- Completion drains NATS, then emits one line on stderr with the outcome, PR URL,
+  exact head, total count, failed count, and unknown-conclusion count. Standard output stays v2 NDJSON.
+- A merged or closed PR stops the child with that distinct outcome. It never
+  substitutes a closure result for completed checks.
+- After successful exit, send one compact handoff to Gizmo and end the child.
+  Gizmo acts on the result and starts a fresh child for another iteration.
+- Gizmo retains final direct reconciliation, readiness, and merge authority.
+- Use a harness wait that wakes on output when available. Otherwise use the
+  longest host-bounded PTY read. Empty reads produce no messages or GitHub queries.
 
 ### Live reactive pipeline canary
 

@@ -68,7 +68,7 @@ export class PrStewardGithubUnavailableError extends Error {
   }
 }
 
-class PrStewardGhCommand implements PrStewardCommandRunner {
+export class PrStewardGhCommand implements PrStewardCommandRunner {
   async run(request: PrStewardCommandRequest): Promise<PrStewardCommandResult> {
     try {
       const result = await promisify(execFile)(

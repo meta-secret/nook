@@ -66,12 +66,11 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Push the coherent shared branch as the shared-branch owner.
    - Give PR Steward an explicit packet for pull-request publication.
 6. **Validate and repair.**
-   - Gizmo may create one mission-scoped PR Steward child with the fixed Luna
-     profile and start its subscription for exactly one active pull request.
-   - Before this Gizmo advances to another pull request, stop the old child,
-     wait for its NATS drain and exit, then start a fresh child for the new PR.
+   - Gizmo creates a fresh PR Steward child with the fixed Luna profile for
+     each check-observation iteration on one PR.
+   - Wait for the child's result, NATS drain, and exit before the next iteration.
    - Launch the subscriber as the documented direct Bun process in a foreground
-     PTY. Stop it by sending Ctrl-C to that same PTY and require exit status zero.
+     PTY. For an explicit stop, send Ctrl-C there and require exit status zero.
    - Never stop or switch another Gizmo's independently active child.
    - Route compact review/comment hints by path and line; never transfer bodies through the reactive stream.
    - Treat each matching notification as a hint to issue a bounded PR Steward
@@ -139,8 +138,12 @@ Delivery is complete only when:
 
 ## Reactive observation completion
 
-- PR Steward subscribes to GitHub event hints during the active mission.
-- Its process checks the assigned PR every five minutes for merged or closed.
-- Open observations remain silent. Terminal observations drain the subscriber.
-- The child returns one terminal handoff after successful exit.
+- Start a fresh PR Steward child for each check-observation iteration.
+- The child subscribes before its initial snapshot and freezes that head.
+- Current-head check events trigger completion snapshots.
+- More than five minutes of event inactivity permits a silent completion query.
+- Incomplete checks keep the child subscribed. Completed checks end the iteration,
+  including failed conclusions. The child drains and returns one result.
+- PR closure stops the child with a distinct outcome, not check completion.
+- Gizmo acts on the result before starting another iteration.
 - Gizmo retains final direct reconciliation and the mission completion verdict.
