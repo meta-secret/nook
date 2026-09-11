@@ -104,7 +104,7 @@ export type AuditedRuntimeSourceRequest = {
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/scripts/dockerized-rust.test.ts',
-    'f95896746eab2637215457801b3c145b68659f44877a8cf6ff6e30beb9b03660',
+    '277813d4fda029388c2f7c1eea6f655ac3ad4673e57877161fd751dd470392fd',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -148,7 +148,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    '383aa74270646fb6b5bc8bb7d0d28cb06b1656536a0864ff592a0c847631701f',
+    'f0c2e0839cce0a6380d877ed44e71805f234952c11d9bcffc920fe0a83d56e42',
   ],
   [
     'infra/operator-ssh.ts',
