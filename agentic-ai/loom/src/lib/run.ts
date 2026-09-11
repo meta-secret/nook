@@ -70,6 +70,16 @@ export class RepositoryCommand {
                 options,
               );
               break;
+            case RepositoryBunScript.TestFixture:
+              result = spawnSync(
+                'bun',
+                [
+                  'agentic-ai/loom/tests/repository-command.fixture.cjs',
+                  ...request.args,
+                ],
+                options,
+              );
+              break;
           }
           break;
         case RepositoryCommandExecutable.Bunx:
@@ -97,16 +107,6 @@ export class RepositoryCommand {
           break;
         case RepositoryCommandExecutable.Node:
           switch (request.script) {
-            case RepositoryNodeScript.TestFixture:
-              result = spawnSync(
-                'node',
-                [
-                  'agentic-ai/loom/tests/repository-command.fixture.cjs',
-                  ...request.args,
-                ],
-                options,
-              );
-              break;
             case RepositoryNodeScript.WorkbenchPublish:
               result = spawnSync(
                 'node',
@@ -209,6 +209,7 @@ export enum RepositoryBashScript {
 
 export enum RepositoryBunScript {
   Loom = 'loom',
+  TestFixture = 'testFixture',
 }
 
 export enum RepositoryBunxExecutable {
@@ -217,7 +218,6 @@ export enum RepositoryBunxExecutable {
 }
 
 export enum RepositoryNodeScript {
-  TestFixture = 'testFixture',
   WorkbenchPublish = 'workbenchPublish',
 }
 
