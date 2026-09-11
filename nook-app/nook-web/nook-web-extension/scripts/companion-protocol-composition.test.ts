@@ -310,12 +310,26 @@ function beginHandoff(requestId: string) {
 type ConsumedWasmCapability =
   NookDiscoveredCompanionExtensionEndpoint | NookPendingCompanionIdentityHandoff
 
+enum CompanionProtocolTimeoutStateKind {
+  NotScheduled = 'not-scheduled',
+  Scheduled = 'scheduled',
+}
+
+type CompanionProtocolTimeoutState =
+  | { kind: CompanionProtocolTimeoutStateKind.NotScheduled }
+  | {
+      kind: CompanionProtocolTimeoutStateKind.Scheduled
+      handle: ReturnType<typeof setTimeout>
+    }
+
 class CompanionProtocolExpectation {
   static async rejectionWithin(
     operation: Promise<unknown>,
     timeoutMs = 1_000,
   ): Promise<{ failure: Error }> {
-    let timeout: ReturnType<typeof setTimeout> | undefined
+    let timeoutState: CompanionProtocolTimeoutState = {
+      kind: CompanionProtocolTimeoutStateKind.NotScheduled,
+    }
     try {
       return await Promise.race([
         operation.then(
@@ -325,17 +339,22 @@ class CompanionProtocolExpectation {
           (error: Error) => ({ failure: error }),
         ),
         new Promise<never>((_resolve, reject) => {
-          timeout = setTimeout(
-            () =>
-              reject(
-                new Error(`operation did not settle within ${timeoutMs}ms`),
-              ),
-            timeoutMs,
-          )
+          timeoutState = {
+            kind: CompanionProtocolTimeoutStateKind.Scheduled,
+            handle: setTimeout(
+              () =>
+                reject(
+                  new Error(`operation did not settle within ${timeoutMs}ms`),
+                ),
+              timeoutMs,
+            ),
+          }
         }),
       ])
     } finally {
-      if (timeout !== undefined) clearTimeout(timeout)
+      if (timeoutState.kind === CompanionProtocolTimeoutStateKind.Scheduled) {
+        clearTimeout(timeoutState.handle)
+      }
     }
   }
 
