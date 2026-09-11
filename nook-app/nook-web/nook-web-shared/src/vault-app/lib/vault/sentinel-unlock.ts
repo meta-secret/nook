@@ -188,7 +188,6 @@ export class SentinelUnlockActions {
   async ensureSentinelCeremonyHydrated(): Promise<SentinelActionResult<void>> {
     const state = this.state;
     if (state.isAuthenticated || state.isVerifying) return storageOk();
-    log.info("device identity caller: sentinel ceremony hydration");
     const initialized = await state.initDeviceIdentity();
     if (initialized.isErr()) return storageErr(initialized.error);
     const synchronized = await state.syncFromStorage(
@@ -309,7 +308,6 @@ export class SentinelUnlockActions {
     SentinelActionResult<SentinelStoredDeliverySummary[]>
   > {
     const state = this.state;
-    log.info("device identity caller: sentinel stored deliveries");
     const initialized = await state.initDeviceIdentity();
     if (initialized.isErr()) return storageErr(initialized.error);
     const summaries = await state.enqueueStorage(async () => {
@@ -334,7 +332,6 @@ export class SentinelUnlockActions {
     request,
   }: SentinelUnlockResponseCreation): Promise<SentinelActionResult<string>> {
     const state = this.state;
-    log.info("device identity caller: sentinel unlock response");
     const initialized = await state.initDeviceIdentity();
     if (initialized.isErr()) return storageErr(initialized.error);
     const response = await state.enqueueStorage(async () => {

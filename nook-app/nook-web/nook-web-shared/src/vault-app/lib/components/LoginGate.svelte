@@ -1,7 +1,6 @@
 <script lang="ts">
   import { WorkspaceLocation } from '$lib/app/workspace-route'
   import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
-  import { browserLogRuntime } from '$lib/runtime/log'
   type EnrollmentCodeUnlock = {
     readonly code: string
     readonly password: string
@@ -92,8 +91,6 @@
     RecoveryDiscoveryKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
-
-  const log = browserLogRuntime.createLogger('login-gate')
 
   let {
     vault,
@@ -365,10 +362,8 @@
       sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
   )
   $effect(() => {
-    if (sentinelVisibility.isErr()) {
-      log.warn('login gate diagnostic: sentinel visibility rejected')
+    if (sentinelVisibility.isErr())
       vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
-    }
   })
   const hasKnownLocalVault = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,

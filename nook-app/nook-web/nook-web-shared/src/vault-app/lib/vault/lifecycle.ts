@@ -54,28 +54,6 @@ import { VaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
 
 const log = browserLogRuntime.createLogger("vault-lifecycle");
 
-enum VaultInitializationCheckpoint {
-  BrowserLocaleStarted = "app init checkpoint: browser locale started",
-  BrowserLocaleCompleted = "app init checkpoint: browser locale completed",
-  BundledLocaleStarted = "app init checkpoint: bundled locale started",
-  BundledLocaleCompleted = "app init checkpoint: bundled locale completed",
-  LocalVaultCatalogStarted = "app init checkpoint: local vault catalog started",
-  LocalVaultCatalogCompleted = "app init checkpoint: local vault catalog completed",
-  ManagerStarted = "app init checkpoint: manager started",
-  ManagerCompleted = "app init checkpoint: manager completed",
-  EngineLocaleStarted = "app init checkpoint: engine locale started",
-  EngineLocaleCompleted = "app init checkpoint: engine locale completed",
-  ProtectionStatusStarted = "app init checkpoint: protection status started",
-  ProtectionStatusCompleted = "app init checkpoint: protection status completed",
-  ProtectionModeStarted = "app init checkpoint: protection mode started",
-  ProtectionModeCompleted = "app init checkpoint: protection mode completed",
-  PristineProvidersStarted = "app init checkpoint: pristine providers started",
-  PristineProvidersCompleted = "app init checkpoint: pristine providers completed",
-  IdentityAuthorizationRejected = "app init diagnostic: device identity authorization rejected",
-  InitializationException = "app init diagnostic: initialization exception",
-  InitializationSettled = "app init checkpoint: initialization settled",
-}
-
 type DeviceIdentityInitialization = {
   readonly mode: DeviceIdentityInitializationMode;
 };
@@ -106,9 +84,7 @@ export class VaultInitializationActions {
         return;
       }
       const localeState = savedLocale.value;
-      log.info(VaultInitializationCheckpoint.BrowserLocaleStarted);
       const browserLocale = state.browserLocale.app_locale();
-      log.info(VaultInitializationCheckpoint.BrowserLocaleCompleted);
       const locale =
         localeState.kind === SavedAppLocaleKind.Supported
           ? localeState.locale
@@ -117,21 +93,16 @@ export class VaultInitializationActions {
         newLocale: locale,
         catalogSource: LocaleCatalogSource.Bundled,
       };
-      log.info(VaultInitializationCheckpoint.BundledLocaleStarted);
       const initialLocale = await state.updateLocale(initialLocaleArgs);
       if (initialLocale.isErr()) {
         state.errorMsg = state.t(initialLocale.error.translationKey);
         return;
       }
-      log.info(VaultInitializationCheckpoint.BundledLocaleCompleted);
-      log.info(VaultInitializationCheckpoint.LocalVaultCatalogStarted);
       const catalogRefresh1 = await state.refreshLocalVaultCatalog();
       if (catalogRefresh1.isErr()) {
         state.errorMsg = state.t(catalogRefresh1.error.translationKey);
         return;
       }
-      log.info(VaultInitializationCheckpoint.LocalVaultCatalogCompleted);
-      log.info(VaultInitializationCheckpoint.ManagerStarted);
       const manager = await getVaultManager();
       if (manager.isErr()) {
         state.deviceProtectionStatus = DeviceProtectionStatus.Error;
@@ -152,19 +123,15 @@ export class VaultInitializationActions {
         state.deviceProtectionStatus = DeviceProtectionStatus.Error;
         return;
       }
-      log.info(VaultInitializationCheckpoint.ManagerCompleted);
       const updateLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
         newLocale: locale,
         catalogSource: LocaleCatalogSource.Engine,
       };
-      log.info(VaultInitializationCheckpoint.EngineLocaleStarted);
       const updatedLocale = await state.updateLocale(updateLocaleArgs);
       if (updatedLocale.isErr()) {
         state.errorMsg = state.t(updatedLocale.error.translationKey);
         return;
       }
-      log.info(VaultInitializationCheckpoint.EngineLocaleCompleted);
-      log.info(VaultInitializationCheckpoint.ProtectionStatusStarted);
       const protectionStatus = await state.enqueueStorage(async () => {
         const admitted = state.admitManager();
         if (admitted.isErr()) return storageErr(admitted.error);
@@ -179,9 +146,7 @@ export class VaultInitializationActions {
         state.errorMsg = state.t(protectionStatus.error.translationKey);
         return;
       }
-      log.info(VaultInitializationCheckpoint.ProtectionStatusCompleted);
       state.deviceProtectionStatus = protectionStatus.value;
-      log.info(VaultInitializationCheckpoint.ProtectionModeStarted);
       const protectionMode = await state.enqueueStorage(async () => {
         const admitted = state.admitManager();
         if (admitted.isErr()) return storageErr(admitted.error);
@@ -197,7 +162,6 @@ export class VaultInitializationActions {
         state.errorMsg = state.t(protectionMode.error.translationKey);
         return;
       }
-      log.info(VaultInitializationCheckpoint.ProtectionModeCompleted);
       const persistedDeviceMode = protectionMode.value;
       if (persistedDeviceMode === DeviceProtectionDeviceModeState.Standard) {
         state.draftDeviceMode = DeviceMode.Standard;
@@ -281,9 +245,7 @@ export class VaultInitializationActions {
           return;
         }
         if (state.localVaults.length === 0) {
-          log.info(VaultInitializationCheckpoint.PristineProvidersStarted);
           state.initializePristineDeviceProviders();
-          log.info(VaultInitializationCheckpoint.PristineProvidersCompleted);
         }
         return;
       }
@@ -294,7 +256,6 @@ export class VaultInitializationActions {
       }
       state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
     } catch (error) {
-      log.warn(VaultInitializationCheckpoint.InitializationException);
       if (
         state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
         deviceIdentityUnlocked
@@ -315,7 +276,6 @@ export class VaultInitializationActions {
     } finally {
       state.deviceAuthorizationInProgress = false;
       state.isInitializing = false;
-      log.info(VaultInitializationCheckpoint.InitializationSettled);
     }
   }
 
@@ -339,7 +299,6 @@ export class VaultInitializationActions {
         !state.deviceAuthorizationInProgress &&
         mode !== DeviceIdentityInitializationMode.AllowPendingAuthorization)
     ) {
-      log.warn(VaultInitializationCheckpoint.IdentityAuthorizationRejected);
       return storageErr(
         new StorageOperationFailure(
           StorageOperationFailureKind.DeviceAuthorizationRequired,
@@ -401,7 +360,6 @@ export class VaultInitializationActions {
           state.errorMsg = state.t(marked.error.translationKey);
           return false;
         }
-        log.info("device identity caller: external identity adoption");
         // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         const initialized = await this.initDeviceIdentity({
           mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
@@ -496,7 +454,6 @@ export class VaultInitializationActions {
     state.isVerifying = true;
     log.info("creating fresh remote vault");
     try {
-      log.info("device identity caller: fresh vault creation");
       const initialized = await state.initDeviceIdentity();
       if (initialized.isErr()) {
         state.errorMsg = state.t(initialized.error.translationKey);
@@ -649,7 +606,6 @@ class DeviceInitializationContinuation {
     const initialization: DeviceIdentityInitialization = {
       mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
     };
-    log.info("device identity caller: initialization continuation");
     const initialized = await new VaultInitializationActions(
       state,
     ).initDeviceIdentity(initialization);
