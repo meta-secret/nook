@@ -16,14 +16,10 @@ Workbench record, not another coordinator or worker.
 3. Give a Team Agent only its team entry point and task-relevant authorities.
 4. Stop loading Cortex when the delivery decision has enough evidence.
 
-## Activity clock
+## Communication
 
-Every user-visible activity line follows the universal
-[agent communication](../AGENTS.md#agent-communication) contract.
-
-- Read `HH:mm` from the execution host immediately before emitting each line.
-- Never infer, convert, or reuse a timestamp.
-- Report a blocker when the host clock is unavailable.
+Follow the universal [agent communication](../AGENTS.md#agent-communication)
+contract. Report meaningful changes and one compact terminal outcome.
 
 ## Ownership
 

@@ -28,8 +28,8 @@ PR Steward returns observable evidence or a bounded blocker.
 3. **Observe review state.** Request the authorized review path and collect
    submitted review bodies, inline conversations, top-level comments, and
    unresolved threads.
-   - Return the complete observed set without deciding whether a finding is
-     technically valid or in scope.
+   - Preserve complete observations in evidence. Return new or changed items
+     with references, without technical adjudication.
 4. **Observe validation state.** Collect failed checks, running checks,
    deployments, mergeability, and bounded wait outcomes for the exact head.
    - A selected successful job does not hide another required running or
@@ -135,20 +135,35 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 
 ### Output contract
 
+The observer retains fingerprints of the last 128 successfully emitted payloads.
+An identical byte payload is suppressed before another GitHub read. Changed
+envelopes remain observable even when their meaning is unchanged. Blockers are
+not cached. This bounded memory is process-local and never persisted.
+
 Output contains only bounded hints. It never contains bodies, review text,
-logs, raw payloads, or credentials. Failure reconciliation and summaries are
-deferred.
+logs, raw payloads, or credentials. Steward performs authorized reconciliation
+from these hints. The subscriber does not summarize or decide readiness.
+
+### Active-task waiting
+
+- Let the subscriber wait on NATS without periodic output.
+- Use a harness wait that wakes on output when available.
+- Otherwise use the longest bounded PTY read allowed by the host.
+- An empty read is not a state change. Do not notify Gizmo or query GitHub.
+- Reconcile relevant hints only within the current operation packet.
+- Keep one initial observation and the required final direct reconciliation.
+- Report a new blocker, changed actionable result, or terminal outcome once.
+- Do not repeat unchanged evidence or wake Gizmo for transport activity.
 
 ### Live reactive pipeline canary
 
-This staged canary proves that one active PR can reach its assigned Steward.
+This diagnostic-only canary proves that one active PR can reach its Steward.
+Run it only when assigned to diagnose the subscription.
 
 1. Confirm the scoped credential file and exact pull-request number exist.
 2. Start the documented direct Bun subscription in the foreground PTY.
-3. Poll the child PTY with reads bounded to at most five seconds.
-   - Poll only the local foreground PTY and NATS stream, never GitHub.
-   - Return to reasoning after each read and notify Gizmo when matching NDJSON
-     arrives.
+3. Read the child PTY using the active-task waiting rules above.
+   - Notify Gizmo only when matching NDJSON or a new blocker arrives.
 4. Correlate its `deliveryId` across GitHub, Argo, and the NATS envelope.
 5. Have PR Steward send the bounded matching notification to Gizmo.
 6. Have Gizmo perform a bounded direct GitHub reconciliation.

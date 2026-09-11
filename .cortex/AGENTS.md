@@ -315,73 +315,13 @@ Follow higher-priority host instructions when they require progress updates.
 
 ### Message format
 
-Apply this format only when a message is warranted under the rules above.
-
-Put only the existing metadata fields in a fenced `text` block:
-
-```text
-HH:mm:(<PR>):<ACTOR>:<ACTION>
-```
-
-For example:
-
-```text
-01:25:(pending):Gizmo Prime:CLARIFY
-```
-
-Clarified the user-visible communication format.
-
-Write the human-readable description as ordinary Markdown immediately after
-the fence. Do not add a PR prefix, arrow, or description to the metadata line,
-and do not rename, reorder, or remove its time, PR, actor, or action fields.
-
-- Use `(<number>)` with the exact positive pull-request number that the
-  activity currently serves, for example `(1263)`.
-- Use `(pending)` before that pull request exists.
-- Use `(none)` when the assigned work intentionally has no pull request.
-- Emit the current PR token on every metadata line. Refresh it immediately
-  after pull-request creation.
-- Use `SKILL` when loading or applying a skill is the reported action.
-- Start every metadata line with the current local time in 24-hour `HH:mm`
-  form.
-- Identify the executor on every metadata line with one compact canonical actor
-  token from this closed mapping:
-  - `Gizmo Prime` for Gizmo Prime;
-  - `AI` for the AI team;
-  - `DEV-CORE` for Development core;
-  - `SECURITY` for Security;
-  - `SRE` for SRE;
-  - `WEB-DEV` for Web development;
-  - `PR-STEWARD` for the PR Steward operational Team Agent; and
-  - `SKILL` for an actively executing skill.
-  - Use the Team Agent's team token, not `Team Agent` or a personal name.
-  - Use `SKILL` only for an activity performed by a skill.
-  - Never imply an executor, subagent, or skill execution that did not exist.
-- Use a short action type that makes the purpose immediately visible.
-  - `FEATURE` covers new product functionality.
-  - `BUILD` covers implementation of already selected functionality.
-  - `REVIEW` covers review analysis and comment fixes.
-    - When addressing comments, briefly name what each actionable finding is
-      about.
-    - A count plus reply, resolution, or re-query mechanics is insufficient.
-    - Summarize the concern safely. Do not paste the full comment body.
-  - `REFACTOR` covers structure changes without intended behavior changes.
-  - `TEST` covers validation and test results.
-  - `AI` covers agent coordination and AI-owned implementation.
-  - `SKILL` covers a skill load, application, required action, or pause.
-  - `DOCS/CORTEX` covers documentation and Cortex work.
-  - `CMD` identifies a consequential command event.
-  - `WAIT` identifies a consequential change during a wait.
-  - `STATE` summarizes a consequential result, blocker, or resolution.
-- Place no spaces around the colons between time, PR, actor, and action type.
-- State what changed and its impact.
-- Include an operation identifier or evidence URL when needed to act on it.
-- Apply the format to progress updates, questions, handoffs, and final
-  responses.
-- Do not add the activity format to code, logs, repository content, or commit
-  messages.
-- A strict machine-readable protocol response is exempt from the entire
-  activity format. Emit only the required protocol content.
+- Use plain Markdown with the outcome first.
+- Prefer one sentence for a meaningful change.
+- Send one compact terminal handoff per assigned task.
+- Include identifiers only when needed to act or verify the result.
+- Keep timing and statistics in required delivery records.
+- Do not add metadata fences or fetch the clock for a message.
+- Emit only the required content for a strict machine-readable protocol.
 
 ## Cortex authoring
 
@@ -440,9 +380,9 @@ not mission completion.
 - Codex scheduled tasks are prohibited. Do not create, suggest, or update a
   Codex automation, heartbeat, reminder, recurring follow-up, or deferred task
   for repository work.
-- An agent may plan its own sequencing, polling cadence, and bounded waits
-  inside the active task. That plan is ephemeral execution behavior. It must
-  not be materialized as a Codex scheduled task.
+- Plan sequencing and host-bounded waits inside the active task.
+  Use reactive event hints instead of routine GitHub polling.
+  Do not materialize this ephemeral plan as a Codex scheduled task.
 - Repository-owned GitHub Actions, Workbench automation fields, and Hive
   reconciliation are separate systems governed by their existing authorities.
 - A request to test, monitor, and merge a PR when ready remains one active

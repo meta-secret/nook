@@ -76,10 +76,10 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Implementing these features in Rust ensures they can be shared across platforms.
 - Relying on TypeScript or other frontend-specific implementations for domain logic or localized resources makes sharing impossible.
 
-## 7. Close Every Task with a Duration Report
+## 7. Close Every Task Concisely
 
-- **Measure wall-clock time** from the start of the user's assignment until the final handoff message.
-- **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done).
+- Report the outcome once with essential evidence and unresolved blockers.
+- Keep elapsed time in required delivery records unless the user requests it.
 - See [pull request task completion](../../../gizmo/workflows/pull-requests.md#10-task-completion-report).
 
 ## 8. Default to the Coding Bro Pipeline

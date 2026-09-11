@@ -1,3 +1,4 @@
+import { PrStewardInvocationCodec } from '../src/pr-steward-invocation.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
   chmodSync,
@@ -11,7 +12,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   PrStewardEventObserver,
-  PrStewardInvocationCodec,
   PrStewardCredentialFile,
   PrStewardBoundedMessageStream,
   PrStewardSubscriptionKind,

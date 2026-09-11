@@ -6,10 +6,6 @@ import {
   readFileSync,
 } from 'node:fs';
 
-import { homedir } from 'node:os';
-
-import { isAbsolute, join } from 'node:path';
-
 import { type Msg, type MsgCallback, wsconnect } from '@nats-io/nats-core';
 
 import {
@@ -40,6 +36,9 @@ import type {
 } from './pr-steward-contract.ts';
 
 import type { PrStewardAssignedPrReader } from './pr-steward-github.ts';
+
+import { PrStewardDeliveries } from './pr-steward-deliveries.ts';
+import { PrStewardInvocationCodec } from './pr-steward-invocation.ts';
 
 export class WebhookProperty {
   private constructor(
@@ -750,38 +749,6 @@ export class PrStewardWebhookDecoder {
   }
 }
 
-export type PrStewardInvocation = {
-  readonly pullRequest: PrStewardPullRequest;
-  readonly credentialPath: string;
-};
-
-export class PrStewardInvocationCodec {
-  static parse(argv: readonly string[]): PrStewardInvocation {
-    if (
-      (argv.length !== 2 && argv.length !== 4) ||
-      argv[0] !== '--pr' ||
-      (argv.length === 4 && argv[2] !== '--config')
-    ) {
-      throw new Error('expected --pr N [--config /absolute/path]');
-    }
-    const prText = argv[1]!;
-    if (!/^[1-9][0-9]*$/.test(prText))
-      throw new Error('pull request must be a positive integer');
-    let pullRequest: PrStewardPullRequest;
-    try {
-      pullRequest = PrStewardNdjsonCodec.pullRequest(Number(prText));
-    } catch {
-      throw new Error('pull request must be a positive integer');
-    }
-    const path =
-      argv.length === 4
-        ? argv[3]!
-        : join(homedir(), '.nook/events/pr-steward-client.yaml');
-    if (!isAbsolute(path)) throw new Error('credential path must be absolute');
-    return { pullRequest, credentialPath: path };
-  }
-}
-
 type PrStewardObservationRequest = {
   readonly messages: AsyncIterable<{ readonly data: Uint8Array }>;
   readonly pullRequest: PrStewardPullRequest;
@@ -798,9 +765,15 @@ export class PrStewardEventObserver {
   }
 
   async observe(request: PrStewardObservationRequest): Promise<void> {
+    const deliveries = new PrStewardDeliveries();
     for await (const message of request.messages) {
+      const fingerprint = deliveries.fingerprint(message.data);
+      if (deliveries.contains(fingerprint)) continue;
       const record = await this.#observeMessage({ request, message });
-      if (record !== false) request.write(PrStewardNdjsonCodec.encode(record));
+      if (record === false) continue;
+      request.write(PrStewardNdjsonCodec.encode(record));
+      if (record.kind === PrStewardRecordKind.Routing)
+        deliveries.remember(fingerprint);
     }
   }
 

@@ -126,8 +126,8 @@ must coordinate these actions:
 - use unresolved-thread state as the deterministic readiness authority when a
   review has inline comments;
 - reply on the targeted thread before resolving it;
-- re-query until unresolved review threads are zero;
-- keep polling feedback while repository checks run for the validation head;
+- re-query after a relevant event or authorized resolution;
+- observe Steward event hints while checks run for the validation head;
   and
 - batch feedback with check failures after both result sets settle.
 
@@ -221,8 +221,8 @@ Cursor, CodeRabbit, or another service:
    targeted reply is possible.
 14. Resolve only after the targeted reply is visible and the finding is fixed or
    explicitly invalidated.
-15. Re-query feedback throughout validation and immediately before handoff or
-   merge.
+15. Re-query on relevant Steward hints during validation. Reconcile directly
+   immediately before handoff or merge.
 
 Do not resolve or minimize a clarification-needed finding as handled. Its
 targeted response requests or identifies the missing evidence. The finding
@@ -266,15 +266,9 @@ when its team task contract grants the required scope.
 
 ## Handoff
 
-Report:
-
-- every substantive finding that was already present and its disposition;
-- unresolved active review-thread count at the time of the final inspection;
-- Loom pre-push and optional debug results when used; and
-- the state of Nook's applicable repository-owned PR test checks.
-
-Confirm that unresolved review-thread count was zero at the final readiness
-audit.
+Return one compact outcome with unresolved findings and essential evidence
+references. Keep the complete finding inventory and dispositions in the delivery
+record. Confirm zero unresolved review threads in the final readiness evidence.
 
 ## Exact-head verdict
 
