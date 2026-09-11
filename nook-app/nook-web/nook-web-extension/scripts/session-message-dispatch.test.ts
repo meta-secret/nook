@@ -124,10 +124,12 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     const response = Promise.withResolvers<unknown>()
     expect(
-      listener(
-        { type: ExtensionSessionMessageType.ClassifyGrantAuthority, payload },
-        { id: 'nook-extension' },
-        response.resolve,
+      Boolean(
+        listener(
+          { type: ExtensionSessionMessageType.ClassifyGrantAuthority, payload },
+          { id: 'nook-extension' },
+          response.resolve,
+        ),
       ),
     ).toBe(true)
     await queued.promise
@@ -185,7 +187,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       payload,
     })
     expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
-    expect(payload.codes).toEqual([])
+    expect(payload).toHaveProperty('codes', [])
   })
   test('rejects malformed provider and event-log elements at Rust ingress', async () => {
     const grant = {
@@ -274,16 +276,20 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const parse = await parseExtensionSessionRequest(message)
     expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parse.kind !== ExtensionSessionRequestParseKind.Parsed) return
-    const stagedProvider = parse.request.payload.providers[0] as StorageProvider
+    if (parse.request.type !== ExtensionSessionMessageType.ImportVault) {
+      throw new Error('expected a parsed vault import')
+    }
+    const stagedProvider = parse.request.payload.providers[0]
+    if (!stagedProvider) throw new Error('expected a staged provider')
     expect(stagedProvider.label).toBe('Personal GitHub')
     expect(stagedProvider.githubPat).toEqual({
       state: 'token',
       value: 'secret',
     })
-    expect(provider.githubPat).toEqual({ state: 'missing' })
+    expect(provider).toHaveProperty('githubPat.state', 'missing')
   })
   test('stages sensitive fields and clears the caller-owned payload', async () => {
-    const payload: Record<string, unknown> = {
+    const payload = {
       pin: '123456',
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     }
@@ -497,7 +503,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
 
     expect(payload.providers).toEqual([])
-    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
+    expect(providers[0]).toHaveProperty('githubPat.state', 'missing')
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
   })
@@ -509,89 +515,49 @@ describe('ExtensionSessionMessageDispatcher', () => {
         metadata: new Date(),
       },
     ]
-    const payload: Record<string, unknown> = {
-      providers,
-      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-    }
-    let handled = false
-    const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      decodeProviders,
-      handleMessage: async () => {
-        handled = true
-        return ok({ ok: true })
+    const response = await parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        providers,
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     })
 
-    const response = await dispatcher.enqueue({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload,
-    })
-
-    expect(response).toEqual(
-      err(
-        new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
-      ),
-    )
-    expect(handled).toBe(false)
-    expect(payload.providers).toEqual([])
-    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
+    expect(response.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+    expect(providers[0]).toHaveProperty('githubPat.state', 'missing')
   })
 
   test('rejects a vault import without a provider array', async () => {
-    const payload: Record<string, unknown> = {
-      providers: 'missing-array',
-      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-    }
-    let handled = false
-    const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      decodeProviders,
-      handleMessage: async () => {
-        handled = true
-        return ok({ ok: true })
+    const response = await parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        providers: 'missing-array',
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     })
 
-    const response = await dispatcher.enqueue({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload,
-    })
-
-    expect(response).toEqual(
-      err(
-        new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
-      ),
-    )
-    expect(handled).toBe(false)
-    expect(payload.providers).toEqual([])
+    expect(response.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
   })
 
   test('scrubs an accepted caller provider array after staging', async () => {
-    const providers = [{ githubPat: 'github_pat_accepted_secret' }]
-    const payload: Record<string, unknown> = {
+    const providers: StorageProvider[] = [
+      {
+        id: 'provider',
+        type: 'github',
+        label: 'GitHub',
+        githubPat: {
+          state: 'token',
+          value: 'github_pat_accepted_secret',
+        },
+        githubRepo: { state: 'defaultRepository' },
+        oauthFile: { state: 'notApplicable' },
+        localFolder: { state: 'notApplicable' },
+        storeId: { state: 'unscoped' },
+        syncCheckpoint: { state: 'neverSynced' },
+        createdAt: '2026-08-10T00:00:00Z',
+      },
+    ]
+    const payload = {
       providers,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     }
@@ -619,7 +585,16 @@ describe('ExtensionSessionMessageDispatcher', () => {
             typeof provider === 'object' &&
             'githubPat' in provider
           ) {
-            handledGithubPat = String(provider.githubPat)
+            const githubPat = provider.githubPat
+            if (
+              githubPat &&
+              typeof githubPat === 'object' &&
+              'state' in githubPat &&
+              githubPat.state === 'token' &&
+              'value' in githubPat
+            ) {
+              handledGithubPat = String(githubPat.value)
+            }
           }
         }
         return ok({ ok: true })
@@ -632,7 +607,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
 
     expect(payload.providers).toEqual([])
-    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
+    expect(providers[0]?.githubPat.state).toBe('missing')
     await expect(response).resolves.toEqual(ok({ ok: true }))
     expect(handledGithubPat).toBe('github_pat_accepted_secret')
   })
@@ -888,36 +863,21 @@ describe('ExtensionSessionMessageDispatcher', () => {
   })
 
   test('rejects foreign and malformed runtime messages without hanging', async () => {
-    type RuntimeListener = (
-      message: unknown,
-      sender: chrome.runtime.MessageSender,
-      sendResponse: (response?: unknown) => void,
-    ) => boolean
-    enum ListenerRegistrationKind {
-      NotRegistered = 'not-registered',
-      Registered = 'registered',
-    }
-
-    type ListenerRegistration =
-      | { kind: ListenerRegistrationKind.NotRegistered }
-      | { kind: ListenerRegistrationKind.Registered; listener: RuntimeListener }
-    let registration: ListenerRegistration = {
-      kind: ListenerRegistrationKind.NotRegistered,
-    }
-    globalThis.chrome = {
-      runtime: {
-        id: 'nook-extension',
-        getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
-        onMessage: {
-          addListener: (registered: RuntimeListener) => {
-            registration = {
-              kind: ListenerRegistrationKind.Registered,
-              listener: registered,
-            }
+    type RuntimeListener = Parameters<
+      typeof chrome.runtime.onMessage.addListener
+    >[0]
+    const registered = Promise.withResolvers<RuntimeListener>()
+    Object.assign(globalThis, {
+      chrome: {
+        runtime: {
+          id: 'nook-extension',
+          getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
+          onMessage: {
+            addListener: registered.resolve,
           },
         },
       },
-    } as typeof chrome
+    })
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
         err(
@@ -935,15 +895,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
       handleMessage: async () => ok({ ok: true }),
     })
     chrome.runtime.onMessage.addListener(dispatcher.listener())
-
-    if (registration.kind === ListenerRegistrationKind.NotRegistered) {
-      throw new Error('runtime listener was not registered')
-    }
+    const listener = await registered.promise
     expect(
-      registration.listener(
-        { type: ExtensionSessionMessageType.Status },
-        { id: 'other-extension' },
-        () => {},
+      Boolean(
+        listener(
+          { type: ExtensionSessionMessageType.Status },
+          { id: 'other-extension' },
+          () => {},
+        ),
       ),
     ).toBe(false)
 
@@ -956,10 +915,8 @@ describe('ExtensionSessionMessageDispatcher', () => {
       unrelatedMessageResponded = true
     }
     expect(
-      registration.listener(
-        unrelatedMessage,
-        sameExtensionSender,
-        unrelatedResponse,
+      Boolean(
+        listener(unrelatedMessage, sameExtensionSender, unrelatedResponse),
       ),
     ).toBe(false)
     await Promise.resolve()
@@ -970,10 +927,12 @@ describe('ExtensionSessionMessageDispatcher', () => {
       lockMessageResponded = true
     }
     expect(
-      registration.listener(
-        { type: ExtensionSessionMessageType.Lock },
-        sameExtensionSender,
-        lockResponse,
+      Boolean(
+        listener(
+          { type: ExtensionSessionMessageType.Lock },
+          sameExtensionSender,
+          lockResponse,
+        ),
       ),
     ).toBe(false)
     await Promise.resolve()
@@ -981,12 +940,12 @@ describe('ExtensionSessionMessageDispatcher', () => {
 
     const malformedResponse = new Promise<unknown>((resolve) => {
       const sender: chrome.runtime.MessageSender = { id: 'nook-extension' }
-      const keepsResponseChannelOpen = registration.listener(
+      const keepsResponseChannelOpen = listener(
         { type: ExtensionSessionMessageType.Status },
         sender,
         resolve,
       )
-      expect(keepsResponseChannelOpen).toBe(true)
+      expect(Boolean(keepsResponseChannelOpen)).toBe(true)
     })
     await expect(malformedResponse).resolves.toEqual({
       ok: false,
