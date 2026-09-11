@@ -27,11 +27,7 @@ jobs:
         with:
           version: 3.52.0
 
-      - name: Install Rust for untrusted repository policy
-        if: >-
-          github.event_name == 'pull_request' &&
-          (github.event.pull_request.head.repo.full_name != github.repository ||
-          github.event.pull_request.user.login == 'dependabot[bot]')
+      - name: Install Rust for repository policy
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt

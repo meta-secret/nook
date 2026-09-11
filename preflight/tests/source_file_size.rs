@@ -130,6 +130,12 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
 }
 
 fn assert_hosted_preflight_rust_cache(workflow: &str, name: &str) -> anyhow::Result<()> {
+    assert!(
+        workflow.contains(
+            "      - name: Install Rust for repository policy\n        uses: dtolnay/rust-toolchain@stable"
+        ),
+        "{name} must provision Rust and rustfmt for trusted and untrusted policy paths"
+    );
     let toolchain = workflow
         .find("uses: dtolnay/rust-toolchain@stable")
         .ok_or_else(|| anyhow::anyhow!("{name} must install the pinned stable Rust channel"))?;
