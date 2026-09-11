@@ -103,6 +103,10 @@ export type AuditedRuntimeSourceRequest = {
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
+    '.github/scripts/dockerized-rust.test.ts',
+    '5f26019521cf2f61f555ea3d47a91376d351d5ed39726082c6f01d8dfb41b802',
+  ],
+  [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
     '4476880c01a245ebf6aa42b3e15a7a4f8dfa433c2d43f5bfb80265aa83fb6989',
   ],
