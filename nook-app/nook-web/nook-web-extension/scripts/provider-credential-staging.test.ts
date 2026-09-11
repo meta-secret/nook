@@ -164,6 +164,8 @@ describe('provider credential staging', () => {
     const parsed = await parseProviderImport([providerIdentity])
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
+    expect(parsed.request.type).toBe(ExtensionSessionMessageType.ImportVault)
+    if (parsed.request.type !== ExtensionSessionMessageType.ImportVault) return
     expect(parsed.request.payload.providers).toEqual([providerIdentity])
   })
 
