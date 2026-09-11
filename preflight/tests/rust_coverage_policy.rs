@@ -55,6 +55,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let docker_tasks = read(&root.join("nook-app/nook-platform/docker/Taskfile.yml"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
     let hive = read(&root.join("agentic-ai/minds/hive/Dockerfile"))?;
+    let central_ci = read(&root.join(".github/workflows/ci.yml"))?;
     let hive_ci = read(&root.join(".github/workflows/hive.yml"))?;
     let hive_tasks = read(&root.join("agentic-ai/minds/hive/Taskfile.yml"))?;
     let hive_arc = read(&root.join("agentic-ai/minds/hive/run-arc-tests.sh"))?;
@@ -158,7 +159,26 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains("--from=builder-wasm-handoff /opt/nook/wasm-handoff"));
     assert!(product.contains("--from=builder-wasm /opt/nook/wasm-coverage-passed"));
     assert!(product.contains("FROM builder-wasm-handoff AS nook-rust"));
-    assert_eq!(hive_ci.matches("nook-core/coverage-floor.json").count(), 2);
+    assert!(
+        central_ci.contains("on:\n  pull_request:")
+            && central_ci.contains("push:\n    branches: [main]")
+    );
+    assert_eq!(
+        central_ci
+            .matches("nook-app/nook-platform/nook-core/coverage-floor.json")
+            .count(),
+        1
+    );
+    let hive_route = central_ci
+        .split_once("\n  hive:\n")
+        .and_then(|(_, remainder)| remainder.split_once("\n  research:\n"))
+        .map(|(route, _)| route)
+        .context("central CI must retain an independently routed Hive job")?;
+    assert!(
+        hive_route.contains("if: needs.scope.outputs.hive == 'true'")
+            && hive_route.contains("uses: ./.github/workflows/hive.yml")
+    );
+    assert!(hive_ci.contains("workflow_call:"));
     assert!(hive_tasks.contains(".package_lines_percent.hive | numbers"));
     assert!(hive.contains("cargo llvm-cov report -p hive"));
     assert!(hive.contains("--fail-under-lines \"${HIVE_RUST_COVERAGE_FLOOR}\""));
