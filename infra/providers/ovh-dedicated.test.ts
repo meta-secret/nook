@@ -4,7 +4,7 @@ import {
   OvhRecoveryMarkerObservation,
   RecoveryMarkerCompatibilityKind,
 } from "./ovh-dedicated-observations";
-import { ArcTier, EndpointMode } from "./ovh-dedicated-contracts";
+import { ArcTier, EndpointMode, OvhTaskState } from "./ovh-dedicated-contracts";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -78,16 +78,16 @@ describe("OVH dedicated provider", () => {
   });
 
   test("recognizes every OVH terminal reinstall failure", () => {
-    expect(OvhTaskStatus.outcome(OvhTaskStatus.Cancelled)).toBe(
+    expect(new OvhTaskState(OvhTaskStatus.Cancelled).outcome()).toBe(
       OvhTaskOutcome.Failed,
     );
-    expect(OvhTaskStatus.outcome(OvhTaskStatus.CustomerError)).toBe(
+    expect(new OvhTaskState(OvhTaskStatus.CustomerError).outcome()).toBe(
       OvhTaskOutcome.Failed,
     );
-    expect(OvhTaskStatus.outcome(OvhTaskStatus.OvhError)).toBe(
+    expect(new OvhTaskState(OvhTaskStatus.OvhError).outcome()).toBe(
       OvhTaskOutcome.Failed,
     );
-    expect(OvhTaskStatus.outcome(OvhTaskStatus.Doing)).toBe(
+    expect(new OvhTaskState(OvhTaskStatus.Doing).outcome()).toBe(
       OvhTaskOutcome.Pending,
     );
   });

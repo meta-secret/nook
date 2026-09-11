@@ -177,9 +177,10 @@ export enum OvhTaskOutcome {
   Completed = "completed",
   Failed = "failed",
 }
-export namespace OvhTaskStatus {
-  export function outcome(status: OvhTaskStatus): OvhTaskOutcome {
-    switch (status) {
+export class OvhTaskState {
+  constructor(private readonly status: OvhTaskStatus) {}
+  outcome(): OvhTaskOutcome {
+    switch (this.status) {
       case OvhTaskStatus.Done:
         return OvhTaskOutcome.Completed;
       case OvhTaskStatus.Cancelled:

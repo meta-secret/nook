@@ -3,7 +3,7 @@ import { OvhFailure, OvhFailureKind } from "./ovh-dedicated-failure";
 import { OvhDocument } from "./ovh-dedicated-document";
 import { OvhDedicatedGetServer, OvhDedicatedOvhApi, OvhDedicatedRequireCompatibleTemplate } from "./ovh-dedicated-api";
 import { OvhHostIdentityStore, OvhLocalFile, OvhPrivatePaths, OvhRecoveryMarkerStore } from "./ovh-dedicated-local";
-import { HostIdentityCreation, HttpMethod, OvhTaskOutcome, OvhTaskStatus, ProvisionResult,
+import { HostIdentityCreation, HttpMethod, OvhTaskOutcome, OvhTaskState, ProvisionResult,
   RecoveryMarkerStatus, ReinstallAuthorization, type HostIdentity, type ProvisionContext,
   type ReinstallRequest } from "./ovh-dedicated-contracts";
 
@@ -118,7 +118,7 @@ class SubmittedOvhReinstall {
         decode: (text) => new OvhDocument(text).task(), request: { method: HttpMethod.Get,
           path: `/dedicated/server/${encodeURIComponent(context.definition.serviceName)}/task/${taskId}` } }).execute();
       if (task.isErr()) return err(task.error);
-      const outcome = OvhTaskStatus.outcome(task.value.status);
+      const outcome = new OvhTaskState(task.value.status).outcome();
       if (outcome === OvhTaskOutcome.Completed) break;
       if (outcome === OvhTaskOutcome.Failed) return err(new OvhFailure(OvhFailureKind.Task, `OVH reinstall task ended in ${task.value.status}`));
       process.stderr.write(`OVH reinstall ${task.value.status}\n`);
