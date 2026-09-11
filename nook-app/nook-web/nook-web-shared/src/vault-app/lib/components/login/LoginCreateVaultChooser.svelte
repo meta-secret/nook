@@ -7,7 +7,7 @@
   import type { LoginCreateVaultChooserProps } from "./login-create-vault-chooser-contract";
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { tick } from "svelte";
+  import { tick, type ComponentProps } from "svelte";
   import {
     ArrowRight,
     Check,
@@ -71,6 +71,29 @@
     onAcceptSentinelOnboardingPackage,
     onFinishSentinelInvitation,
   }: LoginCreateVaultChooserProps = $props();
+
+  type JoinFlowOptionalProps = Partial<
+    Pick<
+      ComponentProps<typeof SentinelGenesisJoinFlow>,
+      | "onCreateParticipantResponse"
+      | "onRememberRequest"
+      | "onReceiveShare"
+      | "onAcceptOnboardingPackage"
+    >
+  >;
+  const joinFlowOptionalProps = $derived.by(() => {
+    const props: JoinFlowOptionalProps = {};
+    if (onCreateSentinelGenesisParticipantResponse)
+      props.onCreateParticipantResponse =
+        onCreateSentinelGenesisParticipantResponse;
+    if (onRememberSentinelGenesisRequest)
+      props.onRememberRequest = onRememberSentinelGenesisRequest;
+    if (onReceiveSentinelGenesisShare)
+      props.onReceiveShare = onReceiveSentinelGenesisShare;
+    if (onAcceptSentinelOnboardingPackage)
+      props.onAcceptOnboardingPackage = onAcceptSentinelOnboardingPackage;
+    return props;
+  });
 
   const isBusy = $derived(isVerifying || isInitializing);
   let wizardStep = $state<VaultCreationWizardStep>(
@@ -905,10 +928,7 @@
                 {sentinelInvitationRequest}
                 {sentinelParticipantResponsePending}
                 {sentinelOnboardingPackage}
-                onCreateParticipantResponse={onCreateSentinelGenesisParticipantResponse}
-                onRememberRequest={onRememberSentinelGenesisRequest}
-                onReceiveShare={onReceiveSentinelGenesisShare}
-                onAcceptOnboardingPackage={onAcceptSentinelOnboardingPackage}
+                {...joinFlowOptionalProps}
                 onFinishSentinelInvitation={finishSentinelInvitation}
               />
             {/key}

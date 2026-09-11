@@ -675,12 +675,15 @@
         <div class="space-y-3">
           {#each groups as group (group.site)}
             {@const Icon = getGroupIcon(group.items)}
-            {@const titleAsCardHeader =
+            {@const [firstItem] = group.items}
+            {@const titleAsCardHeader = Boolean(
               group.items.length === 1 &&
-              (group.items[0].type === SecretType.SecureNote ||
-                group.items[0].type === SecretType.FileAttachment ||
-                group.items[0].type === SecretType.Login ||
-                group.items[0].type === SecretType.CreditCard)}
+              firstItem &&
+              (firstItem.type === SecretType.SecureNote ||
+                firstItem.type === SecretType.FileAttachment ||
+                firstItem.type === SecretType.Login ||
+                firstItem.type === SecretType.CreditCard),
+            )}
             <Card
               class="gap-0 overflow-hidden border-border/35 bg-card py-0 shadow-xs sm:border-border/60"
               data-testid="vault-site-group"

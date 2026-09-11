@@ -120,6 +120,7 @@
 
   function signalStyle(item: Signal) {
     const position = slots[item.slot]
+    if (!position) throw new Error('signal slot is outside the orbit')
     return [
       `--signal-x:${position.x}%`,
       `--signal-y:${position.y}%`,
@@ -191,6 +192,7 @@
           )
           const availableTerms = terms.filter((term) => !visibleTerms.has(term))
           const sector = slotSectors[item.id]
+          if (!sector) return
           const availableSlots = sector.filter((slot) => slot !== item.slot)
           item.label = ((...[v = item.label]) => v)(
             availableTerms[Math.floor(Math.random() * availableTerms.length)],

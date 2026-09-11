@@ -13,4 +13,8 @@
   const html = $derived(markdownRenderer.renderMarkdown(source))
 </script>
 
-<MarkdownBody {html} {testId} />
+{#if testId}
+  <MarkdownBody {html} {testId} />
+{:else}
+  <MarkdownBody {html} />
+{/if}

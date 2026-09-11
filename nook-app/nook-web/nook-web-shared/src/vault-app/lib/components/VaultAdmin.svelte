@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { ComponentProps } from 'svelte'
   import type { PasswordOperationResult } from '$lib/vault/password-unlock'
   import { type SecretOperationResult } from '$lib/vault/secret-operation-failure'
   import type { EnrollmentCodeIssueResult } from '$lib/vault/enrollment-issue-failure'
@@ -197,6 +198,24 @@
     ) => Promise<SecretOperationResult<NookImportResult>>
     activeSection?: AdminAccordionSection
   } = $props()
+
+  type AuthStorageOptionalProps = Partial<
+    Pick<
+      ComponentProps<typeof AuthStorage>,
+      | 'onSyncProvider'
+      | 'onBeginAddProvider'
+      | 'onCancelAddProvider'
+      | 'onRemoveProvider'
+    >
+  >
+  const authStorageOptionalProps = $derived.by(() => {
+    const props: AuthStorageOptionalProps = {}
+    if (onSyncProvider) props.onSyncProvider = onSyncProvider
+    if (onBeginAddProvider) props.onBeginAddProvider = onBeginAddProvider
+    if (onCancelAddProvider) props.onCancelAddProvider = onCancelAddProvider
+    if (onRemoveProvider) props.onRemoveProvider = onRemoveProvider
+    return props
+  })
 
   let newVaultName = $state('')
   let drafts = $state<Record<string, string>>({})
@@ -634,12 +653,9 @@
       bind:githubPat
       bind:githubRepo
       {onReconnect}
-      {onSyncProvider}
-      {onBeginAddProvider}
-      {onCancelAddProvider}
+      {...authStorageOptionalProps}
       {onBeginSetup}
       {onCancelSetup}
-      {onRemoveProvider}
     />
   </SettingsAccordionSection>
 

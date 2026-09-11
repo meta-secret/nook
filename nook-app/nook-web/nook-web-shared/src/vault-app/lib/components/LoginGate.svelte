@@ -13,7 +13,7 @@
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { KeyRound, RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import { onMount, tick, untrack } from 'svelte'
+  import { onMount, tick, untrack, type ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     type DevicesAccessHostMount,
@@ -167,6 +167,51 @@
       packageJson: string,
     ) => void | Promise<void>
   } = $props()
+
+  type CreateVaultChooserOptionalProps = Partial<
+    Pick<
+      ComponentProps<typeof LoginCreateVaultChooser>,
+      'onAcceptSentinelOnboardingPackage' | 'onFinishSentinelInvitation'
+    >
+  >
+  type EnrollmentPanelOptionalProps = Partial<
+    Pick<ComponentProps<typeof LoginEnrollmentPanel>, 'onUseEnrollmentCode'>
+  >
+  type SentinelCeremonyOptionalProps = Partial<
+    Pick<ComponentProps<typeof SentinelCeremonyPanel>, 'onUnlocked'>
+  >
+  type ProviderManagementOptionalProps = Partial<
+    Pick<
+      ComponentProps<typeof LoginProviderManagement>,
+      'onBeginAddProvider' | 'onCancelAddProvider' | 'onRemoveProvider'
+    >
+  >
+  const createVaultChooserOptionalProps = $derived.by(() => {
+    const props: CreateVaultChooserOptionalProps = {}
+    if (onAcceptSentinelOnboardingPackage)
+      props.onAcceptSentinelOnboardingPackage =
+        onAcceptSentinelOnboardingPackage
+    if (onSentinelUnlocked)
+      props.onFinishSentinelInvitation = onSentinelUnlocked
+    return props
+  })
+  const enrollmentPanelOptionalProps = $derived.by(() => {
+    const props: EnrollmentPanelOptionalProps = {}
+    if (onUseEnrollmentCode) props.onUseEnrollmentCode = onUseEnrollmentCode
+    return props
+  })
+  const sentinelCeremonyOptionalProps = $derived.by(() => {
+    const props: SentinelCeremonyOptionalProps = {}
+    if (onSentinelUnlocked) props.onUnlocked = onSentinelUnlocked
+    return props
+  })
+  const providerManagementOptionalProps = $derived.by(() => {
+    const props: ProviderManagementOptionalProps = {}
+    if (onBeginAddProvider) props.onBeginAddProvider = onBeginAddProvider
+    if (onCancelAddProvider) props.onCancelAddProvider = onCancelAddProvider
+    if (onRemoveProvider) props.onRemoveProvider = onRemoveProvider
+    return props
+  })
 
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
@@ -646,8 +691,7 @@
         {sentinelParticipantResponsePending}
         {sentinelParticipantResponse}
         {sentinelOnboardingPackage}
-        {onAcceptSentinelOnboardingPackage}
-        onFinishSentinelInvitation={onSentinelUnlocked}
+        {...createVaultChooserOptionalProps}
         onConnectStorage={() => {
           vault.beginExistingVaultOpen()
           showProviderSetupLink = true
@@ -661,7 +705,7 @@
           {isVerifying}
           initialCode={prefillEnrollmentCode}
           openFormInitially={false}
-          {onUseEnrollmentCode}
+          {...enrollmentPanelOptionalProps}
         />
       {/if}
     {:else}
@@ -744,7 +788,7 @@
               {vault}
               {isVerifying}
               {isInitializing}
-              onUnlocked={onSentinelUnlocked}
+              {...sentinelCeremonyOptionalProps}
             />
           {:else if showVaultPicker && onCreateDeviceVault}
             <LoginVaultPicker
@@ -890,10 +934,8 @@
               {isVerifying}
               {isInitializing}
               addingProvider={addProviderOpen}
-              {onBeginAddProvider}
+              {...providerManagementOptionalProps}
               {onBeginSetup}
-              {onCancelAddProvider}
-              {onRemoveProvider}
             />
           {/if}
         </CardContent>
@@ -906,7 +948,7 @@
           {isVerifying}
           initialCode={prefillEnrollmentCode}
           openFormInitially={false}
-          {onUseEnrollmentCode}
+          {...enrollmentPanelOptionalProps}
         />
       {/if}
     {/if}
