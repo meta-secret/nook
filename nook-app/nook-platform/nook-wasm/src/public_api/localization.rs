@@ -222,7 +222,6 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> Result<String, wasm_bindgen::JsError> {
     TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
         locale,
