@@ -58,6 +58,8 @@ enum AuthProviderHookFailure {
   WriteFailed = 'write-failed',
 }
 
+export const AUTH_PROVIDER_HOOK_READ_FAILED = AuthProviderHookFailure.ReadFailed
+
 type AuthProviderBrowserHooks = {
   activeVaultScope(storeId: string): ActiveVaultScope
   loadAuthProviders: () => Promise<

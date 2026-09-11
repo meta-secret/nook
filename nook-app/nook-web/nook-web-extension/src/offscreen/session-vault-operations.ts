@@ -43,15 +43,27 @@ export type ImportExtensionVaultArgs = {
   message: ImportVaultRequest
 }
 
+type ExtensionEventLogImportOperation = (
+  ...args: Parameters<NookVaultManager['import_extension_event_log_records_js']>
+) => Promise<
+  Pick<
+    Awaited<
+      ReturnType<NookVaultManager['import_extension_event_log_records_js']>
+    >,
+    'to_object' | 'free'
+  >
+>
+
 export type ExtensionVaultImportManager = Pick<
   NookVaultManager,
   | 'device_id'
   | 'activate_local_identity_for_app_id'
-  | 'import_extension_event_log_records_js'
   | 'device_protection_status'
   | 'replace_auth_providers_for_vault'
   | 'save_presealed_auth_providers_snapshot'
->
+> & {
+  import_extension_event_log_records_js: ExtensionEventLogImportOperation
+}
 
 export type ImportExtensionVaultDependencies = {
   decodeProviders: (snapshot: AuthProvidersSnapshot) => StorageProvider[]

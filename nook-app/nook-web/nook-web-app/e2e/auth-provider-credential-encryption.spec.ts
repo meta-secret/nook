@@ -8,7 +8,6 @@ import {
   flushNookLogPersistQueue,
   fetchAppLogs,
   AuthProviderBrowserFixture,
-  AuthProviderHookFailure,
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
   UI_TIMEOUT_MS,
@@ -17,6 +16,7 @@ import {
   waitForStorageChainIdle,
   waitForVaultSyncIdle,
 } from './helpers'
+import { AUTH_PROVIDER_HOOK_READ_FAILED } from './helpers/auth-providers'
 
 test.describe('sync provider credential encryption', () => {
   test.beforeEach(async ({ page }) => {
@@ -110,7 +110,7 @@ test.describe('sync provider credential encryption', () => {
     const admission = await new AuthProviderBrowserFixture(page).load()
     expect(admission.isErr()).toBe(true)
     if (admission.isErr())
-      expect(admission.error).toBe(AuthProviderHookFailure.ReadFailed)
+      expect(admission.error).toBe(AUTH_PROVIDER_HOOK_READ_FAILED)
 
     const raw = await readRawAuthProvidersFromIdb(page)
     expect(raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat).toBe(

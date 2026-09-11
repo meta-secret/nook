@@ -55,7 +55,7 @@ function githubProvider(): StorageProvider {
     localFolder: { state: 'notApplicable' },
     storeId: { state: 'unscoped' },
     createdAt: '2026-08-11T00:00:00Z',
-    syncCheckpoint: { state: 'untracked' },
+    syncCheckpoint: { state: 'neverSynced' },
   }
 }
 
@@ -366,7 +366,12 @@ class CompanionVaultDiscoveryScenario {
     }
   }
 
-  private reportUnlocked() {
+  private reportUnlocked(): ReturnType<
+    Extract<
+      CompanionVaultDiscoveryArgs['endpoint'],
+      { kind: CompanionDiscoveryEndpointKind.Initial }
+    >['endpoint']['discover']
+  >['status'] {
     this.operationOrder.push('discover')
     return {
       status: 'unlocked',

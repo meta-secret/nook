@@ -52,7 +52,11 @@ function matchedWorkflowSnapshot({
 }: {
   observationIndex: number
   action: number
-}) {
+}): Awaited<
+  ReturnType<
+    AuthenticationWorkflowRoutingDependencies['authenticationWorkflowSnapshot']
+  >
+> {
   return {
     kind: AuthenticationWorkflowSnapshotKind.Matched,
     snapshot: {

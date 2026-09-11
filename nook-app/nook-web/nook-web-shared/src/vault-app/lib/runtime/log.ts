@@ -54,6 +54,11 @@ type RuntimeFailureDetails = {
 };
 
 type BrowserLogFetchArguments = Parameters<typeof globalThis.fetch>;
+type BrowserLogFetchProxyArguments = [
+  target: typeof globalThis.fetch,
+  thisArgument: unknown,
+  browserLogFetchArguments: BrowserLogFetchArguments,
+];
 
 export class RuntimeFailure {
   readonly message: string;
@@ -546,11 +551,13 @@ class BrowserLogRuntime {
     };
     if (globalThis.fetch === marker.__nookFetchOuter) return;
 
-    const wrapped = new Proxy(globalThis.fetch, {
+    const fetchHandler: ProxyHandler<typeof globalThis.fetch> = {
       apply: async (
-        target,
-        thisArgument,
-        browserLogFetchArguments: BrowserLogFetchArguments,
+        ...[
+          target,
+          thisArgument,
+          browserLogFetchArguments,
+        ]: BrowserLogFetchProxyArguments
       ) => {
         const [input, init] = browserLogFetchArguments;
         const response = await Reflect.apply(
@@ -573,7 +580,8 @@ class BrowserLogRuntime {
         }
         return response;
       },
-    });
+    };
+    const wrapped = new Proxy(globalThis.fetch, fetchHandler);
     marker.__nookFetchOuter = wrapped;
     globalThis.fetch = wrapped;
   }
