@@ -601,8 +601,8 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 
 - PRs labeled `ci:full-e2e` additionally run two deterministic web shards and one independent extension job on separate hosted runners.
 - Each consumes the Chromium image published by web verification from built WASM.
-- Full extension e2e replaces the focused authentication regression when requested.
-- Preview requires the full-suite result when authentication coverage is required.
+- One Extension e2e job selects the full suite when requested, otherwise the focused authentication regression.
+- Preview requires the extension result when either full or authentication coverage is required.
 - The stable web join fails unless both shards succeed and does not rebuild the browser image merely to publish a low-reuse exact-head cache.
 - The overall `PR` workflow cannot succeed until both web shards, the join, and extension e2e succeed.
 

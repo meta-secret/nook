@@ -178,7 +178,13 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
             && pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
             && checks
-                .matches("github.event.pull_request.head.repo.full_name == github.repository")
+                .lines()
+                .filter(|line| line.trim_start().starts_with("runs-on:")
+                    && line.contains(
+                        "github.event.pull_request.head.repo.full_name == github.repository"
+                    )
+                    && line.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+                    && line.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'"))
                 .count()
                 == 3,
         "trusted native/ecosystem Rust jobs must use configured ARC while forks fall back hosted"

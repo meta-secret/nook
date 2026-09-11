@@ -563,7 +563,7 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 
-- **Label effect:** Adds two `Full browser e2e shard (N/2)` jobs, the stable `Full browser e2e (main fix)` join, and `Full extension e2e (main fix)` to the PR workflow.
+- **Label effect:** Adds two `Full browser e2e shard (N/2)` jobs, the stable `Full browser e2e (main fix)` join, and selects the full suite in the existing `Extension e2e` job.
 - **WASM artifact sharing:**
   - A dedicated producer verifies WASM once and uploads only its generated package.
   - Preview and both browser jobs download that artifact instead of recompiling Rust.
@@ -874,8 +874,8 @@ authenticator-domain to 90 percent.
 - An enabled, required demo failure blocks preview.
 - Optional web and extension e2e consumers start after the exact-source browser image is ready.
 - Node verification runs concurrently and remains mandatory for preview and readiness.
-- Full extension e2e replaces the focused authentication regression when requested.
-- Preview requires that full-suite result when authentication coverage is required.
+- One Extension e2e job selects the full suite when requested, otherwise the focused authentication regression.
+- Preview requires the extension result when either full or authentication coverage is required.
 - A separate `Rust coverage report` job declares `needs: rust`, downloads the native handoff directly, and performs reporting without occupying or delaying the preview runner.
 
 **Rerun and artifact rules:**

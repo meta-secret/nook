@@ -40,7 +40,14 @@ class DockerizedRustContract {
           z.object({
             needs: z.union([z.string(), z.array(z.string())]).optional(),
             if: z.string().optional(),
-            steps: z.array(z.object({ run: z.string().optional() })).optional(),
+            steps: z
+              .array(
+                z.object({
+                  run: z.string().optional(),
+                  if: z.string().optional(),
+                }),
+              )
+              .optional(),
           }),
         ),
       })
@@ -48,41 +55,52 @@ class DockerizedRustContract {
     const preview = workflow.jobs.preview;
     const script = z.string().parse(preview?.steps?.[0]?.run);
     expect(preview?.needs).toContain("wasm-node-test");
-    expect(preview?.needs).toContain("full-extension-e2e");
-    expect(workflow.jobs["auth-sensitive-extension-e2e"]?.if).toContain(
-      "!inputs.full_e2e_requested",
-    );
-    for (const job of [
+    expect(preview?.needs).toContain("extension-e2e");
+    expect(Object.keys(workflow.jobs)).not.toContain(
       "auth-sensitive-extension-e2e",
-      "full-extension-e2e",
-      "full-e2e-shard",
-    ]) {
+    );
+    expect(Object.keys(workflow.jobs)).not.toContain("full-extension-e2e");
+    const extension = workflow.jobs["extension-e2e"];
+    expect(extension?.if).toContain(
+      "inputs.full_e2e_requested || needs.verify.outputs.auth-sensitive-e2e-required == 'true'",
+    );
+    expect(extension?.steps).toEqual([
+      { if: "inputs.full_e2e_requested", run: "task _extension:test:e2e" },
+      {
+        if: "${{ !inputs.full_e2e_requested }}",
+        run: "task _extension:test:e2e:file",
+      },
+    ]);
+    for (const job of ["extension-e2e", "full-e2e-shard"]) {
       expect(workflow.jobs[job]?.needs).not.toContain("wasm-node-test");
       expect(workflow.jobs[job]?.needs).toContain("verify");
     }
     for (const full of ["true", "false"]) {
-      for (const result of ["success", "failure", "cancelled", "skipped"]) {
-        for (const node of ["success", "failure", "cancelled", "skipped"]) {
-          const run = spawnSync("bash", ["-c", script], {
-            encoding: "utf8",
-            env: {
-              ...process.env,
-              NATIVE_RESULT: "success",
-              WASM_RESULT: "success",
-              WEB_RESULT: "success",
-              WASM_NODE_RESULT: node,
-              UI_DEMOS_ENABLED: "false",
-              UI_DEMO_REQUIRED: "false",
-              UI_DEMO_RESULT: "skipped",
-              AUTH_SENSITIVE_E2E_REQUIRED: "true",
-              FULL_E2E_REQUESTED: full,
-              FULL_EXTENSION_E2E_RESULT: full === "true" ? result : "skipped",
-              AUTH_SENSITIVE_E2E_RESULT: full === "true" ? "skipped" : result,
-            },
-          });
-          expect(run.status === 0, run.stdout).toBe(
-            result === "success" && node === "success",
-          );
+      for (const auth of ["true", "false"]) {
+        for (const result of ["success", "failure", "cancelled", "skipped"]) {
+          for (const node of ["success", "failure", "cancelled", "skipped"]) {
+            const run = spawnSync("bash", ["-c", script], {
+              encoding: "utf8",
+              env: {
+                ...process.env,
+                NATIVE_RESULT: "success",
+                WASM_RESULT: "success",
+                WEB_RESULT: "success",
+                WASM_NODE_RESULT: node,
+                UI_DEMOS_ENABLED: "false",
+                UI_DEMO_REQUIRED: "false",
+                UI_DEMO_RESULT: "skipped",
+                AUTH_SENSITIVE_E2E_REQUIRED: auth,
+                FULL_E2E_REQUESTED: full,
+                EXTENSION_E2E_RESULT: result,
+              },
+            });
+            expect(run.status === 0, run.stdout).toBe(
+              (result === "success" ||
+                (full === "false" && auth === "false")) &&
+                node === "success",
+            );
+          }
         }
       }
     }
@@ -193,6 +211,21 @@ class DockerizedRustContract {
       3,
     );
     expect(ecosystem.match(/cache-selection: ecosystem-/g)).toHaveLength(3);
+    let routedJobs = 0;
+    for (const line of ecosystem.split("\n")) {
+      if (!line.trimStart().startsWith("runs-on:")) continue;
+      routedJobs += 1;
+      expect(line).toContain(
+        "github.event.pull_request.head.repo.full_name == github.repository",
+      );
+      expect(line).toContain(
+        "github.event.pull_request.user.login != 'dependabot[bot]'",
+      );
+      expect(line).toContain(
+        "(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'",
+      );
+    }
+    expect(routedJobs).toBe(3);
 
     expect(this.read(".github/formatting/Dockerfile")).toContain(
       "prettier-skill.json",

@@ -225,18 +225,16 @@ export class ArcContractSourceInventory {
       label: "PR workflow",
       source: prWorkflowSource,
     });
-    const authSensitiveJobStart = prWorkflowSource.indexOf(
-      "  auth-sensitive-extension-e2e:",
-    );
+    const authSensitiveJobStart = prWorkflowSource.indexOf("  extension-e2e:");
     const authSensitiveJobEnd = prWorkflowSource.indexOf("  preview:");
     if (authSensitiveJobStart < 0 || authSensitiveJobEnd < 0) {
       return err({
         kind: OperationalContractFailureKind.Requirement,
-        message: "PR authentication-sensitive extension e2e job is missing",
+        message: "PR extension e2e job is missing",
       });
     }
     const authSensitiveJob = new TextContract({
-      label: "PR authentication-sensitive extension e2e job",
+      label: "PR extension e2e job",
       source: prWorkflowSource.slice(),
     });
     const readSource9 = await new OperationalContractSource(
