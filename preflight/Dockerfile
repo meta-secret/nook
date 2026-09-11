@@ -85,6 +85,8 @@ WORKDIR /meta-secret/nook
 ENV REPO_ROOT=/meta-secret/nook NOOK_REPO_ROOT=/meta-secret/nook NOOK_REPOSITORY_SOURCE_CONTEXT=1
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
+COPY .github/formatting/package.json .github/formatting/bun.lock ./.github/formatting/
+RUN bun install --cwd .github/formatting --frozen-lockfile --ignore-scripts
 COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock ./agentic-ai/loom/
 RUN bun install --cwd agentic-ai/loom --frozen-lockfile
 

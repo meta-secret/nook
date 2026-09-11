@@ -60,6 +60,9 @@ class DockerizedRustContract {
       4,
     );
     expect(ecosystem.match(/cache-selection: native/g)).toHaveLength(1);
+    expect(this.read(".github/formatting/Dockerfile")).toContain(
+      "prettier-skill.json",
+    );
     const audit = this.read(".github/docker/rust-maintenance.hcl");
     expect(audit).toContain('no-cache-filter = ["audit"]');
     expect(audit).not.toContain("no-cache = true");
@@ -316,6 +319,53 @@ class DockerizedRustContract {
     }
   }
 
+  formatterContext(): void {
+    const temporary = mkdtempSync(join(tmpdir(), "nook-format-context-"));
+    try {
+      const shared =
+        "nook-app/nook-web/nook-web-shared/src/vault-app/fixture.ts";
+      const skill =
+        ".cortex/teams/ai/dynamic-skills/new-fixture/scripts/src/fixture.ts";
+      const prelude = this.read(".github/formatting/ci.Dockerfile").match(
+        /^RUN mkdir -p .+$/m,
+      );
+      if (!prelude)
+        throw new Error("CI formatter working directory setup missing");
+      for (const path of [shared, skill]) {
+        const directory = path.slice(0, path.lastIndexOf("/"));
+        mkdirSync(join(temporary, directory), { recursive: true });
+        writeFileSync(
+          join(temporary, path),
+          'export const value={name:"example"}\n',
+        );
+        const files = join(temporary, "files");
+        writeFileSync(files, `${path}\0`);
+        const prepare = prelude[0].slice(4).replaceAll("/workspace", temporary);
+        const result = spawnSync(
+          "bash",
+          ["-c", `${prepare}\nbash "$FORMAT_SCRIPT"`],
+          {
+            encoding: "utf8",
+            env: {
+              ...process.env,
+              NOOK_REPO_ROOT: temporary,
+              NOOK_FORMATTER_ROOT: join(this.root, ".github/formatting"),
+              FORMAT_CHANGED_FILES: files,
+              FORMAT_SCRIPT: join(this.root, ".github/formatting/format.sh"),
+            },
+          },
+        );
+        expect(result.status, result.stderr).toBe(0);
+        const quote = path === shared ? '"' : "'";
+        expect(readFileSync(join(temporary, path), "utf8")).toBe(
+          `export const value = { name: ${quote}example${quote} };\n`,
+        );
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+
   private read(path: string): string {
     return readFileSync(join(this.root, path), "utf8");
   }
@@ -347,4 +397,9 @@ test(
 test(
   "trusted formatter exports only bounded files and rejects hostile paths",
   contract.formatterExport.bind(contract),
+);
+
+test(
+  "actual formatter supports shared-only files and new skill packages",
+  contract.formatterContext.bind(contract),
 );

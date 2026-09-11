@@ -5,6 +5,8 @@ FROM formatter-tools AS format
 COPY --from=implementation-source / /workspace
 COPY --from=format-input /files /tmp/nook-format-files
 COPY format.sh /opt/nook-formatter/format.sh
+# Shared and vault paths are formatted relative to the web-app directory.
+RUN mkdir -p /workspace/nook-app/nook-web/nook-web-app
 RUN bash <<'BASH'
 set -euo pipefail
 while IFS= read -r -d '' path; do
