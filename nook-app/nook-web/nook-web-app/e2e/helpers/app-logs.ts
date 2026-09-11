@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import fs from 'node:fs/promises'
-import { LogLevel } from '$lib/runtime/log'
+import { LogLevel } from '../../../nook-web-shared/src/vault-app/lib/runtime/log-level'
 import { UI_TIMEOUT_MS } from './environment'
 
 export type NookLogEntry = {

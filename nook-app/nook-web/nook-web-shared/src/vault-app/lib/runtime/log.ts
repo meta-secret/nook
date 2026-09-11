@@ -37,14 +37,9 @@ import {
   log_set_level,
   log_record_with_data,
 } from "$app-wasm";
+import { LogLevel } from "./log-level";
 
-export enum LogLevel {
-  Error = "error",
-  Warn = "warn",
-  Info = "info",
-  Debug = "debug",
-  Trace = "trace",
-}
+export { LogLevel } from "./log-level";
 
 export type { LogEntry } from "$app-wasm";
 
