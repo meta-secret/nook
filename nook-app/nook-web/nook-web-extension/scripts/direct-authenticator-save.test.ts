@@ -90,7 +90,7 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
   expect(host.description.textContent).toBe(
     BROWSER_MESSAGE_KEYS.WidgetEnrollSaved,
   )
-  expect(section.replaceChildren).toHaveBeenCalledOnce()
+  expect(section.replaceChildren).toHaveBeenCalledTimes(1)
   expect(authenticatorEnrollmentInteraction.enrollmentCeremonyActive()).toBe(
     true,
   )

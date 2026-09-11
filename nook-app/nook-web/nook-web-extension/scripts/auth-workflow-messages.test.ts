@@ -56,12 +56,34 @@ const validMessage = {
   },
 }
 
+function admittedMessage() {
+  const admission =
+    AuthenticationWorkflowSnapshotMessageSchema.admit(validMessage)
+  if (admission.kind !== 'accepted') {
+    throw new Error('authentication workflow fixture must be admitted')
+  }
+  return admission.message
+}
+
 function approvalMatcherDependencies(): Parameters<
   typeof AuthenticationWorkflowApprovalSchema.compare
 >[0]['matcherDependencies'] {
+  type MatcherDependencies = NonNullable<
+    Parameters<
+      typeof AuthenticationWorkflowApprovalSchema.compare
+    >[0]['matcherDependencies']
+  >
+  type ApprovedFacts = Parameters<
+    MatcherDependencies['bind_authentication_page_observation_facts']
+  >[0]
+  type FactsBinding = Parameters<
+    MatcherDependencies['authentication_page_observation_facts_match_binding']
+  >[0]
   let approvedFactsJson = ''
   return {
-    bind_authentication_page_observation_facts: (approvedFacts) => {
+    bind_authentication_page_observation_facts: (
+      approvedFacts: ApprovedFacts,
+    ) => {
       approvedFactsJson = JSON.stringify(approvedFacts)
       return {} as ReturnType<
         NonNullable<
@@ -72,15 +94,15 @@ function approvalMatcherDependencies(): Parameters<
       >
     },
     authentication_page_observation_facts_match_binding: (
-      _binding,
-      currentFacts,
+      _binding: FactsBinding,
+      currentFacts: ApprovedFacts,
     ) => approvedFactsJson === JSON.stringify(currentFacts),
   }
 }
 
 describe('authentication workflow snapshot messages', () => {
   test('invalidates pending approval after an action or fact transition', () => {
-    const facts = validMessage.payload.observations[0]
+    const facts = admittedMessage().payload.observations[0]
     const approved = { workflowKey: 'login:continue', facts }
     const dependencies = approvalMatcherDependencies()
     expect(
@@ -113,7 +135,7 @@ describe('authentication workflow snapshot messages', () => {
   })
 
   test('invalidates an authenticator picker across OTP challenge facts', () => {
-    const approvedFacts = validMessage.payload.observations[0]
+    const approvedFacts = admittedMessage().payload.observations[0]
     const dependencies = approvalMatcherDependencies()
     expect(
       AuthenticationWorkflowApprovalSchema.compare({

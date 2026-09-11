@@ -4,10 +4,10 @@ import type { StoredExtensionPairingGrant } from '../src/background/pairing-gran
 import type { WebsitePasskeyOptionsDependencies } from '../src/background/service-worker/passkey-operations'
 import {
   WebsitePasskeyCeremony,
-  WebsitePasskeyOptionsMessageType,
   WebsitePasskeyOptionsStatus,
 } from '../src/lib/webauthn-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import type { WebsitePasskeyRequestContext } from '../src/background/service-worker/pairing-identity'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -56,30 +56,29 @@ describe('website passkey options', () => {
       passkeyPairingGrants: mock(() =>
         Promise.resolve([pairingGrant('a'), pairingGrant('b')]),
       ),
-      requestOriginAndRpId: mock(async () => ({
-        kind: WebsitePasskeyRequestContextKind.Validated,
-        origin: 'https://example.test',
-        rpId: 'example.test',
-        request: {
-          ceremony: WebsitePasskeyCeremony.Get,
+      requestOriginAndRpId: mock(
+        async (): Promise<WebsitePasskeyRequestContext> => ({
+          kind: WebsitePasskeyRequestContextKind.Validated,
           origin: 'https://example.test',
           rpId: 'example.test',
-          value: {
-            origin: 'https://example.test',
-            rpId: 'example.test',
-            challenge: 'challenge',
-            userVerificationRequired: false,
-            allowCredentials: [],
+          request: {
+            ceremony: WebsitePasskeyCeremony.Get,
+            value: {
+              origin: 'https://example.test',
+              rpId: 'example.test',
+              challenge: 'challenge',
+              userVerificationRequired: false,
+              allowCredentials: [],
+            },
           },
-        },
-      })),
+        }),
+      ),
       sendSessionMessage,
     }
     const args: Parameters<
       typeof websitePasskeyRequests.websitePasskeyOptions
     >[0] = {
       message: {
-        type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions,
         payload: {
           requestId: 'atomic-passkey-request',
           ceremony: WebsitePasskeyCeremony.Get,
@@ -87,7 +86,7 @@ describe('website passkey options', () => {
           expiresAt: Date.now() + 60_000,
         },
       },
-      sender: { id: 'nook-extension', tab: { id: 42 } },
+      sender: { id: 'nook-extension' },
       dependencies,
     }
 
