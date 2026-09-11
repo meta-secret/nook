@@ -383,24 +383,53 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     ));
 
     let remote = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
-    let compiler_jobs = 2;
+    let remote_compiler_jobs = [
+        ("task batch", "\n  batch:\n", "\n  web-verify:\n"),
+        (
+            "web verification",
+            "\n  web-verify:\n",
+            "\n  web-e2e-image:\n",
+        ),
+        ("browser image", "\n  web-e2e-image:\n", "\n  web-e2e:\n"),
+    ];
+    let remote_compiler_credentials = [
+        "NOOK_SCCACHE_REMOTE_ACCESS_KEY",
+        "NOOK_SCCACHE_REMOTE_SECRET_KEY",
+        "NOOK_SCCACHE_REMOTE_BUCKET",
+        "NOOK_SCCACHE_ENDPOINT",
+    ];
+    assert!(remote.contains("on:\n  workflow_dispatch:") && !remote.contains("pull_request:"));
+    for &(job_name, start, end) in &remote_compiler_jobs {
+        let job = remote
+            .split_once(start)
+            .and_then(|(_, tail)| tail.split_once(end))
+            .map(|(job, _)| job)
+            .with_context(|| format!("remote workflow must keep the {job_name} job"))?;
+        assert!(
+            job.contains("uses: ./.github/actions/nook-docker-setup"),
+            "trusted remote compiler job {job_name} must own Docker setup"
+        );
+        assert!(
+            job.contains("runs-on:")
+                && job.contains("vars.NOOK_RUNS_ON")
+                && job.contains("'nook-k0s'"),
+            "trusted remote compiler job {job_name} must remain on the private ARC pool"
+        );
+        for credential in remote_compiler_credentials {
+            assert!(
+                job.contains(credential),
+                "trusted remote compiler job {job_name} must receive {credential}"
+            );
+        }
+    }
     assert!(remote.contains("if: inputs.task == 'rust-cache:promote'"));
-    assert_eq!(
-        remote.matches("NOOK_SCCACHE_REMOTE_ACCESS_KEY").count(),
-        compiler_jobs
-    );
-    assert_eq!(
-        remote.matches("NOOK_SCCACHE_REMOTE_SECRET_KEY").count(),
-        compiler_jobs
-    );
-    assert_eq!(
-        remote.matches("NOOK_SCCACHE_REMOTE_BUCKET").count(),
-        compiler_jobs
-    );
-    assert_eq!(
-        remote.matches("NOOK_SCCACHE_ENDPOINT").count(),
-        compiler_jobs
-    );
+    for credential in remote_compiler_credentials {
+        assert_eq!(
+            remote.matches(credential).count(),
+            remote_compiler_jobs.len(),
+            "only enumerated trusted remote compiler jobs may receive {credential}"
+        );
+    }
     assert!(remote.contains(
         "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}"
     ));
