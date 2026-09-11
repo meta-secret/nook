@@ -25,6 +25,7 @@ import {
 import type {
   CompanionExtensionPresence,
   CompanionIdentityDiscoveryObservation,
+  NookDiscoveredCompanionExtensionEndpoint,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type ImportManagerState = {
@@ -346,7 +347,7 @@ class CompanionVaultDiscoveryScenario {
   private readonly endpoint: CompanionVaultDiscoveryArgs['endpoint'] = {
     kind: CompanionDiscoveryEndpointKind.Initial,
     endpoint: {
-      discover: () => ({ status: this.reportUnlocked() }),
+      discover: () => new DiscoveredCompanionEndpointFixture(this),
       free: () => {},
     },
   }
@@ -366,7 +367,7 @@ class CompanionVaultDiscoveryScenario {
     }
   }
 
-  private reportUnlocked(): ReturnType<
+  reportUnlocked(): ReturnType<
     Extract<
       CompanionVaultDiscoveryArgs['endpoint'],
       { kind: CompanionDiscoveryEndpointKind.Initial }
@@ -391,6 +392,38 @@ class CompanionVaultDiscoveryScenario {
       companionDiscoveryArgs,
     )
     return companionDiscovery.discover(this.discovery)
+  }
+}
+
+class DiscoveredCompanionEndpointFixture implements NookDiscoveredCompanionExtensionEndpoint {
+  constructor(private readonly scenario: CompanionVaultDiscoveryScenario) {}
+
+  get status(): NookDiscoveredCompanionExtensionEndpoint['status'] {
+    return this.scenario.reportUnlocked()
+  }
+
+  authorize_and_seal(
+    ..._args: Parameters<
+      NookDiscoveredCompanionExtensionEndpoint['authorize_and_seal']
+    >
+  ): ReturnType<
+    NookDiscoveredCompanionExtensionEndpoint['authorize_and_seal']
+  > {
+    void _args
+    throw new Error('Authorization is outside this discovery scenario')
+  }
+
+  rediscover(
+    ..._args: Parameters<NookDiscoveredCompanionExtensionEndpoint['rediscover']>
+  ): NookDiscoveredCompanionExtensionEndpoint {
+    void _args
+    return this
+  }
+
+  free(): void {}
+
+  [Symbol.dispose](): void {
+    this.free()
   }
 }
 

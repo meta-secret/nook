@@ -53,12 +53,10 @@ type RuntimeFailureDetails = {
   readonly stack?: string;
 };
 
-type BrowserLogFetchArguments = Parameters<typeof globalThis.fetch>;
-type BrowserLogFetchProxyArguments = [
-  target: typeof globalThis.fetch,
-  thisArgument: unknown,
-  browserLogFetchArguments: BrowserLogFetchArguments,
-];
+type BrowserLogFetchProxyApply = NonNullable<
+  ProxyHandler<typeof globalThis.fetch>["apply"]
+>;
+type BrowserLogFetchProxyArguments = Parameters<BrowserLogFetchProxyApply>;
 
 export class RuntimeFailure {
   readonly message: string;

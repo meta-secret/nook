@@ -43,16 +43,22 @@ export type ImportExtensionVaultArgs = {
   message: ImportVaultRequest
 }
 
-type ExtensionEventLogImportOperation = (
-  ...args: Parameters<NookVaultManager['import_extension_event_log_records_js']>
-) => Promise<
-  Pick<
-    Awaited<
-      ReturnType<NookVaultManager['import_extension_event_log_records_js']>
-    >,
-    'to_object' | 'free'
-  >
+type ExtensionEventLogImportArguments = Parameters<
+  NookVaultManager['import_extension_event_log_records_js']
 >
+type ExtensionEventLogImportStatusResource = Awaited<
+  ReturnType<NookVaultManager['import_extension_event_log_records_js']>
+>
+type ExtensionEventLogImportOperation = (
+  ...extensionEventLogImportArguments: ExtensionEventLogImportArguments
+) => Promise<Pick<ExtensionEventLogImportStatusResource, 'to_object' | 'free'>>
+type ExtensionEventLogImportStatus = ReturnType<
+  ExtensionEventLogImportStatusResource['to_object']
+>
+type ExtensionIdentityOperationOutcome = {
+  ok: boolean
+  status: ExtensionEventLogImportStatus
+}
 
 export type ExtensionVaultImportManager = Pick<
   NookVaultManager,
@@ -116,7 +122,10 @@ export type PasskeyEventProviderFlushRequest = {
 }
 
 export type ActivatedExtensionIdentityOperation<
-  Outcome extends Result<unknown, SessionOperationFailure>,
+  Outcome extends Result<
+    ExtensionIdentityOperationOutcome,
+    SessionOperationFailure
+  >,
 > = {
   activeManager: Pick<
     NookVaultManager,
@@ -129,7 +138,10 @@ export type ActivatedExtensionIdentityOperation<
 }
 
 export class ActivatedExtensionIdentityLifecycle<
-  Outcome extends Result<unknown, SessionOperationFailure>,
+  Outcome extends Result<
+    ExtensionIdentityOperationOutcome,
+    SessionOperationFailure
+  >,
 > {
   constructor(
     private readonly request: ActivatedExtensionIdentityOperation<Outcome>,
