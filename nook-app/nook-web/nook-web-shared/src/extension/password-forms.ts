@@ -820,7 +820,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       nookTypedArgs0_22,
     );
     passwordFormCredentialInteraction.setNativeInputValue(nookTypedArgs0_22);
-    if (passwordFieldBlocksFill()) {
+    if (disclosureRevalidation.blocks()) {
       passwordFormCredentialInteraction.clearLoginCredentials(request);
       return false;
     }
