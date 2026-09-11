@@ -724,15 +724,23 @@ test('re-approves an existing local vault after reload without event-log-access-
     // fresh page for pairing instead of reusing the setup popup.
     await popupPage.close()
     const pairPopup = await context.newPage()
-    const openedConnect = context.waitForEvent('page', {
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
     await pairPopup.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
+    await expect(pairPopup.getByTestId('extension-device-setup')).toBeVisible()
+    await expect(
+      pairPopup.getByTestId('device-protection-unlock-btn'),
+    ).toBeVisible()
+    await pairPopup.getByTestId('device-protection-unlock-btn').click()
+    await expect(pairPopup.getByTestId('extension-toolbar-menu')).toBeVisible({
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
     await expect(pairPopup.getByTestId('connect-simple-vault-btn')).toBeVisible(
       { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
     )
+    const openedConnect = context.waitForEvent('page', {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
     await pairPopup.getByTestId('connect-simple-vault-btn').click()
     const connectPage = await openedConnect
     await expect(connectPage).toHaveURL((url) =>
