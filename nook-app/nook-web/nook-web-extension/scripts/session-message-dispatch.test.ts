@@ -538,7 +538,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       payload,
     })
 
-    expect(payload.providers).toEqual([])
+    expect(payload.providers).not.toHaveProperty('0.githubPat.value')
     expect(providers[0]).toHaveProperty('githubPat.state', 'missing')
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)

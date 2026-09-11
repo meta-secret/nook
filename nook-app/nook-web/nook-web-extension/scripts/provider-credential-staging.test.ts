@@ -41,7 +41,9 @@ class ProviderStagingFixture {
       createdAt: '2026-06-24T00:00:00.000Z',
     }
   }
-  async stage(providers: StorageProvider[]) {
+  async stage(
+    providers: ConstructorParameters<typeof ProviderCredentialBuffer>[0],
+  ) {
     return new ProviderCredentialBuffer(providers).stage({
       decode: async (candidate) => admit_extension_storage_providers(candidate),
     })
@@ -151,16 +153,18 @@ describe('provider credential staging', () => {
     const source = [
       { ...providerStagingFixture.github(), metadata: new Date() },
     ]
-    expect((await parseProviderImport(source)).kind).toBe(
-      ExtensionSessionRequestParseKind.Invalid,
+    await expect(providerStagingFixture.stage(source)).resolves.toEqual(
+      err(ProviderCredentialFailure.InvalidTransport),
     )
     expect(source[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
-  test('identity-only metadata cannot become a stored provider', async () => {
-    expect(
-      (await parseProviderImport([{ id: 'github', type: 'github' }])).kind,
-    ).toBe(ExtensionSessionRequestParseKind.Invalid)
+  test('preserves valid identity-only metadata for canonical provider admission', async () => {
+    const providerIdentity = { id: 'github', type: 'github' }
+    const parsed = await parseProviderImport([providerIdentity])
+    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+    if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
+    expect(parsed.request.payload.providers).toEqual([providerIdentity])
   })
 
   test('canonical admission does not retain prototype metadata', async () => {

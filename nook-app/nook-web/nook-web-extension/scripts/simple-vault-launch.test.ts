@@ -65,7 +65,7 @@ describe('Simple Vault browser launch', () => {
         autoDiscardable: true,
         frozen: false,
         lastAccessed: 0,
-        groupId: chrome.tabGroups.TAB_GROUP_ID_NONE,
+        groupId: -1,
       })
       await opening
       expect(completed).toBe(true)
