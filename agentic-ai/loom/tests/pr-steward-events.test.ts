@@ -13,6 +13,12 @@ import {
   PrStewardEventObserver,
   PrStewardInvocationCodec,
   PrStewardCredentialFile,
+  PrStewardSubscriptionGuard,
+  PrStewardSubscriptionGuardKind,
+} from '../src/pr-steward-events.ts';
+import type {
+  PrStewardSlowConsumerObservation,
+  PrStewardSubscriptionControl,
 } from '../src/pr-steward-events.ts';
 import {
   PR_STEWARD_REPOSITORY,
@@ -85,6 +91,14 @@ class UnexpectedPrReader implements PrStewardAssignedPrReader {
 
   async read(_request: PrStewardAssignedPrRequest): Promise<never> {
     throw this.#error;
+  }
+}
+
+class FixtureSubscription implements PrStewardSubscriptionControl {
+  unsubscribed = false;
+
+  unsubscribe(): void {
+    this.unsubscribed = true;
   }
 }
 
@@ -206,6 +220,43 @@ describe('PR Steward credentials and invocation codec', () => {
 });
 
 describe('exact-head routing observations', () => {
+  test('unsubscribes when the assigned subscription becomes a slow consumer', async () => {
+    const assigned = new FixtureSubscription();
+    const unrelated = new FixtureSubscription();
+    const observations =
+      (async function* (): AsyncIterable<PrStewardSlowConsumerObservation> {
+        yield { subscription: unrelated, pending: 5 };
+        yield { subscription: assigned, pending: 6 };
+      })();
+    const outcome = await new PrStewardSubscriptionGuard({
+      observations,
+      subscription: assigned,
+    }).monitor();
+    expect(outcome).toEqual({
+      kind: PrStewardSubscriptionGuardKind.Overloaded,
+      pending: 6,
+    });
+    expect(assigned.unsubscribed).toBe(true);
+    expect(unrelated.unsubscribed).toBe(false);
+  });
+
+  test('leaves the subscription active when the status stream closes normally', async () => {
+    const subscription = new FixtureSubscription();
+    const closed: readonly PrStewardSlowConsumerObservation[] = [];
+    const observations =
+      (async function* (): AsyncIterable<PrStewardSlowConsumerObservation> {
+        for (const observation of closed) yield observation;
+      })();
+    const outcome = await new PrStewardSubscriptionGuard({
+      observations,
+      subscription,
+    }).monitor();
+    expect(outcome).toEqual({
+      kind: PrStewardSubscriptionGuardKind.Closed,
+    });
+    expect(subscription.unsubscribed).toBe(false);
+  });
+
   test.each([
     {
       event: 'pull_request',

@@ -10,7 +10,7 @@ import { homedir } from 'node:os';
 
 import { isAbsolute, join } from 'node:path';
 
-import { wsconnect } from '@nats-io/nats-core';
+import { wsconnect, type Status } from '@nats-io/nats-core';
 
 import {
   UntrustedYamlPropertyPresence,
@@ -198,6 +198,68 @@ export class PrStewardCredentialFile {
 export const PR_STEWARD_ENDPOINT = 'wss://events.dev.nokey.sh';
 
 export const PR_STEWARD_SUBJECT = 'default.github-webhook.pr-lifecycle';
+
+export const PR_STEWARD_PENDING_MESSAGE_LIMIT = 4;
+
+export interface PrStewardSubscriptionControl {
+  unsubscribe(): void;
+}
+
+export type PrStewardSlowConsumerObservation = {
+  readonly subscription: PrStewardSubscriptionControl;
+  readonly pending: number;
+};
+
+export enum PrStewardSubscriptionGuardKind {
+  Closed = 'closed',
+  Overloaded = 'overloaded',
+}
+
+export type PrStewardSubscriptionGuardOutcome =
+  | { readonly kind: PrStewardSubscriptionGuardKind.Closed }
+  | {
+      readonly kind: PrStewardSubscriptionGuardKind.Overloaded;
+      readonly pending: number;
+    };
+
+type PrStewardNatsStatusRequest = {
+  readonly statuses: AsyncIterable<Status>;
+};
+
+class PrStewardNatsSlowConsumerAdapter {
+  static async *read(
+    request: PrStewardNatsStatusRequest,
+  ): AsyncIterable<PrStewardSlowConsumerObservation> {
+    for await (const status of request.statuses)
+      if (status.type === 'slowConsumer')
+        yield { subscription: status.sub, pending: status.pending };
+  }
+}
+
+type PrStewardSubscriptionGuardRequest = {
+  readonly observations: AsyncIterable<PrStewardSlowConsumerObservation>;
+  readonly subscription: PrStewardSubscriptionControl;
+};
+
+export class PrStewardSubscriptionGuard {
+  readonly #request: PrStewardSubscriptionGuardRequest;
+
+  constructor(request: PrStewardSubscriptionGuardRequest) {
+    this.#request = request;
+  }
+
+  async monitor(): Promise<PrStewardSubscriptionGuardOutcome> {
+    for await (const observation of this.#request.observations) {
+      if (observation.subscription !== this.#request.subscription) continue;
+      this.#request.subscription.unsubscribe();
+      return {
+        kind: PrStewardSubscriptionGuardKind.Overloaded,
+        pending: observation.pending,
+      };
+    }
+    return { kind: PrStewardSubscriptionGuardKind.Closed };
+  }
+}
 
 export type PrStewardCredential = {
   readonly username: 'pr-steward';
@@ -858,7 +920,14 @@ export class PrStewardEventCli {
       name: `pr-steward-${process.pid}`,
       ignoreClusterUpdates: true,
     });
-    const subscription = connection.subscribe(PR_STEWARD_SUBJECT);
+    const statuses = connection.status();
+    const subscription = connection.subscribe(PR_STEWARD_SUBJECT, {
+      slow: PR_STEWARD_PENDING_MESSAGE_LIMIT,
+    });
+    const subscriptionGuard = new PrStewardSubscriptionGuard({
+      observations: PrStewardNatsSlowConsumerAdapter.read({ statuses }),
+      subscription,
+    }).monitor();
     let stopping = false;
     const stop = (): void => {
       if (stopping) return;
@@ -879,6 +948,11 @@ export class PrStewardEventCli {
           process.stdout.write(line);
         },
       });
+      const guardOutcome = await subscriptionGuard;
+      if (guardOutcome.kind === PrStewardSubscriptionGuardKind.Overloaded)
+        throw new Error(
+          `NATS subscription exceeded the ${PR_STEWARD_PENDING_MESSAGE_LIMIT}-message pending limit`,
+        );
       const closeError = await connection.closed();
       if (closeError) throw new Error('NATS connection closed unexpectedly');
     } finally {
