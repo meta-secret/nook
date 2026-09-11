@@ -621,11 +621,12 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     })
 
-    const response = dispatcher.enqueue(
-      vaultImportRequest(payload.providers, payload.queue),
-    )
+    const request = vaultImportRequest(payload.providers, payload.queue)
+    const response = dispatcher.enqueue(request)
 
-    expect(payload.providers).toEqual([])
+    expect(request.payload.providers).toEqual([])
+    expect(payload.providers).toHaveLength(1)
+    expect(payload.providers).not.toHaveProperty('0.githubPat.value')
     expect(providers[0]?.githubPat.state).toBe('missing')
     await expect(response).resolves.toEqual(ok({ ok: true }))
     expect(handledGithubPat).toBe('github_pat_accepted_secret')

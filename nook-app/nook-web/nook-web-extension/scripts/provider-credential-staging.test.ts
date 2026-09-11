@@ -153,9 +153,18 @@ describe('provider credential staging', () => {
     const source = [
       { ...providerStagingFixture.github(), metadata: new Date() },
     ]
-    await expect(providerStagingFixture.stage(source)).resolves.toEqual(
-      err(ProviderCredentialFailure.InvalidTransport),
-    )
+    const credentialBuffer = new ProviderCredentialBuffer(source)
+    try {
+      await expect(
+        credentialBuffer.stage({
+          decode: async (candidate) =>
+            admit_extension_storage_providers(candidate),
+        }),
+      ).resolves.toEqual(err(ProviderCredentialFailure.InvalidTransport))
+      expect(source[0]?.githubPat.state).toBe('token')
+    } finally {
+      credentialBuffer.clear()
+    }
     expect(source[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
