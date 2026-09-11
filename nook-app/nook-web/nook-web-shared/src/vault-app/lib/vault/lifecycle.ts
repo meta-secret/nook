@@ -71,6 +71,9 @@ enum VaultInitializationCheckpoint {
   ProtectionModeCompleted = "app init checkpoint: protection mode completed",
   PristineProvidersStarted = "app init checkpoint: pristine providers started",
   PristineProvidersCompleted = "app init checkpoint: pristine providers completed",
+  IdentityAuthorizationRejected = "app init diagnostic: device identity authorization rejected",
+  InitializationException = "app init diagnostic: initialization exception",
+  InitializationSettled = "app init checkpoint: initialization settled",
 }
 
 type DeviceIdentityInitialization = {
@@ -290,6 +293,7 @@ export class VaultInitializationActions {
       }
       state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
     } catch (error) {
+      log.warn(VaultInitializationCheckpoint.InitializationException);
       if (
         state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
         deviceIdentityUnlocked
@@ -310,6 +314,7 @@ export class VaultInitializationActions {
     } finally {
       state.deviceAuthorizationInProgress = false;
       state.isInitializing = false;
+      log.info(VaultInitializationCheckpoint.InitializationSettled);
     }
   }
 
@@ -333,6 +338,7 @@ export class VaultInitializationActions {
         !state.deviceAuthorizationInProgress &&
         mode !== DeviceIdentityInitializationMode.AllowPendingAuthorization)
     ) {
+      log.warn(VaultInitializationCheckpoint.IdentityAuthorizationRejected);
       return storageErr(
         new StorageOperationFailure(
           StorageOperationFailureKind.DeviceAuthorizationRequired,

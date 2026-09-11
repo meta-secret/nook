@@ -5,6 +5,7 @@
     VaultStorageFailureKind,
   } from "$lib/runtime/storage-failure";
   import type { LoginCreateVaultChooserProps } from "./login-create-vault-chooser-contract";
+  import { browserLogRuntime } from "$lib/runtime/log";
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { tick } from "svelte";
@@ -43,6 +44,8 @@
     VaultApplication,
     sentinel_genesis_participant_fingerprint,
   } from "$app-wasm";
+
+  const log = browserLogRuntime.createLogger("login-create-vault");
 
   let {
     vault,
@@ -279,8 +282,10 @@
       return;
     initiatorKeyLoading = true;
     try {
+      log.info("login create diagnostic: initiator key preparation started");
       const payload = await onCreateSentinelGenesisPublicKeyAnnouncement();
       if (payload.isErr()) {
+        log.warn("login create diagnostic: initiator key preparation rejected");
         initiatorPasskeyRequested =
           payload.error.kind ===
           VaultStorageFailureKind.DeviceAuthorizationRequired;
