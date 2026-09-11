@@ -6,6 +6,7 @@ use std::{fmt, mem};
 
 use crate::errors;
 use serde::{Deserialize, Deserializer, de::Error as _};
+use zeroize::Zeroizing;
 
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -61,7 +62,49 @@ impl serde::Serialize for StoredVaultYaml {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SecretPayloadYaml(String);
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct SecretPayloadValidationRequest<'a> {
+    pub secret_type: crate::SecretType,
+    pub raw: &'a str,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ValidatedSecretPayloadYaml<'a> {
+    raw: &'a str,
+    secret_type: crate::SecretType,
+}
+
+impl<'a> ValidatedSecretPayloadYaml<'a> {
+    #[must_use]
+    pub const fn as_str(self) -> &'a str {
+        self.raw
+    }
+
+    #[must_use]
+    pub const fn secret_type(self) -> crate::SecretType {
+        self.secret_type
+    }
+}
+
 impl SecretPayloadYaml {
+    pub fn validate(
+        request: SecretPayloadValidationRequest<'_>,
+    ) -> errors::SecretPayloadResult<ValidatedSecretPayloadYaml<'_>> {
+        if request.raw.is_empty() {
+            return Err(errors::SecretPayloadError::Validation(
+                errors::ValidationError::SecretDataRequired,
+            ));
+        }
+        let _plaintext = Zeroizing::new(SecretValue::from_yaml_str(
+            request.secret_type,
+            request.raw,
+        )?);
+        Ok(ValidatedSecretPayloadYaml {
+            raw: request.raw,
+            secret_type: request.secret_type,
+        })
+    }
+
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -144,9 +187,9 @@ impl StoredVaultYaml {
 }
 
 impl SecretPayloadYaml {
-    pub fn parse(secret_type: crate::SecretType, raw: &str) -> errors::SecretPayloadResult<Self> {
-        SecretValue::from_yaml_str(secret_type, raw)?;
-        Ok(Self::from_trusted(raw.to_owned()))
+    pub fn parse(request: SecretPayloadValidationRequest<'_>) -> errors::SecretPayloadResult<Self> {
+        Self::validate(request)?;
+        Ok(Self::from_trusted(request.raw.to_owned()))
     }
 }
 

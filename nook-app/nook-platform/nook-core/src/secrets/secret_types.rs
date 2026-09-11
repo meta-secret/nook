@@ -7,12 +7,13 @@
 use crate::AuthenticatorSecret;
 use crate::CreditCardSecret;
 use crate::SecretId;
-use crate::bip39;
+use crate::bip39::{Bip39Mnemonic, Bip39MnemonicInput};
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser::SerializeStruct};
 use std::fmt;
+use std::mem;
 use zeroize::Zeroize;
 
 mod file_attachment;
@@ -38,11 +39,68 @@ pub struct ApiKeySecret {
     pub expires_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SeedPhraseSecret {
+pub struct SeedPhraseSecretRequest {
     pub name: String,
     pub seed: String,
+}
+
+impl Drop for SeedPhraseSecretRequest {
+    fn drop(&mut self) {
+        self.seed.zeroize();
+    }
+}
+
+#[derive(PartialEq, Eq)]
+pub struct SeedPhraseSecret {
+    pub name: String,
+    validated: Bip39Mnemonic,
+}
+
+impl fmt::Debug for SeedPhraseSecret {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SeedPhraseSecret")
+            .field("name", &self.name)
+            .field("validated", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl SeedPhraseSecret {
+    pub fn try_new(mut request: SeedPhraseSecretRequest) -> SecretPayloadResult<Self> {
+        let validated = Bip39MnemonicInput::new(&request.seed).validate()?;
+        let name = mem::take(&mut request.name);
+        Ok(Self { name, validated })
+    }
+
+    #[must_use]
+    pub fn seed(&self) -> &str {
+        self.validated.as_str()
+    }
+}
+
+impl Serialize for SeedPhraseSecret {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("SeedPhraseSecret", 2)?;
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("seed", self.seed())?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for SeedPhraseSecret {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let request = SeedPhraseSecretRequest::deserialize(deserializer)?;
+        Self::try_new(request).map_err(de::Error::custom)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -398,7 +456,7 @@ fn validate_rp_id(rp_id: &str) -> SecretPayloadResult<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum SecretValue {
     Login(LoginSecret),
@@ -428,10 +486,9 @@ impl SecretValue {
                 .map(Self::ApiKey)
                 .map_err(SecretPayloadError::InvalidApiKey),
             SecretType::SeedPhrase => {
-                let secret: SeedPhraseSecret =
+                let request: SeedPhraseSecretRequest =
                     serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidSeedPhrase)?;
-                bip39::validate_bip39_mnemonic(&secret.seed)?;
-                Ok(Self::SeedPhrase(secret))
+                Ok(Self::SeedPhrase(SeedPhraseSecret::try_new(request)?))
             }
             SecretType::SecureNote => serde_yaml::from_str(yaml)
                 .map(Self::SecureNote)
@@ -499,6 +556,12 @@ impl SecretValue {
     }
 
     pub fn zeroize_plaintext(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl Zeroize for SecretValue {
+    fn zeroize(&mut self) {
         match self {
             Self::Login(value) => {
                 value.website_url.zeroize();
@@ -513,7 +576,7 @@ impl SecretValue {
             }
             Self::SeedPhrase(value) => {
                 value.name.zeroize();
-                value.seed.zeroize();
+                value.validated.zeroize();
             }
             Self::SecureNote(value) => {
                 value.title.zeroize();
@@ -528,7 +591,7 @@ impl SecretValue {
 }
 
 /// Typed plaintext secret (in memory only).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SecretRecord {
     pub id: SecretId,
     #[serde(rename = "type")]
@@ -545,6 +608,44 @@ impl SecretRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ValidationError;
+
+    const VALID_SEED_PHRASE: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+    #[test]
+    fn seed_phrase_payload_round_trips_as_validated_yaml() -> anyhow::Result<()> {
+        let value = SecretValue::SeedPhrase(SeedPhraseSecret::try_new(SeedPhraseSecretRequest {
+            name: "Recovery".to_owned(),
+            seed: VALID_SEED_PHRASE.to_owned(),
+        })?);
+        let yaml = value.to_yaml()?;
+        let decoded = SecretValue::from_yaml(SecretType::SeedPhrase, &yaml)?;
+
+        assert_eq!(decoded, value);
+        assert!(yaml.as_str().contains("name: Recovery"));
+        assert!(yaml.as_str().contains(VALID_SEED_PHRASE));
+        Ok(())
+    }
+
+    #[test]
+    fn seed_phrase_payload_rejects_malformed_yaml_and_invalid_mnemonics() {
+        let malformed = SecretValue::from_yaml_str(SecretType::SeedPhrase, "seed: [");
+        assert!(matches!(
+            malformed,
+            Err(SecretPayloadError::InvalidSeedPhrase(_))
+        ));
+
+        let invalid = SecretValue::from_yaml_str(
+            SecretType::SeedPhrase,
+            "name: Recovery\nseed: abandon abandon\n",
+        );
+        assert!(matches!(
+            invalid,
+            Err(SecretPayloadError::Validation(
+                ValidationError::Bip39Invalid
+            ))
+        ));
+    }
 
     #[test]
     fn passkey_version_preserves_scalars_and_rejects_unsupported_values() -> anyhow::Result<()> {

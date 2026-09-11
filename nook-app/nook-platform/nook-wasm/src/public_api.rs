@@ -127,7 +127,7 @@ pub fn default_password_generation_options() -> nook_core::PasswordGenerationOpt
 pub fn generate_password(
     options: nook_core::PasswordGenerationOptions,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::generate_password(options)?)
+    Ok(options.generate()?)
 }
 
 /// Generate an RFC 6238 TOTP code from a base32 secret via `nook-core`.

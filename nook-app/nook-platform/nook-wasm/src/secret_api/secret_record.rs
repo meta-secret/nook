@@ -116,7 +116,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn seed(&self) -> String {
         match &self.record.data {
-            SecretValue::SeedPhrase(value) => value.seed.clone(),
+            SecretValue::SeedPhrase(value) => value.seed().to_owned(),
             _ => String::new(),
         }
     }
@@ -392,10 +392,14 @@ mod browser_tests {
     fn seed_note_card_and_attachment_projections_expose_typed_fields() {
         let seed = record(
             SecretType::SeedPhrase,
-            SecretValue::SeedPhrase(SeedPhraseSecret {
-                name: "Recovery".into(),
-                seed: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".into(),
-            }),
+            SecretValue::SeedPhrase(
+                SeedPhraseSecret::try_new(nook_core::SeedPhraseSecretRequest {
+                    name: "Recovery".into(),
+                    seed: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+                        .into(),
+                })
+                .expect("valid seed phrase"),
+            ),
         );
         assert_eq!(seed.name(), "Recovery");
         assert!(seed.seed().starts_with("abandon"));

@@ -7,10 +7,10 @@ use std::io;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
-    PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId, SecretType,
-    SecretValue, StorageMode, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat,
-    VaultFormatDocument, VaultMetaState, VaultRecordSet, filter_secrets, generate_password,
-    validate_secret_data,
+    PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId,
+    SecretPayloadValidationRequest, SecretPayloadYaml, SecretRecordSearch, SecretType, SecretValue,
+    StorageMode, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultFormatDocument,
+    VaultMetaState, VaultRecordSet,
 };
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -150,7 +150,10 @@ fn incremental_add_secret_matches_full_reencrypt() -> anyhow::Result<()> {
     let mut armored = armored_cache_from_db(&db, &crypto)?;
 
     let label = SecretId::parse("  secret_SMypl8K0w9Y  ")?;
-    validate_secret_data("generated-secret")?;
+    SecretPayloadYaml::validate(SecretPayloadValidationRequest {
+        secret_type: SecretType::ApiKey,
+        raw: &api_key_yaml("generated-secret")?,
+    })?;
     armored.insert(
         label.clone(),
         encrypted_api_key(&crypto, "generated-secret")?,
@@ -358,13 +361,14 @@ fn incremental_update_secret_replaces_armored_entry() -> anyhow::Result<()> {
 #[test]
 fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
-    let password = generate_password(PasswordGenerationOptions {
+    let password = PasswordGenerationOptions {
         length: 20.into(),
         lowercase: true,
         uppercase: true,
         numbers: true,
         symbols: true,
-    })?;
+    }
+    .generate()?;
 
     let mut armored = HashMap::new();
     armored.insert(sid("generated"), encrypted_api_key(&crypto, &password)?);
@@ -400,12 +404,39 @@ fn filter_secrets_on_loaded_vault() -> anyhow::Result<()> {
     let records = db.list();
 
     assert_eq!(
-        filter_secrets(&records, sid("github.com").as_str()).len(),
+        SecretRecordSearch {
+            records: &records,
+            query: sid("github.com").as_str(),
+        }
+        .filter()
+        .len(),
         1
     );
-    assert_eq!(filter_secrets(&records, sid("work-vpn").as_str()).len(), 1);
-    assert!(filter_secrets(&records, "missing").is_empty());
-    assert_eq!(filter_secrets(&records, ""), records);
+    assert_eq!(
+        SecretRecordSearch {
+            records: &records,
+            query: sid("work-vpn").as_str(),
+        }
+        .filter()
+        .len(),
+        1
+    );
+    assert!(
+        SecretRecordSearch {
+            records: &records,
+            query: "missing",
+        }
+        .filter()
+        .is_empty()
+    );
+    assert_eq!(
+        SecretRecordSearch {
+            records: &records,
+            query: "",
+        }
+        .filter(),
+        records
+    );
     Ok(())
 }
 

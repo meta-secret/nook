@@ -160,7 +160,7 @@ impl CanonicalSecretBytes {
             SecretValue::SeedPhrase(seed_phrase) => {
                 let seed = Zeroizing::new(
                     seed_phrase
-                        .seed
+                        .seed()
                         .split_whitespace()
                         .collect::<Vec<_>>()
                         .join(" "),
@@ -329,29 +329,30 @@ mod tests {
             CanonicalSecretBytes::version(&value).0,
             b"7:api-key\x007:Example\x005: key \x00"
         );
-        let mut changed = value.clone();
+        let original = CanonicalSecretBytes::version(&value).0;
+        let mut changed = value;
         if let SecretValue::ApiKey(key) = &mut changed {
             key.expires_at = "later".to_owned();
         }
-        assert_eq!(
-            CanonicalSecretBytes::version(&value).0,
-            CanonicalSecretBytes::version(&changed).0
-        );
+        assert_eq!(original, CanonicalSecretBytes::version(&changed).0);
     }
 
     #[test]
     fn seed_phrase_whitespace_is_collapsed_only_in_the_version_field() {
-        let value = SecretValue::SeedPhrase(SeedPhraseSecret {
-            name: " Recovery\r\n ".to_owned(),
-            seed: " alpha\t beta\n gamma ".to_owned(),
-        });
+        let value = SecretValue::SeedPhrase(
+            SeedPhraseSecret::try_new(crate::SeedPhraseSecretRequest {
+                name: " Recovery\r\n ".to_owned(),
+                seed: " abandon\t abandon\n abandon abandon abandon abandon abandon abandon abandon abandon abandon about ".to_owned(),
+            })
+            .unwrap_or_else(|error| panic!("valid seed phrase fixture: {error}")),
+        );
         assert_eq!(
             CanonicalSecretBytes::identity(&value).0,
             b"11:seed-phrase\x008:Recovery\x00"
         );
         assert_eq!(
             CanonicalSecretBytes::version(&value).0,
-            b"11:seed-phrase\x008:Recovery\x0016:alpha beta gamma\x00"
+            b"11:seed-phrase\x008:Recovery\x0093:abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\x00"
         );
     }
 
@@ -412,12 +413,11 @@ mod tests {
     #[test]
     fn discarding_prepared_bytes_preserves_source_and_key() -> anyhow::Result<()> {
         let fixture = LoginFingerprintFixture::new()?;
-        let original = fixture.value.clone();
         {
             let prepared = fixture.request().prepare(FingerprintKind::Version);
             assert!(ptr::eq(prepared.secrets_key, &raw const fixture.key));
         }
-        assert_eq!(fixture.value, original);
+        assert!(matches!(fixture.value, SecretValue::Login(_)));
         assert_eq!(fixture.key.as_str(), "a".repeat(64));
         assert_eq!(
             fixture.value.fingerprint(&fixture.key)?.as_str(),

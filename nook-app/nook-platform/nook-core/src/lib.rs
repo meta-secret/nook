@@ -63,10 +63,9 @@ pub use authenticator_issuer_hosts::{
     AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
 };
 pub use bip39::{
-    Bip39MnemonicWordCount, Bip39WordSequenceExpectedCount, Bip39WordSuggestionLimit,
-    bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
-    is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
-    validate_bip39_mnemonic,
+    Bip39EnglishWordList, Bip39Mnemonic, Bip39MnemonicInput, Bip39MnemonicWordCount, Bip39Word,
+    Bip39WordJoinRequest, Bip39WordSequenceExpectedCount, Bip39WordSequenceRequest,
+    Bip39WordSequenceValidation, Bip39WordSuggestionLimit, Bip39WordSuggestionRequest, Bip39Words,
 };
 pub use bitwarden_import::{BitwardenExport, BitwardenImportError, BitwardenImportPlan};
 pub use chrome_passwords_import::{
@@ -180,15 +179,15 @@ pub use secret_types::{
     ApiKeySecret, FILE_ATTACHMENT_MAX_BYTES, FileAttachmentByteCount, FileAttachmentSecret,
     LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
     PasskeyPublicKeyCose, PasskeySecret, PasskeySecretVersion, PasskeySignatureCount, SecretRecord,
-    SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload,
-    StoredSecretRecord,
+    SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret, SeedPhraseSecretRequest,
+    StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,
     AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm, LoginHostMatchRequest,
     LoginSecretForm, LoginSiteHostsError, SecretFormFields, SecretGroupKey, SecretListItem,
     SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount,
-    WebsiteHost, build_secret_yaml, build_secret_yaml_from_form,
+    WebsiteHost,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
@@ -262,16 +261,15 @@ pub use nook_event_log::{
     concurrent_epoch_rotations_conflict, operation_starts_epoch, parse_event_storage_bytes,
     parse_remote_event_storage_bytes, serialize_event_storage_yaml,
 };
-pub use password::{
-    MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,
-};
+pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions};
 pub use password_envelope::{
     PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEntryIssuance, PasswordEntryResolution,
     PasswordEnvelope, PasswordEnvelopeAttachment, PasswordEnvelopeResolution,
     PasswordEnvelopeRewrap, PasswordEnvelopeVersion, PasswordPolicy, PasswordUnlockEntry,
     VaultUnlock,
 };
-pub use secrets::{filter_secrets, validate_secret_data};
+pub use secrets::SecretRecordSearch;
+pub use secrets::secret_fingerprint::SecretEnrichment;
 pub use session::{
     EncryptedSecretSession, PlaintextSecretSession, PreparedEncryptedSecretReplacement,
     ReplaceSecretInput, VerifiedAuthenticatorReplacementInput,
@@ -384,8 +382,8 @@ pub use vault_sync_store::{
 pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
-    SecretPayloadYaml, Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultYaml, SymmetricKey,
-    Url64EncodedString,
+    SecretPayloadValidationRequest, SecretPayloadYaml, Sha256Hex, SigningSeedHex, StoredVaultBlob,
+    StoredVaultYaml, SymmetricKey, Url64EncodedString, ValidatedSecretPayloadYaml,
 };
 
 #[cfg(test)]

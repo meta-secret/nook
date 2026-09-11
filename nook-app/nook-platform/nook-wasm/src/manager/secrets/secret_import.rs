@@ -74,10 +74,8 @@ impl<'a> CoalescedSecretImport<'a> {
         for mut value in items {
             let fingerprint = value.fingerprint(secrets_key)?;
             if let Some(index) = indexes.get(&fingerprint).copied() {
-                let enriched = coalesced[index].enriched_with(&value);
-                coalesced[index].zeroize_plaintext();
+                let _enrichment = coalesced[index].enrich_with(&value);
                 value.zeroize_plaintext();
-                coalesced[index] = enriched;
                 duplicates += 1;
             } else {
                 indexes.insert(fingerprint, coalesced.len());
@@ -116,11 +114,9 @@ impl<'a> CoalescedSecretImport<'a> {
             let mut plaintext = crypto.decrypt_value(&ciphertext)?;
             let mut existing = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
             plaintext.zeroize_plaintext();
-            let mut enriched = existing.enriched_with(&value);
-            let outcome = if enriched == existing {
-                ImportItemOutcome::Duplicate
-            } else {
-                let mut yaml = enriched.to_yaml()?;
+            let enrichment = existing.enrich_with(&value);
+            let outcome = if matches!(enrichment, nook_core::SecretEnrichment::Changed) {
+                let mut yaml = existing.to_yaml()?;
                 let ciphertext = crypto.encrypt_value(yaml.as_str())?;
                 yaml.zeroize_plaintext();
                 let new_id = nook_core::SecretId::generate()?;
@@ -134,9 +130,10 @@ impl<'a> CoalescedSecretImport<'a> {
                         fingerprint,
                     ),
                 })
+            } else {
+                ImportItemOutcome::Duplicate
             };
             existing.zeroize_plaintext();
-            enriched.zeroize_plaintext();
             value.zeroize_plaintext();
             return Ok(outcome);
         }

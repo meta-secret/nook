@@ -20,7 +20,7 @@ impl SecretRecord {
             },
             SecretValue::SeedPhrase(value) => SecretListItemData::SeedPhrase {
                 name: value.name.clone(),
-                word_count: value.seed.split_whitespace().count().into(),
+                word_count: value.seed().split_whitespace().count().into(),
             },
             SecretValue::SecureNote(value) => SecretListItemData::SecureNote {
                 title: value.title.clone(),
@@ -79,7 +79,7 @@ impl SecretRecord {
         match &self.data {
             SecretValue::Login(value) => value.password.as_str(),
             SecretValue::ApiKey(value) => value.key.as_str(),
-            SecretValue::SeedPhrase(value) => value.seed.as_str(),
+            SecretValue::SeedPhrase(value) => value.seed(),
             SecretValue::SecureNote(value) => value.note.as_str(),
             SecretValue::Passkey(_) | SecretValue::FileAttachment(_) => "",
             SecretValue::Authenticator(value) => value.secret.as_str(),
@@ -235,10 +235,14 @@ mod tests {
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_seed"),
             secret_type: SecretType::SeedPhrase,
-            data: SecretValue::SeedPhrase(crate::SeedPhraseSecret {
-                name: "wallet".to_owned(),
-                seed: "abandon ability able about above absent absorb abstract absurd abuse access accident".to_owned(),
-            }),
+            data: SecretValue::SeedPhrase(
+                crate::SeedPhraseSecret::try_new(crate::SeedPhraseSecretRequest {
+                    name: "wallet".to_owned(),
+                    seed: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+                        .to_owned(),
+                })
+                .unwrap_or_else(|error| panic!("valid seed phrase fixture: {error}")),
+            ),
         };
         let item = record.list_item();
         assert_eq!(

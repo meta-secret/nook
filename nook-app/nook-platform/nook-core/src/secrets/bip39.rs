@@ -1,7 +1,14 @@
 //! BIP-39 mnemonic validation (word membership + checksum).
 
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+
 use crate::errors::{ValidationError, ValidationResult};
 use bip39::{Language, Mnemonic};
+use zeroize::{Zeroize, Zeroizing};
 
 /// A supported BIP-39 mnemonic word count inferred from normalized input.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,6 +41,7 @@ impl From<Bip39WordSuggestionLimit> for usize {
     }
 }
 
+/// Expected BIP-39 word count for membership validation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bip39WordSequenceExpectedCount(usize);
 
@@ -49,82 +57,199 @@ impl From<Bip39WordSequenceExpectedCount> for usize {
     }
 }
 
-/// Validates a normalized English BIP-39 mnemonic (12 or 24 words).
-pub fn validate_bip39_mnemonic(mnemonic: &str) -> ValidationResult<()> {
-    let normalized = mnemonic.trim();
-    if normalized.is_empty() {
-        return Err(ValidationError::Bip39Empty);
+/// An unchecked BIP-39 mnemonic request owned by its input text.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Bip39MnemonicInput<'a> {
+    text: &'a str,
+}
+
+impl<'a> Bip39MnemonicInput<'a> {
+    #[must_use]
+    pub const fn new(text: &'a str) -> Self {
+        Self { text }
     }
 
-    Mnemonic::parse_in_normalized(Language::English, normalized)
-        .map(|_| ())
-        .map_err(|_| ValidationError::Bip39Invalid)
-}
+    /// Validates an English BIP-39 mnemonic and returns the validated value.
+    pub fn validate(self) -> ValidationResult<Bip39Mnemonic> {
+        let normalized = self.text.trim();
+        if normalized.is_empty() {
+            return Err(ValidationError::Bip39Empty);
+        }
 
-#[must_use]
-pub fn bip39_english_wordlist() -> Vec<&'static str> {
-    Language::English.word_list().to_vec()
-}
-
-#[must_use]
-pub fn is_known_bip39_word(word: &str) -> bool {
-    let normalized = word.trim().to_lowercase();
-    if normalized.is_empty() {
-        return false;
+        Mnemonic::parse_in_normalized(Language::English, normalized)
+            .map(|_| Bip39Mnemonic {
+                text: Zeroizing::new(normalized.to_owned().into_boxed_str()),
+            })
+            .map_err(|_| ValidationError::Bip39Invalid)
     }
-    Language::English.find_word(&normalized).is_some()
-}
 
-#[must_use]
-pub fn suggest_bip39_words(prefix: &str, limit: Bip39WordSuggestionLimit) -> Vec<&'static str> {
-    let limit = usize::from(limit);
-    let needle = prefix.trim().to_lowercase();
-    if needle.is_empty() || limit == 0 {
-        return Vec::new();
+    #[must_use]
+    pub fn parse_words(self) -> Vec<String> {
+        Self::parse_words_from(self.text)
     }
-    Language::English
-        .words_by_prefix(&needle)
-        .iter()
-        .copied()
-        .take(limit)
-        .collect()
+
+    #[must_use]
+    pub fn infer_length(self) -> Option<Bip39MnemonicWordCount> {
+        match self.parse_words().len() {
+            12 => Some(Bip39MnemonicWordCount::WORDS_12),
+            24 => Some(Bip39MnemonicWordCount::WORDS_24),
+            _ => None,
+        }
+    }
+
+    fn parse_words_from(text: &str) -> Vec<String> {
+        text.split_whitespace()
+            .map(str::trim)
+            .filter(|word| !word.is_empty())
+            .map(str::to_lowercase)
+            .collect()
+    }
 }
 
-#[must_use]
-pub fn is_bip39_word_sequence_valid(
-    text: &str,
-    expected_word_count: Bip39WordSequenceExpectedCount,
-) -> bool {
-    let words = parse_bip39_words(text);
-    words.len() == usize::from(expected_word_count)
-        && words.iter().all(|word| is_known_bip39_word(word))
+/// A validated English BIP-39 mnemonic.
+#[derive(PartialEq, Eq)]
+pub struct Bip39Mnemonic {
+    text: Zeroizing<Box<str>>,
 }
 
-#[must_use]
-pub fn parse_bip39_words(text: &str) -> Vec<String> {
-    text.split_whitespace()
-        .map(str::trim)
-        .filter(|word| !word.is_empty())
-        .map(str::to_lowercase)
-        .collect()
+impl Bip39Mnemonic {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        self.text.as_ref()
+    }
+
+    #[must_use]
+    pub fn infer_length(&self) -> Option<Bip39MnemonicWordCount> {
+        match self.text.split_whitespace().count() {
+            12 => Some(Bip39MnemonicWordCount::WORDS_12),
+            24 => Some(Bip39MnemonicWordCount::WORDS_24),
+            _ => None,
+        }
+    }
 }
 
-#[must_use]
-pub fn join_bip39_words(words: &[String]) -> String {
-    words
-        .iter()
-        .map(|word| word.trim().to_lowercase())
-        .filter(|word| !word.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+impl Zeroize for Bip39Mnemonic {
+    fn zeroize(&mut self) {
+        self.text.zeroize();
+    }
 }
 
-#[must_use]
-pub fn infer_bip39_mnemonic_length(text: &str) -> Option<Bip39MnemonicWordCount> {
-    match parse_bip39_words(text).len() {
-        12 => Some(Bip39MnemonicWordCount::WORDS_12),
-        24 => Some(Bip39MnemonicWordCount::WORDS_24),
-        _ => None,
+/// The bundled English BIP-39 word list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Bip39EnglishWordList(Vec<&'static str>);
+
+impl Bip39EnglishWordList {
+    #[must_use]
+    pub fn english() -> Self {
+        Self(Language::English.word_list().to_vec())
+    }
+
+    #[must_use]
+    pub fn into_words(self) -> Vec<&'static str> {
+        self.0
+    }
+}
+
+/// A word queried against the bundled English BIP-39 list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bip39Word<'a> {
+    value: &'a str,
+}
+
+impl<'a> Bip39Word<'a> {
+    #[must_use]
+    pub const fn new(value: &'a str) -> Self {
+        Self { value }
+    }
+
+    #[must_use]
+    pub fn is_known(self) -> bool {
+        let normalized = self.value.trim().to_lowercase();
+        !normalized.is_empty() && Language::English.find_word(&normalized).is_some()
+    }
+}
+
+/// Input for bounded BIP-39 word suggestions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bip39WordSuggestionRequest<'a> {
+    pub prefix: &'a str,
+    pub limit: Bip39WordSuggestionLimit,
+}
+
+impl Bip39WordSuggestionRequest<'_> {
+    #[must_use]
+    pub fn suggest(self) -> Vec<&'static str> {
+        let limit = usize::from(self.limit);
+        let needle = self.prefix.trim().to_lowercase();
+        if needle.is_empty() || limit == 0 {
+            return Vec::new();
+        }
+        Language::English
+            .words_by_prefix(&needle)
+            .iter()
+            .copied()
+            .take(limit)
+            .collect()
+    }
+}
+
+/// Input for BIP-39 word-sequence membership validation.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Bip39WordSequenceRequest<'a> {
+    pub text: &'a str,
+    pub expected_word_count: Bip39WordSequenceExpectedCount,
+}
+
+impl Bip39WordSequenceRequest<'_> {
+    #[must_use]
+    pub fn validate(self) -> Bip39WordSequenceValidation {
+        let words = Bip39MnemonicInput::new(self.text).parse_words();
+        if words.len() != usize::from(self.expected_word_count) {
+            return Bip39WordSequenceValidation::WrongWordCount;
+        }
+        if words.iter().any(|word| !Bip39Word::new(word).is_known()) {
+            return Bip39WordSequenceValidation::UnknownWord;
+        }
+        Bip39WordSequenceValidation::Valid(Bip39Words { words })
+    }
+}
+
+/// Typed result of BIP-39 word-sequence membership validation.
+#[derive(PartialEq, Eq)]
+pub enum Bip39WordSequenceValidation {
+    Valid(Bip39Words),
+    WrongWordCount,
+    UnknownWord,
+}
+
+/// A validated sequence of normalized BIP-39 words.
+#[derive(PartialEq, Eq)]
+pub struct Bip39Words {
+    words: Vec<String>,
+}
+
+impl Bip39Words {
+    #[must_use]
+    pub fn join(self) -> String {
+        self.words.join(" ")
+    }
+}
+
+/// Untrusted words to normalize and join for mnemonic input presentation.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Bip39WordJoinRequest<'a> {
+    pub words: &'a [String],
+}
+
+impl Bip39WordJoinRequest<'_> {
+    #[must_use]
+    pub fn join(self) -> String {
+        self.words
+            .iter()
+            .map(|word| word.trim().to_lowercase())
+            .filter(|word| !word.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -139,38 +264,44 @@ mod tests {
 
     #[test]
     fn accepts_standard_bip39_test_vectors() -> anyhow::Result<()> {
-        assert!(validate_bip39_mnemonic(VALID_12).is_ok());
+        assert!(Bip39MnemonicInput::new(VALID_12).validate().is_ok());
         let mnemonic_24 = Mnemonic::from_entropy(&[0u8; 32])?;
-        assert!(validate_bip39_mnemonic(&mnemonic_24.to_string()).is_ok());
+        let mnemonic_24 = mnemonic_24.to_string();
+        assert!(Bip39MnemonicInput::new(&mnemonic_24).validate().is_ok());
         Ok(())
     }
 
     #[test]
     fn rejects_unknown_words() {
-        assert!(validate_bip39_mnemonic("notaword notaword notaword notaword notaword notaword notaword notaword notaword notaword notaword notaword").is_err());
+        assert!(Bip39MnemonicInput::new("notaword notaword notaword notaword notaword notaword notaword notaword notaword notaword notaword notaword").validate().is_err());
     }
 
     #[test]
     fn rejects_valid_words_with_bad_checksum() {
         assert!(
-            validate_bip39_mnemonic("able able able able able able able able able able able able")
+            Bip39MnemonicInput::new("able able able able able able able able able able able able")
+                .validate()
                 .is_err()
         );
     }
 
     #[test]
     fn rejects_wrong_word_count() {
-        assert!(validate_bip39_mnemonic("abandon abandon abandon").is_err());
+        assert!(
+            Bip39MnemonicInput::new("abandon abandon abandon")
+                .validate()
+                .is_err()
+        );
     }
 
     #[test]
     fn rejects_empty_mnemonic() {
-        assert!(validate_bip39_mnemonic("   ").is_err());
+        assert!(Bip39MnemonicInput::new("   ").validate().is_err());
     }
 
     #[test]
     fn exposes_bundled_english_wordlist() {
-        let words = bip39_english_wordlist();
+        let words = Bip39EnglishWordList::english().into_words();
         assert_eq!(words.len(), 2048);
         assert_eq!(words.first().copied(), Some("abandon"));
         assert_eq!(words.last().copied(), Some("zoo"));
@@ -179,54 +310,102 @@ mod tests {
     #[test]
     fn suggests_words_by_prefix() {
         assert_eq!(
-            suggest_bip39_words("ab", 4.into()),
+            Bip39WordSuggestionRequest {
+                prefix: "ab",
+                limit: 4.into(),
+            }
+            .suggest(),
             vec!["abandon", "ability", "able", "about"]
         );
-        assert_eq!(suggest_bip39_words("zoo", 8.into()), vec!["zoo"]);
-        assert!(suggest_bip39_words("missing", 8.into()).is_empty());
+        assert_eq!(
+            Bip39WordSuggestionRequest {
+                prefix: "zoo",
+                limit: 8.into(),
+            }
+            .suggest(),
+            vec!["zoo"]
+        );
+        assert!(
+            Bip39WordSuggestionRequest {
+                prefix: "missing",
+                limit: 8.into(),
+            }
+            .suggest()
+            .is_empty()
+        );
     }
 
     #[test]
     fn validates_word_sequence_membership_without_checksum() {
-        assert!(is_bip39_word_sequence_valid(
-            "abandon ability able about above absent absorb abstract absurd abuse access accident",
-            12.into()
+        let validation = Bip39WordSequenceRequest {
+                text: "abandon ability able about above absent absorb abstract absurd abuse access accident",
+                expected_word_count: 12.into(),
+            }
+            .validate();
+        let Bip39WordSequenceValidation::Valid(words) = validation else {
+            panic!("known words with the expected count must produce a validated capability");
+        };
+        assert_eq!(
+            words.join(),
+            "abandon ability able about above absent absorb abstract absurd abuse access accident"
+        );
+        assert!(matches!(
+            Bip39WordSequenceRequest {
+                text: "abandon notaword",
+                expected_word_count: 2.into(),
+            }
+            .validate(),
+            Bip39WordSequenceValidation::UnknownWord
         ));
-        assert!(!is_bip39_word_sequence_valid("abandon notaword", 12.into()));
-        assert!(!is_bip39_word_sequence_valid("abandon ability", 12.into()));
+        assert!(matches!(
+            Bip39WordSequenceRequest {
+                text: "abandon ability",
+                expected_word_count: 12.into(),
+            }
+            .validate(),
+            Bip39WordSequenceValidation::WrongWordCount
+        ));
     }
 
     #[test]
     fn normalizes_and_joins_mnemonic_words() {
         assert_eq!(
-            parse_bip39_words("  Abandon   ability\nable "),
+            Bip39MnemonicInput::new("  Abandon   ability\nable ").parse_words(),
             vec!["abandon", "ability", "able"]
         );
         assert_eq!(
-            join_bip39_words(&[
-                " abandon ".to_owned(),
-                "ABILITY".to_owned(),
-                String::new(),
-                "able".to_owned(),
-            ]),
+            Bip39WordJoinRequest {
+                words: &[
+                    " abandon ".to_owned(),
+                    "ABILITY".to_owned(),
+                    String::new(),
+                    "able".to_owned(),
+                ],
+            }
+            .join(),
             "abandon ability able"
         );
     }
 
     #[test]
     fn infers_supported_mnemonic_lengths() -> anyhow::Result<()> {
-        let twelve_word_length = infer_bip39_mnemonic_length(
+        let twelve_word_length = Bip39MnemonicInput::new(
             "abandon ability able about above absent absorb abstract absurd abuse access accident",
         )
+        .infer_length()
         .ok_or_else(|| io::Error::other("12-word mnemonic length must be recognized"))?;
         assert_eq!(u32::from(twelve_word_length), 12);
-        let twenty_four_word_length = infer_bip39_mnemonic_length(
+        let twenty_four_word_length = Bip39MnemonicInput::new(
             "abandon ability able about above absent absorb abstract absurd abuse access accident \
              account accuse achieve acid acoustic acquire across act action actor actress actual",
         )
+        .infer_length()
         .ok_or_else(|| io::Error::other("24-word mnemonic length must be recognized"))?;
         assert_eq!(u32::from(twenty_four_word_length), 24);
-        assert_eq!(infer_bip39_mnemonic_length("abandon ability"), None);
+        assert_eq!(
+            Bip39MnemonicInput::new("abandon ability").infer_length(),
+            None
+        );
         Ok(())
     }
 }

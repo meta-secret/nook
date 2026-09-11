@@ -18,7 +18,7 @@ use crate::vault_format;
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml, SymmetricKey};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Database {
     records: HashMap<SecretId, SecretRecord>,
 }
@@ -97,8 +97,8 @@ impl Database {
     }
 
     #[must_use]
-    pub fn list(&self) -> Vec<SecretRecord> {
-        let mut records: Vec<SecretRecord> = self.records.values().cloned().collect();
+    pub fn list(&self) -> Vec<&SecretRecord> {
+        let mut records: Vec<&SecretRecord> = self.records.values().collect();
         records.sort_by(|a, b| a.id.cmp(&b.id));
         records
     }
@@ -232,8 +232,10 @@ mod tests {
         db.insert(sid("foo"), api_key("bar"));
         db.insert(sid("hello"), api_key("world"));
 
-        let parsed = db.clone();
-        assert_eq!(parsed.list(), db.list());
+        let records = db.list();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].id.as_str(), "foo");
+        assert_eq!(records[1].id.as_str(), "hello");
         Ok(())
     }
 
@@ -360,7 +362,8 @@ mod tests {
 
     #[test]
     fn list_is_sorted_by_key() -> anyhow::Result<()> {
-        let records = sample_db().list();
+        let db = sample_db();
+        let records = db.list();
         let keys: Vec<&str> = records.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(keys, vec!["github.com", "work-vpn"]);
         Ok(())
@@ -547,10 +550,16 @@ mod tests {
 
     #[test]
     fn validate_before_insert_rejects_blank_label() -> anyhow::Result<()> {
-        use crate::{SecretId, validate_secret_data};
+        use crate::{SecretId, SecretPayloadYaml};
 
         assert!(SecretId::parse("   ").is_err());
-        assert!(validate_secret_data("").is_err());
+        assert!(
+            SecretPayloadYaml::validate(crate::SecretPayloadValidationRequest {
+                secret_type: SecretType::Login,
+                raw: "",
+            })
+            .is_err()
+        );
         Ok(())
     }
 }
