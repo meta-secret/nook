@@ -27,8 +27,7 @@ jobs:
     timeout-minutes: 10
     env:
       HIVE_CONSOLE_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}
-      HIVE_CONSOLE_CACHE_EXACT_FROM: ${{ github.event_name == 'pull_request' && format('type=registry,ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console-v1-git-{0}:buildcache', github.event.pull_request.head.sha) || '' }}
-      HIVE_CONSOLE_CACHE_TO: ${{ github.event_name == 'pull_request' && format('type=registry,ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console-v1-git-{0}:buildcache,mode=max,timeout=10m', github.event.pull_request.head.sha) || 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-console-v1:buildcache,mode=max,timeout=10m' }}
+      HIVE_CONSOLE_CACHE_TO: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-console-v1:buildcache,mode=max,timeout=10m' || '' }}
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
     steps:

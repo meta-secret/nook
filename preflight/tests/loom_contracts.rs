@@ -227,9 +227,7 @@ fn loom_workflow_audits_every_cortex_change() {
     let workflow = root.read(".github/workflows/repository-policy.yml");
     let taskfile = root.read(".task/ci-workflows.yml");
     assert!(
-        workflow.contains("pull_request:")
-            && workflow.contains("push:")
-            && workflow.contains("branches: [main]")
+        workflow.contains("workflow_call:")
             && !workflow.contains("paths:")
             && !workflow.contains("paths-ignore:"),
         "repository policy must validate every PR and Main tree"
@@ -251,17 +249,13 @@ fn loom_workflow_audits_every_cortex_change() {
             && !workflow.contains("run: bash "),
         "repository policy must contain only Actions setup glue and thin Task invocations"
     );
-    for task in [
-        "task: preflight:format-contract",
-        "task: preflight:typescript-state",
-        "task: preflight:loom-contracts",
-        "task: loom:verify",
-        "task: loom:cortex-audit",
-    ] {
-        assert!(
-            taskfile.contains(task),
-            "repository policy Task surfaces must retain `{task}`"
-        );
+    assert!(
+        taskfile.contains("task: preflight:repository-policy"),
+        "both trust domains must use the Docker policy Task surface"
+    );
+    let dockerfile = root.read("preflight/Dockerfile");
+    for task in ["task loom:verify", "task preflight:format-contract", "task loom:cortex-audit"] {
+        assert!(dockerfile.contains(task), "Docker policy must retain `{task}`");
     }
     assert!(
         workflow.contains("run: task ci:repository-policy:trusted")

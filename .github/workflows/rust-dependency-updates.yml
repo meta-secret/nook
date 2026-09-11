@@ -27,18 +27,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      # cargo-outdated is an orchestration-only tool; application builds and
-      # validation remain inside the repository Docker Task targets.
-      - name: Install cargo-outdated
-        run: cargo install cargo-outdated --version 0.19.0 --locked
-
-      - name: Setup Task
-        uses: go-task/setup-task@v2
+      - name: Connect Docker Rust audit tooling
+        uses: ./.github/actions/nook-docker-setup
         with:
-          version: 3.52.0
+          cache-selection: connection-only
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
 
       - name: Check every direct Cargo dependency
         id: audit

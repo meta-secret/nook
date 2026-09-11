@@ -24,22 +24,17 @@ tasks:
         printf '%s\n' "$vale_dir" >> "$GITHUB_PATH"
 
   ci:repository-policy:trusted:
-    desc: Enforce preflight and Loom policy with trusted BuildKit access.
+    desc: Enforce repository policy with trusted read-only BuildKit access.
     cmds:
-      - task: preflight:format-contract
-      - task: preflight:test
-      - task: loom:verify
-      - task: loom:cortex-audit
+      - task: preflight:repository-policy
 
   ci:repository-policy:untrusted:
-    desc: Enforce preflight and Loom policy without private credentials.
+    desc: Enforce the same Docker policy without private credentials or caches.
+    env:
+      GHA_CACHE_ENABLED: ''
+      GHA_CACHE_WRITE_ENABLED: ''
     cmds:
-      - task: preflight:format-contract
-      - task: preflight:source-architecture
-      - task: preflight:typescript-state
-      - task: preflight:loom-contracts
-      - task: loom:verify
-      - task: loom:cortex-audit
+      - task: preflight:repository-policy-untrusted
 
   ci:pr:deploy-and-verify-previews:
     desc: Deploy and verify Cloudflare Pages PR preview aliases.
@@ -79,7 +74,26 @@ tasks:
   rust:deps:outdated:
     desc: Audit direct Cargo dependencies with cargo-outdated.
     cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/ci-rust-deps-outdated.sh"
+      - |
+        set -euo pipefail
+        output="$(mktemp -d)"
+        trap 'rm -rf "$output"' EXIT
+        docker buildx bake \
+          --allow="fs.read={{.REPO_ROOT}}" --allow="fs.write=$output" \
+          -f '{{.REPO_ROOT}}/nook-app/docker-bake.hcl' \
+          -f '{{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/docker-bake.hcl' \
+          -f '{{.REPO_ROOT}}/.github/docker/rust-maintenance.hcl' \
+          --set "rust-dependency-audit.output=type=local,dest=$output" \
+          rust-dependency-audit
+        grep -Ex 'outdated=(true|false)' "$output/result"
+        test "$(wc -l < "$output/result")" -eq 1
+        cat "$output/report.txt"
+        if [ -n "${GITHUB_OUTPUT:-}" ]; then
+          cat "$output/result" >> "$GITHUB_OUTPUT"
+        fi
+        if [ -n "${RUST_DEPS_OUTDATED_REPORT:-}" ]; then
+          cp "$output/report.txt" "$RUST_DEPS_OUTDATED_REPORT"
+        fi
 
   docker:prune:stale:
     desc: Prune stale Docker data on self-hosted runners.
@@ -120,3 +134,41 @@ tasks:
     desc: Validate the root Taskfile still exposes Hive infrastructure commands.
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/infra-surface-check.sh"
+
+  ci:format:implementation:
+    desc: Format only the bounded implementation file list with trusted Docker tooling.
+    dir: '{{.REPO_ROOT}}'
+    requires:
+      vars: [IMPLEMENTATION_REPO_ROOT, FORMAT_CHANGED_FILES]
+    cmds:
+      - |
+        set -euo pipefail
+        inputs="$(mktemp -d)"
+        output="$(mktemp -d)"
+        trap 'rm -rf "$inputs" "$output"' EXIT
+        cp "$FORMAT_CHANGED_FILES" "$inputs/files"
+        implementation="$(realpath "$IMPLEMENTATION_REPO_ROOT")"
+        docker buildx bake \
+          --allow="fs.read={{.REPO_ROOT}}" \
+          --allow="fs.read=$implementation" --allow="fs.read=$inputs" \
+          --allow="fs.write=$output" \
+          -f '{{.REPO_ROOT}}/.github/formatting/ci.hcl' \
+          --set "formatter-tools.context={{.REPO_ROOT}}/.github/formatting" \
+          --set "format-export.context={{.REPO_ROOT}}/.github/formatting" \
+          --set "format-export.contexts.implementation-source=$implementation" \
+          --set "format-export.contexts.format-input=$inputs" \
+          --set "format-export.output=type=local,dest=$output" \
+          format-export
+        while IFS= read -r -d '' path; do
+          case "$path" in
+            ''|/*|..|../*|*/../*|*/..|.git|.git/*) exit 1 ;;
+          esac
+          if [ ! -f "$implementation/$path" ] || [ -L "$implementation/$path" ]; then
+            test ! -e "$output/$path"
+            continue
+          fi
+          resolved="$(realpath "$implementation/$path")"
+          case "$resolved" in "$implementation"/*) ;; *) exit 1 ;; esac
+          test -f "$output/$path" && test ! -L "$output/$path"
+          cp -- "$output/$path" "$implementation/$path"
+        done <"$inputs/files"

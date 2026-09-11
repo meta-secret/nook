@@ -69,6 +69,7 @@ jobs:
       - name: Connect private ARC BuildKit
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: web-e2e
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}

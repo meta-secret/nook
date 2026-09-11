@@ -104,39 +104,78 @@ tasks:
       - task: docker:ecosystem:dependency-policy:run
         vars: { WORKSPACE: preflight }
 
-  preflight:source-architecture:
-    desc: Enforce source architecture and repository language boundaries.
-    dir: '{{.ROOT_DIR}}'
+  preflight:policy:run:
+    internal: true
+    desc: Execute the selected Rust policy stage through BuildKit.
+    dir: '{{.REPO_ROOT}}'
+    requires:
+      vars: [POLICY_STAGE]
     cmds:
-      - >-
-        cargo test
-        --locked
-        --manifest-path preflight/Cargo.toml
-        --test source_file_size
-      - >-
-        cargo test
-        --locked
-        --manifest-path preflight/Cargo.toml
-        --test repository_languages
+      - |
+        set -euo pipefail
+        metadata="$(mktemp -d)"
+        trap 'rm -rf "$metadata"' EXIT
+        # Reconstruct portable Git metadata without checkout credentials, hooks,
+        # alternates, or absolute worktree pointers from the runner.
+        git clone --quiet --no-local --no-checkout --depth 1 '{{.REPO_ROOT}}' "$metadata/repository"
+        test "$(git -C "$metadata/repository" rev-parse HEAD)" = "$(git -C '{{.REPO_ROOT}}' rev-parse HEAD)"
+        git -C "$metadata/repository" remote remove origin
+        git -C "$metadata/repository" read-tree HEAD
+        printf '{}' > "$metadata/event.json"
+        case '{{.POLICY_STAGE}}' in
+          repository-policy|repository-policy-untrusted)
+            baseline="$(git -C '{{.REPO_ROOT}}' rev-parse refs/remotes/origin/main)"
+            git -C "$metadata/repository" fetch --quiet --no-tags --depth 1 '{{.REPO_ROOT}}' "$baseline:refs/remotes/origin/main"
+            if [ -n "${GITHUB_EVENT_PATH:-}" ]; then
+              jq '{pull_request: {base: {sha: .pull_request.base.sha}}, before: .before}' "$GITHUB_EVENT_PATH" > "$metadata/event.json"
+              event_base="$(jq -r '.pull_request.base.sha // .before // empty' "$metadata/event.json")"
+              if [ -n "$event_base" ] && [ "$event_base" != 0000000000000000000000000000000000000000 ]; then
+                git -C "$metadata/repository" fetch --quiet --no-tags --depth 1 '{{.REPO_ROOT}}' "$event_base"
+              fi
+            fi
+            ;;
+        esac
+        mv "$metadata/repository/.git" "$metadata/git"
+        rmdir "$metadata/repository"
+        PREFLIGHT_SOURCE_CONTEXT="{{.PREFLIGHT_SOURCE_ROOT}}" \
+          {{.DOCKER}} buildx bake \
+          {{.PREFLIGHT_BAKE_FILES}} \
+          --allow="fs.read=$metadata" \
+          --set "preflight-{{.POLICY_STAGE}}.contexts.repository-git=$metadata" \
+          preflight-{{.POLICY_STAGE}}
+
+  preflight:repository-policy:
+    desc: Verify preflight, formatter contracts, and Loom inside Docker.
+    cmds:
+      - task: preflight:policy:run
+        vars: { POLICY_STAGE: repository-policy }
+
+  preflight:repository-policy-untrusted:
+    desc: Verify targeted preflight contracts and Loom inside secret-free Docker.
+    cmds:
+      - task: preflight:policy:run
+        vars: { POLICY_STAGE: repository-policy-untrusted }
+
+  preflight:loom-verify:
+    desc: Verify Loom with pinned Docker Rust, Bun, Task, and Vale.
+    cmds:
+      - task: preflight:policy:run
+        vars: { POLICY_STAGE: loom-verify }
+
+  preflight:source-architecture:
+    desc: Enforce source architecture and repository language boundaries in Docker.
+    cmds:
+      - task: preflight:policy:run
+        vars: { POLICY_STAGE: source-architecture }
 
   preflight:typescript-state:
-    desc: Enforce authored TypeScript absence, enum, and state-modeling invariants.
-    dir: '{{.ROOT_DIR}}'
+    desc: Enforce authored TypeScript state-modeling invariants in Docker.
     cmds:
-      - >-
-        cargo test
-        --locked
-        --manifest-path preflight/Cargo.toml
-        --test core_ownership
-        typescript_
+      - task: preflight:policy:run
+        vars: { POLICY_STAGE: typescript-state }
 
   preflight:loom-contracts:
-    desc: Enforce hosted Loom and skill-authority contracts.
-    dir: '{{.ROOT_DIR}}'
+    desc: Enforce hosted Loom and skill-authority contracts in Docker.
     cmds:
-      - >-
-        cargo test
-        --locked
-        --manifest-path preflight/Cargo.toml
-        --test loom_contracts
-        --test skill_authority
+      - task: preflight:policy:run
+        vars: { POLICY_STAGE: loom-contracts }

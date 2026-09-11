@@ -364,8 +364,6 @@ tasks:
         msg: HIVE_CONSOLE_IMAGE is required for console image publication.
       - sh: test -n "${HIVE_CONSOLE_CACHE_FROM:-}"
         msg: HIVE_CONSOLE_CACHE_FROM is required for console image publication.
-      - sh: test -n "${HIVE_CONSOLE_CACHE_TO:-}"
-        msg: HIVE_CONSOLE_CACHE_TO is required for console image publication.
     cmds:
       - |
         HIVE_TASK_DIR='{{.HIVE_TASK_DIR}}' \
@@ -375,45 +373,16 @@ tasks:
         . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
         prepare_nook_sccache_helpers_context
         trap cleanup_nook_sccache_helpers_context EXIT
-        cache_from="$HIVE_CONSOLE_CACHE_FROM"
-        cache_ref_status() {
-          local ref="$1"
-          local probe_output
-          probe_output="$(mktemp)"
-          if docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output"; then
-            rm -f "$probe_output"
-            return 0
-          fi
-          if grep -Eqi 'not found|manifest unknown|name unknown' "$probe_output"; then
-            rm -f "$probe_output"
-            return 1
-          fi
-          echo "Hive console cache probe was inconclusive: $ref" >&2
-          cat "$probe_output" >&2
-          rm -f "$probe_output"
-          return 2
-        }
-        if [ -n "${HIVE_CONSOLE_CACHE_EXACT_FROM:-}" ]; then
-          exact_ref="${HIVE_CONSOLE_CACHE_EXACT_FROM#type=registry,ref=}"
-          exact_ref="${exact_ref%%,*}"
-          if cache_ref_status "$exact_ref"; then
-            cache_from="$HIVE_CONSOLE_CACHE_EXACT_FROM"
-            echo "Exact Hive console cache available; Main seed suppressed"
-          else
-            probe_status=$?
-            if [ "$probe_status" -eq 1 ]; then
-              echo "Exact Hive console cache absent; trusted Main seed enabled"
-            else
-              exit "$probe_status"
-            fi
-          fi
+        cache_export=()
+        if [ -n "${HIVE_CONSOLE_CACHE_TO:-}" ]; then
+          cache_export=(--cache-to "$HIVE_CONSOLE_CACHE_TO")
         fi
         docker buildx build \
           --platform linux/amd64 \
           --target console-verification \
           --tag "$HIVE_CONSOLE_IMAGE" \
-          --cache-from "$cache_from" \
-          --cache-to "$HIVE_CONSOLE_CACHE_TO" \
+          --cache-from "$HIVE_CONSOLE_CACHE_FROM" \
+          "${cache_export[@]}" \
           --push \
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
           --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}" \

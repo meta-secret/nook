@@ -17,7 +17,6 @@ hive_cache_bake = File.read(File.join(root, "infra/sim/bake-cache/docker-bake.hc
 unless hive_dockerfile.include?("FROM bun AS console-verification") &&
        hive_dockerfile.include?("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium") &&
        hive_taskfile.include?("--target console-verification") &&
-       hive_taskfile.include?('HIVE_CONSOLE_CACHE_EXACT_FROM') &&
        hive_taskfile.include?('HIVE_CONSOLE_CACHE_TO')
   raise "Hive console verification must own a narrow cached browser image lineage"
 end
@@ -25,16 +24,12 @@ end
 console_image_task = hive_taskfile.match(
   /^  console:image:\n(?<body>.*?)(?=^  image:)/m
 )&.[](:body)
-unless console_image_task&.include?('probe_output="$(mktemp)"') &&
-       console_image_task.include?('2>"$probe_output"') &&
-       console_image_task.include?("grep -Eqi 'not found|manifest unknown|name unknown'") &&
-       console_image_task.include?('cat "$probe_output" >&2') &&
-       console_image_task.scan('rm -f "$probe_output"').length == 3 &&
-       console_image_task.include?('return 2') &&
-       console_image_task.include?('probe_status=$?') &&
-       console_image_task.include?('exit "$probe_status"') &&
-       !console_image_task.include?('imagetools inspect "$exact_ref" >/dev/null 2>&1')
-  raise "Hive console exact-cache probe must distinguish absence from registry failure"
+unless console_image_task&.include?('cache_export=()') &&
+       console_image_task.include?('if [ -n "${HIVE_CONSOLE_CACHE_TO:-}" ]; then') &&
+       console_image_task.include?('"${cache_export[@]}"') &&
+       !console_image_task.include?('imagetools inspect') &&
+       !hive_workflow.include?('HIVE_CONSOLE_CACHE_EXACT_FROM')
+  raise "Hive console must reuse its local/Main graph without duplicate PR cache exports"
 end
 
 docker_setup_action = load_yaml.call(".github/actions/nook-docker-setup/action.yml")
@@ -103,7 +98,7 @@ unless !docker_setup_cache_script.include?("GHA_CACHE_EXACT_RUST_WASM_NODE_AVAIL
 end
 
 unless hive_workflow.include?("run: task hive:console:image") &&
-       hive_workflow.include?("nook-hive-console-v1-git-") &&
+       !hive_workflow.include?("nook-hive-console-v1-git-") &&
        hive_workflow.include?("nook/buildcache/nook-hive-console-v1:buildcache") &&
        !hive_workflow.include?("task web:e2e:kubernetes-image")
   raise "Hive console CI must not solve the Nook Web Rust/WASM browser graph"

@@ -54,7 +54,7 @@ run_task() {
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
-    loom:verify) run_with_timeout "$timeout_minutes" task loom:verify ;;
+    loom:verify) run_with_timeout "$timeout_minutes" task preflight:loom-verify ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
     web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
     web:e2e:debug) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e-debug" NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug ;;
