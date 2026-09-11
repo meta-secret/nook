@@ -15,6 +15,13 @@ name: PR
 
 on:
   workflow_call:
+    inputs:
+      full_e2e_requested:
+        required: true
+        type: boolean
+      validation_requested:
+        required: true
+        type: boolean
 
 permissions:
   actions: read
@@ -31,13 +38,14 @@ env:
 jobs:
   validation-request:
     name: Validate explicit CI request
-    if: github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e'
+    if: inputs.validation_requested
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 2
     outputs:
       ui-demos-enabled: ${{ 'false' }}
     steps:
       - name: Reject unsupported label events
+        if: github.event.action == 'labeled'
         env:
           REQUESTED_LABEL: ${{ github.event.label.name }}
         run: |
@@ -52,8 +60,7 @@ jobs:
   rust-ecosystem:
     name: Rust ecosystem
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: validation-request
     uses: ./.github/workflows/rust-ecosystem-checks.yml
     secrets: inherit
@@ -64,8 +71,7 @@ jobs:
   rust:
     name: Native Rust verification
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
@@ -200,8 +206,7 @@ jobs:
   wasm:
     name: WASM build and artifact
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
@@ -347,8 +352,7 @@ jobs:
   wasm-node-test:
     name: WASM Node tests
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: wasm
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
@@ -396,8 +400,7 @@ jobs:
     name: Web verification
     timeout-minutes: 10
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: [validation-request, wasm]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     outputs:
@@ -530,7 +533,7 @@ jobs:
 
       - name: Publish exact-source PR browser job image
         if: >-
-          contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||
+          inputs.full_e2e_requested ||
           (needs.validation-request.outputs.ui-demos-enabled == 'true' &&
           steps.ui-demo-contract.outputs.required == 'true') ||
           (steps.auth-sensitive-e2e-contract.outputs.required == 'true' &&
@@ -577,8 +580,7 @@ jobs:
       needs.verify.outputs.ui-demo-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: [validation-request, verify]
     runs-on: nook-k0s-container
     timeout-minutes: 10
@@ -663,8 +665,7 @@ jobs:
       needs.verify.outputs.auth-sensitive-e2e-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: [validation-request, verify, wasm-node-test]
     runs-on: nook-k0s-container
     timeout-minutes: 10
@@ -685,8 +686,7 @@ jobs:
     name: Verify and preview
     if: >-
       always() &&
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
     needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]
@@ -899,8 +899,7 @@ jobs:
   coverage:
     name: Rust coverage report
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: rust
     uses: ./.github/workflows/pr-coverage.yml
     secrets: inherit
@@ -910,7 +909,7 @@ jobs:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+      inputs.full_e2e_requested
     needs: [verify, wasm-node-test]
     runs-on: nook-k0s-container
     timeout-minutes: 10
@@ -938,10 +937,10 @@ jobs:
     name: Full browser e2e (main fix)
     if: >-
       always() &&
-      (github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e') &&
+      inputs.validation_requested &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+      inputs.full_e2e_requested
     needs: [full-e2e-shard, wasm]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
@@ -956,7 +955,7 @@ jobs:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+      inputs.full_e2e_requested
     needs: [verify, wasm-node-test]
     runs-on: nook-k0s-container
     timeout-minutes: 10

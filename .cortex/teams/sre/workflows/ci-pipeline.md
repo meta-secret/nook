@@ -18,7 +18,9 @@ and manual ecosystem execution in one Actions run named `CI`.
 - A secret-free classifier reads changed paths without executing source.
 - Repository policy runs on PR changes and Main pushes.
 - Hive and research retain their existing changed-path selections.
-- Product PR validation still requires a validation label.
+- A validation label activates product checks for subsequent PR commits.
+- The router reads current labels to avoid stale event ordering.
+- Removing the validation label disables product checks on later pushes.
 - Main product work retains its separate path selection.
 - PR replacement and close events use native concurrency.
 - Base-only edits and close events start no classifier or validation jobs.
@@ -111,8 +113,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Rust domain unit tests + coverage, no-opt WASM, web/unit tests, all three web builds.
 - Shared Rust ecosystem gates via `rust-ecosystem-checks.yml`.
 - Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
-- Ordinary pushes do not start this workflow.
-- Only `ci:validate` / `ci:full-e2e` label events start it.
+- Unlabeled pushes skip product validation.
+- `ci:validate` or `ci:full-e2e` remains active across subsequent commits.
 - Headless UI-demo execution is temporarily disabled.
 - The UI-demo contract and focused spec requirement remain active.
 - New UI-demo artifacts are not published.
@@ -147,7 +149,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 **`pr-validation-handoff.yml`**
 
 - Runs from trusted default-branch code.
-- Receives only completed labeled validation runs because PR close is not a `PR` workflow trigger.
+- Publishes only completed CI runs with successful opted-in product verification.
 - Verifies the successful source run and required jobs.
 - Validates native/WASM artifact shapes, attaches provenance.
 - Publishes exact-input handoffs that later PRs may trust.

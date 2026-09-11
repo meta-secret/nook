@@ -774,7 +774,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
     }
     for label in ["ci:validate", "ci:full-e2e"] {
         assert!(
-            pr.contains(&format!("github.event.label.name == '{label}'")),
+            pr.contains("inputs.validation_requested"),
             "PR workflow must gate workers on {label}"
         );
         assert!(

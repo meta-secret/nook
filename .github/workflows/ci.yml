@@ -25,6 +25,9 @@ concurrency:
 jobs:
   scope:
     name: Classify CI paths
+    permissions:
+      contents: read
+      pull-requests: read
     if: >-
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' &&
@@ -33,6 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
+      validation-requested: ${{ steps.paths.outputs.validation-requested }}
+      full-e2e-requested: ${{ steps.paths.outputs.full-e2e-requested }}
       product: ${{ steps.paths.outputs.product }}
       minds: ${{ steps.paths.outputs.minds }}
       hive: ${{ steps.paths.outputs.hive }}
@@ -46,6 +51,8 @@ jobs:
         id: paths
         env:
           EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
@@ -60,6 +67,14 @@ jobs:
           else
             git diff --name-only -z "$BASE_SHA" "$HEAD_SHA" > "$changed_paths"
           fi
+          validation_requested=false
+          full_e2e_requested=false
+          if [ "$EVENT_NAME" = pull_request ]; then
+            label_scope="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | [any(. == "ci:validate" or . == "ci:full-e2e"), any(. == "ci:full-e2e")] | @tsv')"
+            IFS=$'\t' read -r validation_requested full_e2e_requested <<< "$label_scope"
+          fi
+          echo "validation-requested=$validation_requested" >> "$GITHUB_OUTPUT"
+          echo "full-e2e-requested=$full_e2e_requested" >> "$GITHUB_OUTPUT"
           product=false
           minds=false
           hive=false
@@ -89,7 +104,7 @@ jobs:
     needs: scope
     if: >-
       github.event_name == 'pull_request' && needs.scope.outputs.product == 'true' &&
-      (github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e')
+      needs.scope.outputs.validation-requested == 'true'
     permissions:
       actions: read
       contents: read
@@ -98,6 +113,9 @@ jobs:
       issues: write
     uses: ./.github/workflows/pr.yml
     secrets: inherit
+    with:
+      validation_requested: ${{ needs.scope.outputs.validation-requested == 'true' }}
+      full_e2e_requested: ${{ needs.scope.outputs.full-e2e-requested == 'true' }}
 
   main:
     name: Main validation
@@ -138,7 +156,7 @@ jobs:
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && needs.scope.outputs.product == 'false' &&
       needs.scope.outputs.minds == 'true' &&
-      (github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e')))
+      needs.scope.outputs.validation-requested == 'true'))
     permissions:
       contents: read
       pull-requests: read

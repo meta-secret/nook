@@ -256,10 +256,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: Validate explicit CI request",
         "name: Reject unsupported label events",
         "ui-demos-enabled: ${{ 'false' }}",
-        "github.event.label.name == 'ci:validate'",
+        "inputs.validation_requested",
         "name: Full browser e2e (main fix)",
         "name: Full extension e2e (main fix)",
-        "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')",
+        "inputs.full_e2e_requested",
         "runs-on: nook-k0s-container",
         "nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
         "name: pr-wasm-${{ github.run_id }}",
@@ -382,8 +382,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && ui_demo_job
                 .contains("github.event.pull_request.head.repo.full_name == github.repository")
             && ui_demo_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && ui_demo_job.contains("github.event.label.name == 'ci:validate'")
-            && ui_demo_job.contains("github.event.label.name == 'ci:full-e2e'")
+            && ui_demo_job.contains("inputs.validation_requested")
             && ui_demo_job.contains("needs: [validation-request, verify]")
             && ui_demo_job.contains("runs-on: nook-k0s-container")
             && ui_demo_job
@@ -512,14 +511,13 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     assert!(
-        verify_job.contains("github.event.label.name == 'ci:validate'")
-            && verify_job.contains("github.event.label.name == 'ci:full-e2e'")
+        verify_job.contains("inputs.validation_requested")
             && verify_job.contains("needs: [validation-request, wasm]")
             && verify_job.contains("name: Download built WASM handoff")
             && verify_job.contains("name: Confirm WASM handoff shape")
             && verify_job.contains("name: Upload preview dist handoff")
             && verify_job.contains(
-                "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||\n          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&\n          steps.ui-demo-contract.outputs.required == 'true')"
+                "inputs.full_e2e_requested ||\n          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&\n          steps.ui-demo-contract.outputs.required == 'true')"
             )
             && verify_job.contains("steps.auth-sensitive-e2e-contract.outputs.required == 'true'")
             && verify_job.contains("actions/download-artifact@v8")
