@@ -107,8 +107,8 @@ describe('Booking.com authentication mock', () => {
     expect(BookingAuthMockScenario.submittedControl('Primary action')).toBe(
       BookingAuthControl.Unrecognized,
     )
-    expect(BookingAuthPresentationState.Ready).toBe('ready')
-    expect(BookingAuthPresentationState.Rejected).toBe('rejected')
+    expect(String(BookingAuthPresentationState.Ready)).toBe('ready')
+    expect(String(BookingAuthPresentationState.Rejected)).toBe('rejected')
   })
 
   test('promotes only the observed consumer route to the captured shell', () => {

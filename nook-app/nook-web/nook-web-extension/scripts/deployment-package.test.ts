@@ -2,17 +2,19 @@ import { describe, expect, test } from 'bun:test'
 import {
   extensionArchiveName,
   extensionInstallTarget,
+  ExtensionInstallMethod,
 } from './deployment-package'
+import { ExtensionReleaseChannel } from './channel-identity'
 
 describe('extension deployment archive', () => {
   test('uses predictable channel-specific names', () => {
-    expect(extensionArchiveName('production', '1.2.3')).toBe(
-      'nook-passwords-1.2.3.zip',
-    )
-    expect(extensionArchiveName('development', '1.2.3')).toBe(
-      'nook-passwords-dev.zip',
-    )
-    expect(extensionArchiveName('local', '1.2.3')).toBe(
+    expect(
+      extensionArchiveName(ExtensionReleaseChannel.Production, '1.2.3'),
+    ).toBe('nook-passwords-1.2.3.zip')
+    expect(
+      extensionArchiveName(ExtensionReleaseChannel.Development, '1.2.3'),
+    ).toBe('nook-passwords-dev.zip')
+    expect(extensionArchiveName(ExtensionReleaseChannel.Local, '1.2.3')).toBe(
       'nook-passwords-local.zip',
     )
     expect(extensionArchiveName('pr-408', '1.2.3')).toBe(
@@ -21,19 +23,21 @@ describe('extension deployment archive', () => {
   })
 
   test('rejects unsafe production versions', () => {
-    expect(() => extensionArchiveName('production', '../latest')).toThrow()
+    expect(() =>
+      extensionArchiveName(ExtensionReleaseChannel.Production, '../latest'),
+    ).toThrow()
   })
 
   test('sends production installs to the Chrome Web Store', () => {
     const extensionId = 'abcdefghijklmnopabcdefghijklmnop'
     expect(
       extensionInstallTarget(
-        'production',
+        ExtensionReleaseChannel.Production,
         extensionId,
         'https://nokey.sh/downloads/nook-passwords-1.2.3.zip',
       ),
     ).toEqual({
-      install_method: 'chrome_web_store',
+      install_method: ExtensionInstallMethod.ChromeWebStore,
       install_url: `https://chromewebstore.google.com/detail/${extensionId}`,
     })
   })
@@ -47,13 +51,16 @@ describe('extension deployment archive', () => {
         'abcdefghijklmnopabcdefghijklmnop',
         downloadUrl,
       ),
-    ).toEqual({ install_method: 'manual_zip', install_url: downloadUrl })
+    ).toEqual({
+      install_method: ExtensionInstallMethod.ManualZip,
+      install_url: downloadUrl,
+    })
   })
 
   test('rejects invalid extension IDs when creating install links', () => {
     expect(() =>
       extensionInstallTarget(
-        'production',
+        ExtensionReleaseChannel.Production,
         'invalid',
         'https://nokey.sh/downloads/nook-passwords-1.2.3.zip',
       ),

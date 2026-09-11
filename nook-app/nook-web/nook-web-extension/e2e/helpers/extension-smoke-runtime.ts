@@ -11,6 +11,7 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ExtensionPairingApprovedMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
+import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import {
   attachNookLogsForTest,
   readPersistedAppLogs,
@@ -78,7 +79,7 @@ const chromiumExecutablePath = ((v) => (v ? v : ''))(
 )
 export const setupStorageKey = 'nook:extension-setup'
 export const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
-export const syntheticEventLogRecords = [
+export const syntheticEventLogRecords: ExtensionEventLogRecord[] = [
   {
     eventId: 'event-e2e',
     path: 'events/event-e2e.yaml',

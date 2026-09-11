@@ -33,7 +33,7 @@ export type ExtensionDeploymentMetadata = {
   install_url: string
 }
 
-enum ExtensionInstallMethod {
+export enum ExtensionInstallMethod {
   ChromeWebStore = 'chrome_web_store',
   ManualZip = 'manual_zip',
 }

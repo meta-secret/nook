@@ -212,6 +212,12 @@ type NookLocaleCatalog = {
       generate_password_working: string
       generate_password_failed: string
       generated_password_filled: string
+      use_passkey: string
+      create_passkey: string
+      use_passkey_working: string
+      create_passkey_working: string
+      passkey_control_missing: string
+      passkey_ceremony_started: string
       save_login_title: string
       save_login_description: string
       update_login_title: string

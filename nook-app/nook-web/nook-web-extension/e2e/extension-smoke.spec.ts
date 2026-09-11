@@ -35,6 +35,7 @@ import {
 } from './helpers/pin-device'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
+import { ExtensionPairingApprovedMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
@@ -310,7 +311,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(sentinelPage.locator('#nook-auth-widget')).toHaveCount(0)
 
     const forgedGrant = {
-      type: 'nook:extension-pairing-approved',
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
         vaultType: 'sentinel',
         deviceId: 'sentinel-device-e2e',
@@ -332,7 +333,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const persistenceBeforeMalformedProvider =
       await readExtensionPersistenceSnapshot(worker)
     const malformedProviderGrant = {
-      type: 'nook:extension-pairing-approved',
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
         vaultType: 'simple',
         deviceId: 'device-e2e',
@@ -362,7 +363,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     )
 
     const approvedGrant: ExtensionPairingApprovedMessage = {
-      type: 'nook:extension-pairing-approved',
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
         vaultType: 'simple',
         deviceId: 'device-e2e',

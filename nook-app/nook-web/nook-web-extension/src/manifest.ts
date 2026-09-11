@@ -18,7 +18,7 @@ export enum ExtensionManifestType {
   Module = 'module',
 }
 
-enum ContentScriptRunAt {
+export enum ContentScriptRunAt {
   DocumentIdle = 'document_idle',
   DocumentStart = 'document_start',
 }
@@ -28,7 +28,7 @@ enum ContentScriptWorld {
   Main = 'MAIN',
 }
 
-enum ExtensionPermission {
+export enum ExtensionPermission {
   ActiveTab = 'activeTab',
   Offscreen = 'offscreen',
   Storage = 'storage',
