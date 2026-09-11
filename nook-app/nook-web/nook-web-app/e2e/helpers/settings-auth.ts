@@ -4,6 +4,11 @@ import type { ProviderLoadOptions } from '$lib/vault/providers.svelte'
 import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from '../vault-yaml'
 import { E2E_OAUTH_ONBOARD_PROVIDER } from './auth-providers'
 import {
+  AuthenticatedWorkspaceObservation,
+  AuthenticatedWorkspaceState,
+  type AuthenticatedWorkspaceVisibility,
+} from './authenticated-workspace'
+import {
   dismissJoinEnrollmentDialog,
   keepVaultIdleLockDisabled,
 } from './device-enrollment'
@@ -423,17 +428,19 @@ export async function authorizeDeviceProtection(
   const lockedAccessDashboard = loginGate.getByTestId(
     'devices-access-dashboard',
   )
-  const workspacePanel = page
-    .getByTestId('vault-panel')
-    .or(page.getByTestId('vault-admin-panel'))
-    .or(page.getByTestId('devices-access-dashboard'))
-    .or(page.getByTestId('storage-settings-panel'))
-    .or(page.getByTestId('onboard-device-panel'))
-    .or(page.getByTestId('help-page'))
+  const authenticatedShell = page.getByTestId('authenticated-shell')
   const button = page.getByTestId('device-protection-unlock-btn')
 
-  const isAuthenticatedWorkspace = async () =>
-    (await workspacePanel.isVisible()) && !(await loginGate.isVisible())
+  const isAuthenticatedWorkspace = async () => {
+    const visibility: AuthenticatedWorkspaceVisibility = {
+      authenticatedShellVisible: await authenticatedShell.isVisible(),
+      loginGateVisible: await loginGate.isVisible(),
+    }
+    return (
+      new AuthenticatedWorkspaceObservation(visibility).state() ===
+      AuthenticatedWorkspaceState.Unlocked
+    )
+  }
 
   const authorizeButtonReady = async () => {
     if (!(await button.isVisible())) return false
@@ -539,7 +546,7 @@ export async function authorizeDeviceProtection(
     await expect(loginGate).toBeHidden({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(workspacePanel).toBeVisible({
+    await expect(authenticatedShell).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   }
