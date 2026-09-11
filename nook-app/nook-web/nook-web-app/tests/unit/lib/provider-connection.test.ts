@@ -18,10 +18,14 @@ import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
+import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { VaultState } from '$lib/vault.svelte'
 import { ProviderConnectionActions } from '$lib/vault/provider-connection'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
-import { StagedRemoteStorageKind } from '$lib/vault/state/provider.svelte'
+import {
+  LoginSetupKind,
+  StagedRemoteStorageKind,
+} from '$lib/vault/state/provider.svelte'
 
 vi.mock('$lib/runtime/log', () => ({
   browserLogRuntime: {
@@ -36,7 +40,6 @@ type ProviderConnectionOutcome = Result<
 
 type ProviderConnectionScenario = {
   readonly actions: ProviderConnectionActions
-  readonly clearLoginSetup: ReturnType<typeof vi.fn>
   readonly flushRemoteEventOutboxNow: ReturnType<typeof vi.fn>
   readonly state: VaultState
   readonly syncProviderById: ReturnType<typeof vi.fn>
@@ -90,32 +93,31 @@ function providerConnectionScenario(
   state.providers = [provider]
   state.errorMsg = ''
   state.openActiveVault('vault-1')
+  state.activateLoginSetup(LOCAL_FOLDER_PROVIDER_TYPE)
   const manager = new NookVaultManager()
   state.openManager(manager)
   ownedManagers.push({ manager, state })
-  vi.spyOn(state, 'stagedRemoteStorageArgs').mockReturnValue({
-    kind: StagedRemoteStorageKind.Unavailable,
-  })
-  vi.spyOn(state, 'ensureProviderSaved').mockResolvedValue(ok())
-  const flushRemoteEventOutboxNow = vi
-    .spyOn(state, 'flushRemoteEventOutboxNow')
-    .mockResolvedValue(
-      err(
-        new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed),
-      ),
-    )
-  const syncProviderById = vi
-    .spyOn(state, 'syncProviderById')
-    .mockImplementation(async () => synchronize(state))
-  const clearLoginSetup = vi
-    .spyOn(state, 'clearLoginSetup')
-    .mockImplementation(() => {})
-  vi.spyOn(state, 't').mockImplementation((request) =>
-    typeof request === 'string' ? request : request.key,
+  const flushRemoteEventOutboxNow = vi.fn(async () =>
+    err(new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed)),
   )
+  const syncProviderById = vi.fn(async () => synchronize(state))
+  const injectedPorts = {
+    stagedRemoteStorageArgs: () => ({
+      kind: StagedRemoteStorageKind.Unavailable,
+    }),
+    ensureProviderSaved: async () => ok(),
+    flushRemoteEventOutboxNow,
+    syncProviderById,
+  } satisfies Pick<
+    ProviderActionsContext,
+    | 'stagedRemoteStorageArgs'
+    | 'ensureProviderSaved'
+    | 'flushRemoteEventOutboxNow'
+    | 'syncProviderById'
+  >
+  Object.assign(state, injectedPorts)
   return {
     actions: new ProviderConnectionActions(state),
-    clearLoginSetup,
     flushRemoteEventOutboxNow,
     state,
     syncProviderById,
@@ -145,7 +147,7 @@ describe('local-folder provider connection', () => {
       visibility: ProviderSyncVisibility.Quiet,
       failureHandling: ProviderSyncFailureHandling.Propagate,
     })
-    expect(scenario.clearLoginSetup).toHaveBeenCalledOnce()
+    expect(scenario.state.loginSetup.kind).toBe(LoginSetupKind.Inactive)
     expect(scenario.state.addProviderOpen).toBe(false)
   })
 
@@ -160,7 +162,7 @@ describe('local-folder provider connection', () => {
     expect(scenario.flushRemoteEventOutboxNow).not.toHaveBeenCalled()
     expect(scenario.syncProviderById).toHaveBeenCalledOnce()
     expect(scenario.state.errorMsg).toBe('store-mismatch-staged')
-    expect(scenario.clearLoginSetup).not.toHaveBeenCalled()
+    expect(scenario.state.loginSetup.kind).toBe(LoginSetupKind.Active)
     expect(scenario.state.addProviderOpen).toBe(true)
   })
 
@@ -175,7 +177,7 @@ describe('local-folder provider connection', () => {
     expect(scenario.flushRemoteEventOutboxNow).not.toHaveBeenCalled()
     expect(scenario.syncProviderById).toHaveBeenCalledOnce()
     expect(scenario.state.errorMsg).toBe('multiple-vaults-staged')
-    expect(scenario.clearLoginSetup).not.toHaveBeenCalled()
+    expect(scenario.state.loginSetup.kind).toBe(LoginSetupKind.Active)
     expect(scenario.state.addProviderOpen).toBe(true)
   })
 })
