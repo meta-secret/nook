@@ -120,10 +120,10 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - The legacy registered `nook` runner is not used.
   - Do not use Blacksmith or other third-party runner labels.
 - **PR workflow cancellation:**
-  - `concurrency` with `cancel-in-progress: true` on `pr-<number>` lets a newly requested validation or PR close cancel an older labeled run.
-  - Ordinary pushes do not start or cancel complete validation.
-  - Agents avoid pushing while it runs.
-  - Agents explicitly cancel an obsolete run.
+  - Central CI uses native concurrency on `pr-<number>`.
+  - New PR heads automatically cancel older runs in that group.
+  - See [workflow concurrency policy](../workflows/ci-pipeline.md#workflow-concurrency-policy)
+    for cancellation events and scopes.
 - **Remote task and PR CI.**
   - `remote.yml` executes named Task targets per manual dispatch.
   - `preflight`, `rust:ci`, `loom:verify`, and `arc:runtime` may run on a fresh
