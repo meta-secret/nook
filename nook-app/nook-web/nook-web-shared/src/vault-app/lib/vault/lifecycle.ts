@@ -622,14 +622,22 @@ class DeviceInitializationContinuation {
   > {
     const state = this.state;
     const current = this.requireCurrentManager();
-    if (current.isErr()) return storageErr(current.error);
+    if (current.isErr()) {
+      log.warn("app init diagnostic: authorized manager admission rejected");
+      return storageErr(current.error);
+    }
     const initialization: DeviceIdentityInitialization = {
       mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
     };
     const initialized = await new VaultInitializationActions(
       state,
     ).initDeviceIdentity(initialization);
-    if (initialized.isErr()) return storageErr(initialized.error);
+    if (initialized.isErr()) {
+      log.warn(
+        "app init diagnostic: authorized identity initialization rejected",
+      );
+      return storageErr(initialized.error);
+    }
     const pending = await state.enqueueStorage(async () => {
       const admittedManager = state.admitManager();
       if (admittedManager.isErr()) return storageErr(admittedManager.error);
@@ -641,7 +649,12 @@ class DeviceInitializationContinuation {
         return storageErr(new NativeVaultStorageFailure(nativeFailure));
       }
     });
-    if (pending.isErr()) return storageErr(pending.error);
+    if (pending.isErr()) {
+      log.warn(
+        "app init diagnostic: pending sentinel finalization lookup rejected",
+      );
+      return storageErr(pending.error);
+    }
     if (pending.value) {
       const rawResult = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
@@ -654,7 +667,10 @@ class DeviceInitializationContinuation {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       });
-      if (rawResult.isErr()) return storageErr(rawResult.error);
+      if (rawResult.isErr()) {
+        log.warn("app init diagnostic: pending sentinel finalization rejected");
+        return storageErr(rawResult.error);
+      }
       const applyFinalizeResultArgs: Parameters<
         sentinelGenesisActions.SentinelGenesisActions["applyFinalizeResult"]
       >[0] = { result: rawResult.value };
@@ -672,6 +688,7 @@ class DeviceInitializationContinuation {
     }
     const catalogRefresh3 = await state.refreshLocalVaultCatalog();
     if (catalogRefresh3.isErr()) {
+      log.warn("app init diagnostic: authorized local vault catalog rejected");
       return storageErr(catalogRefresh3.error);
     }
     if (
@@ -696,6 +713,7 @@ class DeviceInitializationContinuation {
     try {
       state.localVaultPresent = await has_active_local_vault();
     } catch (failure) {
+      log.warn("app init diagnostic: active local vault lookup rejected");
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     if (state.localVaultPresent) {
@@ -712,6 +730,7 @@ class DeviceInitializationContinuation {
       state.storageMode = LOCAL_PROVIDER_TYPE;
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
       if (passwordRefresh1.isErr()) {
+        log.warn("app init diagnostic: login password metadata rejected");
         return storageErr(passwordRefresh1.error);
       }
       const presentation = await new LoginUnlockPresentation(state).refresh();
@@ -734,7 +753,10 @@ class DeviceInitializationContinuation {
       }
     } else {
       const devices = await state.refreshDeviceState();
-      if (devices.isErr()) return storageErr(devices.error);
+      if (devices.isErr()) {
+        log.warn("app init diagnostic: device state refresh rejected");
+        return storageErr(devices.error);
+      }
     }
 
     const enrollment = state.enrollmentLinkState;
@@ -748,7 +770,10 @@ class DeviceInitializationContinuation {
     }
     if (state.isAuthenticated) {
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();
-      if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
+      if (localSaveSync.isErr()) {
+        log.warn("app init diagnostic: authenticated fan-out sync rejected");
+        return storageErr(localSaveSync.error);
+      }
       state.startVaultSync();
     }
     log.info("app init finished");
