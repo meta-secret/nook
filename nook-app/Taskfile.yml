@@ -229,14 +229,26 @@ tasks:
     desc: Web and extension linters only — Rust clippy already runs in the Rust image branch.
     cmds:
       - task: _web:lint:parallel
+      - task: _extension:lint:parallel
       - task: _extension:format:check
 
   _test:parallel:
-    desc: Svelte check, Vitest, and extension type-check after Rust/WASM and web builds ran at image build.
+    desc: Compile every web surface before running the parallel unit suites.
+    cmds:
+      - task: _compile:parallel
+      - task: _unit:parallel
+
+  _compile:parallel:
+    desc: Aggregate web and extension compiler diagnostics before any unit test starts.
     deps:
       - _web:check:parallel
+      - _extension:typecheck
+
+  _unit:parallel:
+    desc: Run web and extension unit suites after every compiler succeeds.
+    deps:
       - _web:test:parallel
-      - _extension:check
+      - _extension:test:parallel
 
   _format:
     desc: Format web projects, then print a host-applicable git diff (sealed image).

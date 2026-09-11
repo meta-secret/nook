@@ -764,6 +764,106 @@ class DockerizedRustContract {
     }
   }
 
+  compilerFirstWebVerification(): void {
+    const taskSchema = z.object({
+      tasks: z.record(
+        z.string(),
+        z.object({
+          deps: z.array(z.string()).optional(),
+          cmds: z
+            .array(z.union([z.string(), z.object({ task: z.string() })]))
+            .optional(),
+        }),
+      ),
+    });
+    const tasks = taskSchema.parse(
+      Bun.YAML.parse(this.read("nook-app/Taskfile.yml")),
+    ).tasks;
+    expect(
+      (tasks["_test:parallel"]?.cmds ?? []).map((command) =>
+        typeof command === "string" ? command : command.task,
+      ),
+    ).toEqual(["_compile:parallel", "_unit:parallel"]);
+    expect(tasks["_compile:parallel"]?.deps?.sort()).toEqual([
+      "_extension:typecheck",
+      "_web:check:parallel",
+    ]);
+    expect(tasks["_unit:parallel"]?.deps?.sort()).toEqual([
+      "_extension:test:parallel",
+      "_web:test:parallel",
+    ]);
+    expect(tasks["_test:parallel"]?.deps).toBeUndefined();
+    expect(
+      (tasks["_lint:parallel"]?.cmds ?? []).map((command) =>
+        typeof command === "string" ? command : command.task,
+      ),
+    ).toContain("_extension:lint:parallel");
+
+    const extension = this.read(
+      "nook-app/nook-web/nook-web-extension/Taskfile.yml",
+    );
+    expect(extension).toContain("_extension:lint:parallel:");
+    expect(extension).toContain("bun run typecheck");
+    expect(extension).toContain("bun run test:unit");
+
+    const temporary = mkdtempSync(join(tmpdir(), "nook-compiler-first-"));
+    try {
+      const taskfile = join(temporary, "Taskfile.yml");
+      const probe = join(temporary, "probe.log");
+      writeFileSync(
+        taskfile,
+        `version: '3'
+tasks:
+  compiler:web:
+    cmds:
+      - sh -c 'echo compiler:web >> "$PROBE_LOG"; test "${"${FAIL_COMPILERS:-}"}" != 1'
+  compiler:extension:
+    cmds:
+      - sh -c 'echo compiler:extension >> "$PROBE_LOG"; test "${"${FAIL_COMPILERS:-}"}" != 1'
+  compiler:all:
+    deps: [compiler:web, compiler:extension]
+  unit:web:
+    cmds:
+      - sh -c 'echo unit:web >> "$PROBE_LOG"'
+  unit:extension:
+    cmds:
+      - sh -c 'echo unit:extension >> "$PROBE_LOG"'
+  unit:all:
+    deps: [unit:web, unit:extension]
+  verify:
+    cmds:
+      - task: compiler:all
+      - task: unit:all
+`,
+      );
+      for (const failure of ["1", "0"]) {
+        writeFileSync(probe, "");
+        const result = spawnSync("task", ["--taskfile", taskfile, "verify"], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            FAIL_COMPILERS: failure,
+            PROBE_LOG: probe,
+          },
+        });
+        const output = readFileSync(probe, "utf8");
+        expect(output).toContain("compiler:web");
+        expect(output).toContain("compiler:extension");
+        if (failure === "1") {
+          expect(result.status).not.toBe(0);
+          expect(output).not.toContain("unit:web");
+          expect(output).not.toContain("unit:extension");
+        } else {
+          expect(result.status, result.stderr).toBe(0);
+          expect(output).toContain("unit:web");
+          expect(output).toContain("unit:extension");
+        }
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+
   private read(path: string): string {
     return readFileSync(join(this.root, path), "utf8");
   }
@@ -816,4 +916,8 @@ test(
 test(
   "e2e orchestration reports every selected suite before failing",
   contract.e2eCompletion.bind(contract),
+);
+test(
+  "web verification aggregates compilers before starting unit suites",
+  contract.compilerFirstWebVerification.bind(contract),
 );
