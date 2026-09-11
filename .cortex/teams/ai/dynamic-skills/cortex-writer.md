@@ -275,7 +275,7 @@ Full rewritten example:
      `task loom:pre-push`;
   3. return any new formatter mutation in AI-owned content for a fresh AI
      commit before Gizmo reruns hygiene and pushes; and
-  4. Gizmo dispatches at least one relevant focused remote task when the pushed
-     head is not validation-ready, or complete exact-head validation immediately
-     when it is ready.
+  4. Gizmo authorizes PR Steward to dispatch validation for the pushed head.
+     Use focused remote evidence until the head is validation-ready.
+     Dispatch complete exact-head validation immediately when it is ready.
 - Gizmo obtains fresh exact-head remote evidence after every replacement push.

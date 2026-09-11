@@ -31,6 +31,7 @@ Write `prLand` domain requests as nested YAML (for example `prLand.validate` wit
 task loom:pre-push
 git commit …
 git push -u origin HEAD
+# PR Steward executes the remaining GitHub-backed commands under a packet.
 # Required when the head is not validation-ready:
 task remote TASK_NAME=<name>
 # As soon as the head is validation-ready:

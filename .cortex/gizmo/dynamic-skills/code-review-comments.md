@@ -229,7 +229,7 @@ Does not apply to:
 - [ ] Gizmo continues from verified commits and runs
       `task loom:pre-push PR=<number>` only when an accepted fix or failed-check
       repair changed files.
-- [ ] Gizmo uses focused `task remote` jobs when useful, then explicitly triggers
+- [ ] Gizmo authorizes PR Steward to run useful focused jobs and trigger
       complete PR validation.
 - [ ] Gizmo pushes changed code or documentation only when the head changed.
 - [ ] A batch with no accepted fix or failed-check repair does not create

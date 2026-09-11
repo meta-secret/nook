@@ -80,9 +80,17 @@ Before an agent says any of the following, it must apply this workflow:
 The workflow also applies when tests, review comments, or implementation work
 discover missing functionality that the current PR will not finish.
 
+## GitHub execution ownership
+
+Gizmo authors Workbench content and decides its state. PR Steward executes all
+GitHub commands and publisher wrappers shown below under an explicit packet.
+Gizmo may search and edit the returned local files. Publication does not transfer
+authorship or lifecycle decisions to PR Steward.
+
 ## Search first
 
-Clone or update the Workbench outside the Nook working tree, then search feature
+Have PR Steward clone or update the Workbench outside the Nook working tree.
+Then search feature
 summaries, issues, plans, and worklogs with both product language and code
 terms:
 
@@ -166,7 +174,7 @@ to avoid naming the feature; `backlog` is primarily the historical import area.
 ## Publishing changes
 
 Workbench records are content, not Nook product changes. Publish a single
-record directly with the checked-in helper. For an existing issue, first read
+record through PR Steward with the checked-in helper. For an existing issue, first read
 the file and retain the blob SHA that the local edit is based on, then pass that
 exact SHA as `NOOK_WORKBENCH_EXPECTED_SHA`:
 
@@ -276,7 +284,7 @@ Publish a superseding plan when the request, design, scope, or estimate changes
 materially.
 
 Do not rewrite the earlier plan.
-Use the checked-in publisher for interactive work:
+Authorize PR Steward to execute the checked-in publisher for interactive work:
 
 ```bash
 NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \

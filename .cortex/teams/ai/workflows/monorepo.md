@@ -7,7 +7,7 @@ Use this workflow for feature work that touches more than one package.
 0. Follow [mission delivery](../../../gizmo/workflows/mission-delivery.md).
    Fetch `origin/main`, branch, and never push to `main`. See
    [pull requests](../../../gizmo/workflows/pull-requests.md).
-   0b. **Merge with squash only.** When a PR is merged, use **Squash and
+   0b. **Merge with squash only.** Gizmo authorizes PR Steward to use **Squash and
    merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See
    [pull requests](../../../gizmo/workflows/pull-requests.md#squash-merge-only---no-exceptions).
    0c. Estimate authored additions and map package ownership before editing.
@@ -32,10 +32,10 @@ Use this workflow for feature work that touches more than one package.
      pushing.
    - Do not add broad local builds, tests, e2e, container product gates, or
      duplicate hosted-check mirrors before push.
-   - If the pushed head is not validation-ready, Gizmo dispatches at least one
-     relevant focused hosted task immediately.
-   - When the head is validation-ready, Gizmo dispatches complete exact-head
-     validation immediately. Focused tasks are optional on that path.
+   - For a non-ready pushed head, Gizmo authorizes PR Steward to dispatch
+     at least one relevant focused hosted task immediately.
+   - When the head is ready, Gizmo authorizes PR Steward to dispatch complete
+     exact-head validation immediately. Focused tasks are optional on that path.
    - Gizmo obtains fresh exact-head remote evidence after every replacement
      push.
 

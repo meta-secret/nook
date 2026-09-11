@@ -53,8 +53,8 @@ These are the core engineering beliefs that guide the development of Nook. Becau
   commit, then continues from it and reruns pre-push hygiene.
 - Every pushed head immediately selects remote evidence. A head that is not
   validation-ready requires at least one relevant focused `task remote` job.
-- Gizmo dispatches `task pr:validate` immediately when the pushed head is ready
-  for complete validation. Focused jobs are optional on that path.
+- Gizmo authorizes PR Steward to dispatch `task pr:validate` when the pushed
+  head is ready. Focused jobs are optional on that path.
 - Every replacement push requires fresh exact-head remote evidence.
 - They do not add broad local builds, tests, e2e, container product gates, or
   duplicate local mirrors before push.
@@ -94,10 +94,10 @@ These are the core engineering beliefs that guide the development of Nook. Becau
   2. Gizmo assigns the bounded implementation task through the active harness.
   3. Gizmo continues from the Team Agent's shared-branch result.
   4. Gizmo runs Loom pre-push. Team-owned formatter mutations return to their
-     owners for a fresh committed handoff before Gizmo updates the PR.
-  5. Gizmo immediately dispatches a relevant focused hosted task when the head
-     is not validation-ready. Otherwise it immediately dispatches complete
-     validation.
+     owners for a fresh committed handoff before Gizmo authorizes PR Steward to update the PR.
+  5. Gizmo authorizes PR Steward to dispatch hosted validation immediately.
+     Use a relevant focused task until the head is validation-ready.
+     Dispatch complete validation when the head is ready.
   6. Gizmo assigns each bounded correction task to its owning team.
   7. Gizmo continues from verified fixes and runs Loom pre-push. Team-owned
      formatter mutations return to their owners for a fresh committed handoff

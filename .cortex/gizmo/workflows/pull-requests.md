@@ -41,7 +41,8 @@ operations described in the [PR Steward lifecycle](../../teams/pr-steward/workfl
 ## PR Steward boundary
 
 PR Steward owns the mechanical seam after Gizmo has prepared a coherent exact
-head.
+head. All GitHub commands and wrappers in this document are executed by
+PR Steward. Gizmo retains ordinary local `git` operations.
 
 It may perform these operations:
 
@@ -58,7 +59,8 @@ PR Steward does not push code commits.
 It does not choose technical fixes.
 It does not adjudicate review findings.
 It does not route functional work.
-It does not alter Workbench state.
+It does not author Workbench records or decide their state.
+It may execute exact parent-authorized Workbench publication.
 It does not declare readiness.
 It does not issue the final delivery verdict.
 
@@ -733,7 +735,7 @@ Static analysis includes Knip unused findings and jscpd clone/duplicate
 findings. Route those problems to the responsible team. Do not silence the
 gate. See [quality](../../teams/sre/workflows/quality.md#fix-check-findings--not-silence-them).
 
-1. Read the failed job log: `gh run view <run-id> --log-failed`
+1. Have PR Steward collect the failed job log: `gh run view <run-id> --log-failed`
 2. For **e2e / web failures**, read persisted app logs before changing code.
    Use the Playwright `nook-app-logs.json` attachment. Local sources include
    `fetchAppLogs(page)`, `/app-logs`, and `dumpNookLogs(page)`.

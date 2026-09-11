@@ -24,12 +24,12 @@ Validation has three layers:
 
 - **Required handoff:** Team Agents format and commit without pushing. Gizmo
   integrates, runs `task loom:pre-push`, and owns publication.
-- **Focused evidence:** after Gizmo pushes a non-ready head, use
+- **Focused evidence:** after Gizmo pushes a non-ready head, PR Steward uses
   `task remote TASK_NAME=<name>` for one relevant gate.
   - Do not batch broad gates sequentially before complete validation.
   - Use named Task selectors. A local Docker-backed task remains unavailable
     until it has a Kubernetes-native Pod implementation.
-- **Required remotely:** Gizmo triggers complete exact-head PR validation.
+- **Required remotely:** Gizmo authorizes PR Steward to trigger exact-head PR validation.
   - Dispatch every required hosted check immediately.
   - Never wait for GitHub review before dispatch.
   - After dispatch, request one circuit-guarded Codex review bound to the
@@ -59,6 +59,7 @@ prLand:
 # Gizmo, after integrating accepted Team Agent handoffs
 task loom:pre-push
 git push -u origin HEAD
+# PR Steward executes under Gizmo's operation packet:
 task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
 ```
 
@@ -73,10 +74,10 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
   3. push; and
   4. retry.
 - On a red remote run:
-  1. read `gh run view <id> --log-failed`;
+  1. have PR Steward return `gh run view <id> --log-failed` evidence;
   2. obtain the responsible Team Agent's formatted fix commit;
   3. Gizmo continues from the commit, runs pre-push, and pushes; and
-  4. Gizmo validates when ready or runs relevant focused proof.
+  4. Gizmo authorizes PR Steward to dispatch validation or focused proof.
 - Ordinary pushes do not refresh complete PR checks.
 - Markdown-only Cortex changes use the repository-policy workflow.
   - The workflow runs `task loom:cortex-audit`.
@@ -119,10 +120,10 @@ Does not apply to:
       on the agent machine.
 - [ ] A non-ready head requires a relevant focused `task remote`. Usefulness
       decides focused tasks only after the head is validation-ready.
-- [ ] Gizmo triggers complete validation with Loom or `task pr:validate`.
+- [ ] Gizmo authorizes PR Steward to trigger Loom or `task pr:validate`.
 - [ ] Complete validation dispatches hosted checks before requesting review.
 - [ ] Exact-head review runs concurrently with hosted validation.
-- [ ] Gizmo re-validates after every push that replaces the validated head.
+- [ ] Gizmo authorizes PR Steward to validate every replacement head.
 
 ## Validation
 

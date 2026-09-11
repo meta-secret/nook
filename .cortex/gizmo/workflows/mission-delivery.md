@@ -77,21 +77,21 @@ Report the blocker instead of reporting an intermediate state as complete.
      operation packet.
    - Authorize PR Steward to trigger the repository-owned exact-head review and
      validation path.
-   - Use `task remote TASK_NAME=web:build` for a remote web build.
-   - Use `task remote TASK_NAME=web:e2e` for remote browser validation.
+   - Have PR Steward use `task remote TASK_NAME=web:build` for a remote web build.
+   - Have PR Steward use `task remote TASK_NAME=web:e2e` for remote browser validation.
    - Route every finding to its functional owner.
    - Sequence the responsible writer in the current checkout.
    - Push the corrected head and obtain fresh exact-head evidence.
 7. **Finish delivery.**
    - Tell the reactive PR Steward child to stop and wait for its exit.
-   - Re-read the final GitHub state directly. Do this even when every expected
-     notification arrived.
+   - Authorize PR Steward to re-read final GitHub state and return evidence.
+     Require this even when every expected notification arrived.
    - Authorize PR Steward to run `task pr:ready PR=<number>` and return its
      read-only evidence.
    - Issue a separate merge authorization only after Gizmo's final readiness
      verdict succeeds.
    - Have PR Steward squash-merge and verify remote merge state.
-   - Publish the final Workbench update.
+   - Authorize PR Steward to publish the exact final Workbench update.
    - If another planned slice remains, fetch current `origin/main`.
    - Create the next branch only after the current slice is remotely verified
      and closed out.
@@ -130,7 +130,7 @@ Delivery is complete only when:
 - repository-owned checks pass on the exact head;
 - actionable review findings are resolved;
 - any reactive PR Steward child has stopped;
-- Gizmo has reconciled final GitHub state directly;
+- Gizmo has reconciled final GitHub evidence returned by PR Steward;
 - `task pr:ready PR=<number>` succeeds;
 - every pull request is squash-merged;
 - every remote merge is verified; and
