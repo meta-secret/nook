@@ -2,7 +2,6 @@ import { ok } from 'neverthrow'
 import { describe, expect, mock, test } from 'bun:test'
 import { WebsiteAuthenticatorResponseStatus } from '../src/lib/login-fill-messages'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import { extensionSessionProbeDeadline } from '../src/offscreen/session-request-adapter'
 
 type GrantAccessResponse =
@@ -21,16 +20,42 @@ type ExtensionWindowRequest = {
   url: string
 }
 
-type LoginAccountAvailabilityRequest = {
-  queue: {
-    kind: string
-    expiresAt?: number
-    priority?: string
+type AccountPickerSessions =
+  (typeof import('../src/background/service-worker/account-pickers'))['accountPickerSessions']
+type LoginAccountAvailabilityRequest = Parameters<
+  AccountPickerSessions['loginAccountAvailabilityForOrigin']
+>[0]
+type LoginAccountAvailabilityResponse = Awaited<
+  ReturnType<AccountPickerSessions['loginAccountAvailabilityForOrigin']>
+>
+
+function websiteSender({
+  id = 'nook-extension',
+  tabId = 42,
+}: {
+  id?: string
+  tabId?: number
+} = {}): chrome.runtime.MessageSender {
+  return {
+    id,
+    url: 'https://example.test/login',
+    tab: {
+      id: tabId,
+      index: 0,
+      pinned: false,
+      highlighted: false,
+      windowId: 1,
+      active: true,
+      incognito: false,
+      selected: true,
+      discarded: false,
+      autoDiscardable: true,
+      frozen: false,
+      lastAccessed: 0,
+      groupId: -1,
+    },
   }
 }
-
-type LoginAccountAvailabilityResponse =
-  { ok: true; accounts: [] } | { ok: false }
 
 describe('websiteLoginOptions', () => {
   test('opens one trusted pairing surface when Continue finds no password-filling grant', async () => {
@@ -95,11 +120,7 @@ describe('websiteLoginOptions', () => {
     }
     const response = await accountPickerSessions.websiteLoginOptions({
       message: { payload: { origin: 'https://example.test' } },
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
+      sender: websiteSender(),
       dependencies,
     })
 
@@ -125,11 +146,7 @@ describe('websiteLoginOptions', () => {
     const passiveResponse =
       await accountPickerSessions.websiteLoginMatchAvailability({
         origin: 'https://example.test',
-        sender: {
-          id: 'nook-extension',
-          url: 'https://example.test/login',
-          tab: { id: 42 },
-        },
+        sender: websiteSender(),
         dependencies,
       })
     expect(passiveResponse).toEqual({ kind: 'locked' })
@@ -141,11 +158,7 @@ describe('websiteLoginOptions', () => {
     const unlockedPassiveResponse =
       await accountPickerSessions.websiteLoginMatchAvailability({
         origin: 'https://example.test',
-        sender: {
-          id: 'nook-extension',
-          url: 'https://example.test/login',
-          tab: { id: 42 },
-        },
+        sender: websiteSender(),
         dependencies,
       })
     expect(unlockedPassiveResponse).toEqual({ kind: 'ready', count: 0 })
@@ -160,11 +173,7 @@ describe('websiteLoginOptions', () => {
     const failedPassiveResponse =
       await accountPickerSessions.websiteLoginMatchAvailability({
         origin: 'https://example.test',
-        sender: {
-          id: 'nook-extension',
-          url: 'https://example.test/login',
-          tab: { id: 42 },
-        },
+        sender: websiteSender(),
         dependencies,
       })
     expect(failedPassiveResponse).toEqual({ kind: 'unavailable' })
@@ -177,12 +186,20 @@ describe('websiteLoginOptions', () => {
     >[0] = {
       grants: [
         {
+          vaultType: 'simple',
           vaultStoreId: 'vault-1',
           vaultName: 'Personal',
           deviceId: 'device-1',
           devicePublicKey: 'device-public-key',
           deviceSigningPublicKey: 'device-signing-key',
-        } as StoredExtensionPairingGrant,
+          deviceLabel: 'Laptop',
+          approvedAt: '2026-08-10T00:00:00Z',
+          scopes: ['password-filling'],
+          syncProviderCount: 0,
+          eventCount: 1,
+          eventLogHeads: ['event-1'],
+          lastLocalSyncAt: '2026-08-10T00:00:00Z',
+        },
       ],
       origin: 'https://example.test',
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
@@ -195,11 +212,7 @@ describe('websiteLoginOptions', () => {
     const interactiveResponse = await accountPickerSessions.websiteLoginOptions(
       {
         message: { payload: { origin: 'https://example.test' } },
-        sender: {
-          id: 'nook-extension',
-          url: 'https://example.test/login',
-          tab: { id: 42 },
-        },
+        sender: websiteSender(),
         dependencies,
       },
     )
@@ -217,11 +230,7 @@ describe('websiteLoginOptions', () => {
     }
     const rejectedResponse = await accountPickerSessions.websiteLoginOptions({
       message: { payload: { origin: 'https://example.test' } },
-      sender: {
-        id: 'foreign-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
+      sender: websiteSender({ id: 'foreign-extension' }),
       dependencies,
     })
 
