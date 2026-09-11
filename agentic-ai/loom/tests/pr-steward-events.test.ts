@@ -581,12 +581,21 @@ describe('exact-head routing observations', () => {
 
   test('processes one admitted observation at a time', async () => {
     const reader = new PendingPrReader();
-    const event = cloudEvent({
-      event: 'pull_request',
-      body: { repository, pull_request: pullRequest },
-    });
+    const events = [
+      'serial-1',
+      'serial-2',
+      'serial-3',
+      'serial-4',
+      'serial-5',
+    ].map((id) =>
+      cloudEvent({
+        event: 'pull_request',
+        body: { repository, pull_request: pullRequest },
+        id,
+      }),
+    );
     const observation = PrStewardEventFixture.observe({
-      data: [event, event, event, event, event],
+      data: events,
       reader,
     });
     await Bun.sleep(0);
