@@ -28,7 +28,7 @@ export type AuthenticationSubmissionObservation = {
 const ISOLATED_BRIDGE_STATE = "__nookAuthenticationDirectSubmitBridgeV1";
 
 /** Owns this browser host’s resources and interaction lifecycle. */
-class AuthenticationSubmissionBridge {
+const AuthenticationSubmissionBridge = class {
   constructor(private readonly browser: typeof globalThis) {}
 
   private isolatedBridgeState(): AuthenticationDirectSubmitBridgeState {
@@ -181,7 +181,7 @@ class AuthenticationSubmissionBridge {
     }
     return result;
   }
-}
+};
 
 export const authenticationSubmissionBridge =
   new AuthenticationSubmissionBridge(globalThis);
