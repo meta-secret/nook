@@ -4,7 +4,7 @@ import {
   websitePasskeyOptionsDisposition,
   WebsitePasskeyOptionsDispositionKind,
 } from '../src/content/webauthn-options-response'
-import { WebsitePasskeyOptionsStatus } from '../src/lib/webauthn-messages'
+import { WebsitePasskeyOptionsStatus } from '../src/lib/webauthn-message-types'
 
 describe('WebAuthn options content response', () => {
   test('rejects invalid vault options instead of falling back to the browser', () => {

@@ -17,7 +17,9 @@ import {
 import type {
   WebsitePasskeyCancelMessage,
   WebsitePasskeyOptionsMessage,
+  WebsitePasskeyOptionsResponse,
   WebsitePasskeyPerformMessage,
+  WebsitePasskeyPerformResponse,
 } from '../lib/webauthn-messages'
 import {
   PageResponseAction,
@@ -222,7 +224,7 @@ function chooseOption({
 
 async function handleRequest(request: PageRequest): Promise<void> {
   const requestJson = JSON.stringify(request.request)
-  const nookTypedArgs0_4: Parameters<typeof runtimeMessage>[0] = {
+  const nookTypedArgs0_4: WebsitePasskeyOptionsMessage = {
     type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions,
     payload: {
       requestId: request.requestId,
@@ -231,17 +233,20 @@ async function handleRequest(request: PageRequest): Promise<void> {
       expiresAt: request.expiresAt,
     },
   } satisfies WebsitePasskeyOptionsMessage
-  const optionsResponse = await runtimeMessage<{
-    ok?: boolean
-    status?: WebsitePasskeyOptionsStatus
-    options?: unknown
-  }>(nookTypedArgs0_4)
-  const options = validOptions(optionsResponse?.options)
+  const optionsResponse =
+    await new WebAuthnRuntimeTransport<WebsitePasskeyOptionsResponse>(
+      nookTypedArgs0_4,
+    ).send()
+  const options = validOptions(
+    optionsResponse.ok ? optionsResponse.options : [],
+  )
   const dispositionArgs: Parameters<
     typeof websitePasskeyOptionsDisposition
   >[0] = {
-    ok: optionsResponse?.ok === true,
-    status: optionsResponse?.status,
+    ok: optionsResponse.ok,
+    status: optionsResponse.ok
+      ? optionsResponse.status
+      : WebsitePasskeyOptionsStatus.Unavailable,
     hasOptions: options.length > 0,
   }
   const disposition = websitePasskeyOptionsDisposition(dispositionArgs)
@@ -268,7 +273,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
     return
   }
   const { option: selected } = choice
-  const nookTypedArgs0_5: Parameters<typeof runtimeMessage>[0] = {
+  const nookTypedArgs0_5: WebsitePasskeyPerformMessage = {
     type: WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform,
     payload: {
       requestId: request.requestId,
@@ -281,7 +286,10 @@ async function handleRequest(request: PageRequest): Promise<void> {
         : {}),
     },
   } satisfies WebsitePasskeyPerformMessage
-  const result = await runtimeMessage<Record<string, unknown>>(nookTypedArgs0_5)
+  const result =
+    await new WebAuthnRuntimeTransport<WebsitePasskeyPerformResponse>(
+      nookTypedArgs0_5,
+    ).send()
   if (result?.ok === true) {
     const nookTypedArgs0_5: Parameters<typeof respond>[0] = {
       requestId: request.requestId,
@@ -315,7 +323,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return
   if (message.type === 'cancel') {
     removePrompt(message.requestId)
-    const nookTypedArgs0_6: Parameters<typeof runtimeMessage>[0] = {
+    const nookTypedArgs0_6: WebsitePasskeyCancelMessage = {
       type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel,
       payload: { requestId: message.requestId },
     } satisfies WebsitePasskeyCancelMessage
