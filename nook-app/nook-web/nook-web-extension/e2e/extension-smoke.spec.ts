@@ -457,6 +457,15 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
     await expect(
+      replacementPopupPage.getByTestId('extension-device-setup'),
+    ).toBeVisible()
+    await expect(
+      replacementPopupPage.getByTestId('device-protection-use-existing-choice'),
+    ).toBeVisible()
+    await replacementPopupPage
+      .getByTestId('device-protection-use-existing-choice')
+      .click()
+    await expect(
       replacementPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
     const replacementPage = await openSimpleVaultConnection(
