@@ -41,6 +41,10 @@ type CheckSummary = {
   readonly failed: number;
   readonly unknown: number;
 };
+enum PrStewardCheckContextKind {
+  CheckRun = 'checkRun',
+  StatusContext = 'statusContext',
+}
 
 export class PrStewardChecksReader implements PrStewardCompletionReader {
   static readonly #query = `query($number:Int!) {
@@ -147,8 +151,14 @@ export class PrStewardChecksReader implements PrStewardCompletionReader {
     if (!value && typeof value === 'object')
       return { total: 0, pending: 0, failed: 0, unknown: 0 };
     const contexts = this.#object(this.#field({ record: this.#object(value), key: 'contexts' }));
-    const checks = this.#counts({ contexts, kind: 'checkRun' });
-    const statuses = this.#counts({ contexts, kind: 'statusContext' });
+    const checks = this.#counts({
+      contexts,
+      kind: PrStewardCheckContextKind.CheckRun,
+    });
+    const statuses = this.#counts({
+      contexts,
+      kind: PrStewardCheckContextKind.StatusContext,
+    });
     return {
       total: checks.total + statuses.total,
       pending: checks.pending + statuses.pending,
@@ -159,7 +169,7 @@ export class PrStewardChecksReader implements PrStewardCompletionReader {
 
   #counts(request: {
     readonly contexts: UntrustedYamlMap;
-    readonly kind: 'checkRun' | 'statusContext';
+    readonly kind: PrStewardCheckContextKind;
   }): CheckSummary {
     const expected = this.#field({ record: request.contexts, key: `${request.kind}Count` });
     const groups = this.#field({ record: request.contexts, key: `${request.kind}CountsByState` });
@@ -180,7 +190,7 @@ export class PrStewardChecksReader implements PrStewardCompletionReader {
         throw new PrStewardGithubUnavailableError({ cause: false });
       seen.add(state);
       total += count;
-      if (request.kind === 'checkRun') {
+      if (request.kind === PrStewardCheckContextKind.CheckRun) {
         if (['PENDING', 'QUEUED', 'IN_PROGRESS', 'WAITING', 'REQUESTED'].includes(state)) pending += count;
         else if (['FAILURE', 'ACTION_REQUIRED', 'CANCELLED', 'STALE', 'STARTUP_FAILURE', 'TIMED_OUT'].includes(state)) failed += count;
         else if (state === 'COMPLETED') unknown += count;
