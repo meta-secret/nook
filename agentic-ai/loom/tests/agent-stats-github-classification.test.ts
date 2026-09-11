@@ -103,6 +103,41 @@ describe('agent stats GitHub classification', () => {
     ).toEqual(ok(GitHubValidationRequest.Requested));
   });
 
+  test('central CI ignores automatic policy jobs and accepts nested validation', () => {
+    const gate = 'PR validation / Validate explicit CI request';
+    expect(
+      new GitHubActionJobs([
+        { name: 'Classify CI paths', conclusion: 'success' },
+        {
+          name: 'Repository policy / Enforce repository policy',
+          conclusion: 'success',
+        },
+        { name: 'Hive / Verify', conclusion: 'success' },
+        {
+          name: 'Web research / Build and deploy research catalog',
+          conclusion: 'success',
+        },
+        {
+          name: 'PR validation / Native Rust verification',
+          conclusion: 'skipped',
+        },
+      ]).validationRequest(gate),
+    ).toEqual(ok(GitHubValidationRequest.NotRequested));
+    expect(
+      new GitHubActionJobs([
+        { name: 'PR validation / Web verification', conclusion: 'failure' },
+      ]).validationRequest(gate),
+    ).toEqual(ok(GitHubValidationRequest.Requested));
+    expect(
+      new GitHubActionJobs([
+        {
+          name: 'Rust ecosystem / Kani bounded proofs',
+          conclusion: 'cancelled',
+        },
+      ]).validationRequest(gate),
+    ).toEqual(ok(GitHubValidationRequest.Requested));
+  });
+
   test('counts findings in noncanonical details blocks', () => {
     const reviewBody = `### 💡 Codex Review
 

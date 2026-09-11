@@ -156,42 +156,6 @@ tasks:
         fi
         if [ "$local_sha" != "$dispatched_pr_sha" ] || [ "$base_ref" != "$dispatched_base_ref" ] || [ "$dispatched_base_current" != "1" ]; then
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
-          repository="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
-          cancel_attempt=0
-          cancelled_run_ids=""
-          while [ "$cancel_attempt" -lt 6 ]; do
-            run_ids="$(
-              for run_status in requested waiting pending queued in_progress; do
-                gh api --paginate \
-                  "repos/$repository/actions/runs?head_sha=$dispatched_pr_sha&status=$run_status&per_page=100" \
-                  --jq ".workflow_runs[] | select(.event == \"pull_request\") | select(any(.pull_requests[]?; .number == $REQUESTED_PR)) | select(.name == \"PR\" or .name == \"Rust ecosystem checks\") | .id"
-              done | sort -u
-            )"
-            if [ -n "$run_ids" ]; then
-              for run_id in $run_ids; do
-                case " $cancelled_run_ids " in
-                  *" $run_id "*) ;;
-                  *)
-                    if gh run cancel "$run_id"; then
-                      cancelled_run_ids="$cancelled_run_ids $run_id"
-                    elif latest_run_status="$(gh run view "$run_id" --json status --jq .status)"; then
-                      if [ "$latest_run_status" = "completed" ]; then
-                        cancelled_run_ids="$cancelled_run_ids $run_id"
-                      else
-                        echo "Could not cancel active replacement-state run $run_id; retrying within the bounded cleanup window." >&2
-                      fi
-                    else
-                      echo "Could not cancel or recheck replacement-state run $run_id; retrying within the bounded cleanup window." >&2
-                    fi
-                    ;;
-                esac
-              done
-            fi
-            cancel_attempt=$((cancel_attempt + 1))
-            if [ "$cancel_attempt" -lt 6 ]; then
-              sleep 5
-            fi
-          done
           echo "PR #$REQUESTED_PR changed head or base while validation was dispatched; removed $validation_label from the replacement state." >&2
           exit 2
         fi

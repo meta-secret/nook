@@ -38,7 +38,7 @@ Use this workflow for quality, CI, and deployment changes.
    - Composites call those stages in order so a leaf miss cannot cold-rebuild apt.
    - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
    - `main.yml` owns all merged-head ecosystem execution.
-   - Thin `rust-ecosystem.yml` keeps schedule, manual, and labeled minds-only PR entry points.
+   - `ci.yml` owns schedule, manual, and labeled minds-only PR entry points.
    - Main includes minds paths, then skips its product job chain when the push is minds-only.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
    - Kani pins its specialized model-checking toolchain in `product.Dockerfile`.

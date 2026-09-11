@@ -8,26 +8,20 @@
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
 # Vale-policy, repository-policy-only, and agentic-AI-only changes do not need the product
 # pipeline. Agent statistics live in meta-secret/nook-workbench.
-# Validation is requested explicitly by adding a label. Ordinary pushes do not
-# spend hosted workers. A later push invalidates the prior head's checks, so the
-# label must be toggled again before merge. The trusted Linear close workflow
-# claims the same exact-head concurrency group to cancel in-flight validation on PR close.
-# Schedule, manual, and minds-only PR ecosystem entry points stay in rust-ecosystem.yml.
+# Central ci.yml requests this reusable component only for explicit validation labels.
+# It owns event selection and native cancellation.
 
 name: PR
 
 on:
-  pull_request:
-    types: [labeled]
-    paths-ignore:
-      - .cortex/**
-      - .cursor/**
-      - .vale.ini
-      - .vale/**
-      - .github/workflows/repository-policy.yml
-      - .github/workflows/web-research.yml
-      - agentic-ai/**
-      - nook-app/nook-web/nook-web-research/**
+  workflow_call:
+    inputs:
+      full_e2e_requested:
+        required: true
+        type: boolean
+      validation_requested:
+        required: true
+        type: boolean
 
 permissions:
   actions: read
@@ -35,10 +29,6 @@ permissions:
   deployments: write
   pull-requests: write
   issues: write
-
-concurrency:
-  group: pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
-  cancel-in-progress: true
 
 env:
   PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
@@ -48,12 +38,14 @@ env:
 jobs:
   validation-request:
     name: Validate explicit CI request
+    if: inputs.validation_requested
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 2
     outputs:
       ui-demos-enabled: ${{ 'false' }}
     steps:
       - name: Reject unsupported label events
+        if: github.event.action == 'labeled'
         env:
           REQUESTED_LABEL: ${{ github.event.label.name }}
         run: |
@@ -68,8 +60,7 @@ jobs:
   rust-ecosystem:
     name: Rust ecosystem
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: validation-request
     uses: ./.github/workflows/rust-ecosystem-checks.yml
     secrets: inherit
@@ -80,10 +71,10 @@ jobs:
   rust:
     name: Native Rust verification
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -104,7 +95,7 @@ jobs:
       - name: Derive native validation key
         id: native-key
         run: |
-          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}" >> "$GITHUB_OUTPUT"
+          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/ci.yml', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Locate trusted native handoff
         id: trusted-native
@@ -164,7 +155,7 @@ jobs:
             '.schema_version == 1 and
              .kind == "native" and
              .input_key == $key and
-             .source_workflow == ".github/workflows/pr.yml" and
+             .source_workflow == ".github/workflows/ci.yml" and
              .producer_jobs_verified == true' \
             "$dir/nook-validation-manifest.json" >/dev/null
           for file in summary.txt summary.json lcov.info coverage-floor.json; do
@@ -215,10 +206,10 @@ jobs:
   wasm:
     name: WASM build and artifact
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    timeout-minutes: 10
     outputs:
       run-node-tests: ${{ steps.decide-node-tests.outputs.run-node-tests }}
     steps:
@@ -242,7 +233,7 @@ jobs:
       - name: Derive WASM validation key
         id: wasm-key
         run: |
-          echo "value=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}" >> "$GITHUB_OUTPUT"
+          echo "value=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/ci.yml', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Locate trusted WASM handoff
         id: trusted-wasm
@@ -302,7 +293,7 @@ jobs:
             '.schema_version == 1 and
              .kind == "wasm" and
              .input_key == $key and
-             .source_workflow == ".github/workflows/pr.yml" and
+             .source_workflow == ".github/workflows/ci.yml" and
              .producer_jobs_verified == true' \
             "$dir/nook-validation-manifest.json" >/dev/null
           for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts nook-wasm-build-mode; do
@@ -361,10 +352,10 @@ jobs:
   wasm-node-test:
     name: WASM Node tests
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: wasm
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    timeout-minutes: 10
     steps:
       - name: Checkout
         if: needs.wasm.outputs.run-node-tests == 'true'
@@ -409,8 +400,7 @@ jobs:
     name: Web verification
     timeout-minutes: 10
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: [validation-request, wasm]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     outputs:
@@ -543,7 +533,7 @@ jobs:
 
       - name: Publish exact-source PR browser job image
         if: >-
-          contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||
+          inputs.full_e2e_requested ||
           (needs.validation-request.outputs.ui-demos-enabled == 'true' &&
           steps.ui-demo-contract.outputs.required == 'true') ||
           (steps.auth-sensitive-e2e-contract.outputs.required == 'true' &&
@@ -590,10 +580,10 @@ jobs:
       needs.verify.outputs.ui-demo-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: [validation-request, verify]
     runs-on: nook-k0s-container
+    timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -675,10 +665,10 @@ jobs:
       needs.verify.outputs.auth-sensitive-e2e-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: [validation-request, verify, wasm-node-test]
     runs-on: nook-k0s-container
+    timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -696,12 +686,12 @@ jobs:
     name: Verify and preview
     if: >-
       always() &&
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
     needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    timeout-minutes: 10
     steps:
       - name: Enforce required verification results
         env:
@@ -909,8 +899,7 @@ jobs:
   coverage:
     name: Rust coverage report
     if: >-
-      (github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e')
+      inputs.validation_requested
     needs: rust
     uses: ./.github/workflows/pr-coverage.yml
     secrets: inherit
@@ -920,9 +909,10 @@ jobs:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+      inputs.full_e2e_requested
     needs: [verify, wasm-node-test]
     runs-on: nook-k0s-container
+    timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -947,11 +937,13 @@ jobs:
     name: Full browser e2e (main fix)
     if: >-
       always() &&
+      inputs.validation_requested &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+      inputs.full_e2e_requested
     needs: [full-e2e-shard, wasm]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     steps:
       - name: Require both browser shards
         env:
@@ -963,9 +955,10 @@ jobs:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+      inputs.full_e2e_requested
     needs: [verify, wasm-node-test]
     runs-on: nook-k0s-container
+    timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:

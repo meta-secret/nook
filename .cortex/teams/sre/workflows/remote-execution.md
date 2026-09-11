@@ -31,12 +31,13 @@ Nook separates iterative evidence from merge authorization.
    - Provide repeatable debugging evidence.
    - Do not authorize merge.
 2. **Complete PR validation**
-   - Runs through `.github/workflows/pr.yml`.
-   - Starts only after Gizmo explicitly requests validation for the integrated
-     pushed head.
+   - Runs through `.github/workflows/ci.yml` and its reusable PR component.
+   - Activates when Gizmo adds a validation label.
+   - Continues on subsequent commits while that label remains.
    - Provides the exact-head checks and deployment required for readiness.
 
-Ordinary PR pushes do not start complete validation.
+Unlabeled PR pushes do not start complete product validation. A retained
+validation label requests fresh evidence for each subsequent commit.
 
 Every pushed head gets remote evidence immediately: complete validation when
 ready, or at least one relevant focused task otherwise.

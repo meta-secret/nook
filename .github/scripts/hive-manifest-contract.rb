@@ -925,6 +925,13 @@ if hive_taskfile.include?("host.docker.internal")
 end
 
 hive_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
+ci_workflow = File.read(File.join(root, ".github/workflows/ci.yml"))
+unless ci_workflow.include?("  pull_request:") && ci_workflow.include?("  push:") &&
+       ci_workflow.include?("branches: [main]") &&
+       ci_workflow.include?("if: needs.scope.outputs.hive == 'true'") &&
+       ci_workflow.include?("uses: ./.github/workflows/hive.yml")
+  raise "Central CI must route Hive changes for PR and Main verification"
+end
 root_agentic_taskfile = File.read(File.join(root, ".task/agentic-ai.yml"))
 guest_changed_formatter = root_agentic_taskfile.match(
   /^  hive:guest:format:changed:\n(?<body>.*?)(?=^  hive:guest:format:)/m
@@ -943,15 +950,15 @@ end
 unless hive_dockerfile.include?("COPY --from=nook-formatter") &&
        hive_dockerfile.include?("/opt/nook-formatter/") &&
        hive_taskfile.scan('--build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"').length == 9 &&
-       hive_workflow.scan(".github/formatting/**").length == 2 &&
+       ci_workflow.include?(".github/formatting/*") &&
        infra_taskfile.include?(".github/formatting")
   raise "Hive runtime must bake and track the canonical external formatter bundle"
 end
 
-unless hive_workflow.scan("agentic-ai/minds/hive/controller/reaper.test.ts").length == 2
+unless ci_workflow.include?("agentic-ai/minds/hive/controller/reaper.test.ts")
   raise "Hive controller behavior-test changes must trigger PR and Main verification"
 end
-unless hive_workflow.scan(".github/scripts/k0s-firewall-rollback-test.ts").length == 2
+unless ci_workflow.include?(".github/scripts/k0s-firewall-rollback-test.ts")
   raise "k0s firewall rollback-test changes must trigger PR and Main verification"
 end
 unless hive_workflow.include?("run: task hive:verify") &&

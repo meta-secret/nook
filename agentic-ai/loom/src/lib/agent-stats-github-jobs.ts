@@ -71,6 +71,9 @@ export class GitHubActionJobs {
       if (name.isErr()) return err(name.error);
       if (
         name.value !== gateJobName &&
+        (gateJobName !== 'PR validation / Validate explicit CI request' ||
+          name.value.startsWith('PR validation / ') ||
+          name.value.startsWith('Rust ecosystem / ')) &&
         new GitHubEvidenceField({
           record: job,
           key: 'conclusion',

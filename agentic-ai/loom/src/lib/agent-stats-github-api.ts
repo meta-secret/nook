@@ -340,11 +340,13 @@ export class GitHubActionAttempt {
     if (requiredField12.isErr()) return err(requiredField12.error);
     const workflow = requiredField12.value;
     const gateJobName =
-      workflow === 'PR'
-        ? 'Validate explicit CI request'
-        : workflow === 'Rust ecosystem checks'
-          ? 'Validate explicit ecosystem request'
-          : '';
+      workflow === 'CI'
+        ? 'PR validation / Validate explicit CI request'
+        : workflow === 'PR'
+          ? 'Validate explicit CI request'
+          : workflow === 'Rust ecosystem checks'
+            ? 'Validate explicit ecosystem request'
+            : '';
     if (gateJobName.length === 0) return ok(GitHubValidationRequest.Requested);
     const jobsRequest: GitHubApiRequest = {
       repoRoot: request.repoRoot,

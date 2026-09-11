@@ -10,6 +10,26 @@ See [issues](../../../gizmo/workflows/issues.md),
 [agent statistics](../../../gizmo/workflows/agent-statistics.md), and
 [main-build-statistics.md](main-build-statistics.md).
 
+## Central CI entrypoint
+
+[`ci.yml`](../../../../.github/workflows/ci.yml) owns PR, Main, scheduled,
+and manual ecosystem execution in one Actions run named `CI`.
+
+- A secret-free classifier reads changed paths without executing source.
+- Repository policy runs on PR changes and Main pushes.
+- Hive and research retain their existing changed-path selections.
+- A validation label activates product checks for subsequent PR commits.
+- The router reads current labels to avoid stale event ordering.
+- Removing the validation label disables product checks on later pushes.
+- Main product work retains its separate path selection.
+- PR replacement and close events use native concurrency.
+- Base-only edits and close events start no classifier or validation jobs.
+- Main runs remain serialized to protect cache publication.
+- Runner jobs have a ten-minute maximum. The five Rust ecosystem jobs use
+  five minutes. Existing shorter limits remain in place.
+- Privileged completion publishers remain separate trusted workflows.
+- Manual remote execution and release workflows remain separate.
+
 ## Workflow map
 
 - **[`remote.yml`](../../../../.github/workflows/remote.yml)**
@@ -17,48 +37,40 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Purpose: Focused command batch; no merge authorization
   - GitHub PAT: No
 - **[`pr.yml`](../../../../.github/workflows/pr.yml)**
-  - Trigger: Explicit `ci:validate` / `ci:full-e2e` label
+  - Trigger: Reusable call from `ci.yml` after a validation label
   - Purpose: Exact-head PR gate, including Rust ecosystem jobs
   - GitHub PAT: No
-- **[`pr-obsolete-validation.yml`](../../../../.github/workflows/pr-obsolete-validation.yml)**
-  - Trigger: `pull_request_target` on synchronize or base-ref edit
-  - Purpose: Cancel obsolete PR, Rust ecosystem, and Web research runs
-  - GitHub PAT: No
 - **[`repository-policy.yml`](../../../../.github/workflows/repository-policy.yml)**
-  - Trigger: Every PR; path-filtered Main changes
+  - Trigger: Reusable call from `ci.yml`
   - Purpose: Source architecture plus conditional Loom verification
   - GitHub PAT: No
 - **[`web-research.yml`](../../../../.github/workflows/web-research.yml)**
-  - Trigger: Path-filtered PR/Main changes or manual dispatch
+  - Trigger: Reusable call from `ci.yml` for research paths
   - Purpose: Research check, build, Cloudflare deploy, and PR preview
   - GitHub PAT: No
-- **[`rust-ecosystem.yml`](../../../../.github/workflows/rust-ecosystem.yml)**
-  - Trigger: Schedule, manual, minds-only PR
-  - Purpose: Specialist Rust ecosystem entry points
-  - GitHub PAT: No
 - **[`pr-validation-handoff.yml`](../../../../.github/workflows/pr-validation-handoff.yml)**
-  - Trigger: Successful same-repository PR workflow
+  - Trigger: Successful same-repository CI run with PR product verification
   - Purpose: Promote trusted PR artifacts
   - GitHub PAT: No
 - **[`linear-ui-demo.yml`](../../../../.github/workflows/linear-ui-demo.yml)**
-  - Trigger: Successful PR workflow / PR close
+  - Trigger: Successful CI run / PR close
   - Purpose: Retain disabled publication and close previously created Linear
     issues
   - GitHub PAT: No
 - **[`main.yml`](../../../../.github/workflows/main.yml)**
-  - Trigger: Push to `main`
+  - Trigger: Reusable call from `ci.yml` on Main pushes
   - Purpose: Product + ecosystem verify, e2e, dev deploy
   - GitHub PAT: No
 - **[`main-build-stats.yml`](../../../../.github/workflows/main-build-stats.yml)**
-  - Trigger: Completed `Main` attempt
+  - Trigger: Completed Main-push `CI` attempt
   - Purpose: Commit Main build stats to Workbench
   - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
 - **[`main-failure-handoff.yml`](../../../../.github/workflows/main-failure-handoff.yml)**
-  - Trigger: Failed `Main` attempt
+  - Trigger: Failed Main-push `CI` attempt
   - Purpose: Create Hive Workbench incident
   - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
 - **[`hive.yml`](../../../../.github/workflows/hive.yml)**
-  - Trigger: Hive/infra PR changes and Main pushes
+  - Trigger: Reusable call from `ci.yml` for Hive paths
   - Purpose: Hive format/Clippy/tests
   - GitHub PAT: No
 - **[`release.yml`](../../../../.github/workflows/release.yml)**
@@ -101,8 +113,8 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Rust domain unit tests + coverage, no-opt WASM, web/unit tests, all three web builds.
 - Shared Rust ecosystem gates via `rust-ecosystem-checks.yml`.
 - Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
-- Ordinary pushes do not start this workflow.
-- Only `ci:validate` / `ci:full-e2e` label events start it.
+- Unlabeled pushes skip product validation.
+- `ci:validate` or `ci:full-e2e` remains active across subsequent commits.
 - Headless UI-demo execution is temporarily disabled.
 - The UI-demo contract and focused spec requirement remain active.
 - New UI-demo artifacts are not published.
@@ -111,18 +123,6 @@ See [issues](../../../gizmo/workflows/issues.md),
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
 - Keep independent long-running gates on separate ARC Pods.
 - Combine jobs only when measured setup savings exceed lost parallelism.
-
-**`pr-obsolete-validation.yml`**
-
-- Runs trusted default-branch code without checking out pull-request code.
-- Handles head synchronization and base-ref edits.
-- Ignores edits that do not change the base ref.
-- Grants only `actions: write`, `contents: read`, and `pull-requests: read`.
-- Cancels active PR, Rust ecosystem, and Web research runs for obsolete heads.
-- Cancels stale-base PR and Rust ecosystem runs after a base retarget.
-- Creates no transition marker, comment, or backfill state.
-- Performs no review request or review wait.
-- Its bounded inspection window serves only the Actions registration race.
 
 **`repository-policy.yml`**
 
@@ -146,20 +146,10 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Deploys path-applicable PR previews and Main updates to Cloudflare Pages.
 - Records the deployment and comments the PR preview URL.
 
-**`rust-ecosystem.yml`**
-
-- Each shared ecosystem job has a five-minute limit.
-- Scheduled and manual fuzz smoke use the same 20-second budget per target.
-- Thin entry points outside the product PR pipeline.
-- Weekly schedule and `workflow_dispatch`.
-- Labeled `agentic-ai/minds/**` PRs only, because `pr.yml` ignores `agentic-ai/**`.
-- Calls the same `rust-ecosystem-checks.yml` jobs as labeled product PRs and Main.
-- Ordinary PR pushes do not start it.
-
 **`pr-validation-handoff.yml`**
 
 - Runs from trusted default-branch code.
-- Receives only completed labeled validation runs because PR close is not a `PR` workflow trigger.
+- Publishes only completed CI runs with successful opted-in product verification.
 - Verifies the successful source run and required jobs.
 - Validates native/WASM artifact shapes, attaches provenance.
 - Publishes exact-input handoffs that later PRs may trust.
@@ -167,7 +157,7 @@ See [issues](../../../gizmo/workflows/issues.md),
 **`linear-ui-demo.yml`**
 
 - Runs from the trusted default branch.
-- Claims the current `pr-<number>-<head-sha>` concurrency group on close to cancel in-flight validation.
+- Uses an independent publisher group. Central CI owns close cancellation.
 - Keeps artifact publication disabled.
 - Keeps the retained publisher implementation available for later re-enable.
 - Completes or cancels matching Linear issues created before publication was
@@ -251,11 +241,13 @@ See [issues](../../../gizmo/workflows/issues.md),
 flowchart LR
   branch[Exact pushed branch head] --> remote_yml[remote.yml focused task batch]
   PR[Ready pull request] --> label[Validation label]
-  label --> pr_yml[pr.yml]
+  label --> ci_yml[ci.yml]
+  ci_yml --> pr_yml[pr.yml reusable]
   pr_yml --> preview[Cloudflare isolated aliases]
   pr_yml --> pr_deployment[github-pages deployment status]
 
-  merge[Squash merge to main] --> main_yml[main.yml]
+  merge[Squash merge to main] --> ci_yml
+  ci_yml --> main_yml[main.yml reusable]
   main_yml --> main_verify[Verify + build + e2e]
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
   main_yml --> main_stats[Persist completed run metrics]
@@ -279,8 +271,12 @@ flowchart LR
 Cancellation is scoped to work that a newer run actually supersedes:
 
 - PR validation uses `pr-<number>`. A push makes earlier exact-head evidence
-  stale. The next explicit validation request cancels an older active run for
-  that PR.
+  stale. Native concurrency cancels the older active run on synchronization
+  or a base-ref edit. Product validation stays label-gated.
+- Unrelated labels and non-base edits use isolated concurrency groups.
+- Rust specialist PR execution shares the central CI run.
+- Web research shares central CI cancellation.
+- Central event registration is independent of changed-path classification.
 - Separate PRs continue to receive independent required checks.
 - Do not replace this with a global PR group, which would cancel other contributors' required checks on push.
 - Main is serialized: an active run completes to protect its cache writers, while the single pending slot coalesces bursts to the newest merged revision.

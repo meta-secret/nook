@@ -79,52 +79,27 @@ fn head_transition_marker_and_stabilization_routes_are_absent() -> Result<()> {
 
 #[test]
 fn obsolete_validation_cancellation_is_marker_free_and_head_bound() -> Result<()> {
-    let cancellation = RepositoryFixture::repository_root()
-        .read(".github/workflows/pr-obsolete-validation.yml")?;
+    let root = RepositoryFixture::repository_root();
+    assert!(
+        !root
+            .join(".github/workflows/pr-obsolete-validation.yml")
+            .exists(),
+        "native workflow concurrency must replace the cancellation worker"
+    );
+    let path = ".github/workflows/ci.yml";
+    let workflow = root.read(path)?;
     for required in [
-        "pull_request_target:",
-        "types: [edited, synchronize]",
-        "actions: write",
-        "pull-requests: read",
-        "name: Cancel obsolete validation heads",
-        "context.payload.action === \"edited\"",
-        "context.payload.changes?.base?.ref?.from",
-        "Ignoring PR edit without a base-ref change.",
-        "{ file: \"pr.yml\", name: \"PR\" }",
-        "{ file: \"rust-ecosystem.yml\", name: \"Rust ecosystem checks\" }",
-        "{ file: \"web-research.yml\", name: \"Web research\" }",
-        "associatedPullRequest?.base?.sha !== currentPr.base.sha",
-        "run.head_sha !== currentPr.head.sha || predatesBaseRetarget",
-        "latestPr.head.sha === eventHeadSha",
-        "latestPr.base.ref === eventBaseRef",
-        "github.rest.actions.listWorkflowRuns",
-        "github.rest.actions.cancelWorkflowRun",
-        "github.rest.actions.getWorkflowRun",
-        "inspectionDeadline = Date.now() + 45_000",
-        "setTimeout(resolve, 5_000)",
+        "types: [opened, synchronize, reopened, labeled, edited, closed]",
+        "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        "github.event.changes.base.ref.from != ''",
+        "if: github.event",
+        "github.event.label.name == 'ci:validate'",
     ] {
-        assert!(
-            cancellation.contains(required),
-            "obsolete validation cancellation contract missing: {required}"
-        );
+        assert!(workflow.contains(required), "{path} is missing {required}");
     }
-    for forbidden in [
-        "workflow_dispatch:",
-        "pull-requests: write",
-        "github.rest.issues",
-        "github.rest.issues.createComment",
-        "github.rest.issues.updateComment",
-        "pr_number:",
-        "head_sha:",
-        "base_sha:",
-        "nook-head-transition",
-        "backfill",
-        "actions/checkout",
-    ] {
-        assert!(
-            !cancellation.contains(forbidden),
-            "cancellation-only workflow must not restore transition state: {forbidden}"
-        );
-    }
+    assert!(
+        !workflow.contains("github.rest.actions.cancelWorkflowRun"),
+        "{path} must use native concurrency"
+    );
     Ok(())
 }

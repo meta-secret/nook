@@ -549,7 +549,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !preflight_cache_publish.contains("nook-docker-setup")
             && !preflight_cache_publish.contains("actions/checkout")
             && !preflight_cache_publish.contains("continue-on-error")
-            && rust.contains("needs: [product-paths, preflight]")
+            && rust.contains("needs: [preflight]") && rust.contains("if: inputs.product_changed")
             && rust_verify < rust_publish_id
             && rust_publish_id < rust_publish
             && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")

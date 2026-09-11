@@ -94,10 +94,6 @@ fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one validation contract verifies dispatch and review ordering"
-)]
 fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
@@ -181,24 +177,8 @@ fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
         "a head or base change during label dispatch must remove the replacement-state label"
     );
     assert!(
-        direct_validation.contains("gh run cancel \"$run_id\""),
-        "a replacement-head validation dispatched during the race must be cancelled"
-    );
-    for required in [
-        "for run_status in requested waiting pending queued in_progress",
-        "any(.pull_requests[]?; .number == $REQUESTED_PR)",
-        "select(.name == \\\"PR\\\" or .name == \\\"Rust ecosystem checks\\\")",
-    ] {
-        assert!(
-            direct_validation.contains(required),
-            "replacement-head dispatch cleanup missing: {required}"
-        );
-    }
-    assert!(
-        !direct_validation.contains(
-            "select(.name == \\\"PR\\\" or .name == \\\"Rust ecosystem checks\\\" or .name == \\\"Web research\\\")"
-        ),
-        "label-race cleanup must preserve independently synchronized Web research runs"
+        !direct_validation.contains("gh run cancel"),
+        "validation dispatch must leave cancellation to centralized native concurrency"
     );
 
     Ok(())
@@ -773,7 +753,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
     let remote_doc = RepositoryFixture::repository_root()
         .read(".cortex/teams/sre/workflows/remote-execution.md");
 
-    assert!(pr.contains("types: [labeled]"));
+    assert!(pr.contains("workflow_call:"));
     assert!(
         !pr.contains("types: [labeled, closed]"),
         "PR validation must not create a close-triggered source run"
@@ -790,7 +770,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
     }
     for label in ["ci:validate", "ci:full-e2e"] {
         assert!(
-            pr.contains(&format!("github.event.label.name == '{label}'")),
+            pr.contains("inputs.validation_requested"),
             "PR workflow must gate workers on {label}"
         );
         assert!(
@@ -812,10 +792,10 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         .split_once("\n  full-extension-e2e:\n")
         .map(|(_, job)| job)
         .context("PR workflow must keep the full extension e2e job")?;
-    let full_e2e_label = "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')";
+    let full_e2e_request = "inputs.full_e2e_requested";
     assert!(
-        full_e2e.contains(full_e2e_label) && full_extension_e2e.contains(full_e2e_label),
-        "a persistent Main-fix label must keep both full e2e jobs active"
+        full_e2e.contains(full_e2e_request) && full_extension_e2e.contains(full_e2e_request),
+        "the central full-e2e request must keep both full e2e jobs active"
     );
     assert!(ui_demo.contains("runs-on: nook-k0s-container"));
     for required in [

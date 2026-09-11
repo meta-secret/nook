@@ -2,6 +2,7 @@
 export class ValidationWorkflowHistory {
   private constructor() {}
   private static readonly VALIDATION_WORKFLOWS = new Set([
+    'CI',
     'PR',
     'Rust ecosystem checks',
     'Web research',

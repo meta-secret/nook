@@ -45,6 +45,7 @@ class ArcManifestContract {
       tasks,
       dockerSetup,
       runtimeSmoke,
+      ciWorkflow,
       mainWorkflow,
       prWorkflow,
       authSensitiveJob,
@@ -531,9 +532,24 @@ class ArcManifestContract {
       "    runs-on: ubuntu-latest",
     );
     if (admittedContract27.isErr()) return err(admittedContract27.error);
+    const centralRouting = ciWorkflow.requireAll([
+      "types: [opened, synchronize, reopened, labeled, edited, closed]",
+      "branches: [main]",
+      ".vale.ini | .vale/*",
+      "uses: ./.github/workflows/pr.yml",
+      "uses: ./.github/workflows/main.yml",
+      "uses: ./.github/workflows/hive.yml",
+      "uses: ./.github/workflows/repository-policy.yml",
+      "uses: ./.github/workflows/web-research.yml",
+      "github.event_name == 'push' && 'main'",
+      "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+      "needs.scope.outputs.validation-requested == 'true'",
+      "persist-credentials: false",
+    ]);
+    if (centralRouting.isErr()) return err(centralRouting.error);
     const admittedContract28 = mainWorkflow.requireAll([
-      '- "!.vale.ini"',
-      '- "!.vale/**"',
+      "workflow_call:",
+      "if: inputs.product_changed",
       "wasm-cache-publish:",
       "name: WASM cache publication",
       "needs: [wasm]",
@@ -569,8 +585,8 @@ class ArcManifestContract {
     );
     if (admittedContract29.isErr()) return err(admittedContract29.error);
     const admittedContract30 = prWorkflow.requireAll([
-      "- .vale.ini",
-      "- .vale/**",
+      "workflow_call:",
+      "inputs.validation_requested",
       "full-e2e-shard:",
       "name: Full browser e2e shard (${{ matrix.shard }}/2)",
       "fail-fast: false",

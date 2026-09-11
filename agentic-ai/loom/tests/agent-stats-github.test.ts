@@ -16,7 +16,7 @@ export class AgentStatsGithubScenario {
   }
   private execute(): UntrustedYamlNode {
     const fixture = this.request;
-    const [defaulted1 = 'PR'] = [fixture.workflow];
+    const [defaulted1 = 'CI'] = [fixture.workflow];
     const [defaulted2 = 'pull_request'] = [fixture.trigger];
     const [defaulted3 = fixture.startedAt] = [fixture.createdAt];
     const [defaulted4 = 'completed'] = [fixture.status];
