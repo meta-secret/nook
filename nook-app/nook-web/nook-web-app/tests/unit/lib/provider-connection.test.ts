@@ -1,6 +1,8 @@
 import { err, ok, type Result } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
+  NookLocalFolderHealth,
+  NookLocalFolderHealthState,
   NookVaultManager,
   ProviderSyncFailureHandling,
   ProviderSyncVisibility,
@@ -22,6 +24,7 @@ import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { VaultState } from '$lib/vault.svelte'
 import { ProviderConnectionActions } from '$lib/vault/provider-connection'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   LoginSetupKind,
   StagedRemoteStorageKind,
@@ -126,6 +129,7 @@ function providerConnectionScenario(
 
 afterEach(() => {
   for (const owned of ownedManagers) {
+    owned.state.clearLocalFolderMultipleVaultsIssue()
     owned.state.clearManager()
     owned.manager.free()
   }
@@ -166,17 +170,51 @@ describe('local-folder provider connection', () => {
     expect(scenario.state.addProviderOpen).toBe(true)
   })
 
-  test('preserves a multiple-vault presentation instead of a generic preflush failure', async () => {
+  test('preserves a multiple-vault presentation when propagated sync fails', async () => {
     const scenario = providerConnectionScenario((state) => {
-      state.errorMsg = 'multiple-vaults-staged'
-      return ok(ProviderSyncOutcome.FailureCaptured)
+      state.reportLocalFolderMultipleVaults(
+        NookLocalFolderHealth.multiple_vaults(
+          'local-folder-provider',
+          'Local backup',
+          ['vault-1', 'vault-2'],
+          state.t(I18N_KEYS.AuthStorageSyncFailed),
+        ),
+      )
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      )
     })
 
     await scenario.actions.connectAndSyncStagedProvider()
 
     expect(scenario.flushRemoteEventOutboxNow).not.toHaveBeenCalled()
     expect(scenario.syncProviderById).toHaveBeenCalledOnce()
-    expect(scenario.state.errorMsg).toBe('multiple-vaults-staged')
+    expect(scenario.state.localFolderHealth.state).toBe(
+      NookLocalFolderHealthState.MultipleVaults,
+    )
+    expect(scenario.state.errorMsg).toBe(
+      scenario.state.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsShort),
+    )
+    expect(scenario.state.loginSetup.kind).toBe(LoginSetupKind.Active)
+    expect(scenario.state.addProviderOpen).toBe(true)
+  })
+
+  test('preserves the typed sync failure outside multiple-vault health', async () => {
+    const failure = new VaultStorageFailure(
+      VaultStorageFailureKind.OperationFailed,
+    )
+    const scenario = providerConnectionScenario(() => err(failure))
+
+    await scenario.actions.connectAndSyncStagedProvider()
+
+    expect(scenario.flushRemoteEventOutboxNow).not.toHaveBeenCalled()
+    expect(scenario.syncProviderById).toHaveBeenCalledOnce()
+    expect(scenario.state.localFolderHealth.state).not.toBe(
+      NookLocalFolderHealthState.MultipleVaults,
+    )
+    expect(scenario.state.errorMsg).toBe(
+      scenario.state.t(failure.translationKey),
+    )
     expect(scenario.state.loginSetup.kind).toBe(LoginSetupKind.Active)
     expect(scenario.state.addProviderOpen).toBe(true)
   })

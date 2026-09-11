@@ -59,6 +59,7 @@ class SentinelFinalizationFixture {
     hasManager: true,
     isInitializing: false,
     isVerifying: false,
+    isSyncActivityVisible: false,
     isAuthenticated: false,
     deviceProtectionReady: true,
     errorMsg: '',
@@ -86,6 +87,7 @@ class SentinelFinalizationFixture {
     admitManager: () => ok(this.manager as unknown as NookVaultManager),
     enqueueStorage: async <Value>(operation: () => Value | Promise<Value>) =>
       operation(),
+    waitForStorageChain: vi.fn(async () => {}),
     dismissSuccess: vi.fn(),
     loadSecretPage: vi.fn<() => Promise<SentinelActionResult<void>>>(async () =>
       ok(),
@@ -117,6 +119,10 @@ class SentinelFinalizationFixture {
     vi.spyOn(this.previous, 'ready', 'get').mockReturnValue(true)
   }
 
+  get vault(): VaultState {
+    return this.state as unknown as VaultState
+  }
+
   async finalize(): Promise<void> {
     const actions = new SentinelUnlockActions(
       this.state as unknown as VaultState,
@@ -127,7 +133,7 @@ class SentinelFinalizationFixture {
 
   renderLogin(surface: LoginSurface) {
     const props = {
-      vault: this.state as unknown as VaultState,
+      vault: this.vault,
       isVerifying: false,
       isInitializing: false,
       onUnlock: this.openVault,
@@ -175,11 +181,29 @@ class SentinelFinalizationFixture {
 }
 
 describe('Sentinel quorum completion presentation', () => {
-  test('lists stored deliveries only after device protection is ready and quiescent', async () => {
+  test('does not list stored deliveries while the helper is collapsed', async () => {
+    const fixture = new SentinelFinalizationFixture()
+    const view = render(SentinelUnlockParticipantHelper, {
+      vault: fixture.vault,
+    })
+
+    await tick()
+
+    expect(fixture.state.waitForStorageChain).not.toHaveBeenCalled()
+    expect(fixture.state.initDeviceIdentity).not.toHaveBeenCalled()
+    expect(
+      fixture.manager.list_sentinel_genesis_share_deliveries,
+    ).not.toHaveBeenCalled()
+    view.unmount()
+    fixture.dispose()
+  })
+
+  test('lists stored deliveries only after protection and sync activity are ready', async () => {
     const locked = new SentinelFinalizationFixture()
     locked.state.deviceProtectionReady = false
     const lockedView = render(SentinelUnlockParticipantHelper, {
-      vault: locked.state as unknown as VaultState,
+      vault: locked.vault,
+      expanded: true,
     })
 
     await tick()
@@ -194,7 +218,8 @@ describe('Sentinel quorum completion presentation', () => {
     const initializing = new SentinelFinalizationFixture()
     initializing.state.isInitializing = true
     const initializingView = render(SentinelUnlockParticipantHelper, {
-      vault: initializing.state as unknown as VaultState,
+      vault: initializing.vault,
+      expanded: true,
     })
 
     await tick()
@@ -209,7 +234,8 @@ describe('Sentinel quorum completion presentation', () => {
     const verifying = new SentinelFinalizationFixture()
     verifying.state.isVerifying = true
     const verifyingView = render(SentinelUnlockParticipantHelper, {
-      vault: verifying.state as unknown as VaultState,
+      vault: verifying.vault,
+      expanded: true,
     })
 
     await tick()
@@ -221,10 +247,43 @@ describe('Sentinel quorum completion presentation', () => {
     verifyingView.unmount()
     verifying.dispose()
 
-    const ready = new SentinelFinalizationFixture()
-    const readyView = render(SentinelUnlockParticipantHelper, {
-      vault: ready.state as unknown as VaultState,
+    const syncing = new SentinelFinalizationFixture()
+    syncing.state.isSyncActivityVisible = true
+    const syncingView = render(SentinelUnlockParticipantHelper, {
+      vault: syncing.vault,
+      expanded: true,
     })
+
+    await tick()
+
+    expect(syncing.state.waitForStorageChain).not.toHaveBeenCalled()
+    expect(syncing.state.initDeviceIdentity).not.toHaveBeenCalled()
+    expect(
+      syncing.manager.list_sentinel_genesis_share_deliveries,
+    ).not.toHaveBeenCalled()
+    syncingView.unmount()
+    syncing.dispose()
+
+    const ready = new SentinelFinalizationFixture()
+    let releaseStorageChain = () => {}
+    const storageChainIdle = new Promise<void>((resolve) => {
+      releaseStorageChain = resolve
+    })
+    ready.state.waitForStorageChain.mockReturnValue(storageChainIdle)
+    const readyView = render(SentinelUnlockParticipantHelper, {
+      vault: ready.vault,
+      expanded: true,
+    })
+
+    await vi.waitFor(() => {
+      expect(ready.state.waitForStorageChain).toHaveBeenCalledOnce()
+    })
+    expect(ready.state.initDeviceIdentity).not.toHaveBeenCalled()
+    expect(
+      ready.manager.list_sentinel_genesis_share_deliveries,
+    ).not.toHaveBeenCalled()
+
+    releaseStorageChain()
 
     await vi.waitFor(() => {
       expect(ready.state.initDeviceIdentity).toHaveBeenCalledOnce()
@@ -234,6 +293,43 @@ describe('Sentinel quorum completion presentation', () => {
     })
     readyView.unmount()
     ready.dispose()
+  })
+
+  test('does not start a second delivery listing while one is in flight', async () => {
+    const fixture = new SentinelFinalizationFixture()
+    let finishListing = () => {}
+    const pendingListing = new Promise<never[]>((resolve) => {
+      finishListing = () => resolve([])
+    })
+    fixture.manager.list_sentinel_genesis_share_deliveries.mockReturnValue(
+      pendingListing,
+    )
+    const view = render(SentinelUnlockParticipantHelper, {
+      vault: fixture.vault,
+      expanded: true,
+      showWhenEmpty: true,
+    })
+
+    await vi.waitFor(() => {
+      expect(
+        fixture.manager.list_sentinel_genesis_share_deliveries,
+      ).toHaveBeenCalledOnce()
+    })
+
+    const toggle = view.getByTestId('sentinel-unlock-participant-toggle')
+    await fireEvent.click(toggle)
+    await fireEvent.click(toggle)
+
+    expect(
+      fixture.manager.list_sentinel_genesis_share_deliveries,
+    ).toHaveBeenCalledOnce()
+
+    finishListing()
+    await vi.waitFor(() => {
+      expect(view.getByTestId('sentinel-unlock-no-deliveries')).toBeVisible()
+    })
+    view.unmount()
+    fixture.dispose()
   })
 
   test('refreshes Sentinel status only after device protection is ready', async () => {

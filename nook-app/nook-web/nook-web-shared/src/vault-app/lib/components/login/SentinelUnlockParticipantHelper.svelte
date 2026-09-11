@@ -36,6 +36,11 @@
   let copied = $state(false)
   let deliveryRefreshInFlight = false
 
+  enum DeliveryRefreshOrigin {
+    Automatic = 'automatic',
+    Requested = 'requested',
+  }
+
   const visible = $derived(
     showWhenEmpty || (loaded && vault.sentinelStoredDeliveries.length > 0),
   )
@@ -54,19 +59,30 @@
   $effect(() => {
     if (
       automaticScanStarted ||
+      !expanded ||
       !vault.deviceProtectionReady ||
       vault.isInitializing ||
-      vault.isVerifying
+      vault.isVerifying ||
+      vault.isSyncActivityVisible
     )
       return
     automaticScanStarted = true
-    untrack(() => void refreshDeliveries())
+    untrack(() => void refreshDeliveries(DeliveryRefreshOrigin.Automatic))
   })
 
-  async function refreshDeliveries() {
+  async function refreshDeliveries(
+    origin: DeliveryRefreshOrigin = DeliveryRefreshOrigin.Requested,
+  ) {
     if (deliveryRefreshInFlight) return
     deliveryRefreshInFlight = true
     try {
+      if (origin === DeliveryRefreshOrigin.Automatic) {
+        await vault.waitForStorageChain()
+        if (!expanded || vault.isSyncActivityVisible) {
+          automaticScanStarted = false
+          return
+        }
+      }
       const listed = await new SentinelUnlockActions(
         vault,
       ).listSentinelStoredDeliveries()

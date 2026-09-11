@@ -201,7 +201,11 @@ export class ProviderConnectionActions {
         };
       const providerSync = await state.syncProviderById(syncProviderByIdArgs);
       if (providerSync.isErr()) {
-        state.errorMsg = state.t(providerSync.error.translationKey);
+        state.errorMsg =
+          state.localFolderHealth.state ===
+          NookLocalFolderHealthState.MultipleVaults
+            ? state.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsShort)
+            : state.t(providerSync.error.translationKey);
         return;
       }
       if (providerSync.value !== ProviderSyncOutcome.Synced) return;
