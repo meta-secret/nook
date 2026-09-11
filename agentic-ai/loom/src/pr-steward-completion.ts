@@ -67,7 +67,9 @@ export class PrStewardCompletion {
       if (this.#head === false) this.#head = result.headSha;
       if (result.headSha !== this.#head) {
         this.stop();
-        this.#request.failed(new Error('Assigned pull request iteration head changed.'));
+        this.#request.failed(
+          new Error('Assigned pull request iteration head changed.'),
+        );
         return;
       }
       if (generation !== this.#generation) return;
@@ -81,7 +83,9 @@ export class PrStewardCompletion {
       if (this.#active && generation === this.#generation) {
         this.stop();
         this.#request.failed(
-          new Error('Assigned pull request completion observation is unavailable.'),
+          new Error(
+            'Assigned pull request completion observation is unavailable.',
+          ),
         );
       }
     } finally {

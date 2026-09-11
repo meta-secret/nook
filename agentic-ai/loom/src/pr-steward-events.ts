@@ -768,7 +768,8 @@ export class PrStewardEventObserver {
       if (record === false || !output.shouldEmit({ record })) continue;
       if (record.kind === PrStewardRecordKind.Routing)
         request.activity({
-          checkEvent: record.source === PrStewardSource.CheckRun ||
+          checkEvent:
+            record.source === PrStewardSource.CheckRun ||
             record.source === PrStewardSource.CheckSuite ||
             record.source === PrStewardSource.WorkflowRun,
         });
@@ -890,7 +891,9 @@ if (import.meta.main) {
     .catch((cause) => {
       const message =
         cause instanceof Error ? cause.message : 'subscription failed';
-      process.stderr.write(`PR Steward event subscription failed: ${message}\n`);
+      process.stderr.write(
+        `PR Steward event subscription failed: ${message}\n`,
+      );
       process.exitCode = 1;
     });
 }

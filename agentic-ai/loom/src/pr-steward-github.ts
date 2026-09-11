@@ -179,8 +179,14 @@ export class PrStewardGithubPrReader implements PrStewardAssignedPrReader {
       url.value !== expected
     )
       throw new PrStewardGithubUnavailableError({ cause: false });
-    const state = UntrustedYamlBoundary.property({ record: parsed, key: 'state' });
-    const merged = UntrustedYamlBoundary.property({ record: parsed, key: 'merged' });
+    const state = UntrustedYamlBoundary.property({
+      record: parsed,
+      key: 'state',
+    });
+    const merged = UntrustedYamlBoundary.property({
+      record: parsed,
+      key: 'merged',
+    });
     if (
       state.presence !== UntrustedYamlPropertyPresence.Present ||
       merged.presence !== UntrustedYamlPropertyPresence.Present ||
