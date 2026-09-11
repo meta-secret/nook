@@ -93,7 +93,7 @@ tasks:
   loom:check:
     desc: Typecheck Loom.
     dir: agentic-ai/loom
-    deps: [loom:install]
+    deps: [loom:install, skills:install]
     cmds:
       - bun run check
 
