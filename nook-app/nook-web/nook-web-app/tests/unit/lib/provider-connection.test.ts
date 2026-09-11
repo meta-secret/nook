@@ -7,7 +7,7 @@ import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
-import type { ProviderActionsContext } from '$lib/vault/action-contexts'
+import { VaultState } from '$lib/vault.svelte'
 import { ProviderConnectionActions } from '$lib/vault/provider-connection'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import { StagedRemoteStorageKind } from '$lib/vault/state/provider.svelte'
@@ -27,7 +27,7 @@ type ProviderConnectionScenario = {
   readonly actions: ProviderConnectionActions
   readonly clearLoginSetup: ReturnType<typeof vi.fn>
   readonly flushRemoteEventOutboxNow: ReturnType<typeof vi.fn>
-  readonly state: ProviderActionsContext
+  readonly state: VaultState
   readonly syncProviderById: ReturnType<typeof vi.fn>
 }
 
@@ -41,33 +41,37 @@ function localFolderProvider(): StorageProvider {
 
 function providerConnectionScenario(
   synchronize: (
-    state: ProviderActionsContext,
+    state: VaultState,
   ) => ProviderConnectionOutcome | Promise<ProviderConnectionOutcome>,
 ): ProviderConnectionScenario {
   const provider = localFolderProvider()
-  const clearLoginSetup = vi.fn()
-  const flushRemoteEventOutboxNow = vi.fn(async () =>
-    err(new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed)),
+  const state = new VaultState()
+  state.isVerifying = false
+  state.addProviderOpen = true
+  state.providers = [provider]
+  state.errorMsg = ''
+  vi.spyOn(state, 'hasManager', 'get').mockReturnValue(true)
+  vi.spyOn(state, 'syncProviders', 'get').mockReturnValue([provider])
+  vi.spyOn(state, 'stagedRemoteStorageArgs').mockReturnValue({
+    kind: StagedRemoteStorageKind.Unavailable,
+  })
+  vi.spyOn(state, 'ensureProviderSaved').mockResolvedValue(ok())
+  const flushRemoteEventOutboxNow = vi
+    .spyOn(state, 'flushRemoteEventOutboxNow')
+    .mockResolvedValue(
+      err(
+        new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed),
+      ),
+    )
+  const syncProviderById = vi
+    .spyOn(state, 'syncProviderById')
+    .mockImplementation(async () => synchronize(state))
+  const clearLoginSetup = vi
+    .spyOn(state, 'clearLoginSetup')
+    .mockImplementation(() => {})
+  vi.spyOn(state, 't').mockImplementation((request) =>
+    typeof request === 'string' ? request : request.key,
   )
-  const context = { current: {} as ProviderActionsContext }
-  const syncProviderById = vi.fn(async () => synchronize(context.current))
-  const state = {
-    hasManager: true,
-    isVerifying: false,
-    addProviderOpen: true,
-    providers: [provider],
-    syncProviders: [provider],
-    errorMsg: '',
-    stagedRemoteStorageArgs: () => ({
-      kind: StagedRemoteStorageKind.Unavailable,
-    }),
-    ensureProviderSaved: async () => ok(),
-    flushRemoteEventOutboxNow,
-    syncProviderById,
-    clearLoginSetup,
-    t: (request) => (typeof request === 'string' ? request : request.key),
-  } as ProviderActionsContext
-  context.current = state
   return {
     actions: new ProviderConnectionActions(state),
     clearLoginSetup,
