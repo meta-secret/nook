@@ -319,12 +319,12 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     root = this.browser.document,
     formScope,
   }: PasswordFieldQuery): HTMLInputElement[] {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.findFields({
+    const query: ScopedInputFieldQuery = {
       root,
       selector: 'input[type="password"]',
-      formScope,
-    }).filter(
+    };
+    if (formScope) query.formScope = formScope;
+    return this.findFields(query).filter(
       (field) =>
         !this.inputIsEffectivelyDisabled(field) &&
         field.type === "password" &&
@@ -418,11 +418,12 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   usernameEvidence(
     observation: PasswordFieldQuery,
   ): AuthenticationUsernameEvidence {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const evidence = this.findUsernameFields({
-      root: observation.root,
-      formScope: observation.formScope,
-    }).map(this.authenticationUsernameEvidence.bind(this));
+    const query: PasswordFieldQuery = {};
+    if (observation.root) query.root = observation.root;
+    if (observation.formScope) query.formScope = observation.formScope;
+    const evidence = this.findUsernameFields(query).map(
+      this.authenticationUsernameEvidence.bind(this),
+    );
     return strongest_authentication_username_evidence(evidence);
   }
 
@@ -477,20 +478,22 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }: PasswordFieldQuery): HTMLInputElement[] {
     const seen = new Set<HTMLInputElement>();
     const fields: HTMLInputElement[] = [];
+    const semanticQuery: ScopedInputFieldQuery = {
+      root,
+      selector: usernameFieldSelectors.join(","),
+    };
+    const candidateQuery: ScopedInputFieldQuery = {
+      root,
+      selector: usernameCandidateSelector,
+    };
+    if (formScope) {
+      semanticQuery.formScope = formScope;
+      candidateQuery.formScope = formScope;
+    }
 
     for (const field of [
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      ...this.findFields({
-        root,
-        selector: usernameFieldSelectors.join(","),
-        formScope,
-      }),
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      ...this.findFields({
-        root,
-        selector: usernameCandidateSelector,
-        formScope,
-      }),
+      ...this.findFields(semanticQuery),
+      ...this.findFields(candidateQuery),
     ]) {
       if (seen.has(field) || !this.looksLikeUsernameField(field)) continue;
       seen.add(field);
@@ -505,13 +508,13 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }: PasswordFieldQuery): HTMLInputElement[] {
     const seen = new Set<HTMLInputElement>();
     const fields: HTMLInputElement[] = [];
-
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    for (const field of this.findFields({
+    const query: ScopedInputFieldQuery = {
       root,
       selector: oneTimeCodeCandidateSelector,
-      formScope,
-    })) {
+    };
+    if (formScope) query.formScope = formScope;
+
+    for (const field of this.findFields(query)) {
       if (seen.has(field) || !this.looksLikeOneTimeCodeField(field)) continue;
       seen.add(field);
       fields.push(field);

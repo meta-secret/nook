@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
-import { defineConfig, type UserConfig } from "vitest/config";
+import type { UserConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import {
   VAULT_WORKSPACE_OUTPUT_ALIASES,
   VAULT_WORKSPACE_SPA_PATHS,

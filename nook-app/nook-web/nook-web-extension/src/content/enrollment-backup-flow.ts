@@ -448,13 +448,14 @@ class EnrollmentBackupInteraction {
         return
       }
 
-      if (accounts.length === 1) {
+      const [account] = accounts
+      if (accounts.length === 1 && account) {
         const nookTypedArgs0_69: Parameters<
           typeof this.showBackupModeChooser
         >[0] = {
           host,
           section,
-          account: accounts[0],
+          account,
           codes,
         }
         this.showBackupModeChooser(nookTypedArgs0_69)

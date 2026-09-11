@@ -763,7 +763,8 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     if (observedPasswordFields.length > 0 && passwordFields.length === 0) {
       return false;
     }
-    if (passwordFields.length === 0) {
+    const [passwordField] = passwordFields;
+    if (!passwordField) {
       if (!usernameField) return false;
       const nookTypedArgs0_20: Parameters<
         typeof passwordFormCredentialInteraction.trackLoginCredentialField
@@ -779,7 +780,6 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       usernameField.focus();
       return true;
     }
-    const passwordField = passwordFields[0];
     const passwordForm = passwordField.form;
     const approvedPasswordForm: ApprovedPasswordForm = passwordForm
       ? { kind: ApprovedPasswordFormKind.Available, form: passwordForm }
@@ -867,10 +867,8 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
                   this.scopedAdvanceControls(observation),
                 ),
             });
-            return (
-              Boolean(transported) &&
-              authentication_advance_control_is_safe(transported)
-            );
+            if (!transported) return false;
+            return authentication_advance_control_is_safe(transported);
           }),
       )
     );
@@ -944,7 +942,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       passwordFieldDiscovery.ownedObservationIsLocallyBounded(request)
     )
       return FormSubmissionResult.NotObserved;
-    if (!passwordField || !form) {
+    if ((!passwordField || !form) && usernameField) {
       if (
         authenticationSubmissionControls.clickAdvanceControl({
           ...request,

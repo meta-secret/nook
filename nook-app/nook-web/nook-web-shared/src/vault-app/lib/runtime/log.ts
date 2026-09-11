@@ -483,7 +483,9 @@ class BrowserLogRuntime {
       parsed.hash = "";
       return parsed.toString();
     } catch {
-      return url.split("?")[0].split("#")[0];
+      const [withoutQuery = url] = url.split("?");
+      const [withoutHash = withoutQuery] = withoutQuery.split("#");
+      return withoutHash;
     }
   }
 

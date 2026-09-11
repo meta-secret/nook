@@ -383,7 +383,10 @@ class CloudKitRuntime {
       userAgent: navigator.userAgent,
       cookieNames: document.cookie
         .split(";")
-        .map((part) => part.trim().split("=")[0])
+        .map((part) => {
+          const [name = ""] = part.trim().split("=");
+          return name;
+        })
         .filter(Boolean),
     };
   }

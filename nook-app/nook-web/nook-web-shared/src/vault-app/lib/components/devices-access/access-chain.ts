@@ -456,10 +456,10 @@ export class AccessChainPresentation {
     if (vaults.length === 0) {
       return vault.t(I18N_KEYS.DevicesAccessNoVaultsShort);
     }
-    if (verified.length === 0) {
+    const [primary, ...rest] = verified;
+    if (!primary) {
       return vault.t(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort);
     }
-    const [primary, ...rest] = verified;
     return rest.length === 0
       ? primary.label
       : (() => {

@@ -231,7 +231,6 @@ class AuthenticationFactObserver {
     const originalSet = descriptor.set;
     const valueProperty: PropertyDescriptor = {
       configurable: true,
-      enumerable: descriptor.enumerable,
       get() {
         return originalGet.call(this);
       },
@@ -249,6 +248,8 @@ class AuthenticationFactObserver {
         }
       },
     };
+    if (typeof descriptor.enumerable === "boolean")
+      valueProperty.enumerable = descriptor.enumerable;
     Object.defineProperty(HTMLInputElement.prototype, "value", valueProperty);
     return () => {
       Object.defineProperty(HTMLInputElement.prototype, "value", descriptor);

@@ -57,12 +57,12 @@ export function sentinelDashboardPortal(
   function trapFocus(event: KeyboardEvent) {
     if (event.key !== "Tab") return;
     const elements = focusableElements();
-    if (elements.length === 0) {
+    const [first] = elements;
+    const last = elements.at(-1);
+    if (!first || !last) {
       event.preventDefault();
       return;
     }
-    const first = elements[0];
-    const last = elements[elements.length - 1];
     const focused = document.activeElement;
     if (event.shiftKey && (focused === first || !node.contains(focused))) {
       event.preventDefault();

@@ -702,24 +702,31 @@ class ExtensionPairingIdentity {
       const legacy = await this.readLegacyPairingStorage()
       const legacyKeys = this.legacyPairingStorageKeys(legacy)
       if (legacyKeys.length === 0) return
-      const legacyPairingRecords = Object.fromEntries(
-        legacyKeys.map((key) => [key, legacy[key]]),
-      )
+      const legacyPairingRecords: LegacyPairingStorageItems = {}
+      for (const key of legacyKeys) {
+        legacyPairingRecords[key] = legacy[key]
+      }
       const current = await backgroundVaultRuntime.loadExtensionPairingItems()
       const pairingPolicy = await extensionPairingGrantPolicyReady
       const migrated =
         pairingPolicy.migratedLegacyPairingStorageItems(legacyPairingRecords)
       if (Object.keys(current).length > 0) {
-        const completedKeys = Object.keys(migrated).filter(
-          (key) =>
-            legacyKeys.includes(key) &&
-            key in current &&
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-            pairingPolicy.compare_extension_pairing_records({
-              current: current[key],
-              migrated: migrated[key],
-            }) === 'Equivalent',
-        )
+        const completedKeys = Object.keys(migrated).filter((key) => {
+          const currentRecord = current[key]
+          const migratedRecord = migrated[key]
+          if (!legacyKeys.includes(key) || !currentRecord || !migratedRecord)
+            return false
+          const compareRequest: Parameters<
+            typeof pairingPolicy.compare_extension_pairing_records
+          >[0] = {
+            current: currentRecord,
+            migrated: migratedRecord,
+          }
+          return (
+            pairingPolicy.compare_extension_pairing_records(compareRequest) ===
+            'Equivalent'
+          )
+        })
         if (
           completedKeys.length > 0 &&
           completedKeys.length === Object.keys(migrated).length
@@ -746,7 +753,8 @@ class ExtensionPairingIdentity {
     await this.ensureLegacyPairingMigration()
     const stored = await backgroundVaultRuntime.loadExtensionPairingItems()
     if (!key) return stored
-    return key in stored ? { [key]: stored[key] } : {}
+    const record = stored[key]
+    return record ? { [key]: record } : {}
   }
 
   async requestOriginAndRpId({

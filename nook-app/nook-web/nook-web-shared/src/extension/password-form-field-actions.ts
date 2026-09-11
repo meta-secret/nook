@@ -62,21 +62,18 @@ class PasswordFormCredentialInteraction {
       };
       return passwordFieldDiscovery.hasAutocompleteToken(nookArrowArgs4);
     });
-    const [passwordField = passwordFields[0]] = [
-      ((
-        ...[
-          v = passwordFields.find((field) => {
-            const nookArrowArgs5: Parameters<
-              typeof passwordFieldDiscovery.hasAutocompleteToken
-            >[0] = {
-              field,
-              expected: "current-password",
-            };
-            return passwordFieldDiscovery.hasAutocompleteToken(nookArrowArgs5);
-          }),
-        ]
-      ) => v)(newPasswordFields[0]),
-    ];
+    let passwordField = passwordFields.find((field) => {
+      const nookArrowArgs5: Parameters<
+        typeof passwordFieldDiscovery.hasAutocompleteToken
+      >[0] = {
+        field,
+        expected: "current-password",
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(nookArrowArgs5);
+    });
+    if (!passwordField) [passwordField] = newPasswordFields;
+    if (!passwordField) [passwordField] = passwordFields;
+    if (!passwordField) return { kind: LoginCredentialsLookupKind.Absent };
     const password = passwordField.value.trim();
     const nookNamedArgs0_3 = this.passwordFieldQuery(request);
     const username = ((v) => (v ? v : ""))(

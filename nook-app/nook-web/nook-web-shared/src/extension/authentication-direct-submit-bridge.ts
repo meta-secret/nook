@@ -47,7 +47,8 @@ const AuthenticationSubmissionBridge = class {
     const previous = state.handler;
     state.handler = handler;
     return () => {
-      state.handler = previous;
+      if (previous) state.handler = previous;
+      else delete state.handler;
     };
   }
 

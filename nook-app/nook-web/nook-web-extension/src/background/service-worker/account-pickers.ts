@@ -861,9 +861,9 @@ class AccountPickerSessions {
     const responseRequest: WebsiteLoginOptionsResponseArgs = {
       message,
       sender,
-      dependencies,
       openUnavailableCompanion: false,
     }
+    if (dependencies) responseRequest.dependencies = dependencies
     const response = await this.websiteLoginOptionsResponse(responseRequest)
     return decode_website_login_match_availability(
       response as WebsiteLoginOptionsWireValue,

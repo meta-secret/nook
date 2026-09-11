@@ -34,11 +34,10 @@ export class IdentityVaultSelection {
     const identitySelection = new IdentityDirectoryPresentation(
       directoryLoadState.view,
     ).selectedIdentity();
-    if (
-      identitySelection.kind === IdentityDirectorySelectionKind.Empty ||
-      identitySelection.identity.vaults.length === 0
-    )
+    if (identitySelection.kind === IdentityDirectorySelectionKind.Empty)
       return { kind: IdentityBridgeVaultSelectionKind.Empty };
+    const [firstVault] = identitySelection.identity.vaults;
+    if (!firstVault) return { kind: IdentityBridgeVaultSelectionKind.Empty };
     if (
       selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected &&
       identitySelection.identity.vaults.some(
@@ -48,7 +47,7 @@ export class IdentityVaultSelection {
       return selectedVault;
     return {
       kind: IdentityBridgeVaultSelectionKind.Selected,
-      storeId: identitySelection.identity.vaults[0].storeId,
+      storeId: firstVault.storeId,
     };
   }
 }

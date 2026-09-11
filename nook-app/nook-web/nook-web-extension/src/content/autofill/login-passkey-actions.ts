@@ -923,10 +923,11 @@ class LoginPasskeyInteraction {
         return
       }
 
-      if (accounts.length === 1) {
+      const [account] = accounts
+      if (accounts.length === 1 && account) {
         await this.fillAndSubmitAccount({
           account: {
-            ...accounts[0],
+            ...account,
             authorizationGeneration: response.authorizationGeneration,
           },
           workflow,

@@ -385,7 +385,8 @@ export async function websiteLoginSaveOffer({
       }
     }
     const grants = await extensionPairingIdentity.passwordPairingGrants()
-    if (grants.length === 0) {
+    const [grant] = grants
+    if (!grant) {
       pendingPassword.value = ''
       return { kind: 'unavailable' }
     }
@@ -417,7 +418,6 @@ export async function websiteLoginSaveOffer({
     }
 
     // Prefer the selected/ready vault, then the first password-filling grant.
-    const grant = grants[0]
     const nookTypedArgs0_7 = {
       type: 'nook:extension-session-plan-login-save',
       payload: {

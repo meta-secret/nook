@@ -107,11 +107,11 @@ async function restorePairingStorage(
 ): Promise<void> {
   const { previous, written } = args
   const touchedKeys = Object.keys(written)
-  const restore: ExtensionPairingItems = Object.fromEntries(
-    touchedKeys
-      .filter((key) => key in previous)
-      .map((key) => [key, previous[key]]),
-  )
+  const restore: ExtensionPairingItems = {}
+  for (const key of touchedKeys) {
+    const record = previous[key]
+    if (record) restore[key] = record
+  }
   const addedKeys = touchedKeys.filter((key) => !(key in previous))
   const reconcileArgs: Parameters<typeof reconcilePairingStorage>[0] = {
     items: restore,
