@@ -23,6 +23,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   import type { VaultState } from "$lib/vault.svelte";
   import {
     DashboardLoadKind,
+    DashboardSnapshotFailureTransition,
+    type DashboardSnapshotFailureRequest,
     type DashboardLoadState,
     DashboardTextKind,
     type DashboardView,
@@ -52,7 +54,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   import { PasskeyCardPresentation } from "./devices-access/passkey-card";
   import { IdentitySessionTransition } from "./devices-access/identity-session-transition";
   import { IdentityVaultSelection } from "./devices-access/identity-vault-selection";
-
   let {
     vault,
     onBack,
@@ -60,14 +61,12 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     vault: VaultState;
     onBack: () => void;
   } = $props();
-
   let loadState = $state<DashboardLoadState<DashboardView>>({
     kind: DashboardLoadKind.Loading,
   });
   let directoryLoadState = $state<IdentityDirectoryLoadState>({
     kind: IdentityDirectoryLoadKind.Loading,
   });
-
   let selectedRepresentation = $state(DevicesAccessRepresentationKind.List);
   let selectedPerspective = $state(IdentityBridgePerspective.Identities);
   let selectedVault = $state<IdentityBridgeVaultSelection>({
@@ -79,7 +78,18 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   let identityCreationCleanupRequested = false;
   let dashboardMounted = true;
   let snapshotLoadGeneration = 0;
-
+  const snapshotFailureRequest: DashboardSnapshotFailureRequest = {
+    currentGeneration: () => snapshotLoadGeneration,
+    failAccessSnapshot: () => {
+      loadState = { kind: DashboardLoadKind.Failed };
+    },
+    failDirectorySnapshot: () => {
+      directoryLoadState = { kind: IdentityDirectoryLoadKind.Failed };
+    },
+  };
+  const snapshotFailureTransition = new DashboardSnapshotFailureTransition(
+    snapshotFailureRequest,
+  );
   function clearPriorIdentitySession(): void {
     new IdentitySessionTransition(vault).clearPriorIdentity();
   }
@@ -349,9 +359,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading };
     }
     const manager = vault.admitManager();
-    if (manager.isErr()) return failSnapshotLoad(generation);
+    if (manager.isErr()) return snapshotFailureTransition.apply(generation);
     const loaded = await new IdentityDirectoryReader(manager.value).load();
-    if (loaded.isErr()) return failSnapshotLoad(generation);
+    if (loaded.isErr()) return snapshotFailureTransition.apply(generation);
     const snapshot = loaded.value;
     if (generation !== snapshotLoadGeneration) {
       return DashboardLoadKind.Loading;
@@ -393,15 +403,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     }
     resetSelectedVaultForIdentity();
     return DashboardLoadKind.Ready;
-  }
-
-  function failSnapshotLoad(generation: number): DashboardLoadKind {
-    if (generation === snapshotLoadGeneration) {
-      loadState = { kind: DashboardLoadKind.Failed };
-      directoryLoadState = { kind: IdentityDirectoryLoadKind.Failed };
-      return DashboardLoadKind.Failed;
-    }
-    return DashboardLoadKind.Loading;
   }
 
   $effect(() => {

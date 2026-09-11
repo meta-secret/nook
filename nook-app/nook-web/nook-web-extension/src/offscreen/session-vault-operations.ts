@@ -99,68 +99,71 @@ export type ActivatedExtensionIdentityOperation<
   operation: () => Promise<Outcome>
 }
 
-export async function withActivatedExtensionIdentity<
+export class ActivatedExtensionIdentityLifecycle<
   // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   Outcome extends Result<unknown, SessionOperationFailure>,
->({
-  activeManager,
-  deviceId,
-  operation,
-}: ActivatedExtensionIdentityOperation<Outcome>): Promise<
-  Outcome | Err<never, SessionOperationFailure>
 > {
-  let previousDeviceId: string
-  let previousProtection: DeviceProtectionStatus
-  try {
-    previousDeviceId = activeManager.device_id
-    previousProtection = await activeManager.device_protection_status()
-  } catch {
-    return err<never, SessionOperationFailure>(
-      new SessionOperationFailure(SessionOperationFailureKind.Failed),
-    )
-  }
-  if (
-    previousProtection === DeviceProtectionStatus.Unlocked &&
-    previousDeviceId !== deviceId
-  )
-    return err<never, SessionOperationFailure>(
-      new SessionOperationFailure(SessionOperationFailureKind.Locked),
-    )
-  let persistedPreviousDeviceId: string
-  try {
-    persistedPreviousDeviceId =
-      await activeManager.activate_local_identity_for_app_id(deviceId)
-  } catch {
-    return err<never, SessionOperationFailure>(
-      new SessionOperationFailure(SessionOperationFailureKind.Failed),
-    )
-  }
-  const previousSelection =
-    previousProtection === DeviceProtectionStatus.Unlocked
-      ? previousDeviceId
-      : persistedPreviousDeviceId
-  let outcome: Outcome | Err<never, SessionOperationFailure>
-  try {
-    outcome = await operation()
-  } catch {
-    outcome = err(
-      new SessionOperationFailure(SessionOperationFailureKind.Failed),
-    )
-  }
-  if (
-    outcome.isErr() &&
-    previousSelection.length > 0 &&
-    previousSelection !== deviceId
-  ) {
+  constructor(
+    private readonly request: ActivatedExtensionIdentityOperation<Outcome>,
+  ) {}
+
+  async run(): Promise<Outcome | Err<never, SessionOperationFailure>> {
+    const { activeManager, deviceId, operation } = this.request
+    let previousDeviceId: string
+    let previousProtection: DeviceProtectionStatus
     try {
-      await activeManager.activate_local_identity_for_app_id(previousSelection)
+      previousDeviceId = activeManager.device_id
+      previousProtection = await activeManager.device_protection_status()
     } catch {
       return err<never, SessionOperationFailure>(
         new SessionOperationFailure(SessionOperationFailureKind.Failed),
       )
     }
+    if (
+      previousProtection === DeviceProtectionStatus.Unlocked &&
+      previousDeviceId !== deviceId
+    )
+      return err<never, SessionOperationFailure>(
+        new SessionOperationFailure(SessionOperationFailureKind.Locked),
+      )
+    let persistedPreviousDeviceId: string
+    try {
+      persistedPreviousDeviceId =
+        await activeManager.activate_local_identity_for_app_id(deviceId)
+    } catch {
+      return err<never, SessionOperationFailure>(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
+    }
+    const previousSelection =
+      previousProtection === DeviceProtectionStatus.Unlocked
+        ? previousDeviceId
+        : persistedPreviousDeviceId
+    let outcome: Outcome | Err<never, SessionOperationFailure>
+    try {
+      outcome = await operation()
+    } catch {
+      outcome = err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
+    }
+    if (
+      outcome.isErr() &&
+      previousSelection.length > 0 &&
+      previousSelection !== deviceId
+    ) {
+      try {
+        await activeManager.activate_local_identity_for_app_id(
+          previousSelection,
+        )
+      } catch {
+        return err<never, SessionOperationFailure>(
+          new SessionOperationFailure(SessionOperationFailureKind.Failed),
+        )
+      }
+    }
+    return outcome
   }
-  return outcome
 }
 
 export function importExtensionVault(
@@ -255,7 +258,7 @@ export async function importExtensionVaultWithDependencies({
         deviceId: grant.deviceId,
         operation,
       }
-      return await withActivatedExtensionIdentity(activationArgs)
+      return await new ActivatedExtensionIdentityLifecycle(activationArgs).run()
     } finally {
       new ProviderCredentialBuffer(grantedProviders).clear()
     }

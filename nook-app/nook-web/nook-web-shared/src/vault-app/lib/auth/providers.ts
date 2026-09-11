@@ -446,7 +446,7 @@ export type SyncProviderCandidateExclusion = SyncProviderCandidateSet & {
   readonly excludeId: string;
 };
 
-export type AuthProviderPersistence = {
+export type AuthProviderPersistenceRequest = {
   readonly manager: NookVaultManager;
   readonly snapshot: AuthProvidersSnapshot;
 };
@@ -495,17 +495,19 @@ export function findDuplicateSyncProviderExcluding({
   );
 }
 
-export async function saveAuthProviders({
-  manager,
-  snapshot,
-}: AuthProviderPersistence): Promise<Result<void, VaultStorageFailure>> {
-  try {
-    await manager.save_auth_providers_snapshot(snapshot);
-    return ok();
-  } catch {
-    return err(
-      new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
-    );
+export class AuthProviderPersistence {
+  constructor(private readonly request: AuthProviderPersistenceRequest) {}
+
+  async save(): Promise<Result<void, VaultStorageFailure>> {
+    const { manager, snapshot } = this.request;
+    try {
+      await manager.save_auth_providers_snapshot(snapshot);
+      return ok();
+    } catch {
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      );
+    }
   }
 }
 

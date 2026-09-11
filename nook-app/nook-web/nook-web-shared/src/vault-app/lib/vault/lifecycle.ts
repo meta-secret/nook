@@ -17,7 +17,7 @@ import {
 import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
-import { getVaultManager } from "$lib/nook";
+import { VaultManagerRuntime } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   DeviceMode,
@@ -103,7 +103,7 @@ export class VaultInitializationActions {
         state.errorMsg = state.t(catalogRefresh1.error.translationKey);
         return;
       }
-      const manager = await getVaultManager();
+      const manager = await new VaultManagerRuntime().open();
       if (manager.isErr()) {
         state.deviceProtectionStatus = DeviceProtectionStatus.Error;
         state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);

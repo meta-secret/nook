@@ -7,7 +7,7 @@ import { LegalRouteKind, type LegalRoute } from "$lib/app/route-state";
 
 import {
   activeVaultScope,
-  saveAuthProviders,
+  AuthProviderPersistence,
   unselectedVaultScope,
   type AuthProvidersSnapshot,
 } from "$lib/auth/providers";
@@ -39,7 +39,7 @@ type AuthProviderDebugHooks = {
   >;
   saveAuthProviders(
     snapshot: AuthProvidersSnapshot,
-  ): ReturnType<typeof saveAuthProviders>;
+  ): ReturnType<AuthProviderPersistence["save"]>;
   unselectedVaultScope(): AuthProvidersSnapshot["activeVaultStoreId"];
 };
 
@@ -119,7 +119,10 @@ class VaultBrowserLifecycle {
               const manager = vault.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
               // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-              return saveAuthProviders({ manager: manager.value, snapshot });
+              return new AuthProviderPersistence({
+                manager: manager.value,
+                snapshot,
+              }).save();
             }),
           unselectedVaultScope,
         },

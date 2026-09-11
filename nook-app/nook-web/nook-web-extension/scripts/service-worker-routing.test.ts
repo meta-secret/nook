@@ -366,6 +366,39 @@ describe('service worker routing', () => {
     })
   })
 
+  test('keeps authorization invalid when cleanup completion rejects', async () => {
+    const release = mock(() => {})
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      clearPendingAccountPickers: () => Promise.resolve(),
+      closeExtensionSessionDocument: () => Promise.resolve(ok()),
+      completeAccountPickerAuthorizationCleanup: () =>
+        Promise.reject(new Error('completion unavailable')),
+      isExtensionSessionEnsureMessage: () => false,
+      isExtensionSessionLockMessage: () => true,
+      releaseAccountPickerAuthorizationCleanup: release,
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+
+    routeExtensionLifecycleMessage({
+      dependencies,
+      message: { type: 'test-session-lock' },
+      sender: { id: 'nook-extension' },
+      sendResponse,
+    })
+    await flushResponses()
+    await flushResponses()
+    await flushResponses()
+
+    expect(release).toHaveBeenCalled()
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'session-lock-failed',
+    })
+  })
+
   test('invalidates authorization before a failed startup marker lookup', async () => {
     const events: string[] = []
     const dependencies: ExtensionLifecycleRoutingDependencies = {
@@ -575,10 +608,10 @@ describe('service worker routing', () => {
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {
     openCompanionLauncher.mockClear()
-    const { routeExternalCompanionMessage } =
+    const { ExternalCompanionRouter } =
       await import('../src/background/service-worker/external-companion-routing')
     const sendResponse = mock(() => {})
-    const routingArgs: Parameters<typeof routeExternalCompanionMessage>[0] = {
+    const routingArgs = {
       dependencies: externalDependencies,
       message: {
         type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
@@ -590,7 +623,7 @@ describe('service worker routing', () => {
       sendResponse,
     }
 
-    expect(await routeExternalCompanionMessage(routingArgs)).toBe(false)
+    expect(await new ExternalCompanionRouter(routingArgs).route()).toBe(false)
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,
       reason: 'forbidden-sender',
@@ -600,10 +633,10 @@ describe('service worker routing', () => {
 
   test('keeps an authorized external launcher response channel open', async () => {
     openCompanionLauncher.mockClear()
-    const { routeExternalCompanionMessage } =
+    const { ExternalCompanionRouter } =
       await import('../src/background/service-worker/external-companion-routing')
     const sendResponse = mock(() => {})
-    const routingArgs: Parameters<typeof routeExternalCompanionMessage>[0] = {
+    const routingArgs = {
       dependencies: externalDependencies,
       message: {
         type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
@@ -615,7 +648,7 @@ describe('service worker routing', () => {
       sendResponse,
     }
 
-    expect(await routeExternalCompanionMessage(routingArgs)).toBe(true)
+    expect(await new ExternalCompanionRouter(routingArgs).route()).toBe(true)
     await flushResponses()
     expect(openCompanionLauncher).toHaveBeenCalledTimes(1)
     expect(openCompanionLauncher).toHaveBeenCalledWith(
@@ -635,12 +668,12 @@ describe('service worker routing', () => {
       importPairingAfterCompanionReady,
       refreshAuthenticationSurfaces: refresh,
     }
-    const { routeExternalCompanionMessage } =
+    const { ExternalCompanionRouter } =
       await import('../src/background/service-worker/external-companion-routing')
     const sendResponse = mock(() => {})
 
     expect(
-      await routeExternalCompanionMessage({
+      await new ExternalCompanionRouter({
         dependencies,
         message: { type: 'nook:extension-pairing-approved' },
         sender: {
@@ -648,7 +681,7 @@ describe('service worker routing', () => {
           url: 'https://simple.example.test/',
         },
         sendResponse,
-      }),
+      }).route(),
     ).toBe(true)
     await flushResponses()
     await flushResponses()
@@ -666,12 +699,12 @@ describe('service worker routing', () => {
       refreshAuthenticationSurfaces: () =>
         Promise.reject(new Error('refresh unavailable')),
     }
-    const { routeExternalCompanionMessage } =
+    const { ExternalCompanionRouter } =
       await import('../src/background/service-worker/external-companion-routing')
     const sendResponse = mock(() => {})
 
     expect(
-      await routeExternalCompanionMessage({
+      await new ExternalCompanionRouter({
         dependencies,
         message: { type: 'nook:extension-pairing-approved' },
         sender: {
@@ -679,7 +712,7 @@ describe('service worker routing', () => {
           url: 'https://simple.example.test/',
         },
         sendResponse,
-      }),
+      }).route(),
     ).toBe(true)
     await flushResponses()
     await flushResponses()

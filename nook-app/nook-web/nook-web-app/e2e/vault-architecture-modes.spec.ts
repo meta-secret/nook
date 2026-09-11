@@ -3,6 +3,7 @@ import { expect, test, type Page } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import {
   addSecret,
+  attachNookLogsForTest,
   assertVaultReady,
   clearBrowserVault,
   createIsolatedContext,
@@ -781,6 +782,9 @@ test.describe('vault architecture modes', () => {
         code,
         SHARED_SECRET_VALUE,
       ])
+    } catch (error) {
+      await attachNookLogsForTest(joiner, test.info(), { print: true })
+      throw error
     } finally {
       await joiner.close()
       await joinerContext.close()

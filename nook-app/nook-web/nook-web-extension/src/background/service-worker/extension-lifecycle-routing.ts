@@ -125,66 +125,71 @@ type AuthorizationCleanupResult = Result<
   readonly AuthorizationCleanupFailure[]
 >
 
-async function clearAuthorizationState({
-  beginAccountPickerAuthorizationCleanup,
-  clearPendingAccountPickers,
-  clearStagedAuthenticatorEnrollments,
-  closeExtensionSessionDocument,
-  completeAccountPickerAuthorizationCleanup,
-  releaseAccountPickerAuthorizationCleanup,
-  closeSession,
-  cleanupStart,
-}: ClearAuthorizationStateArgs): Promise<AuthorizationCleanupResult> {
-  const cleanupOperation =
-    cleanupStart.kind === AuthorizationCleanupStartKind.Existing
-      ? Promise.resolve(cleanupStart.cleanup)
-      : beginAccountPickerAuthorizationCleanup()
-  const closeOperation = closeSession
-    ? closeExtensionSessionDocument()
-    : Promise.resolve(ok())
-  let startedCleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
-  try {
-    startedCleanup = await cleanupOperation
-  } catch {
-    return err([AuthorizationCleanupFailureKind.Rejected])
+class AuthorizationCleanupLifecycle {
+  constructor(private readonly request: ClearAuthorizationStateArgs) {}
+
+  async clear(): Promise<AuthorizationCleanupResult> {
+    const {
+      beginAccountPickerAuthorizationCleanup,
+      clearPendingAccountPickers,
+      clearStagedAuthenticatorEnrollments,
+      closeExtensionSessionDocument,
+      completeAccountPickerAuthorizationCleanup,
+      releaseAccountPickerAuthorizationCleanup,
+      closeSession,
+      cleanupStart,
+    } = this.request
+    const cleanupOperation =
+      cleanupStart.kind === AuthorizationCleanupStartKind.Existing
+        ? Promise.resolve(cleanupStart.cleanup)
+        : beginAccountPickerAuthorizationCleanup()
+    const closeOperation = closeSession
+      ? closeExtensionSessionDocument()
+      : Promise.resolve(ok())
+    let startedCleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
+    try {
+      startedCleanup = await cleanupOperation
+    } catch {
+      return err([AuthorizationCleanupFailureKind.Rejected])
+    }
+    const { authorizationGeneration, markerStatus } = startedCleanup
+    const failures: AuthorizationCleanupFailure[] = []
+    if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable)
+      failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
+    const closed = await closeOperation
+    if (closed.isErr()) failures.push(closed.error)
+    clearStagedAuthenticatorEnrollments()
+    try {
+      await clearPendingAccountPickers()
+    } catch {
+      failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
+    }
+    try {
+      await clearPendingAccountPickers()
+    } catch {
+      failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
+    }
+    clearStagedAuthenticatorEnrollments()
+    if (failures.length > 0) {
+      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+      return err(failures)
+    }
+    let outcome: Awaited<
+      ReturnType<typeof completeAccountPickerAuthorizationCleanup>
+    >
+    try {
+      outcome = await completeAccountPickerAuthorizationCleanup(
+        authorizationGeneration,
+        CleanupEvidence.Full,
+      )
+    } catch {
+      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+      return err([AuthorizationCleanupFailureKind.Rejected])
+    }
+    return 'error' in outcome
+      ? err([AuthorizationCleanupFailureKind.Rejected])
+      : ok()
   }
-  const { authorizationGeneration, markerStatus } = startedCleanup
-  const failures: AuthorizationCleanupFailure[] = []
-  if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable)
-    failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
-  const closed = await closeOperation
-  if (closed.isErr()) failures.push(closed.error)
-  clearStagedAuthenticatorEnrollments()
-  try {
-    await clearPendingAccountPickers()
-  } catch {
-    failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
-  }
-  try {
-    await clearPendingAccountPickers()
-  } catch {
-    failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
-  }
-  clearStagedAuthenticatorEnrollments()
-  if (failures.length > 0) {
-    releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
-    return err(failures)
-  }
-  let outcome: Awaited<
-    ReturnType<typeof completeAccountPickerAuthorizationCleanup>
-  >
-  try {
-    outcome = await completeAccountPickerAuthorizationCleanup(
-      authorizationGeneration,
-      CleanupEvidence.Full,
-    )
-  } catch {
-    releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
-    return err([AuthorizationCleanupFailureKind.Rejected])
-  }
-  return 'error' in outcome
-    ? err([AuthorizationCleanupFailureKind.Rejected])
-    : ok()
 }
 
 export async function recoverInterruptedAuthorizationCleanup(
@@ -222,7 +227,7 @@ export async function recoverInterruptedAuthorizationCleanup(
       cleanup,
     },
   }
-  return clearAuthorizationState(cleanupArgs)
+  return new AuthorizationCleanupLifecycle(cleanupArgs).clear()
 }
 
 export enum ExtensionLifecycleRoutingResult {
@@ -310,7 +315,8 @@ export function routeExtensionLifecycleMessage({
       closeSession: true,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    void clearAuthorizationState(cleanupArgs)
+    void new AuthorizationCleanupLifecycle(cleanupArgs)
+      .clear()
       .then((cleanup) =>
         sendResponse(
           cleanup.isOk() ? successResponse : sessionLockFailureResponse,
@@ -338,7 +344,8 @@ export function routeExtensionLifecycleMessage({
       closeSession: true,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    void clearAuthorizationState(cleanupArgs)
+    void new AuthorizationCleanupLifecycle(cleanupArgs)
+      .clear()
       .then((cleanup) =>
         sendResponse(
           cleanup.isOk() ? successResponse : sessionLockFailureResponse,
@@ -399,7 +406,9 @@ export function routeExtensionLifecycleMessage({
                 response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
               ) {
                 try {
-                  const cleanup = await clearAuthorizationState(cleanupArgs)
+                  const cleanup = await new AuthorizationCleanupLifecycle(
+                    cleanupArgs,
+                  ).clear()
                   if (cleanup.isErr())
                     return {
                       ok: false,
@@ -423,7 +432,9 @@ export function routeExtensionLifecycleMessage({
               return response
             } catch {
               try {
-                const cleanup = await clearAuthorizationState(cleanupArgs)
+                const cleanup = await new AuthorizationCleanupLifecycle(
+                  cleanupArgs,
+                ).clear()
                 if (cleanup.isErr())
                   return {
                     ok: false,

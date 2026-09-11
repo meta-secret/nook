@@ -82,7 +82,7 @@ export async function importPairingAfterCompanionReady(message: unknown) {
   if (admission.kind === PairingIngressAdmissionKind.Rejected) {
     return { ok: false, reason: admission.reason }
   }
-  return importApprovedPairing(admission.message)
+  return new PairingCredentialImportLifecycle(admission.message).import()
 }
 
 type ReconcilePairingStorageArgs = {
@@ -276,37 +276,39 @@ async function importDecodedApprovedPairing(
   }
 }
 
-export async function importApprovedPairing(
-  message: ExtensionPairingApprovedMessage,
-): Promise<PairingImportResult> {
-  try {
-    const sourceProviders = message.payload.providers
-    const stagingArgs: Parameters<ProviderCredentialBuffer['stage']>[0] = {
-      decode: backgroundVaultRuntime.decodeExtensionStorageProviders.bind(
-        backgroundVaultRuntime,
-      ),
-    }
-    const stagingOperation = new ProviderCredentialBuffer(
-      sourceProviders,
-    ).stage(stagingArgs)
-    new ProviderCredentialBuffer(sourceProviders).clear()
-    message.payload.providers = []
-    const staging = await stagingOperation
-    if (staging.isErr()) {
-      return { ok: false, reason: 'invalid-provider-payload' }
-    }
-    const stagedProviders = staging.value
+export class PairingCredentialImportLifecycle {
+  constructor(private readonly message: ExtensionPairingApprovedMessage) {}
+
+  async import(): Promise<PairingImportResult> {
     try {
-      const args: ImportDecodedApprovedPairingArgs = {
-        message,
-        providers: stagedProviders,
+      const sourceProviders = this.message.payload.providers
+      const stagingArgs: Parameters<ProviderCredentialBuffer['stage']>[0] = {
+        decode: backgroundVaultRuntime.decodeExtensionStorageProviders.bind(
+          backgroundVaultRuntime,
+        ),
       }
-      return await importDecodedApprovedPairing(args)
-    } finally {
-      new ProviderCredentialBuffer(stagedProviders).clear()
+      const stagingOperation = new ProviderCredentialBuffer(
+        sourceProviders,
+      ).stage(stagingArgs)
+      new ProviderCredentialBuffer(sourceProviders).clear()
+      this.message.payload.providers = []
+      const staging = await stagingOperation
+      if (staging.isErr()) {
+        return { ok: false, reason: 'invalid-provider-payload' }
+      }
+      const stagedProviders = staging.value
+      try {
+        const args: ImportDecodedApprovedPairingArgs = {
+          message: this.message,
+          providers: stagedProviders,
+        }
+        return await importDecodedApprovedPairing(args)
+      } finally {
+        new ProviderCredentialBuffer(stagedProviders).clear()
+      }
+    } catch {
+      return { ok: false, reason: 'event-log-import-failed' }
     }
-  } catch {
-    return { ok: false, reason: 'event-log-import-failed' }
   }
 }
 

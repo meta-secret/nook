@@ -327,7 +327,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     }
     expect(
       await sendExternalMessage(simplePage, extensionId, forgedGrant),
-    ).toEqual({ ok: false, reason: 'invalid-pairing-grant' })
+    ).toEqual({ ok: false, reason: 'invalid-pairing-grant-vault-type' })
 
     const persistenceBeforeMalformedProvider =
       await readExtensionPersistenceSnapshot(worker)
@@ -356,7 +356,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         extensionId,
         malformedProviderGrant,
       ),
-    ).toEqual({ ok: false, reason: 'invalid-pairing-grant' })
+    ).toEqual({ ok: false, reason: 'invalid-pairing-grant-providers' })
     expect(await readExtensionPersistenceSnapshot(worker)).toEqual(
       persistenceBeforeMalformedProvider,
     )

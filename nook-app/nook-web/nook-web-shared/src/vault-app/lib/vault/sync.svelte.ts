@@ -16,7 +16,7 @@ import type {
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   isoTimestamp,
-  syncVaultFromStorage,
+  VaultStorageSynchronization,
   type JoinRequest,
 } from "$lib/nook";
 import {
@@ -771,7 +771,12 @@ export class VaultSyncActions {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return syncVaultFromStorage({ manager: manager.value, mode, pat, repo });
+      return new VaultStorageSynchronization({
+        manager: manager.value,
+        mode,
+        pat,
+        repo,
+      }).run();
     });
     if (synchronized.isErr()) return storageErr(synchronized.error);
     return state.applyVaultSyncResult(synchronized.value);

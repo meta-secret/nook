@@ -87,10 +87,50 @@ let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
 let managerAvailability: VaultManagerAvailability = {
   kind: VaultManagerAvailabilityKind.Locked,
 }
-let sessionExpirySchedule: SessionExpirySchedule = {
-  kind: SessionExpiryScheduleKind.Stopped,
+class ExtensionSessionExpiryLifecycle {
+  private scheduleState: SessionExpirySchedule = {
+    kind: SessionExpiryScheduleKind.Stopped,
+  }
+  private generation = 0
+
+  currentGeneration(): number {
+    return this.generation
+  }
+
+  activate(onExpire: () => void): void {
+    this.generation += 1
+    if (this.scheduleState.kind === SessionExpiryScheduleKind.Scheduled) {
+      this.scheduleState.lease.stop()
+    }
+    const generation = this.generation
+    this.scheduleState = {
+      kind: SessionExpiryScheduleKind.Scheduled,
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      lease: new ActiveExtensionSessionLease({
+        generation,
+        durationMs: SESSION_DURATION_MS,
+        onExpire: () => {
+          if (generation !== this.generation) return
+          this.scheduleState = { kind: SessionExpiryScheduleKind.Stopped }
+          this.generation += 1
+          onExpire()
+        },
+      }),
+    }
+  }
+
+  renew(generation: number): Result<void, ExtensionSessionLeaseFailure> {
+    if (
+      generation !== this.generation ||
+      this.scheduleState.kind !== SessionExpiryScheduleKind.Scheduled
+    ) {
+      return err(ExtensionSessionLeaseFailure.Locked)
+    }
+    return this.scheduleState.lease.renew(generation)
+  }
 }
-let sessionGeneration = 0
+
+const sessionExpiryLifecycle = new ExtensionSessionExpiryLifecycle()
 
 enum CompanionEndpointAvailabilityKind {
   Inactive = 'inactive',
@@ -153,63 +193,32 @@ async function deviceResult(
   }
 }
 
-function scheduleSessionExpiry(generation: number): void {
-  if (sessionExpirySchedule.kind === SessionExpiryScheduleKind.Scheduled) {
-    sessionExpirySchedule.lease.stop()
-  }
-  sessionExpirySchedule = {
-    kind: SessionExpiryScheduleKind.Scheduled,
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    lease: new ActiveExtensionSessionLease({
-      generation,
-      durationMs: SESSION_DURATION_MS,
-      onExpire: () => {
-        if (generation !== sessionGeneration) return
-        sessionExpirySchedule = { kind: SessionExpiryScheduleKind.Stopped }
-        sessionGeneration += 1
-        releaseCompanionEndpoint()
-        const expiredManager = managerAvailability
-        managerAvailability = { kind: VaultManagerAvailabilityKind.Locked }
-        if (expiredManager.kind === VaultManagerAvailabilityKind.Active) {
-          try {
-            expiredManager.manager.lock_device_identity()
-            expiredManager.manager.free()
-          } catch {
-            // The service worker closes this document immediately if a WASM call
-            // still owns the manager when the session expires.
-          }
-        }
-        sessionMessageDispatcher.replaceOperations(
-          new SessionOperationFailure(SessionOperationFailureKind.Locked),
-        )
-        const expiryMessage: ExtensionSessionExpiryMessage = {
-          type: ExtensionSessionLifecycleMessageType.Expired,
-        }
-        void chrome.runtime.sendMessage(expiryMessage)
-      },
-    }),
-  }
-}
-
 async function activateSession(): Promise<DeviceResult> {
   releaseCompanionEndpoint()
   sessionMessageDispatcher.resetOperations()
   const activeManager = await getManager()
-  sessionGeneration += 1
-  scheduleSessionExpiry(sessionGeneration)
+  sessionExpiryLifecycle.activate(() => {
+    releaseCompanionEndpoint()
+    const expiredManager = managerAvailability
+    managerAvailability = { kind: VaultManagerAvailabilityKind.Locked }
+    if (expiredManager.kind === VaultManagerAvailabilityKind.Active) {
+      try {
+        expiredManager.manager.lock_device_identity()
+        expiredManager.manager.free()
+      } catch {
+        // The service worker closes this document immediately if a WASM call
+        // still owns the manager when the session expires.
+      }
+    }
+    sessionMessageDispatcher.replaceOperations(
+      new SessionOperationFailure(SessionOperationFailureKind.Locked),
+    )
+    const expiryMessage: ExtensionSessionExpiryMessage = {
+      type: ExtensionSessionLifecycleMessageType.Expired,
+    }
+    void chrome.runtime.sendMessage(expiryMessage)
+  })
   return deviceResult(activeManager)
-}
-
-function renewSessionExpiry(
-  generation: number,
-): Result<void, ExtensionSessionLeaseFailure> {
-  if (
-    generation !== sessionGeneration ||
-    sessionExpirySchedule.kind !== SessionExpiryScheduleKind.Scheduled
-  ) {
-    return err(ExtensionSessionLeaseFailure.Locked)
-  }
-  return sessionExpirySchedule.lease.renew(generation)
 }
 
 const operationContext: SessionOperationContext = {
@@ -217,8 +226,8 @@ const operationContext: SessionOperationContext = {
   getManager,
   activateSession,
   deviceResult,
-  currentGeneration: () => sessionGeneration,
-  renewSessionExpiry,
+  currentGeneration: () => sessionExpiryLifecycle.currentGeneration(),
+  renewSessionExpiry: (generation) => sessionExpiryLifecycle.renew(generation),
   resetOperations: (error) => {
     releaseCompanionEndpoint()
     sessionMessageDispatcher.replaceOperations(error)
@@ -250,7 +259,7 @@ async function handleCompanionIdentityHandoff(
     companionEndpointAvailability = {
       kind: CompanionEndpointAvailabilityKind.Inactive,
     }
-    const generation = sessionGeneration
+    const generation = sessionExpiryLifecycle.currentGeneration()
     let consumed = false
     try {
       const activeManager = await getManager()
@@ -260,7 +269,7 @@ async function handleCompanionIdentityHandoff(
         endpoint,
         [activeManager, message.payload.authorization],
       )
-      const renewal = renewSessionExpiry(generation)
+      const renewal = sessionExpiryLifecycle.renew(generation)
       if (renewal.isErr())
         return err(
           new SessionOperationFailure(SessionOperationFailureKind.Locked),

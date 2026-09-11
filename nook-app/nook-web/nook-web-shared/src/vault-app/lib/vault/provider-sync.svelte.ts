@@ -13,7 +13,7 @@ import type {
   SyncActionsContext,
 } from "$lib/vault/action-contexts";
 import { browserLogRuntime } from "$lib/runtime/log";
-import { syncVaultFromStorage } from "$lib/nook";
+import { VaultStorageSynchronization } from "$lib/nook";
 import {
   NookEventLogSyncIssueState,
   NookLocalFolderHealth,
@@ -273,12 +273,12 @@ export class ProviderSyncActions {
           // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return state.raceStorageTimeout({
             // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-            promise: syncVaultFromStorage({
+            promise: new VaultStorageSynchronization({
               manager: admitted.value,
               mode,
               pat,
               repo,
-            }),
+            }).run(),
             releaseLateValue: (result) => result.free(),
           });
         });

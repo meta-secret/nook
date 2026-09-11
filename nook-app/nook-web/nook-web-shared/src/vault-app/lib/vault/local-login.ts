@@ -20,7 +20,10 @@ import {
   NookVaultSwitchState,
   NookActiveVaultSelectionState,
 } from "$app-wasm";
-import { activeVaultScope, saveAuthProviders } from "$lib/auth/providers";
+import {
+  activeVaultScope,
+  AuthProviderPersistence,
+} from "$lib/auth/providers";
 import {
   ActiveVaultKind,
   LocalLoginPreparationState,
@@ -604,13 +607,13 @@ export class VaultLoginActions {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return saveAuthProviders({
+      return new AuthProviderPersistence({
         manager: manager.value,
         snapshot: {
           providers: state.providers,
           activeVaultStoreId: activeVaultScope(storeId),
         },
-      });
+      }).save();
     });
   }
 

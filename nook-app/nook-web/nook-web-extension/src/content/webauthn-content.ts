@@ -96,15 +96,19 @@ function respond({
   window.postMessage(nookTypedArgs0_0, location.origin)
 }
 
-function runtimeMessage<T>(message: WebsitePasskeyRuntimeMessage): Promise<T> {
-  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-  return new Promise((resolve, reject) => {
-    void chrome.runtime.sendMessage(message, (response: T) => {
-      const error = chrome.runtime.lastError?.message
-      if (error) reject(new Error(error))
-      else resolve(response)
+class WebAuthnRuntimeTransport<T> {
+  constructor(private readonly message: WebsitePasskeyRuntimeMessage) {}
+
+  send(): Promise<T> {
+    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
+    return new Promise((resolve, reject) => {
+      void chrome.runtime.sendMessage(this.message, (response: T) => {
+        const error = chrome.runtime.lastError?.message
+        if (error) reject(new Error(error))
+        else resolve(response)
+      })
     })
-  })
+  }
 }
 
 function validOptions(value: unknown): PasskeyOption[] {
@@ -315,7 +319,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
       type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel,
       payload: { requestId: message.requestId },
     } satisfies WebsitePasskeyCancelMessage
-    void runtimeMessage(nookTypedArgs0_6).catch(() => {})
+    void new WebAuthnRuntimeTransport(nookTypedArgs0_6).send().catch(() => {})
     return
   }
   if (

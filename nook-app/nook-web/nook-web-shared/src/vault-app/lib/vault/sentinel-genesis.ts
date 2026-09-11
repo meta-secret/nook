@@ -54,10 +54,37 @@ export interface SentinelOnboardingPackageAcceptance {
   readonly packageJson: string;
 }
 
+export interface SentinelParticipantKeyCreationRequest {
+  readonly vault: VaultState;
+  readonly waitForDevice: () => void;
+  readonly finishPendingCreation: () => void;
+}
+
 export type SentinelActionResult<T> = Result<
   T,
   StorageOperationFailure | OAuthFailure
 >;
+
+export class SentinelParticipantKeyCreationLifecycle {
+  constructor(
+    private readonly request: SentinelParticipantKeyCreationRequest,
+  ) {}
+
+  async create(): Promise<SentinelActionResult<string>> {
+    const { vault, waitForDevice, finishPendingCreation } = this.request;
+    if (!vault.deviceProtectionReady) {
+      waitForDevice();
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.DeviceAuthorizationRequired,
+        ),
+      );
+    }
+    return new SentinelGenesisActions(vault)
+      .createPublicKeyAnnouncement()
+      .finally(finishPendingCreation);
+  }
+}
 
 /** Owns browser orchestration for one sentinel genesis context. */
 export class SentinelGenesisActions {

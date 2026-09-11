@@ -60,6 +60,7 @@ import {
   emptyPasswordFormSummary,
   PasswordFormFieldQuery,
 } from "./password-form-summary-state";
+import { CredentialDisclosureRevalidation } from "./credential-disclosure-revalidation";
 
 export {
   oneTimeCodeFieldSelectors,
@@ -776,30 +777,14 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     }
     const passwordField = passwordFields[0];
     const approvedPasswordForm = passwordField.form;
-    const passwordFieldRemainsEligible = (): boolean =>
-      !passwordField.readOnly &&
-      passwordField.form === approvedPasswordForm &&
-      passwordFieldDiscovery
-        .findPasswordFields(new PasswordFormFieldQuery(request).query)
-        .includes(passwordField);
-    const formBlocksFill = (form: HTMLFormElement): boolean => {
-      return authenticationSubmissionControls.selectedSubmitterBlocksCredentialDisclosure(
-        {
-          form,
-          selectedSubmitter: this.findApprovedOwnedAdvanceControl({
-            request,
-            form,
-          }),
-        },
-      );
-    };
-    function passwordFieldBlocksFill(): boolean {
-      if (!passwordFieldRemainsEligible()) return true;
-      return approvedPasswordForm
-        ? formBlocksFill(approvedPasswordForm)
-        : false;
-    }
-    if (passwordFieldBlocksFill()) return false;
+    const disclosureRevalidation = new CredentialDisclosureRevalidation({
+      passwordField,
+      approvedPasswordForm,
+      request,
+      selectedSubmitter: (form) =>
+        this.findApprovedOwnedAdvanceControl({ request, form }),
+    });
+    if (disclosureRevalidation.blocks()) return false;
     if (usernameField) {
       const nookTypedArgs0_21: Parameters<
         typeof passwordFormCredentialInteraction.trackLoginCredentialField
@@ -812,7 +797,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
         nookTypedArgs0_21,
       );
       passwordFormCredentialInteraction.setNativeInputValue(nookTypedArgs0_21);
-      if (passwordFieldBlocksFill()) {
+      if (disclosureRevalidation.blocks()) {
         passwordFormCredentialInteraction.clearLoginCredentials(request);
         return false;
       }

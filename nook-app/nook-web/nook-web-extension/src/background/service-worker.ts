@@ -82,7 +82,10 @@ import {
   recoverInterruptedAuthorizationCleanup,
   routeExtensionLifecycleMessage,
 } from './service-worker/extension-lifecycle-routing'
-import { routeExternalCompanionMessage } from './service-worker/external-companion-routing'
+import {
+  ExternalCompanionRouter,
+  type ExternalCompanionRoutingRequest,
+} from './service-worker/external-companion-routing'
 import {
   authenticationPasskeyEvidenceIsSafe,
   authenticationWorkflowMessageResponse,
@@ -170,46 +173,46 @@ void recoverInterruptedAuthorizationCleanup(
     console.warn('Extension authorization cleanup initialization failed')
   })
 
-const externalCompanionRoutingDependencies: Parameters<
-  typeof routeExternalCompanionMessage
->[0]['dependencies'] = {
-  createIdentityHandoff: extensionPairingIdentity.createIdentityHandoff.bind(
-    extensionPairingIdentity,
-  ),
-  createPairedIdentityHandoff:
-    extensionPairingIdentity.createPairedIdentityHandoff.bind(
+const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dependencies'] =
+  {
+    createIdentityHandoff: extensionPairingIdentity.createIdentityHandoff.bind(
       extensionPairingIdentity,
     ),
-  discoverPairedVaultIdentity:
-    extensionPairingIdentity.discoverPairedVaultIdentity.bind(
-      extensionPairingIdentity,
-    ),
-  hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType.bind(
-    extensionPairingIdentity,
-  ),
-  importPairingAfterCompanionReady,
-  isExtensionIdentityHandoffRequestMessage:
-    ExtensionIdentityHandoffRequestMessageSchema.is,
-  isExtensionPairedVaultIdentityDiscoveryMessage:
-    ExtensionPairedVaultIdentityDiscoveryMessageSchema.is,
-  isExtensionPairedVaultIdentityHandoffRequestMessage:
-    ExtensionPairedVaultIdentityHandoffRequestMessageSchema.is,
-  isExtensionPairedVaultUnlockRequestMessage:
-    ExtensionPairedVaultUnlockRequestMessageSchema.is,
-  normalizeOpenCompanionLauncherMessage:
-    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage,
-  openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
-    extensionSessionLifecycle,
-  ),
-  refreshAuthenticationSurfaces:
-    extensionSessionLifecycle.refreshAuthenticationSurfaces.bind(
+    createPairedIdentityHandoff:
+      extensionPairingIdentity.createPairedIdentityHandoff.bind(
+        extensionPairingIdentity,
+      ),
+    discoverPairedVaultIdentity:
+      extensionPairingIdentity.discoverPairedVaultIdentity.bind(
+        extensionPairingIdentity,
+      ),
+    hasPairingApprovedType:
+      extensionPairingIdentity.hasPairingApprovedType.bind(
+        extensionPairingIdentity,
+      ),
+    importPairingAfterCompanionReady,
+    isExtensionIdentityHandoffRequestMessage:
+      ExtensionIdentityHandoffRequestMessageSchema.is,
+    isExtensionPairedVaultIdentityDiscoveryMessage:
+      ExtensionPairedVaultIdentityDiscoveryMessageSchema.is,
+    isExtensionPairedVaultIdentityHandoffRequestMessage:
+      ExtensionPairedVaultIdentityHandoffRequestMessageSchema.is,
+    isExtensionPairedVaultUnlockRequestMessage:
+      ExtensionPairedVaultUnlockRequestMessageSchema.is,
+    normalizeOpenCompanionLauncherMessage:
+      NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage,
+    openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
       extensionSessionLifecycle,
     ),
-  requestPairedVaultUnlock:
-    extensionPairingIdentity.requestPairedVaultUnlock.bind(
-      extensionPairingIdentity,
-    ),
-}
+    refreshAuthenticationSurfaces:
+      extensionSessionLifecycle.refreshAuthenticationSurfaces.bind(
+        extensionSessionLifecycle,
+      ),
+    requestPairedVaultUnlock:
+      extensionPairingIdentity.requestPairedVaultUnlock.bind(
+        extensionPairingIdentity,
+      ),
+  }
 
 // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
@@ -840,15 +843,13 @@ chrome.runtime.onMessageExternal.addListener(
   (runtimeMessage, sender, sendResponse) => {
     if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
     const message = runtimeMessage
-    const externalRoutingArgs: Parameters<
-      typeof routeExternalCompanionMessage
-    >[0] = {
+    const externalRoutingArgs: ExternalCompanionRoutingRequest = {
       dependencies: externalCompanionRoutingDependencies,
       message,
       sender,
       sendResponse,
     }
-    void routeExternalCompanionMessage(externalRoutingArgs).catch(() =>
+    void new ExternalCompanionRouter(externalRoutingArgs).route().catch(() =>
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       sendResponse({ ok: false, reason: 'forbidden-sender' }),
     )

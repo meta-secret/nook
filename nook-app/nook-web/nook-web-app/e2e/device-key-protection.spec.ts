@@ -854,12 +854,9 @@ test.describe('passkey device-key protection', () => {
   for (const scenario of [
     {
       mode: 'not-supported-error',
-      error:
-        'NotSupportedError: The requested public-key algorithm is not supported.',
     },
     {
       mode: 'security-error',
-      error: 'SecurityError: This is an invalid domain.',
     },
   ]) {
     test(`keeps ${scenario.mode} explicit`, async ({ page }) => {
@@ -872,7 +869,7 @@ test.describe('passkey device-key protection', () => {
       await clickDeviceProtectionSetup(page)
 
       await expect(page.getByTestId('device-protection-error')).toContainText(
-        scenario.error,
+        'This browser did not finish creating the passkey.',
       )
       await expect(
         page.getByTestId('device-protection-setup-btn'),

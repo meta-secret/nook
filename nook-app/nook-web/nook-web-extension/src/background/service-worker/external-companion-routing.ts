@@ -12,7 +12,7 @@ type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
 >[0]
 
-type ExternalCompanionRoutingArgs = {
+export type ExternalCompanionRoutingRequest = {
   dependencies: ExternalCompanionRoutingDependencies
   message: Parameters<ChromeMessageListener>[0]
   sender: chrome.runtime.MessageSender
@@ -36,7 +36,7 @@ export type ExternalCompanionRoutingDependencies = {
 }
 
 type MessageResponse = Parameters<
-  ExternalCompanionRoutingArgs['sendResponse']
+  ExternalCompanionRoutingRequest['sendResponse']
 >[0]
 
 const forbiddenSenderResponse: MessageResponse = {
@@ -57,105 +57,105 @@ const authenticationSurfaceRefreshFailureResponse: MessageResponse = {
   reason: 'authentication-surface-refresh-failed',
 }
 
-export async function routeExternalCompanionMessage({
-  dependencies,
-  message,
-  sender,
-  sendResponse,
-}: ExternalCompanionRoutingArgs): Promise<boolean> {
-  const {
-    createIdentityHandoff,
-    createPairedIdentityHandoff,
-    discoverPairedVaultIdentity,
-    hasPairingApprovedType,
-    importPairingAfterCompanionReady,
-    isExtensionIdentityHandoffRequestMessage,
-    isExtensionPairedVaultIdentityDiscoveryMessage,
-    isExtensionPairedVaultIdentityHandoffRequestMessage,
-    isExtensionPairedVaultUnlockRequestMessage,
-    normalizeOpenCompanionLauncherMessage,
-    openCompanionLauncher,
-    refreshAuthenticationSurfaces,
-    requestPairedVaultUnlock,
-  } = dependencies
-  const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
-  if (
-    launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
-  ) {
-    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-      sendResponse(forbiddenSenderResponse)
-      return false
-    }
-    void openCompanionLauncher(launcherMessage.message.intent)
-      .then(() => sendResponse(successResponse))
-      .catch(() => sendResponse(launcherFailureResponse))
-    return true
-  }
+export class ExternalCompanionRouter {
+  constructor(private readonly request: ExternalCompanionRoutingRequest) {}
 
-  if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
-    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-      sendResponse(forbiddenSenderResponse)
-      return false
-    }
-    void discoverPairedVaultIdentity(message).then(sendResponse)
-    return true
-  }
-
-  if (isExtensionPairedVaultUnlockRequestMessage(message)) {
-    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-      sendResponse(forbiddenSenderResponse)
-      return false
-    }
-    void requestPairedVaultUnlock(message)
-      .then(sendResponse)
-      .catch(() => {
-        const unlockFailureResponse: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          requestId: message.payload.requestId,
-          vaultStoreId: message.payload.vaultStoreId,
-          reason: 'unlock-launch-failed',
-        }
-        return sendResponse(unlockFailureResponse)
-      })
-    return true
-  }
-
-  if (isExtensionIdentityHandoffRequestMessage(message)) {
-    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-      sendResponse(forbiddenSenderResponse)
-      return false
-    }
-    void createIdentityHandoff(message).then(sendResponse)
-    return true
-  }
-
-  if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
-    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-      sendResponse(forbiddenSenderResponse)
-      return false
-    }
-    void createPairedIdentityHandoff(message).then(sendResponse)
-    return true
-  }
-
-  if (
-    !hasPairingApprovedType(message) ||
-    !(await ExternalSenderTrustPolicy.admits(sender))
-  ) {
-    sendResponse(invalidPairingGrantResponse)
-    return false
-  }
-  void importPairingAfterCompanionReady(message)
-    .then(async (response) => {
-      if (response.ok) {
-        try {
-          await refreshAuthenticationSurfaces()
-        } catch {
-          return authenticationSurfaceRefreshFailureResponse
-        }
+  async route(): Promise<boolean> {
+    const { dependencies, message, sender, sendResponse } = this.request
+    const {
+      createIdentityHandoff,
+      createPairedIdentityHandoff,
+      discoverPairedVaultIdentity,
+      hasPairingApprovedType,
+      importPairingAfterCompanionReady,
+      isExtensionIdentityHandoffRequestMessage,
+      isExtensionPairedVaultIdentityDiscoveryMessage,
+      isExtensionPairedVaultIdentityHandoffRequestMessage,
+      isExtensionPairedVaultUnlockRequestMessage,
+      normalizeOpenCompanionLauncherMessage,
+      openCompanionLauncher,
+      refreshAuthenticationSurfaces,
+      requestPairedVaultUnlock,
+    } = dependencies
+    const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
+    if (
+      launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
+    ) {
+      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+        sendResponse(forbiddenSenderResponse)
+        return false
       }
-      return response
-    })
-    .then(sendResponse)
-  return true
+      void openCompanionLauncher(launcherMessage.message.intent)
+        .then(() => sendResponse(successResponse))
+        .catch(() => sendResponse(launcherFailureResponse))
+      return true
+    }
+
+    if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
+      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+        sendResponse(forbiddenSenderResponse)
+        return false
+      }
+      void discoverPairedVaultIdentity(message).then(sendResponse)
+      return true
+    }
+
+    if (isExtensionPairedVaultUnlockRequestMessage(message)) {
+      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+        sendResponse(forbiddenSenderResponse)
+        return false
+      }
+      void requestPairedVaultUnlock(message)
+        .then(sendResponse)
+        .catch(() => {
+          const unlockFailureResponse: Parameters<typeof sendResponse>[0] = {
+            ok: false,
+            requestId: message.payload.requestId,
+            vaultStoreId: message.payload.vaultStoreId,
+            reason: 'unlock-launch-failed',
+          }
+          return sendResponse(unlockFailureResponse)
+        })
+      return true
+    }
+
+    if (isExtensionIdentityHandoffRequestMessage(message)) {
+      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+        sendResponse(forbiddenSenderResponse)
+        return false
+      }
+      void createIdentityHandoff(message).then(sendResponse)
+      return true
+    }
+
+    if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
+      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+        sendResponse(forbiddenSenderResponse)
+        return false
+      }
+      void createPairedIdentityHandoff(message).then(sendResponse)
+      return true
+    }
+
+    if (
+      !hasPairingApprovedType(message) ||
+      !(await ExternalSenderTrustPolicy.admits(sender))
+    ) {
+      sendResponse(invalidPairingGrantResponse)
+      return false
+    }
+    void importPairingAfterCompanionReady(message)
+      .then(async (response) => {
+        if (response.ok) {
+          try {
+            await refreshAuthenticationSurfaces()
+          } catch {
+            return authenticationSurfaceRefreshFailureResponse
+          }
+        }
+        return response
+      })
+      .then(sendResponse)
+    return true
+  }
 }

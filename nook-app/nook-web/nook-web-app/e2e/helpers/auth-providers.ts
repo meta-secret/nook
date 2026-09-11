@@ -490,21 +490,25 @@ export async function waitForAuthProvidersE2eHook(page: Page) {
     .toBe(true)
 }
 
-/** Load decrypted sync providers via wasm in the browser. */
-export async function loadDecryptedAuthProvidersInBrowser(
-  page: Page,
-): Promise<Result<AuthProvidersSnapshot, AuthProviderHookFailure>> {
-  const loaded = await page.evaluate(async (failures) => {
-    const hook = (
-      window as Window & { __nookAuthProviders?: AuthProviderBrowserHooks }
-    ).__nookAuthProviders
-    if (!hook) return { ok: false as const, failure: failures.Unavailable }
-    const snapshot = await hook.loadAuthProviders()
-    return snapshot.isErr()
-      ? { ok: false as const, failure: failures.ReadFailed }
-      : { ok: true as const, value: snapshot.value }
-  }, AuthProviderHookFailure)
-  return loaded.ok ? ok(loaded.value) : err(loaded.failure)
+/** Owns the browser-side E2E hook for decrypted provider inspection. */
+export class AuthProviderBrowserFixture {
+  constructor(private readonly page: Page) {}
+
+  async load(): Promise<
+    Result<AuthProvidersSnapshot, AuthProviderHookFailure>
+  > {
+    const loaded = await this.page.evaluate(async (failures) => {
+      const hook = (
+        window as Window & { __nookAuthProviders?: AuthProviderBrowserHooks }
+      ).__nookAuthProviders
+      if (!hook) return { ok: false as const, failure: failures.Unavailable }
+      const snapshot = await hook.loadAuthProviders()
+      return snapshot.isErr()
+        ? { ok: false as const, failure: failures.ReadFailed }
+        : { ok: true as const, value: snapshot.value }
+    }, AuthProviderHookFailure)
+    return loaded.ok ? ok(loaded.value) : err(loaded.failure)
+  }
 }
 
 /** Save sync providers through wasm (plaintext in → sealed in IndexedDB). */

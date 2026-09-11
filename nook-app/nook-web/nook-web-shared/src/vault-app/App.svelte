@@ -84,6 +84,7 @@
   } from '$lib/app/workspace-route'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
+
   const IS_SIMPLE_APP = configured_vault_application_is_simple()
   const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
@@ -684,24 +685,17 @@
   function finishPendingCreation(): void {
     pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
   }
-  async function handleCreateSentinelParticipantKey(): Promise<
-    SentinelActionResult<string>
-  > {
-    if (!vault.deviceProtectionReady) {
-      pendingVaultCreationState = {
-        kind: VaultCreationQueueKind.WaitingForDevice,
-        request: { kind: PendingVaultCreationKind.SentinelParticipantKey },
-      }
-      return err(
-        new VaultStorageFailure(
-          VaultStorageFailureKind.DeviceAuthorizationRequired,
-        ),
-      )
-    }
-    return new sentinelGenesisActions.SentinelGenesisActions(vault)
-      .createPublicKeyAnnouncement()
-      .finally(finishPendingCreation)
-  }
+  const sentinelParticipantKeyCreation =
+    new sentinelGenesisActions.SentinelParticipantKeyCreationLifecycle({
+      vault,
+      waitForDevice: () => {
+        pendingVaultCreationState = {
+          kind: VaultCreationQueueKind.WaitingForDevice,
+          request: { kind: PendingVaultCreationKind.SentinelParticipantKey },
+        }
+      },
+      finishPendingCreation,
+    })
   async function handleCreateSentinelParticipantResponse(
     requestPayload: string,
   ): Promise<SentinelActionResult<string>> {
@@ -954,7 +948,8 @@
     },
     onCreateDeviceVault: handleCreateDeviceVault,
     onStartSentinelGenesis: handleStartSentinelGenesis,
-    onCreateSentinelParticipantKey: handleCreateSentinelParticipantKey,
+    onCreateSentinelParticipantKey: () =>
+      sentinelParticipantKeyCreation.create(),
     onCreateSentinelParticipantResponse:
       handleCreateSentinelParticipantResponse,
     onDismissPasskey: () => {

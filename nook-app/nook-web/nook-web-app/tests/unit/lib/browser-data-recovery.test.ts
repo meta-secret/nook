@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { browserDataLifecycle } from '$lib/runtime/browser-data'
-import { VaultStorageFailureKind } from '$lib/runtime/storage-failure'
+import { err, type Result } from 'neverthrow'
+import {
+  BrowserDataCleanupFailure,
+  browserDataLifecycle,
+} from '$lib/runtime/browser-data'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
+import { browserLogRuntime } from '$lib/runtime/log'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -138,5 +146,78 @@ describe('local data recovery support', () => {
     expect(rejection.isErr() ? rejection.error.kind : rejection.value).toBe(
       VaultStorageFailureKind.PeerFailed,
     )
+  })
+
+  test('reports a rejected peer cleanup as failed readiness', async () => {
+    const messages: Array<{ readonly readiness?: { readonly kind: string } }> =
+      []
+    class RecoveryChannel {
+      static instance: RecoveryChannel
+      onmessage?: (event: MessageEvent) => void
+      constructor() {
+        RecoveryChannel.instance = this
+      }
+      postMessage(message: { readonly readiness?: { readonly kind: string } }) {
+        messages.push(message)
+      }
+      close(): void {}
+    }
+    vi.stubGlobal('BroadcastChannel', RecoveryChannel)
+
+    const subscription =
+      browserDataLifecycle.subscribeToLocalBrowserDataDeletion(() =>
+        Promise.reject(new Error('peer cleanup rejected')),
+      )
+    expect(subscription.isOk()).toBe(true)
+    RecoveryChannel.instance.onmessage?.({
+      data: {
+        type: 'request',
+        requestId: 'request-1',
+        senderId: 'other-tab',
+      },
+    } as MessageEvent)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(
+      messages.some((message) => message.readiness?.kind === 'failed'),
+    ).toBe(true)
+    if (subscription.isOk()) subscription.value()
+  })
+
+  test('preserves database and browser cleanup failures together', async () => {
+    vi.spyOn(browserLogRuntime, 'suspendWasmLogging').mockResolvedValue()
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: async (
+          _name: string,
+          operation: () => Promise<Result<void, VaultStorageFailure>>,
+        ) => operation(),
+      },
+    })
+    class RecoveryChannel {
+      onmessage?: (event: MessageEvent) => void
+      postMessage(): void {}
+      close(): void {}
+    }
+    vi.stubGlobal('BroadcastChannel', RecoveryChannel)
+    vi.stubGlobal('caches', {
+      keys: () => Promise.reject(new Error('cache cleanup failed')),
+    })
+
+    const databaseFailure = new VaultStorageFailure(
+      VaultStorageFailureKind.OperationFailed,
+    )
+    const outcome = await browserDataLifecycle.deleteLocalBrowserData(
+      async () => err(databaseFailure),
+    )
+
+    expect(outcome.isErr()).toBe(true)
+    if (outcome.isErr()) {
+      expect(outcome.error).toBeInstanceOf(BrowserDataCleanupFailure)
+      if (outcome.error instanceof BrowserDataCleanupFailure) {
+        expect(outcome.error.failures).toHaveLength(2)
+      }
+    }
   })
 })

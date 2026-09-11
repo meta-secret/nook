@@ -7,7 +7,7 @@ import {
   expectSealedCredential,
   flushNookLogPersistQueue,
   fetchAppLogs,
-  loadDecryptedAuthProvidersInBrowser,
+  AuthProviderBrowserFixture,
   AuthProviderHookFailure,
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
@@ -52,7 +52,7 @@ test.describe('sync provider credential encryption', () => {
     const raw = await readRawAuthProvidersFromIdb(page)
     expectSealedCredential(raw.providers[0]?.githubPat, pat)
 
-    const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
+    const decrypted = await new AuthProviderBrowserFixture(page).load()
     expect(decrypted.isOk()).toBe(true)
     if (decrypted.isOk())
       expect(decrypted.value.providers[0]?.githubPat).toEqual({
@@ -107,7 +107,7 @@ test.describe('sync provider credential encryption', () => {
       },
     ])
 
-    const admission = await loadDecryptedAuthProvidersInBrowser(page)
+    const admission = await new AuthProviderBrowserFixture(page).load()
     expect(admission.isErr()).toBe(true)
     if (admission.isErr())
       expect(admission.error).toBe(AuthProviderHookFailure.ReadFailed)
@@ -152,7 +152,7 @@ test.describe('sync provider credential encryption', () => {
     expectSealedCredential(oauth?.accessToken, access)
     expectSealedCredential(oauth?.refreshToken, refresh)
 
-    const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
+    const decrypted = await new AuthProviderBrowserFixture(page).load()
     expect(decrypted.isOk()).toBe(true)
     if (decrypted.isOk())
       expect(decrypted.value.providers[0]?.oauthFile).toEqual(

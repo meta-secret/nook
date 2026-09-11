@@ -15,6 +15,25 @@ export enum DashboardLoadKind {
   Failed = "failed",
 }
 
+export interface DashboardSnapshotFailureRequest {
+  readonly currentGeneration: () => number;
+  readonly failAccessSnapshot: () => void;
+  readonly failDirectorySnapshot: () => void;
+}
+
+export class DashboardSnapshotFailureTransition {
+  constructor(private readonly request: DashboardSnapshotFailureRequest) {}
+
+  apply(generation: number): DashboardLoadKind {
+    if (generation !== this.request.currentGeneration()) {
+      return DashboardLoadKind.Loading;
+    }
+    this.request.failAccessSnapshot();
+    this.request.failDirectorySnapshot();
+    return DashboardLoadKind.Failed;
+  }
+}
+
 export enum DevicesAccessRepresentationKind {
   List = "list",
   Graph = "graph",

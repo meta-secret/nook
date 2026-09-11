@@ -418,6 +418,7 @@ export async function authorizeDeviceProtection(
   const loginGate = page.getByTestId('login-gate')
   const vaultPicker = page.getByTestId('login-vault-picker')
   const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+  const vaultError = page.getByTestId('vault-error')
   const lockedAccessDashboard = loginGate.getByTestId(
     'devices-access-dashboard',
   )
@@ -499,6 +500,23 @@ export async function authorizeDeviceProtection(
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       await option.click()
+      await expect
+        .poll(
+          async () => {
+            if (await unlockVaultButton.isVisible()) return 'unlock'
+            if (await overlay.isVisible()) return 'overlay'
+            if (await vaultError.isVisible()) return 'error'
+            if (await vaultPicker.isVisible()) return 'picker'
+            return 'waiting'
+          },
+          { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+        )
+        .not.toBe('waiting')
+      if (await vaultError.isVisible()) {
+        throw new Error(
+          `Vault selection failed before unlock: ${await vaultError.textContent()}`,
+        )
+      }
     }
     await expect(unlockVaultButton).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

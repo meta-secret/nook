@@ -27,7 +27,7 @@ import {
   importExtensionVault,
   type ImportExtensionVaultArgs,
   openPasskeyVault,
-  withActivatedExtensionIdentity,
+  ActivatedExtensionIdentityLifecycle,
 } from './session-vault-operations'
 import { PasskeyBrowserBytes } from './session-key-material'
 import { extensionVaultGrant } from './session-vault-grant'
@@ -356,7 +356,7 @@ export async function handleSessionMessage({
           deviceId: grant.deviceId,
           operation,
         }
-        return withActivatedExtensionIdentity(activationArgs)
+        return new ActivatedExtensionIdentityLifecycle(activationArgs).run()
       }
       case ExtensionSessionMessageType.ListPasskeys: {
         const payload = message.payload

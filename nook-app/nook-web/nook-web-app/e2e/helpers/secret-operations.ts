@@ -177,10 +177,10 @@ export async function waitForSecretOnDevice(
           try {
             await triggerVaultSyncRefresh(page)
           } catch {
-            await synchronizeBrowserVault(page)
+            await new BrowserVaultScenario(page).synchronize()
           }
         } else {
-          await synchronizeBrowserVault(page)
+          await new BrowserVaultScenario(page).synchronize()
         }
         await waitForVaultOperationsIdle(page)
         return row.isVisible()
@@ -247,17 +247,21 @@ export async function assertEnrolledVaultOnGithub(
 export const seedSyncProvidersWhileUnlocked =
   seedOauthFileSyncProvidersWhileUnlocked
 
-async function synchronizeBrowserVault(page: Page): Promise<void> {
-  const failure = await page.evaluate(async () => {
-    const vault = (
-      window as Window & { __nookVault?: Pick<VaultState, 'manualSync'> }
-    ).__nookVault
-    if (!vault) return 'vault-unavailable'
-    const synchronized = await vault.manualSync()
-    return synchronized.isErr() ? synchronized.error.translationKey : ''
-  })
-  expect(
-    failure,
-    'Browser synchronization should complete without a typed failure',
-  ).toBe('')
+class BrowserVaultScenario {
+  constructor(private readonly page: Page) {}
+
+  async synchronize(): Promise<void> {
+    const failure = await this.page.evaluate(async () => {
+      const vault = (
+        window as Window & { __nookVault?: Pick<VaultState, 'manualSync'> }
+      ).__nookVault
+      if (!vault) return 'vault-unavailable'
+      const synchronized = await vault.manualSync()
+      return synchronized.isErr() ? synchronized.error.translationKey : ''
+    })
+    expect(
+      failure,
+      'Browser synchronization should complete without a typed failure',
+    ).toBe('')
+  }
 }
