@@ -7,6 +7,22 @@ includes:
     flatten: true
 
 tasks:
+  web:verify:
+    desc: Run the PR web verification and production builds with only the required WASM preparation.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+      - registry-cache:ensure
+    cmds:
+      - |
+        set -euo pipefail
+        artifacts_dir="$(mktemp -d "${TMPDIR:-/tmp}/nook-web-verify.XXXXXX")"
+        trap 'rm -rf "$artifacts_dir"' EXIT
+        {{.DOCKER}} buildx bake --allow="fs.write=$artifacts_dir" {{.NOOK_BAKE_FILES}} \
+          --set "focused-web-artifacts.output=type=local,dest=$artifacts_dir" \
+          --set "web-deps.output=type=cacheonly" focused-web-artifacts web-deps
+        task ci:pr:web CI_ARTIFACT_DIR="$artifacts_dir"
+
   web:install:
     desc: Install web dependencies in Docker.
     deps:

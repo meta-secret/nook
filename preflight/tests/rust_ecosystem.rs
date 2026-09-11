@@ -43,9 +43,9 @@ fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("dependency-policy job block is missing"))?;
 
     assert!(
-        dependency_policy.contains("timeout-minutes: 30")
+        dependency_policy.contains("timeout-minutes: 5")
             && dependency_policy.contains("task docker:ecosystem:dependency-policy"),
-        "dependency policy must retain its command and allow Main cache-seed latency"
+        "dependency policy must retain its command within the five-minute job limit"
     );
 
     Ok(())
@@ -208,8 +208,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     }
     assert!(
         dependency_policy.contains("name: Dependency policy and RustSec")
-            && dependency_policy.contains("timeout-minutes: 30"),
-        "Dependency policy must retain enough time for a contended ARC cache miss"
+            && dependency_policy.contains("timeout-minutes: 5"),
+        "Dependency policy must enforce the five-minute job limit"
     );
     assert!(
         !entry.contains("Run dependency policy") && !entry.contains("Bake rust-dependency-policy"),

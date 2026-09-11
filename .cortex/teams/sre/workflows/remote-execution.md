@@ -46,6 +46,18 @@ that the branch contains the current `origin/main`.
 
 ## Focused remote tasks
 
+Dispatch the browser-free PR web verification:
+
+```bash
+task remote TASK_NAME=web:verify
+```
+
+This selector prepares WASM without native Rust tests. It runs the existing
+web checks, bundled JavaScript tests, lint, and production builds.
+The standalone job has a ten-minute limit. Batched `web:verify` execution
+uses the same task limit. The inner verification stage stops after five
+minutes to leave time for runner cleanup.
+
 Dispatch one Kubernetes-native browser task:
 
 ```bash

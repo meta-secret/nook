@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import { rejects, throws } from 'node:assert/strict'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import {
   IDBCursor,
@@ -513,43 +514,33 @@ describe('generated companion protocol composition', () => {
       throw new Error('expected unlocked transaction')
     }
     mismatched.request.transaction.status.app_key.appKey.appId = 'app-mismatch'
-    await expect(
+    // Await through the event loop so wasm-bindgen can deliver its rejection.
+    await rejects(
       first.endpoint.authorize_and_seal(extension, mismatched),
-    ).rejects.toThrow()
-    expect(() =>
-      first.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(first.authorization),
-      ),
-    ).toThrow()
+      Error,
+    )
+    // Consumed wasm-bindgen owners must be checked synchronously: invoking
+    // another async method traps inside its future before it can settle.
+    throws(() => first.endpoint.status)
   })
 
   test('consumes stale authorization and concurrent discovery', async () => {
     const stale = beginHandoff('request-stale')
     stale.authorization.observedAt = 200
-    await expect(
+    await rejects(
       stale.endpoint.authorize_and_seal(
         extension,
         structuredClone(stale.authorization),
       ),
-    ).rejects.toThrow()
-    expect(() =>
-      stale.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(stale.authorization),
-      ),
-    ).toThrow()
+      Error,
+    )
+    throws(() => stale.endpoint.status)
 
     const concurrent = beginHandoff('request-concurrent')
     expect(() =>
       concurrent.endpoint.rediscover(discovery('request-other')),
     ).toThrow()
-    expect(() =>
-      concurrent.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(concurrent.authorization),
-      ),
-    ).toThrow()
+    throws(() => concurrent.endpoint.status)
   })
 
   test('rejects replay and a forged response at retained website state', async () => {
@@ -559,22 +550,16 @@ describe('generated companion protocol composition', () => {
       extension,
       structuredClone(first.authorization),
     )
-    expect(() =>
-      first.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(first.authorization),
-      ),
-    ).toThrow()
+    throws(() => first.endpoint.status)
 
     const forged = structuredClone(
       response,
     ) satisfies CompanionIdentityHandoffResponse
     forged.request.transaction.discovery.request.requestId = 'request-forged'
-    await expect(first.pending.finish(first.website, forged)).rejects.toThrow(
-      'does not match the active request',
+    await rejects(
+      first.pending.finish(first.website, forged),
+      /does not match the active request/,
     )
-    expect(() =>
-      first.pending.finish(first.website, structuredClone(response)),
-    ).toThrow()
+    throws(() => first.pending.request)
   })
 })

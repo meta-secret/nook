@@ -407,6 +407,7 @@ jobs:
 
   verify:
     name: Web verification
+    timeout-minutes: 10
     if: >-
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
