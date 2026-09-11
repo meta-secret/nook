@@ -1,8 +1,19 @@
 import { err, ok, type Result } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { ProviderSyncFailureHandling, ProviderSyncVisibility } from '$app-wasm'
+import {
+  NookVaultManager,
+  ProviderSyncFailureHandling,
+  ProviderSyncVisibility,
+} from '$app-wasm'
 import { LOCAL_FOLDER_PROVIDER_TYPE } from '$lib/auth/provider-types'
-import type { StorageProvider } from '$lib/auth/providers'
+import {
+  configuredLocalFolder,
+  providerPersistenceDefaults,
+  scopedProviderVault,
+  storedLocalFolderDirectory,
+  storedLocalFolderHandle,
+  type StorageProvider,
+} from '$lib/auth/providers'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
@@ -31,12 +42,26 @@ type ProviderConnectionScenario = {
   readonly syncProviderById: ReturnType<typeof vi.fn>
 }
 
+type OwnedManager = {
+  readonly manager: NookVaultManager
+  readonly state: VaultState
+}
+
+const ownedManagers: OwnedManager[] = []
+
 function localFolderProvider(): StorageProvider {
   return {
+    ...providerPersistenceDefaults(),
     id: 'local-folder-provider',
     type: LOCAL_FOLDER_PROVIDER_TYPE,
     label: 'Local backup',
-  } as StorageProvider
+    localFolder: configuredLocalFolder({
+      directoryName: storedLocalFolderDirectory('Vaults'),
+      handleId: storedLocalFolderHandle('local-folder-handle'),
+    }),
+    storeId: scopedProviderVault('vault-1'),
+    createdAt: '2026-09-11T00:00:00Z',
+  }
 }
 
 function vaultState(): VaultState {
@@ -64,8 +89,10 @@ function providerConnectionScenario(
   state.addProviderOpen = true
   state.providers = [provider]
   state.errorMsg = ''
-  vi.spyOn(state, 'hasManager', 'get').mockReturnValue(true)
-  vi.spyOn(state, 'syncProviders', 'get').mockReturnValue([provider])
+  state.openActiveVault('vault-1')
+  const manager = new NookVaultManager()
+  state.openManager(manager)
+  ownedManagers.push({ manager, state })
   vi.spyOn(state, 'stagedRemoteStorageArgs').mockReturnValue({
     kind: StagedRemoteStorageKind.Unavailable,
   })
@@ -95,7 +122,14 @@ function providerConnectionScenario(
   }
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  for (const owned of ownedManagers) {
+    owned.state.clearManager()
+    owned.manager.free()
+  }
+  ownedManagers.length = 0
+  vi.restoreAllMocks()
+})
 
 describe('local-folder provider connection', () => {
   test('synchronizes a healthy folder exactly once without a preflush', async () => {
