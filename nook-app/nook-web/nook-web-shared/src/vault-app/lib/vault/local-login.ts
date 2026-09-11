@@ -230,13 +230,17 @@ export class VaultLoginActions {
     state.dismissSuccess();
     state.isVerifying = true;
     try {
+      log.info("vault selection diagnostic: active vault selection started");
       try {
         await set_active_vault(storeId);
       } catch (failure) {
+        log.warn("vault selection diagnostic: active vault selection failed");
         return storageErr(new NativeVaultStorageFailure(failure));
       }
+      log.info("vault selection diagnostic: active vault selection completed");
       state.openActiveVault(storeId);
       if (state.hasManager) {
+        log.info("vault selection diagnostic: session reset started");
         const reset = await state.enqueueStorage(async () => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
@@ -247,19 +251,37 @@ export class VaultLoginActions {
             return storageErr(new NativeVaultStorageFailure(failure));
           }
         });
-        if (reset.isErr()) return storageErr(reset.error);
+        if (reset.isErr()) {
+          log.warn("vault selection diagnostic: session reset failed");
+          return storageErr(reset.error);
+        }
+        log.info("vault selection diagnostic: session reset completed");
       }
+      log.info("vault selection diagnostic: local vault lookup started");
       try {
         state.localVaultPresent = await has_active_local_vault();
       } catch (failure) {
+        log.warn("vault selection diagnostic: local vault lookup failed");
         return storageErr(new NativeVaultStorageFailure(failure));
       }
+      log.info("vault selection diagnostic: local vault lookup completed");
       state.localLoginPreparation = LocalLoginPreparationState.Idle;
+      log.info("vault selection diagnostic: password refresh started");
       const passwordRefresh2 = await state.refreshPasswordEntriesList();
-      if (passwordRefresh2.isErr()) return storageErr(passwordRefresh2.error);
+      if (passwordRefresh2.isErr()) {
+        log.warn("vault selection diagnostic: password refresh failed");
+        return storageErr(passwordRefresh2.error);
+      }
+      log.info("vault selection diagnostic: password refresh completed");
+      log.info("vault selection diagnostic: unlock presentation started");
       const presentation = await new LoginUnlockPresentation(state).refresh();
-      if (presentation.isErr()) return storageErr(presentation.error);
+      if (presentation.isErr()) {
+        log.warn("vault selection diagnostic: unlock presentation failed");
+        return storageErr(presentation.error);
+      }
+      log.info("vault selection diagnostic: unlock presentation completed");
       state.localLoginPreparation = LocalLoginPreparationState.Ready;
+      log.info("vault selection diagnostic: selection completed");
       return storageOk();
     } finally {
       state.isVerifying = false;
