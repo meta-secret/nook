@@ -264,6 +264,7 @@ export class VaultInitializationActions {
       }
       state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
     } catch (error) {
+      log.warn("app init diagnostic: initialization exception");
       if (
         state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
         deviceIdentityUnlocked
@@ -654,7 +655,10 @@ class DeviceInitializationContinuation {
       ensureLocalRow: true,
     };
     const loadedProviders2 = await state.loadProviders(loadProvidersArgs2);
-    if (loadedProviders2.isErr()) return storageErr(loadedProviders2.error);
+    if (loadedProviders2.isErr()) {
+      log.warn("app init diagnostic: authorized provider load rejected");
+      return storageErr(loadedProviders2.error);
+    }
     const catalogRefresh3 = await state.refreshLocalVaultCatalog();
     if (catalogRefresh3.isErr()) {
       return storageErr(catalogRefresh3.error);
@@ -669,10 +673,12 @@ class DeviceInitializationContinuation {
       try {
         await set_active_vault(state.activeVault.storeId);
       } catch (failure) {
+        log.warn("app init diagnostic: active vault selection rejected");
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       const activeVaultPersistence = await state.syncActiveVaultStoreIdToAuth();
       if (activeVaultPersistence.isErr()) {
+        log.warn("app init diagnostic: active vault persistence rejected");
         return storageErr(activeVaultPersistence.error);
       }
     }
@@ -698,7 +704,10 @@ class DeviceInitializationContinuation {
         return storageErr(passwordRefresh1.error);
       }
       const presentation = await new LoginUnlockPresentation(state).refresh();
-      if (presentation.isErr()) return storageErr(presentation.error);
+      if (presentation.isErr()) {
+        log.warn("app init diagnostic: unlock assessment rejected");
+        return storageErr(presentation.error);
+      }
     }
     const autoUnlock = !hasPendingEnrollment && state.shouldAutoUnlock();
     if (autoUnlock) {

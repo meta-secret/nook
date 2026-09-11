@@ -3,7 +3,6 @@ import { expect, test, type Page } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import {
   addSecret,
-  attachNookLogsForTest,
   assertVaultReady,
   clearBrowserVault,
   createIsolatedContext,
@@ -16,6 +15,7 @@ import {
   openOnboardDevicePanel,
   openStorageSettings,
   readPersistedAppLogs,
+  readNookLogSnapshot,
   revealSecretValue,
   seedGithubSyncProvidersWhileUnlocked,
   seedUnscopedOauthFileProvidersForEnrollment,
@@ -783,7 +783,15 @@ test.describe('vault architecture modes', () => {
         SHARED_SECRET_VALUE,
       ])
     } catch (error) {
-      await attachNookLogsForTest(joiner, test.info(), { print: true })
+      try {
+        const joinerLogs = await readNookLogSnapshot(joiner)
+        await test.info().attach('joiner-nook-app-logs.json', {
+          body: JSON.stringify(joinerLogs, (_key, value) => value, 2),
+          contentType: 'application/json',
+        })
+      } catch {
+        // Diagnostic attachment failure must not replace the browser failure.
+      }
       throw error
     } finally {
       await joiner.close()
