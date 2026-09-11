@@ -37,6 +37,7 @@ import type {
 
 import type { PrStewardAssignedPrReader } from './pr-steward-github.ts';
 
+import { PrStewardOutput } from './pr-steward-output.ts';
 import { PrStewardDeliveries } from './pr-steward-deliveries.ts';
 import { PrStewardInvocationCodec } from './pr-steward-invocation.ts';
 
@@ -766,14 +767,14 @@ export class PrStewardEventObserver {
 
   async observe(request: PrStewardObservationRequest): Promise<void> {
     const deliveries = new PrStewardDeliveries();
+    const output = new PrStewardOutput();
     for await (const message of request.messages) {
-      const fingerprint = deliveries.fingerprint(message.data);
-      if (deliveries.contains(fingerprint)) continue;
+      if (deliveries.contains(message)) continue;
       const record = await this.#observeMessage({ request, message });
-      if (record === false) continue;
+      if (record === false || !output.shouldEmit({ record })) continue;
       request.write(PrStewardNdjsonCodec.encode(record));
       if (record.kind === PrStewardRecordKind.Routing)
-        deliveries.remember(fingerprint);
+        deliveries.remember(message);
     }
   }
 

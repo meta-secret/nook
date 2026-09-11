@@ -137,8 +137,11 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 
 The observer retains fingerprints of the last 128 successfully emitted payloads.
 An identical byte payload is suppressed before another GitHub read. Changed
-envelopes remain observable even when their meaning is unchanged. Blockers are
-not cached. This bounded memory is process-local and never persisted.
+envelopes remain observable even when their meaning is unchanged. Failed
+deliveries remain eligible for fresh observation. Repeated blockers with the
+same code, target, source, head, and summary emit once. Successful routing
+clears that suppression so a later recurrence is visible. Event identifiers
+do not define a blocker change. This bounded memory is never persisted.
 
 Output contains only bounded hints. It never contains bodies, review text,
 logs, raw payloads, or credentials. Steward performs authorized reconciliation

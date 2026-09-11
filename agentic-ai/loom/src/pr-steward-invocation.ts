@@ -35,4 +35,3 @@ export class PrStewardInvocationCodec {
     return { pullRequest, credentialPath: path };
   }
 }
-
