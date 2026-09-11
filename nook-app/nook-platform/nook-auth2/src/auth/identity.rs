@@ -374,7 +374,11 @@ impl IdentityRecord {
                             "identity does not own the vault being granted".to_owned(),
                         )
                     })?;
-                let grant = &self.vault_deks[index];
+                let grant = self.vault_deks.get(index).ok_or_else(|| {
+                    MultiDeviceError::InvalidDeviceIdentity(
+                        "identity does not own the vault being granted".to_owned(),
+                    )
+                })?;
                 let authorized_app_ids = grant
                     .secrets_envelopes
                     .iter()
@@ -415,7 +419,7 @@ impl IdentityRecord {
                 {
                     authorized_members.push(member.clone());
                 }
-                let key_epoch = self.vault_deks[index].key_epoch.clone();
+                let key_epoch = grant.key_epoch.clone();
                 let mut replacement = IdentityVaultDek::wrap_vault_keys_for_members(
                     WrapVaultKeysForMembersRequest {
                         keys: keys,
@@ -427,7 +431,12 @@ impl IdentityRecord {
                 replacements.push((index, replacement));
             }
             for (index, replacement) in replacements {
-                self.vault_deks[index] = replacement;
+                let grant = self.vault_deks.get_mut(index).ok_or_else(|| {
+                    MultiDeviceError::InvalidDeviceIdentity(
+                        "identity does not own the vault being granted".to_owned(),
+                    )
+                })?;
+                *grant = replacement;
             }
             if !keys_by_store.is_empty() {
                 self.control_epoch = self.control_epoch.next();
@@ -608,7 +617,11 @@ impl IdentityId {
     #[must_use]
     pub fn identity_fingerprint(identity_id: &IdentityId) -> String {
         let hash = Sha256::digest(identity_id.as_str().as_bytes());
-        hex::encode(&hash[..8])
+        let mut prefix = [0_u8; 8];
+        for (output, input) in prefix.iter_mut().zip(hash) {
+            *output = input;
+        }
+        hex::encode(prefix)
     }
 }
 
@@ -658,7 +671,11 @@ mod tests {
         let IdentityVaultBinding::Bound(vault_dek) = identity.vault_dek(&store) else {
             anyhow::bail!("identity DEK missing after generate")
         };
-        let opened = app_key.decrypt_envelope(&vault_dek.secrets_envelopes[0].envelope)?;
+        let envelope = vault_dek
+            .secrets_envelopes
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("generated vault DEK must contain an envelope"))?;
+        let opened = app_key.decrypt_envelope(&envelope.envelope)?;
         assert_eq!(opened.as_str(), keys.secrets_key.as_str());
         let opened_identity = identity.open_or_generate_vault_dek(IdentityVaultKeyOpening {
             app_key: &app_key,
@@ -751,7 +768,14 @@ mod tests {
             IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let legacy_json = serde_json::to_string(&identity)?;
         let legacy: IdentityRecord = serde_json::from_str(&legacy_json)?;
-        assert!(legacy.members[0].signing_public_key.is_empty());
+        assert!(
+            legacy
+                .members
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("legacy identity must contain its owner"))?
+                .signing_public_key
+                .is_empty()
+        );
 
         let signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
         identity = identity.set_member_signing_public_key(IdentityMemberSigningUpdate {
@@ -759,7 +783,14 @@ mod tests {
             signing_public_key: &signing_public_key,
         })?;
         let restored: IdentityRecord = serde_json::from_str(&serde_json::to_string(&identity)?)?;
-        assert_eq!(restored.members[0].signing_public_key, signing_public_key);
+        assert_eq!(
+            restored
+                .members
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("restored identity must contain its owner"))?
+                .signing_public_key,
+            signing_public_key
+        );
         Ok(())
     }
 }

@@ -472,8 +472,11 @@ mod tests {
         let request = session.request();
         let first = fixture.response(&request, 0)?;
         let second = fixture.response(&request, 1)?;
-        let local_plaintext =
-            SentinelShareOpening::new(&fixture.records, &fixture.participants[0]).open()?;
+        let participant = fixture
+            .participants
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain its first participant"))?;
+        let local_plaintext = SentinelShareOpening::new(&fixture.records, participant).open()?;
         assert!(!serde_json::to_string(&first)?.contains(&local_plaintext.share));
         session = Fixture::collect(session, first)?;
         assert_eq!(
@@ -582,7 +585,9 @@ mod tests {
             ))?
             .respond(
                 &fixture.records,
-                &fixture.participants[1],
+                fixture.participants.get(1).ok_or_else(|| {
+                    anyhow::anyhow!("fixture must contain its second participant")
+                })?,
                 &Fixture::signing_key(1),
             )?;
         let before = session.status();
@@ -715,7 +720,10 @@ mod tests {
         assert!(matches!(
             checked.respond(
                 &fixture.records,
-                &fixture.participants[0],
+                fixture
+                    .participants
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("fixture must contain its first participant"))?,
                 &Fixture::signing_key(1)
             ),
             Err(MultiDeviceError::InvalidSentinelUnlockPayload)
@@ -840,7 +848,10 @@ mod tests {
                         threshold: 2.into(),
                     },
                 )?;
-            let requester = participants[2].clone();
+            let requester = participants
+                .get(2)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("fixture must contain its requester"))?;
             Ok(Fixture {
                 keys,
                 records,
@@ -877,7 +888,9 @@ mod tests {
                 ))?
                 .respond(
                     &self.records,
-                    &self.participants[index],
+                    self.participants.get(index).ok_or_else(|| {
+                        anyhow::anyhow!("participant index must be in the fixture")
+                    })?,
                     &Self::signing_key(u8::try_from(index + 1)?),
                 )?)
         }

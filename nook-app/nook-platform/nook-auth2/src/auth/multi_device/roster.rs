@@ -530,7 +530,13 @@ mod tests {
             members_key: &keys.members_key,
         })?;
         assert_eq!(roster.len(), 1);
-        assert_eq!(roster[0].auth_id, genesis.auth_id());
+        assert_eq!(
+            roster
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("genesis member must remain in the roster"))?
+                .auth_id,
+            genesis.auth_id()
+        );
         Ok(())
     }
 
@@ -589,11 +595,14 @@ mod tests {
             }),
             Err(MultiDeviceError::MemberRecordKeyMismatch { .. })
         ));
+        let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records: &records,
+            members_key: &keys.members_key,
+        })?;
         assert_eq!(
-            VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
-                records: &records,
-                members_key: &keys.members_key
-            })?[0]
+            roster
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("genesis member must resolve"))?
                 .auth_id,
             genesis.auth_id()
         );

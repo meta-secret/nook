@@ -38,7 +38,7 @@ impl Share {
             (u32::from(self.member_index) << 4) | u32::from(self.member_threshold - 1);
         let mut indices = MnemonicWords::integer_words(id_ext_exponent, 2);
         indices.extend(MnemonicWords::integer_words(group_member_parameters, 2));
-        indices.extend(MnemonicWords::bytes_to_words(&self.value));
+        indices.extend(MnemonicWords::bytes_to_words(&self.value)?);
         indices.extend(Checksum::create(&indices));
         let words = WordList::values();
         indices
@@ -71,7 +71,11 @@ impl Share {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
 
-        let id_ext_exponent = MnemonicWords::words_to_u32(&indices[..2]);
+        let id_ext_exponent = MnemonicWords::words_to_u32(
+            indices
+                .get(..2)
+                .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?,
+        );
         let identifier = u16::try_from(id_ext_exponent >> 5)
             .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
         let extendable = (id_ext_exponent >> 4) & 1;
@@ -80,7 +84,11 @@ impl Share {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
 
-        let parameters = MnemonicWords::words_to_u32(&indices[2..METADATA_WORDS]);
+        let parameters = MnemonicWords::words_to_u32(
+            indices
+                .get(2..METADATA_WORDS)
+                .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?,
+        );
         let group_index = ((parameters >> 16) & 0x0f) as u8;
         let group_threshold = ((parameters >> 12) & 0x0f) as u8 + 1;
         let group_count = ((parameters >> 8) & 0x0f) as u8 + 1;
@@ -90,7 +98,13 @@ impl Share {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
 
-        let value_words = &indices[METADATA_WORDS..indices.len() - CHECKSUM_WORDS];
+        let value_end = indices
+            .len()
+            .checked_sub(CHECKSUM_WORDS)
+            .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
+        let value_words = indices
+            .get(METADATA_WORDS..value_end)
+            .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
         let value = MnemonicWords::words_to_bytes(value_words)?;
         if value.len() != SECRET_BYTES {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
@@ -129,17 +143,23 @@ impl MnemonicWords {
             .fold(0_u32, |value, word| (value << 10) | u32::from(*word))
     }
 
-    fn bytes_to_words(bytes: &[u8]) -> Vec<u16> {
+    fn bytes_to_words(bytes: &[u8]) -> MultiDeviceResult<Vec<u16>> {
         let word_count = (bytes.len() * 8).div_ceil(10);
         let padding = word_count * 10 - bytes.len() * 8;
         let mut words = vec![0_u16; word_count];
         for bit in 0..bytes.len() * 8 {
-            if bytes[bit / 8] & (1 << (7 - bit % 8)) != 0 {
+            let byte = bytes
+                .get(bit / 8)
+                .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
+            if byte & (1 << (7 - bit % 8)) != 0 {
                 let padded_bit = padding + bit;
-                words[padded_bit / 10] |= 1 << (9 - padded_bit % 10);
+                let word = words
+                    .get_mut(padded_bit / 10)
+                    .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
+                *word |= 1 << (9 - padded_bit % 10);
             }
         }
-        words
+        Ok(words)
     }
 
     fn words_to_bytes(words: &[u16]) -> MultiDeviceResult<Vec<u8>> {
@@ -149,7 +169,10 @@ impl MnemonicWords {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
         for bit in 0..padding {
-            if words[bit / 10] & (1 << (9 - bit % 10)) != 0 {
+            let word = words
+                .get(bit / 10)
+                .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
+            if word & (1 << (9 - bit % 10)) != 0 {
                 return Err(MultiDeviceError::InvalidSentinelShareEncoding);
             }
         }
@@ -160,8 +183,14 @@ impl MnemonicWords {
         let mut bytes = vec![0_u8; byte_count];
         for bit in 0..byte_count * 8 {
             let source = padding + bit;
-            if words[source / 10] & (1 << (9 - source % 10)) != 0 {
-                bytes[bit / 8] |= 1 << (7 - bit % 8);
+            let word = words
+                .get(source / 10)
+                .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
+            if word & (1 << (9 - source % 10)) != 0 {
+                let byte = bytes
+                    .get_mut(bit / 8)
+                    .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
+                *byte |= 1 << (7 - bit % 8);
             }
         }
         Ok(bytes)

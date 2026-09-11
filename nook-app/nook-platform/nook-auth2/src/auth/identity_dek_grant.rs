@@ -125,10 +125,26 @@ mod tests {
         missing.members_envelopes.clear();
         assert!(!fixture.matches(&missing));
         let mut duplicate = fixture.grant.clone();
-        duplicate.secrets_envelopes[1] = duplicate.secrets_envelopes[0].clone();
+        let first = duplicate
+            .secrets_envelopes
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a secrets envelope"))?;
+        *duplicate
+            .secrets_envelopes
+            .get_mut(1)
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain two secrets envelopes"))? = first;
         assert!(!fixture.matches(&duplicate));
         let mut duplicate = fixture.grant.clone();
-        duplicate.members_envelopes[1] = duplicate.members_envelopes[0].clone();
+        let first = duplicate
+            .members_envelopes
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a members envelope"))?;
+        *duplicate
+            .members_envelopes
+            .get_mut(1)
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain two members envelopes"))? = first;
         assert!(!fixture.matches(&duplicate));
         Ok(())
     }
@@ -166,10 +182,18 @@ mod tests {
             .public_key()
             .seal_bytes(fixture.keys.secrets_key.as_str().as_bytes())?;
         let mut unreadable = fixture.grant.clone();
-        unreadable.secrets_envelopes[0].envelope = encrypted_for_other;
+        unreadable
+            .secrets_envelopes
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a secrets envelope"))?
+            .envelope = encrypted_for_other;
         assert!(!fixture.matches(&unreadable));
         let mut unreadable = fixture.grant.clone();
-        unreadable.members_envelopes[0].envelope = other
+        unreadable
+            .members_envelopes
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a members envelope"))?
+            .envelope = other
             .public_key()
             .seal_bytes(fixture.keys.members_key.as_str().as_bytes())?;
         assert!(!fixture.matches(&unreadable));

@@ -287,7 +287,12 @@ mod tests {
         directory = opened_identity.directory;
         let expected_keys = opened_identity.keys;
         let epoch = known_epoch('a', 'b')?;
-        directory.identities[0].vault_deks[0].key_epoch = epoch.clone();
+        directory
+            .identities
+            .first_mut()
+            .and_then(|identity| identity.vault_deks.first_mut())
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain its generated vault DEK"))?
+            .key_epoch = epoch.clone();
         let resolved_identity = directory.create_identity(IdentityCreation {
             label: "Work",
             app_key: &website_key,
@@ -315,7 +320,15 @@ mod tests {
             expected_keys
         );
         assert_eq!(directory.selected()?.members.len(), 1);
-        assert_eq!(directory.identities()[0].vault_deks[0].key_epoch, epoch);
+        assert_eq!(
+            directory
+                .identities()
+                .first()
+                .and_then(|identity| identity.vault_deks.first())
+                .ok_or_else(|| anyhow::anyhow!("enrolled owner must retain its vault DEK"))?
+                .key_epoch,
+            epoch
+        );
         Ok(())
     }
 

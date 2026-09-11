@@ -305,7 +305,10 @@ mod tests {
                 Self::Nonce => &record.nonce,
             };
             let mut bytes = Engine::decode(&URL_SAFE_NO_PAD, encoded)?;
-            bytes[0] ^= 0x80;
+            let first = bytes
+                .first_mut()
+                .ok_or_else(|| anyhow::anyhow!("authenticated metadata must not be empty"))?;
+            *first ^= 0x80;
             let encoded = match self {
                 Self::Credential => &mut record.credential_id,
                 Self::UserHandle => &mut record.user_handle,

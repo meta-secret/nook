@@ -37,8 +37,9 @@ impl<'a> MasterSecretCipher<'a> {
 
     fn feistel(&self, input: &[u8], rounds: impl Iterator<Item = u8>) -> Vec<u8> {
         let middle = input.len() / 2;
-        let mut left = input[..middle].to_vec();
-        let mut right = input[middle..].to_vec();
+        let (left_half, right_half) = input.split_at(middle);
+        let mut left = left_half.to_vec();
+        let mut right = right_half.to_vec();
         for round in rounds {
             let mut derived = self.round(round, &right);
             let next_right = Self::xor(&left, &derived);

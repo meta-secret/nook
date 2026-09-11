@@ -12,14 +12,14 @@ struct LegacyIdentityProjection<'a> {
 impl<'a> LegacyIdentityProjection<'a> {
     fn merge(mut self, incoming: Self) -> MultiDeviceResult<Self> {
         for member in incoming.members {
-            if let Some(index) = self
+            if let Some(existing) = self
                 .members
-                .iter()
-                .position(|existing| existing.app_id == member.app_id)
+                .iter_mut()
+                .find(|existing| existing.app_id == member.app_id)
             {
-                self.members[index].admit_legacy_peer(member)?;
-                if self.members[index].signing_public_key.is_empty() {
-                    self.members[index] = member;
+                existing.admit_legacy_peer(member)?;
+                if existing.signing_public_key.is_empty() {
+                    *existing = member;
                 }
             } else {
                 self.members.push(member);
@@ -72,20 +72,28 @@ impl LegacyDirectoryAdmission<'_> {
             let Some((left, right, app_id)) = duplicate else {
                 break;
             };
+            let left_identity = identities
+                .get(left)
+                .ok_or(MultiDeviceError::InvalidIdentitySelection)?
+                .identity_id;
+            let right_identity = identities
+                .get(right)
+                .ok_or(MultiDeviceError::InvalidIdentitySelection)?
+                .identity_id;
             if let LegacyMigrationScope::FromBase { components, .. } = &self.scope {
-                let left_component = components.get(identities[left].identity_id);
-                let right_component = components.get(identities[right].identity_id);
+                let left_component = components.get(left_identity);
+                let right_component = components.get(right_identity);
                 if left_component.is_none() || left_component != right_component {
                     return Err(MultiDeviceError::DuplicateAppKeyOwnership {
                         app_id: app_id.to_string(),
                     });
                 }
             }
-            let survivor = if self.scope.preserves(identities[right].identity_id) {
+            let survivor = if self.scope.preserves(right_identity) {
                 right
-            } else if self.scope.preserves(identities[left].identity_id) {
+            } else if self.scope.preserves(left_identity) {
                 left
-            } else if matches!(&selection, IdentitySelection::Selected(identity) if identity == identities[right].identity_id)
+            } else if matches!(&selection, IdentitySelection::Selected(identity) if identity == right_identity)
             {
                 right
             } else {

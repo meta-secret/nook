@@ -58,7 +58,12 @@ impl IdentityDirectory {
             .ok_or_else(|| MultiDeviceError::IdentityNotFound {
                 identity_id: request.identity_id.to_string(),
             })?;
-        self.identities[index].require_retiring_member(request.app_id)?;
+        self.identities
+            .get(index)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: request.identity_id.to_string(),
+            })?
+            .require_retiring_member(request.app_id)?;
         Ok(index)
     }
 
@@ -67,7 +72,16 @@ impl IdentityDirectory {
         retirement: LocalKeyRetirementApplication<'_>,
     ) -> Result<Self, IdentityDirectoryRejection> {
         let LocalKeyRetirementApplication { index, request } = retirement;
-        let directory = if self.identities[index].members.len() == 1 {
+        let Some(identity) = self.identities.get(index) else {
+            return Err(IdentityDirectoryRejection {
+                directory: self,
+                cause: MultiDeviceError::IdentityNotFound {
+                    identity_id: request.identity_id.to_string(),
+                },
+            });
+        };
+        let removing_identity = identity.members.len() == 1;
+        let directory = if removing_identity {
             self.identities.remove(index);
             self.selection = self
                 .identities
@@ -196,7 +210,14 @@ mod tests {
         })?;
 
         assert_eq!(directory.identities().len(), 1);
-        assert_eq!(directory.identities()[0].identity_id, first_id);
+        assert_eq!(
+            directory
+                .identities()
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("first identity must remain after recovery"))?
+                .identity_id,
+            first_id
+        );
         assert_eq!(
             directory.selection(),
             &IdentitySelection::Selected(first_id.clone())

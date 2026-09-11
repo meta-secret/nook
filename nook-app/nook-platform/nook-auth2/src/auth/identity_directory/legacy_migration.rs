@@ -121,9 +121,18 @@ impl IdentityDirectory {
         self,
         request: LegacyDirectoryBase<'_>,
     ) -> Result<PreparedLegacyDirectoryMigration, IdentityDirectoryRejection> {
+        let components = match request.base.legacy_identity_components() {
+            Ok(components) => components,
+            Err(cause) => {
+                return Err(IdentityDirectoryRejection {
+                    directory: self,
+                    cause,
+                });
+            }
+        };
         self.prepare_legacy_migration(LegacyMigrationScope::FromBase {
             preserved: request.preserved_identity_id,
-            components: request.base.legacy_identity_components(),
+            components,
         })
     }
     fn prepare_legacy_migration(
@@ -161,14 +170,20 @@ impl IdentityDirectory {
         true
     }
 
-    fn legacy_identity_components(&self) -> HashMap<IdentityId, usize> {
+    fn legacy_identity_components(&self) -> MultiDeviceResult<HashMap<IdentityId, usize>> {
         let mut components = (0..self.identities.len()).collect::<Vec<_>>();
         let mut owners = HashMap::<&AppId, usize>::new();
         for (index, identity) in self.identities.iter().enumerate() {
             for member in &identity.members {
                 if let Some(owner) = owners.insert(&member.app_id, index) {
-                    let from = components[index];
-                    let into = components[owner];
+                    let from = components
+                        .get(index)
+                        .copied()
+                        .ok_or(MultiDeviceError::InvalidIdentitySelection)?;
+                    let into = components
+                        .get(owner)
+                        .copied()
+                        .ok_or(MultiDeviceError::InvalidIdentitySelection)?;
                     for component in &mut components {
                         if *component == from {
                             *component = into;
@@ -177,11 +192,12 @@ impl IdentityDirectory {
                 }
             }
         }
-        self.identities
+        Ok(self
+            .identities
             .iter()
             .zip(components)
             .map(|(identity, component)| (identity.identity_id.clone(), component))
-            .collect()
+            .collect())
     }
 
     fn merge_identity_records(mut self, merge: LegacyIdentityMerge) -> Self {
@@ -289,7 +305,11 @@ mod tests {
         let peer = AppKey::generate()?;
         let mut record =
             IdentityRecord::create_with_app_key("Personal", &owner, MemberLabelState::Unnamed)?;
-        let existing = record.members[0].clone();
+        let existing = record
+            .members
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("created identity must contain its owner"))?;
         let incoming = IdentityMember::fixture(&peer);
         record = record.merge_legacy_member(incoming.clone())?;
         assert_eq!(record.members, vec![existing, incoming]);
@@ -321,7 +341,11 @@ mod tests {
         let other = AppKey::generate()?;
         let mut record =
             IdentityRecord::create_with_app_key("Personal", &owner, MemberLabelState::Unnamed)?;
-        record.members[0].signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
+        record
+            .members
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("created identity must contain its owner"))?
+            .signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
         let before = record.clone();
         let mut wrong_auth = IdentityMember::fixture(&owner);
         wrong_auth.auth_id = other.auth_id();
@@ -510,8 +534,16 @@ mod tests {
             IdentityRecord::create_with_app_key("Second", &app, MemberLabelState::Unnamed)?;
         let mut third =
             IdentityRecord::create_with_app_key("Third", &app, MemberLabelState::Unnamed)?;
-        second.members[0].signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
-        third.members[0].signing_public_key = DeviceSigningPublicKey::parse(&"22".repeat(32))?;
+        second
+            .members
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("second identity must contain its owner"))?
+            .signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
+        third
+            .members
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("third identity must contain its owner"))?
+            .signing_public_key = DeviceSigningPublicKey::parse(&"22".repeat(32))?;
         let original = IdentityDirectory {
             selection: IdentitySelection::Selected(first.identity_id.clone()),
             identities: vec![first, second, third],

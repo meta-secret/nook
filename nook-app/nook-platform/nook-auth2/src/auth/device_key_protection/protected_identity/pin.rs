@@ -207,7 +207,10 @@ mod tests {
             return Err(anyhow::anyhow!("expected pin record"));
         };
         let mut ciphertext = URL_SAFE_NO_PAD.decode(&pin.ciphertext)?;
-        ciphertext[0] ^= 0x80;
+        let first = ciphertext
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("PIN ciphertext must not be empty"))?;
+        *first ^= 0x80;
         pin.ciphertext = URL_SAFE_NO_PAD.encode(&ciphertext);
         assert!(matches!(
             ciphertext_tampered.unwrap_pin("123456"),

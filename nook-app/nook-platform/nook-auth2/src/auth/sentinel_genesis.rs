@@ -751,11 +751,12 @@ mod tests {
 
         let session = session.collect_payload(&payload, "  Ada's iPhone  ")?;
 
-        assert_eq!(session.participants()[1].label, "Ada's iPhone");
-        assert_eq!(
-            session.participants()[1].device_id,
-            peer.device_id().clone()
-        );
+        let participant = session
+            .participants()
+            .get(1)
+            .ok_or_else(|| anyhow::anyhow!("peer participant must be collected"))?;
+        assert_eq!(participant.label, "Ada's iPhone");
+        assert_eq!(participant.device_id, peer.device_id().clone());
         Ok(())
     }
 

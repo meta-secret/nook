@@ -101,10 +101,13 @@ impl SecretPolynomial {
 
         let secret = Self::interpolate(shares, SECRET_INDEX)?;
         let digest_share = Self::interpolate(shares, DIGEST_INDEX)?;
-        if digest_share.len() < DIGEST_BYTES
-            || digest_share[..DIGEST_BYTES]
-                != ShareDigest::new(&digest_share[DIGEST_BYTES..], &secret).compute()
-        {
+        let digest = digest_share
+            .get(..DIGEST_BYTES)
+            .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
+        let random_part = digest_share
+            .get(DIGEST_BYTES..)
+            .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
+        if digest != ShareDigest::new(random_part, &secret).compute() {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
         Ok(secret)
@@ -170,7 +173,11 @@ impl<'a> ShareDigest<'a> {
 
     fn compute(&self) -> [u8; DIGEST_BYTES] {
         let digest = HmacInput::new(self.random_part, self.secret).digest();
-        [digest[0], digest[1], digest[2], digest[3]]
+        let mut prefix = [0_u8; DIGEST_BYTES];
+        for (output, input) in prefix.iter_mut().zip(digest) {
+            *output = input;
+        }
+        prefix
     }
 }
 
@@ -188,15 +195,19 @@ impl<'a> HmacInput<'a> {
         const BLOCK_BYTES: usize = 64;
         let mut normalized = [0_u8; BLOCK_BYTES];
         if self.key.len() > BLOCK_BYTES {
-            normalized[..32].copy_from_slice(&Sha256::digest(self.key));
+            for (output, input) in normalized.iter_mut().zip(Sha256::digest(self.key)) {
+                *output = input;
+            }
         } else {
-            normalized[..self.key.len()].copy_from_slice(self.key);
+            for (output, input) in normalized.iter_mut().zip(self.key) {
+                *output = *input;
+            }
         }
         let mut inner_pad = [0x36_u8; BLOCK_BYTES];
         let mut outer_pad = [0x5c_u8; BLOCK_BYTES];
-        for index in 0..BLOCK_BYTES {
-            inner_pad[index] ^= normalized[index];
-            outer_pad[index] ^= normalized[index];
+        for ((inner, outer), key) in inner_pad.iter_mut().zip(&mut outer_pad).zip(&normalized) {
+            *inner ^= key;
+            *outer ^= key;
         }
         let mut inner = Sha256::new();
         inner.update(inner_pad);

@@ -145,8 +145,13 @@ impl IndexedShare {
                     a: numerator,
                     b: IndexedShare::gf_inv(denominator),
                 });
+                let share_byte = share_i
+                    .bytes
+                    .get(byte_index)
+                    .copied()
+                    .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
                 value ^= IndexedShare::gf_mul(ShareFieldProduct {
-                    a: share_i.bytes[byte_index],
+                    a: share_byte,
                     b: coefficient,
                 });
             }
@@ -221,8 +226,11 @@ mod tests {
             threshold: 2,
             required_participants: 3,
         })?;
+        let admitted = shares
+            .get(1..)
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a threshold subset"))?;
         let restored = IndexedShare::reconstruct_secret_bytes(SentinelSecretReconstruction {
-            shares: &shares[1..],
+            shares: admitted,
             threshold: 2,
         })?;
         assert_eq!(restored, secret);

@@ -219,15 +219,21 @@ impl AdmittedSentinelQuorum {
     fn reconstruct(self) -> MultiDeviceResult<VaultKeys> {
         let required = usize::from(u8::from(self.threshold));
         if self.version == SentinelShareVersion::CURRENT {
-            let mut root =
-                slip39::SentinelSecretRecoveryRequest::sentinel(&self.slip39_mnemonics[..required])
-                    .recover()?;
+            let admitted = self
+                .slip39_mnemonics
+                .get(..required)
+                .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
+            let mut root = slip39::SentinelSecretRecoveryRequest::sentinel(admitted).recover()?;
             let keys = SentinelVaultKeyDerivation::new(&root).derive();
             root.zeroize();
             return keys;
         }
+        let admitted = self
+            .legacy_shares
+            .get(..required)
+            .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
         let reconstructed = IndexedShare::reconstruct_secret_bytes(SentinelSecretReconstruction {
-            shares: &self.legacy_shares[..required],
+            shares: admitted,
             threshold: self.threshold.into(),
         })?;
         let payload: SentinelVaultKeysPlaintext = serde_json::from_slice(&reconstructed)

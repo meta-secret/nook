@@ -144,9 +144,9 @@ impl LocalIdentityKeyringEntry {
         self.require_matching_app_key(app_key)?;
         match &self.signing_seed_envelope {
             SigningSeedProtectionState::Protected(envelope) => {
-                Ok(ProtectedSigningMaterial::Opened(
-                    SigningSeedHex::try_from(app_key.open_utf8(envelope)?)?,
-                ))
+                Ok(ProtectedSigningMaterial::Opened(SigningSeedHex::try_from(
+                    app_key.open_utf8(envelope)?,
+                )?))
             }
             SigningSeedProtectionState::LegacyMigrationRequired => {
                 Ok(ProtectedSigningMaterial::LegacySeedRequired)
@@ -319,7 +319,11 @@ impl LocalIdentityKeyring {
         request: IdentitySigningSeedProtection<'_>,
     ) -> Result<ProtectedIdentityKeyring, KeyringRejection> {
         let prepared = self.entry_index(request.identity_id).and_then(|index| {
-            self.entries[index]
+            self.entries
+                .get(index)
+                .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                    identity_id: request.identity_id.to_string(),
+                })?
                 .seal_signing_material(request.material)
                 .map(|material| (index, material))
         });
@@ -329,7 +333,15 @@ impl LocalIdentityKeyring {
                 cause,
             }),
             Ok((index, material)) => {
-                self.entries[index].signing_seed_envelope =
+                let Some(entry) = self.entries.get_mut(index) else {
+                    return Err(KeyringRejection {
+                        keyring: self,
+                        cause: MultiDeviceError::IdentityNotFound {
+                            identity_id: request.identity_id.to_string(),
+                        },
+                    });
+                };
+                entry.signing_seed_envelope =
                     SigningSeedProtectionState::Protected(material.envelope);
                 Ok(ProtectedIdentityKeyring {
                     keyring: self,
@@ -355,7 +367,15 @@ impl LocalIdentityKeyring {
                 ),
             }),
             Some(index) => {
-                self.entries[index].wrapped_app_key = request.wrapped_app_key;
+                let Some(entry) = self.entries.get_mut(index) else {
+                    return Err(KeyringRejection {
+                        keyring: self,
+                        cause: MultiDeviceError::InvalidDeviceIdentity(
+                            "wrapped app key has no local keyring owner".to_owned(),
+                        ),
+                    });
+                };
+                entry.wrapped_app_key = request.wrapped_app_key;
                 Ok(self)
             }
         }
@@ -401,7 +421,15 @@ impl LocalIdentityKeyring {
                 cause,
             }),
             Ok(index) => {
-                self.entries[index] = entry;
+                let Some(existing) = self.entries.get_mut(index) else {
+                    return Err(KeyringRejection {
+                        keyring: self,
+                        cause: MultiDeviceError::IdentityNotFound {
+                            identity_id: entry.identity_id().to_string(),
+                        },
+                    });
+                };
+                *existing = entry;
                 Ok(self)
             }
         }
@@ -410,7 +438,15 @@ impl LocalIdentityKeyring {
     fn admit_replacement(&self, entry: &LocalIdentityKeyringEntry) -> MultiDeviceResult<usize> {
         self.validate()?;
         let index = self.entry_index(entry.identity_id())?;
-        if self.entries[index].app_id() != entry.app_id() {
+        if self
+            .entries
+            .get(index)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: entry.identity_id().to_string(),
+            })?
+            .app_id()
+            != entry.app_id()
+        {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "cannot replace a local identity keyring entry with a different app id".to_owned(),
             ));
@@ -596,7 +632,11 @@ mod tests {
         decoded.validate()?;
         assert!(!encoded.contains(app_key.secret_string().as_str()));
         assert_eq!(
-            decoded.entries()[0].signing_public_key(&app_key)?,
+            decoded
+                .entries()
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("decoded keyring must contain its entry"))?
+                .signing_public_key(&app_key)?,
             signing_public_key
         );
         Ok(())

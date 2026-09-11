@@ -281,7 +281,9 @@ impl AppKeyDerivation {
     pub(super) fn app_id(recipient: &Recipient) -> AppId {
         let hash = Sha256::digest(recipient.to_string().as_bytes());
         let mut prefix = [0_u8; 8];
-        prefix.copy_from_slice(&hash[..8]);
+        for (output, input) in prefix.iter_mut().zip(hash) {
+            *output = input;
+        }
         AppId::from_sha256_prefix(prefix)
     }
 

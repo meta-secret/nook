@@ -50,7 +50,10 @@ impl IdentityDirectory {
             Ok(rollback) => match self.validate() {
                 Ok(()) => Ok(self),
                 Err(cause) => {
-                    rollback.restore(&mut self);
+                    let cause = match rollback.restore(&mut self) {
+                        Ok(()) => cause,
+                        Err(rollback_cause) => rollback_cause,
+                    };
                     Err(IdentityDirectoryRejection {
                         directory: self,
                         cause,
@@ -72,16 +75,19 @@ impl IdentityDirectory {
                 .iter()
                 .position(|record| record.identity_id == target.identity_id),
         ) {
-            (StagedIdentityPresence::Existing(_), Some(index))
-                if self.identities[index] == *target =>
-            {
-                Ok(StagedRebaseRollback::Unchanged)
-            }
-            (StagedIdentityPresence::Existing(original), Some(index))
-                if self.identities[index] == *original =>
-            {
-                let previous = mem::replace(&mut self.identities[index], target.clone());
-                Ok(StagedRebaseRollback::Replaced { index, previous })
+            (StagedIdentityPresence::Existing(original), Some(index)) => {
+                let current = self
+                    .identities
+                    .get_mut(index)
+                    .ok_or_else(|| Self::staged_identity_conflict(&target.identity_id))?;
+                if *current == *target {
+                    Ok(StagedRebaseRollback::Unchanged)
+                } else if *current == *original {
+                    let previous = mem::replace(current, target.clone());
+                    Ok(StagedRebaseRollback::Replaced { index, previous })
+                } else {
+                    Err(Self::staged_identity_conflict(&target.identity_id))
+                }
             }
             (StagedIdentityPresence::NewlyCreated, None) => {
                 self.identities.push(target.clone());
@@ -142,13 +148,23 @@ impl<'a> StagedIdentityRebase<'a> {
 }
 
 impl StagedRebaseRollback {
-    fn restore(self, directory: &mut IdentityDirectory) {
+    fn restore(self, directory: &mut IdentityDirectory) -> Result<(), MultiDeviceError> {
         match self {
-            Self::Unchanged => {}
-            Self::Replaced { index, previous } => directory.identities[index] = previous,
-            Self::Inserted => {
-                directory.identities.pop();
+            Self::Unchanged => Ok(()),
+            Self::Replaced { index, previous } => {
+                let identity_id = previous.identity_id.clone();
+                let stored = directory
+                    .identities
+                    .get_mut(index)
+                    .ok_or_else(|| IdentityDirectory::staged_identity_conflict(&identity_id))?;
+                *stored = previous;
+                Ok(())
             }
+            Self::Inserted => directory
+                .identities
+                .pop()
+                .map(|_| ())
+                .ok_or(MultiDeviceError::InvalidIdentitySelection),
         }
     }
 }

@@ -582,7 +582,13 @@ impl IdentityDirectory {
                 cause: MultiDeviceError::InvalidIdentitySelection,
             });
         };
-        self.identities[index] = record;
+        let Some(selected) = self.identities.get_mut(index) else {
+            return Err(IdentityDirectoryRejection {
+                directory: self,
+                cause: MultiDeviceError::InvalidIdentitySelection,
+            });
+        };
+        *selected = record;
         Ok(self)
     }
 }
@@ -628,7 +634,14 @@ mod tests {
 
         assert_eq!(directory.identities().len(), 2);
         assert_eq!(directory.selected()?.identity_id, work);
-        assert_eq!(directory.identities()[0].label, "Personal");
+        assert_eq!(
+            directory
+                .identities()
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("personal identity must remain"))?
+                .label,
+            "Personal"
+        );
 
         directory = directory.select(&personal)?;
         assert_eq!(directory.selected()?.identity_id, personal);
@@ -770,8 +783,22 @@ mod tests {
                 .seal_bytes(keys.members_key.as_str().as_bytes())?,
             crate::IdentityVaultDekEpoch::LegacyUnknown,
         )?;
-        let secrets_envelope = imported.vault_deks[0].secrets_envelopes[0].envelope.clone();
-        let members_envelope = imported.vault_deks[0].members_envelopes[0].envelope.clone();
+        let imported_vault = imported
+            .vault_deks
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("import fixture must contain its vault DEK"))?;
+        let secrets_envelope = imported_vault
+            .secrets_envelopes
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("import fixture must contain a secrets envelope"))?
+            .envelope
+            .clone();
+        let members_envelope = imported_vault
+            .members_envelopes
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("import fixture must contain a members envelope"))?
+            .envelope
+            .clone();
 
         let resolved_identity = directory.import_legacy_vault(DirectoryLegacyVaultImport {
             label: "Imported",
@@ -789,7 +816,12 @@ mod tests {
         assert_eq!(directory.identities().len(), 1);
         assert_eq!(directory.selected()?.identity_id, imported_id);
         assert_eq!(
-            directory.selected()?.vault_deks[0].key_epoch,
+            directory
+                .selected()?
+                .vault_deks
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("imported identity must contain its vault DEK"))?
+                .key_epoch,
             known_epoch('e', 'f')?
         );
 
@@ -811,7 +843,12 @@ mod tests {
             })?
             .directory;
         let recovered_app_key = AppKey::generate()?;
-        let imported_vault = directory.selected()?.vault_deks[0].clone();
+        let imported_vault = directory
+            .selected()?
+            .vault_deks
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("selected identity must contain its imported vault"))?;
         let recovered_secrets_envelope = recovered_app_key
             .public_key()
             .seal_bytes(keys.secrets_key.as_str().as_bytes())?;
@@ -846,7 +883,10 @@ mod tests {
                 .any(|member| member.app_id == *recovered_app_key.app_id())
         );
         assert!(
-            !selected.vault_deks[0]
+            !selected
+                .vault_deks
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("selected identity must retain its first vault"))?
                 .secrets_envelopes
                 .iter()
                 .any(|entry| entry.app_id == *recovered_app_key.app_id())

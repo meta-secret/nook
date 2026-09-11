@@ -37,7 +37,11 @@ impl IdentityRecord {
                         "identity does not own this legacy vault".to_owned(),
                     )
                 })?;
-            let vault_dek = &self.vault_deks[vault_dek_index];
+            let vault_dek = self.vault_deks.get(vault_dek_index).ok_or_else(|| {
+                MultiDeviceError::InvalidDeviceIdentity(
+                    "identity does not own this legacy vault".to_owned(),
+                )
+            })?;
             let next_epoch = vault_dek.next_epoch(&reconciliation.epoch_update)?;
             let keys = VaultKeys {
                 secrets_key: app_key.decrypt_envelope(&reconciliation.secrets_envelope)?,
@@ -70,7 +74,12 @@ impl IdentityRecord {
                 })?;
             rewrapped.key_epoch = next_epoch;
             if *vault_dek != rewrapped {
-                self.vault_deks[vault_dek_index] = rewrapped;
+                let stored = self.vault_deks.get_mut(vault_dek_index).ok_or_else(|| {
+                    MultiDeviceError::InvalidDeviceIdentity(
+                        "identity does not own this legacy vault".to_owned(),
+                    )
+                })?;
+                *stored = rewrapped;
                 self.control_epoch = self.control_epoch.next();
             }
             Ok(())

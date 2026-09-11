@@ -285,10 +285,12 @@ impl SentinelGenesisSession {
         }
         match Self::response_from_payload(payload) {
             Ok(response) => {
-                let index = self.participants.len();
                 let mut next = self.collect(response)?;
                 if !label.is_empty() {
-                    label.clone_into(&mut next.participants[index].label);
+                    let Some(participant) = next.participants.last_mut() else {
+                        return Err(next.reject(MultiDeviceError::InvalidSentinelGenesisSession));
+                    };
+                    label.clone_into(&mut participant.label);
                 }
                 Ok(next)
             }
@@ -505,7 +507,14 @@ mod tests {
         }
         let payload = serde_json::to_string(&Fixture::response(&session)?)?;
         let session = session.collect_payload(&payload, " ")?;
-        assert_eq!(session.participants()[1].label, "Peer");
+        assert_eq!(
+            session
+                .participants()
+                .get(1)
+                .ok_or_else(|| anyhow::anyhow!("peer participant must be collected"))?
+                .label,
+            "Peer"
+        );
         // Distinct signing key too: capacity rejection must follow uniqueness checks.
         let identity = DeviceIdentity::generate()?;
         let extra = session
@@ -529,7 +538,12 @@ mod tests {
     fn oversized_internal_roster_is_rejected_without_reconstruction() -> anyhow::Result<()> {
         let signer = SigningKey::from_bytes(&[1; 32]);
         let mut session = Fixture::start(&signer)?;
-        session.participants = vec![session.participants[0].clone(); usize::from(u8::MAX) + 1];
+        let participant = session
+            .participants
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("genesis session must contain its owner"))?;
+        session.participants = vec![participant; usize::from(u8::MAX) + 1];
         let (session, error) = session
             .prepare(&signer)
             .err()
