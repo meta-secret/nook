@@ -9,9 +9,19 @@ type RecoveryStorageSnapshot = {
 
 async function createProtectedVault(page: Page): Promise<void> {
   await page.goto('/app/')
-  await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  const vaultError = page.getByTestId('vault-error')
+  await expect
+    .poll(
+      async () => (await chooser.isVisible()) || (await vaultError.isVisible()),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
+  if (await vaultError.isVisible()) {
+    throw new Error(
+      `Protected vault setup failed: ${await vaultError.innerText()}`,
+    )
+  }
   await page.getByTestId('get-started-path-simple').click()
   await page.getByTestId('login-vault-name-input').fill('Recovery test vault')
   await page.getByTestId('login-create-device-vault-btn').click()
