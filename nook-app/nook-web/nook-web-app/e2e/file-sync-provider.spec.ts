@@ -91,7 +91,11 @@ test.describe('file sync provider event log', () => {
     await connectSyncJoinerDevice(deviceB, target)
     const join = await sendJoinRequestLocalE2e(deviceB, stub)
     await approveJoinFromBanner(deviceA, join.deviceId, target, 2)
-    await waitForJoinerVaultReady(deviceB, target)
+    await waitForJoinerVaultReady({
+      page: deviceB,
+      target,
+      testInfo: test.info(),
+    })
 
     await waitForSecretOnDevice(deviceB, key, target)
     expect(await revealSecretValue(deviceB, key)).toBe(value)
@@ -125,7 +129,11 @@ test.describe('file sync provider event log', () => {
     await connectSyncJoinerDevice(deviceB, commonVault)
     const join = await sendJoinRequestLocalE2e(deviceB, commonVault.stub!)
     await approveJoinFromBanner(deviceA, join.deviceId, commonVault, 2)
-    await waitForJoinerVaultReady(deviceB, commonVault)
+    await waitForJoinerVaultReady({
+      page: deviceB,
+      target: commonVault,
+      testInfo: test.info(),
+    })
     await assertVaultReady(deviceB)
 
     await addFileBackupProvider(deviceB, vault2Backup, {

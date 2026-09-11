@@ -180,7 +180,19 @@ test.describe('login unlock flow (local-first)', () => {
     await reviewIdentities.click()
     await expect(page.getByTestId('devices-access-back')).toBeFocused()
     await page.getByTestId('devices-access-back').click()
-    await expect(reviewIdentities).toBeFocused()
+    try {
+      await expect(reviewIdentities).toBeFocused()
+    } catch (error) {
+      const activeElement = await page.evaluate(() => ({
+        tag: document.activeElement?.tagName.toLowerCase() ?? 'absent',
+        testId: document.activeElement?.getAttribute('data-testid') ?? 'absent',
+      }))
+      await test.info().attach('identity-focus-state.json', {
+        body: Buffer.from(JSON.stringify(activeElement)),
+        contentType: 'application/json',
+      })
+      throw error
+    }
     await page.keyboard.press('Tab')
     const focusAfterTab = await page.evaluate(() =>
       ((v) => (v ? v : ''))(

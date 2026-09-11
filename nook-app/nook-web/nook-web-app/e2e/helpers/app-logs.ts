@@ -423,7 +423,10 @@ export async function dumpNookLogs(
 export async function attachNookLogsForTest(
   page: Page,
   testInfo: import('@playwright/test').TestInfo,
-  options?: { print?: boolean },
+  options?: {
+    attachmentName?: NookAppLogAttachmentName
+    print?: boolean
+  },
 ) {
   try {
     const payload = await readNookLogSnapshot(page, {
@@ -438,13 +441,21 @@ export async function attachNookLogsForTest(
       )
     }
     const body = JSON.stringify(payload, (_key, value) => value, 2)
-    const attachmentPath = testInfo.outputPath('nook-app-logs.json')
+    const attachmentName =
+      options?.attachmentName ?? NookAppLogAttachmentName.Primary
+    const attachmentPath = testInfo.outputPath(attachmentName)
     await fs.writeFile(attachmentPath, body)
-    await testInfo.attach('nook-app-logs.json', {
+    await testInfo.attach(attachmentName, {
       path: attachmentPath,
       contentType: 'application/json',
     })
   } catch {
     // Post-mortem logging must never fail the run.
   }
+}
+
+export enum NookAppLogAttachmentName {
+  Joiner = 'joiner-nook-app-logs.json',
+  Primary = 'nook-app-logs.json',
+  SentinelInitiator = 'sentinel-initiator-nook-app-logs.json',
 }

@@ -164,7 +164,11 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
   })
 
   test('device B unlocks and reads genesis secret', async () => {
-    await waitForJoinerVaultReady(deviceB, target)
+    await waitForJoinerVaultReady({
+      page: deviceB,
+      target,
+      testInfo: test.info(),
+    })
     await assertVaultReady(deviceB)
 
     await waitForSecretOnDevice(deviceB, genesisSecretKey, target)
@@ -237,7 +241,11 @@ test.describe(`multi-device approve from settings (${providerLabel})`, () => {
     expect(enrolledYaml.authPkIds).toHaveLength(2)
     expect(enrolledYaml.memberPkIds).toHaveLength(2)
 
-    await waitForJoinerVaultReady(deviceB, target)
+    await waitForJoinerVaultReady({
+      page: deviceB,
+      target,
+      testInfo: test.info(),
+    })
     await assertVaultReady(deviceB)
   })
 })

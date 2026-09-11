@@ -3,6 +3,8 @@ import {
   clearBrowserVault,
   createIsolatedContext,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  NookAppLogAttachmentName,
+  attachNookLogsForTest,
   flushNookLogPersistQueue,
   readPersistedAppLogs,
   UI_TIMEOUT_MS,
@@ -250,7 +252,15 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     const unlockRequestOutput = deviceA.getByTestId(
       'sentinel-unlock-request-output',
     )
-    await expect(unlockRequestOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    try {
+      await expect(unlockRequestOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    } catch (error) {
+      await attachNookLogsForTest(deviceA, test.info(), {
+        attachmentName: NookAppLogAttachmentName.SentinelInitiator,
+        print: true,
+      })
+      throw error
+    }
     const unlockRequest = await unlockRequestOutput.inputValue()
     expect(unlockRequest).not.toContain('mnemonic')
     expect(unlockRequest).not.toContain('share_mnemonic')

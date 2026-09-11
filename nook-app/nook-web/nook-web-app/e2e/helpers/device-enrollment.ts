@@ -1,11 +1,16 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Page, type TestInfo } from '@playwright/test'
+import { ProviderSyncFreshness } from '$app-wasm'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import {
   assertJoinPendingYaml,
   joinCountFromYaml,
   parseVaultYamlSnapshot,
 } from '../vault-yaml'
-import { dumpNookLogs } from './app-logs'
+import {
+  NookAppLogAttachmentName,
+  attachNookLogsForTest,
+  dumpNookLogs,
+} from './app-logs'
 import {
   DEFAULT_GITHUB_REPO,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -44,6 +49,7 @@ import {
   waitForVaultOperationsIdle,
 } from './vault-runtime'
 import { createLocalVaultOnLogin } from './vault-setup'
+import { refreshJoinerVaultOnLoginGate } from './joiner-vault-refresh'
 
 export async function expectEmptyLocalFolderRejected(
   page: Page,
@@ -356,16 +362,10 @@ export async function dismissJoinEnrollmentDialog(page: Page) {
 
 export /** Pull remote vault state on the login gate (joiner waiting for / after approval). */
 async function refreshGithubVaultOnLoginGate(page: Page) {
-  await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          syncFromStorage?: (opts?: { force?: boolean }) => Promise<void>
-        }
-      }
-    ).__nookVault
-    await vault?.syncFromStorage?.({ force: true })
-  })
+  await page.evaluate(
+    refreshJoinerVaultOnLoginGate,
+    ProviderSyncFreshness.Forced,
+  )
   await waitForVaultOperationsIdle(page)
 }
 
@@ -476,10 +476,17 @@ export async function keepVaultIdleLockDisabled(page: Page) {
   })
 }
 
-export async function waitForJoinerVaultReady(
-  page: Page,
-  target: JoinerVaultReadyTarget,
-) {
+type WaitForJoinerVaultReadyRequest = {
+  readonly page: Page
+  readonly target: JoinerVaultReadyTarget
+  readonly testInfo: TestInfo
+}
+
+export async function waitForJoinerVaultReady({
+  page,
+  target,
+  testInfo,
+}: WaitForJoinerVaultReadyRequest) {
   if (target.stub) {
     await target.stub.install(
       page,
@@ -516,6 +523,10 @@ export async function waitForJoinerVaultReady(
       .toBe(true)
   } catch (error) {
     await dumpNookLogs(page, 'waitForJoinerVaultReady')
+    await attachNookLogsForTest(page, testInfo, {
+      attachmentName: NookAppLogAttachmentName.Joiner,
+      print: true,
+    })
     throw error
   }
   await disableVaultIdleLock(page)
