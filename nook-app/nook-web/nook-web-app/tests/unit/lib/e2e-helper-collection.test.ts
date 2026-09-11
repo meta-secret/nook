@@ -11,14 +11,16 @@ const importProcessOptions: SpawnSyncOptionsWithStringEncoding = {
   encoding: 'utf8',
 }
 
-function importWithoutViteAliases(modulePath: string) {
-  const importArguments = ['-e', `await import('${modulePath}')`]
-  const importProcess = spawnSync(
-    process.execPath,
-    importArguments,
-    importProcessOptions,
-  )
-  return { exitCode: importProcess.status, stderr: importProcess.stderr }
+class PlaywrightCollectorProbe {
+  static importWithoutViteAliases(modulePath: string) {
+    const importArguments = ['-e', `await import('${modulePath}')`]
+    const importProcess = spawnSync(
+      'bun',
+      importArguments,
+      importProcessOptions,
+    )
+    return { exitCode: importProcess.status, stderr: importProcess.stderr }
+  }
 }
 
 describe('Playwright collection imports', () => {
@@ -27,7 +29,9 @@ describe('Playwright collection imports', () => {
   })
 
   test('loads the app-log helper without browser-only Vite aliases', () => {
-    const result = importWithoutViteAliases('./e2e/helpers/app-logs.ts')
+    const result = PlaywrightCollectorProbe.importWithoutViteAliases(
+      './e2e/helpers/app-logs.ts',
+    )
     expect(result.exitCode).toBe(0)
     expect(result.stderr).not.toContain("Cannot find package '$app-wasm'")
   })
