@@ -310,8 +310,8 @@ test('production Loom limits provider imports to the semantic adapter', async ()
     }
   }
 
-  expect(violations).toEqual([
-    'src/lib/cortex-article-structure.ts',
+  expect([...violations].sort()).toEqual([
     'src/agent-workflow/codex-runtime.ts',
+    'src/lib/cortex-article-structure.ts',
   ]);
 });

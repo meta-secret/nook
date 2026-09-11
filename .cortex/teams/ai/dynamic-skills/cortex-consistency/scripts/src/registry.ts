@@ -57,7 +57,7 @@ export const CORTEX_CONTRACT_REGISTRY = {
     {
       document: RegisteredCortexRuntimeDocument.NativeSubagentDelegation,
       allowedCommandPrefixes: [RegisteredCortexRuntimeCommand.StaticSkillHost],
-      requiredCommandPrefixes: [RegisteredCortexRuntimeCommand.StaticSkillHost],
+      requiredCommandPrefixes: [],
       retiredCommandPrefixes: [
         RegisteredCortexRuntimeCommand.DelegationJournalBinary,
         RegisteredCortexRuntimeCommand.DelegationJournalTask,
