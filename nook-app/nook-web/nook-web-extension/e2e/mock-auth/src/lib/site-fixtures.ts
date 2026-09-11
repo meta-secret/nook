@@ -222,7 +222,9 @@ export function renderFixtureHtml(
   const [stepIndex = Math.max(0, fixture.steps.length - 1)] = [
     options?.stepIndex,
   ]
-  const [step = fixture.steps[0]] = [fixture.steps[stepIndex]]
+  let step = fixture.steps[stepIndex]
+  if (!step) [step] = fixture.steps
+  if (!step) throw new Error('site fixture must contain at least one step')
   const [ariaHidden = fixture.quirks.includes('aria-hidden-ancestor')] = [
     options?.wrapAriaHidden,
   ]

@@ -89,14 +89,7 @@ test.describe('remote vault recovery (local-first sync)', () => {
         async () => {
           await waitForVaultOperationsIdle(vaultPage)
           await vaultPage.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: {
-                  manualSync?: () => Promise<void>
-                  runFanOutSyncAfterLocalSave?: () => Promise<void>
-                }
-              }
-            ).__nookVault
+            const vault = window.__nookVault
             await vault?.runFanOutSyncAfterLocalSave?.()
             await vault?.manualSync?.()
           })

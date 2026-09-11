@@ -82,11 +82,11 @@ async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {
 }
 
 function parseStoreId(yaml: string): string {
-  const match = yaml.match(/^store_id:\s*(\S+)/m)
-  if (!match) {
+  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
+  if (!storeId) {
     throw new Error('store_id missing from vault yaml')
   }
-  return match[1]
+  return storeId
 }
 
 function assertBoxVisibleInViewport(request: VisibleInViewportRequest): void {

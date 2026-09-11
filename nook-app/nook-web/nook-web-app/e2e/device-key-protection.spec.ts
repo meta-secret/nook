@@ -8,12 +8,10 @@ import {
   waitForPersistedAppLog,
 } from './helpers'
 
-type DelayedStorageWindow = Window & {
-  readonly __nookVault?: {
-    readonly isVerifying: boolean
-    enqueueStorage(operation: () => Promise<void>): Promise<void>
+declare global {
+  interface Window {
+    __nookE2eReleaseStorage?: () => void
   }
-  __nookE2eReleaseStorage?: () => void
 }
 
 async function revealDeviceProtectionCreateWorkflow(page: Page) {
@@ -592,24 +590,24 @@ test.describe('passkey device-key protection', () => {
       page.getByTestId('sentinel-genesis-participant-step'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await page.evaluate(() => {
-      const testWindow = window as DelayedStorageWindow
-      const vault = testWindow.__nookVault
+      const vault = window.__nookVault
       if (!vault) throw new Error('Vault runtime is not exposed')
       let releaseStorage: () => void = () => {}
       const blocker = new Promise<void>((resolve) => {
         releaseStorage = resolve
       })
-      testWindow.__nookE2eReleaseStorage = releaseStorage
-      void vault.enqueueStorage(() => blocker)
+      window.__nookE2eReleaseStorage = releaseStorage
+      void vault.enqueueStorage(async () => {
+        await blocker
+        return vault.admitManager()
+      })
     })
     await page.getByTestId('sentinel-genesis-connect-device').click()
     await expect
       .poll(
         () =>
           page.evaluate(() =>
-            ((v) => (v ? v : false))(
-              (window as DelayedStorageWindow).__nookVault?.isVerifying,
-            ),
+            ((v) => (v ? v : false))(window.__nookVault?.isVerifying),
           ),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
@@ -617,17 +615,14 @@ test.describe('passkey device-key protection', () => {
     await page.goBack()
     await expect(page).toHaveURL(/\/vault$/)
     await page.evaluate(() => {
-      const testWindow = window as DelayedStorageWindow
-      testWindow.__nookE2eReleaseStorage?.()
-      delete testWindow.__nookE2eReleaseStorage
+      window.__nookE2eReleaseStorage?.()
+      delete window.__nookE2eReleaseStorage
     })
     await expect
       .poll(
         () =>
           page.evaluate(() =>
-            ((...[v = true]) => v)(
-              (window as DelayedStorageWindow).__nookVault?.isVerifying,
-            ),
+            ((...[v = true]) => v)(window.__nookVault?.isVerifying),
           ),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )

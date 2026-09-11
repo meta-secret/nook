@@ -236,22 +236,32 @@ export async function installSyncRemote(
     target.providerId === E2eSyncProviderId.Local ||
     target.providerId === E2eSyncProviderId.GoogleDrive
   ) {
-    await target.stub.install(page, {
+    const installRequest: {
+      fileName: string
+      accessToken: string
+      vaultYaml?: string
+    } = {
       fileName: target.repoName,
-      vaultYaml,
       accessToken: target.pat,
-    })
+    }
+    if (vaultYaml) installRequest.vaultYaml = vaultYaml
+    await target.stub.install(page, installRequest)
     return
   }
   if (target.providerId === E2eSyncProviderId.ICloud) {
-    await target.stub.install(page, { fileName: target.repoName, vaultYaml })
+    const installRequest: { fileName: string; vaultYaml?: string } = {
+      fileName: target.repoName,
+    }
+    if (vaultYaml) installRequest.vaultYaml = vaultYaml
+    await target.stub.install(page, installRequest)
     return
   }
   if (!target.stub) return
-  await target.stub.install(page, {
+  const installRequest: { repoName: string; vaultYaml?: string } = {
     repoName: target.repoName,
-    vaultYaml,
-  })
+  }
+  if (vaultYaml) installRequest.vaultYaml = vaultYaml
+  await target.stub.install(page, installRequest)
 }
 
 export async function installSyncRemoteOnPages(

@@ -611,14 +611,7 @@ async function ensureLoginLocalUnlockReady(page: Page) {
         if (await localUnlock.isVisible()) return 'ready'
         if (await vaultPicker.isVisible()) return 'ready'
         await page.evaluate(async () => {
-          const vault = (
-            window as Window & {
-              __nookVault?: {
-                refreshLocalVaultCatalog?: () => Promise<void>
-                prepareLocalLogin?: () => Promise<void>
-              }
-            }
-          ).__nookVault
+          const vault = window.__nookVault
           await vault?.refreshLocalVaultCatalog?.()
           await vault?.prepareLocalLogin?.()
         })

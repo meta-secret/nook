@@ -5,6 +5,7 @@ import {
   type BrowserContext,
   type Page,
 } from './fixtures'
+import { ProviderSyncFreshness } from '$app-wasm'
 import {
   addSecret,
   approveJoinFromBanner,
@@ -113,6 +114,7 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
     const join = target.stub
       ? await sendJoinRequestLocalE2e(deviceB, target.stub)
       : await sendJoinRequest(deviceB, target.pat, target.repoName, target.stub)
+    if (!join) throw new Error('the joining device must publish a join request')
 
     expect(join.deviceId).toMatch(/^[a-f0-9]{16}$/)
     expect(join.publicKey).toMatch(/^age1/)
@@ -121,8 +123,11 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
       target,
       (snapshot) => snapshot.joinEntries.length === 1,
     )
-    expect(yaml.joinEntries[0].deviceId).toBe(join.deviceId)
-    expect(yaml.joinEntries[0].publicKey).toBe(join.publicKey)
+    const [yamlJoin] = yaml.joinEntries
+    if (!yamlJoin)
+      throw new Error('the remote vault must contain the join request')
+    expect(yamlJoin.deviceId).toBe(join.deviceId)
+    expect(yamlJoin.publicKey).toBe(join.publicKey)
   })
 
   test('device A sees pending join after manual vault refresh', async () => {
@@ -132,6 +137,7 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
         (snapshot) => snapshot.joinEntries.length === 1,
       )
     ).joinEntries[0]
+    if (!join) throw new Error('the remote vault must contain the join request')
 
     await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
@@ -148,6 +154,7 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
         (snapshot) => snapshot.joinEntries.length === 1,
       )
     ).joinEntries[0]
+    if (!join) throw new Error('the remote vault must contain the join request')
 
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -231,6 +238,7 @@ test.describe(`multi-device approve from settings (${providerLabel})`, () => {
     const join = target.stub
       ? await sendJoinRequestLocalE2e(deviceB, target.stub)
       : await sendJoinRequest(deviceB, target.pat, target.repoName, target.stub)
+    if (!join) throw new Error('the joining device must publish a join request')
 
     await triggerVaultSyncRefresh(deviceA)
     await waitForPendingJoinBanner(deviceA, join.deviceId)
@@ -280,6 +288,7 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
       target.repoName,
       target.stub,
     )
+    if (!join) throw new Error('the joining device must publish a join request')
 
     await expect
       .poll(
@@ -288,17 +297,8 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
             return true
           }
           await deviceA.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: {
-                  syncFromStorage?: (opts?: {
-                    force?: boolean
-                  }) => Promise<void>
-                  refreshPendingJoinsFromProviders?: () => Promise<void>
-                }
-              }
-            ).__nookVault
-            await vault?.syncFromStorage?.({ force: true })
+            const vault = window.__nookVault
+            await vault?.syncFromStorage(ProviderSyncFreshness.Forced)
             await vault?.refreshPendingJoinsFromProviders?.()
           })
           return deviceA.getByTestId('pending-joins-banner').isVisible()

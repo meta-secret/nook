@@ -355,21 +355,23 @@ export function parseVaultEventLogSnapshot(
           break
         case 'password-added':
           if (operation.entry_id) {
-            passwordEntries.set(operation.entry_id, {
+            const entry: PasswordEntryYaml = {
               id: operation.entry_id,
-              label: operation.label,
               envelope: passwordEventEnvelope(operation.envelope),
-            })
+            }
+            if (operation.label) entry.label = operation.label
+            passwordEntries.set(operation.entry_id, entry)
           }
           break
         case 'password-rotated':
           if (operation.entry_id) {
             const existing = passwordEntries.get(operation.entry_id)
-            passwordEntries.set(operation.entry_id, {
+            const entry: PasswordEntryYaml = {
               id: operation.entry_id,
-              label: existing?.label,
               envelope: passwordEventEnvelope(operation.envelope),
-            })
+            }
+            if (existing?.label) entry.label = existing.label
+            passwordEntries.set(operation.entry_id, entry)
           }
           break
         case 'password-removed':

@@ -118,7 +118,9 @@ describe('AddSecretForm authenticator editing', () => {
     await fireEvent.click(view.getByTestId('save-secret-btn'))
 
     await waitFor(() => expect(onReplaceSecret).toHaveBeenCalledTimes(1))
-    const request = onReplaceSecret.mock.calls[0][0]
+    const [call] = onReplaceSecret.mock.calls
+    if (!call) expect.fail('editing must replace the authenticator secret')
+    const [request] = call
     expect(request.type).toBe(SecretType.Authenticator)
     expect(request.data).toContain('algorithm: SHA256')
     expect(request.data).toContain('digits: 8')
@@ -137,7 +139,9 @@ describe('AddSecretForm authenticator editing', () => {
     await fireEvent.click(view.getByTestId('save-secret-btn'))
 
     await waitFor(() => expect(onReplaceSecret).toHaveBeenCalledTimes(1))
-    const request = onReplaceSecret.mock.calls[0][0]
+    const [call] = onReplaceSecret.mock.calls
+    if (!call) expect.fail('editing must replace the authenticator secret')
+    const [request] = call
     expect(request.type).toBe(SecretType.Authenticator)
     expect(request.data).toContain('algorithm: SHA1')
     expect(request.data).toContain('digits: 6')

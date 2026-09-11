@@ -19,11 +19,11 @@ import {
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
 function parseStoreId(yaml: string): string {
-  const match = yaml.match(/^store_id:\s*(\S+)/m)
-  if (!match) {
+  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
+  if (!storeId) {
     throw new Error('store_id missing from vault yaml')
   }
-  return match[1]
+  return storeId
 }
 
 async function setSecurityConflict(page: Page, present: boolean) {
@@ -164,13 +164,7 @@ test.describe('sync conflict resolution', () => {
     await triggerVaultSyncRefresh(page)
     await waitForLoadedSyncProviders(page)
     await page.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            runFanOutSyncAfterLocalSave?: () => Promise<void>
-          }
-        }
-      ).__nookVault
+      const vault = window.__nookVault
       await vault?.runFanOutSyncAfterLocalSave?.()
     })
     await waitForSyncRemoteVaultState(
@@ -315,13 +309,7 @@ test.describe('sync conflict resolution', () => {
     await triggerVaultSyncRefresh(page)
     await waitForLoadedSyncProviders(page)
     await page.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            runFanOutSyncAfterLocalSave?: () => Promise<void>
-          }
-        }
-      ).__nookVault
+      const vault = window.__nookVault
       await vault?.runFanOutSyncAfterLocalSave?.()
     })
     await waitForSyncRemoteVaultState(

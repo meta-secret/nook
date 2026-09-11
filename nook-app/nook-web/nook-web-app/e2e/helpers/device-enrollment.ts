@@ -85,7 +85,8 @@ export async function connectGithubVault(
   repoName = DEFAULT_GITHUB_REPO,
   stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
-  const target = { pat, repoName, stub }
+  const target: GithubE2eTarget = { pat, repoName }
+  if (stub) target.stub = stub
   if (stub) {
     await stub.install(page, { repoName })
   }
@@ -196,7 +197,8 @@ export async function connectGithubJoinerDevice(
   repoName: string,
   stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
-  const target = { pat, repoName, stub }
+  const target: GithubE2eTarget = { pat, repoName }
+  if (stub) target.stub = stub
   await assertGenesisVaultOnGithub(target)
   if (stub) {
     await stub.install(page, { repoName })
@@ -220,8 +222,10 @@ export async function sendJoinRequest(
   await waitForVaultOperationsIdle(page)
   await waitForStorageChainIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
 
+  const target: GithubE2eTarget = { pat, repoName }
+  if (stub) target.stub = stub
   const snapshot = await waitForGithubVaultState(
-    { pat, repoName, stub },
+    target,
     (yaml) => yaml.joinEntries.length >= 1 || joinCountFromYaml(yaml.raw) >= 1,
     { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
   )
@@ -252,24 +256,14 @@ export async function waitForPendingJoinBanner(page: Page, deviceId?: string) {
       async () => {
         await dismissSyncConflictIfVisible(page)
         await page.evaluate(async () => {
-          const vault = (
-            window as Window & {
-              __nookVault?: {
-                refreshPendingJoinsFromProviders?: () => Promise<void>
-              }
-            }
-          ).__nookVault
+          const vault = window.__nookVault
           await vault?.refreshPendingJoinsFromProviders?.()
         })
         try {
           await triggerVaultSyncRefresh(page)
         } catch {
           await page.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: { manualSync?: () => Promise<void> }
-              }
-            ).__nookVault
+            const vault = window.__nookVault
             await vault?.manualSync?.()
           })
         }
@@ -284,11 +278,7 @@ export async function waitForPendingJoinBanner(page: Page, deviceId?: string) {
           return true
         }
         const pending = await page.evaluate(() => {
-          const vault = (
-            window as Window & {
-              __nookVault?: { pendingJoins?: unknown[] }
-            }
-          ).__nookVault
+          const vault = window.__nookVault
           return ((v) => (v ? v : 0))(vault?.pendingJoins?.length)
         })
         return pending > 0
@@ -338,13 +328,7 @@ export async function waitForPendingJoinInSettings(
     .poll(
       async () => {
         await page.evaluate(async () => {
-          const vault = (
-            window as Window & {
-              __nookVault?: {
-                refreshPendingJoinsFromProviders?: () => Promise<void>
-              }
-            }
-          ).__nookVault
+          const vault = window.__nookVault
           await vault?.refreshPendingJoinsFromProviders?.()
         })
         if (await row.isVisible()) return true

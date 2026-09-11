@@ -256,14 +256,7 @@ async function addSecureNote(page: Page, title: string, body: string) {
 
 async function flushFileProviders(page: Page) {
   await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          manualSync?: () => Promise<void>
-          runFanOutSyncAfterLocalSave?: () => Promise<void>
-        }
-      }
-    ).__nookVault
+    const vault = window.__nookVault
     await vault?.manualSync?.()
     await vault?.runFanOutSyncAfterLocalSave?.()
   })

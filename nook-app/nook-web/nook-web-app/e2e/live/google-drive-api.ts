@@ -214,11 +214,12 @@ export async function getFileMetadata(
   if (!meta.id?.trim()) {
     throw new Error('Drive file metadata missing id')
   }
-  return {
+  const metadata: { id: string; name: string; parents?: string[] } = {
     id: meta.id,
     name: meta.name?.trim() || fileId,
-    parents: meta.parents,
   }
+  if (meta.parents) metadata.parents = meta.parents
+  return metadata
 }
 
 /** Best-effort trash cleanup so live smoke does not leave folders behind. */

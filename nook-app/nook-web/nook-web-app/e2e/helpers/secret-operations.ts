@@ -231,13 +231,15 @@ export async function assertEnrolledVaultOnGithub(
   expectedMembers: number,
   page?: Page,
 ) {
+  const waitOptions: { page?: Page } = {}
+  if (page) waitOptions.page = page
   const snapshot = await waitForGithubVaultState(
     target,
     (yaml) =>
       yaml.joinEntries.length === 0 &&
       yaml.authPkIds.length === expectedMembers &&
       yaml.memberPkIds.length === expectedMembers,
-    { page },
+    waitOptions,
   )
   assertEnrolledVaultYaml(snapshot, expectedMembers)
   return snapshot

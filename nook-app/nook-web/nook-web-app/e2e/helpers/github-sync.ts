@@ -265,13 +265,7 @@ export async function waitForSyncRemoteVaultState(
 
 export async function flushRemoteEventsToSyncProviders(page: Page) {
   await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          runFanOutSyncAfterLocalSave?: () => Promise<void>
-        }
-      }
-    ).__nookVault
+    const vault = window.__nookVault
     await vault?.runFanOutSyncAfterLocalSave?.()
   })
   await waitForVaultOperationsIdle(page)

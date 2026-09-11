@@ -80,7 +80,9 @@ function escapeAttr(value: string): string {
 }
 
 function renderStepHtml(fixture: ShellTemplate, stepIndex: number): string {
-  const [step = fixture.steps[0]] = [fixture.steps[stepIndex]]
+  let step = fixture.steps[stepIndex]
+  if (!step) [step] = fixture.steps
+  if (!step) expect.fail('a shell fixture must contain at least one step')
   const fields = step.fields
     .map((field) => {
       const attrs = [
@@ -144,8 +146,9 @@ describe('popular login shell templates', () => {
       ),
     ).toEqual([SiteFixturePilotExpectation.FailClosedAlternateAuthentication])
     for (const site of catalog) {
-      expect(siteShells[site.id]).toBeTruthy()
-      expect(templates.has(siteShells[site.id].template)).toBe(true)
+      const siteShell = siteShells[site.id]
+      if (!siteShell) expect.fail(`missing shell for catalog site ${site.id}`)
+      expect(templates.has(siteShell.template)).toBe(true)
     }
   })
 
@@ -155,7 +158,9 @@ describe('popular login shell templates', () => {
       const fixture = templates.get(templateId) as ShellTemplate
       expect(fixture.steps.length).toBeGreaterThan(0)
 
-      const firstHasPassword = fixture.steps[0].fields.some(
+      const [firstStep] = fixture.steps
+      if (!firstStep) expect.fail('a shell fixture must contain a first step')
+      const firstHasPassword = firstStep.fields.some(
         (field) => field.type === 'password',
       )
       document.body.innerHTML = renderStepHtml(fixture, 0)

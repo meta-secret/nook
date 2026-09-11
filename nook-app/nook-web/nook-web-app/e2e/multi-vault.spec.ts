@@ -48,11 +48,11 @@ async function listLocalVaultEntries(page: import('@playwright/test').Page) {
 }
 
 function parseStoreId(yaml: string): string {
-  const match = yaml.match(/^store_id:\s*(\S+)/m)
-  if (!match) {
+  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
+  if (!storeId) {
     throw new Error('store_id missing from vault yaml')
   }
-  return match[1]
+  return storeId
 }
 
 type ViewportBox = {

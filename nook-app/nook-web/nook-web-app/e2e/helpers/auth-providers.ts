@@ -328,24 +328,24 @@ async function seedOauthFileProviders(
   extras: SeededOauthFileProviderInput[],
   seedScope: AuthProviderSeedScope,
 ) {
-  await appendSealedAuthProviders(
-    page,
-    extras.map((provider) => ({
+  const providers: SeededAuthProvider[] = extras.map((provider) => {
+    const oauthFile: NonNullable<SeededAuthProvider['oauthFile']> = {
+      preset: 'google-drive',
+      accessToken: provider.accessToken,
+      fileName: provider.fileName,
+      driveMode: provider.folderId ? 'shared' : 'private',
+      iCloudMode: 'private',
+    }
+    if (provider.accountEmail) oauthFile.accountEmail = provider.accountEmail
+    if (provider.folderId) oauthFile.folderId = provider.folderId
+    return {
       id: provider.id,
       type: 'oauth-file',
       label: provider.label,
-      oauthFile: {
-        preset: 'google-drive',
-        accessToken: provider.accessToken,
-        fileName: provider.fileName,
-        driveMode: provider.folderId ? 'shared' : 'private',
-        iCloudMode: 'private',
-        accountEmail: provider.accountEmail,
-        folderId: provider.folderId,
-      },
-    })),
-    seedScope,
-  )
+      oauthFile,
+    }
+  })
+  await appendSealedAuthProviders(page, providers, seedScope)
   await waitForAuthProviderIds(
     page,
     extras.map((provider) => provider.id),
@@ -364,10 +364,12 @@ export async function seedExtraOauthFileProviders(
   if (!storeIdMatch) {
     throw new Error('E2E OAuth provider seeding requires an active vault')
   }
+  const storeId = storeIdMatch[1]
+  if (!storeId) throw new Error('E2E OAuth provider store id is unavailable')
   await seedOauthFileProviders(
     page,
     extras,
-    activeAuthProviderSeedScope(storeIdMatch[1]),
+    activeAuthProviderSeedScope(storeId),
   )
 }
 

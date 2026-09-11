@@ -41,7 +41,11 @@ function managerWithContext({
   const snapshot = {
     selectedVaultContextKind: kind,
     length: identities.length,
-    identity: (index: number) => linkedIdentity(...identities[index]),
+    identity: (index: number) => {
+      const identity = identities[index]
+      if (!identity) expect.fail(`missing linked identity at index ${index}`)
+      return linkedIdentity(...identity)
+    },
     current_browser_identity: currentBrowserIdentity,
     free: vi.fn(),
   }

@@ -46,6 +46,8 @@ describe('access chain nodes', () => {
       },
     })
 
+    if (!passkey || !deviceKey || !vaults)
+      expect.fail('the complete access chain must contain three nodes')
     expect(passkey.stage).toBe(AccessChainStage.Unlock)
     expect(passkey.title).toBe('Work laptop')
     expect(passkey.detail).toEqual({
@@ -96,6 +98,7 @@ describe('access chain nodes', () => {
       },
     })
 
+    if (!vaults) expect.fail('the access chain must contain a vault node')
     expect(vaults.title).toEqual({
       key: I18N_KEYS.DevicesAccessVerifiedPlusMore,
       replacements: { label: 'Family', count: '2' },
@@ -115,6 +118,7 @@ describe('access chain nodes', () => {
       },
     })
 
+    if (!vaults) expect.fail('the access chain must contain a vault node')
     expect(vaults.title).toBe(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort)
     expect(vaults.detail).toEqual({
       kind: AccessNodeDetailKind.Summary,
@@ -142,6 +146,8 @@ describe('access chain nodes', () => {
       },
     })
 
+    if (!passkey || !vaults)
+      expect.fail('the access chain must contain unlock and vault nodes')
     expect(passkey.title).toBe(I18N_KEYS.DevicesAccessPasskeyUnnamed)
     expect(passkey.detail.kind).toBe(AccessNodeDetailKind.Absent)
     expect(vaults.title).toBe(I18N_KEYS.DevicesAccessNoVaultsShort)
@@ -159,6 +165,7 @@ describe('access chain nodes', () => {
       },
     })
 
+    if (!unlock) expect.fail('the access chain must contain an unlock node')
     expect(unlock.caption).toBe(I18N_KEYS.DevicesAccessStageUnlock)
     expect(unlock.title).toBe(I18N_KEYS.DevicesAccessNotPrepared)
   })
@@ -176,6 +183,8 @@ describe('access chain nodes', () => {
       },
     })
 
+    if (!session || !deviceKey)
+      expect.fail('the companion chain must contain session and device nodes')
     expect(session.title).toBe(I18N_KEYS.DevicesAccessSessionNodeTitle)
     expect(session.detail.kind).toBe(AccessNodeDetailKind.Absent)
     expect(deviceKey.title).toBe(I18N_KEYS.DevicesAccessCompanionIdentity)
@@ -198,6 +207,7 @@ describe('access chain nodes', () => {
       },
     })
 
+    if (!pin) expect.fail('the access chain must contain a PIN node')
     expect(pin.caption).toBe(I18N_KEYS.DevicesAccessStagePin)
     expect(pin.title).toBe(I18N_KEYS.DevicesAccessPinNodeTitle)
     expect(pin.detail.kind).toBe(AccessNodeDetailKind.Absent)

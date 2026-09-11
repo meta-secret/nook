@@ -729,10 +729,11 @@ export async function reloadUnlockWithSyncProvider(
   })
   await ensureLoginLocalUnlockReady(page)
   if (opts?.password) {
-    await unlockVaultOnLogin(page, {
+    const unlockRequest: { password: string; entryLabel?: string } = {
       password: opts.password,
-      entryLabel: opts.entryLabel,
-    })
+    }
+    if (opts.entryLabel) unlockRequest.entryLabel = opts.entryLabel
+    await unlockVaultOnLogin(page, unlockRequest)
   } else {
     await unlockVaultOnLogin(page)
   }

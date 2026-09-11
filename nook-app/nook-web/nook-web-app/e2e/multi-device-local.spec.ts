@@ -1,3 +1,4 @@
+import { ProviderSyncFreshness } from '$app-wasm'
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
   approveJoinLocalE2eFromBanner,
@@ -133,25 +134,11 @@ test.describe('multi-device local vault with sync provider', () => {
             return true
           }
           await deviceA.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: {
-                  syncFromStorage?: (opts?: {
-                    force?: boolean
-                  }) => Promise<void>
-                }
-              }
-            ).__nookVault
-            await vault?.syncFromStorage?.({ force: true })
+            const vault = window.__nookVault
+            await vault?.syncFromStorage(ProviderSyncFreshness.Forced)
           })
           await deviceA.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: {
-                  refreshPendingJoinsFromProviders?: () => Promise<void>
-                }
-              }
-            ).__nookVault
+            const vault = window.__nookVault
             await vault?.refreshPendingJoinsFromProviders?.()
           })
           return deviceA.getByTestId('pending-joins-banner').isVisible()
