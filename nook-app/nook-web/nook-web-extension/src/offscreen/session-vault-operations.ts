@@ -143,7 +143,7 @@ export class ActivatedExtensionIdentityLifecycle<
     try {
       outcome = await operation()
     } catch {
-      outcome = err(
+      outcome = err<never, SessionOperationFailure>(
         new SessionOperationFailure(SessionOperationFailureKind.Failed),
       )
     }
