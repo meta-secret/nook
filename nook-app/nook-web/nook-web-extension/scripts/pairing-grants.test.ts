@@ -3,6 +3,7 @@ import {
   decode_extension_grant_authority_response,
   type ExtensionGrantAuthority,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { ExtensionPairingApprovedMessageAdmissionFailure } from '../../nook-web-shared/src/extension/runtime-messages'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import {
@@ -58,7 +59,7 @@ describe('extension pairing grant transport', () => {
 
     await expect(ingress.admit({})).resolves.toEqual({
       kind: 'rejected',
-      reason: PairingIngressFailure.InvalidGrant,
+      reason: ExtensionPairingApprovedMessageAdmissionFailure.MessageEnvelope,
     })
   })
 

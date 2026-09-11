@@ -67,31 +67,72 @@ export type ExtensionPairingApprovedGrant = Omit<
   vaultType: "simple";
   providers: ExtensionStorageProviderPayload[];
 };
+export enum ExtensionPairingApprovedMessageAdmissionFailure {
+  ApprovedAt = "invalid-pairing-grant-approved-at",
+  DeviceId = "invalid-pairing-grant-device-id",
+  DeviceLabel = "invalid-pairing-grant-device-label",
+  DevicePublicKey = "invalid-pairing-grant-device-public-key",
+  DeviceSigningPublicKey = "invalid-pairing-grant-device-signing-public-key",
+  EventLogRecords = "invalid-pairing-grant-event-log-records",
+  MessageEnvelope = "invalid-pairing-grant-message-envelope",
+  Payload = "invalid-pairing-grant-payload",
+  Providers = "invalid-pairing-grant-providers",
+  Scopes = "invalid-pairing-grant-scopes",
+  VaultName = "invalid-pairing-grant-vault-name",
+  VaultStoreId = "invalid-pairing-grant-vault-store-id",
+  VaultType = "invalid-pairing-grant-vault-type",
+}
 export class ExtensionPairingApprovedGrantAdmission {
   private constructor() {}
-  static is(value: unknown): value is ExtensionPairingApprovedGrant {
-    if (!value || typeof value !== "object") return false;
+  static parse(
+    value: unknown,
+  ): Result<
+    ExtensionPairingApprovedGrant,
+    ExtensionPairingApprovedMessageAdmissionFailure
+  > {
+    if (!value || typeof value !== "object")
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.Payload);
     const payload = value as Record<string, unknown>;
-    return (
-      payload.vaultType === "simple" &&
-      typeof payload.deviceId === "string" &&
-      typeof payload.devicePublicKey === "string" &&
-      typeof payload.deviceSigningPublicKey === "string" &&
-      typeof payload.deviceLabel === "string" &&
-      typeof payload.vaultStoreId === "string" &&
-      typeof payload.vaultName === "string" &&
-      typeof payload.approvedAt === "string" &&
-      Array.isArray(payload.scopes) &&
-      payload.scopes.every(
+    if (payload.vaultType !== "simple")
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
+    if (typeof payload.deviceId !== "string")
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.DeviceId);
+    if (typeof payload.devicePublicKey !== "string")
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.DevicePublicKey,
+      );
+    if (typeof payload.deviceSigningPublicKey !== "string")
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.DeviceSigningPublicKey,
+      );
+    if (typeof payload.deviceLabel !== "string")
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.DeviceLabel);
+    if (typeof payload.vaultStoreId !== "string")
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultStoreId);
+    if (typeof payload.vaultName !== "string")
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultName);
+    if (typeof payload.approvedAt !== "string")
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt);
+    if (
+      !Array.isArray(payload.scopes) ||
+      !payload.scopes.every(
         ExtensionConnectScope.isExtensionConnectScopeValue.bind(
           ExtensionConnectScope,
         ),
-      ) &&
-      Array.isArray(payload.providers) &&
-      payload.providers.every((provider) =>
+      )
+    )
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.Scopes);
+    if (
+      !Array.isArray(payload.providers) ||
+      !payload.providers.every((provider) =>
         new ExtensionStorageProviderPayloadAdmission(provider).parse().isOk(),
       )
-    );
+    )
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
+    return ok(value as ExtensionPairingApprovedGrant);
+  }
+  static is(value: unknown): value is ExtensionPairingApprovedGrant {
+    return ExtensionPairingApprovedGrantAdmission.parse(value).isOk();
   }
 }
 
@@ -171,25 +212,46 @@ export class ExtensionPairingApprovedMessage {
   declare readonly type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved;
   declare readonly payload: ExtensionPairingApprovedGrant;
   declare readonly eventLogRecords: ExtensionEventLogRecord[];
-  static is(message: unknown): message is ExtensionPairingApprovedMessage {
+  static parse(
+    message: unknown,
+  ): Result<
+    ExtensionPairingApprovedMessage,
+    ExtensionPairingApprovedMessageAdmissionFailure
+  > {
     if (
       !RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) ||
       message.type !==
-        ExtensionPairingApprovedMessageType.NookExtensionPairingApproved ||
+        ExtensionPairingApprovedMessageType.NookExtensionPairingApproved
+    ) {
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.MessageEnvelope,
+      );
+    }
+    if (
       !("payload" in message) ||
       typeof message.payload !== "object" ||
       !message.payload
     ) {
-      return false;
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.Payload);
     }
-
-    const payload = message.payload as Record<string, unknown>;
-    return (
-      ExtensionPairingApprovedGrant.is(payload) &&
-      ExtensionPairingApprovedMessage.isExtensionEventLogRecords(
-        (message as { eventLogRecords?: unknown }).eventLogRecords,
-      )
+    const payload = ExtensionPairingApprovedGrantAdmission.parse(
+      message.payload,
     );
+    if (payload.isErr()) return err(payload.error);
+    if (
+      !("eventLogRecords" in message) ||
+      !ExtensionPairingApprovedMessage.isExtensionEventLogRecords(
+        message.eventLogRecords,
+      )
+    ) {
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecords,
+      );
+    }
+    return ok(message as ExtensionPairingApprovedMessage);
+  }
+  static is(message: unknown): message is ExtensionPairingApprovedMessage {
+    return ExtensionPairingApprovedMessage.parse(message).isOk();
   }
 }
 

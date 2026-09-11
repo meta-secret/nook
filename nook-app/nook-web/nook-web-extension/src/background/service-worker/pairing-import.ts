@@ -3,6 +3,7 @@ import { decode_extension_grant_authority_response } from '../../../../nook-web-
 import {
   type ExtensionPairingApprovedMessage,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
+  type ExtensionPairingApprovedMessageAdmissionFailure,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import type { ExtensionPairingGrantApproval } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -23,7 +24,6 @@ import { extensionSessionLifecycle } from './session-lifecycle'
 
 export enum PairingIngressFailure {
   AdmissionFailed = 'pairing-grant-admission-failed',
-  InvalidGrant = 'invalid-pairing-grant',
   RuntimeUnavailable = 'extension-runtime-unavailable',
 }
 
@@ -39,7 +39,8 @@ type PairingIngressAdmission =
     }
   | {
       readonly kind: PairingIngressAdmissionKind.Rejected
-      readonly reason: PairingIngressFailure
+      readonly reason:
+        PairingIngressFailure | ExtensionPairingApprovedMessageAdmissionFailure
     }
 
 export class ExtensionPairingIngress {
@@ -55,11 +56,15 @@ export class ExtensionPairingIngress {
       }
     }
     try {
-      return ExtensionPairingApprovedMessageSchema.is(message)
-        ? { kind: PairingIngressAdmissionKind.Admitted, message }
+      const admission = ExtensionPairingApprovedMessageSchema.parse(message)
+      return admission.isOk()
+        ? {
+            kind: PairingIngressAdmissionKind.Admitted,
+            message: admission.value,
+          }
         : {
             kind: PairingIngressAdmissionKind.Rejected,
-            reason: PairingIngressFailure.InvalidGrant,
+            reason: admission.error,
           }
     } catch {
       return {

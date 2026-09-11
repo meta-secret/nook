@@ -16,6 +16,7 @@ import {
   ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageGuard,
   OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
   OpenCompanionLauncherIntent,
+  ExtensionPairingApprovedMessageAdmissionFailure,
   ExtensionPairingApprovedMessageType,
   ExtensionIdentityHandoffRequestMessage as ExtensionIdentityHandoffRequestMessageSchema,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
@@ -357,6 +358,18 @@ describe('extension pairing approved message', () => {
         eventLogRecords,
       }),
     ).toBe(true)
+  })
+
+  test('classifies invalid approved grant clauses without payload values', () => {
+    const message = approvalDeliveryArgs().message
+    const admission = ExtensionPairingApprovedMessageSchema.parse({
+      ...message,
+      eventLogRecords: [],
+    })
+
+    expect(admission.isErr() ? admission.error : 'admitted').toBe(
+      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecords,
+    )
   })
 
   test('rejects Sentinel grants before extension persistence', () => {
