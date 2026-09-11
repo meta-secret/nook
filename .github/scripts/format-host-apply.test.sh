@@ -165,7 +165,6 @@ test "$#" -ge 6 && test "$1" = --edition && test "$2" = 2024
 test "$3" = --config && test "$4" = skip_children=true && test "$5" = --
 shift 5
 printf '%s\n' "$@" >>"$FORMAT_TEST_RUST_LOG"
-"$FORMAT_TEST_REAL_RUSTFMT" --edition 2024 --config skip_children=true -- "$@"
 EOF
 cat >"$fixture_root/.github/formatting/node_modules/.bin/prettier" <<'EOF'
 #!/usr/bin/env bash
@@ -241,7 +240,6 @@ printf 'baseline\n' >"$fixture_root/README.md"
   printf '<p>sentinel</p>\n' >nook-app/nook-web/nook-vault-sentinel/src/sentinel.svelte
   FORMAT_TEST_LOG="$fixture_root/format.log" \
   FORMAT_TEST_RUST_LOG="$fixture_root/rust.log" \
-  FORMAT_TEST_REAL_RUSTFMT="$(command -v rustfmt)" \
   FORMAT_TEST_REAL_TASK="$(command -v task)" \
   FORMAT_TEST_SCRIPTS_SLUG_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/scripts/scripts" \
   FORMAT_TEST_NESTED_SCRIPTS_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts" \
@@ -284,7 +282,6 @@ cmp -s "$fixture_root/expected-rust.log" "$fixture_root/actual-rust.log" \
   git update-ref refs/remotes/origin/main HEAD
   FORMAT_TEST_LOG="$fixture_root/format.log" \
   FORMAT_TEST_RUST_LOG="$fixture_root/rust.log" \
-  FORMAT_TEST_REAL_RUSTFMT="$(command -v rustfmt)" \
   FORMAT_TEST_REAL_TASK="$(command -v task)" \
   FORMAT_TEST_SCRIPTS_SLUG_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/scripts/scripts" \
   FORMAT_TEST_NESTED_SCRIPTS_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts" \
