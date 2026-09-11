@@ -122,6 +122,7 @@ jobs:
     name: Playwright (${{ inputs.suite }})
     needs: image
     runs-on: nook-k0s-container
+    timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-manual-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:

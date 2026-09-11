@@ -669,7 +669,7 @@ jobs:
       inputs.validation_requested
     needs: [validation-request, verify]
     runs-on: nook-k0s-container
-    timeout-minutes: 10
+    timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -921,7 +921,7 @@ jobs:
       inputs.full_e2e_requested
     needs: verify
     runs-on: nook-k0s-container
-    timeout-minutes: 10
+    timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:

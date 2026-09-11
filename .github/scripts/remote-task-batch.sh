@@ -9,7 +9,7 @@ task_timeout_minutes() {
     rust:ci|hive:verify) echo 20 ;;
     web:verify) echo 10 ;;
     web:build) echo 25 ;;
-    web:e2e|web:e2e:debug|extension:e2e) echo 30 ;;
+    web:e2e|web:e2e:debug|extension:e2e) echo 180 ;;
     check|ci:pr) echo 35 ;;
     ci:pr:e2e) echo 45 ;;
     *) echo 30 ;;

@@ -127,8 +127,8 @@ export default defineConfig({
     : isCi
       ? { workers: 2 }
       : {}),
-  ...(isCi ? { maxFailures: 1, globalTimeout: 45 * 60_000 } : {}),
-  retries: isCi ? 2 : 0,
+  ...(isCi ? { maxFailures: 0, globalTimeout: 180 * 60_000 } : {}),
+  retries: 0,
   globalTeardown: './e2e/global-teardown.ts',
   timeout: isCi ? 120_000 : 60_000,
   reporter: isCi ? 'line' : 'list',

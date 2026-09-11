@@ -411,7 +411,7 @@ tasks:
     desc: Run both local-provider Playwright projects, optionally selecting one NOOK_E2E_SHARD.
     cmds:
       - |
-        set -eu
+        set -u
         set --
         if [ -n "${NOOK_E2E_SHARD:-}" ]; then
           case "$NOOK_E2E_SHARD" in
@@ -420,8 +420,10 @@ tasks:
           esac
         fi
         cd "{{.WEB_ROOT}}"
-        PLAYWRIGHT_WORKERS=3 bun x playwright test --project=stable "$@"
-        PLAYWRIGHT_WORKERS=2 bun x playwright test --project=unstable "$@"
+        failed=0
+        PLAYWRIGHT_WORKERS=3 bun x playwright test --project=stable "$@" || failed=1
+        PLAYWRIGHT_WORKERS=2 bun x playwright test --project=unstable "$@" || failed=1
+        exit "$failed"
 
   _web:e2e:build-if-needed:
     internal: true

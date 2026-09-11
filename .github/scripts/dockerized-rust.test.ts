@@ -559,6 +559,134 @@ class DockerizedRustContract {
     }
   }
 
+  e2eCompletion(): void {
+    const workflowSchema = z.object({
+      jobs: z.record(
+        z.string(),
+        z.object({
+          "timeout-minutes": z.number().optional(),
+          strategy: z
+            .object({ "fail-fast": z.boolean().optional() })
+            .optional(),
+        }),
+      ),
+    });
+    const pr = workflowSchema.parse(
+      Bun.YAML.parse(this.read(".github/workflows/pr.yml")),
+    );
+    const main = workflowSchema.parse(
+      Bun.YAML.parse(this.read(".github/workflows/main.yml")),
+    );
+    const remote = workflowSchema.parse(
+      Bun.YAML.parse(this.read(".github/workflows/remote.yml")),
+    );
+    const manual = workflowSchema.parse(
+      Bun.YAML.parse(this.read(".github/workflows/e2e-pr.yml")),
+    );
+    expect(pr.jobs["extension-e2e"]?.["timeout-minutes"]).toBe(180);
+    expect(pr.jobs["full-e2e-shard"]?.["timeout-minutes"]).toBe(180);
+    expect(pr.jobs["full-e2e-shard"]?.strategy?.["fail-fast"]).toBe(false);
+    expect(main.jobs["web-e2e"]?.["timeout-minutes"]).toBe(180);
+    expect(main.jobs["extension-e2e"]?.["timeout-minutes"]).toBe(180);
+    expect(remote.jobs["web-e2e"]?.["timeout-minutes"]).toBe(180);
+    expect(manual.jobs.e2e?.["timeout-minutes"]).toBe(180);
+    expect(this.read(".github/scripts/remote-task-batch.sh")).toContain(
+      "web:e2e|web:e2e:debug|extension:e2e) echo 180",
+    );
+    const webConfig = this.read(
+      "nook-app/nook-web/nook-web-app/playwright.config.ts",
+    );
+    const extensionConfig = this.read(
+      "nook-app/nook-web/nook-web-extension/playwright.config.ts",
+    );
+    expect(webConfig).toContain("maxFailures: 0, globalTimeout: 180 * 60_000");
+    expect(webConfig).toContain("retries: 0");
+    expect(extensionConfig).toContain(
+      "maxFailures: 0, globalTimeout: 180 * 60_000",
+    );
+    expect(extensionConfig).toContain("retries: 0");
+
+    const taskSchema = z.object({
+      tasks: z.record(
+        z.string(),
+        z.object({
+          cmds: z
+            .array(z.union([z.string(), z.record(z.string(), z.any())]))
+            .optional(),
+        }),
+      ),
+    });
+    const webTasks = taskSchema.parse(
+      Bun.YAML.parse(this.read("nook-app/nook-web/Taskfile.yml")),
+    );
+    const ciTasks = taskSchema.parse(
+      Bun.YAML.parse(this.read("nook-app/ci/Taskfile.yml")),
+    );
+    expect(this.read("nook-app/ci/Taskfile.yml")).toContain(
+      "defer: task _web:e2e:restore-prod-dist",
+    );
+    const grouped = z
+      .string()
+      .parse(webTasks.tasks["_web:test:e2e:run-groups"]?.cmds[0]);
+    const webOnly = z
+      .string()
+      .parse(ciTasks.tasks["_ci:main:web:e2e-only"]?.cmds[0]);
+    const full = z.string().parse(ciTasks.tasks["_ci:main"]?.cmds[0]);
+    const temporary = mkdtempSync(join(tmpdir(), "nook-e2e-completion-"));
+    try {
+      const bin = join(temporary, "bin");
+      mkdirSync(bin);
+      writeFileSync(
+        join(bin, "task"),
+        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PROBE_LOG"\ncase "$*" in *"$FAILURE"*) exit 1;; esac\n',
+        { mode: 0o755 },
+      );
+      writeFileSync(
+        join(bin, "bun"),
+        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PROBE_LOG"\ncase "$*" in *"$FAILURE"*) exit 1;; esac\n',
+        { mode: 0o755 },
+      );
+      for (const scenario of [
+        {
+          script: grouped.replaceAll("{{.WEB_ROOT}}", temporary),
+          failures: ["project=stable", "project=unstable"],
+          expected: ["project=stable", "project=unstable"],
+        },
+        {
+          script: webOnly,
+          failures: ["_web:test:e2e:parallel", "_web:test:e2e:isolation"],
+          expected: ["_web:test:e2e:parallel", "_web:test:e2e:isolation"],
+        },
+        {
+          script: full,
+          failures: ["_ci:main:core", "_extension:test:e2e"],
+          expected: ["_ci:main:core", "_extension:test:e2e"],
+        },
+      ]) {
+        for (const failure of scenario.failures) {
+          const probe = join(temporary, "probe.log");
+          writeFileSync(probe, "");
+          const result = spawnSync("bash", ["-c", scenario.script], {
+            encoding: "utf8",
+            env: {
+              ...process.env,
+              PATH: `${bin}:${process.env.PATH}`,
+              FAILURE: failure,
+              PROBE_LOG: probe,
+            },
+          });
+          expect(result.status).not.toBe(0);
+          const output = readFileSync(probe, "utf8");
+          for (const expected of scenario.expected) {
+            expect(output).toContain(expected);
+          }
+        }
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+
   private read(path: string): string {
     return readFileSync(join(this.root, path), "utf8");
   }
@@ -607,4 +735,8 @@ test(
 test(
   "actual formatter supports shared-only files and new skill packages",
   contract.formatterContext.bind(contract),
+);
+test(
+  "e2e orchestration reports every selected suite before failing",
+  contract.e2eCompletion.bind(contract),
 );
