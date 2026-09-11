@@ -175,6 +175,7 @@ export class VaultInitializationActions {
         }
       });
       if (protectionStatus.isErr()) {
+        state.deviceProtectionStatus = DeviceProtectionStatus.Error;
         state.errorMsg = state.t(protectionStatus.error.translationKey);
         return;
       }

@@ -18,10 +18,12 @@ import { VaultState } from '$lib/vault.svelte'
 import { VaultInitializationActions } from '$lib/vault/lifecycle'
 import { BrowserIdentityHandoffKind } from '$lib/vault/identity-handoff'
 import {
+  NativeVaultStorageFailure,
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { TranslationMessage } from '$lib/vault/translation'
+import { VaultManagerStartup } from '$lib/runtime/wasm-bootstrap'
 
 /** Only the native boundary is doubled; browser lifecycle and handle ownership are real. */
 class IdentityHandoffFixture {
@@ -129,6 +131,36 @@ class IdentityHandoffFixture {
 afterEach(() => vi.restoreAllMocks())
 
 describe('external browser identity handoff commit ownership', () => {
+  test('exposes recovery when persisted protection status cannot be read', async () => {
+    const fixture = new IdentityHandoffFixture()
+    try {
+      fixture.state.clearManager()
+      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
+        ok(fixture.manager),
+      )
+      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
+      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
+        ok(),
+      )
+      vi.spyOn(fixture.manager, 'device_protection_status').mockRejectedValue(
+        new Error('identity directory cannot be read'),
+      )
+
+      await fixture.lifecycle.initOnce()
+
+      expect(fixture.state.deviceProtectionStatus).toBe(
+        DeviceProtectionStatus.Error,
+      )
+      expect(fixture.state.errorMsg).toBe(
+        new NativeVaultStorageFailure(
+          new Error('identity directory cannot be read'),
+        ).translationKey,
+      )
+    } finally {
+      fixture.dispose()
+    }
+  })
+
   test.each([
     VaultStorageFailureKind.DeletionActive,
     VaultStorageFailureKind.GenerationChanged,
