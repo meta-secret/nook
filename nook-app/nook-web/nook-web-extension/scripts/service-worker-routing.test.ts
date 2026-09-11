@@ -24,6 +24,20 @@ import {
   type StoredExtensionPairingGrant,
 } from '../src/background/pairing-grants'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import { extensionPairingIdentity } from '../src/background/service-worker/pairing-identity'
+import { ExtensionPairingStateQueryMessage } from '../src/lib/pairing-state'
+import {
+  isExtensionAuthenticationSurfacesRefreshMessage,
+  isExtensionSessionEnsureMessage,
+  isExtensionSessionExpiryMessage,
+  isExtensionSessionLockMessage,
+} from '../src/background/service-worker/session-runtime-messages'
+import {
+  ExtensionIdentityHandoffRequestMessage,
+  ExtensionPairedVaultIdentityDiscoveryMessage,
+  ExtensionPairedVaultIdentityHandoffRequestMessage,
+  ExtensionPairedVaultUnlockRequestMessage,
+} from '../../nook-web-shared/src/extension/runtime-messages'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -121,22 +135,14 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   ensureExtensionSessionDocument,
   extensionSessionDocument: 'offscreen/session.html',
   handlePairingStateQuery: mock(() => false),
-  hasPairingApprovedType: mock(() => false),
+  hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,
-  isExtensionAuthenticationSurfacesRefreshMessage: (message) =>
-    !!message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
-  isExtensionPairingStateQueryMessage: mock(() => false),
-  isExtensionSessionEnsureMessage: (message) =>
-    !!message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type === ExtensionRuntimeRequestType.EnsureRuntime,
-  isExtensionSessionExpiryMessage: mock(() => false),
-  isExtensionSessionLockMessage: mock(() => false),
+  isExtensionAuthenticationSurfacesRefreshMessage,
+  isExtensionPairingStateQueryMessage: ExtensionPairingStateQueryMessage.is,
+  isExtensionSessionEnsureMessage,
+  isExtensionSessionExpiryMessage,
+  isExtensionSessionLockMessage,
   openCompanionLauncher,
   openExtensionPairing: unusedAsyncDependency,
   openSimpleVault: mock(() => Promise.resolve()),
@@ -149,12 +155,16 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   createIdentityHandoff: unusedAsyncDependency,
   createPairedIdentityHandoff: unusedAsyncDependency,
   discoverPairedVaultIdentity: unusedAsyncDependency,
-  hasPairingApprovedType: mock(() => false),
+  hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
   importPairingAfterCompanionReady: unusedAsyncDependency,
-  isExtensionIdentityHandoffRequestMessage: mock(() => false),
-  isExtensionPairedVaultIdentityDiscoveryMessage: mock(() => false),
-  isExtensionPairedVaultIdentityHandoffRequestMessage: mock(() => false),
-  isExtensionPairedVaultUnlockRequestMessage: mock(() => false),
+  isExtensionIdentityHandoffRequestMessage:
+    ExtensionIdentityHandoffRequestMessage.is,
+  isExtensionPairedVaultIdentityDiscoveryMessage:
+    ExtensionPairedVaultIdentityDiscoveryMessage.is,
+  isExtensionPairedVaultIdentityHandoffRequestMessage:
+    ExtensionPairedVaultIdentityHandoffRequestMessage.is,
+  isExtensionPairedVaultUnlockRequestMessage:
+    ExtensionPairedVaultUnlockRequestMessage.is,
   normalizeOpenCompanionLauncherMessage:
     NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
@@ -181,7 +191,7 @@ async function routeDecodedLocalUpdate(
   ) =>
     importLocalEventLogUpdateWithDependencies({
       ...request,
-      ensureSession: async () => {},
+      ensureSession: async () => ok(),
       persistPairingStorage: async () => {},
       loadPairingStorage: async () => ({ [key]: routedGrant }),
       pairingPolicyReady: extensionPairingGrantPolicyReady,
@@ -309,8 +319,8 @@ describe('service worker routing', () => {
         events.push(`authorization-restored-${generation}`)
         return Promise.resolve(completedCleanup)
       },
-      isExtensionSessionEnsureMessage: () => false,
-      isExtensionSessionLockMessage: () => true,
+      isExtensionSessionEnsureMessage,
+      isExtensionSessionLockMessage,
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
@@ -319,7 +329,7 @@ describe('service worker routing', () => {
     expect(
       routeExtensionLifecycleMessage({
         dependencies,
-        message: { type: 'test-session-lock' },
+        message: { type: ExtensionSessionMessageType.Lock },
         sender: {
           id: 'nook-extension',
           url: 'chrome-extension://nook-extension/popup/index.html',
@@ -355,12 +365,12 @@ describe('service worker routing', () => {
         closeExtensionSessionDocument: () => Promise.resolve(ok()),
         completeAccountPickerAuthorizationCleanup: () =>
           Promise.resolve(outcome),
-        isExtensionSessionEnsureMessage: () => false,
-        isExtensionSessionLockMessage: () => true,
+        isExtensionSessionEnsureMessage,
+        isExtensionSessionLockMessage,
       }
       routeExtensionLifecycleMessage({
         dependencies,
-        message: { type: 'test-session-lock' },
+        message: { type: ExtensionSessionMessageType.Lock },
         sender: { id: 'nook-extension' },
         sendResponse,
       })
@@ -391,13 +401,13 @@ describe('service worker routing', () => {
         closeExtensionSessionDocument: () =>
           Promise.resolve(err(new ExtensionSessionTransportFailure(kind))),
         completeAccountPickerAuthorizationCleanup: completeCleanup,
-        isExtensionSessionEnsureMessage: () => false,
-        isExtensionSessionLockMessage: () => true,
+        isExtensionSessionEnsureMessage,
+        isExtensionSessionLockMessage,
       }
       expect(
         routeExtensionLifecycleMessage({
           dependencies,
-          message: { type: 'test-session-lock' },
+          message: { type: ExtensionSessionMessageType.Lock },
           sender: { id: 'nook-extension' },
           sendResponse,
         }),
@@ -421,8 +431,8 @@ describe('service worker routing', () => {
         Promise.reject(new Error('session storage unavailable')),
       clearPendingAccountPickers: () => Promise.resolve(),
       closeExtensionSessionDocument: closeSession,
-      isExtensionSessionEnsureMessage: () => false,
-      isExtensionSessionLockMessage: () => true,
+      isExtensionSessionEnsureMessage,
+      isExtensionSessionLockMessage,
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
@@ -430,7 +440,7 @@ describe('service worker routing', () => {
 
     routeExtensionLifecycleMessage({
       dependencies,
-      message: { type: 'test-session-lock' },
+      message: { type: ExtensionSessionMessageType.Lock },
       sender: {
         id: 'nook-extension',
         url: 'chrome-extension://nook-extension/popup/index.html',
@@ -455,8 +465,8 @@ describe('service worker routing', () => {
       closeExtensionSessionDocument: () => Promise.resolve(ok()),
       completeAccountPickerAuthorizationCleanup: () =>
         Promise.reject(new Error('completion unavailable')),
-      isExtensionSessionEnsureMessage: () => false,
-      isExtensionSessionLockMessage: () => true,
+      isExtensionSessionEnsureMessage,
+      isExtensionSessionLockMessage,
       releaseAccountPickerAuthorizationCleanup: release,
     }
     const { routeExtensionLifecycleMessage } =
@@ -465,7 +475,7 @@ describe('service worker routing', () => {
 
     routeExtensionLifecycleMessage({
       dependencies,
-      message: { type: 'test-session-lock' },
+      message: { type: ExtensionSessionMessageType.Lock },
       sender: { id: 'nook-extension' },
       sendResponse,
     })
@@ -750,7 +760,7 @@ describe('service worker routing', () => {
         ok: false,
         reason: LocalEventLogUpdateFailure.EventLogImportFailed,
       })
-      expect(update.closeSession).toHaveBeenCalledOnce()
+      expect(update.closeSession).toHaveBeenCalledTimes(1)
     },
   )
 
@@ -812,7 +822,7 @@ describe('service worker routing', () => {
     const refresh = mock(() => Promise.resolve())
     const dependencies: ExternalCompanionRoutingDependencies = {
       ...externalDependencies,
-      hasPairingApprovedType: () => true,
+      hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
       importPairingAfterCompanionReady,
       refreshAuthenticationSurfaces: refresh,
     }
@@ -834,14 +844,14 @@ describe('service worker routing', () => {
     await flushResponses()
     await flushResponses()
 
-    expect(refresh).toHaveBeenCalledOnce()
+    expect(refresh).toHaveBeenCalledTimes(1)
     expect(sendResponse).toHaveBeenCalledWith({ ok: true, eventCount: 1 })
   })
 
   test('reports an external pairing refresh failure', async () => {
     const dependencies: ExternalCompanionRoutingDependencies = {
       ...externalDependencies,
-      hasPairingApprovedType: () => true,
+      hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
       importPairingAfterCompanionReady: () =>
         Promise.resolve({ ok: true as const, eventCount: 1 }),
       refreshAuthenticationSurfaces: () =>

@@ -7,8 +7,63 @@ import type {
   WebsiteLoginSaveOfferView,
 } from '../src/lib/login-save-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import {
+  AuthenticationWorkflowApproval,
+  AuthenticationWorkflowSnapshotIngress,
+} from '../src/lib/auth-workflow-messages'
 
 await companionWasmReady
+
+function pickerApproval(): AuthenticationWorkflowApproval {
+  const admission = AuthenticationWorkflowSnapshotIngress.admit({
+    type: 'nook:authentication-workflow-snapshot',
+    payload: {
+      origin: 'https://login.example.test',
+      observations: [
+        {
+          fields: {
+            usernameFieldCount: 1,
+            currentPasswordFieldCount: 1,
+            newPasswordFieldCount: 0,
+            genericPasswordFieldCount: 0,
+            oneTimeCodeFieldCount: 0,
+            actionablePasswordFieldCount: 1,
+            readonlyPasswordFieldCount: 0,
+          },
+          ceremony: {
+            oneTimeCodeProgression: 'advance-control-required',
+            oneTimeCodeHandlerSignal: '',
+            authenticationContext: {
+              authenticationUsername: 'explicit',
+              sourceOrigin: 'https://login.example.test',
+              formIdentity: 'login',
+              destinationIdentity: '/login',
+            },
+            manualCheckpoint: 'absent',
+            advanceControl: 'absent',
+          },
+          authenticator: {
+            authenticatorSetup: 'absent',
+            backupCodesCopy: '',
+            passkeyControl: 'absent',
+            passkeyAccountAvailability: 'unavailable',
+            matchingPasskeyAccountCount: 0,
+            detailedPasskeyControl: { kind: 'absent' },
+          },
+          credentialSubmission: { kind: 'absent' },
+          detailedAdvanceControl: { kind: 'absent' },
+        },
+      ],
+    },
+  })
+  if (admission.kind !== 'accepted') {
+    throw new Error('picker approval fixture must be admitted')
+  }
+  return {
+    workflowKey: 'login:cleanup',
+    facts: admission.message.payload.observations[0],
+  }
+}
 
 const addListener = mock(() => {})
 type RuntimeResponseCallback = (response: unknown) => void
@@ -127,6 +182,7 @@ test('delivers cleanup cancellation through the content-script router', async ()
     description,
     continueButton,
     timeoutId: 7,
+    approval: pickerApproval(),
   })
   const sendResponse = mock(() => {})
 
@@ -181,13 +237,11 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   const responseCapture = captureRefreshResponse()
   const sendResponse = mock(responseCapture.sendResponse)
 
-  expect(
-    routeAutofillMessage(
-      { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
-      { id: 'nook-extension' },
-      sendResponse,
-    ),
-  ).toBe(true)
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
+    { id: 'nook-extension' },
+    sendResponse,
+  )
 
   expect(widgetState.dismissed).toBe(true)
   expect(widgetState.busy).toBe(false)
@@ -207,8 +261,8 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
     },
     expect.any(Function),
   )
-  expect(remove).toHaveBeenCalledOnce()
-  expect(schedule).toHaveBeenCalledOnce()
+  expect(remove).toHaveBeenCalledTimes(1)
+  expect(schedule).toHaveBeenCalledTimes(1)
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })
 })
 
@@ -237,16 +291,14 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
   const responseCapture = captureRefreshResponse()
   const sendResponse = mock(responseCapture.sendResponse)
 
-  expect(
-    routeAutofillMessage(
-      { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
-      { id: 'nook-extension' },
-      sendResponse,
-    ),
-  ).toBe(true)
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
+    { id: 'nook-extension' },
+    sendResponse,
+  )
   await expect(responseCapture.response).resolves.toEqual({ ok: false })
 
-  expect(remove).toHaveBeenCalledOnce()
+  expect(remove).toHaveBeenCalledTimes(1)
   expect(schedule).not.toHaveBeenCalled()
   expect(sendResponse).toHaveBeenCalledWith({ ok: false })
 })
@@ -270,13 +322,11 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
   const responseCapture = captureRefreshResponse()
   const sendResponse = mock(responseCapture.sendResponse)
 
-  expect(
-    routeAutofillMessage(
-      { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
-      { id: 'nook-extension' },
-      sendResponse,
-    ),
-  ).toBe(true)
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
+    { id: 'nook-extension' },
+    sendResponse,
+  )
   expect(schedule).not.toHaveBeenCalled()
   expect(sendResponse).not.toHaveBeenCalled()
 
@@ -309,5 +359,5 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
     },
     expect.any(Function),
   )
-  expect(schedule).toHaveBeenCalledOnce()
+  expect(schedule).toHaveBeenCalledTimes(1)
 })

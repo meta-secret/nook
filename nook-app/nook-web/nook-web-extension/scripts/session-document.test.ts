@@ -64,21 +64,26 @@ class SessionDocumentFixture {
   private reply: BrowserReply = { kind: BrowserReplyPhase.Unrequested }
 
   constructor() {
-    globalThis.chrome = {
-      offscreen: {
-        Reason: { WORKERS: 'WORKERS' },
-        createDocument: this.createDocument,
-        closeDocument: this.closeDocument,
-      },
-      runtime: {
-        ContextType: { OFFSCREEN_DOCUMENT: 'OFFSCREEN_DOCUMENT' },
-        getURL: (path: string) => `chrome-extension://fixture/${path}`,
-        getContexts: this.getContexts,
-        sendMessage: (_message: unknown, respond: (value: unknown) => void) => {
-          this.reply = { kind: BrowserReplyPhase.Pending, respond }
+    Object.assign(globalThis, {
+      chrome: {
+        offscreen: {
+          Reason: { WORKERS: 'WORKERS' },
+          createDocument: this.createDocument,
+          closeDocument: this.closeDocument,
+        },
+        runtime: {
+          ContextType: { OFFSCREEN_DOCUMENT: 'OFFSCREEN_DOCUMENT' },
+          getURL: (path: string) => `chrome-extension://fixture/${path}`,
+          getContexts: this.getContexts,
+          sendMessage: (
+            _message: unknown,
+            respond: (value: unknown) => void,
+          ) => {
+            this.reply = { kind: BrowserReplyPhase.Pending, respond }
+          },
         },
       },
-    } as typeof chrome
+    })
   }
 
   inheritDocument(): void {
@@ -261,7 +266,7 @@ describe('extension session document ownership', () => {
     const opened = await first
     const shared = await second
     if (opened.isErr() || shared.isErr())
-      return expect.fail('document creation must succeed')
+      throw new Error('document creation must succeed')
     expect(opened.value).toBe(shared.value)
     const closing = fixture.owner.close()
     expect(fixture.closure.complete()).toEqual(ok())
@@ -292,7 +297,7 @@ describe('extension session document ownership', () => {
     await Promise.resolve()
     expect(fixture.creation.complete()).toEqual(ok())
     const opened = await opening
-    if (opened.isErr()) return expect.fail('document creation must succeed')
+    if (opened.isErr()) throw new Error('document creation must succeed')
     const delivery = opened.value.sendMessage({ type: 'fixture-request' })
     const closing = fixture.owner.close()
     expect(
@@ -322,7 +327,7 @@ describe('extension session document ownership', () => {
     await Promise.resolve()
     expect(fixture.creation.complete()).toEqual(ok())
     const opened = await opening
-    if (opened.isErr()) return expect.fail('document creation must succeed')
+    if (opened.isErr()) throw new Error('document creation must succeed')
     fixture.closeDocument.mockImplementationOnce(() =>
       Promise.reject(new Error('native close failed')),
     )
