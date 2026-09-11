@@ -96,6 +96,7 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
 #[test]
 fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
+    let central_ci = fs::read_to_string(root.join(".github/workflows/ci.yml"))?;
     let workflow = fs::read_to_string(root.join(".github/workflows/repository-policy.yml"))?;
     let preflight_dockerfile = fs::read_to_string(root.join("preflight/Dockerfile"))?;
     let workflow_taskfile = fs::read_to_string(root.join(".task/ci-workflows.yml"))?;
@@ -107,9 +108,33 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
             && !root.join(".github/workflows/loom.yml").exists(),
         "repository policy must remain the single automatic policy workflow"
     );
-    let ci_workflow = fs::read_to_string(root.join(".github/workflows/ci.yml"))?;
-    assert!(ci_workflow.contains("pull_request:"));
-    assert!(ci_workflow.contains("uses: ./.github/workflows/repository-policy.yml"));
+    let pull_request_trigger = central_ci
+        .split_once("  pull_request:\n")
+        .and_then(|(_, remainder)| remainder.split_once("  push:\n"))
+        .map(|(trigger, _)| trigger)
+        .ok_or_else(|| anyhow::anyhow!("central CI must define PR before push triggers"))?;
+    assert!(
+        pull_request_trigger.contains("opened")
+            && pull_request_trigger.contains("synchronize")
+            && pull_request_trigger.contains("reopened")
+            && !pull_request_trigger.contains("paths:")
+            && !pull_request_trigger.contains("paths-ignore:")
+            && central_ci.contains(
+                "contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\"]'), github.event.action)",
+            ),
+        "central CI must route every authored PR tree to repository policy"
+    );
+    let policy_route = central_ci
+        .split_once("\n  policy:\n")
+        .and_then(|(_, remainder)| remainder.split_once("\n  pr:\n"))
+        .map(|(route, _)| route)
+        .ok_or_else(|| anyhow::anyhow!("central CI must define repository policy routing"))?;
+    assert!(
+        policy_route.contains("needs: scope")
+            && policy_route.contains("uses: ./.github/workflows/repository-policy.yml")
+            && !policy_route.contains("if:"),
+        "central CI must call repository policy without a path or label condition"
+    );
     assert!(workflow.contains("workflow_call:"));
     assert!(
         workflow.contains("fetch-depth: 0")
