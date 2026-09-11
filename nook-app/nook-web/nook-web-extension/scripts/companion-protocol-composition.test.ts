@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { rejects } from 'node:assert/strict'
+import { rejects, throws } from 'node:assert/strict'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import {
   IDBCursor,
@@ -519,12 +519,9 @@ describe('generated companion protocol composition', () => {
       first.endpoint.authorize_and_seal(extension, mismatched),
       Error,
     )
-    expect(() =>
-      first.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(first.authorization),
-      ),
-    ).toThrow()
+    // Consumed wasm-bindgen owners must be checked synchronously: invoking
+    // another async method traps inside its future before it can settle.
+    throws(() => first.endpoint.status)
   })
 
   test('consumes stale authorization and concurrent discovery', async () => {
@@ -537,23 +534,13 @@ describe('generated companion protocol composition', () => {
       ),
       Error,
     )
-    expect(() =>
-      stale.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(stale.authorization),
-      ),
-    ).toThrow()
+    throws(() => stale.endpoint.status)
 
     const concurrent = beginHandoff('request-concurrent')
     expect(() =>
       concurrent.endpoint.rediscover(discovery('request-other')),
     ).toThrow()
-    expect(() =>
-      concurrent.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(concurrent.authorization),
-      ),
-    ).toThrow()
+    throws(() => concurrent.endpoint.status)
   })
 
   test('rejects replay and a forged response at retained website state', async () => {
@@ -563,12 +550,7 @@ describe('generated companion protocol composition', () => {
       extension,
       structuredClone(first.authorization),
     )
-    expect(() =>
-      first.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(first.authorization),
-      ),
-    ).toThrow()
+    throws(() => first.endpoint.status)
 
     const forged = structuredClone(
       response,
@@ -578,8 +560,6 @@ describe('generated companion protocol composition', () => {
       first.pending.finish(first.website, forged),
       /does not match the active request/,
     )
-    expect(() =>
-      first.pending.finish(first.website, structuredClone(response)),
-    ).toThrow()
+    throws(() => first.pending.request)
   })
 })
