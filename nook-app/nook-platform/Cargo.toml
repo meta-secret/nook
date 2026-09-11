@@ -34,6 +34,10 @@ pedantic = { level = "warn", priority = -1 }
 absolute_paths = "deny"
 expect_used = "deny"
 unwrap_used = "deny"
+let_underscore_must_use = "deny"
+indexing_slicing = "deny"
+string_slice = "deny"
+disallowed_methods = "deny"
 
 [workspace.metadata.kani.flags]
 default-unwind = "8"

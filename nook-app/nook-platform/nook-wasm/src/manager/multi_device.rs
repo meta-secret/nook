@@ -401,8 +401,8 @@ mod tests {
             nook_core::DeviceMode::Standard,
             policy,
         );
-        manager.vault.secrets_key = keys.secrets_key.to_string();
-        manager.vault.members_key = keys.members_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
+        manager.vault.members_key = keys.members_key.as_str().to_owned();
 
         let one = vec![VaultMember::member_from_identity(
             MemberFromIdentityRequest {
@@ -470,8 +470,8 @@ mod tests {
                 ready_participants: 0.into(),
             },
         );
-        manager.vault.secrets_key = keys.secrets_key.to_string();
-        manager.vault.members_key = keys.members_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
+        manager.vault.members_key = keys.members_key.as_str().to_owned();
         let roster = vec![
             VaultMember::member_from_identity(MemberFromIdentityRequest {
                 identity: &first,
@@ -519,7 +519,7 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn empty_multi_device_queries_are_safe() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
-        manager.vault.members_key = nook_core::VaultKeys::generate()?.members_key.to_string();
+        manager.vault.members_key = nook_core::VaultKeys::generate()?.members_key.as_str().to_owned();
         assert!(manager.init_device().is_err());
         assert!(manager.list_pending_joins()?.is_empty());
         assert!(manager.list_vault_members()?.is_empty());
@@ -611,8 +611,8 @@ mod browser_tests {
                 ready_participants: 0.into(),
             },
         );
-        manager.vault.secrets_key = keys.secrets_key.to_string();
-        manager.vault.members_key = keys.members_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
+        manager.vault.members_key = keys.members_key.as_str().to_owned();
         let one = vec![VaultMember::member_from_identity(
             MemberFromIdentityRequest {
                 identity: &first,
@@ -773,7 +773,7 @@ mod browser_tests {
         enrollee.bootstrap_event_log_genesis().await?;
         let keys = nook_core::VaultKeys::generate()?;
         let enrolled = js(enrollee
-            .enroll_with_keys(keys.secrets_key.to_string(), keys.members_key.to_string())
+            .enroll_with_keys(keys.secrets_key.as_str().to_owned(), keys.members_key.as_str().to_owned())
             .await)?;
         assert!(enrolled.is_empty());
         assert!(!js(enrollee.list_vault_members())?.is_empty());

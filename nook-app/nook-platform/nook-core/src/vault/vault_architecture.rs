@@ -207,6 +207,7 @@ impl SentinelPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "VaultArchitectureWire")]
 #[serde(rename_all = "snake_case")]
 pub struct VaultArchitecture {
     #[serde(default)]
@@ -220,6 +221,32 @@ pub struct VaultArchitecture {
     /// Sentinel quorum policy.
     #[serde(default)]
     pub sentinel: SentinelConfiguration,
+}
+
+#[derive(Deserialize)]
+struct VaultArchitectureWire {
+    #[serde(default)]
+    device_mode: DeviceMode,
+    #[serde(default)]
+    vault_type: VaultType,
+    #[serde(default)]
+    replication_type: ReplicationType,
+    #[serde(default)]
+    sentinel: SentinelConfiguration,
+}
+
+impl TryFrom<VaultArchitectureWire> for VaultArchitecture {
+    type Error = ValidationError;
+    fn try_from(wire: VaultArchitectureWire) -> Result<Self, Self::Error> {
+        let architecture = Self {
+            device_mode: wire.device_mode,
+            vault_type: wire.vault_type,
+            replication_type: wire.replication_type,
+            sentinel: wire.sentinel,
+        };
+        architecture.validate()?;
+        Ok(architecture)
+    }
 }
 
 impl Default for VaultArchitecture {

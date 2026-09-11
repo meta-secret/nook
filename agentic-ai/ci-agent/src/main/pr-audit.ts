@@ -221,7 +221,7 @@ export class PullRequestAuditClient {
       base: { branch: pr.base.ref, sha: pr.base.sha },
       branchProtection,
       changedFiles,
-      exactHeadDeployment,
+      ...(exactHeadDeployment === undefined ? {} : { exactHeadDeployment }),
       externalReviewPolicy: "inspect-existing-feedback-without-waiting",
       feedback,
       head: { branch: pr.head.ref, sha: pr.head.sha },

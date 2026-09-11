@@ -14,14 +14,11 @@ import {
   DeviceMode,
   decode_extension_session_status_details,
   decode_extension_session_device_response,
-  type ExtensionSessionOperationResponseWire,
   type ExtensionSessionDeviceWire,
   generate_password,
   get_translation_catalog,
   NookAppLocaleParse,
   parse_app_locale,
-  type PasskeySetupMaterialResponse,
-  type PasskeyUnlockMaterialResponse,
   resolve_app_locale_from_tags,
   resolve_translation_catalog,
   supported_app_locale_code,
@@ -221,9 +218,9 @@ class ExtensionWasmRuntime {
     })
   }
 
-  private async sessionResponse<Response>(
+  private async sessionResponse(
     message: ExtensionSessionRequest,
-  ): Promise<Response> {
+  ): Promise<Parameters<typeof decode_extension_session_status_details>[0]> {
     await this.ensureNookWasm()
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const runtime = await this.runtimeMessage({
@@ -260,7 +257,7 @@ class ExtensionWasmRuntime {
           : 'Extension session operation failed.',
       )
     }
-    return response as Response
+    return response
   }
 
   private bytes(value: ArrayBuffer | ArrayBufferView): number[] {
@@ -356,8 +353,7 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.Status,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const response =
-      await this.sessionResponse<ExtensionSessionOperationResponseWire>(request)
+    const response = await this.sessionResponse(request)
     const deviceStatus =
       decode_extension_session_status_details(response).status
     // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- Existing exhaustive fallback behavior is preserved.
@@ -384,8 +380,7 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.Status,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const response =
-      await this.sessionResponse<ExtensionSessionOperationResponseWire>(request)
+    const response = await this.sessionResponse(request)
     const status = decode_extension_session_status_details(response)
     if (status.kind === 'inactive') {
       return { kind: ExtensionSessionDeviceStateKind.Locked }
@@ -405,8 +400,7 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.BeginPasskeySetup,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const setupResponse =
-      await this.sessionResponse<PasskeySetupMaterialResponse>(beginRequest)
+    const setupResponse = await this.sessionResponse(beginRequest)
     const setup = decode_passkey_setup_material_response(setupResponse)
     const creationOptions = build_passkey_creation_options(
       '',
@@ -433,10 +427,7 @@ class ExtensionWasmRuntime {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    const finishResponse =
-      await this.sessionResponse<ExtensionSessionOperationResponseWire>(
-        finishRequest,
-      )
+    const finishResponse = await this.sessionResponse(finishRequest)
     return decode_extension_session_device_response(finishResponse).device
   }
 
@@ -453,8 +444,7 @@ class ExtensionWasmRuntime {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    const response =
-      await this.sessionResponse<ExtensionSessionOperationResponseWire>(request)
+    const response = await this.sessionResponse(request)
     return decode_extension_session_device_response(response).device
   }
 
@@ -464,8 +454,7 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.UnlockOptions,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const materialResponse =
-      await this.sessionResponse<PasskeyUnlockMaterialResponse>(optionsRequest)
+    const materialResponse = await this.sessionResponse(optionsRequest)
     const material = decode_passkey_unlock_material_response(materialResponse)
     const options = build_passkey_prf_request_options(
       '',
@@ -480,8 +469,7 @@ class ExtensionWasmRuntime {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    const response =
-      await this.sessionResponse<ExtensionSessionOperationResponseWire>(request)
+    const response = await this.sessionResponse(request)
     return decode_extension_session_device_response(response).device
   }
 
@@ -490,8 +478,7 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.CreatePin,
       payload: { pin, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const response =
-      await this.sessionResponse<ExtensionSessionOperationResponseWire>(request)
+    const response = await this.sessionResponse(request)
     return decode_extension_session_device_response(response).device
   }
 
@@ -500,8 +487,7 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.UnlockPin,
       payload: { pin, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const response =
-      await this.sessionResponse<ExtensionSessionOperationResponseWire>(request)
+    const response = await this.sessionResponse(request)
     return decode_extension_session_device_response(response).device
   }
 

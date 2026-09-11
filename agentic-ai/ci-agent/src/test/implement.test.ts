@@ -86,6 +86,8 @@ test("trusted budget rejection is exported for blocked worklog publication", () 
       }).execute(),
     );
     const encoded = readFileSync(output, "utf8").trim().split("=")[1];
+    if (encoded === undefined)
+      throw new Error("Missing encoded budget failure");
     assert.equal(
       Buffer.from(encoded, "base64").toString("utf8"),
       error.message,

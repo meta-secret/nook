@@ -2,6 +2,7 @@
 
 use crate::CompactToken;
 use crate::errors::{ValidationError, ValidationResult};
+use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};
 use serde::{Deserialize, Serialize};
 use std::{fmt, mem};
@@ -13,7 +14,7 @@ pub use metadata::{DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, S
 const AGE_ARMOR_MARKER: &str = "BEGIN AGE ENCRYPTED FILE";
 const HEX_32_BYTE_LEN: usize = 64;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 pub struct SymmetricKey(String);
 
@@ -27,16 +28,11 @@ impl SymmetricKey {
     pub fn into_inner(mut self) -> String {
         mem::take(&mut self.0)
     }
-
-    #[must_use]
-    pub fn from_trusted(value: String) -> Self {
-        Self(value)
-    }
 }
 
-impl fmt::Display for SymmetricKey {
+impl fmt::Debug for SymmetricKey {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+        formatter.write_str("SymmetricKey([REDACTED])")
     }
 }
 
@@ -226,7 +222,7 @@ impl AsRef<str> for OpaqueCiphertext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct DecryptedPlaintext(String);
 
 impl DecryptedPlaintext {
@@ -241,14 +237,14 @@ impl DecryptedPlaintext {
     }
 
     #[must_use]
-    pub fn from_trusted(value: String) -> Self {
+    pub(crate) fn from_trusted(value: String) -> Self {
         Self(value)
     }
 }
 
-impl fmt::Display for DecryptedPlaintext {
+impl fmt::Debug for DecryptedPlaintext {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+        formatter.write_str("DecryptedPlaintext([REDACTED])")
     }
 }
 
@@ -258,7 +254,7 @@ impl AsRef<str> for DecryptedPlaintext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 pub struct SigningSeedHex(String);
 
@@ -272,16 +268,11 @@ impl SigningSeedHex {
     pub fn into_inner(mut self) -> String {
         mem::take(&mut self.0)
     }
-
-    #[must_use]
-    pub fn from_trusted(value: String) -> Self {
-        Self(value)
-    }
 }
 
-impl fmt::Display for SigningSeedHex {
+impl fmt::Debug for SigningSeedHex {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+        formatter.write_str("SigningSeedHex([REDACTED])")
     }
 }
 
@@ -319,20 +310,14 @@ impl DeviceIdentitySecret {
     }
 
     #[must_use]
-    pub fn from_trusted(value: String) -> Self {
-        Self(value)
+    pub(crate) fn from_identity(identity: &Identity) -> Self {
+        Self(identity.to_string().expose_secret().to_owned())
     }
 }
 
 impl fmt::Debug for DeviceIdentitySecret {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("DeviceIdentitySecret([REDACTED])")
-    }
-}
-
-impl fmt::Display for DeviceIdentitySecret {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
     }
 }
 
@@ -490,7 +475,7 @@ mod tests {
         let key = SymmetricKey::generate()?;
         assert_eq!(key.as_str().len(), 64);
         assert_eq!(SymmetricKey::parse(key.as_str())?, key);
-        assert_eq!(key.to_string(), key.as_str());
+        assert_eq!(format!("{key:?}"), "SymmetricKey([REDACTED])");
         assert_eq!(key.into_inner().len(), 64);
         Ok(())
     }
@@ -547,11 +532,11 @@ mod tests {
         let seed = SigningSeedHex::parse(&seed_hex)?;
         assert_eq!(seed.as_str(), seed_hex);
         assert_eq!(seed.as_ref(), seed_hex);
-        assert_eq!(seed.to_string(), seed_hex);
+        assert_eq!(format!("{seed:?}"), "SigningSeedHex([REDACTED])");
         assert_eq!(serde_json::to_string(&seed)?, format!("\"{seed_hex}\""));
         assert_eq!(seed.clone().into_inner(), seed_hex);
 
-        let trusted_seed = SigningSeedHex::from_trusted(seed_hex.clone());
+        let trusted_seed = SigningSeedHex::try_from(seed_hex.clone())?;
         assert_eq!(trusted_seed, seed);
 
         let label = MemberLabel::from_trusted("Laptop".to_owned());
@@ -573,7 +558,7 @@ mod tests {
         let plaintext = DecryptedPlaintext::from_trusted("secret".to_owned());
         assert_eq!(plaintext.as_str(), "secret");
         assert_eq!(plaintext.as_ref(), "secret");
-        assert_eq!(plaintext.to_string(), "secret");
+        assert_eq!(format!("{plaintext:?}"), "DecryptedPlaintext([REDACTED])");
         assert_eq!(plaintext.into_inner(), "secret");
         Ok(())
     }
@@ -584,7 +569,6 @@ mod tests {
         let secret = identity.to_string().expose_secret().to_owned();
         let wrapped = DeviceIdentitySecret::parse(&secret)?;
         assert_eq!(wrapped.as_ref(), secret);
-        assert_eq!(wrapped.to_string(), secret);
         assert_eq!(format!("{wrapped:?}"), "DeviceIdentitySecret([REDACTED])");
         assert_eq!(serde_json::to_string(&wrapped)?, format!("\"{secret}\""));
         assert_eq!(wrapped.into_inner(), secret);

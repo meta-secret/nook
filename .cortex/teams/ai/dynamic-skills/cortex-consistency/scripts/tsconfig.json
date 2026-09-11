@@ -12,7 +12,14 @@
     "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "noImplicitOverride": true,
+    "allowJs": true,
+    "checkJs": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"],
+  "exclude": ["node_modules"]
 }
