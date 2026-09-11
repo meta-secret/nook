@@ -9,6 +9,8 @@ second delivery state machine.
 1. **Send one operation packet.** Gizmo names the repository, base ref,
    branch, pull-request number, expected head SHA, current scope, requested
    operation, and required evidence.
+   - A reactive observation packet includes the five-minute read-only terminal
+     check for the assigned PR. This permits no mutation or readiness verdict.
 2. **Confirm the live target.** PR Steward re-reads the pull request and exact
    head before acting.
    - A mismatch is a blocker. PR Steward never infers authority for a new

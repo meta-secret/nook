@@ -24,7 +24,7 @@ import {
   PrStewardSource,
   PrStewardUrlTrust,
 } from '../src/pr-steward-contract.ts';
-import { PrStewardGithubUnavailableError } from '../src/pr-steward-github.ts';
+import { PrStewardPullRequestState, PrStewardGithubUnavailableError } from '../src/pr-steward-github.ts';
 import type {
   PrStewardHeadSha,
   PrStewardPullRequest,
@@ -52,7 +52,7 @@ const assignedUrl = {
 
 class FixturePrReader implements PrStewardAssignedPrReader {
   async read(_request: PrStewardAssignedPrRequest) {
-    return { headSha: ASSIGNED_HEAD, url: assignedUrl } as const;
+    return { headSha: ASSIGNED_HEAD, url: assignedUrl, state: PrStewardPullRequestState.Open } as const;
   }
 }
 class UnavailablePrReader implements PrStewardAssignedPrReader {
@@ -588,7 +588,7 @@ describe('exact-head routing observations', () => {
     });
     await Bun.sleep(0);
     expect(reader.reads).toBe(1);
-    reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl, state: PrStewardPullRequestState.Open });
     expect(await observation).toHaveLength(5);
   });
 
@@ -616,10 +616,10 @@ describe('exact-head routing observations', () => {
       write: (line) => lines.push(line),
     });
     await Bun.sleep(0);
-    reader.second.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    reader.second.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl, state: PrStewardPullRequestState.Open });
     await Bun.sleep(0);
     expect(lines).toHaveLength(0);
-    reader.first.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    reader.first.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl, state: PrStewardPullRequestState.Open });
     await observation;
     expect(
       lines.map((line) => PrStewardNdjsonCodec.decode(line).record),
@@ -645,7 +645,7 @@ describe('exact-head routing observations', () => {
     });
     await Bun.sleep(0);
     expect(reader.reads).toBe(1);
-    reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl, state: PrStewardPullRequestState.Open });
     await expect(observation).rejects.toBe(failure);
     expect(lines).toHaveLength(1);
   });

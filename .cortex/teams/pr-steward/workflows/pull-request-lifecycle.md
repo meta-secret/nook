@@ -109,8 +109,8 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
    - Emit a sanitized blocker for attributable malformed input, then continue.
    - Treat the notification as a prompt to perform only the next operation
      that Gizmo authorizes.
-3. Stop when Gizmo directs the child to finish.
-   - Send Ctrl-C to the same foreground PTY. The direct process receives
+3. Stop when Gizmo directs or the five-minute check observes merged or closed.
+   - For a requested stop, send Ctrl-C to the same foreground PTY. It receives
      `SIGINT`, drains NATS, and exits with status zero.
    - An operating-system termination may use `SIGTERM` against the direct
      process.
@@ -152,9 +152,21 @@ from these hints. The subscriber does not summarize or decide readiness.
 - Let the subscriber wait on NATS without periodic output.
 - Use a harness wait that wakes on output when available.
 - Otherwise use the longest bounded PTY read allowed by the host.
-- An empty read is not a state change. Do not notify Gizmo or query GitHub.
+- An empty PTY read is not a state change. Do not notify Gizmo or query GitHub.
 - Reconcile relevant hints only within the current operation packet.
-- Keep one initial observation and the required final direct reconciliation.
+- The subscriber checks the assigned PR every five minutes (300,000 ms).
+  This narrow terminal check runs inside the process without waking reasoning.
+- An open PR emits nothing. Merged or closed means this observer has finished.
+  Passing checks alone do not finish it.
+- A terminal result drains NATS, then emits one completion line on stderr.
+  The line contains the terminal state, canonical PR URL, and observed head.
+  Standard output remains exclusively the existing v2 NDJSON protocol.
+- Complete the child task after successful exit and one compact parent handoff.
+  Child completion does not declare mission readiness or authorize a merge.
+- Failed terminal observation reports a sanitized error and exits nonzero.
+  No retry or alternate observation path is introduced.
+- Stop clears the timer. Pending reads cannot report completion after stop.
+- Keep the required final direct reconciliation before Gizmo's verdict.
 - Report a new blocker, changed actionable result, or terminal outcome once.
 - Do not repeat unchanged evidence or wake Gizmo for transport activity.
 

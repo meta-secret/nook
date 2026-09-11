@@ -35,8 +35,9 @@ import type {
   PrStewardUrl,
 } from './pr-steward-contract.ts';
 
-import type { PrStewardAssignedPrReader } from './pr-steward-github.ts';
+import type { PrStewardAssignedPrReader, PrStewardAssignedPullRequest } from './pr-steward-github.ts';
 
+import { PrStewardCompletion } from './pr-steward-completion.ts';
 import { PrStewardOutput } from './pr-steward-output.ts';
 import { PrStewardDeliveries } from './pr-steward-deliveries.ts';
 import { PrStewardInvocationCodec } from './pr-steward-invocation.ts';
@@ -928,18 +929,33 @@ export class PrStewardEventCli {
       );
     });
     let stopping = false;
+    let draining: Promise<void> | false = false;
+    const terminal: { result: PrStewardAssignedPullRequest | false } = { result: false };
+    const reader = PrStewardGithubPrReader.create();
     const stop = (): void => {
       if (stopping) return;
       stopping = true;
-      void connection.drain().catch(() => {
+      completion.stop();
+      draining = connection.drain().catch(() => {
         process.exitCode = 1;
       });
     };
+    const completion = new PrStewardCompletion({
+      reader,
+      target: { repository: PR_STEWARD_REPOSITORY, pullRequest: invocation.pullRequest },
+      finished: (result) => {
+        terminal.result = result;
+        stop();
+      },
+      failed: (error) => {
+        messages.terminate({ kind: PrStewardSubscriptionKind.Failed, error });
+      },
+    });
     process.once('SIGINT', stop);
     process.once('SIGTERM', stop);
     try {
       await new PrStewardEventObserver({
-        reader: PrStewardGithubPrReader.create(),
+        reader,
       }).observe({
         messages,
         pullRequest: invocation.pullRequest,
@@ -954,7 +970,13 @@ export class PrStewardEventCli {
         });
       const closeError = await connection.closed();
       if (closeError) throw new Error('NATS connection closed unexpectedly');
+      if (draining !== false) await draining;
+      if (terminal.result !== false && process.exitCode !== 1)
+        process.stderr.write(
+          `PR Steward finished: ${terminal.result.state} ${terminal.result.url.value} head=${terminal.result.headSha}\n`,
+        );
     } finally {
+      completion.stop();
       if (!stopping) await connection.close();
       process.removeListener('SIGINT', stop);
       process.removeListener('SIGTERM', stop);
