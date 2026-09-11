@@ -313,7 +313,7 @@ mod tests {
         StoredSigningSeed,
     };
     use crate::{
-        AgeArmoredCiphertext, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
+        AgeArmoredCiphertext, DeviceIdentity, DevicePublicKey,
         DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex,
         VaultError, VaultResult,
     };
@@ -548,9 +548,12 @@ mod tests {
         ));
         let mut payload = fixture.payload()?;
         payload.version = 2;
-        payload.identity_private_key =
-            DeviceIdentitySecret::from_trusted("invalid-private-key".to_owned());
-        let malformed = fixture.encrypt_payload(&payload)?;
+        let plaintext = Zeroizing::new(
+            serde_json::to_string(&payload)
+                .map_err(ExtensionIdentityHandoffError::Serialize)?
+                .replace(payload.identity_private_key.as_str(), "invalid-private-key"),
+        );
+        let malformed = fixture.encrypt_text(&plaintext)?;
         assert!(matches!(
             fixture.open_request(&malformed).open(),
             Err(VaultError::ExtensionIdentityHandoff(

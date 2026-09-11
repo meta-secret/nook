@@ -159,7 +159,7 @@ mod tests {
         let keys = nook_core::VaultKeys::generate()?;
         let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
-        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
         manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
 
         let request: nook_core::PasskeyRegistrationRequest =
@@ -236,7 +236,7 @@ mod browser_tests {
         let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.apply_vault_keys(&keys.secrets_key.to_string(), &keys.members_key.to_string())?;
+        manager.apply_vault_keys(&keys.secrets_key.as_str().to_owned(), &keys.members_key.as_str().to_owned())?;
 
         let accounts = manager
             .list_website_passkey_accounts("example.com", "https://example.com")

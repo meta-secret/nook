@@ -40,9 +40,9 @@ const EXECUTABLE_PACKAGE_PATH = new RegExp(
 const DECLARED_OWNER_PATH = new RegExp(`^${OWNER_ROOT}/`, 'u');
 const CONFIG_HASHES = {
   prettier: '5342eced2ab6be14cc6716a764019f8a037da054a5c10c5c69ed428a43f739cb',
-  eslint: '041f64bd112d38d0cbff3acf6ef1f7ddf40e5329fa93c7e5c07720f0bd50c0a1',
+  eslint: '1c3f37f67a81962fce4aafbb0a3dd5c1bad59d20a3d24f75fb82fc3ba9ee6664',
   typescript:
-    '28526bdfb8bdaba4bbe5eb8b4e45f47c3bbf966e99a42424e7e0573d1014c95a',
+    'f0d5319cc53de48b772e88245a5939b503289a965097d3dc5f37c385d7505aa8',
 } as const;
 
 const REQUIRED_PROJECT_FILES = [

@@ -25,7 +25,7 @@ RUN cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo dylint --version
 
-FROM rust-ecosystem-nightly AS rust-dylint-self-test
+FROM rust-ecosystem-nightly AS rust-dylint-build
 
 ARG DYLINT_NIGHTLY=nightly-2026-04-16
 ARG RUST_DYLINT_COVERAGE_FLOOR
@@ -34,6 +34,12 @@ WORKDIR /meta-secret/nook/nook-app/nook-platform
 COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/
 ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 ENV RUSTFLAGS="-D warnings"
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked
+
+FROM rust-dylint-build AS rust-dylint-self-test
+ARG RUST_DYLINT_COVERAGE_FLOOR
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo fmt --manifest-path dylint/nook-domain-api/Cargo.toml -- --check \
@@ -50,7 +56,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
     && nook-sccache-report rust-dylint-self-test
 
-FROM rust-dylint-self-test AS rust-dylint
+FROM rust-dylint-build AS rust-dylint-native
 
 WORKDIR /meta-secret/nook
 COPY nook-app/nook-platform/ nook-app/nook-platform/
@@ -58,8 +64,25 @@ COPY nook-app/nook-platform/ nook-app/nook-platform/
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo dylint --all -- --all-targets \
-    && nook-sccache-report rust-dylint
+    cargo dylint --all -- --locked --all-targets \
+      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
+    && nook-sccache-report rust-dylint-native
+
+FROM rust-dylint-build AS rust-dylint-wasm
+RUN rustup target add wasm32-unknown-unknown
+WORKDIR /meta-secret/nook
+COPY nook-app/nook-platform/ nook-app/nook-platform/
+WORKDIR /meta-secret/nook/nook-app/nook-platform
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo dylint --all -- --locked --target wasm32-unknown-unknown --all-targets \
+      -p nook-wasm -p nook-companion-wasm -p nook-wasm-composition-tests \
+    && nook-sccache-report rust-dylint-wasm
+
+FROM rust-dylint-native AS rust-dylint
+COPY --from=rust-dylint-self-test /meta-secret/nook/nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml /tmp/dylint-self-tested.toml
+COPY --from=rust-dylint-wasm /meta-secret/nook/nook-app/nook-platform/Cargo.toml /tmp/dylint-wasm-checked.toml
 
 FROM rust-ecosystem-nightly AS rust-fuzz-smoke
 

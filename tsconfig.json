@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["bun", "node"]
+  },
+  "include": [
+    ".github/**/*.ts",
+    ".github/**/*.js",
+    ".github/**/*.mjs",
+    ".github/**/*.cjs",
+    "infra/**/*.ts",
+    "infra/**/*.js",
+    "infra/**/*.mjs",
+    "infra/**/*.cjs",
+    "agentic-ai/minds/hive/controller/**/*.ts",
+    "agentic-ai/minds/hive/controller/**/*.js",
+    "agentic-ai/minds/hive/controller/**/*.mjs",
+    "agentic-ai/minds/hive/controller/**/*.cjs",
+    "eslint.config.mjs"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/target/**"
+  ]
+}

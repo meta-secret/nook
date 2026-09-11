@@ -663,8 +663,8 @@ mod wasm_tests {
                 &manager.vault.architecture,
             )?
             .into_inner();
-        manager.vault.secrets_key = keys.secrets_key.to_string();
-        manager.vault.members_key = keys.members_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
+        manager.vault.members_key = keys.members_key.as_str().to_owned();
         let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.bootstrap_event_log_genesis().await?;

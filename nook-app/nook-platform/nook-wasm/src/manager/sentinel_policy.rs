@@ -100,8 +100,8 @@ mod tests {
         );
 
         let keys = nook_core::VaultKeys::generate()?;
-        manager.vault.secrets_key = keys.secrets_key.to_string();
-        manager.vault.members_key = keys.members_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
+        manager.vault.members_key = keys.members_key.as_str().to_owned();
         assert_eq!(
             manager.sentinel_unlock_status(),
             SentinelVaultUnlockState::Unlocked

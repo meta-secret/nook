@@ -46,9 +46,7 @@ export class YamlDocument {
     const text = this.text;
     try {
       const decodeOkArgs = {
-        value: UntrustedYamlBoundary.fromHost(
-          Bun.YAML.parse(text) as UntrustedYamlNode,
-        ),
+        value: UntrustedYamlBoundary.fromHost(Bun.YAML.parse(text)),
         text,
       };
       return SuccessfulFieldDecode.create(decodeOkArgs);

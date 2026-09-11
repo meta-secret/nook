@@ -29,6 +29,7 @@ use rustc_span::{
 mod boundary_reason;
 mod function_ownership;
 mod implementation_surface;
+mod trusted_value_declarations;
 use boundary_reason::BoundaryReason;
 use implementation_surface::{ImplementationSurface, NumericNewtype, NumericNewtypePrimitive};
 
@@ -120,6 +121,12 @@ pub fn register_lints(session: &Session, lint_store: &mut LintStore) {
         function_ownership::INVALID_UNOWNED_FUNCTION_SUPPRESSION,
     ]);
     lint_store.register_late_pass(|_| Box::new(function_ownership::FunctionOwnership));
+    lint_store.register_lints(&[
+        trusted_value_declarations::VALIDATED_ID_TRANSPARENT_DESERIALIZE,
+        trusted_value_declarations::SECRET_PLAINTEXT_FORMATTING,
+        trusted_value_declarations::PUBLIC_UNCHECKED_SECRET_CONSTRUCTOR,
+    ]);
+    lint_store.register_late_pass(|_| Box::new(trusted_value_declarations::TrustedValueDeclarations));
 }
 
 impl<'tcx> LateLintPass<'tcx> for DomainApi {

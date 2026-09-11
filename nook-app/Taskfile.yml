@@ -1,20 +1,20 @@
-version: '3'
+version: "3"
 
 vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
-  APP_ROOT: '{{.REPO_ROOT}}/nook-app'
-  PLATFORM_ROOT: '{{.APP_ROOT}}/nook-platform'
-  WEB_GROUP_ROOT: '{{.APP_ROOT}}/nook-web'
-  WEB_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-app'
-  RESEARCH_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-research'
-  EXTENSION_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-extension'
-  WEB_SHARED_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-shared'
+  APP_ROOT: "{{.REPO_ROOT}}/nook-app"
+  PLATFORM_ROOT: "{{.APP_ROOT}}/nook-platform"
+  WEB_GROUP_ROOT: "{{.APP_ROOT}}/nook-web"
+  WEB_ROOT: "{{.WEB_GROUP_ROOT}}/nook-web-app"
+  RESEARCH_ROOT: "{{.WEB_GROUP_ROOT}}/nook-web-research"
+  EXTENSION_ROOT: "{{.WEB_GROUP_ROOT}}/nook-web-extension"
+  WEB_SHARED_ROOT: "{{.WEB_GROUP_ROOT}}/nook-web-shared"
   DOCKER: '{{default "docker" .DOCKER}}'
   # Keep runtime containers at Docker Desktop's 1 Mi open-file baseline. Kernel-wide inotify
   # limits are host prerequisites documented in README.md; they cannot be set per container.
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
-  DOCKER_RUN_LIMITS: '--ulimit nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}'
+  DOCKER_RUN_LIMITS: "--ulimit nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}"
   # Bake never selects a Buildx instance by name. Hosted CI runs
   # `docker buildx use` before Task. Local Bake uses the active default.
   # The slim sealed web image is the common runtime. Heavy Rust images are loaded only by explicit
@@ -103,7 +103,7 @@ vars:
   NOOK_SIMPLE_VAULT_URL: '{{default "https://simple.nokey.sh/" .NOOK_SIMPLE_VAULT_URL}}'
   NOOK_EXTENSION_CHANNEL: '{{default "production" .NOOK_EXTENSION_CHANNEL}}'
   NOOK_EXTENSION_VERSION: '{{default "1.0.0" .NOOK_EXTENSION_VERSION}}'
-  NOOK_EXTENSION_COMMIT: '{{default .GIT_COMMIT_ID .NOOK_EXTENSION_COMMIT}}'
+  NOOK_EXTENSION_COMMIT: "{{default .GIT_COMMIT_ID .NOOK_EXTENSION_COMMIT}}"
   NOOK_EXTENSION_SITE_URL: '{{default "https://nokey.sh/" .NOOK_EXTENSION_SITE_URL}}'
   VITE_SIMPLE_APP_URL: '{{default "" .VITE_SIMPLE_APP_URL}}'
   VITE_SENTINEL_APP_URL: '{{default "" .VITE_SENTINEL_APP_URL}}'
@@ -113,27 +113,27 @@ vars:
 includes:
   platform:
     taskfile: nook-platform/Taskfile.yml
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     flatten: true
   platform-docker:
     taskfile: nook-platform/docker/Taskfile.yml
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     flatten: true
   wasm:
     taskfile: nook-platform/nook-wasm/Taskfile.yml
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     flatten: true
   web:
     taskfile: nook-web/Taskfile.yml
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     flatten: true
   web-docker:
     taskfile: nook-web/docker/Taskfile.yml
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     flatten: true
   ci:
     taskfile: ci/Taskfile.yml
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     flatten: true
 
 tasks:
@@ -220,10 +220,13 @@ tasks:
       - task: _test
 
   _verify:parallel:
-    desc: Lint ‖ tests when wasm is already built (ci:pr parallel track).
-    deps:
-      - _lint:parallel
-      - _test:parallel
+    desc: Report all static diagnostics before the existing parallel lint and test gates.
+    cmds:
+      - |
+        failed=0
+        task _web:static || failed=1
+        task --parallel _lint:parallel _test:parallel || failed=1
+        exit "$failed"
 
   _lint:parallel:
     desc: Web and extension linters only — Rust clippy already runs in the Rust image branch.
@@ -271,7 +274,6 @@ tasks:
       - cd "{{.EXTENSION_ROOT}}" && bun run format:check
       - cd "{{.RESEARCH_ROOT}}" && bun run format:check
 
-
   default:
     desc: Build every project.
     cmds:
@@ -279,7 +281,7 @@ tasks:
 
   setup:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     deps:
       - sccache:ensure
       - registry-cache:ensure
@@ -289,18 +291,18 @@ tasks:
     # parent/context of nook-web. Retry only that immediate final solve once for the known BuildKit
     # frontend flake; never repeat the multi-minute preparation graph.
     env:
-      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
-      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
-      VITE_BASE: '{{.VITE_BASE}}'
-      VITE_SITE_URL: '{{.VITE_SITE_URL}}'
-      VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
-      NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
-      NOOK_EXTENSION_CHANNEL: '{{.NOOK_EXTENSION_CHANNEL}}'
-      NOOK_EXTENSION_VERSION: '{{.NOOK_EXTENSION_VERSION}}'
-      NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'
-      NOOK_EXTENSION_SITE_URL: '{{.NOOK_EXTENSION_SITE_URL}}'
-      VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
-      VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
+      GIT_COMMIT_ID: "{{.GIT_COMMIT_ID}}"
+      WASM_BUILD_MODE: "{{.WASM_BUILD_MODE}}"
+      VITE_BASE: "{{.VITE_BASE}}"
+      VITE_SITE_URL: "{{.VITE_SITE_URL}}"
+      VITE_PUBLIC_APP_URL: "{{.VITE_PUBLIC_APP_URL}}"
+      NOOK_SIMPLE_VAULT_URL: "{{.NOOK_SIMPLE_VAULT_URL}}"
+      NOOK_EXTENSION_CHANNEL: "{{.NOOK_EXTENSION_CHANNEL}}"
+      NOOK_EXTENSION_VERSION: "{{.NOOK_EXTENSION_VERSION}}"
+      NOOK_EXTENSION_COMMIT: "{{.NOOK_EXTENSION_COMMIT}}"
+      NOOK_EXTENSION_SITE_URL: "{{.NOOK_EXTENSION_SITE_URL}}"
+      VITE_SIMPLE_APP_URL: "{{.VITE_SIMPLE_APP_URL}}"
+      VITE_SENTINEL_APP_URL: "{{.VITE_SENTINEL_APP_URL}}"
     vars:
       SETUP_OUTPUT: '{{default "" .SETUP_OUTPUT}}'
     cmds:
@@ -338,14 +340,14 @@ tasks:
 
   setup:web:focused:
     desc: Build the narrow source-sealed web image for focused checks without full verification or production builds.
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     deps:
       - sccache:ensure
       - registry-cache:ensure
     env:
-      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
-      NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'
-      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+      GIT_COMMIT_ID: "{{.GIT_COMMIT_ID}}"
+      NOOK_EXTENSION_COMMIT: "{{.NOOK_EXTENSION_COMMIT}}"
+      WASM_BUILD_MODE: "{{.WASM_BUILD_MODE}}"
     cmds:
       - >-
         bash -c 'set -euo pipefail;

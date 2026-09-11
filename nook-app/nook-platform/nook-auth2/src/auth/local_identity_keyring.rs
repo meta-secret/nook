@@ -145,7 +145,7 @@ impl LocalIdentityKeyringEntry {
         match &self.signing_seed_envelope {
             SigningSeedProtectionState::Protected(envelope) => {
                 Ok(ProtectedSigningMaterial::Opened(
-                    SigningSeedHex::from_trusted(app_key.open_utf8(envelope)?),
+                    SigningSeedHex::try_from(app_key.open_utf8(envelope)?)?,
                 ))
             }
             SigningSeedProtectionState::LegacyMigrationRequired => {

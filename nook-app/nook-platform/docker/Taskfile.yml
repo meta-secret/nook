@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 tasks:
   registry-cache:ensure:
@@ -457,21 +457,28 @@ tasks:
             rust-fuzz-smoke
         fi
 
-  docker:ecosystem:dylint:
-    desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
+  docker:ecosystem:dylint:build:
+    desc: Compile the custom Rust checker without running product checks or UI tests.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
       - task: docker:rust-base
-      - >-
-        GHA_CACHE_WRITE_ENABLED=
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}}
-        --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$(jq -er '.package_lines_percent["nook_domain_api"] | numbers' "{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json")"
-        rust-dylint
+      - "{{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} rust-dylint-build"
+
+  docker:ecosystem:dylint:
+    desc: Independently verify the custom checker and scan native and WASM product crates.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - task: docker:rust-base
       - |
+        failed=0
+        floor="$(jq -er '.package_lines_percent["nook_domain_api"] | numbers' "{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json")" || exit 1
+        for stage in self-test native wasm; do
+          {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
+            --set "rust-dylint-$stage.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" \
+            "rust-dylint-$stage" || failed=1
+        done
+        if [ "$failed" -ne 0 ]; then exit "$failed"; fi
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
-          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$(jq -er '.package_lines_percent["nook_domain_api"] | numbers' "{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json")" \
-            rust-dylint
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
+            --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" rust-dylint
         fi

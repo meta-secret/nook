@@ -455,7 +455,7 @@ mod tests {
                 .map_err(NookDatabase::map_domain_error)?
                 .open_signing_seed(&first_key)
                 .map_err(|error| NookError::Database(error.to_string()))?,
-            ProtectedSigningMaterial::Opened(SigningSeedHex::from_trusted(legacy_seed))
+            ProtectedSigningMaterial::Opened(SigningSeedHex::try_from(legacy_seed)?)
         );
         assert!(matches!(
             NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY,).await?,
@@ -877,9 +877,9 @@ mod tests {
             entry
                 .open_signing_seed(&app_key)
                 .map_err(|error| NookError::Database(error.to_string()))?,
-            ProtectedSigningMaterial::Opened(SigningSeedHex::from_trusted(
+            ProtectedSigningMaterial::Opened(SigningSeedHex::try_from(
                 protected.signing_seed.as_str().to_owned()
-            ))
+            )?)
         );
         assert!(matches!(
             NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY).await?,
