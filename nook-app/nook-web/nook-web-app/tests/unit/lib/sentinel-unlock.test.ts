@@ -15,6 +15,7 @@ import {
 } from '$app-wasm'
 import LoginGate from '$lib/components/LoginGate.svelte'
 import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
+import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
 import { LoginVaultEntryKind } from '$lib/components/login/login-unlock-state'
 import { VaultType } from '$lib/vault/architecture-model'
 import { PasswordEntrySelectionKind } from '$lib/vault/state/session.svelte'
@@ -173,6 +174,37 @@ class SentinelFinalizationFixture {
 }
 
 describe('Sentinel quorum completion presentation', () => {
+  test('lists stored deliveries only after device protection is ready', async () => {
+    const locked = new SentinelFinalizationFixture()
+    locked.state.deviceProtectionReady = false
+    const lockedView = render(SentinelUnlockParticipantHelper, {
+      vault: locked.state as unknown as VaultState,
+    })
+
+    await tick()
+
+    expect(locked.state.initDeviceIdentity).not.toHaveBeenCalled()
+    expect(
+      locked.manager.list_sentinel_genesis_share_deliveries,
+    ).not.toHaveBeenCalled()
+    lockedView.unmount()
+    locked.dispose()
+
+    const ready = new SentinelFinalizationFixture()
+    const readyView = render(SentinelUnlockParticipantHelper, {
+      vault: ready.state as unknown as VaultState,
+    })
+
+    await vi.waitFor(() => {
+      expect(ready.state.initDeviceIdentity).toHaveBeenCalledOnce()
+      expect(
+        ready.manager.list_sentinel_genesis_share_deliveries,
+      ).toHaveBeenCalledOnce()
+    })
+    readyView.unmount()
+    ready.dispose()
+  })
+
   test('refreshes Sentinel status only after device protection is ready', async () => {
     const locked = new SentinelFinalizationFixture()
     locked.state.deviceProtectionReady = false

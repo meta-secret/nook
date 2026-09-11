@@ -1,6 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { onMount } from 'svelte'
+  import { untrack } from 'svelte'
   import { Copy, KeyRound, RefreshCw, Users } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -49,8 +49,9 @@
     if (expanded) open = true
   })
 
-  onMount(() => {
-    void refreshDeliveries()
+  $effect(() => {
+    if (!vault.deviceProtectionReady) return
+    untrack(() => void refreshDeliveries())
   })
 
   async function refreshDeliveries() {
