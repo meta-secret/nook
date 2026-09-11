@@ -104,7 +104,7 @@ export type AuditedRuntimeSourceRequest = {
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/scripts/dockerized-rust.test.ts',
-    'd4588cd632bd65b79b94b4be3c742273669af720589fda09254161ca444da3eb',
+    'ada6a4952d50e6083e51263e3f0d735cbfdbc40166763f55e324e05e0b58f4ca',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -160,7 +160,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
-    '998f45b0027db1f638e1f803c33eb3668199f7848d04c45c5fb337bda201dfe6',
+    'cd6198785b267280b7ed3eb86379076119d6e324d3cb7c50bf7cbafaff5fd86e',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
