@@ -5,6 +5,42 @@ vars:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
 
 tasks:
+  ci:repository-policy:vale:activate:
+    desc: Add the provisioned pinned Vale binary to later GitHub Actions steps.
+    cmds:
+      - |
+        set -euo pipefail
+        vale_bin="$(find "$RUNNER_TOOL_CACHE/vale/3.19.0" -type f -name vale -perm -u+x -print -quit)"
+        if [ -z "$vale_bin" ]; then
+          echo "Vale 3.19.0 was not provisioned." >&2
+          exit 1
+        fi
+        vale_dir="$(dirname "$vale_bin")"
+        PATH="$vale_dir:$PATH"
+        if [ "$(vale --version)" != "vale version 3.19.0" ]; then
+          echo "Vale 3.19.0 was not provisioned." >&2
+          exit 1
+        fi
+        printf '%s\n' "$vale_dir" >> "$GITHUB_PATH"
+
+  ci:repository-policy:trusted:
+    desc: Enforce preflight and Loom policy with trusted BuildKit access.
+    cmds:
+      - task: preflight:format-contract
+      - task: preflight:test
+      - task: loom:verify
+      - task: loom:cortex-audit
+
+  ci:repository-policy:untrusted:
+    desc: Enforce preflight and Loom policy without private credentials.
+    cmds:
+      - task: preflight:format-contract
+      - task: preflight:source-architecture
+      - task: preflight:typescript-state
+      - task: preflight:loom-contracts
+      - task: loom:verify
+      - task: loom:cortex-audit
+
   ci:pr:deploy-and-verify-previews:
     desc: Deploy and verify Cloudflare Pages PR preview aliases.
     cmds:

@@ -36,18 +36,6 @@ impl RepositoryFixture {
     }
 }
 
-fn workflow_step<'a>(workflow: &'a str, name: &str) -> &'a str {
-    let marker = format!("      - name: {name}\n");
-    let start = workflow
-        .find(&marker)
-        .unwrap_or_else(|| panic!("repository policy must contain the named `{name}` step"));
-    let step = &workflow[start..];
-    let end = step[1..]
-        .find("\n      - name:")
-        .map_or(step.len(), |offset| offset + 1);
-    &step[..end]
-}
-
 fn task_body<'a>(taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
     let start_marker = format!("  {task}:\n");
     let end_marker = format!("  {next_task}:\n");
@@ -237,86 +225,47 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
 fn loom_workflow_audits_every_cortex_change() {
     let root = RepositoryFixture::repository_root();
     let workflow = root.read(".github/workflows/repository-policy.yml");
+    let taskfile = root.read(".task/ci-workflows.yml");
     assert!(
-        workflow.contains("fetch-depth: 0"),
-        "repository policy must retain full history for exact stacked-base availability"
-    );
-
-    assert!(
-        workflow.contains("      - .cortex/**") && workflow.contains(".cortex/* |"),
-        "repository policy must classify Cortex PR changes and trigger on Cortex Main pushes"
-    );
-    assert!(
-        workflow.contains("      - .agents/skills/**")
-            && workflow.contains(".agents/skills/* |")
-            && workflow.contains("      - .cortex/**/dynamic-skills/*/scripts/**")
-            && workflow.contains(".cortex/*/dynamic-skills/*/scripts/* |"),
-        "repository policy must trigger for prohibited mirrors and canonical applications"
+        workflow.contains("pull_request:")
+            && workflow.contains("push:")
+            && workflow.contains("branches: [main]")
+            && !workflow.contains("paths:")
+            && !workflow.contains("paths-ignore:"),
+        "repository policy must validate every PR and Main tree"
     );
     assert!(
-        workflow.contains("echo \"loom=$loom_changed\" >> \"$GITHUB_OUTPUT\"")
-            && workflow.contains("git diff --no-renames --name-only HEAD^1 HEAD^2")
-            && workflow
-                .matches("steps.policy-paths.outputs.loom == 'true'")
-                .count()
-                == 7,
-        "repository policy must classify rename sources and condition every Loom-only step"
+        !workflow.contains("fetch-depth")
+            && !workflow.contains("BASELINE_SHA")
+            && !workflow.contains("BEFORE_SHA")
+            && !workflow.contains("git diff")
+            && !workflow.contains("policy-paths")
+            && !workflow.contains("cortex_markdown_only"),
+        "repository policy must not fetch or classify a base comparison"
     );
     assert!(
-        workflow.contains(".cortex/*.md) ;;")
-            && workflow.contains("*) cortex_markdown_only=false ;;")
-            && workflow.contains(
-                "if [ \"$changed\" != \"true\" ]; then\n            cortex_markdown_only=false"
-            )
-            && workflow.contains(
-                "echo \"cortex_markdown_only=$cortex_markdown_only\" >> \"$GITHUB_OUTPUT\"",
-            ),
-        "repository policy must classify only non-empty Cortex Markdown changes as lightweight"
+        !workflow.contains("arc-manifest-contract.ts")
+            && !workflow.contains("runner_placement")
+            && !workflow.contains("run: |")
+            && !workflow.contains("run: bun ")
+            && !workflow.contains("run: bash "),
+        "repository policy must contain only Actions setup glue and thin Task invocations"
     );
-    for trigger_path in [
-        ".github/formatting/**",
-        ".github/scripts/format-host-apply.sh",
-        ".github/scripts/format-host-apply.test.sh",
+    for task in [
+        "task: preflight:format-contract",
+        "task: preflight:typescript-state",
+        "task: preflight:loom-contracts",
+        "task: loom:verify",
+        "task: loom:cortex-audit",
     ] {
         assert!(
-            workflow.contains(trigger_path),
-            "repository policy must trigger for formatter authority `{trigger_path}`"
+            taskfile.contains(task),
+            "repository policy Task surfaces must retain `{task}`"
         );
     }
-    let format_step = workflow_step(&workflow, "Enforce shared source formatter contract");
     assert!(
-        format_step.contains("run: task preflight:format-contract")
-            && format_step
-                .contains("if: steps.policy-paths.outputs.cortex_markdown_only != 'true'",)
-            && !format_step.contains("install"),
-        "repository policy must skip the detached formatter only for Cortex Markdown"
+        workflow.contains("run: task ci:repository-policy:trusted")
+            && workflow.contains("run: task ci:repository-policy:untrusted"),
+        "trusted and untrusted workflow branches must delegate policy behavior to Taskfile"
     );
-
-    let cortex_audit_step = workflow_step(&workflow, "Audit Cortex document structure");
-    assert!(
-        cortex_audit_step.contains("if: steps.policy-paths.outputs.loom == 'true'")
-            && cortex_audit_step.contains("run: task loom:cortex-audit")
-            && !cortex_audit_step.contains("cortex_markdown_only"),
-        "Loom must audit Cortex Markdown even when detached formatter work is skipped"
-    );
-
-    for (step_name, task) in [
-        (
-            "Enforce authored TypeScript state invariants",
-            "task preflight:typescript-state",
-        ),
-        (
-            "Enforce Loom single-parameter contract",
-            "task preflight:loom-contracts",
-        ),
-    ] {
-        let hosted_preflight_step = workflow_step(&workflow, step_name);
-        assert!(
-            hosted_preflight_step
-                .contains("steps.policy-paths.outputs.cortex_markdown_only != 'true'")
-                && hosted_preflight_step.contains("github.event_name == 'pull_request'")
-                && hosted_preflight_step.contains(task),
-            "hosted `{step_name}` must skip Cargo-backed preflight for Cortex Markdown only"
-        );
-    }
 }

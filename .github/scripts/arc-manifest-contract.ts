@@ -49,7 +49,6 @@ class ArcManifestContract {
       prWorkflow,
       authSensitiveJob,
       hiveWorkflow,
-      repositoryPolicySource,
       repositoryPolicyWorkflow,
       webResearchWorkflow,
       nodeSetup,
@@ -635,65 +634,22 @@ class ArcManifestContract {
     if (admittedContract35.isErr()) return err(admittedContract35.error);
     const admittedContract36 = repositoryPolicyWorkflow.requireAll([
       "github.event.pull_request.head.repo.full_name == github.repository",
+      "github.event.pull_request.user.login != 'dependabot[bot]'",
       "uses: ./.github/actions/nook-docker-setup",
-      "run: task preflight:test",
-      "- .vale.ini",
-      "- .vale/**",
-      ".vale.ini | .vale/*",
+      "run: task ci:repository-policy:trusted",
+      "run: task ci:repository-policy:untrusted",
+      "run: task ci:repository-policy:vale:activate",
       "uses: vale-cli/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff",
       "version: 3.19.0",
       "files: '[]'",
       "sync: false",
-      'find "$RUNNER_TOOL_CACHE/vale/3.19.0"',
-      'vale_dir="$(dirname "$vale_bin")"',
-      'PATH="$vale_dir:$PATH"',
-      '"$(vale --version)"',
-      '"vale version 3.19.0"',
     ]);
     if (admittedContract36.isErr()) return err(admittedContract36.error);
-    const productionContractInputs = [
-      ".github/actions/nook-docker-setup/action.yml",
-      "agentic-ai/minds/hive/Dockerfile",
-      "infra/k0s/scripts/k0s-worker-mesh-reconcile",
-      "infra/tasks/k0s-worker-restore.yml",
-      "infra/tasks/k0s-workers.yml",
-      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
-      "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
-      "nook-app/nook-platform/docker/sccache-health.Dockerfile",
-      "nook-app/nook-web/docker/toolchain.Dockerfile",
-      "nook-app/nook-web/docker/web.Dockerfile",
-      "nook-app/nook-web/nook-web-app/Dockerfile",
-      "preflight/Dockerfile",
-    ] as const;
-    const policyPushTriggers = new TextContract({
-      label: "repository policy Main push triggers",
-      source: repositoryPolicySource.slice(
-        0,
-        repositoryPolicySource.indexOf("permissions:"),
-      ),
-    });
-    const runnerContractClassification = new TextContract({
-      label: "repository policy runner contract classification",
-      source: repositoryPolicySource.slice(
-        repositoryPolicySource.indexOf("runner_placement_changed=false"),
-        repositoryPolicySource.indexOf('done <<< "$changed_files"'),
-      ),
-    });
-    for (const productionInput of productionContractInputs) {
-      const admittedContract37 = policyPushTriggers.require(productionInput);
-      if (admittedContract37.isErr()) return err(admittedContract37.error);
-      const admittedContract38 =
-        runnerContractClassification.require(productionInput);
-      if (admittedContract38.isErr()) return err(admittedContract38.error);
-    }
-    const admittedContract39 = repositoryPolicyWorkflow.forbid(
-      '"$("$vale_bin" --version)"',
-    );
+    const admittedContract39 = repositoryPolicyWorkflow.forbid("run: |");
     if (admittedContract39.isErr()) return err(admittedContract39.error);
     const admittedContract40 = repositoryPolicyWorkflow.requireBefore({
       first: "name: Activate Vale 3.19.0",
-      second: "run: task loom:cortex-audit",
+      second: "run: task ci:repository-policy:trusted",
     });
     if (admittedContract40.isErr()) return err(admittedContract40.error);
     const admittedContract41 = hiveWorkflow.requireAll([

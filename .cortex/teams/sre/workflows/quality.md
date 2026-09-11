@@ -422,8 +422,10 @@ Use this workflow for quality, CI, and deployment changes.
     - `Verify and preview` never waits for native coverage.
     - The preview web solve retries once after the known immediate BuildKit Dockerfile-load flake.
     - Repeated failures still fail the gate.
-    - The Repository policy job owns Source architecture and conditional Loom
-      checks in one automatic PR run.
+    - The Repository policy job owns preflight and Loom checks in one automatic
+      PR run without base-SHA comparison or changed-path classification.
+    - Its workflow is Actions-only setup and trust wiring; repository-owned
+      operations run through `.task/ci-workflows.yml`.
     - Its `pr-preflight` cache covers `preflight/target` and the Cargo registry.
     - The source-architecture proof requires cache restore before the first
       preflight Cargo task.
