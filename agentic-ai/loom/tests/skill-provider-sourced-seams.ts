@@ -132,7 +132,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/services-network-repair-test.ts',
-    'c2c3b61e2e5fbee58adf9b4ad3b5a79cbfeaa832a38f3129f162474e64a309fd',
+    '5f31d641f1e009e7d018ebfbb9ebea63a165baad1a7bc288d96af457137daaa2',
   ],
   [
     '.github/scripts/k0s-cni-migration-test.ts',

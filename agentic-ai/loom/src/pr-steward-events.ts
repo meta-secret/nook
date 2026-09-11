@@ -196,8 +196,102 @@ export class PrStewardCredentialFile {
 }
 
 export const PR_STEWARD_ENDPOINT = 'wss://events.dev.nokey.sh';
-
 export const PR_STEWARD_SUBJECT = 'default.github-webhook.pr-lifecycle';
+export const PR_STEWARD_PENDING_MESSAGE_LIMIT = 4;
+export enum PrStewardSubscriptionKind {
+  Active = 'active',
+  Closed = 'closed',
+  Failed = 'failed',
+  Overloaded = 'overloaded',
+}
+export type PrStewardSubscriptionTermination =
+  | { readonly kind: PrStewardSubscriptionKind.Closed }
+  | { readonly kind: PrStewardSubscriptionKind.Failed; readonly error: Error };
+
+type PrStewardSubscriptionOverload = {
+  readonly kind: PrStewardSubscriptionKind.Overloaded;
+  readonly pending: number;
+};
+type PrStewardSubscriptionState =
+  | { readonly kind: PrStewardSubscriptionKind.Active }
+  | PrStewardSubscriptionTermination
+  | PrStewardSubscriptionOverload;
+export type PrStewardSubscriptionAdmission = {
+  readonly data: Uint8Array;
+  readonly unsubscribe: () => void;
+};
+export type PrStewardSubscriptionOutcome =
+  | PrStewardSubscriptionTermination
+  | PrStewardSubscriptionOverload;
+type PrStewardSubscriptionOverloadRequest = { readonly pending: number };
+export class PrStewardSubscriptionOverloadError extends Error {
+  readonly pending: number;
+  constructor(request: PrStewardSubscriptionOverloadRequest) {
+    super(
+      `NATS subscription overloaded with ${request.pending} pending messages`,
+    );
+    this.name = 'PrStewardSubscriptionOverloadError';
+    this.pending = request.pending;
+  }
+}
+export class PrStewardBoundedMessageStream
+  implements AsyncIterable<PrStewardMessage>
+{
+  // Admission remains owned until the consumer resumes after processing it.
+  #admitted = 0;
+  readonly #messages: PrStewardMessage[] = [];
+  #signal = Promise.withResolvers<void>();
+  #state: PrStewardSubscriptionState = {
+    kind: PrStewardSubscriptionKind.Active,
+  };
+
+  admit(request: PrStewardSubscriptionAdmission): void {
+    if (this.#state.kind !== PrStewardSubscriptionKind.Active) return;
+    if (this.#admitted === PR_STEWARD_PENDING_MESSAGE_LIMIT) {
+      this.#state = {
+        kind: PrStewardSubscriptionKind.Overloaded,
+        pending: this.#admitted,
+      };
+      request.unsubscribe();
+      this.#signal.resolve();
+      return;
+    }
+    this.#admitted += 1;
+    this.#messages.push({ data: request.data });
+    this.#signal.resolve();
+  }
+
+  terminate(termination: PrStewardSubscriptionTermination): void {
+    if (this.#state.kind !== PrStewardSubscriptionKind.Active) return;
+    this.#state = termination;
+    this.#signal.resolve();
+  }
+
+  outcome(): PrStewardSubscriptionOutcome {
+    if (this.#state.kind === PrStewardSubscriptionKind.Active)
+      throw new Error('NATS subscription is still active');
+    return this.#state;
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterator<PrStewardMessage> {
+    while (true) {
+      const message = this.#messages.shift();
+      if (message) {
+        yield message;
+        this.#admitted -= 1;
+        continue;
+      }
+      if (this.#state.kind === PrStewardSubscriptionKind.Active) {
+        await this.#signal.promise;
+        this.#signal = Promise.withResolvers<void>();
+        continue;
+      }
+      if (this.#state.kind === PrStewardSubscriptionKind.Failed)
+        throw this.#state.error;
+      return;
+    }
+  }
+}
 
 export type PrStewardCredential = {
   readonly username: 'pr-steward';
@@ -706,32 +800,11 @@ export class PrStewardEventObserver {
   }
 
   async observe(request: PrStewardObservationRequest): Promise<void> {
-    let pending: Promise<PrStewardRecord | false>[] = [];
-    try {
-      for await (const message of request.messages) {
-        pending.push(this.#observeMessage({ request, message }));
-        if (pending.length === 4) {
-          await this.#complete({ request, pending });
-          pending = [];
-        }
-      }
-    } catch (error) {
-      await Promise.allSettled(pending);
-      throw error;
+    for await (const message of request.messages) {
+      const record = await this.#observeMessage({ request, message });
+      if (record !== false)
+        request.write(PrStewardNdjsonCodec.encode(record));
     }
-    await this.#complete({ request, pending });
-  }
-
-  async #complete(args: {
-    readonly request: PrStewardObservationRequest;
-    readonly pending: readonly Promise<PrStewardRecord | false>[];
-  }): Promise<void> {
-    const results = await Promise.allSettled(args.pending);
-    for (const result of results)
-      if (result.status === 'rejected') throw result.reason;
-    for (const result of results)
-      if (result.status === 'fulfilled' && result.value !== false)
-        args.request.write(PrStewardNdjsonCodec.encode(result.value));
   }
 
   async #observeMessage(args: {
@@ -858,7 +931,29 @@ export class PrStewardEventCli {
       name: `pr-steward-${process.pid}`,
       ignoreClusterUpdates: true,
     });
-    const subscription = connection.subscribe(PR_STEWARD_SUBJECT);
+    const messages = new PrStewardBoundedMessageStream();
+    const subscription = connection.subscribe(PR_STEWARD_SUBJECT, {
+      callback: (error, message) => {
+        if (error instanceof Error) {
+          messages.terminate({
+            kind: PrStewardSubscriptionKind.Failed,
+            error,
+          });
+          return;
+        }
+        messages.admit({
+          data: message.data,
+          unsubscribe: () => subscription.unsubscribe(),
+        });
+      },
+    });
+    void connection.closed().then((error) => {
+      messages.terminate(
+        error instanceof Error
+          ? { kind: PrStewardSubscriptionKind.Failed, error }
+          : { kind: PrStewardSubscriptionKind.Closed },
+      );
+    });
     let stopping = false;
     const stop = (): void => {
       if (stopping) return;
@@ -873,12 +968,17 @@ export class PrStewardEventCli {
       await new PrStewardEventObserver({
         reader: PrStewardGithubPrReader.create(),
       }).observe({
-        messages: subscription,
+        messages,
         pullRequest: invocation.pullRequest,
         write: (line) => {
           process.stdout.write(line);
         },
       });
+      const outcome = messages.outcome();
+      if (outcome.kind === PrStewardSubscriptionKind.Overloaded)
+        throw new PrStewardSubscriptionOverloadError({
+          pending: outcome.pending,
+        });
       const closeError = await connection.closed();
       if (closeError) throw new Error('NATS connection closed unexpectedly');
     } finally {

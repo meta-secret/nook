@@ -92,8 +92,8 @@ if test "\${1:-}" = version; then printf '%s\\n' "$MOCK_DOCKER_VERSION"; fi
     };
     const dockerMockReady = new NetworkRepairExecutable(dockerMock).execute();
     if (dockerMockReady.isErr()) return err(dockerMockReady.error);
-    const sudoMock = {
-      path: join(mockBin, "sudo"),
+    const fixtureCommand = {
+      path: join(mockBin, "fixture-command"),
       source: `#!/usr/bin/env bash
 set -euo pipefail
 if test "\${1:-}" = -n; then shift; fi
@@ -120,8 +120,10 @@ case "$operation" in
 esac
 `,
     };
-    const sudoMockReady = new NetworkRepairExecutable(sudoMock).execute();
-    if (sudoMockReady.isErr()) return err(sudoMockReady.error);
+    const fixtureCommandReady = new NetworkRepairExecutable(
+      fixtureCommand,
+    ).execute();
+    if (fixtureCommandReady.isErr()) return err(fixtureCommandReady.error);
     const curlMock = {
       path: join(mockBin, "curl"),
       source: "#!/bin/sh\nprintf '200\\n'\n",
@@ -130,9 +132,20 @@ esac
     if (curlMockReady.isErr()) return err(curlMockReady.error);
     const source = new NetworkRepairSource(work).execute();
     if (source.isErr()) return err(source.error);
+    const fixtureSource = source.value
+      .replaceAll("sudo -n ", `${JSON.stringify(fixtureCommand.path)} `)
+      .replace(
+        "set -euo pipefail\n",
+        `set -euo pipefail
+export PATH=${JSON.stringify(`${mockBin}:${executablePath}`)}
+export MOCK_LOG=${JSON.stringify(log)}
+export MOCK_STATE=${JSON.stringify(state)}
+export MOCK_DOCKER_VERSION=${JSON.stringify(input.version)}
+`,
+      );
     const harness = {
       path: join(work, "harness.sh"),
-      source: source.value,
+      source: fixtureSource,
     };
     const harnessReady = new NetworkRepairExecutable(harness).execute();
     if (harnessReady.isErr()) return err(harnessReady.error);

@@ -121,7 +121,7 @@ export class ProviderCredentialBuffer {
     try {
       const admitted: StorageProvider[] = await Reflect.apply(
         args.decode,
-        undefined,
+        globalThis,
         [staged],
       )
       return ok(admitted)
