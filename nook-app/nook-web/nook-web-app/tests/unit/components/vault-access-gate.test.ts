@@ -52,6 +52,6 @@ describe('vault access gate', () => {
     expect(view.getByTestId('vault-error').textContent).toContain(
       'Provider startup failed',
     )
-    expect(view.queryByTestId('login-gate')).toBeNull()
+    expect(view.queryAllByTestId('login-gate')).toHaveLength(0)
   })
 })

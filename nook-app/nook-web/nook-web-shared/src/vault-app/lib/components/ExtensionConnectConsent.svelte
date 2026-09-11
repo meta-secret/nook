@@ -92,7 +92,10 @@
           )
           break
         case ExtensionPairingDeliveryKind.Rejected:
-          handoffRejectionReason = delivery.value.reason ?? ''
+          handoffRejectionReason =
+            'reason' in delivery.value && delivery.value.reason
+              ? delivery.value.reason
+              : ''
           handoffError = vault.t(I18N_KEYS.ExtensionConsentGrantRejected)
           break
       }
