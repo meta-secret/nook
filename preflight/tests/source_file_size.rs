@@ -97,8 +97,8 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
 fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let workflow = fs::read_to_string(root.join(".github/workflows/repository-policy.yml"))?;
-    let taskfile =
-        fs::read_to_string(RepositoryFixture::repository_root().join("preflight/Taskfile.yml"))?;
+    let preflight_taskfile = fs::read_to_string(root.join("preflight/Taskfile.yml"))?;
+    let workflow_taskfile = fs::read_to_string(root.join(".task/ci-workflows.yml"))?;
 
     assert!(
         !root
@@ -108,29 +108,34 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
         "repository policy must remain the single automatic policy workflow"
     );
     assert!(workflow.contains("pull_request:"));
-    let pull_request_trigger = workflow
-        .split_once("  pull_request:\n")
-        .and_then(|(_, tail)| tail.split_once("  push:\n"))
-        .map(|(trigger, _)| trigger)
-        .ok_or_else(|| anyhow::anyhow!("repository policy must define PR before push triggers"))?;
     assert!(
-        !pull_request_trigger.contains("paths:") && !pull_request_trigger.contains("paths-ignore:"),
-        "repository policy must not skip source architecture for authored PR trees"
+        !workflow.contains("fetch-depth")
+            && !workflow.contains("BASELINE_SHA")
+            && !workflow.contains("git diff")
+            && !workflow.contains("policy-paths"),
+        "repository policy must validate the checked-out tree without base comparison or path classification"
     );
     assert!(
         workflow.contains("github.event.pull_request.head.repo.full_name != github.repository")
-            && workflow.contains("run: task preflight:source-architecture"),
-        "repository policy must run native source architecture for untrusted PR events"
+            && workflow.contains("run: task ci:repository-policy:untrusted")
+            && workflow_taskfile.contains("task: preflight:source-architecture"),
+        "repository policy must route untrusted PR source architecture through Taskfile"
     );
     assert_hosted_preflight_rust_cache(&workflow, "repository-policy")?;
     assert!(
-        taskfile.contains("--test source_file_size"),
+        preflight_taskfile.contains("--test source_file_size"),
         "preflight:source-architecture must run the source_file_size test"
     );
     Ok(())
 }
 
 fn assert_hosted_preflight_rust_cache(workflow: &str, name: &str) -> anyhow::Result<()> {
+    assert!(
+        workflow.contains(
+            "      - name: Install Rust for repository policy\n        uses: dtolnay/rust-toolchain@stable"
+        ),
+        "{name} must provision Rust and rustfmt for trusted and untrusted policy paths"
+    );
     let toolchain = workflow
         .find("uses: dtolnay/rust-toolchain@stable")
         .ok_or_else(|| anyhow::anyhow!("{name} must install the pinned stable Rust channel"))?;
@@ -138,8 +143,8 @@ fn assert_hosted_preflight_rust_cache(workflow: &str, name: &str) -> anyhow::Res
         .find("uses: Swatinem/rust-cache@v2")
         .ok_or_else(|| anyhow::anyhow!("{name} must restore its hosted Rust dependency cache"))?;
     let first_preflight_task = workflow
-        .find("task preflight:")
-        .ok_or_else(|| anyhow::anyhow!("{name} must run a preflight Rust task"))?;
+        .find("run: task ci:repository-policy:untrusted")
+        .ok_or_else(|| anyhow::anyhow!("{name} must run the untrusted policy Task"))?;
 
     assert!(
         toolchain < cache && cache < first_preflight_task,

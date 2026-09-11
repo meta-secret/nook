@@ -125,24 +125,17 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`repository-policy.yml`**
 
-- Runs source architecture enforcement on every pull request except a
-  Markdown-only Cortex change.
-- Classifies PR and Main paths before provisioning language toolchains.
-- Markdown-only Cortex changes run the Cortex audit without Rust, BuildKit,
-  preflight, or the full Loom package suite.
-- Non-Markdown Cortex changes retain the full Loom and preflight path.
-- Mixed changes retain the full policy path.
-- Runs Loom checks when Loom, its Task wrapper, Cortex, or related preflight
-  sources change.
-- Runs on Main for policy, Cortex, Loom, and workflow-relevant paths.
-- Verifies Loom formatting, lint, types, tests, authored TypeScript state, and
-  Loom API contracts when executable Loom or policy sources require them.
+- Runs preflight and Loom policy for every pull request and Main push.
+- Validates the checked-out tree without fetching or comparing a base SHA and
+  without classifying changed paths.
+- Delegates repository-owned commands to the repository-policy Task surfaces;
+  the workflow retains only Actions setup and trust-boundary wiring.
+- Verifies source architecture, formatting contracts, Loom formatting, lint,
+  types, tests, Cortex structure, authored TypeScript state, and Loom API
+  contracts.
+- Trusted same-repository human PRs and Main use private ARC and BuildKit.
+  Fork and Dependabot PRs use secret-free hosted checks.
 - Remains separate from Main product orchestration.
-  - Cortex and agent-only merges require relevant Loom-backed policy checks.
-  - They intentionally skip product Main when product paths are unchanged.
-  - Repository-policy-only changes also skip product PR and Main.
-  - Combining repository policy with Cortex Markdown keeps that skip.
-  - Adding any product-impacting path restores product PR and Main.
 - Enforces the authored source-file limit.
 - Enforces Rust unit-test colocation.
 
