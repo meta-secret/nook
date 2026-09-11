@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 
 describe('ensureExtensionSessionDocument', () => {
-  test('uses an existing offscreen session when Chrome rejects with a string', async () => {
+  test('uses a browser-confirmed existing offscreen session', async () => {
     let createAttempts = 0
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -15,12 +15,23 @@ describe('ensureExtensionSessionDocument', () => {
           return Promise.reject('single offscreen document')
         },
       },
+      runtime: {
+        ContextType: { OFFSCREEN_DOCUMENT: 'OFFSCREEN_DOCUMENT' },
+        getURL: (path: string) => `chrome-extension://nook/${path}`,
+        getContexts: () =>
+          Promise.resolve([
+            {
+              contextType: 'OFFSCREEN_DOCUMENT',
+              documentUrl: 'chrome-extension://nook/offscreen/session.html',
+            },
+          ]),
+      },
     } as typeof chrome
     const { ExtensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     await new ExtensionSessionLifecycle().ensureExtensionSessionDocument()
-    expect(createAttempts).toBe(1)
+    expect(createAttempts).toBe(0)
   })
 })
 

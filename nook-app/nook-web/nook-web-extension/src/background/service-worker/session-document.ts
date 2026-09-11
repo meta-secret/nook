@@ -168,6 +168,34 @@ export class ExtensionSessionDocumentOwner {
     return ok(new OpenExtensionSessionDocument())
   }
 
+  private async openExistingOrCreate(): Promise<
+    ExtensionSessionTransportResult<OpenExtensionSessionDocument>
+  > {
+    const documentUrl = chrome.runtime.getURL(extensionSessionDocument)
+    let contexts: chrome.runtime.ExtensionContext[]
+    try {
+      const observationRequest: Parameters<
+        typeof chrome.runtime.getContexts
+      >[0] = {
+        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+        documentUrls: [documentUrl],
+      }
+      contexts = await chrome.runtime.getContexts(observationRequest)
+    } catch {
+      return err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.ObservationFailed,
+        ),
+      )
+    }
+    const inherited = contexts.some(
+      (context) =>
+        context.contextType === chrome.runtime.ContextType.OFFSCREEN_DOCUMENT &&
+        context.documentUrl === documentUrl,
+    )
+    return inherited ? ok(new OpenExtensionSessionDocument()) : this.create()
+  }
+
   async open(): Promise<
     ExtensionSessionTransportResult<ExtensionSessionTransport>
   > {
@@ -189,7 +217,11 @@ export class ExtensionSessionDocumentOwner {
       case ExtensionSessionDocumentStateKind.Closed:
         break
     }
-    const operation = this.create().then((created) => {
+    const operation = (
+      state.kind === ExtensionSessionDocumentStateKind.Unobserved
+        ? this.openExistingOrCreate()
+        : this.create()
+    ).then((created) => {
       if (
         this.state.kind === ExtensionSessionDocumentStateKind.Creating &&
         this.state.operation === operation
@@ -199,7 +231,13 @@ export class ExtensionSessionDocumentOwner {
               kind: ExtensionSessionDocumentStateKind.Open,
               document: created.value,
             }
-          : { kind: ExtensionSessionDocumentStateKind.Unobserved }
+          : created.error.kind ===
+              ExtensionSessionTransportFailureKind.ObservationFailed
+            ? {
+                kind: ExtensionSessionDocumentStateKind.ObservationFailed,
+                failure: created.error,
+              }
+            : { kind: ExtensionSessionDocumentStateKind.Unobserved }
       }
       return created
     })
@@ -292,9 +330,14 @@ export class ExtensionSessionDocumentOwner {
         ? state.operation.then(
             (created): Promise<ExtensionSessionTransportResult<void>> => {
               if (created.isErr()) {
-                this.state = {
-                  kind: ExtensionSessionDocumentStateKind.Unobserved,
-                }
+                this.state =
+                  created.error.kind ===
+                  ExtensionSessionTransportFailureKind.ObservationFailed
+                    ? {
+                        kind: ExtensionSessionDocumentStateKind.ObservationFailed,
+                        failure: created.error,
+                      }
+                    : { kind: ExtensionSessionDocumentStateKind.Unobserved }
                 return Promise.resolve(err(created.error))
               }
               return this.closeDocument(created.value)

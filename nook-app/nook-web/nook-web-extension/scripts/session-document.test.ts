@@ -107,6 +107,65 @@ class SessionDocumentFixture {
 }
 
 describe('extension session document ownership', () => {
+  test('reuses the exact inherited session without creating another document', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+
+    const opened = await fixture.owner.open()
+
+    expect(opened.isOk()).toBe(true)
+    expect(fixture.getContexts).toHaveBeenCalledWith({
+      contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+      documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],
+    })
+    expect(fixture.createDocument).not.toHaveBeenCalled()
+  })
+
+  test('does not admit an unrelated offscreen context when creation fails', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.getContexts.mockResolvedValueOnce([
+      {
+        contextType: chrome.runtime.ContextType.OFFSCREEN_DOCUMENT,
+        contextId: 'unrelated-session',
+        documentUrl: chrome.runtime.getURL('offscreen/unrelated.html'),
+        documentOrigin: 'chrome-extension://fixture',
+        documentId: 'unrelated-document',
+        frameId: 0,
+        tabId: -1,
+        windowId: -1,
+        incognito: false,
+      },
+    ])
+    fixture.createDocument.mockRejectedValueOnce(
+      new Error('native create failed'),
+    )
+
+    expect(await fixture.owner.open()).toEqual(
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.CreationFailed,
+        ),
+      ),
+    )
+    expect(fixture.createDocument).toHaveBeenCalledTimes(1)
+  })
+
+  test('reports direct inherited-session observation failure', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.getContexts.mockRejectedValueOnce(
+      new Error('native observation failed'),
+    )
+    const failure = err(
+      new ExtensionSessionTransportFailure(
+        ExtensionSessionTransportFailureKind.ObservationFailed,
+      ),
+    )
+
+    expect(await fixture.owner.open()).toEqual(failure)
+    expect(await fixture.owner.open()).toEqual(failure)
+    expect(fixture.createDocument).not.toHaveBeenCalled()
+  })
+
   test('closes an inherited session and waits for browser acknowledgement without creating one', async () => {
     const fixture = new SessionDocumentFixture()
     fixture.inheritDocument()
@@ -196,6 +255,7 @@ describe('extension session document ownership', () => {
     const fixture = new SessionDocumentFixture()
     const first = fixture.owner.open()
     const second = fixture.owner.open()
+    await Promise.resolve()
     expect(fixture.createDocument).toHaveBeenCalledTimes(1)
     expect(fixture.creation.complete()).toEqual(ok())
     const opened = await first
@@ -212,6 +272,7 @@ describe('extension session document ownership', () => {
     const fixture = new SessionDocumentFixture()
     const opening = fixture.owner.open()
     const closing = fixture.owner.close()
+    await Promise.resolve()
     expect(fixture.creation.complete()).toEqual(ok())
     expect(await opening).toEqual(
       err(
@@ -228,6 +289,7 @@ describe('extension session document ownership', () => {
   test('revokes aliases and pending replies before awaiting browser closure', async () => {
     const fixture = new SessionDocumentFixture()
     const opening = fixture.owner.open()
+    await Promise.resolve()
     expect(fixture.creation.complete()).toEqual(ok())
     const opened = await opening
     if (opened.isErr()) return expect.fail('document creation must succeed')
@@ -257,6 +319,7 @@ describe('extension session document ownership', () => {
   test('retains denied ownership after closure fails until a caller explicitly closes again', async () => {
     const fixture = new SessionDocumentFixture()
     const opening = fixture.owner.open()
+    await Promise.resolve()
     expect(fixture.creation.complete()).toEqual(ok())
     const opened = await opening
     if (opened.isErr()) return expect.fail('document creation must succeed')
