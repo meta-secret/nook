@@ -792,10 +792,10 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         .split_once("\n  full-extension-e2e:\n")
         .map(|(_, job)| job)
         .context("PR workflow must keep the full extension e2e job")?;
-    let full_e2e_label = "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')";
+    let full_e2e_request = "inputs.full_e2e_requested";
     assert!(
-        full_e2e.contains(full_e2e_label) && full_extension_e2e.contains(full_e2e_label),
-        "a persistent Main-fix label must keep both full e2e jobs active"
+        full_e2e.contains(full_e2e_request) && full_extension_e2e.contains(full_e2e_request),
+        "the central full-e2e request must keep both full e2e jobs active"
     );
     assert!(ui_demo.contains("runs-on: nook-k0s-container"));
     for required in [
