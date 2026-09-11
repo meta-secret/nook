@@ -13,6 +13,11 @@ import { TextContract } from "./text-contract";
 
 enum DockerCacheSelection {
   ConnectionOnly = "connection-only",
+  EcosystemDeterministic = "ecosystem-deterministic",
+  EcosystemDylint = "ecosystem-dylint",
+  EcosystemFuzz = "ecosystem-fuzz",
+  EcosystemKani = "ecosystem-kani",
+  EcosystemPolicyTools = "ecosystem-policy-tools",
   General = "general",
   Hive = "hive",
   Native = "native",
@@ -91,8 +96,8 @@ export class DockerCacheSelectionContract {
       source,
     });
     const admitted = contract.requireAll([
-      `general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only) ;;`,
-      "cache-selection must be general, native, wasm, wasm-proof, preflight, web-e2e, hive, or connection-only",
+      `general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani) ;;`,
+      "cache-selection is outside the closed consumer profile set",
     ]);
     if (admitted.isErr()) return err(admitted.error);
     const start = source.indexOf(
@@ -147,7 +152,12 @@ export class DockerCacheSelectionContract {
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "wasm" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then',
-      "general|native|wasm|preflight|web-e2e)",
+      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-dylint" ]; then',
+      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ]; then',
+      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-policy-tools" ]; then',
+      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ]; then',
+      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ]; then',
+      "general|native|wasm|preflight|web-e2e|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani)",
     ]);
     if (admitted.isErr()) return err(admitted.error);
     const hive = source.slice(hiveStart);

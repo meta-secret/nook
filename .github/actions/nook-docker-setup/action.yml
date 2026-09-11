@@ -6,6 +6,8 @@ inputs:
     description: >-
       Closed cache probe set: general probes every shared Bake lineage; native,
       wasm, preflight, and web-e2e probe only the named consumer graph;
+      ecosystem-dylint, ecosystem-fuzz, ecosystem-policy-tools,
+      ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       wasm-proof computes its dependency fingerprint without probing; hive probes
       only the Hive lineage; connection-only performs no registry cache probes.
     required: false
@@ -159,9 +161,9 @@ runs:
         git_ref="${{ github.ref }}"
         cache_selection="${{ inputs.cache-selection }}"
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only) ;;
+          general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani) ;;
           *)
-            echo "cache-selection must be general, native, wasm, wasm-proof, preflight, web-e2e, hive, or connection-only (got: ${cache_selection:-empty})" >&2
+            echo "cache-selection is outside the closed consumer profile set (got: ${cache_selection:-empty})" >&2
             exit 1
             ;;
         esac
@@ -358,16 +360,20 @@ runs:
           fi
         fi
 
-        if [ "$cache_selection" = "general" ]; then
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-dylint" ]; then
           publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$scope_suffix"
+        fi
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ]; then
           publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$scope_suffix"
+        fi
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-policy-tools" ]; then
           publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$scope_suffix"
+        fi
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ]; then
           publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$scope_suffix"
+        fi
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ]; then
           publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$scope_suffix"
-          if [ -z "$scope_suffix" ]; then
-            # On Main these duplicate the exact source refs and have no consumer decision.
-            :
-          fi
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then
           publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
@@ -376,7 +382,7 @@ runs:
           publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
         fi
         case "$cache_selection" in
-          general|native|wasm|preflight|web-e2e)
+          general|native|wasm|preflight|web-e2e|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani)
           echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
           ;;
         esac

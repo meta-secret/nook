@@ -41,7 +41,7 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: connection-only
+          cache-selection: ecosystem-policy-tools
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.
@@ -74,7 +74,7 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: native
+          cache-selection: ecosystem-deterministic
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.
@@ -105,7 +105,7 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: connection-only
+          cache-selection: ecosystem-fuzz
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.
@@ -138,7 +138,7 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: connection-only
+          cache-selection: ecosystem-kani
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
@@ -167,7 +167,7 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: connection-only
+          cache-selection: ecosystem-dylint
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.

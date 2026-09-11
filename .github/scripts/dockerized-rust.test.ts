@@ -50,10 +50,8 @@ class DockerizedRustContract {
     expect(ecosystem.match(/uses: docker\/setup-buildx-action/g)).toHaveLength(
       5,
     );
-    expect(ecosystem.match(/cache-selection: connection-only/g)).toHaveLength(
-      4,
-    );
-    expect(ecosystem.match(/cache-selection: native/g)).toHaveLength(1);
+    expect(ecosystem.match(/cache-selection: ecosystem-/g)).toHaveLength(5);
+
     expect(this.read(".github/formatting/Dockerfile")).toContain(
       "prettier-skill.json",
     );
@@ -89,6 +87,11 @@ class DockerizedRustContract {
         "connection-only",
         "native",
         "hive",
+        "ecosystem-dylint",
+        "ecosystem-fuzz",
+        "ecosystem-policy-tools",
+        "ecosystem-deterministic",
+        "ecosystem-kani",
       ]) {
         const script = selection.run
           .replaceAll("${{ inputs.cache-selection }}", profile)
@@ -133,6 +136,10 @@ class DockerizedRustContract {
         expect(calls).not.toContain("-git-");
         if (profile === "connection-only" || profile === "hive")
           expect(calls).toBe("");
+        if (profile.startsWith("ecosystem-")) {
+          expect(calls.trim().split("\n")).toHaveLength(1);
+          expect(calls).toContain(`nook-rust-${profile}-`);
+        }
         if (profile === "preflight") {
           expect(calls.trim().split("\n")).toHaveLength(1);
           expect(calls).toContain("nook-preflight-v1");

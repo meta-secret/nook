@@ -534,7 +534,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "hosted setup must probe exact refs before selecting exact-only, Main-source-only, or cold fallback imports"
     );
     assert!(
-        setup.contains("general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only")
+        setup.contains("general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani")
             && setup.contains("[ \"$cache_selection\" = \"native\" ]")
             && setup.contains("[ \"$cache_selection\" = \"wasm\" ]")
             && setup.contains("[ \"$cache_selection\" = \"preflight\" ]")

@@ -224,12 +224,19 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
 #[test]
 fn loom_workflow_audits_every_cortex_change() {
     let root = RepositoryFixture::repository_root();
+    let entrypoint = root.read(".github/workflows/ci.yml");
     let workflow = root.read(".github/workflows/repository-policy.yml");
     let taskfile = root.read(".task/ci-workflows.yml");
     assert!(
-        workflow.contains("workflow_call:")
-            && !workflow.contains("paths:")
-            && !workflow.contains("paths-ignore:"),
+        entrypoint.contains("pull_request:")
+            && entrypoint.contains("push:")
+            && entrypoint.contains("branches: [main]")
+            && !entrypoint.contains("paths:")
+            && !entrypoint.contains("paths-ignore:")
+            && entrypoint.contains(
+                "  policy:\n    name: Repository policy\n    needs: scope\n    uses: ./.github/workflows/repository-policy.yml\n    secrets: inherit",
+            )
+            && workflow.contains("workflow_call:"),
         "repository policy must validate every PR and Main tree"
     );
     assert!(
