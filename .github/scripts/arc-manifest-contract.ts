@@ -737,6 +737,7 @@ class ArcManifestContract {
     const admittedContract48 = remoteWorkflow.forbidAll([
       "NOOK_CACHE_RUNS_ON",
       "nook-k0s-cache",
+      "ci:pr:e2e) task _ci:main",
     ]);
     if (admittedContract48.isErr()) return err(admittedContract48.error);
     const admittedContract49 = remoteWorkflow.requireAll([
@@ -750,11 +751,24 @@ class ArcManifestContract {
       "task web:e2e:kubernetes-image",
       "Run selected task without a nested container runtime",
       "web:build) task _web:build",
-      "task _web:test:e2e",
+      "web:e2e) task _ci:main:web:e2e-only",
       "extension:e2e) task _extension:test:e2e",
       "check) task _check",
       "ci:pr) task _ci:pr",
-      "ci:pr:e2e) task _ci:main",
+      "ci-pr-e2e-suite:",
+      "needs: web-e2e-image",
+      "name: Remote / ci:pr:e2e / ${{ matrix.suite }}",
+      "fail-fast: false",
+      "suite: [stable, unstable, isolation, extension]",
+      "stable) task _web:test:e2e:stable",
+      "unstable) task _web:test:e2e:unstable",
+      "isolation) task _web:test:e2e:isolation",
+      "extension) task _extension:test:e2e",
+      "remote-e2e-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.suite }}",
+      "ci-pr-e2e:",
+      "needs: ci-pr-e2e-suite",
+      "SUITE_RESULT: ${{ needs.ci-pr-e2e-suite.result }}",
+      'run: test "$SUITE_RESULT" = "success"',
       "inputs.tasks != '' && inputs.task != ''",
       "(inputs.tasks == '' || inputs.task == '')",
     ]);
