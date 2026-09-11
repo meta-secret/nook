@@ -1,5 +1,6 @@
 import { err, ok, type Result } from 'neverthrow'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 const createPasskeyProtection = vi.hoisted(() => vi.fn())
 
@@ -116,5 +117,28 @@ describe('device protection actions', () => {
 
     expect(state.deviceProtectionStatus).toBe(DeviceProtectionStatus.PinSetup)
     expect(state.continueInitializationAfterDeviceUnlock).not.toHaveBeenCalled()
+  })
+
+  test('presents a typed PIN unlock failure without initializing', async () => {
+    const unlockPinDeviceIdentity = vi.fn(async () => {
+      throw new Error('native PIN failure')
+    })
+    const state = deviceProtectionState()
+    Object.assign(state, {
+      admitManager: () =>
+        ok({ unlock_pin_device_identity: unlockPinDeviceIdentity }),
+    })
+
+    await new DeviceProtectionActions(state).unlockPinDeviceProtection({
+      pin: '000000',
+      initializeSession: true,
+    })
+
+    expect(unlockPinDeviceIdentity).toHaveBeenCalledWith('000000')
+    expect(state.errorMsg).toBe(I18N_KEYS.DeviceProtectionPinUnlockFailed)
+    expect(state.continueInitializationAfterDeviceUnlock).not.toHaveBeenCalled()
+    expect(state.deviceProtectionStatus).not.toBe(
+      DeviceProtectionStatus.Unlocked,
+    )
   })
 })

@@ -731,7 +731,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
     await page.getByTestId('device-protection-use-existing-choice').click()
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      'missing its established signing seed',
+      "Could not safely reset this browser's device identity.",
     )
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   })
@@ -784,7 +784,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-pin-unlock-input').fill('000000')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      'did not decrypt',
+      'The PIN or passphrase did not unlock this browser. Check it and try again.',
     )
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()

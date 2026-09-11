@@ -595,7 +595,7 @@ export class DeviceProtectionActions {
         }
       });
       if (authorization.isErr()) {
-        state.errorMsg = state.t(authorization.error.translationKey);
+        state.errorMsg = state.t(I18N_KEYS.DeviceProtectionPinUnlockFailed);
         return;
       }
       deviceIdentityUnlocked = true;
