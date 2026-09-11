@@ -28,6 +28,9 @@ import {
   INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS,
   MODULE_EXPERT_CATALOG,
   MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  type ModuleExpertGeneratedMarker,
+  type ModuleExpertGeneratedScope,
+  type ModuleExpertProfile,
   WEB_EXPERT_AUTHORITY_PATHS,
   WEB_EXPERT_CANONICAL_CONTEXT_PATHS,
   WEB_EXPERT_PRODUCT_SPEC_PATHS,
@@ -35,11 +38,6 @@ import {
   WEB_EXPERT_ALLOWED_CONTEXT_PATHS,
   WEB_EXPERT_SKILL_AUTHORITY_PATHS,
   WEB_EXPERT_SKILL_PATHS,
-} from '../../src/module-experts/catalog.ts';
-import type {
-  ModuleExpertGeneratedMarker,
-  ModuleExpertGeneratedScope,
-  ModuleExpertProfile,
 } from '../../src/module-experts/catalog.ts';
 import { ModuleExpertSnapshotScope } from '../../src/module-experts/snapshot-scope-audit.ts';
 import type { AuditModuleExpertSnapshotScopesArgs } from '../../src/module-experts/snapshot-scope-audit.ts';
@@ -51,8 +49,8 @@ import {
   MODULE_EXPERT_CONTEXT_MCP,
   MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
   ModuleExpertIsolation,
+  type ModuleExpertCodexOptionsRequest,
 } from '../../src/module-experts/runtime-contract.ts';
-import type { ModuleExpertCodexOptionsRequest } from '../../src/module-experts/runtime-contract.ts';
 import {
   CargoWorkspaceInventoryKind,
   type CargoWorkspaceInventory,
@@ -64,7 +62,6 @@ import {
 export class ModuleExpertsAuditFixture {
   private constructor() {}
   static readonly REPO_ROOT = resolve(import.meta.dir, '../../../..');
-
   static readonly SAFE_CODEX_OPTIONS_REQUEST: ModuleExpertCodexOptionsRequest =
     {
       authenticationCommandArgs: [
@@ -80,14 +77,11 @@ export class ModuleExpertsAuditFixture {
         PATH: '/usr/bin',
       },
     };
-
   static readonly SAFE_CODEX_ENVIRONMENT = {
     CODEX_HOME: '/isolated/codex-home',
     PATH: '/usr/bin',
   } as const;
-
   static readonly SAFE_SHELL_ENVIRONMENT = { PATH: '/usr/bin' } as const;
-
   static readonly SAFE_CODEX_OPTIONS =
     ModuleExpertIsolation.buildModuleExpertCodexOptions(
       ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS_REQUEST,
