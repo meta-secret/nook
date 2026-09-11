@@ -300,4 +300,20 @@ describe('extension session document ownership', () => {
     expect(await fixture.owner.close()).toEqual(ok())
     expect(fixture.closeDocument).not.toHaveBeenCalled()
   })
+
+  test('does not admit a rejected single-offscreen creation', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.createDocument.mockImplementationOnce(() =>
+      Promise.reject(new Error('Only a single offscreen document is allowed')),
+    )
+
+    expect(await fixture.owner.open()).toEqual(
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.CreationFailed,
+        ),
+      ),
+    )
+    expect(fixture.closeDocument).not.toHaveBeenCalled()
+  })
 })

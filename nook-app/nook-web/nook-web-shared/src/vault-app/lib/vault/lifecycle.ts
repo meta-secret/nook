@@ -251,6 +251,13 @@ export class VaultInitializationActions {
       }
       const continued = await this.continueInitializationAfterDeviceUnlock();
       if (continued.isErr()) {
+        if (deviceIdentityUnlocked) {
+          const locked = await state.lockDeviceProtection();
+          if (locked.isErr()) {
+            state.errorMsg = state.t(locked.error.translationKey);
+            return;
+          }
+        }
         state.errorMsg = state.t(continued.error.translationKey);
         return;
       }

@@ -9,7 +9,10 @@ import {
   OpenCompanionLauncherNormalizationKind,
   NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema,
 } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
-import { isExtensionRuntimeSender, isNokeySender } from './routing-trust'
+import {
+  ExternalSenderTrustPolicy,
+  isExtensionRuntimeSender,
+} from './routing-trust'
 import type * as PairingState from '../../lib/pairing-state'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
@@ -139,7 +142,12 @@ async function clearAuthorizationState({
   const closeOperation = closeSession
     ? closeExtensionSessionDocument()
     : Promise.resolve(ok())
-  const startedCleanup = await cleanupOperation
+  let startedCleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
+  try {
+    startedCleanup = await cleanupOperation
+  } catch {
+    return err([AuthorizationCleanupFailureKind.Rejected])
+  }
   const { authorizationGeneration, markerStatus } = startedCleanup
   const failures: AuthorizationCleanupFailure[] = []
   if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable)
@@ -162,10 +170,18 @@ async function clearAuthorizationState({
     releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
     return err(failures)
   }
-  const outcome = await completeAccountPickerAuthorizationCleanup(
-    authorizationGeneration,
-    CleanupEvidence.Full,
-  )
+  let outcome: Awaited<
+    ReturnType<typeof completeAccountPickerAuthorizationCleanup>
+  >
+  try {
+    outcome = await completeAccountPickerAuthorizationCleanup(
+      authorizationGeneration,
+      CleanupEvidence.Full,
+    )
+  } catch {
+    releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+    return err([AuthorizationCleanupFailureKind.Rejected])
+  }
   return 'error' in outcome
     ? err([AuthorizationCleanupFailureKind.Rejected])
     : ok()
@@ -351,7 +367,7 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void isNokeySender(sender)
+    void ExternalSenderTrustPolicy.admits(sender)
       .then(async (trusted) => {
         if (!trusted) {
           sendResponse(forbiddenSenderResponse)

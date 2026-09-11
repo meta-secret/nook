@@ -191,7 +191,13 @@ class RunningSessionOperation<T> {
   async complete(): Promise<void> {
     if (this.state !== OperationStateKind.Running) return
     this.state = OperationStateKind.Settled
-    this.configuration.resolve(await this.configuration.request.operation())
+    try {
+      this.configuration.resolve(await this.configuration.request.operation())
+    } catch {
+      this.configuration.resolve(
+        err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
+      )
+    }
   }
 }
 

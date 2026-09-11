@@ -29,6 +29,15 @@ describe('google-oauth', () => {
     ).toBe(I18N_KEYS.ErrorsGoogleSignInRequired)
   })
 
+  it('keeps Google popup outcomes mapped to Google guidance', () => {
+    expect(
+      new OAuthFailure(OAuthFailureKind.GoogleCancelled).translationKey,
+    ).toBe(I18N_KEYS.ErrorsGoogleSignInRequired)
+    expect(
+      new OAuthFailure(OAuthFailureKind.GooglePopupBlocked).translationKey,
+    ).toBe(I18N_KEYS.ErrorsGoogleSignInRequired)
+  })
+
   it('keeps shared invalid configuration mapped to iCloud guidance', () => {
     expect(
       new OAuthFailure(OAuthFailureKind.InvalidConfiguration).translationKey,

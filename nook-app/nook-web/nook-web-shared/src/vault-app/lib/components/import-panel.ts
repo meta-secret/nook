@@ -60,7 +60,15 @@ export class TextVaultFileImport {
       };
     }
 
-    const result = await onImport(content);
+    let result: Awaited<ReturnType<typeof onImport>>;
+    try {
+      result = await onImport(content);
+    } catch {
+      return {
+        kind: ImportAttemptKind.Failed,
+        error: new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      };
+    }
     return result.isOk()
       ? { kind: ImportAttemptKind.Completed, result: result.value }
       : { kind: ImportAttemptKind.Failed, error: result.error };
@@ -81,7 +89,17 @@ export class BinaryVaultFileImport {
       };
     }
     try {
-      const result = await onImport(content);
+      let result: Awaited<ReturnType<typeof onImport>>;
+      try {
+        result = await onImport(content);
+      } catch {
+        return {
+          kind: ImportAttemptKind.Failed,
+          error: new VaultStorageFailure(
+            VaultStorageFailureKind.OperationFailed,
+          ),
+        };
+      }
       return result.isOk()
         ? { kind: ImportAttemptKind.Completed, result: result.value }
         : { kind: ImportAttemptKind.Failed, error: result.error };

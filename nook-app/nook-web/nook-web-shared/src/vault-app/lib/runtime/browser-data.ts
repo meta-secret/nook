@@ -70,6 +70,12 @@ export type LocalDataStorageOperation<T, E = never> = {
   readonly operation: () => Result<T, E> | Promise<Result<T, E>>;
 };
 
+export class BrowserDataCleanupFailure extends VaultStorageFailure {
+  constructor(readonly failures: readonly VaultStorageFailure[]) {
+    super(VaultStorageFailureKind.BrowserCleanupFailed);
+  }
+}
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 class BrowserDataLifecycle {
   constructor(private readonly browser: typeof globalThis) {}
@@ -266,7 +272,14 @@ class BrowserDataLifecycle {
           .createLogger("browser-data")
           .warn("Peer storage stop acknowledgement could not be sent");
       }
-      const outcome = await handler();
+      let outcome: Result<void, VaultStorageFailure>;
+      try {
+        outcome = await handler();
+      } catch {
+        outcome = err(
+          new VaultStorageFailure(VaultStorageFailureKind.PeerFailed),
+        );
+      }
       const readiness: LocalDataResetReadiness = outcome.isOk()
         ? { kind: LocalDataResetReadinessKind.Ready }
         : {
@@ -428,6 +441,10 @@ class BrowserDataLifecycle {
       outcome = await this.runWithExclusiveLocalDataStorageLock(async () => {
         const database = await clearNookDatabases();
         const browser = await this.clearBrowserManagedStorage();
+        if (database.isErr() && browser.isErr())
+          return err(
+            new BrowserDataCleanupFailure([database.error, browser.error]),
+          );
         return database.isErr() ? err(database.error) : browser;
       });
     }

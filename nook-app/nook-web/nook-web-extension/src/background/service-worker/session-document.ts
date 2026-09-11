@@ -158,14 +158,12 @@ export class ExtensionSessionDocumentOwner {
         justification:
           'Keep a user-authorized extension device identity in memory for a 15-minute session.',
       })
-    } catch (failure) {
-      // Chromium reports this condition when another worker already created the shared document.
-      if (!String(failure).includes('single offscreen'))
-        return err(
-          new ExtensionSessionTransportFailure(
-            ExtensionSessionTransportFailureKind.CreationFailed,
-          ),
-        )
+    } catch {
+      return err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.CreationFailed,
+        ),
+      )
     }
     return ok(new OpenExtensionSessionDocument())
   }

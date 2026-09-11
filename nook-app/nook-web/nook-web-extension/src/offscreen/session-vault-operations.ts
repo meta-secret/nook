@@ -139,7 +139,14 @@ export async function withActivatedExtensionIdentity<
     previousProtection === DeviceProtectionStatus.Unlocked
       ? previousDeviceId
       : persistedPreviousDeviceId
-  const outcome = await operation()
+  let outcome: Outcome | Err<never, SessionOperationFailure>
+  try {
+    outcome = await operation()
+  } catch {
+    outcome = err(
+      new SessionOperationFailure(SessionOperationFailureKind.Failed),
+    )
+  }
   if (
     outcome.isErr() &&
     previousSelection.length > 0 &&

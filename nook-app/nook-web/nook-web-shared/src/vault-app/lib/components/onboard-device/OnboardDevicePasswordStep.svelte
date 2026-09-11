@@ -1,5 +1,8 @@
 <script lang="ts">
-  type VaultPasswordCreation = { readonly label: string; readonly password: string }
+  type VaultPasswordCreation = {
+    readonly label: string
+    readonly password: string
+  }
 
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
@@ -62,7 +65,8 @@
         label: passwordLabelInput.trim(),
         password: newPasswordInput,
       }
-      await onAddPassword(addPasswordArgs)
+      const added = await onAddPassword(addPasswordArgs)
+      if (added.isErr()) return
       passwordLabelInput = ''
       newPasswordInput = ''
       newPasswordConfirm = ''
@@ -123,9 +127,15 @@
                     ? 'text-muted-foreground'
                     : 'text-muted-foreground/80'}"
                 >
-                  {(() => { const translationRequest: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultPasswordsAddedDate, replacements: {
-                    date: entry.createdAt.slice(0, 10),
-                  } }; return vault.t(translationRequest); })()}
+                  {(() => {
+                    const translationRequest: Parameters<typeof vault.t>[0] = {
+                      key: I18N_KEYS.VaultPasswordsAddedDate,
+                      replacements: {
+                        date: entry.createdAt.slice(0, 10),
+                      },
+                    }
+                    return vault.t(translationRequest)
+                  })()}
                 </span>
               {/if}
             </span>
@@ -147,7 +157,10 @@
       </p>
 
       <div class="space-y-1.5">
-        <label for="onboard-vault-pw-label" class="text-xs font-medium text-foreground">
+        <label
+          for="onboard-vault-pw-label"
+          class="text-xs font-medium text-foreground"
+        >
           {vault.t(I18N_KEYS.VaultPasswordsLabel)}
         </label>
         <input
@@ -161,7 +174,10 @@
       </div>
 
       <div class="space-y-1.5">
-        <label for="onboard-vault-pw" class="text-xs font-medium text-foreground">
+        <label
+          for="onboard-vault-pw"
+          class="text-xs font-medium text-foreground"
+        >
           {vault.t(I18N_KEYS.VaultFieldsPassword)}
         </label>
         <input
@@ -175,7 +191,10 @@
       </div>
 
       <div class="space-y-1.5">
-        <label for="onboard-vault-pw-confirm" class="text-xs font-medium text-foreground">
+        <label
+          for="onboard-vault-pw-confirm"
+          class="text-xs font-medium text-foreground"
+        >
           {vault.t(I18N_KEYS.VaultPasswordsConfirmPassword)}
         </label>
         <input

@@ -193,6 +193,28 @@ describe('LastPass import panel', () => {
       )
     })
   })
+
+  test('renders a typed failure when text import rejects', async () => {
+    const onImport = vi.fn(async () => {
+      throw new Error('adapter rejected')
+    })
+    const view = render(LastPassImportPanel, {
+      vault,
+      isSaving: false,
+      onImport,
+    })
+    const input = view.getByTestId('lastpass-csv-file') as HTMLInputElement
+    await fireEvent.change(input, {
+      target: { files: [new File(['invalid'], 'lastpass.csv')] },
+    })
+    await fireEvent.click(view.getByTestId('lastpass-import-submit'))
+
+    await waitFor(() => {
+      expect(view.getByTestId('lastpass-import-error').textContent).toContain(
+        I18N_KEYS.AuthStorageSyncFailed,
+      )
+    })
+  })
 })
 
 describe('Safari / Apple Passwords import panel', () => {

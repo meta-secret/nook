@@ -113,6 +113,25 @@ describe('SessionOperationQueue results', () => {
       }),
     ).toEqual(ok('next'))
   })
+  test('settles a rejected operation and continues draining', async () => {
+    const queue = new SessionOperationQueue()
+    expect(
+      await queue.enqueue({
+        operation: async () => {
+          throw new Error('adapter rejected')
+        },
+        options: DEFAULT_SESSION_OPERATION_OPTIONS,
+      }),
+    ).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
+    )
+    expect(
+      await queue.enqueue({
+        operation: async () => ok('next'),
+        options: DEFAULT_SESSION_OPERATION_OPTIONS,
+      }),
+    ).toEqual(ok('next'))
+  })
   test('closing clears queued input and rejects subsequent enqueue', async () => {
     const fixture = new QueueFixture()
     const queued = fixture.enqueue(Date.now() + 60000)

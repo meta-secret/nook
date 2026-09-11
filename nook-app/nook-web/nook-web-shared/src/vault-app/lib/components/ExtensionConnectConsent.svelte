@@ -75,7 +75,13 @@
         vault.errorMsg = error
         return
       }
-      const delivery = await approval.deliver(prepared.value)
+      let delivery: Awaited<ReturnType<typeof approval.deliver>>
+      try {
+        delivery = await approval.deliver(prepared.value)
+      } catch {
+        handoffError = vault.t(I18N_KEYS.ExtensionConnectIdentityHandoffFailed)
+        return
+      }
       if (delivery.isErr()) {
         handoffError = vault.t(delivery.error.translationKey)
         return

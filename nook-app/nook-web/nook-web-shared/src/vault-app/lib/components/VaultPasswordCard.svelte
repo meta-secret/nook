@@ -262,7 +262,16 @@
       entryId: activeEntryId.entryId,
       password: passwordInput,
     }
-    const issued = await onIssueCode(issueRequest)
+    let issued: Awaited<ReturnType<typeof onIssueCode>>
+    try {
+      issued = await onIssueCode(issueRequest)
+    } catch (failure) {
+      localError =
+        failure instanceof Error
+          ? failure.message
+          : vault.t(I18N_KEYS.VaultPasswordsFailedIssueError)
+      return
+    }
     if (issued.isErr()) {
       localError = vault.t(issued.error.translationKey)
       return

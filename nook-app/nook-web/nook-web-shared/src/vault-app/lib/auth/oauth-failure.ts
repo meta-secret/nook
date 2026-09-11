@@ -11,6 +11,8 @@ export enum OAuthFailureKind {
   GoogleResponse = "google-response",
   GoogleAccountLookup = "google-account-lookup",
   GoogleInvalidConfiguration = "google-invalid-configuration",
+  GoogleCancelled = "google-cancelled",
+  GooglePopupBlocked = "google-popup-blocked",
   RequestInProgress = "request-in-progress",
   CloudKitScript = "cloudkit-script",
   CloudKitUnavailable = "cloudkit-unavailable",
@@ -51,6 +53,8 @@ export class OAuthFailure {
       case OAuthFailureKind.GoogleResponse:
       case OAuthFailureKind.GoogleAccountLookup:
       case OAuthFailureKind.GoogleInvalidConfiguration:
+      case OAuthFailureKind.GoogleCancelled:
+      case OAuthFailureKind.GooglePopupBlocked:
       case OAuthFailureKind.RequestInProgress:
         return I18N_KEYS.ErrorsGoogleSignInRequired;
       case OAuthFailureKind.GoogleSharedSignInRequired:

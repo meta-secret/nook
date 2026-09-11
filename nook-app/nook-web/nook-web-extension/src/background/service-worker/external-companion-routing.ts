@@ -1,4 +1,4 @@
-import { isNokeySender } from './routing-trust'
+import { ExternalSenderTrustPolicy } from './routing-trust'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   OpenCompanionLauncherNormalizationKind,
@@ -82,7 +82,7 @@ export async function routeExternalCompanionMessage({
   if (
     launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
   ) {
-    if (!(await isNokeySender(sender))) {
+    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -93,7 +93,7 @@ export async function routeExternalCompanionMessage({
   }
 
   if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
-    if (!(await isNokeySender(sender))) {
+    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -102,7 +102,7 @@ export async function routeExternalCompanionMessage({
   }
 
   if (isExtensionPairedVaultUnlockRequestMessage(message)) {
-    if (!(await isNokeySender(sender))) {
+    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -121,7 +121,7 @@ export async function routeExternalCompanionMessage({
   }
 
   if (isExtensionIdentityHandoffRequestMessage(message)) {
-    if (!(await isNokeySender(sender))) {
+    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -130,7 +130,7 @@ export async function routeExternalCompanionMessage({
   }
 
   if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
-    if (!(await isNokeySender(sender))) {
+    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -138,7 +138,10 @@ export async function routeExternalCompanionMessage({
     return true
   }
 
-  if (!hasPairingApprovedType(message) || !(await isNokeySender(sender))) {
+  if (
+    !hasPairingApprovedType(message) ||
+    !(await ExternalSenderTrustPolicy.admits(sender))
+  ) {
     sendResponse(invalidPairingGrantResponse)
     return false
   }

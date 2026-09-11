@@ -240,9 +240,9 @@ class GoogleOAuthSession {
           err(
             new OAuthFailure(
               failure.type === "popup_closed"
-                ? OAuthFailureKind.Cancelled
+                ? OAuthFailureKind.GoogleCancelled
                 : failure.type === "popup_failed_to_open"
-                  ? OAuthFailureKind.PopupBlocked
+                  ? OAuthFailureKind.GooglePopupBlocked
                   : OAuthFailureKind.GoogleRequest,
             ),
           ),
@@ -279,7 +279,7 @@ class GoogleOAuthSession {
       return err(
         new OAuthFailure(
           response.error === "access_denied"
-            ? OAuthFailureKind.Cancelled
+            ? OAuthFailureKind.GoogleCancelled
             : OAuthFailureKind.GoogleRequest,
         ),
       );

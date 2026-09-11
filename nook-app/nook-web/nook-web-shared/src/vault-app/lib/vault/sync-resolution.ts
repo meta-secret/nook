@@ -398,179 +398,188 @@ export class SyncConflictActions {
       kind: ProviderVaultImportOutcomeKind.NotImported,
     };
     try {
-      let importedStoreId: string;
-      if (conflict.remoteYaml.trim()) {
-        importedStoreId = await import_named_local_vault_blob(
-          conflict.remoteYaml,
-          conflict.providerLabel,
-        );
-      } else {
-        if (!state.hasManager) {
-          state.errorMsg = state.t(I18N_KEYS.ErrorsManagerUninitialized);
-          return;
-        }
-        const provider = state.providers.find(
-          (p) => p.id === conflict.providerId,
-        );
-        if (provider && provider.type === "local-folder") {
-          const configuration = new StorageProviderPresentation(
-            provider,
-          ).localFolderProviderConfiguration();
-          if (
-            configuration.kind === LocalFolderProviderConfigurationKind.Missing
-          ) {
-            state.errorMsg = state.t(I18N_KEYS.AuthStorageLocalFolderChooseErr);
-            return;
-          }
-          const handle = new LocalFolderPresentation(
-            configuration.config,
-          ).localFolderHandle();
-          if (handle.kind === LocalFolderHandleKind.Unselected) {
-            state.errorMsg = state.t(I18N_KEYS.AuthStorageLocalFolderChooseErr);
-            return;
-          }
-          const imported = await state.enqueueStorage(async () => {
-            const admittedManager = state.admitManager();
-            if (admittedManager.isErr())
-              return storageErr(admittedManager.error);
-            try {
-              return storageOk(
-                await admittedManager.value.import_local_folder_event_log_as_local_vault(
-                  handle.handleId,
-                ),
-              );
-            } catch (nativeFailure) {
-              return storageErr(new NativeVaultStorageFailure(nativeFailure));
-            }
-          });
-          if (imported.isErr()) {
-            state.errorMsg = state.t(imported.error.translationKey);
-            return;
-          }
-          importedStoreId = imported.value;
+      try {
+        let importedStoreId: string;
+        if (conflict.remoteYaml.trim()) {
+          importedStoreId = await import_named_local_vault_blob(
+            conflict.remoteYaml,
+            conflict.providerLabel,
+          );
         } else {
-          const imported = await state.enqueueStorage(async () => {
-            const admittedManager = state.admitManager();
-            if (admittedManager.isErr())
-              return storageErr(admittedManager.error);
-            try {
-              return storageOk(
-                await admittedManager.value.import_provider_event_log_as_local_vault(
-                  conflict.mode,
-                  conflict.pat,
-                  conflict.repo,
-                ),
-              );
-            } catch (nativeFailure) {
-              return storageErr(new NativeVaultStorageFailure(nativeFailure));
-            }
-          });
-          if (imported.isErr()) {
-            state.errorMsg = state.t(imported.error.translationKey);
+          if (!state.hasManager) {
+            state.errorMsg = state.t(I18N_KEYS.ErrorsManagerUninitialized);
             return;
           }
-          importedStoreId = imported.value;
+          const provider = state.providers.find(
+            (p) => p.id === conflict.providerId,
+          );
+          if (provider && provider.type === "local-folder") {
+            const configuration = new StorageProviderPresentation(
+              provider,
+            ).localFolderProviderConfiguration();
+            if (
+              configuration.kind ===
+              LocalFolderProviderConfigurationKind.Missing
+            ) {
+              state.errorMsg = state.t(
+                I18N_KEYS.AuthStorageLocalFolderChooseErr,
+              );
+              return;
+            }
+            const handle = new LocalFolderPresentation(
+              configuration.config,
+            ).localFolderHandle();
+            if (handle.kind === LocalFolderHandleKind.Unselected) {
+              state.errorMsg = state.t(
+                I18N_KEYS.AuthStorageLocalFolderChooseErr,
+              );
+              return;
+            }
+            const imported = await state.enqueueStorage(async () => {
+              const admittedManager = state.admitManager();
+              if (admittedManager.isErr())
+                return storageErr(admittedManager.error);
+              try {
+                return storageOk(
+                  await admittedManager.value.import_local_folder_event_log_as_local_vault(
+                    handle.handleId,
+                  ),
+                );
+              } catch (nativeFailure) {
+                return storageErr(new NativeVaultStorageFailure(nativeFailure));
+              }
+            });
+            if (imported.isErr()) {
+              state.errorMsg = state.t(imported.error.translationKey);
+              return;
+            }
+            importedStoreId = imported.value;
+          } else {
+            const imported = await state.enqueueStorage(async () => {
+              const admittedManager = state.admitManager();
+              if (admittedManager.isErr())
+                return storageErr(admittedManager.error);
+              try {
+                return storageOk(
+                  await admittedManager.value.import_provider_event_log_as_local_vault(
+                    conflict.mode,
+                    conflict.pat,
+                    conflict.repo,
+                  ),
+                );
+              } catch (nativeFailure) {
+                return storageErr(new NativeVaultStorageFailure(nativeFailure));
+              }
+            });
+            if (imported.isErr()) {
+              state.errorMsg = state.t(imported.error.translationKey);
+              return;
+            }
+            importedStoreId = imported.value;
+          }
         }
-      }
-      await set_active_vault(importedStoreId);
-      state.openActiveVault(importedStoreId);
-      state.localVaultPresent = true;
-      const catalogRefresh1 = await state.refreshLocalVaultCatalog();
-      if (catalogRefresh1.isErr()) {
-        state.errorMsg = state.t(catalogRefresh1.error.translationKey);
-        return;
-      }
-      const saved = await state.ensureProviderSavedAfterConflict(conflict);
-      if (saved.isErr()) {
-        state.errorMsg = state.t(saved.error.translationKey);
-        return;
-      }
-      const providerId = saved.value;
-      providerSave = { kind: ConflictProviderSaveKind.Saved, providerId };
-      if (conflict.remoteYaml.trim()) {
-        const remoteRevision = conflict.remoteRevision;
-        const metadataRequest: Parameters<
-          typeof state.updateProviderSyncMetadata
-        >[0] = {
-          providerId,
-          yaml: conflict.remoteYaml,
-          revision: remoteRevision,
-        };
-        const metadata =
-          await state.updateProviderSyncMetadata(metadataRequest);
-        if (metadata.isErr()) {
-          state.errorMsg = state.t(metadata.error.translationKey);
+        await set_active_vault(importedStoreId);
+        state.openActiveVault(importedStoreId);
+        state.localVaultPresent = true;
+        const catalogRefresh1 = await state.refreshLocalVaultCatalog();
+        if (catalogRefresh1.isErr()) {
+          state.errorMsg = state.t(catalogRefresh1.error.translationKey);
           return;
         }
-      } else {
-        state.providers = state.providers.map((provider) =>
-          provider.id === providerId
-            ? {
-                ...provider,
-                storeId: scopedProviderVault(importedStoreId),
-              }
-            : provider,
-        );
-        const persistenceOptions: Parameters<typeof state.persistProviders>[0] =
-          {
+        const saved = await state.ensureProviderSavedAfterConflict(conflict);
+        if (saved.isErr()) {
+          state.errorMsg = state.t(saved.error.translationKey);
+          return;
+        }
+        const providerId = saved.value;
+        providerSave = { kind: ConflictProviderSaveKind.Saved, providerId };
+        if (conflict.remoteYaml.trim()) {
+          const remoteRevision = conflict.remoteRevision;
+          const metadataRequest: Parameters<
+            typeof state.updateProviderSyncMetadata
+          >[0] = {
+            providerId,
+            yaml: conflict.remoteYaml,
+            revision: remoteRevision,
+          };
+          const metadata =
+            await state.updateProviderSyncMetadata(metadataRequest);
+          if (metadata.isErr()) {
+            state.errorMsg = state.t(metadata.error.translationKey);
+            return;
+          }
+        } else {
+          state.providers = state.providers.map((provider) =>
+            provider.id === providerId
+              ? {
+                  ...provider,
+                  storeId: scopedProviderVault(importedStoreId),
+                }
+              : provider,
+          );
+          const persistenceOptions: Parameters<
+            typeof state.persistProviders
+          >[0] = {
             replace: false,
           };
-        const persistence = await state.persistProviders(persistenceOptions);
-        if (persistence.isErr()) {
-          state.errorMsg = state.t(persistence.error.translationKey);
+          const persistence = await state.persistProviders(persistenceOptions);
+          if (persistence.isErr()) {
+            state.errorMsg = state.t(persistence.error.translationKey);
+            return;
+          }
+        }
+        const activeVaultPersistence =
+          await state.syncActiveVaultStoreIdToAuth();
+        if (activeVaultPersistence.isErr()) {
+          state.errorMsg = state.t(activeVaultPersistence.error.translationKey);
           return;
         }
-      }
-      const activeVaultPersistence = await state.syncActiveVaultStoreIdToAuth();
-      if (activeVaultPersistence.isErr()) {
-        state.errorMsg = state.t(activeVaultPersistence.error.translationKey);
-        return;
-      }
-      if (
-        identitySelection.kind === ProviderVaultIdentitySelectionKind.Selected
-      ) {
-        state.selectLoginVault(importedStoreId);
-      } else if (state.localVaults.length > 1) {
-        // Without an identity choice, preserve the existing multi-vault picker.
-        state.clearSelectedLoginVaultStore();
-      } else {
-        state.selectLoginVault(importedStoreId);
-      }
-      state.finishStagedProviderConnectAfterConflict(conflict);
-      state.clearPendingSyncConflict();
-      set_vault_session_locked(true);
-      state.clearUnlockedSession();
-      const passwordRefresh2 = await state.refreshPasswordEntriesList();
-      if (passwordRefresh2.isErr()) {
-        state.errorMsg = state.t(passwordRefresh2.error.translationKey);
-        return;
-      }
-      if (state.localVaults.length <= 1) {
-        const presentation = await new LoginUnlockPresentation(state).refresh();
-        if (presentation.isErr()) {
-          state.errorMsg = state.t(presentation.error.translationKey);
+        if (
+          identitySelection.kind === ProviderVaultIdentitySelectionKind.Selected
+        ) {
+          state.selectLoginVault(importedStoreId);
+        } else if (state.localVaults.length > 1) {
+          // Without an identity choice, preserve the existing multi-vault picker.
+          state.clearSelectedLoginVaultStore();
+        } else {
+          state.selectLoginVault(importedStoreId);
+        }
+        state.finishStagedProviderConnectAfterConflict(conflict);
+        state.clearPendingSyncConflict();
+        set_vault_session_locked(true);
+        state.clearUnlockedSession();
+        const passwordRefresh2 = await state.refreshPasswordEntriesList();
+        if (passwordRefresh2.isErr()) {
+          state.errorMsg = state.t(passwordRefresh2.error.translationKey);
           return;
         }
+        if (state.localVaults.length <= 1) {
+          const presentation = await new LoginUnlockPresentation(
+            state,
+          ).refresh();
+          if (presentation.isErr()) {
+            state.errorMsg = state.t(presentation.error.translationKey);
+            return;
+          }
+        }
+        const tArgs: Parameters<typeof state.t>[0] = {
+          key: I18N_KEYS.AuthStorageSyncConflictImportedVault,
+          replacements: {
+            provider: providerLabel,
+          },
+        };
+        state.showSuccess(state.t(tArgs));
+        importOutcome = {
+          kind: ProviderVaultImportOutcomeKind.Imported,
+          storeId: importedStoreId,
+        };
+      } catch (error) {
+        state.errorMsg =
+          error instanceof Error
+            ? error.message
+            : state.t(I18N_KEYS.AuthStorageSyncFailed);
+        providerSave = { kind: ConflictProviderSaveKind.NotSaved };
       }
-      const tArgs: Parameters<typeof state.t>[0] = {
-        key: I18N_KEYS.AuthStorageSyncConflictImportedVault,
-        replacements: {
-          provider: providerLabel,
-        },
-      };
-      state.showSuccess(state.t(tArgs));
-      importOutcome = {
-        kind: ProviderVaultImportOutcomeKind.Imported,
-        storeId: importedStoreId,
-      };
-    } catch (error) {
-      state.errorMsg =
-        error instanceof Error
-          ? error.message
-          : state.t(I18N_KEYS.AuthStorageSyncFailed);
-      providerSave = { kind: ConflictProviderSaveKind.NotSaved };
-    }
-    try {
       if (
         providerSave.kind === ConflictProviderSaveKind.Saved &&
         importOutcome.kind === ProviderVaultImportOutcomeKind.NotImported
