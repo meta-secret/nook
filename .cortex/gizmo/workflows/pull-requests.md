@@ -610,8 +610,9 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
   waits.
 - Never create a Codex scheduled task, automation, heartbeat, reminder, or
   recurring follow-up to continue PR monitoring later.
-- The agent may plan its polling cadence and next delivery action. Keep that
-  plan inside the active task; do not persist it as Codex scheduling state.
+- Use reactive Steward hints with host-bounded waits. Do not poll GitHub
+  routinely or persist a wait plan as Codex scheduling state.
+  Steward's five-minute merged-or-closed check is the narrow exception.
 - "Merge when ready" is a terminal delivery instruction. Test the PR, authorize
   PR Steward to monitor its exact-head checks and substantive review state, and
   authorize a squash merge as soon as Gizmo's readiness verdict succeeds.
@@ -853,29 +854,11 @@ Completed Main attempts independently commit one automated `stats/main-build/<ru
 
 ### 10. Task completion report
 
-- Every turn that finishes a user-assigned task ends with a short completion
-  report that includes duration.
-- **When:** after merged delivery, delivered answer, or explicit handoff.
-  - Do not wait for post-merge Main unless live verification was requested.
-  - For a multi-step monitor/fix/merge cycle, report once at the end.
-- **Measurement:** wall-clock time from first implementation or investigation
-  through the final message.
-  - Include CI wait time that the agent monitored.
-
-**Format** — add a `## Duration` line (or equivalent) in the final reply:
-
-```markdown
-## Duration
-
-12m 34s (started 2026-06-28T20:15:00Z, finished 2026-06-28T20:27:34Z)
-```
-
-Rules:
-
-- Use a human-readable duration (`Xm Ys`, or `Xh Ym` when over an hour).
-- Include UTC ISO timestamps for start and finish when you can infer them; otherwise duration alone is acceptable.
-- If the task was blocked waiting on the user, exclude idle wait time and note `active time: …` vs `elapsed: …`.
-- For question-only turns with no implementation, a duration line is optional.
+- Report the outcome once after delivery or an explicit handoff.
+- Include unresolved issues and essential evidence references.
+- Keep resolved-finding inventories, timing, and statistics in delivery records.
+- Do not repeat the task history or add a duration section unless requested.
+- Do not wait for post-merge Main unless live verification was requested.
 
 **Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [Docker container harness](../../teams/sre/dynamic-skills/docker-container-harness.md).
 
@@ -911,7 +894,7 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
 15. Authorize PR Steward to squash-merge after Gizmo's exact-head readiness
     verdict succeeds.
 16. Publish the Workbench completion records.
-17. Report task duration.
+17. Report the outcome with essential evidence references.
 
 ## CLI reference
 

@@ -304,19 +304,13 @@ those threads' resolution state as the deterministic handled state.
 
 ## Validation
 
-PR Steward uses GraphQL or `gh pr view`/`gh api` to return the complete
-submitted-review, thread, and PR-comment evidence to Gizmo. Gizmo confirms that
-every substantive review thread has a final accepted or rejected defect
-disposition. It confirms zero clarification-needed findings. It confirms zero
-unresolved handled findings. The inspection identifies remaining substantive
-items. Gizmo records their defect dispositions and any proposed-remedy
-dispositions.
+PR Steward collects complete submitted-review, thread, and PR-comment evidence.
+Return new or changed findings with evidence references. Gizmo confirms that
+every substantive finding has a final defect disposition. Clarification-needed
+or unresolved handled findings remain blockers.
 
-Gizmo reports:
-
-- complete repository-owned validation state;
-- the unresolved-thread query result and disposition summary; and
-- any unthreaded substantive review-body item and its disposition in the
-  handoff.
+Keep complete validation results and finding dispositions in delivery records.
+The terminal handoff names only unresolved items, the outcome, and essential
+evidence references. A concise handoff never replaces the final direct query.
 
 This workflow does not request reviewers or wait for checks to change state.

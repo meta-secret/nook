@@ -14,14 +14,11 @@ the active harness.
   for policy and authorization.
 - Every task names its outcome, allowed files, forbidden files, and acceptance
   evidence.
-- Before any Team Agent starts, Gizmo lists every task and dependency currently
-  known in native harness dispatch order.
-- The user-visible hierarchy comes only from the validated
+- Internally establish every known task and dependency before dispatch.
+- Validate scope, ownership, and dispatch order without printing the plan.
+- Use the optional
   [delegation visualization](../../teams/ai/dynamic-skills/delegation-visualization/SKILL.md)
-  `delegationVisualization.render` result.
-- The visualization request is ephemeral presentation input.
-- It is not admission, scheduling, persistence, or agent-lifecycle state.
-- Gizmo never composes, edits, or infers the returned plan document.
+  only when requested or needed to explain a consequential dependency change.
 - Give the Team Agent only its team entry point and task-relevant Cortex.
 - Use the active harness for Team Agent communication.
 - Do not use another Codex task, thread, cloud task, or external agent as
@@ -46,21 +43,14 @@ the active harness.
 2. Discover every Team Agent task and dependency currently known.
 3. Define each bounded task with explicit file scope and acceptance evidence.
 4. Check that no other write-capable Team Agent is active.
-5. Build one `delegationVisualization.render` request for that known work.
-   - Give every task one identifier, team, description, and dependency list.
-   - Keep tasks in native harness dispatch order.
-   - Name only earlier tasks as dependencies.
-6. Invoke the static renderer through `task skills:run`.
-7. Emit one normal `Gizmo Prime:STATE` activity update for the plan
-   visualization.
-8. Publish the returned `document` as the compact user-visible plan immediately
-   below that activity update.
-9. Start the Team Agent through the active harness in the current checkout.
-10. Let the Team Agent implement and run focused checks.
-11. Ask for a commit when a commit is useful for the delivery sequence.
-12. Verify that the result stays inside the declared scope.
-13. Continue from the resulting shared-branch state.
-14. Route any correction to the team that owns the affected change.
+5. Start the Team Agent through the active harness in the current checkout.
+6. Let the Team Agent implement and run focused checks.
+7. Request one terminal handoff with changed outcomes, evidence references,
+   and unresolved blockers.
+8. Ask for a commit when useful for delivery.
+9. Verify that the result stays inside the declared scope.
+10. Continue from the resulting shared-branch state.
+11. Route corrections to the team that owns the affected change.
 
 ## Dependencies
 
@@ -75,15 +65,14 @@ delivery sequence.
 
 ### Later discovery
 
-A genuinely later dependency was not part of the initial known work. Gizmo
-must not backfill that dependency into the initial visualization or claim it
-was known earlier. Before its Team Agent starts, Gizmo renders a new request
-for the newly known work through the same presentation gate.
+Record a newly discovered dependency internally before dispatch. Report it only
+when it changes the expected outcome or requires a decision. Render a new plan
+only when a visualization is warranted. Never claim it was known earlier.
 
 ## Failure handling
 
-- If request validation or visualization publication fails, report the blocker.
-  Do not dispatch a Team Agent.
+- If task scope or dependency validation fails, stop dispatch.
+  Report the blocker.
 - If a required Team Agent cannot start, report the blocker.
 - If a Team Agent produces out-of-scope changes, reject those changes and route
   a corrected task.

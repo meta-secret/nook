@@ -6,10 +6,6 @@ import {
   readFileSync,
 } from 'node:fs';
 
-import { homedir } from 'node:os';
-
-import { isAbsolute, join } from 'node:path';
-
 import { type Msg, type MsgCallback, wsconnect } from '@nats-io/nats-core';
 
 import {
@@ -39,7 +35,12 @@ import type {
   PrStewardUrl,
 } from './pr-steward-contract.ts';
 
-import type { PrStewardAssignedPrReader } from './pr-steward-github.ts';
+import type { PrStewardAssignedPrReader, PrStewardAssignedPullRequest } from './pr-steward-github.ts';
+
+import { PrStewardCompletion } from './pr-steward-completion.ts';
+import { PrStewardOutput } from './pr-steward-output.ts';
+import { PrStewardDeliveries } from './pr-steward-deliveries.ts';
+import { PrStewardInvocationCodec } from './pr-steward-invocation.ts';
 
 export class WebhookProperty {
   private constructor(
@@ -750,38 +751,6 @@ export class PrStewardWebhookDecoder {
   }
 }
 
-export type PrStewardInvocation = {
-  readonly pullRequest: PrStewardPullRequest;
-  readonly credentialPath: string;
-};
-
-export class PrStewardInvocationCodec {
-  static parse(argv: readonly string[]): PrStewardInvocation {
-    if (
-      (argv.length !== 2 && argv.length !== 4) ||
-      argv[0] !== '--pr' ||
-      (argv.length === 4 && argv[2] !== '--config')
-    ) {
-      throw new Error('expected --pr N [--config /absolute/path]');
-    }
-    const prText = argv[1]!;
-    if (!/^[1-9][0-9]*$/.test(prText))
-      throw new Error('pull request must be a positive integer');
-    let pullRequest: PrStewardPullRequest;
-    try {
-      pullRequest = PrStewardNdjsonCodec.pullRequest(Number(prText));
-    } catch {
-      throw new Error('pull request must be a positive integer');
-    }
-    const path =
-      argv.length === 4
-        ? argv[3]!
-        : join(homedir(), '.nook/events/pr-steward-client.yaml');
-    if (!isAbsolute(path)) throw new Error('credential path must be absolute');
-    return { pullRequest, credentialPath: path };
-  }
-}
-
 type PrStewardObservationRequest = {
   readonly messages: AsyncIterable<{ readonly data: Uint8Array }>;
   readonly pullRequest: PrStewardPullRequest;
@@ -798,9 +767,15 @@ export class PrStewardEventObserver {
   }
 
   async observe(request: PrStewardObservationRequest): Promise<void> {
+    const deliveries = new PrStewardDeliveries();
+    const output = new PrStewardOutput();
     for await (const message of request.messages) {
+      if (deliveries.contains(message)) continue;
       const record = await this.#observeMessage({ request, message });
-      if (record !== false) request.write(PrStewardNdjsonCodec.encode(record));
+      if (record === false || !output.shouldEmit({ record })) continue;
+      request.write(PrStewardNdjsonCodec.encode(record));
+      if (record.kind === PrStewardRecordKind.Routing)
+        deliveries.remember(message);
     }
   }
 
@@ -954,18 +929,33 @@ export class PrStewardEventCli {
       );
     });
     let stopping = false;
+    let draining: Promise<void> | false = false;
+    const terminal: { result: PrStewardAssignedPullRequest | false } = { result: false };
+    const reader = PrStewardGithubPrReader.create();
     const stop = (): void => {
       if (stopping) return;
       stopping = true;
-      void connection.drain().catch(() => {
+      completion.stop();
+      draining = connection.drain().catch(() => {
         process.exitCode = 1;
       });
     };
+    const completion = new PrStewardCompletion({
+      reader,
+      target: { repository: PR_STEWARD_REPOSITORY, pullRequest: invocation.pullRequest },
+      finished: (result) => {
+        terminal.result = result;
+        stop();
+      },
+      failed: (error) => {
+        messages.terminate({ kind: PrStewardSubscriptionKind.Failed, error });
+      },
+    });
     process.once('SIGINT', stop);
     process.once('SIGTERM', stop);
     try {
       await new PrStewardEventObserver({
-        reader: PrStewardGithubPrReader.create(),
+        reader,
       }).observe({
         messages,
         pullRequest: invocation.pullRequest,
@@ -980,7 +970,13 @@ export class PrStewardEventCli {
         });
       const closeError = await connection.closed();
       if (closeError) throw new Error('NATS connection closed unexpectedly');
+      if (draining !== false) await draining;
+      if (terminal.result !== false && process.exitCode !== 1)
+        process.stderr.write(
+          `PR Steward finished: ${terminal.result.state} ${terminal.result.url.value} head=${terminal.result.headSha}\n`,
+        );
     } finally {
+      completion.stop();
       if (!stopping) await connection.close();
       process.removeListener('SIGINT', stop);
       process.removeListener('SIGTERM', stop);

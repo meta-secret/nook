@@ -45,8 +45,9 @@ verdict authority.
   packet satisfies the [lifecycle authority](workflows/pull-request-lifecycle.md).
 - Return bounded evidence or a blocker to Gizmo Prime.
 - Keep all waits inside the active task.
-- Stop the reactive subscription when Gizmo directs or the task receives a
-  termination signal.
+- Keep the subscription active with the authorized five-minute terminal check.
+- Stop when the PR is observed merged or closed, Gizmo directs, or a
+  termination signal arrives. Complete the child after successful drain.
 
 ## Prohibited actions
 
@@ -72,4 +73,4 @@ verdict authority.
 Gizmo evaluates technical findings and decides the next operation.
 Gizmo owns readiness and merge verdicts.
 PR Steward reports the observed remote result.
-The parent owns completion and Workbench closeout.
+A merged or closed PR completes the observation child after its terminal handoff.\nThe parent still owns mission completion and Workbench closeout.

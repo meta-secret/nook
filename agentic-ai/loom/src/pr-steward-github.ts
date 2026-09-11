@@ -15,7 +15,14 @@ import type {
   PrStewardUrl,
 } from './pr-steward-contract.ts';
 
+export enum PrStewardPullRequestState {
+  Open = 'open',
+  Closed = 'closed',
+  Merged = 'merged',
+}
+
 export type PrStewardAssignedPullRequest = {
+  readonly state: PrStewardPullRequestState;
   readonly headSha: PrStewardHeadSha;
   readonly url: PrStewardUrl;
 };
@@ -172,6 +179,24 @@ export class PrStewardGithubPrReader implements PrStewardAssignedPrReader {
       url.value !== expected
     )
       throw new PrStewardGithubUnavailableError({ cause: false });
-    return { headSha: PrStewardNdjsonCodec.headSha(sha.value), url };
+    const state = UntrustedYamlBoundary.property({ record: parsed, key: 'state' });
+    const merged = UntrustedYamlBoundary.property({ record: parsed, key: 'merged' });
+    if (
+      state.presence !== UntrustedYamlPropertyPresence.Present ||
+      merged.presence !== UntrustedYamlPropertyPresence.Present ||
+      (state.value !== 'open' && state.value !== 'closed') ||
+      typeof merged.value !== 'boolean' ||
+      (state.value === 'open' && merged.value)
+    )
+      throw new PrStewardGithubUnavailableError({ cause: false });
+    return {
+      headSha: PrStewardNdjsonCodec.headSha(sha.value),
+      url,
+      state: merged.value
+        ? PrStewardPullRequestState.Merged
+        : state.value === 'closed'
+          ? PrStewardPullRequestState.Closed
+          : PrStewardPullRequestState.Open,
+    };
   }
 }

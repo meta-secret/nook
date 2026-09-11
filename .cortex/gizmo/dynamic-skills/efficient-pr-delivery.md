@@ -73,8 +73,9 @@ Delivery rules:
 - Keep PR Steward monitoring in the active task with bounded direct waits. Never create
   a Codex scheduled task, automation, heartbeat, reminder, or recurring
   follow-up to finish delivery later.
-- Planning a bounded polling cadence is allowed as active-task execution
-  behavior. Persisting that plan as Codex scheduling state is prohibited.
+- Use reactive Steward hints with host-bounded waits. Do not poll GitHub
+  routinely or persist a wait plan as Codex scheduling state.
+  Steward's five-minute merged-or-closed check is the narrow exception.
 - Treat "merge when ready" as an instruction to test the PR, monitor its
   exact-head evidence, and merge in the same delivery task after readiness.
 - Do not monitor the resulting Main workflow unless the user explicitly
@@ -135,7 +136,7 @@ Does not apply to:
 - [ ] If promotion changes the head, repeat hosted validation.
 - [ ] Run `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` on the exact head.
 - [ ] Authorize PR Steward to squash-merge immediately when Gizmo's readiness
-      verdict succeeds, then report duration.
+      verdict succeeds, then report the outcome concisely.
 - [ ] Keep monitoring in the active task; do not schedule a Codex follow-up.
 - [ ] Stop at the PR merge unless Main work was explicitly assigned.
 - [ ] Publish Workbench issue, worklog, and agent statistics.

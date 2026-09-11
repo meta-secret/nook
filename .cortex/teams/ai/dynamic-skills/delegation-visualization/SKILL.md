@@ -7,7 +7,8 @@ description: Render Gizmo's ephemeral native Team Agent plan without acquiring l
 
 ## Purpose
 
-Render the complete Team Agent plan known before native harness dispatch.
+Optionally render the known Team Agent plan when requested or needed to explain
+a consequential dependency change. Rendering is not a dispatch gate.
 
 The output is a typed plan document. The trusted executable-skill host
 serializes its response as compact user-visible YAML. It is not execution
@@ -53,7 +54,7 @@ rendered output.
 
 ## Later discovery
 
-A later dependency requires a new complete request for the then-known work.
+When another visualization is warranted, supply the complete then-known work.
 Never rewrite an earlier visualization as though the dependency was known.
 
 ## Validation

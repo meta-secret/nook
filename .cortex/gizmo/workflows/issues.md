@@ -323,13 +323,9 @@ external blocker moves it to `blocked`.
 
 ## Required handoff
 
-The final response or PR comment must link:
-
-- the Workbench feature and focused issue file;
-- the task-start plan;
-- the new worklog;
-- the Nook implementation PR;
-- what was completed versus what remains.
+Link one canonical completion record from the final handoff. That record links
+the feature, focused issue, task-start plan, worklog, and implementation PR.
+State what remains only when work is incomplete.
 
 Re-open the published files before handoff and verify the links and state are
 visible on Workbench `main`.

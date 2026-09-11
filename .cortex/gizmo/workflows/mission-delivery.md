@@ -136,3 +136,11 @@ Delivery is complete only when:
 - every pull request is squash-merged;
 - every remote merge is verified; and
 - Workbench completion records are published for every slice.
+
+## Reactive observation completion
+
+- PR Steward subscribes to GitHub event hints during the active mission.
+- Its process checks the assigned PR every five minutes for merged or closed.
+- Open observations remain silent. Terminal observations drain the subscriber.
+- The child returns one terminal handoff after successful exit.
+- Gizmo retains final direct reconciliation and the mission completion verdict.
