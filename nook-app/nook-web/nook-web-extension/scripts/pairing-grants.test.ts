@@ -53,19 +53,23 @@ describe('extension pairing grant transport', () => {
       Promise.reject(new Error('runtime unavailable')),
     )
 
-    await expect(ingress.admit({})).resolves.toEqual({
-      kind: 'rejected',
-      reason: PairingIngressFailure.RuntimeUnavailable,
-    })
+    const admission = await ingress.admit({})
+    expect('reason' in admission).toBe(true)
+    if ('reason' in admission) {
+      expect(admission.reason).toBe(PairingIngressFailure.RuntimeUnavailable)
+    }
   })
 
   test('rejects malformed grants after companion runtime startup', async () => {
     const ingress = new ExtensionPairingIngress(Promise.resolve())
 
-    await expect(ingress.admit({})).resolves.toEqual({
-      kind: 'rejected',
-      reason: ExtensionPairingApprovedMessageAdmissionFailure.MessageEnvelope,
-    })
+    const admission = await ingress.admit({})
+    expect('reason' in admission).toBe(true)
+    if ('reason' in admission) {
+      expect(admission.reason).toBe(
+        ExtensionPairingApprovedMessageAdmissionFailure.MessageEnvelope,
+      )
+    }
   })
 
   test.each(['created', 'failed'] as const)(
@@ -82,6 +86,7 @@ describe('extension pairing grant transport', () => {
         ensureSession: async () => {
           events.push('ensure')
           if (receiver === 'failed') throw new Error('receiver unavailable')
+          return ok()
         },
         importEventLog: async () => {
           events.push('import')
@@ -96,6 +101,9 @@ describe('extension pairing grant transport', () => {
           events.push('persist')
         },
         sendSession: async (message) => {
+          if (!message || typeof message !== 'object' || !('type' in message)) {
+            throw new Error('expected a typed session request')
+          }
           if (
             message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
           ) {
@@ -221,6 +229,9 @@ describe('extension pairing grant transport', () => {
       )
       const sendSession = mock(
         async (message: Parameters<ImportDependencies['sendSession']>[0]) => {
+          if (!message || typeof message !== 'object' || !('type' in message)) {
+            throw new Error('expected a typed session request')
+          }
           expect(message.type).toBe(
             ExtensionSessionMessageType.ClassifyGrantAuthority,
           )
@@ -236,6 +247,9 @@ describe('extension pairing grant transport', () => {
             )
           }
           if (scenario === 'malformed-response') return ok({})
+          if (!('payload' in message)) {
+            throw new Error('expected a session request payload')
+          }
           expect(message.payload).toEqual({
             stored_json: JSON.stringify(await loadPairingStorage()),
             vault_store_id: 'unpaired-vault',
@@ -252,7 +266,7 @@ describe('extension pairing grant transport', () => {
         },
       )
       const response = await importLocalEventLogUpdateWithDependencies({
-        ensureSession: async () => {},
+        ensureSession: async () => ok(),
         persistPairingStorage: unusedOperation,
         vaultStoreId: 'unpaired-vault',
         eventLogRecords: [],
