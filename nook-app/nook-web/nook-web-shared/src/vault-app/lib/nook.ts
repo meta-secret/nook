@@ -62,9 +62,12 @@ export type AuthenticatorCodeView = {
   expiresAtUnixSeconds: number;
 };
 
-export type VaultStorageSynchronizationRequest = NookStorageConnectArgs & {
+export interface VaultStorageSynchronizationRequest {
   readonly manager: NookVaultManager;
-};
+  readonly mode: NookStorageConnectArgs["mode"];
+  readonly pat: NookStorageConnectArgs["pat"];
+  readonly repo: NookStorageConnectArgs["repo"];
+}
 
 export function isoTimestamp(): string {
   return new Date().toISOString();
@@ -102,9 +105,7 @@ export class VaultManagerRuntime {
 
 /** Narrow the generated wasm transport result at its API boundary. */
 export class VaultStorageSynchronization {
-  constructor(
-    private readonly request: VaultStorageSynchronizationRequest,
-  ) {}
+  constructor(private readonly request: VaultStorageSynchronizationRequest) {}
 
   async run(): Promise<Result<NookVaultSyncResult, VaultStorageFailure>> {
     const { manager, mode, pat, repo } = this.request;

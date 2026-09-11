@@ -8,33 +8,51 @@ import { PasswordFormFieldQuery } from "./password-form-summary-state";
 
 type ApprovedAdvanceControl = LoginAdvanceControl | false;
 
+export enum ApprovedPasswordFormKind {
+  Unavailable = "unavailable",
+  Available = "available",
+}
+
+export type ApprovedPasswordForm =
+  | { readonly kind: ApprovedPasswordFormKind.Unavailable }
+  | {
+      readonly kind: ApprovedPasswordFormKind.Available;
+      readonly form: HTMLFormElement;
+    };
+
 export interface CredentialDisclosureRevalidationRequest {
   readonly passwordField: HTMLInputElement;
-  readonly approvedPasswordForm: HTMLFormElement | null;
+  readonly approvedPasswordForm: ApprovedPasswordForm;
   readonly request: LoginCredentialsFillRequest;
-  readonly selectedSubmitter: (
-    form: HTMLFormElement,
-  ) => ApprovedAdvanceControl;
+  readonly selectedSubmitter: (form: HTMLFormElement) => ApprovedAdvanceControl;
 }
 
 export class CredentialDisclosureRevalidation {
-  constructor(private readonly request: CredentialDisclosureRevalidationRequest) {}
+  constructor(
+    private readonly request: CredentialDisclosureRevalidationRequest,
+  ) {}
 
   blocks(): boolean {
     const { passwordField, approvedPasswordForm, request } = this.request;
+    const remainsInApprovedForm =
+      approvedPasswordForm.kind === ApprovedPasswordFormKind.Available
+        ? passwordField.form === approvedPasswordForm.form
+        : !passwordField.form;
     const fieldRemainsEligible =
       !passwordField.readOnly &&
-      passwordField.form === approvedPasswordForm &&
+      remainsInApprovedForm &&
       passwordFieldDiscovery
         .findPasswordFields(new PasswordFormFieldQuery(request).query)
         .includes(passwordField);
     if (!fieldRemainsEligible) return true;
-    if (!approvedPasswordForm) return false;
+    if (approvedPasswordForm.kind === ApprovedPasswordFormKind.Unavailable)
+      return false;
+    const approvedForm = approvedPasswordForm.form;
     const disclosureRequest: Parameters<
       typeof authenticationSubmissionControls.selectedSubmitterBlocksCredentialDisclosure
     >[0] = {
-      form: approvedPasswordForm,
-      selectedSubmitter: this.request.selectedSubmitter(approvedPasswordForm),
+      form: approvedForm,
+      selectedSubmitter: this.request.selectedSubmitter(approvedForm),
     };
     return authenticationSubmissionControls.selectedSubmitterBlocksCredentialDisclosure(
       disclosureRequest,

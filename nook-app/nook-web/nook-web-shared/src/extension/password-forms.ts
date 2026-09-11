@@ -60,7 +60,11 @@ import {
   emptyPasswordFormSummary,
   PasswordFormFieldQuery,
 } from "./password-form-summary-state";
-import { CredentialDisclosureRevalidation } from "./credential-disclosure-revalidation";
+import {
+  ApprovedPasswordFormKind,
+  CredentialDisclosureRevalidation,
+  type ApprovedPasswordForm,
+} from "./credential-disclosure-revalidation";
 
 export {
   oneTimeCodeFieldSelectors,
@@ -776,7 +780,10 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       return true;
     }
     const passwordField = passwordFields[0];
-    const approvedPasswordForm = passwordField.form;
+    const passwordForm = passwordField.form;
+    const approvedPasswordForm: ApprovedPasswordForm = passwordForm
+      ? { kind: ApprovedPasswordFormKind.Available, form: passwordForm }
+      : { kind: ApprovedPasswordFormKind.Unavailable };
     const disclosureRevalidation = new CredentialDisclosureRevalidation({
       passwordField,
       approvedPasswordForm,
