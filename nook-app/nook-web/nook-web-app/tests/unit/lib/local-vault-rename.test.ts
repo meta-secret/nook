@@ -44,7 +44,12 @@ vi.mock('$lib/vault/login-unlock-capabilities', () => ({
 }))
 
 vi.mock('$lib/auth/providers', () => ({
-  saveAuthProviders: vi.fn(),
+  activeVaultScope: vi.fn(),
+  AuthProviderPersistence: class {
+    async save() {
+      return ok()
+    }
+  },
 }))
 import { VaultLoginActions } from '$lib/vault/local-login'
 import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
