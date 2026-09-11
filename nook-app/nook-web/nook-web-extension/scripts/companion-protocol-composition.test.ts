@@ -34,8 +34,10 @@ import {
   NookCompanionPairingCandidateFailure,
   type NookCompanionPairingCandidateOutcome,
   NookCompanionPairingCandidateOutcomeState,
+  type NookDiscoveredCompanionExtensionEndpoint,
   NookCompanionPairingExtensionEndpoint,
   NookExternalEventLogRecords,
+  type NookPendingCompanionIdentityHandoff,
   NookPreparedCompanionPairingActivation,
   NookStoredCompanionPairingActivationCandidate,
   NookVaultManager,
@@ -305,6 +307,46 @@ function beginHandoff(requestId: string) {
   return { authorization, endpoint, request, website, pending }
 }
 
+type ConsumedWasmCapability =
+  NookDiscoveredCompanionExtensionEndpoint | NookPendingCompanionIdentityHandoff
+
+class CompanionProtocolExpectation {
+  static async rejectionWithin(
+    operation: Promise<unknown>,
+    timeoutMs = 1_000,
+  ): Promise<{ failure: Error }> {
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        operation.then(
+          () => {
+            throw new Error('expected operation to reject')
+          },
+          (error: Error) => ({ failure: error }),
+        ),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () =>
+              reject(
+                new Error(`operation did not settle within ${timeoutMs}ms`),
+              ),
+            timeoutMs,
+          )
+        }),
+      ])
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout)
+    }
+  }
+
+  static expectConsumed(capability: ConsumedWasmCapability): void {
+    // A wasm-bindgen method that consumes `self` clears the wrapper pointer
+    // before its Rust promise settles. Re-entering that wrapper is invalid;
+    // inspect the ownership transition without invoking it again.
+    expect(Reflect.get(capability, '__wbg_ptr')).toBe(0)
+  }
+}
+
 beforeAll(async () => {
   Object.assign(globalThis, compositionIndexedDBRuntime)
   const nookWasmBytes = await Bun.file(
@@ -506,50 +548,41 @@ describe('generated companion protocol composition', () => {
     ).toEqual({ kind: 'rejected', failure: 'discovery-expired' })
   })
 
-  test('consumes mismatched and replayed authorization', async () => {
+  test('consumes mismatched authorization within a bounded time', async () => {
     const first = beginHandoff('request-replay')
     const mismatched = structuredClone(first.authorization)
     if (mismatched.request.transaction.status.status !== 'unlocked') {
       throw new Error('expected unlocked transaction')
     }
     mismatched.request.transaction.status.app_key.appKey.appId = 'app-mismatch'
-    await expect(
-      first.endpoint.authorize_and_seal(extension, mismatched),
-    ).rejects.toThrow()
-    expect(() =>
-      first.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(first.authorization),
-      ),
-    ).toThrow()
+    const { failure: mismatchFailure } =
+      await CompanionProtocolExpectation.rejectionWithin(
+        first.endpoint.authorize_and_seal(extension, mismatched),
+      )
+    expect(mismatchFailure.message).toContain(
+      'does not match the active request',
+    )
+    CompanionProtocolExpectation.expectConsumed(first.endpoint)
   })
 
   test('consumes stale authorization and concurrent discovery', async () => {
     const stale = beginHandoff('request-stale')
     stale.authorization.observedAt = 200
-    await expect(
-      stale.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(stale.authorization),
-      ),
-    ).rejects.toThrow()
-    expect(() =>
-      stale.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(stale.authorization),
-      ),
-    ).toThrow()
+    const { failure: staleFailure } =
+      await CompanionProtocolExpectation.rejectionWithin(
+        stale.endpoint.authorize_and_seal(
+          extension,
+          structuredClone(stale.authorization),
+        ),
+      )
+    expect(staleFailure.message.length).toBeGreaterThan(0)
+    CompanionProtocolExpectation.expectConsumed(stale.endpoint)
 
     const concurrent = beginHandoff('request-concurrent')
     expect(() =>
       concurrent.endpoint.rediscover(discovery('request-other')),
     ).toThrow()
-    expect(() =>
-      concurrent.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(concurrent.authorization),
-      ),
-    ).toThrow()
+    CompanionProtocolExpectation.expectConsumed(concurrent.endpoint)
   })
 
   test('rejects replay and a forged response at retained website state', async () => {
@@ -559,22 +592,17 @@ describe('generated companion protocol composition', () => {
       extension,
       structuredClone(first.authorization),
     )
-    expect(() =>
-      first.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(first.authorization),
-      ),
-    ).toThrow()
+    CompanionProtocolExpectation.expectConsumed(first.endpoint)
 
     const forged = structuredClone(
       response,
     ) satisfies CompanionIdentityHandoffResponse
     forged.request.transaction.discovery.request.requestId = 'request-forged'
-    await expect(first.pending.finish(first.website, forged)).rejects.toThrow(
-      'does not match the active request',
-    )
-    expect(() =>
-      first.pending.finish(first.website, structuredClone(response)),
-    ).toThrow()
+    const { failure: forgedFailure } =
+      await CompanionProtocolExpectation.rejectionWithin(
+        first.pending.finish(first.website, forged),
+      )
+    expect(forgedFailure.message).toContain('does not match the active request')
+    CompanionProtocolExpectation.expectConsumed(first.pending)
   })
 })
