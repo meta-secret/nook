@@ -1,25 +1,38 @@
 {
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
-    "strict": true,
-    "useUnknownInCatchVariables": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "types": ["svelte", "vite/client", "node", "bun", "chrome"]
+    "types": [
+      "svelte",
+      "vite/client",
+      "node",
+      "bun",
+      "chrome"
+    ]
   },
   "include": [
-    "src/main.ts",
     "scripts/**/*.ts",
     "e2e/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.svelte",
     "playwright*.ts",
     "../nook-web-shared/src/**/*.ts",
-    "../nook-web-shared/src/**/*.svelte"
+    "../nook-web-shared/src/**/*.svelte",
+    "**/*.ts",
+    "**/*.svelte",
+    "**/*.js",
+    "**/*.mjs",
+    "**/*.cjs",
+    "../*.js",
+    "../*.mjs",
+    "../*.cjs"
   ],
   "exclude": [
     "src/lib",
     "../nook-web-shared/src/vault-app/lib/nook-wasm",
-    "../nook-web-shared/src/vault-app/lib/nook-wasm-*"
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-*",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-prod/**",
+    "../nook-web-shared/src/extension/nook-companion-wasm"
   ]
 }

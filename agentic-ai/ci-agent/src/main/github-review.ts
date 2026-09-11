@@ -226,7 +226,7 @@ export class GitHubReviewClient {
       owner,
       prNumber,
       repo,
-      signal,
+      ...(signal === undefined ? {} : { signal }),
     }).load();
     if (snapshotResult.isErr()) return err(snapshotResult.error);
     const snapshot = snapshotResult.value;
@@ -313,7 +313,7 @@ export class GitHubReviewClient {
       owner,
       prNumber,
       repo,
-      signal,
+      ...(signal === undefined ? {} : { signal }),
     }).run();
     if (probedResult.isErr()) return err(probedResult.error);
     const probed = probedResult.value;

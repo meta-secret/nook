@@ -9,7 +9,9 @@
     "dev": "bun run prepare:toolchain && vite",
     "build": "bun run prepare:toolchain && vite build",
     "preview": "bun run prepare:toolchain && vite preview",
-    "check": "bun run prepare:toolchain && svelte-check --tsconfig ./tsconfig.json"
+    "check": "bun run prepare:toolchain && bun run lint && bun run typecheck",
+    "lint": "cd .. && node_modules/.bin/eslint --config eslint.config.js nook-vault-simple",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@lucide/svelte": "1.30.0",

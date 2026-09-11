@@ -1,19 +1,18 @@
 {
-  "extends": "@tsconfig/svelte/tsconfig.json",
+  "extends": [
+    "@tsconfig/svelte/tsconfig.json",
+    "../tsconfig.safety.json"
+  ],
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "es2023",
     "module": "esnext",
-    "types": ["svelte", "vite/client", "node", "chrome"],
-    "noEmit": true,
-    /**
-     * Typecheck JS in `.svelte` and `.js` files by default.
-     * Disable checkJs if you'd like to use dynamic types in JS.
-     * Note that setting allowJs false does not prevent the use
-     * of JS in `.svelte` files.
-     */
-    "allowJs": true,
-    "checkJs": false,
+    "types": [
+      "svelte",
+      "vite/client",
+      "node",
+      "chrome"
+    ],
     "moduleDetection": "force",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -22,24 +21,47 @@
       "nook-wasm": [
         "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js"
       ],
-      "$lib": ["../nook-web-shared/src/vault-app/lib"],
-      "$lib/*": ["../nook-web-shared/src/vault-app/lib/*"],
-      "$vault-shared": ["../nook-web-shared/src/vault-app"],
-      "$vault-shared/*": ["../nook-web-shared/src/vault-app/*"],
-      "$web-shared/*": ["../nook-web-shared/src/*"],
-      "$app-wasm": ["../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm"]
+      "$lib": [
+        "../nook-web-shared/src/vault-app/lib"
+      ],
+      "$lib/*": [
+        "../nook-web-shared/src/vault-app/lib/*"
+      ],
+      "$vault-shared": [
+        "../nook-web-shared/src/vault-app"
+      ],
+      "$vault-shared/*": [
+        "../nook-web-shared/src/vault-app/*"
+      ],
+      "$web-shared/*": [
+        "../nook-web-shared/src/*"
+      ],
+      "$app-wasm": [
+        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm"
+      ]
     }
   },
   "include": [
-    "src/main.ts",
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "src/**/*.js",
+    "src/**/*.mjs",
+    "src/**/*.cjs",
     "../nook-web-shared/src/**/*.ts",
     "../nook-web-shared/src/**/*.svelte",
+    "../nook-web-shared/src/**/*.js",
+    "../nook-web-shared/src/**/*.mjs",
+    "../nook-web-shared/src/**/*.cjs",
     "tests/**/*.ts",
     "tests/**/*.svelte"
   ],
   "exclude": [
     "src/lib",
     "../nook-web-shared/src/vault-app/lib/nook-wasm",
-    "../nook-web-shared/src/vault-app/lib/nook-wasm-*"
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-*",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-prod/**",
+    "../nook-web-shared/src/extension/nook-companion-wasm"
   ]
 }

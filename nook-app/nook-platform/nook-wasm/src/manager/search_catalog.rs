@@ -318,7 +318,7 @@ mod tests {
         let keys = nook_core::VaultKeys::generate()?;
         let store_id = nook_core::StoreId::generate()?;
         manager.vault.store_id = store_id.to_string();
-        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
         manager.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);
         NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
             store_id: store_id.as_str(),

@@ -6,12 +6,14 @@
   "packageManager": "bun@1.3.14",
   "scripts": {
     "build": "bun run contracts && vite build",
-    "check": "bun run contracts && svelte-check --tsconfig ./tsconfig.json",
+    "check": "bun run contracts && { failed=0; bun run lint || failed=1; bun run typecheck || failed=1; exit \"$failed\"; }",
     "dev": "bun run contracts && vite --host 127.0.0.1",
     "format": "prettier --write \"src/**/*.{ts,svelte,css}\" \"e2e/**/*.ts\" \"scripts/**/*.ts\" \"locales/**/*.json\" \"*.{ts,js,json,md,html}\" .prettierrc",
     "format:check": "prettier --check \"src/**/*.{ts,svelte,css}\" \"e2e/**/*.ts\" \"scripts/**/*.ts\" \"locales/**/*.json\" \"*.{ts,js,json,md,html}\" .prettierrc",
     "test:e2e": "playwright test",
-    "contracts": "bun scripts/generate-observer-contract.ts"
+    "contracts": "bun scripts/generate-observer-contract.ts",
+    "lint": "eslint .",
+    "typecheck": "failed=0; svelte-check --tsconfig ./tsconfig.json || failed=1; tsc -p tsconfig.json || failed=1; exit \"$failed\""
   },
   "dependencies": {
     "@lucide/svelte": "1.30.0",
@@ -28,6 +30,12 @@
     "svelte-check": "4.7.5",
     "typescript": "6.0.3",
     "vite": "8.2.1",
-    "ajv": "8.20.0"
+    "ajv": "8.20.0",
+    "@eslint/js": "10.0.1",
+    "@types/bun": "1.3.14",
+    "eslint": "10.8.1",
+    "eslint-plugin-svelte": "3.22.0",
+    "globals": "17.9.0",
+    "typescript-eslint": "8.66.0"
   }
 }

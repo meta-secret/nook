@@ -18,8 +18,15 @@ const AUTH_DIGEST_LEN: usize = 64;
 
 /// Compact random token suffix (`generate_id` — 11 chars, base64url).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String")]
 pub struct CompactToken(String);
+
+impl TryFrom<String> for CompactToken {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
+    }
+}
 
 impl CompactToken {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
@@ -68,8 +75,15 @@ impl AsRef<str> for CompactToken {
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
 )]
 #[tsify(type = "string")]
-#[serde(transparent)]
+#[serde(try_from = "String")]
 pub struct AppId(String);
+
+impl TryFrom<String> for AppId {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
+    }
+}
 
 /// Migration alias for [`AppId`].
 #[tsify::declare]
@@ -122,8 +136,15 @@ impl AsRef<str> for AppId {
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
 )]
 #[tsify(type = "string")]
-#[serde(transparent)]
+#[serde(try_from = "String")]
 pub struct StoreId(String);
+
+impl TryFrom<String> for StoreId {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
+    }
+}
 
 impl StoreId {
     #[must_use]
@@ -184,8 +205,20 @@ impl AsRef<str> for StoreId {
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
 )]
 #[tsify(type = "string")]
-#[serde(transparent)]
+#[serde(try_from = "String")]
 pub struct SecretId(String);
+
+impl TryFrom<String> for SecretId {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        // Persisted row labels also include auth/join/member and historical user
+        // labels. Public secret-ID input still uses the stricter `parse` API.
+        if value.trim().is_empty() {
+            return Err(ValidationError::SecretIdRequired);
+        }
+        Ok(Self(value))
+    }
+}
 
 impl SecretId {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
@@ -251,8 +284,15 @@ impl AsRef<str> for SecretId {
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
 )]
 #[tsify(type = "string")]
-#[serde(transparent)]
+#[serde(try_from = "String")]
 pub struct AuthKeyId(String);
+
+impl TryFrom<String> for AuthKeyId {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
+    }
+}
 
 impl AuthKeyId {
     pub fn parse(raw: &str) -> ValidationResult<Self> {

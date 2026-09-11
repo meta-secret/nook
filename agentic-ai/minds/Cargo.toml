@@ -12,10 +12,18 @@ license = "MIT"
 description = "Minds: AI Agent Team Orchestration and Task Management"
 repository = "https://github.com/meta-secret/nook"
 
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
 [workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
 absolute_paths = "deny"
 expect_used = "deny"
 unwrap_used = "deny"
+let_underscore_must_use = "deny"
+indexing_slicing = "deny"
+string_slice = "deny"
 
 [patch.crates-io]
 arrayref = { path = "vendor/arrayref" }

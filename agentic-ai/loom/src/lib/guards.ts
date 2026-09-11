@@ -1,8 +1,8 @@
 /** The host syntax edge; values leave it only through a concrete decoder. */
 export class UntrustedYamlBoundary {
-  private constructor(private readonly value: UntrustedYamlNode) {}
-  static fromJson(value: UntrustedYamlNode): UntrustedYamlNode {
-    if (Object.prototype.toString.call(value) === '[object Null]') return value;
+  private constructor() {}
+  static fromJson(value: unknown): UntrustedYamlNode {
+    if (typeof value === 'object' && !value) return value;
     if (
       typeof value === 'string' ||
       typeof value === 'number' ||
@@ -10,12 +10,11 @@ export class UntrustedYamlBoundary {
     )
       return value;
     if (Array.isArray(value))
-      return value.map((item: UntrustedYamlNode) =>
-        UntrustedYamlBoundary.fromJson(item),
-      );
+      return value.map((item: unknown) => UntrustedYamlBoundary.fromJson(item));
     if (typeof value === 'object' && value instanceof Object) {
       const result: UntrustedYamlMapBuilder = {};
-      for (const [key, item] of Object.entries(value)) {
+      const entries: [string, unknown][] = Object.entries(value);
+      for (const [key, item] of entries) {
         // Match JSON omission for optional fields in already-typed values.
         const omitted = Symbol('omitted');
         const { admittedItem = omitted } = { admittedItem: item };
@@ -41,8 +40,8 @@ export class UntrustedYamlBoundary {
   static isNonEmptyString(value: UntrustedYamlNode): value is string {
     return typeof value === 'string' && value.length > 0;
   }
-  static fromHost(value: UntrustedYamlNode): UntrustedYamlNode {
-    return new UntrustedYamlBoundary(value).value;
+  static fromHost(value: unknown): UntrustedYamlNode {
+    return UntrustedYamlBoundary.fromJson(value);
   }
   static seal(builder: UntrustedYamlMapBuilder): UntrustedYamlMap {
     return builder;

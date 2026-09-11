@@ -1,28 +1,58 @@
 {
-  "extends": "@tsconfig/svelte/tsconfig.json",
+  "extends": [
+    "@tsconfig/svelte/tsconfig.json",
+    "../tsconfig.safety.json"
+  ],
   "compilerOptions": {
     "target": "es2023",
     "module": "esnext",
-    "types": ["svelte", "vite/client", "node"],
-    "noEmit": true,
-    "allowJs": true,
+    "types": [
+      "svelte",
+      "vite/client",
+      "node"
+    ],
     "moduleDetection": "force",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "resolveJsonModule": true,
     "paths": {
-      "$lib": ["../nook-web-shared/src/vault-app/lib"],
-      "$lib/*": ["../nook-web-shared/src/vault-app/lib/*"],
-      "$vault-shared": ["../nook-web-shared/src/vault-app"],
-      "$vault-shared/*": ["../nook-web-shared/src/vault-app/*"],
-      "$web-shared/*": ["../nook-web-shared/src/*"],
-      "$app-wasm": ["../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm"]
+      "$lib": [
+        "../nook-web-shared/src/vault-app/lib"
+      ],
+      "$lib/*": [
+        "../nook-web-shared/src/vault-app/lib/*"
+      ],
+      "$vault-shared": [
+        "../nook-web-shared/src/vault-app"
+      ],
+      "$vault-shared/*": [
+        "../nook-web-shared/src/vault-app/*"
+      ],
+      "$web-shared/*": [
+        "../nook-web-shared/src/*"
+      ],
+      "$app-wasm": [
+        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm"
+      ]
     }
   },
   "include": [
     "src/**/*.ts",
     "../nook-web-shared/src/**/*.ts",
-    "../nook-web-shared/src/**/*.svelte"
+    "../nook-web-shared/src/**/*.svelte",
+    "**/*.ts",
+    "**/*.svelte",
+    "**/*.js",
+    "**/*.mjs",
+    "**/*.cjs"
   ],
-  "exclude": ["../nook-web-shared/src/vault-app/lib/nook-wasm*"]
+  "exclude": [
+    "../nook-web-shared/src/vault-app/lib/nook-wasm*",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-prod/**",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-*",
+    "../nook-web-shared/src/extension/nook-companion-wasm"
+  ]
 }

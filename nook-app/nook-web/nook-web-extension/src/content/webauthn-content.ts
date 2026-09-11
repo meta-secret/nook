@@ -33,6 +33,7 @@ const prompts = new Map<string, HTMLElement>()
 
 enum PageRequestType {
   Request = 'request',
+  Cancel = 'cancel',
 }
 
 type PageRequest = {
@@ -307,47 +308,75 @@ async function handleRequest(request: PageRequest): Promise<void> {
   }
 }
 
-window.addEventListener('message', (event: MessageEvent<unknown>) => {
-  if (
-    event.source !== window ||
-    event.origin !== location.origin ||
-    !event.data ||
-    typeof event.data !== 'object'
-  )
-    return
-  const message = event.data as Record<string, unknown>
-  if (
-    message.source !== REQUEST_SOURCE ||
-    typeof message.requestId !== 'string'
-  )
-    return
-  if (message.type === 'cancel') {
-    removePrompt(message.requestId)
-    const nookTypedArgs0_6: WebsitePasskeyCancelMessage = {
-      type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel,
-      payload: { requestId: message.requestId },
-    } satisfies WebsitePasskeyCancelMessage
-    void new WebAuthnRuntimeTransport(nookTypedArgs0_6).send().catch(() => {})
-    return
+/** Admits the page message envelope before Rust validates its serialized payload. */
+class WebAuthnPageIngress {
+  private static isRequestBody(
+    value: unknown,
+  ): value is PageRequest['request'] {
+    return (
+      !!value &&
+      typeof value === 'object' &&
+      JSON.stringify(value).length <= 65_536
+    )
   }
-  if (
-    message.type !== PageRequestType.Request ||
-    (message.ceremony !== WebsitePasskeyCeremony.Create &&
-      message.ceremony !== WebsitePasskeyCeremony.Get) ||
-    typeof message.expiresAt !== 'number' ||
-    !Number.isFinite(message.expiresAt) ||
-    message.expiresAt <= Date.now() ||
-    !message.request ||
-    typeof message.request !== 'object' ||
-    JSON.stringify(message.request).length > 65_536
-  )
-    return
-  void handleRequest(message as unknown as PageRequest).catch(() => {
-    removePrompt(message.requestId as string)
-    const nookTypedArgs0_7: Parameters<typeof respond>[0] = {
-      requestId: message.requestId as string,
-      action: PageResponseAction.Fallback,
+
+  static receive(event: MessageEvent<unknown>): void {
+    if (
+      event.source !== window ||
+      event.origin !== location.origin ||
+      !event.data ||
+      typeof event.data !== 'object'
+    )
+      return
+    const message = event.data
+    if (
+      !('source' in message) ||
+      message.source !== REQUEST_SOURCE ||
+      !('requestId' in message) ||
+      typeof message.requestId !== 'string' ||
+      !('type' in message)
+    )
+      return
+    const requestId = message.requestId
+    if (message.type === PageRequestType.Cancel) {
+      removePrompt(requestId)
+      const cancelMessage: WebsitePasskeyCancelMessage = {
+        type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel,
+        payload: { requestId },
+      }
+      void new WebAuthnRuntimeTransport(cancelMessage).send().catch(() => {})
+      return
     }
-    respond(nookTypedArgs0_7)
-  })
-})
+    if (
+      message.type !== PageRequestType.Request ||
+      !('ceremony' in message) ||
+      (message.ceremony !== WebsitePasskeyCeremony.Create &&
+        message.ceremony !== WebsitePasskeyCeremony.Get) ||
+      !('expiresAt' in message) ||
+      typeof message.expiresAt !== 'number' ||
+      !Number.isFinite(message.expiresAt) ||
+      message.expiresAt <= Date.now() ||
+      !('request' in message) ||
+      !WebAuthnPageIngress.isRequestBody(message.request)
+    )
+      return
+    const request: PageRequest = {
+      source: REQUEST_SOURCE,
+      type: PageRequestType.Request,
+      requestId,
+      ceremony: message.ceremony,
+      request: message.request,
+      expiresAt: message.expiresAt,
+    }
+    void handleRequest(request).catch(() => {
+      removePrompt(requestId)
+      const response: Parameters<typeof respond>[0] = {
+        requestId,
+        action: PageResponseAction.Fallback,
+      }
+      respond(response)
+    })
+  }
+}
+
+window.addEventListener('message', WebAuthnPageIngress.receive)

@@ -7,7 +7,6 @@ use crate::MemberLabelState;
 use crate::RecordTypeDeclaration;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppId, AuthKeyId, DeviceId};
-use age::secrecy::ExposeSecret;
 use age::x25519::Identity;
 use std::collections::HashMap;
 
@@ -358,7 +357,7 @@ impl AppKey {
 
     #[must_use]
     pub fn secret_string(&self) -> DeviceIdentitySecret {
-        DeviceIdentitySecret::from_trusted(self.identity.to_string().expose_secret().to_owned())
+        DeviceIdentitySecret::from_identity(&self.identity)
     }
 
     #[must_use]
