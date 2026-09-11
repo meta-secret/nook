@@ -221,8 +221,7 @@ export type PrStewardSubscriptionAdmission = {
   readonly unsubscribe: () => void;
 };
 export type PrStewardSubscriptionOutcome =
-  | PrStewardSubscriptionTermination
-  | PrStewardSubscriptionOverload;
+  PrStewardSubscriptionTermination | PrStewardSubscriptionOverload;
 type PrStewardSubscriptionOverloadRequest = { readonly pending: number };
 export class PrStewardSubscriptionOverloadError extends Error {
   readonly pending: number;
@@ -234,9 +233,7 @@ export class PrStewardSubscriptionOverloadError extends Error {
     this.pending = request.pending;
   }
 }
-export class PrStewardBoundedMessageStream
-  implements AsyncIterable<PrStewardMessage>
-{
+export class PrStewardBoundedMessageStream implements AsyncIterable<PrStewardMessage> {
   // Admission remains owned until the consumer resumes after processing it.
   #admitted = 0;
   readonly #messages: PrStewardMessage[] = [];
@@ -802,8 +799,7 @@ export class PrStewardEventObserver {
   async observe(request: PrStewardObservationRequest): Promise<void> {
     for await (const message of request.messages) {
       const record = await this.#observeMessage({ request, message });
-      if (record !== false)
-        request.write(PrStewardNdjsonCodec.encode(record));
+      if (record !== false) request.write(PrStewardNdjsonCodec.encode(record));
     }
   }
 
