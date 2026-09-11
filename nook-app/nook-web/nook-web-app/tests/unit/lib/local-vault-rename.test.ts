@@ -35,6 +35,14 @@ vi.mock('$lib/runtime/log', () => ({
   },
 }))
 
+vi.mock('$lib/vault/login-unlock-capabilities', () => ({
+  LoginUnlockPresentation: class {
+    async refresh() {
+      return ok()
+    }
+  },
+}))
+
 vi.mock('$lib/auth/providers', () => ({
   saveAuthProviders: vi.fn(),
 }))
@@ -83,5 +91,40 @@ describe('renameLocalVaultLabel', () => {
     expect(setVaultName).toHaveBeenCalledWith('New name')
     expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
     expect(state.isVerifying).toBe(false)
+  })
+})
+
+describe('selectVaultForUnlock', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    wasmMocks.setActiveVault.mockImplementation(async () => {})
+    wasmMocks.hasActiveLocalVault.mockResolvedValue(true)
+  })
+
+  test('prepares the selected vault without protected provider persistence', async () => {
+    const syncActiveVaultStoreIdToAuth = vi.fn(async () => ok())
+    const reloadProvidersForActiveVault = vi.fn(async () => ok())
+    const state = {
+      hasManager: false,
+      errorMsg: '',
+      isVerifying: false,
+      localLoginPreparation: 'idle',
+      localVaultPresent: true,
+      dismissSuccess: vi.fn(),
+      openActiveVault: vi.fn(),
+      refreshPasswordEntriesList: vi.fn(async () => ok()),
+      syncActiveVaultStoreIdToAuth,
+      reloadProvidersForActiveVault,
+    } as unknown as VaultState
+
+    const selected = await new VaultLoginActions(state).selectVaultForUnlock({
+      storeId: 'store-2',
+    })
+
+    expect(selected.isOk()).toBe(true)
+    expect(wasmMocks.setActiveVault).toHaveBeenCalledWith('store-2')
+    expect(state.openActiveVault).toHaveBeenCalledWith('store-2')
+    expect(syncActiveVaultStoreIdToAuth).not.toHaveBeenCalled()
+    expect(reloadProvidersForActiveVault).not.toHaveBeenCalled()
   })
 })

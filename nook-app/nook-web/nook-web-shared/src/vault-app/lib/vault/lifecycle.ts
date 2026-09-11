@@ -670,6 +670,10 @@ class DeviceInitializationContinuation {
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
+      const activeVaultPersistence = await state.syncActiveVaultStoreIdToAuth();
+      if (activeVaultPersistence.isErr()) {
+        return storageErr(activeVaultPersistence.error);
+      }
     }
     try {
       state.localVaultPresent = await has_active_local_vault();

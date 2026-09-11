@@ -20,10 +20,7 @@ import {
   NookVaultSwitchState,
   NookActiveVaultSelectionState,
 } from "$app-wasm";
-import {
-  activeVaultScope,
-  AuthProviderPersistence,
-} from "$lib/auth/providers";
+import { activeVaultScope, AuthProviderPersistence } from "$lib/auth/providers";
 import {
   ActiveVaultKind,
   LocalLoginPreparationState,
@@ -258,10 +255,6 @@ export class VaultLoginActions {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       state.localLoginPreparation = LocalLoginPreparationState.Idle;
-      const persisted = await state.syncActiveVaultStoreIdToAuth();
-      if (persisted.isErr()) return storageErr(persisted.error);
-      const loaded = await state.reloadProvidersForActiveVault();
-      if (loaded.isErr()) return storageErr(loaded.error);
       const passwordRefresh2 = await state.refreshPasswordEntriesList();
       if (passwordRefresh2.isErr()) return storageErr(passwordRefresh2.error);
       const presentation = await new LoginUnlockPresentation(state).refresh();
