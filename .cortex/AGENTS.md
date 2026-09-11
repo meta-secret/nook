@@ -92,6 +92,9 @@ Workbench record, not another coordinator or worker. See the
     - functional-team routing and shared-branch ownership;
     - Workbench completion and the final delivery verdict.
   - PR Steward owns only explicitly authorized external mechanics:
+    - repository discovery, authentication checks, and run-log queries;
+    - exact parent-authored Workbench publication;
+    - GitHub-backed Task, Loom, and script execution;
     - pull-request creation and metadata updates;
     - review and comment collection;
     - exact-head validation retriggers and bounded waits;
@@ -116,8 +119,8 @@ Workbench record, not another coordinator or worker. See the
     Prime after focused local evidence.
   - Gizmo Prime runs pre-push hygiene on the Team Agent's direct commit.
   - Gizmo Prime promptly pushes the shared branch.
-  - Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the
-    exact pushed head.
+  - Gizmo Prime authorizes PR Steward to dispatch
+    `task remote TASK_NAME=loom:verify` for the exact pushed head.
 - **Feature ownership**
   - Portable security behavior stays in Rust/WASM.
   - Web code receives public typed projections.
@@ -203,6 +206,36 @@ Workbench record, not another coordinator or worker. See the
     compliance.
   - Repository-authored automation does not use Python.
 
+## GitHub execution boundary
+
+### Required actions
+
+- PR Steward executes every live-agent GitHub operation under a Gizmo packet.
+- This includes all `gh` commands, including read-only queries, authentication
+  checks, version checks, repository discovery, and log collection.
+- The same boundary applies to Task, Loom, scripts, and other wrappers that
+  invoke `gh` or perform GitHub API operations.
+- Gizmo owns decisions, local authoring, shared-branch sequencing, and ordinary
+  `git` preparation, fetch, commit, and push.
+- Functional teams diagnose evidence returned by PR Steward.
+- Gizmo authors Workbench records and decides their outcomes. PR Steward may
+  publish only the exact content and destination explicitly authorized by Gizmo.
+- Use the [authorization handshake](teams/pr-steward/workflows/authorization-handshake.md)
+  for PR, repository, run, and Workbench operations.
+- This is an agent execution rule, not a credential sandbox. Shared tools and
+  credentials do not enforce technical isolation.
+- Repository-owned autonomous CI and the existing trusted publishers retain
+  their established execution contracts.
+
+### Prohibited actions
+
+- Gizmo and functional Team Agents must not execute `gh`, even for read-only
+  inspection, authentication, or version checks.
+- They must not bypass PR Steward through a wrapper, SDK, direct API request,
+  browser, or another GitHub connector.
+- PR Steward must not author Workbench content or decide its lifecycle state.
+- An unavailable PR Steward is a blocker, not permission for direct execution.
+
 ## Remote task execution
 
 The remote task selectors map local validation work to hosted execution:
@@ -220,12 +253,11 @@ Run hosted validation from a clean, committed non-main branch:
 
 1. Push the branch and confirm that the remote branch is at the same commit as
    local `HEAD`.
-2. Dispatch one task with `task remote TASK_NAME=<task>`, for example
+2. Have PR Steward dispatch one task with `task remote TASK_NAME=<task>`, for example
    `task remote TASK_NAME=loom:verify`.
-3. Dispatch compatible tasks together with
+3. Have PR Steward dispatch compatible tasks together with
    `task remote TASK_NAMES=<task-a>,<task-b>` when one hosted job is preferred.
-4. Follow the run URL printed by the command, or inspect the exact-head run
-   with the printed `gh run list` command.
+4. Have PR Steward inspect the exact-head run and return its URL and result.
 
 `task remote` rejects a dirty checkout, `main`, an unpushed branch, or a local
 `HEAD` that differs from the remote branch. The remote runner invokes the

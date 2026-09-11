@@ -34,7 +34,8 @@ Gizmo owns:
 - Workbench completion; and
 - the final delivery verdict.
 
-Gizmo delegates bounded external pull-request mechanics to the separate
+Gizmo delegates all GitHub execution, including read-only commands and wrappers,
+to the separate
 [PR Steward Team Agent](../teams/pr-steward/AGENTS.md). PR Steward is not a
 sixth functional team. Its [knowledge graph](../teams/pr-steward/knowledge-graph.md)
 defines the operational context, and it never acts without an explicit
@@ -42,6 +43,7 @@ operation packet from Gizmo.
 
 Gizmo does not:
 
+- execute `gh` or equivalent GitHub operations directly;
 - implement or repair team-owned work;
 - redefine another team's technical contract;
 - replace an unavailable required Team Agent;
