@@ -466,14 +466,6 @@ const DYNAMIC_ENVIRONMENT_EXEMPTIONS: readonly DynamicCwdExemption[] = [
     functionName: 'pushAuthenticatedBranch',
     path: 'agentic-ai/ci-agent/src/main/git.ts',
   },
-  // The exact helper is reachable only through the proven git/tar snapshot
-  // calls and receives the runtime contract's audited platform allowlist.
-  {
-    digest: '625f72c6dbcace56e5832d3621ace71f9a3760991d94fb1b5e5e0eb9bba39bec',
-    className: 'ModuleExpertIsolation',
-    functionName: 'captureIsolatedCommand',
-    path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
-  },
 ];
 
 export type BindingCollectionRequest = {

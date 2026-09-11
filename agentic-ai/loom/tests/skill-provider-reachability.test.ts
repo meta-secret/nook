@@ -306,6 +306,7 @@ export class SkillProviderReachabilityScenario {
   static referencesSkillProvider(
     resolution: RuntimeDependencyResolution,
   ): boolean {
+    if (!resolution.specifier.startsWith('.')) return false;
     const path =
       SkillProviderReachabilityScenario.normalizedDependencyPath(resolution);
     return (

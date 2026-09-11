@@ -1,4 +1,4 @@
-const process = require('node:process');
+/* global process */
 
 const [mode = '', value = '0'] = process.argv.slice(2);
 

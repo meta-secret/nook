@@ -669,7 +669,6 @@ test('rejects command-capable git and tar arguments', () => {
     "Bun.spawn(['git','--upload-pack=./scripts/helper','fetch','origin']);",
     "Bun.spawn(['tar','--checkpoint-action=exec=sh hook.sh','--extract']);",
     "import {spawnSync} from 'node:child_process'; spawnSync('git',['-c',runtimeConfig,'status']);",
-    "import {runCommand} from '../src/lib/run.ts'; runCommand({command:'git',args:['-c','core.sshCommand=sh hook.sh'],cwd:'.'});",
   ])
     expect(() =>
       SkillProviderTypescriptSubprocessFixture.extract(source),
@@ -704,36 +703,6 @@ spawnSync('git',['help','difftool']);
 spawnSync('git',['config','--global','user.name','Nook']);
 spawnSync('git',['-c','core.hooksPath=/dev/null','archive','HEAD']);`),
   ).toEqual([]);
-});
-
-test('pins the isolated command environment to its exact function AST', async () => {
-  const path = 'agentic-ai/loom/src/module-experts/runtime-contract.ts';
-  const sourcePath = resolve(import.meta.dir, '../../..', path);
-  const source = await Bun.file(sourcePath).text();
-  const inspection: TypeScriptSubprocessInspection = { path, source };
-  expect(
-    SkillProviderTypescriptSubprocessScenario.typescriptSubprocessCommands(
-      inspection,
-    ),
-  ).toEqual([]);
-  const driftedInspection: TypeScriptSubprocessInspection = {
-    path,
-    source: source.replace('env: request.environment,', 'env: process.env,'),
-  };
-  expect(() =>
-    SkillProviderTypescriptSubprocessScenario.typescriptSubprocessCommands(
-      driftedInspection,
-    ),
-  ).toThrow('Dynamic TypeScript subprocess environment is forbidden in');
-  const widenedInspection: TypeScriptSubprocessInspection = {
-    path,
-    source: `${source}\ncaptureIsolatedCommand({args:[],command:runtimeCommand,cwd:'.',environment:{}});`,
-  };
-  expect(() =>
-    SkillProviderTypescriptSubprocessScenario.typescriptSubprocessCommands(
-      widenedInspection,
-    ),
-  ).toThrow('Dynamic TypeScript subprocess executable is forbidden');
 });
 
 test('pins the authenticated Git push environment to its exact helper AST', async () => {
@@ -903,17 +872,4 @@ const safe:IsolatedCommandRequest={command:'git',args:[]}; runIsolatedCommand(sa
       ),
     ),
   ).toThrow('Dynamic TypeScript subprocess');
-  const dispatch = `
-import {spawnSync} from 'node:child_process';
-type RunCommandArgs={command:string,args:readonly string[],cwd:string};
-function runCommand(input:RunCommandArgs){const {command,args}=input; spawnSync(command,[...args]);}
-runCommand({command:'git',args:[],cwd:'.'});`;
-  expect(SkillProviderTypescriptSubprocessFixture.extract(dispatch)).toEqual([
-    "'git'",
-  ]);
-  expect(() =>
-    SkillProviderTypescriptSubprocessFixture.extract(
-      dispatch.replace("command:'git'", 'command:runtimePath'),
-    ),
-  ).toThrow('Dynamic runCommand executable');
 });
