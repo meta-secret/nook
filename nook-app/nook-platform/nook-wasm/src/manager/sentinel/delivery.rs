@@ -18,7 +18,7 @@ use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Owns the protected identity needed to resolve stored Sentinel deliveries
-/// without retaining a borrow of the live vault manager across IndexedDB work.
+/// without retaining a borrow of the live vault manager across `IndexedDB` work.
 #[wasm_bindgen]
 pub struct NookSentinelStoredDeliveriesRequest {
     identity: nook_core::DeviceIdentity,
