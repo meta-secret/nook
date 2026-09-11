@@ -8,6 +8,12 @@ import initNookWasm, {
   admit_extension_storage_providers,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import {
+  ExtensionSessionRequestParseKind,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  parseExtensionSessionRequest,
+} from '../src/offscreen/session-request-adapter'
 
 beforeAll(async () => {
   await initNookWasm({
@@ -35,7 +41,7 @@ class ProviderStagingFixture {
       createdAt: '2026-06-24T00:00:00.000Z',
     }
   }
-  async stage(providers: unknown[]) {
+  async stage(providers: StorageProvider[]) {
     return new ProviderCredentialBuffer(providers).stage({
       decode: async (candidate) => admit_extension_storage_providers(candidate),
     })
@@ -43,6 +49,21 @@ class ProviderStagingFixture {
 }
 
 const providerStagingFixture = new ProviderStagingFixture()
+
+function parseProviderImport(providers: unknown[]) {
+  return parseExtensionSessionRequest({
+    type: ExtensionSessionMessageType.ImportVault,
+    payload: {
+      vaultStoreId: 'vault',
+      deviceId: 'device',
+      devicePublicKey: 'public',
+      deviceSigningPublicKey: 'signing',
+      providers,
+      eventLogRecords: [],
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
+  })
+}
 
 describe('provider credential staging', () => {
   test('invalid identity is a typed rejection', () => {
@@ -92,20 +113,20 @@ describe('provider credential staging', () => {
   })
 
   test('scrubs a raw IPC snapshot after successful handoff', async () => {
-    const providers = [{ githubPat: 'github_pat_snapshot_secret' }]
-    let observedDuringHandoff = ''
+    const providers = [providerStagingFixture.github()]
+    let observedDuringHandoff = false
     await expect(
       new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
-        observedDuringHandoff = providers[0]?.githubPat || ''
+        observedDuringHandoff = providers[0]?.githubPat.state === 'token'
         return { ok: true }
       }),
     ).resolves.toEqual({ ok: true })
-    expect(observedDuringHandoff).toBe('github_pat_snapshot_secret')
+    expect(observedDuringHandoff).toBe(true)
     expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
   test('scrubs a raw IPC snapshot after failed handoff', async () => {
-    const providers = [{ githubPat: 'github_pat_failed_snapshot' }]
+    const providers = [providerStagingFixture.github()]
     await expect(
       new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
         return err(ProviderCredentialFailure.AdmissionRejected)
@@ -114,24 +135,25 @@ describe('provider credential staging', () => {
     expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
-  test('continues scrubbing after malformed OAuth transport', () => {
+  test('continues scrubbing after malformed OAuth transport', async () => {
     const providers = [
       { oauthFile: 'malformed' },
       { oauthFile: { config: 'malformed' } },
       { githubPat: 'github_pat_following_secret' },
     ]
-    new ProviderCredentialBuffer(providers).clear()
-    expect(providers[2]?.githubPat).toEqual({ state: 'missing' })
+    expect((await parseProviderImport(providers)).kind).toBe(
+      ExtensionSessionRequestParseKind.Invalid,
+    )
+    expect(providers[2]).toHaveProperty('githubPat.state', 'missing')
   })
 
   test('rejects values outside serialized external data', async () => {
     const source = [
       { ...providerStagingFixture.github(), metadata: new Date() },
     ]
-    expect(await providerStagingFixture.stage(source)).toEqual(
-      err(ProviderCredentialFailure.InvalidTransport),
+    expect((await parseProviderImport(source)).kind).toBe(
+      ExtensionSessionRequestParseKind.Invalid,
     )
-    new ProviderCredentialBuffer(source).clear()
     expect(source[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
