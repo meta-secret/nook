@@ -59,6 +59,7 @@ prLand:
 # Gizmo, after integrating accepted Team Agent handoffs
 task loom:pre-push
 git push -u origin HEAD
+# PR Steward executes under Gizmo's operation packet:
 task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
 ```
 
@@ -119,10 +120,10 @@ Does not apply to:
       on the agent machine.
 - [ ] A non-ready head requires a relevant focused `task remote`. Usefulness
       decides focused tasks only after the head is validation-ready.
-- [ ] Gizmo triggers complete validation with Loom or `task pr:validate`.
+- [ ] Gizmo authorizes PR Steward to trigger Loom or `task pr:validate`.
 - [ ] Complete validation dispatches hosted checks before requesting review.
 - [ ] Exact-head review runs concurrently with hosted validation.
-- [ ] Gizmo re-validates after every push that replaces the validated head.
+- [ ] Gizmo authorizes PR Steward to validate every replacement head.
 
 ## Validation
 

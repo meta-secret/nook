@@ -15,22 +15,28 @@ has prepared a coherent exact head and supplied an operation packet.
 
 ## Outcome
 
-The named pull-request operation completes against the packet's exact head.
+The named operation completes against the packet's target.
+Revision-dependent operations use the packet's exact head.
 PR Steward returns observable evidence or a bounded blocker.
 
 ## Inputs
 
-- one repository and base ref;
-- one branch and pull-request number;
-- one expected head SHA;
+- one repository and operation target;
+- the base ref, branch, PR number, and expected head for PR operations;
+- the run identity for workflow-run operations;
+- the exact source, destination, and applicable blob SHA for Workbench publication;
 - one named operation; and
 - the evidence that Gizmo requires.
 
 ## Procedure
 
-1. **Confirm the live target.** Re-read the pull request and compare the live
-   repository, base, branch, number, and head with the packet.
-   - Stop and report a blocker when any identity or head differs.
+Apply only the steps named by the operation packet. Repository and run queries
+do not require a PR. Workbench publication follows its exact content packet.
+
+1. **Confirm the live target.** Compare its identity with the packet.
+   - For PR operations, re-read the repository, base, branch, number, and head.
+   - For other operations, verify the repository, run, or publication target.
+   - Stop and report a blocker when any applicable identity differs.
 2. **Update pull-request metadata.** Create or update the title and
    description from the parent packet.
    - Keep the metadata faithful to the current diff and canonical pull-request
@@ -64,8 +70,9 @@ PR Steward returns observable evidence or a bounded blocker.
      `task pr:ready PR=<number>` evidence.
    - Do not use this route when an applicable check, deployment, or review is
      failed or unresolved.
-8. **Verify the remote result.** Confirm the pull request is merged and return
-   the resulting commit, URL, run identifiers, and observed head.
+8. **Verify the remote result.** Return evidence for the named operation.
+   - After a merge, confirm the merged state and resulting commit.
+   - For other operations, return the observed target, result, and identifiers.
 
 ## Failure handling
 

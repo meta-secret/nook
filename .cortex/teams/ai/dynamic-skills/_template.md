@@ -44,9 +44,9 @@ For implementation tasks, run focused proof and required formatters. Commit
 every resulting mutation in the allowed source or Cortex paths. Gizmo
 continues from the commit and runs `task loom:pre-push`. If hygiene mutates those
 team-owned paths, the team returns a fresh formatted commit before Gizmo
-continues from it, reruns hygiene, and pushes. Gizmo dispatches a relevant focused
-remote task when the pushed head is not validation-ready. Gizmo dispatches
-complete exact-head validation immediately when the head is ready.
+continues from it, reruns hygiene, and pushes. Gizmo authorizes PR Steward to
+dispatch hosted validation. Use focused remote evidence until the head is ready.
+Dispatch complete exact-head validation immediately when it is ready.
 
 For a docs-only Cortex change, run the focused checks named by
 [Cortex document navigation](cortex-document-map/SKILL.md#validation).
