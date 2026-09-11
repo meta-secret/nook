@@ -563,6 +563,27 @@ class DockerizedRustContract {
     const remoteWorkflow = this.read(".github/workflows/remote.yml");
     expect(remoteWorkflow).toContain("web:e2e) task _ci:main:web:e2e-only ;;");
     expect(remoteWorkflow).not.toContain("web:e2e) task _web:test:e2e ;;");
+    expect(remoteWorkflow).toContain("ci-pr-e2e-suite:");
+    expect(remoteWorkflow).toContain("fail-fast: false");
+    expect(remoteWorkflow).toContain(
+      "suite: [stable, unstable, isolation, extension]",
+    );
+    for (const suiteTask of [
+      "stable) task _web:test:e2e:stable ;;",
+      "unstable) task _web:test:e2e:unstable ;;",
+      "isolation) task _web:test:e2e:isolation ;;",
+      "extension) task _extension:test:e2e ;;",
+    ]) {
+      expect(remoteWorkflow).toContain(suiteTask);
+    }
+    expect(remoteWorkflow).toContain(
+      "remote-e2e-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.suite }}",
+    );
+    expect(remoteWorkflow).toContain("needs: ci-pr-e2e-suite");
+    expect(remoteWorkflow).toContain(
+      "SUITE_RESULT: ${{ needs.ci-pr-e2e-suite.result }}",
+    );
+    expect(remoteWorkflow).not.toContain("ci:pr:e2e) task _ci:main ;;");
     const webPackage = z
       .object({ scripts: z.object({ "test:e2e": z.string() }) })
       .parse(
@@ -604,6 +625,8 @@ class DockerizedRustContract {
     expect(main.jobs["web-e2e"]?.["timeout-minutes"]).toBe(180);
     expect(main.jobs["extension-e2e"]?.["timeout-minutes"]).toBe(180);
     expect(remote.jobs["web-e2e"]?.["timeout-minutes"]).toBe(180);
+    expect(remote.jobs["ci-pr-e2e-suite"]?.["timeout-minutes"]).toBe(180);
+    expect(remote.jobs["ci-pr-e2e-suite"]?.strategy?.["fail-fast"]).toBe(false);
     expect(manual.jobs.e2e?.["timeout-minutes"]).toBe(180);
     expect(this.read(".github/scripts/remote-task-batch.sh")).toContain(
       "web:e2e|web:e2e:debug|extension:e2e) echo 180",

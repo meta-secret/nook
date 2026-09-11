@@ -406,6 +406,30 @@ tasks:
       - task: _web:e2e:build-if-needed
       - task: _web:test:e2e:run-groups
 
+  _web:test:e2e:stable:
+    desc: Run the stable local-provider Playwright project.
+    env:
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
+    cmds:
+      - task: _web:e2e:build-if-needed
+      - cd "{{.WEB_ROOT}}" && PLAYWRIGHT_WORKERS=3 bun x playwright test --project=stable
+
+  _web:test:e2e:unstable:
+    desc: Run the unstable local-provider Playwright project.
+    env:
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
+    cmds:
+      - task: _web:e2e:build-if-needed
+      - cd "{{.WEB_ROOT}}" && PLAYWRIGHT_WORKERS=2 bun x playwright test --project=unstable
+
   _web:test:e2e:run-groups:
     internal: true
     desc: Run both local-provider Playwright projects, optionally selecting one NOOK_E2E_SHARD.

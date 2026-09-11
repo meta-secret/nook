@@ -215,18 +215,28 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
     }
     for direct_task in [
         "web:build) task _web:build",
-        "web:e2e) task _web:test:e2e",
+        "web:e2e) task _ci:main:web:e2e-only",
         "web:e2e:debug) NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug",
         "extension:e2e) task _extension:test:e2e",
         "check) task _check",
         "ci:pr) task _ci:pr",
-        "ci:pr:e2e) task _ci:main",
     ] {
         assert!(
             workflow.contains(direct_task),
             "container execution must call the internal daemonless task: {direct_task}"
         );
     }
+    for suite_task in [
+        "stable) task _web:test:e2e:stable",
+        "unstable) task _web:test:e2e:unstable",
+        "isolation) task _web:test:e2e:isolation",
+        "extension) task _extension:test:e2e",
+    ] {
+        assert!(workflow.contains(suite_task));
+    }
+    assert!(workflow.contains("fail-fast: false"));
+    assert!(workflow.contains("needs: ci-pr-e2e-suite"));
+    assert!(workflow.contains("needs.ci-pr-e2e-suite.result"));
     assert!(batch_script.contains("status == 124 || status == 137"));
     assert!(batch_script.contains("cleanup_timed_out_buildkit_work"));
     assert!(batch_script.contains("docker buildx inspect --bootstrap \"$builder\""));
