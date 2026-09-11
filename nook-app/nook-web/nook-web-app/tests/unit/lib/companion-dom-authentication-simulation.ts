@@ -39,6 +39,7 @@ export type DomAuthenticationFixture = {
 export type DomAuthenticationSimulationRequest = {
   readonly fixture: DomAuthenticationFixture
   readonly credentials: FakeLoginCredentials
+  readonly prepareDocument?: (document: Document) => void
 }
 
 export enum DomAuthenticationSimulationOutcomeKind {
@@ -172,8 +173,10 @@ function planDomCredentialFill({
 export function simulateDomAuthentication({
   fixture,
   credentials,
+  prepareDocument,
 }: DomAuthenticationSimulationRequest): DomAuthenticationSimulationResult {
   renderFixture(fixture)
+  prepareDocument?.(document)
   let submittedControlIdentity = ''
   for (const form of document.querySelectorAll<HTMLFormElement>('form')) {
     form.addEventListener('submit', (event) => {
