@@ -31,6 +31,16 @@ pub enum ReplicaInsertStatus {
     Conflict,
 }
 
+impl ReplicaEventBytes<'_> {
+    fn immutable_insert_status(self, incoming: &[u8]) -> ReplicaInsertStatus {
+        match self {
+            Self::UnknownEvent => ReplicaInsertStatus::Inserted,
+            Self::Stored(bytes) if bytes == incoming => ReplicaInsertStatus::Duplicate,
+            Self::Stored(_) => ReplicaInsertStatus::Conflict,
+        }
+    }
+}
+
 pub struct ReplicaEventWrite<Id> {
     pub event_id: Id,
     #[cfg_attr(
@@ -126,16 +136,12 @@ where
             event_id,
             bytes: storage_bytes,
         } = request;
-        let status = match self.events.entry(event_id) {
-            Entry::Occupied(entry) if entry.get() == &storage_bytes => {
-                ReplicaInsertStatus::Duplicate
-            }
-            Entry::Occupied(_) => ReplicaInsertStatus::Conflict,
-            Entry::Vacant(entry) => {
-                entry.insert(storage_bytes);
-                ReplicaInsertStatus::Inserted
-            }
-        };
+        let status = self
+            .get_bytes(&event_id)
+            .immutable_insert_status(&storage_bytes);
+        if status == ReplicaInsertStatus::Inserted {
+            self.events.insert(event_id, storage_bytes);
+        }
         ReplicaWrite {
             store: self,
             status,
@@ -609,7 +615,7 @@ mod loom_tests {
 
 #[cfg(kani)]
 mod kani_proofs {
-    use super::{ReplicaEventWrite, ReplicaInsertStatus, ReplicaStore};
+    use super::{ReplicaEventBytes, ReplicaInsertStatus};
 
     #[kani::proof]
     fn immutable_insert_status_covers_every_existing_state() {
@@ -617,15 +623,10 @@ mod kani_proofs {
         let same_payload = kani::any::<bool>();
         let existing = [7_u8];
         let incoming = [if same_payload { 7 } else { 9 }];
-        let store = if has_existing {
-            ReplicaStore::new()
-                .put_event(ReplicaEventWrite {
-                    event_id: 1_u8,
-                    bytes: existing.to_vec(),
-                })
-                .store
+        let existing_state = if has_existing {
+            ReplicaEventBytes::Stored(&existing)
         } else {
-            ReplicaStore::new()
+            ReplicaEventBytes::UnknownEvent
         };
         let expected_status = if !has_existing {
             ReplicaInsertStatus::Inserted
@@ -636,12 +637,7 @@ mod kani_proofs {
         };
 
         assert_eq!(
-            store
-                .put_event(ReplicaEventWrite {
-                    event_id: 1_u8,
-                    bytes: incoming.to_vec()
-                })
-                .status,
+            existing_state.immutable_insert_status(&incoming),
             expected_status
         );
     }
