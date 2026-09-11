@@ -1,17 +1,24 @@
+import {
+  spawnSync,
+  type SpawnSyncOptionsWithStringEncoding,
+} from 'node:child_process'
 import { describe, expect, test } from 'vitest'
 import { LogLevel } from '$lib/runtime/log-level'
 
 const appRoot = new URL('../../../', import.meta.url).pathname
+const importProcessOptions: SpawnSyncOptionsWithStringEncoding = {
+  cwd: appRoot,
+  encoding: 'utf8',
+}
 
-async function importWithoutViteAliases(modulePath: string) {
-  const importProcess = Bun.spawn({
-    cmd: [process.execPath, '-e', `await import('${modulePath}')`],
-    cwd: appRoot,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  })
-  const stderr = await new Response(importProcess.stderr).text()
-  return { exitCode: await importProcess.exited, stderr }
+function importWithoutViteAliases(modulePath: string) {
+  const importArguments = ['-e', `await import('${modulePath}')`]
+  const importProcess = spawnSync(
+    process.execPath,
+    importArguments,
+    importProcessOptions,
+  )
+  return { exitCode: importProcess.status, stderr: importProcess.stderr }
 }
 
 describe('Playwright collection imports', () => {
@@ -19,8 +26,8 @@ describe('Playwright collection imports', () => {
     expect(LogLevel.Trace).toBe('trace')
   })
 
-  test('loads the app-log helper without browser-only Vite aliases', async () => {
-    const result = await importWithoutViteAliases('./e2e/helpers/app-logs.ts')
+  test('loads the app-log helper without browser-only Vite aliases', () => {
+    const result = importWithoutViteAliases('./e2e/helpers/app-logs.ts')
     expect(result.exitCode).toBe(0)
     expect(result.stderr).not.toContain("Cannot find package '$app-wasm'")
   })
