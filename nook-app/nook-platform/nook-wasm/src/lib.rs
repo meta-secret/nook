@@ -55,9 +55,9 @@ pub use manager::{
     NookExtensionEventLogImportStatus, NookExtensionIdentityHandoffContext,
     NookExternalEventLogRecords, NookPendingCompanionIdentityHandoff,
     NookPendingExtensionIdentityHandoff, NookPreparedCompanionPairingActivation,
-    NookPrevalidatedCompanionPairingApproval, NookStoredCompanionPairingActivationCandidate,
-    NookVaultManager, NookVaultNameState, admit_companion_handoff_response,
-    admit_companion_identity_status,
+    NookPrevalidatedCompanionPairingApproval, NookSentinelStoredDeliveriesRequest,
+    NookStoredCompanionPairingActivationCandidate, NookVaultManager, NookVaultNameState,
+    admit_companion_handoff_response, admit_companion_identity_status,
 };
 pub use storage::indexed_db::DeviceProtectionDeviceModeState;
 pub use storage::local_folder::NookLocalFolderConfig;

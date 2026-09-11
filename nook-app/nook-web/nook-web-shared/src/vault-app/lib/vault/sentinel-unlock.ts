@@ -313,12 +313,20 @@ export class SentinelUnlockActions {
     const summaries = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
+      let request: ReturnType<
+        typeof manager.value.sentinel_stored_deliveries_request
+      >;
       try {
-        return storageOk(
-          await manager.value.list_sentinel_genesis_share_deliveries(),
-        );
+        request = manager.value.sentinel_stored_deliveries_request();
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
+      }
+      try {
+        return storageOk(await request.resolve());
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      } finally {
+        request.free();
       }
     });
     if (summaries.isErr()) return storageErr(summaries.error);

@@ -24,6 +24,8 @@ mod genesis_finalization;
 mod sentinel_policy;
 mod unlock_finalization;
 
+pub use delivery::NookSentinelStoredDeliveriesRequest;
+
 use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::LoadedVault;

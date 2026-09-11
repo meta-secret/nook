@@ -81,6 +81,7 @@ pub use secrets::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExternalEventLogRecords,
 };
+pub use sentinel::NookSentinelStoredDeliveriesRequest;
 pub use session::{NookEventLogSyncIssueResult, NookVaultManager, NookVaultNameState};
 mod grant_authority;
 

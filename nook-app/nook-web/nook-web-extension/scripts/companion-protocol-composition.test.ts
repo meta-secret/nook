@@ -361,6 +361,25 @@ afterAll(() => {
 })
 
 describe('generated companion protocol composition', () => {
+  test('resolves stored Sentinel deliveries without borrowing the live manager', async () => {
+    const request = extension.sentinel_stored_deliveries_request()
+    const resolution = request.resolve()
+
+    expect(extension.device_id).toBe(unlockedAppKey.appKey.appId)
+    expect(extension.vaultStoreId).not.toBe('')
+
+    try {
+      const deliveries = await resolution
+      try {
+        expect(deliveries).toEqual([])
+      } finally {
+        for (const delivery of deliveries) delivery.free()
+      }
+    } finally {
+      request.free()
+    }
+  })
+
   test('prevalidates sealed providers and rejects manifest substitution', () => {
     CompanionPairingApprovalFixture.assertManifestPrevalidation()
   })

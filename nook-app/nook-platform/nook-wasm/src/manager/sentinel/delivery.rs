@@ -17,6 +17,46 @@ use nook_core::{DeviceMode, SentinelGenesisPhase, VaultArchitecture, VaultMetaSt
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+/// Owns the protected identity needed to resolve stored Sentinel deliveries
+/// without retaining a borrow of the live vault manager across IndexedDB work.
+#[wasm_bindgen]
+pub struct NookSentinelStoredDeliveriesRequest {
+    identity: nook_core::DeviceIdentity,
+}
+
+impl NookSentinelStoredDeliveriesRequest {
+    fn new(identity: nook_core::DeviceIdentity) -> Self {
+        Self { identity }
+    }
+}
+
+#[wasm_bindgen]
+impl NookSentinelStoredDeliveriesRequest {
+    pub async fn resolve(&self) -> Result<Vec<NookSentinelStoredDeliverySummary>, JsError> {
+        let mut summaries = Vec::new();
+        for entry in
+            NookDatabase::list_sentinel_genesis_share_deliveries(self.identity.device_id().as_str())
+                .await?
+        {
+            let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&entry.delivery_json)
+                .map_err(|error| NookError::Serialization(error.to_string()))?;
+            // Revalidate the persisted bundle before advertising it to UI.
+            let _ = stored
+                .delivery
+                .check(&nook_core::SentinelGenesisDeliveryRecipient {
+                    expected_request: &stored.request,
+                    identity: &self.identity,
+                })
+                .and_then(nook_core::CheckedSentinelGenesisDelivery::into_record)?;
+            summaries.push(NookSentinelStoredDeliverySummary::from_delivery(
+                entry.store_id,
+                &stored.delivery,
+            ));
+        }
+        Ok(summaries)
+    }
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Build one member-addressed post-genesis package. Provider credentials
@@ -81,33 +121,14 @@ impl NookVaultManager {
         Ok(package.delivery.store_id.to_string())
     }
 
-    /// List provider-free Sentinel shares accepted by this protected device.
+    /// Capture the authority needed to list provider-free Sentinel shares.
     #[wasm_bindgen]
-    pub async fn list_sentinel_genesis_share_deliveries(
+    pub fn sentinel_stored_deliveries_request(
         &self,
-    ) -> Result<Vec<NookSentinelStoredDeliverySummary>, JsError> {
-        let identity = self.device_identity()?;
-        let mut summaries = Vec::new();
-        for entry in
-            NookDatabase::list_sentinel_genesis_share_deliveries(identity.device_id().as_str())
-                .await?
-        {
-            let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&entry.delivery_json)
-                .map_err(|error| NookError::Serialization(error.to_string()))?;
-            // Revalidate the persisted bundle before advertising it to UI.
-            let _ = stored
-                .delivery
-                .check(&nook_core::SentinelGenesisDeliveryRecipient {
-                    expected_request: &stored.request,
-                    identity: &identity,
-                })
-                .and_then(nook_core::CheckedSentinelGenesisDelivery::into_record)?;
-            summaries.push(NookSentinelStoredDeliverySummary::from_delivery(
-                entry.store_id,
-                &stored.delivery,
-            ));
-        }
-        Ok(summaries)
+    ) -> Result<NookSentinelStoredDeliveriesRequest, JsError> {
+        Ok(NookSentinelStoredDeliveriesRequest::new(
+            self.device_identity()?,
+        ))
     }
 
     /// Select a previously accepted provider-free delivery after refresh.
@@ -266,12 +287,7 @@ mod browser_tests {
                 .await
                 .is_err()
         );
-        assert!(
-            manager
-                .list_sentinel_genesis_share_deliveries()
-                .await
-                .is_err()
-        );
+        assert!(manager.sentinel_stored_deliveries_request().is_err());
         assert!(
             manager
                 .load_sentinel_genesis_share_delivery("store".to_owned())
