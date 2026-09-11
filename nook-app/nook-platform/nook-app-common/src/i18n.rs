@@ -395,13 +395,13 @@ impl TranslationCatalog {
     }
 }
 
-/// Resolves the active catalog for a locale. The embedded catalog is used as the
-/// overlay so bundled keys win when a caller supplies a stale wasm catalog.
-///
-/// # Errors
-///
-/// Returns an error when a supplied catalog cannot be parsed or merged.
 impl TranslationCatalog {
+    /// Resolves the active catalog for a locale. The embedded catalog is used as the
+    /// overlay so bundled keys win when a caller supplies a stale wasm catalog.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a supplied catalog cannot be parsed or merged.
     pub fn resolve_translation_catalog(
         request: ResolveTranslationCatalogRequest<'_>,
     ) -> serde_json::Result<String> {
