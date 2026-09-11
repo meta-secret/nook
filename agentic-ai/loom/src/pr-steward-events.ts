@@ -10,7 +10,7 @@ import { homedir } from 'node:os';
 
 import { isAbsolute, join } from 'node:path';
 
-import { wsconnect } from '@nats-io/nats-core';
+import { type Msg, type MsgCallback, wsconnect } from '@nats-io/nats-core';
 
 import {
   UntrustedYamlPropertyPresence,
@@ -220,9 +220,9 @@ export type PrStewardSubscriptionAdmission = {
   readonly data: Uint8Array;
   readonly unsubscribe: () => void;
 };
+type PrStewardSubscriptionCallbackArguments = Parameters<MsgCallback<Msg>>;
 export type PrStewardSubscriptionOutcome =
-  | PrStewardSubscriptionTermination
-  | PrStewardSubscriptionOverload;
+  PrStewardSubscriptionTermination | PrStewardSubscriptionOverload;
 type PrStewardSubscriptionOverloadRequest = { readonly pending: number };
 export class PrStewardSubscriptionOverloadError extends Error {
   readonly pending: number;
@@ -234,9 +234,7 @@ export class PrStewardSubscriptionOverloadError extends Error {
     this.pending = request.pending;
   }
 }
-export class PrStewardBoundedMessageStream
-  implements AsyncIterable<PrStewardMessage>
-{
+export class PrStewardBoundedMessageStream implements AsyncIterable<PrStewardMessage> {
   // Admission remains owned until the consumer resumes after processing it.
   #admitted = 0;
   readonly #messages: PrStewardMessage[] = [];
@@ -802,8 +800,7 @@ export class PrStewardEventObserver {
   async observe(request: PrStewardObservationRequest): Promise<void> {
     for await (const message of request.messages) {
       const record = await this.#observeMessage({ request, message });
-      if (record !== false)
-        request.write(PrStewardNdjsonCodec.encode(record));
+      if (record !== false) request.write(PrStewardNdjsonCodec.encode(record));
     }
   }
 
@@ -933,7 +930,9 @@ export class PrStewardEventCli {
     });
     const messages = new PrStewardBoundedMessageStream();
     const subscription = connection.subscribe(PR_STEWARD_SUBJECT, {
-      callback: (error, message) => {
+      callback: (
+        ...[error, message]: PrStewardSubscriptionCallbackArguments
+      ) => {
         if (error instanceof Error) {
           messages.terminate({
             kind: PrStewardSubscriptionKind.Failed,
