@@ -16,17 +16,22 @@ beforeAll(async () => {
   })
 })
 
+function installSessionResponses(responses: unknown[]): void {
+  const runtime = {
+    sendMessage: (...parameters: [unknown, (response: unknown) => void]) => {
+      parameters[1](responses.shift())
+    },
+  }
+  Object.assign(globalThis, { chrome: { runtime } })
+}
+
 describe('extensionDeviceProtectionStatus', () => {
   test('rejects an unrecognized status from the extension session', async () => {
     const responses: unknown[] = [
       { ok: true },
       { ok: true, status: 'future-protection-state' },
     ]
-    globalThis.chrome = {
-      runtime: {
-        sendMessage: (_message, callback) => callback(responses.shift()),
-      },
-    } as typeof chrome
+    installSessionResponses(responses)
 
     await expect(
       extensionWasmRuntime.extensionDeviceProtectionStatus(),
@@ -42,11 +47,7 @@ describe('extensionDeviceProtectionStatus', () => {
         device: { deviceId: 'device-without-public-keys' },
       },
     ]
-    globalThis.chrome = {
-      runtime: {
-        sendMessage: (_message, callback) => callback(responses.shift()),
-      },
-    } as typeof chrome
+    installSessionResponses(responses)
 
     await expect(
       extensionWasmRuntime.extensionSessionDevice(),
@@ -66,11 +67,7 @@ describe('extensionDeviceProtectionStatus', () => {
         },
       },
     ]
-    globalThis.chrome = {
-      runtime: {
-        sendMessage: (_message, callback) => callback(responses.shift()),
-      },
-    } as typeof chrome
+    installSessionResponses(responses)
 
     await expect(
       extensionWasmRuntime.extensionSessionDevice(),
