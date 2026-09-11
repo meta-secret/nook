@@ -400,6 +400,7 @@ export class VaultInitializationActions {
           state.errorMsg = state.t(marked.error.translationKey);
           return false;
         }
+        log.info("device identity caller: external identity adoption");
         // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         const initialized = await this.initDeviceIdentity({
           mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
@@ -494,6 +495,7 @@ export class VaultInitializationActions {
     state.isVerifying = true;
     log.info("creating fresh remote vault");
     try {
+      log.info("device identity caller: fresh vault creation");
       const initialized = await state.initDeviceIdentity();
       if (initialized.isErr()) {
         state.errorMsg = state.t(initialized.error.translationKey);
@@ -646,6 +648,7 @@ class DeviceInitializationContinuation {
     const initialization: DeviceIdentityInitialization = {
       mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
     };
+    log.info("device identity caller: initialization continuation");
     const initialized = await new VaultInitializationActions(
       state,
     ).initDeviceIdentity(initialization);

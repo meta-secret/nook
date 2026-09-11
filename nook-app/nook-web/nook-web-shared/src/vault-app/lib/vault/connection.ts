@@ -69,6 +69,7 @@ export class VaultConnectionActions {
     state.dismissSuccess();
     state.isVerifying = true;
     try {
+      log.info("device identity caller: provider connection");
       const identityInitialization = await state.initDeviceIdentity();
       if (identityInitialization.isErr()) {
         state.errorMsg = state.t(identityInitialization.error.translationKey);

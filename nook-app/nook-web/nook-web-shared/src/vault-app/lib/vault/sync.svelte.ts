@@ -806,6 +806,7 @@ export class VaultSyncActions {
     }
     state.isSyncing = true;
     try {
+      log.info("device identity caller: vault synchronization");
       const initialized = await state.initDeviceIdentity();
       if (initialized.isErr()) return storageErr(initialized.error);
       if (state.syncProviders.length === 0) {

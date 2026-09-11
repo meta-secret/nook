@@ -329,6 +329,7 @@ export class VaultLoginActions {
     let creationState = LocalVaultCreationState.Pending;
 
     try {
+      log.info("device identity caller: local vault creation");
       const identityInitialization = await state.initDeviceIdentity();
       if (identityInitialization.isErr()) {
         state.errorMsg = state.t(identityInitialization.error.translationKey);

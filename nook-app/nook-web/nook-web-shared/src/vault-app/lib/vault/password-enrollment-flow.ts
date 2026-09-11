@@ -8,6 +8,7 @@ import type { NookStorageConnectArgs } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
+import { browserLogRuntime } from "$lib/runtime/log";
 import {
   findSharedGrantProvider,
   SharedStorageTargetKind,
@@ -56,6 +57,8 @@ import {
   ICloudAccountNameKind,
   iCloudOAuthSession,
 } from "$lib/auth/icloud/oauth";
+
+const log = browserLogRuntime.createLogger("vault-password-enrollment");
 
 enum SavedEnrollmentProviderKind {
   Local = "local",
@@ -569,6 +572,7 @@ export class PasswordEnrollmentActions {
                 : { mode: "local", pat: "", repo: "" };
           }
 
+          log.info("device identity caller: password enrollment");
           const identityInitialization = await state.initDeviceIdentity();
           if (identityInitialization.isErr()) {
             state.errorMsg = state.t(

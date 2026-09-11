@@ -16,9 +16,12 @@ import {
 } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
+import { browserLogRuntime } from "$lib/runtime/log";
 import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 import { SentinelGenesisTargetKind } from "$lib/vault/state/sentinel.svelte";
+
+const log = browserLogRuntime.createLogger("vault-sentinel-genesis");
 
 type ReplaceOwnedWasmValuesArgs<T extends { free: () => void }> = {
   readonly current: T[];
@@ -148,6 +151,7 @@ export class SentinelGenesisActions {
     this.releaseResults();
     state.clearSentinelGenesisStore();
     try {
+      log.info("device identity caller: sentinel genesis start");
       const initialized = await state.initDeviceIdentity();
       if (initialized.isErr()) return storageErr(initialized.error);
       const status = await state.enqueueStorage(async () => {
@@ -231,6 +235,7 @@ export class SentinelGenesisActions {
     state.isVerifying = true;
     state.errorMsg = "";
     try {
+      log.info("device identity caller: sentinel genesis participant");
       const initialized = await state.initDeviceIdentity();
       if (initialized.isErr()) return storageErr(initialized.error);
       const label = state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder);
@@ -299,6 +304,7 @@ export class SentinelGenesisActions {
     state.isVerifying = true;
     state.errorMsg = "";
     try {
+      log.info("device identity caller: sentinel genesis delivery");
       const initialized = await state.initDeviceIdentity();
       if (initialized.isErr()) return storageErr(initialized.error);
       const label = state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder);
