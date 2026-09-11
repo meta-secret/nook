@@ -228,9 +228,7 @@ export class GitHubClient {
         ),
       ),
       (cause): CiFailure => ({
-        kind: signal?.aborted
-          ? CiFailureKind.Cancelled
-          : CiFailureKind.Github,
+        kind: signal?.aborted ? CiFailureKind.Cancelled : CiFailureKind.Github,
         message:
           cause instanceof Error
             ? cause.message
@@ -558,6 +556,9 @@ export class PullRequestChangedPath {
 
     return (
       path === ".github/workflows/web-research.yml" ||
+      path === ".github/scripts/web-research-deploy.sh" ||
+      path === ".github/scripts/web-research-verify-live.sh" ||
+      path === ".task/ci-workflows.yml" ||
       path.startsWith("nook-app/nook-web/nook-web-research/")
     );
   }
@@ -569,7 +570,11 @@ export class PullRequestChangedPath {
       path.startsWith(".cortex/") ||
       path.startsWith(".cursor/") ||
       path.startsWith("agentic-ai/") ||
-      new PullRequestChangedPath(path).isWebResearchPath()
+      path === ".vale.ini" ||
+      path.startsWith(".vale/") ||
+      path === ".github/workflows/repository-policy.yml" ||
+      path === ".github/workflows/web-research.yml" ||
+      path.startsWith("nook-app/nook-web/nook-web-research/")
     );
   }
 }
@@ -579,34 +584,31 @@ export class PullRequestWorkflowSelection {
   names(): RequiredPrWorkflow[] {
     const paths = this.request;
 
-    let required: RequiredPrWorkflow[] = [];
-
+    const product = paths.some(
+      (path) => !new PullRequestChangedPath(path).isMainPrIgnoredPath(),
+    );
+    const requiredJobs: string[] = product ? [...REQUIRED_MAIN_PR_JOBS] : [];
     if (
       paths.some((path) => new PullRequestChangedPath(path).isWebResearchPath())
     ) {
-      required = [...required, WEB_RESEARCH_PR_WORKFLOW];
-    }
-    // Product PRs run ecosystem jobs inside pr.yml. Only minds-only PRs still
-    // require the thin rust-ecosystem.yml entry point.
-    if (
-      paths.some((path) =>
-        new PullRequestChangedPath(path).isRustEcosystemPath(),
-      ) &&
-      paths.every((path) =>
-        new PullRequestChangedPath(path).isMainPrIgnoredPath(),
-      )
-    ) {
-      required = [...required, RUST_ECOSYSTEM_PR_WORKFLOW];
+      requiredJobs.push("Web research / Build and deploy research catalog");
     }
     if (
-      paths.some(
-        (path) => !new PullRequestChangedPath(path).isMainPrIgnoredPath(),
-      )
+      !product &&
+      paths.some((path) => path.startsWith("agentic-ai/minds/"))
     ) {
-      required = [...required, MAIN_PR_WORKFLOW];
+      requiredJobs.push(...REQUIRED_RUST_ECOSYSTEM_JOBS);
     }
-
-    return required;
+    return requiredJobs.length === 0
+      ? []
+      : [
+          {
+            checkName: "CI",
+            workflowFile: "ci.yml",
+            workflowName: "CI",
+            requiredJobs,
+          },
+        ];
   }
 }
 
@@ -822,17 +824,21 @@ export type OpenPrLookup =
 
 /** PAT preferred — PRs from GITHUB_TOKEN do not trigger pull_request workflows. */
 
-const MAIN_PR_CHECK = "Verify and preview";
-const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
-const RUST_ECOSYSTEM_PR_CHECK = "Rust ecosystem checks";
-
-/** Jobs that must succeed on the latest exact-head PR run before merge. */
+/** Product jobs must succeed even when automatic CI jobs already passed. */
 export const REQUIRED_MAIN_PR_JOBS = [
-  "Native Rust verification",
-  "WASM build and artifact",
-  "WASM Node tests",
-  "Web verification",
-  "Verify and preview",
+  "PR validation / Native Rust verification",
+  "PR validation / WASM build and artifact",
+  "PR validation / WASM Node tests",
+  "PR validation / Web verification",
+  "PR validation / Verify and preview",
+] as const;
+
+const REQUIRED_RUST_ECOSYSTEM_JOBS = [
+  "Rust ecosystem / Dependency policy and RustSec",
+  "Rust ecosystem / Proptest, Insta, and Loom",
+  "Rust ecosystem / Cargo fuzz smoke",
+  "Rust ecosystem / Kani bounded proofs",
+  "Rust ecosystem / Dylint repository lints",
 ] as const;
 
 export type RequiredPrWorkflow = {
@@ -840,25 +846,6 @@ export type RequiredPrWorkflow = {
   workflowFile: string;
   workflowName: string;
   requiredJobs?: readonly string[];
-};
-
-const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
-  checkName: MAIN_PR_CHECK,
-  workflowFile: "pr.yml",
-  workflowName: "PR",
-  requiredJobs: REQUIRED_MAIN_PR_JOBS,
-};
-
-const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
-  checkName: WEB_RESEARCH_PR_CHECK,
-  workflowFile: "web-research.yml",
-  workflowName: "Web research",
-};
-
-const RUST_ECOSYSTEM_PR_WORKFLOW: RequiredPrWorkflow = {
-  checkName: RUST_ECOSYSTEM_PR_CHECK,
-  workflowFile: "rust-ecosystem.yml",
-  workflowName: "Rust ecosystem checks",
 };
 
 type ReviewThreadPage = {

@@ -115,6 +115,7 @@ export const WEB_EXPERT_PRODUCT_SPEC_PATHS = [
 
 export const WEB_EXPERT_RELEASE_AUTHORITY_PATHS = [
   '.github/scripts/ci-release-verify-extension.sh',
+  '.github/workflows/ci.yml',
   '.github/workflows/main.yml',
   '.github/workflows/pr.yml',
   '.github/workflows/release.yml',

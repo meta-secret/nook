@@ -286,38 +286,57 @@ class PrAuditCreateMockOctokit {
     const octokit = {
       rest: {
         actions: {
-          listJobsForWorkflowRun: async () => ({
-            data: [
-              "Native Rust verification",
-              "WASM build and artifact",
-              "WASM Node tests",
-              "Web verification",
-              "Verify and preview",
-            ]
-              .filter(
-                (name) =>
-                  !(
-                    options.omitNativeJob === true &&
-                    name === "Native Rust verification"
-                  ),
-              )
-              .map((name) => ({
-                conclusion:
-                  name === "Native Rust verification"
-                    ? nativeConclusion
-                    : MockJobConclusion.Success,
-                name,
-                status: MockRunStatus.Completed,
-              })),
+          listJobsForWorkflowRun: async ({ run_id }: { run_id: number }) => ({
+            data:
+              run_id === 43
+                ? []
+                : [
+                    "PR validation / Native Rust verification",
+                    "PR validation / WASM build and artifact",
+                    "PR validation / WASM Node tests",
+                    "PR validation / Web verification",
+                    "PR validation / Verify and preview",
+                  ]
+                    .filter(
+                      (name) =>
+                        !(
+                          options.omitNativeJob === true &&
+                          name === "PR validation / Native Rust verification"
+                        ),
+                    )
+                    .map((name) => ({
+                      conclusion:
+                        name === "PR validation / Native Rust verification"
+                          ? nativeConclusion
+                          : MockJobConclusion.Success,
+                      name,
+                      status: MockRunStatus.Completed,
+                    })),
           }),
           listWorkflowRuns: async () => ({
             data: {
               workflow_runs: [
+                ...(options.laterNoopRun
+                  ? [
+                      {
+                        id: 43,
+                        event: "pull_request",
+                        head_sha: headSha,
+                        created_at: "2026-08-08T00:02:00Z",
+                        conclusion: "success",
+                        status: "completed",
+                        pull_requests: [
+                          { number: 410, base: { ref: workflowBaseBranch } },
+                        ],
+                      },
+                    ]
+                  : []),
                 {
                   ...(options.runStatus === MockRunStatus.InProgress
                     ? {}
                     : { conclusion: MockJobConclusion.Success }),
                   created_at: "2026-08-08T00:00:00Z",
+                  event: "pull_request",
                   head_sha: headSha,
                   html_url:
                     "https://github.com/meta-secret/nook/actions/runs/42",
@@ -409,9 +428,9 @@ class PrAuditCreateMockOctokit {
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 
-test("buildPrAudit reports an exact-head repository-green PR as ready", async () => {
+test("buildPrAudit keeps exact-head validation ready after a later unrelated CI run", async () => {
   const audit = await new PullRequestAuditClient(
-    new PrAuditMockOctokit({}).execute(),
+    new PrAuditMockOctokit({ laterNoopRun: true }).execute(),
   )
     .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
     .then(assertSuccess);
@@ -424,7 +443,7 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
   );
   assert.deepEqual(
     audit.requiredWorkflows.map((workflow) => workflow.workflowName),
-    ["PR"],
+    ["CI"],
   );
   assert.equal(audit.exactHeadDeployment?.state, "success");
   assert.equal(audit.feedback.cursorReview.requested, true);
@@ -762,7 +781,7 @@ test("buildPrAudit exposes stale-base status while reporting other blockers", as
     false,
   );
   assert.ok(
-    audit.reasons.some((reason) => reason.includes("PR run is in_progress")),
+    audit.reasons.some((reason) => reason.includes("CI run is in_progress")),
   );
   assert.ok(
     audit.reasons.some((reason) => reason.includes("unresolved review thread")),
@@ -780,21 +799,28 @@ test("buildPrAudit counts unresolved threads from dismissed reviews", async () =
   assert.equal(audit.feedback.unresolvedThreads, 1);
 });
 
-test("buildPrAudit rejects a green workflow when Native Rust failed", async () => {
-  const audit = await new PullRequestAuditClient(
-    new PrAuditMockOctokit({
-      nativeConclusion: MockJobConclusion.Failure,
-    }).execute(),
-  )
-    .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
-    .then(assertSuccess);
+test("buildPrAudit rejects green workflows with failed or skipped Native Rust", async () => {
+  for (const nativeConclusion of [
+    MockJobConclusion.Failure,
+    MockJobConclusion.Skipped,
+  ]) {
+    const audit = await new PullRequestAuditClient(
+      new PrAuditMockOctokit({
+        nativeConclusion,
+      }).execute(),
+    )
+      .buildPrAudit({ repoRef: repoRef, prNumber: 410 })
+      .then(assertSuccess);
 
-  assert.equal(audit.ready, false);
-  assert.ok(
-    audit.reasons.some((reason) =>
-      reason.includes("Native Rust verification concluded failure"),
-    ),
-  );
+    assert.equal(audit.ready, false);
+    assert.ok(
+      audit.reasons.some((reason) =>
+        reason.includes(
+          `Native Rust verification concluded ${nativeConclusion}`,
+        ),
+      ),
+    );
+  }
 });
 
 test("buildPrAudit rejects when a required PR job is missing from the latest run", async () => {
@@ -936,6 +962,7 @@ enum MockRunStatus {
 enum MockJobConclusion {
   Failure = "failure",
   Success = "success",
+  Skipped = "skipped",
 }
 
 enum MockAgentHandoff {
@@ -944,6 +971,7 @@ enum MockAgentHandoff {
 }
 
 type MockOptions = {
+  laterNoopRun?: boolean;
   agentHandoff: MockAgentHandoff;
   behindBy?: number;
   codexReview?: MockCodexReview;

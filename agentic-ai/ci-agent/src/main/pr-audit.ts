@@ -188,8 +188,8 @@ export class PullRequestAuditClient {
       }
     }
     if (
-      requiredWorkflows.some(
-        (workflow) => workflow.workflowFile === "pr.yml",
+      requiredWorkflows.some((workflow) =>
+        workflow.requiredJobs?.includes("PR validation / Verify and preview"),
       ) &&
       exactHeadDeployment?.state !== "success"
     ) {
@@ -419,6 +419,7 @@ class PullRequestAuditAuditWorkflows {
                 ? candidate.pull_requests
                 : [];
               return (
+                candidate.event === "pull_request" &&
                 candidate.head_sha === request.headSha &&
                 pullRequests.some(
                   (pullRequest) =>
@@ -431,7 +432,35 @@ class PullRequestAuditAuditWorkflows {
               (left, right) =>
                 Date.parse(right.created_at) - Date.parse(left.created_at),
             );
-          const run = runs[0];
+          const [requiredJobs = []] = [workflow.requiredJobs];
+          const productJobs = requiredJobs.filter((name) =>
+            name.startsWith("PR validation / "),
+          );
+          const requestJobs =
+            productJobs.length > 0
+              ? [...productJobs, "PR validation / Validate explicit CI request"]
+              : requiredJobs;
+          const applicableRuns = [];
+          for (const candidate of runs) {
+            const jobs = await new PullRequestAuditClient(
+              request.octokit,
+            ).auditRequiredJobs({
+              subject1: { owner, repo },
+              runId: candidate.id,
+              requiredJobs: requestJobs,
+            });
+            if (jobs.isErr()) return err(jobs.error);
+            if (
+              jobs.value.some(
+                (job) =>
+                  job.status !== undefined && job.conclusion !== "skipped",
+              )
+            ) {
+              applicableRuns.push(candidate);
+              break;
+            }
+          }
+          const run = applicableRuns[0];
           if (!run) {
             return ok({ ...workflow, state: WorkflowAuditState.NotIndexed });
           }
