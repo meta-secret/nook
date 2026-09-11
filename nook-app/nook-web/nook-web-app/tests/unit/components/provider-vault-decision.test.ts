@@ -179,6 +179,25 @@ test('selected local target survives loading the selected identity providers', a
   expect(openActiveVault).not.toHaveBeenCalledWith('store-b')
 })
 
+test('initializes a pristine device without accessing identity-protected providers', () => {
+  const applyActiveProviderCredentials = vi.fn()
+  const state = {
+    providers: [{ id: 'stale-provider' }],
+    providersLoaded: false,
+    applyActiveProviderCredentials,
+    admitManager: vi.fn(() => {
+      throw new Error('identity-protected provider storage must not be read')
+    }),
+  } as unknown as ProviderActionsContext
+
+  new VaultProviderActions(state).initializePristineDeviceProviders()
+
+  expect(state.providers).toEqual([])
+  expect(state.providersLoaded).toBe(true)
+  expect(applyActiveProviderCredentials).toHaveBeenCalledOnce()
+  expect(state.admitManager).not.toHaveBeenCalled()
+})
+
 test('completed import transitions to the selected locked identity', async () => {
   const calls: string[] = []
   const state = {

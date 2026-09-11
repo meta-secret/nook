@@ -384,6 +384,14 @@ export class VaultProviderActions {
     state.icloudOAuthBusy = false;
   }
 
+  initializePristineDeviceProviders(): void {
+    const state = this.state;
+    state.providers = [];
+    state.providersLoaded = true;
+    state.applyActiveProviderCredentials();
+    log.debug("pristine device providers initialized");
+  }
+
   async loadProviders({ options }: ProviderLoad) {
     const state = this.state;
     const loaded = await state.enqueueStorage(async () => {

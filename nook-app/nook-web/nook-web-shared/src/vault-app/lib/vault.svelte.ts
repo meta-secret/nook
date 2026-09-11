@@ -322,6 +322,12 @@ export class VaultState extends VaultRuntimeState {
     });
   }
 
+  initializePristineDeviceProviders() {
+    return new providersActions.VaultProviderActions(
+      this,
+    ).initializePristineDeviceProviders();
+  }
+
   applyActiveProviderCredentials() {
     return new providersActions.ActiveProviderCredentialsActions(
       this,

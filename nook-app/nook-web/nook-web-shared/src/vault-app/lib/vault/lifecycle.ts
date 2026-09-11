@@ -244,22 +244,7 @@ export class VaultInitializationActions {
           return;
         }
         if (state.localVaults.length === 0) {
-          try {
-            const loadProvidersArgs: Parameters<typeof state.loadProviders>[0] =
-              {
-                ensureLocalRow: true,
-              };
-            const loadedProviders1 =
-              await state.loadProviders(loadProvidersArgs);
-            if (loadedProviders1.isErr()) {
-              state.errorMsg = state.t(loadedProviders1.error.translationKey);
-              return;
-            }
-            state.applyActiveProviderCredentials();
-          } catch {
-            log.warn("empty-device provider load deferred until passkey ");
-            state.providersLoaded = true;
-          }
+          state.initializePristineDeviceProviders();
         }
         return;
       }
