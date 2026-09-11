@@ -12,12 +12,18 @@ import {
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type { ExtensionLifecycleRoutingDependencies } from '../src/background/service-worker/extension-lifecycle-routing'
+import type { LocalEventLogUpdateResult } from '../src/background/service-worker/pairing-import'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   AccountPickerAuthorizationLifecycle,
   CleanupEvidence,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  extensionPairingGrantPolicyReady,
+  type StoredExtensionPairingGrant,
+} from '../src/background/pairing-grants'
+import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -31,8 +37,26 @@ globalThis.chrome = {
 
 const { AccountPickerCleanupMarkerStatus } =
   await import('../src/background/service-worker/account-pickers')
-const { LocalEventLogUpdateFailure } =
-  await import('../src/background/service-worker/pairing-import')
+const {
+  importLocalEventLogUpdateWithDependencies,
+  LocalEventLogUpdateFailure,
+} = await import('../src/background/service-worker/pairing-import')
+
+const routedGrant: StoredExtensionPairingGrant = {
+  vaultType: 'simple',
+  vaultStoreId: 'vault-1',
+  deviceId: 'device-1',
+  devicePublicKey: 'device-public-key',
+  deviceSigningPublicKey: 'device-signing-public-key',
+  vaultName: 'Private vault',
+  deviceLabel: 'Test browser',
+  approvedAt: '2026-09-11T00:00:00.000Z',
+  scopes: ['password-filling'],
+  syncProviderCount: 0,
+  eventCount: 1,
+  eventLogHeads: ['event-1'],
+  lastLocalSyncAt: '2026-09-11T00:00:00.000Z',
+}
 
 // Obtain the generated outcome variants from Rust rather than mirroring them.
 await companionWasmReady
@@ -141,6 +165,63 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
 async function flushResponses(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
+}
+
+async function routeDecodedLocalUpdate(
+  sendSession: Parameters<
+    typeof importLocalEventLogUpdateWithDependencies
+  >[0]['sendSession'],
+) {
+  const policy = await extensionPairingGrantPolicyReady
+  const key = policy.pairingGrantStorageKey(routedGrant.vaultStoreId)
+  const importLocalEventLogUpdate = (
+    request: Parameters<
+      ExtensionLifecycleRoutingDependencies['importLocalEventLogUpdate']
+    >[0],
+  ) =>
+    importLocalEventLogUpdateWithDependencies({
+      ...request,
+      ensureSession: async () => {},
+      persistPairingStorage: async () => {},
+      loadPairingStorage: async () => ({ [key]: routedGrant }),
+      pairingPolicyReady: extensionPairingGrantPolicyReady,
+      importEventLog: async () => ({
+        vaultStoreId: routedGrant.vaultStoreId,
+        accessGranted: true,
+        eventCount: 1,
+        heads: ['event-1'],
+      }),
+      sendSession,
+    })
+  const closeSession = mock(() => Promise.resolve(ok()))
+  const dependencies: ExtensionLifecycleRoutingDependencies = {
+    ...lifecycleDependencies,
+    closeExtensionSessionDocument: closeSession,
+    importLocalEventLogUpdate,
+  }
+  const { routeExtensionLifecycleMessage } =
+    await import('../src/background/service-worker/extension-lifecycle-routing')
+  const response = new Promise<LocalEventLogUpdateResult>((sendResponse) => {
+    routeExtensionLifecycleMessage({
+      dependencies,
+      message: {
+        type: 'nook:extension-local-event-log-updated',
+        payload: {
+          vaultStoreId: routedGrant.vaultStoreId,
+          eventLogRecords: [
+            {
+              eventId: 'event-1',
+              path: 'events/1',
+              event: { schema_version: 1 },
+            },
+          ],
+        },
+      },
+      sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
+      sendResponse,
+    })
+  })
+  return { response: await response, closeSession }
 }
 
 describe('service worker routing', () => {
@@ -605,6 +686,73 @@ describe('service worker routing', () => {
     expect(rejectedResponse).toEqual(response)
     expect(release).not.toHaveBeenCalled()
   })
+
+  test('keeps the decoded local-update session usable for a subsequent authenticator request', async () => {
+    const delivered: ExtensionSessionMessageType[] = []
+    const sendSession = async (message: {
+      type: ExtensionSessionMessageType
+    }) => {
+      delivered.push(message.type)
+      if (message.type === ExtensionSessionMessageType.ClassifyGrantAuthority)
+        return ok({ kind: 'Authorized' as const, grant: routedGrant })
+      if (message.type === ExtensionSessionMessageType.UpdateVault)
+        return ok({ ok: true })
+      if (message.type === ExtensionSessionMessageType.AuthenticatorCode)
+        return ok({
+          ok: true,
+          code: '012345',
+          expiresAt: Date.now() + 30_000,
+        })
+      return err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.DeliveryFailed,
+        ),
+      )
+    }
+    const update = await routeDecodedLocalUpdate(sendSession)
+
+    expect(update.response).toEqual({ ok: true, eventCount: 1 })
+    expect(update.closeSession).not.toHaveBeenCalled()
+    const { ExtensionAuthenticatorSession } =
+      await import('../src/background/service-worker/authenticator-session-adapter')
+    const authenticator = new ExtensionAuthenticatorSession({
+      sendSessionMessage: sendSession,
+    })
+    await expect(
+      authenticator.authenticatorCodeFromSession({
+        grant: routedGrant,
+        secretId: 'authenticator-1',
+      }),
+    ).resolves.toEqual(
+      ok({ ok: true, code: '012345', expiresAt: expect.any(Number) }),
+    )
+    expect(delivered).toEqual([
+      ExtensionSessionMessageType.ClassifyGrantAuthority,
+      ExtensionSessionMessageType.UpdateVault,
+      ExtensionSessionMessageType.AuthenticatorCode,
+    ])
+  })
+
+  test.each(['transport failure', 'rejected authority'] as const)(
+    'closes the local-update session after %s',
+    async (scenario) => {
+      const update = await routeDecodedLocalUpdate(async () =>
+        scenario === 'transport failure'
+          ? err(
+              new ExtensionSessionTransportFailure(
+                ExtensionSessionTransportFailureKind.DeliveryFailed,
+              ),
+            )
+          : ok({ kind: 'MissingActiveAuthority' as const }),
+      )
+
+      expect(update.response).toEqual({
+        ok: false,
+        reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+      })
+      expect(update.closeSession).toHaveBeenCalledOnce()
+    },
+  )
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {
     openCompanionLauncher.mockClear()
