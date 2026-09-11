@@ -21,6 +21,7 @@ export interface ArcContractSources {
   tasks: TextContract;
   dockerSetup: TextContract;
   runtimeSmoke: TextContract;
+  ciWorkflow: TextContract;
   mainWorkflow: TextContract;
   prWorkflow: TextContract;
   authSensitiveJob: TextContract;
@@ -199,6 +200,14 @@ export class ArcContractSourceInventory {
       label: "ARC BuildKit smoke",
       source: readSource12.value,
     });
+    const ciSource = await new OperationalContractSource(
+      resolve(this.root, ".github/workflows/ci.yml"),
+    ).read();
+    if (ciSource.isErr()) return err(ciSource.error);
+    const ciWorkflow = new TextContract({
+      label: "Central CI workflow",
+      source: ciSource.value,
+    });
     const readSource11 = await new OperationalContractSource(
       resolve(this.root, ".github/workflows/main.yml"),
     ).read();
@@ -319,6 +328,7 @@ export class ArcContractSourceInventory {
       tasks,
       dockerSetup,
       runtimeSmoke,
+      ciWorkflow,
       mainWorkflow,
       prWorkflow,
       authSensitiveJob,

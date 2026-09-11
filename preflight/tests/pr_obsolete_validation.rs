@@ -81,7 +81,9 @@ fn head_transition_marker_and_stabilization_routes_are_absent() -> Result<()> {
 fn obsolete_validation_cancellation_is_marker_free_and_head_bound() -> Result<()> {
     let root = RepositoryFixture::repository_root();
     assert!(
-        !root.join(".github/workflows/pr-obsolete-validation.yml").exists(),
+        !root
+            .join(".github/workflows/pr-obsolete-validation.yml")
+            .exists(),
         "native workflow concurrency must replace the cancellation worker"
     );
     for path in [".github/workflows/ci.yml"] {

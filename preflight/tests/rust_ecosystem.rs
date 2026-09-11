@@ -107,8 +107,7 @@ impl DependencyPolicyCacheContract {
 
 #[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
-    let entry =
-        RepositoryFixture::repository_root().read(".github/workflows/ci.yml")?;
+    let entry = RepositoryFixture::repository_root().read(".github/workflows/ci.yml")?;
     let checks =
         RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml")?;
     let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml")?;
@@ -163,7 +162,10 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "needs.scope.outputs.minds == 'true'",
         "github.event.label.name == 'ci:validate'",
     ] {
-        assert!(entry.contains(marker), "central CI routing missing: {marker}");
+        assert!(
+            entry.contains(marker),
+            "central CI routing missing: {marker}"
+        );
     }
     assert!(
         main.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml")
