@@ -126,6 +126,31 @@ export class OperationalCommandProbe {
           stderr: this.request.stderr,
         });
       case OperationalProbeExecutable.Jq:
+        if (this.request.cmd.length === 7) {
+          const [
+            ,
+            outputMode = "",
+            inputMode = "",
+            argumentKind = "",
+            argumentName = "",
+            argumentValue = "",
+            filter = "",
+          ] = this.request.cmd;
+          return Bun.spawnSync({
+            cmd: [
+              "jq",
+              outputMode,
+              inputMode,
+              argumentKind,
+              argumentName,
+              argumentValue,
+              filter,
+            ],
+            stdin,
+            stdout: this.request.stdout,
+            stderr: this.request.stderr,
+          });
+        }
         const [
           ,
           mode = "",
