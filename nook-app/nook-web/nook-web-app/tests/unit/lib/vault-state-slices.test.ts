@@ -12,12 +12,17 @@ import {
   type LoginSetup,
 } from '$lib/vault/state/provider.svelte'
 import { LOCAL_FOLDER_PROVIDER_TYPE } from '$lib/auth/providers'
+import { BrowserIdentityHandoffKind } from '$lib/vault/identity-handoff'
 
 describe('vault state slice transitions', () => {
   test('delegates transition methods to their owning slice', () => {
     const state = new VaultStateSlices(
       new VaultRuntimeState(NookBrowserLocale.from_tags(['en'])),
     )
+
+    expect(state.externalIdentityHandoff).toEqual({
+      kind: BrowserIdentityHandoffKind.Inactive,
+    })
 
     state.activateLoginSetup(LOCAL_FOLDER_PROVIDER_TYPE)
     expect(state.loginSetup).toEqual({

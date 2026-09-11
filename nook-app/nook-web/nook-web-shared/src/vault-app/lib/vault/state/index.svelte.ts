@@ -92,6 +92,7 @@ const providerKeys = [
 ] as const satisfies readonly (keyof VaultProviderState)[];
 
 const sessionKeys = [
+  "externalIdentityHandoff",
   "managerSession",
   "hasManager",
   "admitManager",
