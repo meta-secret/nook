@@ -11,6 +11,7 @@ const wasmMocks = vi.hoisted(() => ({
   setLocalVaultLabel: vi.fn(),
   setVaultSessionLocked: vi.fn(),
 }))
+const unlockPresentationRefresh = vi.hoisted(() => vi.fn())
 
 vi.mock('$app-wasm', () => ({
   get_active_vault_selection: wasmMocks.getActiveVaultSelection,
@@ -38,7 +39,7 @@ vi.mock('$lib/runtime/log', () => ({
 vi.mock('$lib/vault/login-unlock-capabilities', () => ({
   LoginUnlockPresentation: class {
     async refresh() {
-      return ok()
+      return unlockPresentationRefresh()
     }
   },
 }))
@@ -104,9 +105,10 @@ describe('selectVaultForUnlock', () => {
     vi.clearAllMocks()
     wasmMocks.setActiveVault.mockImplementation(async () => {})
     wasmMocks.hasActiveLocalVault.mockResolvedValue(true)
+    unlockPresentationRefresh.mockResolvedValue(ok())
   })
 
-  test('prepares the selected vault without protected provider persistence', async () => {
+  test('prepares the selected vault without protected provider or identity access', async () => {
     const syncActiveVaultStoreIdToAuth = vi.fn(async () => ok())
     const reloadProvidersForActiveVault = vi.fn(async () => ok())
     const state = {
@@ -131,5 +133,6 @@ describe('selectVaultForUnlock', () => {
     expect(state.openActiveVault).toHaveBeenCalledWith('store-2')
     expect(syncActiveVaultStoreIdToAuth).not.toHaveBeenCalled()
     expect(reloadProvidersForActiveVault).not.toHaveBeenCalled()
+    expect(unlockPresentationRefresh).not.toHaveBeenCalled()
   })
 })

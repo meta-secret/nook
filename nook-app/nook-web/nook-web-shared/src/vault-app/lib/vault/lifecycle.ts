@@ -51,6 +51,7 @@ import {
   VaultInitializationKind,
 } from "$lib/vault/state/lifecycle.svelte";
 import { VaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
+import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
 
 const log = browserLogRuntime.createLogger("vault-lifecycle");
 
@@ -696,6 +697,8 @@ class DeviceInitializationContinuation {
       if (passwordRefresh1.isErr()) {
         return storageErr(passwordRefresh1.error);
       }
+      const presentation = await new LoginUnlockPresentation(state).refresh();
+      if (presentation.isErr()) return storageErr(presentation.error);
     }
     const autoUnlock = !hasPendingEnrollment && state.shouldAutoUnlock();
     if (autoUnlock) {
