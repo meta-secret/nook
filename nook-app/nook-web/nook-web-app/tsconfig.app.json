@@ -1,44 +1,24 @@
 {
-  "extends": [
-    "@tsconfig/svelte/tsconfig.json",
-    "../tsconfig.safety.json"
-  ],
+  "extends": ["@tsconfig/svelte/tsconfig.json", "../tsconfig.safety.json"],
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "es2023",
     "module": "esnext",
-    "types": [
-      "svelte",
-      "vite/client",
-      "node",
-      "chrome"
-    ],
+    "types": ["svelte", "vite/client", "node", "chrome"],
     "moduleDetection": "force",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "resolveJsonModule": true,
     "paths": {
       "nook-wasm": [
-        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js"
+        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.d.ts"
       ],
-      "$lib": [
-        "../nook-web-shared/src/vault-app/lib"
-      ],
-      "$lib/*": [
-        "../nook-web-shared/src/vault-app/lib/*"
-      ],
-      "$vault-shared": [
-        "../nook-web-shared/src/vault-app"
-      ],
-      "$vault-shared/*": [
-        "../nook-web-shared/src/vault-app/*"
-      ],
-      "$web-shared/*": [
-        "../nook-web-shared/src/*"
-      ],
-      "$app-wasm": [
-        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm"
-      ]
+      "$lib": ["../nook-web-shared/src/vault-app/lib"],
+      "$lib/*": ["../nook-web-shared/src/vault-app/lib/*"],
+      "$vault-shared": ["../nook-web-shared/src/vault-app"],
+      "$vault-shared/*": ["../nook-web-shared/src/vault-app/*"],
+      "$web-shared/*": ["../nook-web-shared/src/*"],
+      "$app-wasm": ["../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm"]
     }
   },
   "include": [

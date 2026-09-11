@@ -1,13 +1,7 @@
 {
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
-    "types": [
-      "svelte",
-      "vite/client",
-      "node",
-      "bun",
-      "chrome"
-    ]
+    "types": ["svelte", "vite/client", "node", "bun", "chrome"]
   },
   "include": [
     "scripts/**/*.ts",

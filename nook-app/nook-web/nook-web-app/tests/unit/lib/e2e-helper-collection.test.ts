@@ -7,7 +7,7 @@ import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { LogLevel } from '$lib/runtime/log-level'
 
-const appRoot = new URL('../../../', import.meta.url).pathname
+const appRoot = process.cwd()
 const importProcessOptions: SpawnSyncOptionsWithStringEncoding = {
   cwd: appRoot,
   encoding: 'utf8',
@@ -44,10 +44,11 @@ class PlaywrightCollectorProbe {
     return {
       cwdExists: existsSync(appRoot),
       executableExists: existsSync(bunExecutable),
-      exitCode: importProcess.status ?? -1,
+      exitCode:
+        typeof importProcess.status === 'number' ? importProcess.status : -1,
       errorCode,
-      errorMessage: launchError?.message ?? '',
-      signal: importProcess.signal ?? '',
+      errorMessage: launchError ? launchError.message : '',
+      signal: importProcess.signal ? importProcess.signal : '',
       stderr: importProcess.stderr,
     }
   }
