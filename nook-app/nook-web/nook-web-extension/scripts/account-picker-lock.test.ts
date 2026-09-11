@@ -77,7 +77,9 @@ describe('account picker authorization cleanup', () => {
             _message: unknown,
             options: chrome.tabs.MessageSendOptions,
           ) => {
-            deliveries.push({ tabId, frameId: options.frameId ?? 0 })
+            const frameId =
+              typeof options.frameId === 'number' ? options.frameId : 0
+            deliveries.push({ tabId, frameId })
             return Promise.resolve({ ok: options.frameId === 7 })
           },
         },
@@ -359,7 +361,12 @@ describe('account picker authorization cleanup', () => {
               ),
             ]),
           remove: (tabId: number | number[], callback?: () => void) => {
-            removedTabs.push(Array.isArray(tabId) ? (tabId[0] ?? -1) : tabId)
+            const removedTabId = Array.isArray(tabId)
+              ? tabId.length === 0
+                ? -1
+                : tabId[0]
+              : tabId
+            removedTabs.push(removedTabId)
             if (rejectRemoval) {
               Object.assign(runtime, { lastError: { message: 'denied' } })
             }

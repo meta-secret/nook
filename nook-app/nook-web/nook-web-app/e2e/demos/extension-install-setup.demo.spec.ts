@@ -1,5 +1,3 @@
-import type { Result } from 'neverthrow'
-import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
 import { expect, test } from '../fixtures'
 import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
 import {
@@ -41,17 +39,6 @@ type ExtensionInstallDemoChromeRuntime = {
     message: ExtensionInstallDemoMessage,
     callback: (response?: ExtensionInstallDemoResponse) => void,
   ) => void
-}
-
-type ExtensionInstallDemoVault = {
-  admitManager(): Result<
-    {
-      device_id: string
-      device_public_key: string
-      device_signing_public_key_js(): Promise<string>
-    },
-    VaultStorageFailure
-  >
 }
 
 const extensionInstallDemoMessageTypes: ExtensionInstallDemoMessageTypes = {
@@ -245,7 +232,7 @@ test('accept delayed extension pairing acknowledgement without duplicate deliver
   const extensionPage = await extensionContext.newPage()
   await connectLocalVault(extensionPage)
   const extensionDevice = await extensionPage.evaluate(async () => {
-    const vault: ExtensionInstallDemoVault | undefined = window.__nookVault
+    const vault = window.__nookVault
     if (!vault)
       return { ok: false as const, error: 'Vault debug hooks are unavailable' }
     const admission = vault.admitManager()

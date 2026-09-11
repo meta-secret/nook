@@ -14,7 +14,7 @@ test.describe('persistent workspace routing', () => {
       document.documentElement.dataset.workspaceRouteEventCount = '0'
       window.addEventListener('popstate', () => {
         const count = Number.parseInt(
-          document.documentElement.dataset.workspaceRouteEventCount ?? '0',
+          document.documentElement.dataset.workspaceRouteEventCount || '0',
           10,
         )
         document.documentElement.dataset.workspaceRouteEventCount = String(
@@ -57,7 +57,7 @@ test.describe('persistent workspace routing', () => {
     expect(
       await page.evaluate(() =>
         Number.parseInt(
-          document.documentElement.dataset.workspaceRouteEventCount ?? '0',
+          document.documentElement.dataset.workspaceRouteEventCount || '0',
           10,
         ),
       ),
