@@ -10,7 +10,7 @@ import { homedir } from 'node:os';
 
 import { isAbsolute, join } from 'node:path';
 
-import { wsconnect } from '@nats-io/nats-core';
+import { type Msg, type MsgCallback, wsconnect } from '@nats-io/nats-core';
 
 import {
   UntrustedYamlPropertyPresence,
@@ -220,6 +220,7 @@ export type PrStewardSubscriptionAdmission = {
   readonly data: Uint8Array;
   readonly unsubscribe: () => void;
 };
+type PrStewardSubscriptionCallbackArguments = Parameters<MsgCallback<Msg>>;
 export type PrStewardSubscriptionOutcome =
   PrStewardSubscriptionTermination | PrStewardSubscriptionOverload;
 type PrStewardSubscriptionOverloadRequest = { readonly pending: number };
@@ -929,7 +930,9 @@ export class PrStewardEventCli {
     });
     const messages = new PrStewardBoundedMessageStream();
     const subscription = connection.subscribe(PR_STEWARD_SUBJECT, {
-      callback: (error, message) => {
+      callback: (
+        ...[error, message]: PrStewardSubscriptionCallbackArguments
+      ) => {
         if (error instanceof Error) {
           messages.terminate({
             kind: PrStewardSubscriptionKind.Failed,
