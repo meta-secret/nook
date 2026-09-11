@@ -136,12 +136,24 @@ where
             event_id,
             bytes: storage_bytes,
         } = request;
-        let status = self
-            .get_bytes(&event_id)
-            .immutable_insert_status(&storage_bytes);
-        if status == ReplicaInsertStatus::Inserted {
-            self.events.insert(event_id, storage_bytes);
-        }
+        let entry = self.events.entry(event_id);
+        let existing = match &entry {
+            Entry::Occupied(entry) => ReplicaEventBytes::Stored(entry.get()),
+            Entry::Vacant(_) => ReplicaEventBytes::UnknownEvent,
+        };
+        let status = existing.immutable_insert_status(&storage_bytes);
+        let status = match (status, entry) {
+            (ReplicaInsertStatus::Inserted, Entry::Vacant(entry)) => {
+                entry.insert(storage_bytes);
+                ReplicaInsertStatus::Inserted
+            }
+            (ReplicaInsertStatus::Duplicate, Entry::Occupied(_)) => ReplicaInsertStatus::Duplicate,
+            (ReplicaInsertStatus::Conflict, Entry::Occupied(_)) => ReplicaInsertStatus::Conflict,
+            (ReplicaInsertStatus::Inserted, Entry::Occupied(_))
+            | (ReplicaInsertStatus::Duplicate | ReplicaInsertStatus::Conflict, Entry::Vacant(_)) => {
+                unreachable!("immutable insert classification must agree with entry occupancy")
+            }
+        };
         ReplicaWrite {
             store: self,
             status,
@@ -617,28 +629,43 @@ mod loom_tests {
 mod kani_proofs {
     use super::{ReplicaEventBytes, ReplicaInsertStatus};
 
+    struct ImmutableInsertStatusScenario {
+        has_existing: bool,
+        same_payload: bool,
+    }
+
+    impl ImmutableInsertStatusScenario {
+        fn symbolic() -> Self {
+            Self {
+                has_existing: kani::any(),
+                same_payload: kani::any(),
+            }
+        }
+
+        fn verify(self) {
+            let existing = [7_u8];
+            let incoming = [if self.same_payload { 7 } else { 9 }];
+            let existing_state = if self.has_existing {
+                ReplicaEventBytes::Stored(&existing)
+            } else {
+                ReplicaEventBytes::UnknownEvent
+            };
+            let status = existing_state.immutable_insert_status(&incoming);
+
+            assert_eq!(status == ReplicaInsertStatus::Inserted, !self.has_existing);
+            assert_eq!(
+                status == ReplicaInsertStatus::Duplicate,
+                self.has_existing && self.same_payload
+            );
+            assert_eq!(
+                status == ReplicaInsertStatus::Conflict,
+                self.has_existing && !self.same_payload
+            );
+        }
+    }
+
     #[kani::proof]
     fn immutable_insert_status_covers_every_existing_state() {
-        let has_existing = kani::any::<bool>();
-        let same_payload = kani::any::<bool>();
-        let existing = [7_u8];
-        let incoming = [if same_payload { 7 } else { 9 }];
-        let existing_state = if has_existing {
-            ReplicaEventBytes::Stored(&existing)
-        } else {
-            ReplicaEventBytes::UnknownEvent
-        };
-        let expected_status = if !has_existing {
-            ReplicaInsertStatus::Inserted
-        } else if same_payload {
-            ReplicaInsertStatus::Duplicate
-        } else {
-            ReplicaInsertStatus::Conflict
-        };
-
-        assert_eq!(
-            existing_state.immutable_insert_status(&incoming),
-            expected_status
-        );
+        ImmutableInsertStatusScenario::symbolic().verify();
     }
 }
