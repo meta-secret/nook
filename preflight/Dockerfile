@@ -83,6 +83,8 @@ RUN curl -fsSL https://github.com/vale-cli/vale/releases/download/v3.19.0/vale_3
     && vale --version
 WORKDIR /meta-secret/nook
 ENV REPO_ROOT=/meta-secret/nook NOOK_REPO_ROOT=/meta-secret/nook NOOK_REPOSITORY_SOURCE_CONTEXT=1
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock ./agentic-ai/loom/
 RUN bun install --cwd agentic-ai/loom --frozen-lockfile
 

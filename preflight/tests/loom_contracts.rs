@@ -254,7 +254,11 @@ fn loom_workflow_audits_every_cortex_change() {
         "both trust domains must use the Docker policy Task surface"
     );
     let dockerfile = root.read("preflight/Dockerfile");
-    for task in ["task loom:verify", "task preflight:format-contract", "task loom:cortex-audit"] {
+    for task in [
+        "task loom:verify",
+        "task preflight:format-contract",
+        "task loom:cortex-audit",
+    ] {
         assert!(dockerfile.contains(task), "Docker policy must retain `{task}`");
     }
     assert!(

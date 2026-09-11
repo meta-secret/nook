@@ -47,7 +47,7 @@ jobs:
       - name: Install Ruby for the legacy manifest contract
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.4'
+          ruby-version: "3.4"
 
       - name: Validate Taskfile command surface
         run: task infra:surface:check
