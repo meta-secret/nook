@@ -45,12 +45,12 @@ fn assert_workflow_runtime_contract(root: &Path) {
             && ecosystem
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()
-                == 5
-            && ecosystem.matches("github.event_name == 'schedule'").count() == 5
+                == 3
+            && ecosystem.matches("github.event_name == 'schedule'").count() == 3
             && ecosystem
                 .matches("github.event_name == 'workflow_dispatch'")
                 .count()
-                == 5
+                == 3
             && ecosystem_entry.contains("github.event_name == 'schedule'")
             && ecosystem_entry.contains("github.event_name == 'workflow_dispatch'")
             && ecosystem_entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
@@ -239,7 +239,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: Authentication-sensitive extension e2e",
         "name: Verify and preview",
         "always() &&",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]",
+        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e, full-extension-e2e]",
         "name: Enforce required verification results",
         "NATIVE_RESULT: ${{ needs.rust.result }}",
         "WASM_RESULT: ${{ needs.wasm.result }}",
@@ -288,7 +288,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "needs: [validation-request, wasm]",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]",
+        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e, full-extension-e2e]",
         "name: Download built WASM handoff",
         "name: Upload preview dist handoff",
         "NOOK_HOST_PAGES_DEPLOY",
@@ -401,8 +401,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
                 .contains("github.event.pull_request.head.repo.full_name == github.repository")
             && auth_sensitive_e2e_job
                 .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && auth_sensitive_e2e_job
-                .contains("needs: [validation-request, verify, wasm-node-test]")
+            && auth_sensitive_e2e_job.contains("needs: [validation-request, verify]")
             && auth_sensitive_e2e_job.contains("runs-on: nook-k0s-container")
             && auth_sensitive_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
@@ -412,7 +411,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]")
+            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e, full-extension-e2e]")
             && preview_job.contains("UI_DEMOS_ENABLED")
             && preview_job.contains("UI_DEMO_REQUIRED")
             && preview_job.contains("UI_DEMO_RESULT")
@@ -533,7 +532,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]")
+            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e, full-extension-e2e]")
             && preview_job.contains("always() &&")
             && preview_job.contains("name: Enforce required verification results")
             && preview_job.contains("AUTH_SENSITIVE_E2E_RESULT")
@@ -564,7 +563,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     assert!(
         full_e2e_job.contains("github.event.pull_request.head.repo.full_name == github.repository")
             && full_e2e_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && full_e2e_job.contains("needs: [verify, wasm-node-test]")
+            && full_e2e_job.contains("needs: verify")
             && full_e2e_job.contains("runs-on: nook-k0s-container")
             && full_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
@@ -583,7 +582,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             .contains("github.event.pull_request.head.repo.full_name == github.repository")
             && extension_e2e_job
                 .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && extension_e2e_job.contains("needs: [verify, wasm-node-test]")
+            && extension_e2e_job.contains("needs: verify")
             && extension_e2e_job.contains("runs-on: nook-k0s-container")
             && extension_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")

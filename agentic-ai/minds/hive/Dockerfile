@@ -118,7 +118,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY vendor vendor
 COPY hive/Cargo.toml hive/Cargo.toml
 RUN mkdir -p hive/src/bin \
-    && touch hive/src/main.rs hive/src/bin/export_observer_contract.rs
+    && touch hive/src/lib.rs hive/src/main.rs hive/src/bin/export_observer_contract.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM toolchain AS fetched-dependencies
@@ -129,8 +129,16 @@ RUN --network=default mkdir -p hive/src/bin \
     && touch hive/src/lib.rs hive/src/main.rs hive/src/bin/export_observer_contract.rs \
     && cargo fetch --locked --config net.git-fetch-with-cli=false
 
+# Warm the exporter's debug-profile dependencies independently of Hive source.
+FROM fetched-dependencies AS observer-contract-dependencies
+COPY --from=chef-planner /build/recipe.json recipe.json
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
+    cargo chef cook --locked --recipe-path recipe.json -p hive \
+      --features observer-contract-export --bin hive-export-observer-contract \
+    && nook-sccache-report hive-observer-contract-dependencies
+
 # Native contract output is rebuilt from the same Rust sources as this console.
-FROM fetched-dependencies AS observer-contract-exporter
+FROM observer-contract-dependencies AS observer-contract-exporter
 COPY hive/src hive/src
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     cargo run --locked -p hive --features observer-contract-export \

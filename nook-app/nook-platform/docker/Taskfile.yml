@@ -366,9 +366,39 @@ tasks:
       - task: fuzz:dependency-policy
       - task: minds:dependency-policy
 
+  docker:ecosystem:smoke:
+    desc: Run deterministic tests, fuzz, and Kani concurrently on one runner.
+    cmds:
+      - |
+        task docker:ecosystem:deterministic & deterministic_pid=$!
+        task docker:ecosystem:fuzz & fuzz_pid=$!
+        task docker:ecosystem:kani & kani_pid=$!
+        failed=0
+        if wait "$deterministic_pid"; then
+          echo "Deterministic tests: success"
+        else
+          echo "::error::Deterministic tests failed"
+          failed=1
+        fi
+        if wait "$fuzz_pid"; then
+          echo "Fuzz smoke: success"
+        else
+          echo "::error::Fuzz smoke failed"
+          failed=1
+        fi
+        if wait "$kani_pid"; then
+          echo "Kani proofs: success"
+        else
+          echo "::error::Kani proofs failed"
+          failed=1
+        fi
+        test "$failed" -eq 0
+
   docker:ecosystem:deterministic:
     desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.
     deps: [sccache:ensure, registry-cache:ensure]
+    vars:
+      NATIVE_COVERAGE_PROVIDED: '{{default "false" .NATIVE_COVERAGE_PROVIDED}}'
     cmds:
       # Context parents have no cache-to. Leaf writes only its own scoped ref when
       # publish enables GHA_CACHE_WRITE_ENABLED.
@@ -379,11 +409,13 @@ tasks:
         "docker:ecosystem:deterministic"
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
+        --set "rust-ecosystem-deterministic.args.NATIVE_COVERAGE_PROVIDED={{.NATIVE_COVERAGE_PROVIDED}}"
         rust-ecosystem-deterministic
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
           GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
+            --set "rust-ecosystem-deterministic.args.NATIVE_COVERAGE_PROVIDED={{.NATIVE_COVERAGE_PROVIDED}}" \
             rust-ecosystem-deterministic
         fi
 

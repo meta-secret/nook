@@ -9,6 +9,10 @@ name: Rust ecosystem checks
 on:
   workflow_call:
     inputs:
+      native_coverage_provided:
+        description: Required sibling native gate covers replication unit tests.
+        type: boolean
+        default: false
       fuzz_seconds:
         description: Seconds for the cargo-fuzz smoke campaign.
         type: string
@@ -60,7 +64,7 @@ jobs:
         run: task docker:ecosystem:dependency-policy
 
   deterministic-tests:
-    name: Proptest, Insta, and Loom
+    name: Deterministic tests, fuzz, and Kani
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
@@ -74,7 +78,7 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: ecosystem-deterministic
+          cache-selection: ecosystem-smoke
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.
@@ -87,70 +91,11 @@ jobs:
           cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
           main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
           isolated-cache-write: ${{ inputs.isolated_cache_write }}
-      - name: Bake rust-ecosystem-deterministic
-        run: task docker:ecosystem:deterministic
-
-  fuzz-smoke:
-    name: Cargo fuzz smoke
-    runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
-        with:
-          version: 3.52.0
-      - uses: docker/setup-buildx-action@v4
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
-      - uses: ./.github/actions/nook-docker-setup
-        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
-        with:
-          cache-selection: ecosystem-fuzz
-          registry-host: registry.dev.nokey.sh
-          # Main push must use the trusted writer for nook/buildcache/**.
-          # PRs/schedule keep the remote identity for isolated/read-only access.
-          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
-          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
-          isolated-cache-write: ${{ inputs.isolated_cache_write }}
-      - name: Bake rust-fuzz-smoke
+      - name: Run deterministic tests, fuzz smoke, and Kani in parallel
         env:
           FUZZ_SECONDS: ${{ inputs.fuzz_seconds }}
-        run: task docker:ecosystem:fuzz FUZZ_SECONDS="$FUZZ_SECONDS"
-
-  kani:
-    name: Kani bounded proofs
-    runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
-        with:
-          version: 3.52.0
-      - uses: docker/setup-buildx-action@v4
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
-      - uses: ./.github/actions/nook-docker-setup
-        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
-        with:
-          cache-selection: ecosystem-kani
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
-          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
-          isolated-cache-write: ${{ inputs.isolated_cache_write }}
-      - name: Bake Kani bounded proofs
-        run: task docker:ecosystem:kani
+          NATIVE_COVERAGE_PROVIDED: ${{ inputs.native_coverage_provided }}
+        run: task docker:ecosystem:smoke
 
   dylint:
     name: Dylint repository lints
