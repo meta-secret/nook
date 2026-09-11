@@ -148,6 +148,7 @@ export class AppLogsExport {
   constructor(private readonly request: AppLogsQuery) {}
   async execute(): Promise<AppLogsResponse> {
     const query = this.request;
+    await browserLogRuntime.waitForWasmLogging();
     const dumpLogsArgs: Parameters<typeof browserLogRuntime.dumpLogs>[0] = {
       minLevel: query.minLevel,
       limit: query.limit,

@@ -118,6 +118,19 @@ type LogFlushSchedule =
       timer: ReturnType<typeof setInterval>;
     };
 
+enum LogRuntimeReadinessKind {
+  Pending = "pending",
+  Ready = "ready",
+}
+
+type LogRuntimeReadiness =
+  | {
+      readonly kind: LogRuntimeReadinessKind.Pending;
+      readonly completion: Promise<void>;
+      readonly complete: () => void;
+    }
+  | { readonly kind: LogRuntimeReadinessKind.Ready };
+
 /**
  * The original console methods, captured before we patch `console`. All echo
  * paths (`createLogger`, the `console.*` patch, Rust via `__nookConsole.echo`)
@@ -223,6 +236,7 @@ declare global {
 /** Owns the browser runtime resources shared by these interactions. */
 class BrowserLogRuntime {
   private wasmReady = false;
+  private logRuntimeReadiness = BrowserLogRuntime.pendingReadiness();
   private logFlushSchedule: LogFlushSchedule = {
     kind: LogFlushScheduleKind.Stopped,
   };
@@ -246,6 +260,20 @@ class BrowserLogRuntime {
           debug: () => {},
           log: () => {},
         };
+
+  private static pendingReadiness(): LogRuntimeReadiness {
+    let complete = () => {};
+    const completion = new Promise<void>((resolve) => {
+      complete = resolve;
+    });
+    return { kind: LogRuntimeReadinessKind.Pending, completion, complete };
+  }
+
+  async waitForWasmLogging(): Promise<void> {
+    const readiness = this.logRuntimeReadiness;
+    if (readiness.kind === LogRuntimeReadinessKind.Ready) return;
+    await readiness.completion;
+  }
   // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
   runtimeFailure(cause: unknown): RuntimeFailure {
     return new RuntimeFailure(
@@ -687,6 +715,9 @@ class BrowserLogRuntime {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     this.wasmReady = false;
+    if (this.logRuntimeReadiness.kind === LogRuntimeReadinessKind.Ready) {
+      this.logRuntimeReadiness = BrowserLogRuntime.pendingReadiness();
+    }
     this.preInitQueue.length = 0;
   }
 
@@ -751,6 +782,10 @@ class BrowserLogRuntime {
     log_init();
     log_set_level(this.initialLevel());
     this.wasmReady = true;
+    if (this.logRuntimeReadiness.kind === LogRuntimeReadinessKind.Pending) {
+      this.logRuntimeReadiness.complete();
+      this.logRuntimeReadiness = { kind: LogRuntimeReadinessKind.Ready };
+    }
 
     if (this.preInitQueue.length > 0) {
       const queued = this.preInitQueue.splice(0, this.preInitQueue.length);
