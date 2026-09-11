@@ -654,17 +654,12 @@ class ArcManifestContract {
       "uses: ./.github/actions/nook-docker-setup",
       "run: task ci:repository-policy:trusted",
       "run: task ci:repository-policy:untrusted",
-      "run: task ci:repository-policy:vale:activate",
-      "uses: vale-cli/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff",
-      "version: 3.19.0",
-      "files: '[]'",
-      "sync: false",
     ]);
     if (admittedContract36.isErr()) return err(admittedContract36.error);
     const admittedContract39 = repositoryPolicyWorkflow.forbid("run: |");
     if (admittedContract39.isErr()) return err(admittedContract39.error);
     const admittedContract40 = repositoryPolicyWorkflow.requireBefore({
-      first: "name: Activate Vale 3.19.0",
+      first: "uses: ./.github/actions/nook-docker-setup",
       second: "run: task ci:repository-policy:trusted",
     });
     if (admittedContract40.isErr()) return err(admittedContract40.error);
@@ -757,15 +752,6 @@ class ArcManifestContract {
       "ci:pr:e2e) task _ci:main",
       "inputs.tasks != '' && inputs.task != ''",
       "(inputs.tasks == '' || inputs.task == '')",
-      "uses: vale-cli/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff",
-      "version: 3.19.0",
-      "files: '[]'",
-      "sync: false",
-      'find "$RUNNER_TOOL_CACHE/vale/3.19.0"',
-      'vale_dir="$(dirname "$vale_bin")"',
-      'PATH="$vale_dir:$PATH"',
-      '"$(vale --version)"',
-      '"vale version 3.19.0"',
     ]);
     if (admittedContract49.isErr()) return err(admittedContract49.error);
     const admittedContract50 = remoteWorkflow.forbid(
@@ -778,7 +764,7 @@ class ArcManifestContract {
     });
     if (admittedContract51.isErr()) return err(admittedContract51.error);
     const admittedContract52 = remoteWorkflow.requireBefore({
-      first: "name: Activate Vale 3.19.0",
+      first: "uses: ./.github/actions/nook-docker-setup",
       second: "name: Run task batch",
     });
     if (admittedContract52.isErr()) return err(admittedContract52.error);

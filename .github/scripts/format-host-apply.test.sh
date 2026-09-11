@@ -21,7 +21,7 @@ guest_formatter="$(
 
 printf '%s\n' "$script" | grep -q 'formatter_image="nook-source-formatter:' \
   || { echo 'format-host-apply test: expected shared content-addressed image' >&2; exit 1; }
-for hash_input in Dockerfile package.json bun.lock prettier-default.json prettier-shared-typescript.json prettier-web.json format.sh; do
+for hash_input in Dockerfile package.json bun.lock prettier-default.json prettier-shared-typescript.json prettier-web.json prettier-skill.json format.sh; do
   printf '%s\n' "$script" | grep -Fq "$hash_input" \
     || { echo "format-host-apply test: formatter hash misses $hash_input" >&2; exit 1; }
 done
@@ -87,7 +87,7 @@ for required in \
   'skill_application_files+=("${BASH_REMATCH[3]}")' \
   'skill_application_files+=' \
   'skill_application_roots+=' \
-  '"$repo_root/$skill_root/.prettierrc"' \
+  '"$formatter_root/prettier-skill.json"' \
   'done <"$changed_files"'; do
   printf '%s\n' "$formatter" | grep -Fq "$required" \
     || { echo "format-host-apply test: missing shared-tooling formatter contract: $required" >&2; exit 1; }
@@ -192,6 +192,7 @@ chmod +x \
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-web.json"
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-default.json"
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-shared-typescript.json"
+printf '{}\n' >"$fixture_root/.github/formatting/prettier-skill.json"
 printf '{}\n' >"$fixture_root/agentic-ai/loom/.prettierrc"
 printf '{}\n' >"$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/.prettierrc"
 printf '{}\n' >"$fixture_root/.cortex/teams/ai/dynamic-skills/scripts/scripts/.prettierrc"

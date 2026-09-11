@@ -870,8 +870,7 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
     let root = RepositoryFixture::repository_root();
     let workflow = root.read(".github/workflows/rust-dependency-updates.yml");
     for required in [
-        "- cron: '0 9 * * 1'",
-        "cargo install cargo-outdated --version 0.19.0 --locked",
+        "- cron: \"0 9 * * 1\"",
         "task rust:deps:outdated",
         "CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md",
         "uses: ./.github/actions/nook-node-setup",
@@ -883,6 +882,14 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
             "dependency update workflow missing required contract: {required}"
         );
     }
+    assert!(
+        root.read(".github/docker/rust-maintenance.Dockerfile")
+            .contains("cargo install cargo-outdated --version 0.19.0 --locked")
+    );
+    assert!(
+        root.read(".github/docker/rust-maintenance.hcl")
+            .contains("no-cache-filter = [\"audit\"]")
+    );
     let audit_script = root.read(".github/scripts/ci-rust-deps-outdated.sh");
     for required in [
         "cargo outdated --workspace --root-deps-only --exit-code 1",

@@ -97,7 +97,7 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
 fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let workflow = fs::read_to_string(root.join(".github/workflows/repository-policy.yml"))?;
-    let preflight_taskfile = fs::read_to_string(root.join("preflight/Taskfile.yml"))?;
+    let preflight_dockerfile = fs::read_to_string(root.join("preflight/Dockerfile"))?;
     let workflow_taskfile = fs::read_to_string(root.join(".task/ci-workflows.yml"))?;
 
     assert!(
@@ -107,7 +107,10 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
             && !root.join(".github/workflows/loom.yml").exists(),
         "repository policy must remain the single automatic policy workflow"
     );
-    assert!(workflow.contains("pull_request:"));
+    let ci_workflow = fs::read_to_string(root.join(".github/workflows/ci.yml"))?;
+    assert!(ci_workflow.contains("pull_request:"));
+    assert!(ci_workflow.contains("uses: ./.github/workflows/repository-policy.yml"));
+    assert!(workflow.contains("workflow_call:"));
     assert!(
         workflow.contains("fetch-depth: 0")
             && !workflow.contains("BASELINE_SHA")
@@ -118,45 +121,30 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
     assert!(
         workflow.contains("github.event.pull_request.head.repo.full_name != github.repository")
             && workflow.contains("run: task ci:repository-policy:untrusted")
-            && workflow_taskfile.contains("task: preflight:source-architecture"),
+            && workflow_taskfile.contains("task: preflight:repository-policy-untrusted"),
         "repository policy must route untrusted PR source architecture through Taskfile"
     );
-    assert_hosted_preflight_rust_cache(&workflow, "repository-policy")?;
+    assert_dockerized_preflight_tools(&workflow, "repository-policy")?;
     assert!(
-        preflight_taskfile.contains("--test source_file_size"),
+        preflight_dockerfile.contains("--test source_file_size"),
         "preflight:source-architecture must run the source_file_size test"
     );
     Ok(())
 }
 
-fn assert_hosted_preflight_rust_cache(workflow: &str, name: &str) -> anyhow::Result<()> {
-    assert!(
-        workflow.contains(
-            "      - name: Install Rust for repository policy\n        uses: dtolnay/rust-toolchain@stable"
-        ),
-        "{name} must provision Rust and rustfmt for trusted and untrusted policy paths"
-    );
-    let toolchain = workflow
-        .find("uses: dtolnay/rust-toolchain@stable")
-        .ok_or_else(|| anyhow::anyhow!("{name} must install the pinned stable Rust channel"))?;
-    let cache = workflow
-        .find("uses: Swatinem/rust-cache@v2")
-        .ok_or_else(|| anyhow::anyhow!("{name} must restore its hosted Rust dependency cache"))?;
-    let first_preflight_task = workflow
+fn assert_dockerized_preflight_tools(workflow: &str, name: &str) -> anyhow::Result<()> {
+    assert!(workflow.contains("uses: ./.github/actions/nook-docker-setup"));
+    let buildkit = workflow
+        .find("uses: docker/setup-buildx-action")
+        .ok_or_else(|| anyhow::anyhow!("{name} must configure secret-free BuildKit"))?;
+    let task = workflow
         .find("run: task ci:repository-policy:untrusted")
         .ok_or_else(|| anyhow::anyhow!("{name} must run the untrusted policy Task"))?;
-
-    assert!(
-        toolchain < cache && cache < first_preflight_task,
-        "{name} must restore Rust dependencies after toolchain setup and before Cargo work"
-    );
-    for marker in [
-        "shared-key: pr-preflight",
-        "workspaces: preflight -> target",
-    ] {
+    assert!(buildkit < task);
+    for forbidden in ["dtolnay/rust-toolchain", "Swatinem/rust-cache"] {
         assert!(
-            workflow.contains(marker),
-            "{name} Rust cache is missing `{marker}`"
+            !workflow.contains(forbidden),
+            "{name} must use Docker-owned Rust tooling"
         );
     }
     Ok(())

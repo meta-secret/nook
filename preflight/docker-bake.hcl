@@ -53,3 +53,39 @@ target "preflight-cli-export" {
   inherits = ["_preflight-common"]
   target   = "cli-export"
 }
+
+target "preflight-repository-policy" {
+  inherits = ["_preflight-common"]
+  target   = "repository-policy"
+  output   = ["type=cacheonly"]
+}
+
+target "preflight-loom-verify" {
+  inherits = ["_preflight-common"]
+  target   = "loom-verify"
+  output   = ["type=cacheonly"]
+}
+
+target "preflight-source-architecture" {
+  inherits = ["_preflight-common"]
+  target   = "source-architecture"
+  output   = ["type=cacheonly"]
+}
+
+target "preflight-typescript-state" {
+  inherits = ["_preflight-common"]
+  target   = "typescript-state"
+  output   = ["type=cacheonly"]
+}
+
+target "preflight-loom-contracts" {
+  inherits = ["_preflight-common"]
+  target   = "loom-contracts"
+  output   = ["type=cacheonly"]
+}
+
+target "preflight-repository-policy-untrusted" {
+  inherits = ["_preflight-common"]
+  target   = "repository-policy-untrusted"
+  output   = ["type=cacheonly"]
+}

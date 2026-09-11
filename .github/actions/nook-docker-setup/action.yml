@@ -215,6 +215,12 @@ runs:
           read_only=1
         fi
 
+        # ARC retains its solved graph in the persistent shard and does not publish
+        # exact-SHA caches. Do not probe refs this execution path never writes.
+        if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+          isolated_cache_write=false
+        fi
+
         scope_suffix=""
         fallback_enabled=""
         hive_remote_ref=""

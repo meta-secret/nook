@@ -109,6 +109,6 @@ if [[ "${#skill_application_files[@]}" -gt 0 ]]; then
   for index in "${!skill_application_files[@]}"; do
     skill_root="${skill_application_roots[$index]}"
     skill_path="${skill_application_files[$index]}"
-    format_changed_files "$repo_root/$skill_root/.prettierrc" "$repo_root/$skill_root" "$skill_path"
+    format_changed_files "$formatter_root/prettier-skill.json" "$repo_root/$skill_root" "$skill_path"
   done
 fi

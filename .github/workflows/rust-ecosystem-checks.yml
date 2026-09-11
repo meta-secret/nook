@@ -21,6 +21,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Forks and Dependabot intentionally run without private compiler-cache access.
+  SCCACHE_OPTIONAL: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && '1' || '' }}
+
 jobs:
   dependency-policy:
     name: Dependency policy and RustSec
@@ -28,7 +32,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      - uses: go-task/setup-task@v2
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
+        with:
+          version: 3.52.0
+      - uses: docker/setup-buildx-action@v4
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
       - uses: ./.github/actions/nook-docker-setup
+        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
           cache-selection: ecosystem-policy-tools
           registry-host: registry.dev.nokey.sh
@@ -54,7 +65,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      - uses: go-task/setup-task@v2
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
+        with:
+          version: 3.52.0
+      - uses: docker/setup-buildx-action@v4
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
       - uses: ./.github/actions/nook-docker-setup
+        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
           cache-selection: ecosystem-deterministic
           registry-host: registry.dev.nokey.sh
@@ -78,7 +96,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      - uses: go-task/setup-task@v2
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
+        with:
+          version: 3.52.0
+      - uses: docker/setup-buildx-action@v4
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
       - uses: ./.github/actions/nook-docker-setup
+        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
           cache-selection: ecosystem-fuzz
           registry-host: registry.dev.nokey.sh
@@ -104,7 +129,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      - uses: go-task/setup-task@v2
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
+        with:
+          version: 3.52.0
+      - uses: docker/setup-buildx-action@v4
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
       - uses: ./.github/actions/nook-docker-setup
+        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
           cache-selection: ecosystem-kani
           registry-host: registry.dev.nokey.sh
@@ -126,7 +158,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      - uses: go-task/setup-task@v2
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
+        with:
+          version: 3.52.0
+      - uses: docker/setup-buildx-action@v4
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
       - uses: ./.github/actions/nook-docker-setup
+        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
           cache-selection: ecosystem-dylint
           registry-host: registry.dev.nokey.sh

@@ -154,9 +154,19 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
                         .copied()
                         .unwrap_or_else(|| panic!("{path} has no default for FROM ${{{name}}}"))
                 });
+            let trusted_formatter_context =
+                path == ".github/formatting/ci.Dockerfile" && reference == "formatter-tools";
+            if trusted_formatter_context {
+                let bake = RepositoryFixture::repository_root().read(".github/formatting/ci.hcl");
+                assert!(bake.contains("formatter-tools = \"target:formatter-tools\""));
+                assert!(bake.contains(
+                    "target \"formatter-tools\" {\n  context = \".\"\n  dockerfile = \"Dockerfile\""
+                ));
+            }
             assert!(
                 resolved == "scratch"
                     || stages.contains(reference)
+                    || trusted_formatter_context
                     || matches!(
                         reference,
                         "rust-base" | "web-base" | "web-runtime" | "wasm-deps"

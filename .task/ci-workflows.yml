@@ -1,45 +1,22 @@
-version: '3'
+version: "3"
 
 vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
 
 tasks:
-  ci:repository-policy:vale:activate:
-    desc: Add the provisioned pinned Vale binary to later GitHub Actions steps.
-    cmds:
-      - |
-        set -euo pipefail
-        vale_bin="$(find "$RUNNER_TOOL_CACHE/vale/3.19.0" -type f -name vale -perm -u+x -print -quit)"
-        if [ -z "$vale_bin" ]; then
-          echo "Vale 3.19.0 was not provisioned." >&2
-          exit 1
-        fi
-        vale_dir="$(dirname "$vale_bin")"
-        PATH="$vale_dir:$PATH"
-        if [ "$(vale --version)" != "vale version 3.19.0" ]; then
-          echo "Vale 3.19.0 was not provisioned." >&2
-          exit 1
-        fi
-        printf '%s\n' "$vale_dir" >> "$GITHUB_PATH"
-
   ci:repository-policy:trusted:
-    desc: Enforce preflight and Loom policy with trusted BuildKit access.
+    desc: Enforce repository policy with trusted read-only BuildKit access.
     cmds:
-      - task: preflight:format-contract
-      - task: preflight:test
-      - task: loom:verify
-      - task: loom:cortex-audit
+      - task: preflight:repository-policy
 
   ci:repository-policy:untrusted:
-    desc: Enforce preflight and Loom policy without private credentials.
+    desc: Enforce the same Docker policy without private credentials or caches.
+    env:
+      GHA_CACHE_ENABLED: ""
+      GHA_CACHE_WRITE_ENABLED: ""
     cmds:
-      - task: preflight:format-contract
-      - task: preflight:source-architecture
-      - task: preflight:typescript-state
-      - task: preflight:loom-contracts
-      - task: loom:verify
-      - task: loom:cortex-audit
+      - task: preflight:repository-policy-untrusted
 
   ci:pr:deploy-and-verify-previews:
     desc: Deploy and verify Cloudflare Pages PR preview aliases.
@@ -78,8 +55,28 @@ tasks:
 
   rust:deps:outdated:
     desc: Audit direct Cargo dependencies with cargo-outdated.
+    dir: '{{.REPO_ROOT}}'
     cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/ci-rust-deps-outdated.sh"
+      - |
+        set -euo pipefail
+        output="$(mktemp -d)"
+        trap 'rm -rf "$output"' EXIT
+        docker buildx bake \
+          --allow="fs.read={{.REPO_ROOT}}" --allow="fs.write=$output" \
+          -f '{{.REPO_ROOT}}/nook-app/docker-bake.hcl' \
+          -f '{{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/docker-bake.hcl' \
+          -f '{{.REPO_ROOT}}/.github/docker/rust-maintenance.hcl' \
+          --set "rust-dependency-audit.output=type=local,dest=$output" \
+          rust-dependency-audit
+        grep -Ex 'outdated=(true|false)' "$output/result"
+        test "$(wc -l < "$output/result")" -eq 1
+        cat "$output/report.txt"
+        if [ -n "${GITHUB_OUTPUT:-}" ]; then
+          cat "$output/result" >> "$GITHUB_OUTPUT"
+        fi
+        if [ -n "${RUST_DEPS_OUTDATED_REPORT:-}" ]; then
+          cp "$output/report.txt" "$RUST_DEPS_OUTDATED_REPORT"
+        fi
 
   docker:prune:stale:
     desc: Prune stale Docker data on self-hosted runners.
@@ -99,7 +96,7 @@ tasks:
 
   web:research:verify:
     desc: Format-check, check, build, and e2e the web-research catalog.
-    dir: '{{.ROOT_DIR}}/nook-app/nook-web/nook-web-research'
+    dir: "{{.ROOT_DIR}}/nook-app/nook-web/nook-web-research"
     cmds:
       - bun run format:check
       - bun run check
@@ -120,3 +117,58 @@ tasks:
     desc: Validate the root Taskfile still exposes Hive infrastructure commands.
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/infra-surface-check.sh"
+
+  ci:format:implementation:
+    desc: Format only the bounded implementation file list with trusted Docker tooling.
+    dir: "{{.REPO_ROOT}}"
+    requires:
+      vars: [IMPLEMENTATION_REPO_ROOT, FORMAT_CHANGED_FILES]
+    cmds:
+      - |
+        bash <<'FORMAT_BASH'
+        set -euo pipefail
+        inputs="$(mktemp -d)"
+        output="$(mktemp -d)"
+        trap 'rm -rf "$inputs" "$output"' EXIT
+        cp "$FORMAT_CHANGED_FILES" "$inputs/files"
+        implementation="$(realpath "$IMPLEMENTATION_REPO_ROOT")"
+        # Stage only the reviewed changed-file list. Never upload the implementation
+        # checkout, its Git configuration, or implementation-authored build tooling.
+        mkdir "$inputs/source"
+        while IFS= read -r -d '' path; do
+          case "$path" in
+            ''|/*|..|../*|*/../*|*/..|.git|.git/*) exit 1 ;;
+          esac
+          if [ ! -f "$implementation/$path" ] || [ -L "$implementation/$path" ]; then
+            continue
+          fi
+          resolved="$(realpath "$implementation/$path")"
+          case "$resolved" in "$implementation"/*) ;; *) exit 1 ;; esac
+          mkdir -p "$inputs/source/$(dirname "$path")"
+          cp -- "$implementation/$path" "$inputs/source/$path"
+        done <"$inputs/files"
+        docker buildx bake \
+          --allow="fs.read={{.REPO_ROOT}}" \
+          --allow="fs.read=$inputs" \
+          --allow="fs.write=$output" \
+          -f '{{.REPO_ROOT}}/.github/formatting/ci.hcl' \
+          --set "formatter-tools.context={{.REPO_ROOT}}/.github/formatting" \
+          --set "format-export.context={{.REPO_ROOT}}/.github/formatting" \
+          --set "format-export.contexts.implementation-source=$inputs/source" \
+          --set "format-export.contexts.format-input=$inputs" \
+          --set "format-export.output=type=local,dest=$output" \
+          format-export
+        while IFS= read -r -d '' path; do
+          case "$path" in
+            ''|/*|..|../*|*/../*|*/..|.git|.git/*) exit 1 ;;
+          esac
+          if [ ! -f "$implementation/$path" ] || [ -L "$implementation/$path" ]; then
+            test ! -e "$output/$path"
+            continue
+          fi
+          resolved="$(realpath "$implementation/$path")"
+          case "$resolved" in "$implementation"/*) ;; *) exit 1 ;; esac
+          test -f "$output/$path" && test ! -L "$output/$path"
+          cp -- "$output/$path" "$implementation/$path"
+        done <"$inputs/files"
+        FORMAT_BASH

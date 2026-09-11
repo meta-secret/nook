@@ -6,7 +6,7 @@ name: Rust dependency updates
 on:
   schedule:
     # GitHub cron is UTC.
-    - cron: '0 9 * * 1'
+    - cron: "0 9 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -26,19 +26,17 @@ jobs:
       sha: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      # cargo-outdated is an orchestration-only tool; application builds and
-      # validation remain inside the repository Docker Task targets.
-      - name: Install cargo-outdated
-        run: cargo install cargo-outdated --version 0.19.0 --locked
-
-      - name: Setup Task
-        uses: go-task/setup-task@v2
         with:
-          version: 3.52.0
+          persist-credentials: false
+
+      - name: Connect Docker Rust audit tooling
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: connection-only
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
 
       - name: Check every direct Cargo dependency
         id: audit
@@ -68,7 +66,7 @@ jobs:
       CI_AGENT_FIX_PROFILE: rust-dependency-update
       CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
       CI_FIX_LABEL: Rust dependency update
-      CI_AGENT_TIMEOUT_MS: '10800000'
+      CI_AGENT_TIMEOUT_MS: "10800000"
       AGENT_PR_TITLE: "chore(rust): update direct dependencies"
       AGENT_PR_BODY: |
         ## Summary
@@ -127,5 +125,5 @@ jobs:
           RUST_DEPS_OUTDATED_REPORT: ${{ runner.temp }}/rust-deps-outdated.txt
           VITE_BASE: /
           WASM_BUILD_MODE: prod
-          VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+          VITE_VAULT_SYNC_INTERVAL_MS: "1000"
         run: task ci-agent:fix
