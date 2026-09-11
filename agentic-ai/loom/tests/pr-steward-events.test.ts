@@ -13,6 +13,9 @@ import {
   PrStewardEventObserver,
   PrStewardInvocationCodec,
   PrStewardCredentialFile,
+  PrStewardBoundedMessageStream,
+  PrStewardSubscriptionKind,
+  PrStewardSubscriptionOverloadError,
 } from '../src/pr-steward-events.ts';
 import {
   PR_STEWARD_REPOSITORY,
@@ -206,6 +209,61 @@ describe('PR Steward credentials and invocation codec', () => {
 });
 
 describe('exact-head routing observations', () => {
+  test('admits four messages and synchronously unsubscribes on overflow', async () => {
+    const messages = new PrStewardBoundedMessageStream();
+    let unsubscribed = 0;
+    const unsubscribe = (): void => {
+      unsubscribed += 1;
+    };
+    messages.admit({ data: encoder.encode('0'), unsubscribe });
+    const iterator = messages[Symbol.asyncIterator]();
+    const first = await iterator.next();
+    if (first.done) throw new Error('expected first admitted message');
+    for (let index = 1; index < 5; index += 1)
+      messages.admit({ data: encoder.encode(String(index)), unsubscribe });
+    expect(unsubscribed).toBe(1);
+    const admitted = [new TextDecoder().decode(first.value.data)];
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) break;
+      admitted.push(new TextDecoder().decode(next.value.data));
+    }
+    expect(admitted).toEqual(['0', '1', '2', '3']);
+    const outcome = messages.outcome();
+    expect(outcome).toEqual({
+      kind: PrStewardSubscriptionKind.Overloaded,
+      pending: 4,
+    });
+    if (outcome.kind !== PrStewardSubscriptionKind.Overloaded)
+      throw new Error('expected overload outcome');
+    const failure = new PrStewardSubscriptionOverloadError({
+      pending: outcome.pending,
+    });
+    expect(failure.pending).toBe(4);
+    expect(failure.message).toContain('4 pending messages');
+  });
+
+  test('settles admitted messages before reporting normal closure', async () => {
+    const messages = new PrStewardBoundedMessageStream();
+    let unsubscribed = false;
+    messages.admit({
+      data: encoder.encode('admitted'),
+      unsubscribe: () => {
+        unsubscribed = true;
+      },
+    });
+    messages.terminate({ kind: PrStewardSubscriptionKind.Closed });
+    const admitted: string[] = [];
+    for await (const message of messages)
+      admitted.push(new TextDecoder().decode(message.data));
+    expect(admitted).toEqual(['admitted']);
+    const outcome = messages.outcome();
+    expect(outcome).toEqual({
+      kind: PrStewardSubscriptionKind.Closed,
+    });
+    expect(unsubscribed).toBe(false);
+  });
+
   test.each([
     {
       event: 'pull_request',
@@ -518,7 +576,7 @@ describe('exact-head routing observations', () => {
     ).rejects.toBe(failure);
   });
 
-  test('bounds concurrent observations while continuing message consumption', async () => {
+  test('processes one admitted observation at a time', async () => {
     const reader = new PendingPrReader();
     const event = cloudEvent({
       event: 'pull_request',
@@ -529,7 +587,7 @@ describe('exact-head routing observations', () => {
       reader,
     });
     await Bun.sleep(0);
-    expect(reader.reads).toBe(4);
+    expect(reader.reads).toBe(1);
     reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
     expect(await observation).toHaveLength(5);
   });
@@ -568,7 +626,7 @@ describe('exact-head routing observations', () => {
     ).toMatchObject([{ eventId: 'first' }, { eventId: 'second' }]);
   });
 
-  test('settles and discards pending work before propagating stream failure', async () => {
+  test('settles admitted work before propagating stream failure', async () => {
     const reader = new PendingPrReader();
     const failure = new Error('stream failure');
     const lines: string[] = [];
@@ -589,7 +647,7 @@ describe('exact-head routing observations', () => {
     expect(reader.reads).toBe(1);
     reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
     await expect(observation).rejects.toBe(failure);
-    expect(lines).toHaveLength(0);
+    expect(lines).toHaveLength(1);
   });
 });
 
