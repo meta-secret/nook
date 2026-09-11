@@ -12,6 +12,8 @@ import {
   ExtensionSessionRequestParseKind,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   parseExtensionSessionRequest,
+  type ExtensionSessionQueue,
+  type ParsedExtensionSessionTransportRequest,
 } from '../src/offscreen/session-request-adapter'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 function messagePayload(message: unknown): Record<string, unknown> {
@@ -25,6 +27,40 @@ function messagePayload(message: unknown): Record<string, unknown> {
 }
 async function decodeProviders(providers: StorageProvider[]) {
   return structuredClone(providers)
+}
+function githubProvider(token: string): StorageProvider {
+  return {
+    id: 'provider',
+    type: 'github',
+    label: 'GitHub',
+    githubPat: { state: 'token', value: token },
+    githubRepo: { state: 'defaultRepository' },
+    oauthFile: { state: 'notApplicable' },
+    localFolder: { state: 'notApplicable' },
+    storeId: { state: 'unscoped' },
+    syncCheckpoint: { state: 'neverSynced' },
+    createdAt: '2026-08-10T00:00:00Z',
+  }
+}
+function vaultImportRequest(
+  providers: StorageProvider[],
+  queue: ExtensionSessionQueue = MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+): Extract<
+  ParsedExtensionSessionTransportRequest,
+  { type: ExtensionSessionMessageType.ImportVault }
+> {
+  return {
+    type: ExtensionSessionMessageType.ImportVault,
+    payload: {
+      vaultStoreId: 'vault',
+      deviceId: 'device',
+      devicePublicKey: 'public',
+      deviceSigningPublicKey: 'signing',
+      providers,
+      eventLogRecords: [],
+      queue,
+    },
+  }
 }
 describe('ExtensionSessionMessageDispatcher', () => {
   test('routes grant authority through runtime ingress and the owned queue', async () => {
@@ -540,23 +576,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
   })
 
   test('scrubs an accepted caller provider array after staging', async () => {
-    const providers: StorageProvider[] = [
-      {
-        id: 'provider',
-        type: 'github',
-        label: 'GitHub',
-        githubPat: {
-          state: 'token',
-          value: 'github_pat_accepted_secret',
-        },
-        githubRepo: { state: 'defaultRepository' },
-        oauthFile: { state: 'notApplicable' },
-        localFolder: { state: 'notApplicable' },
-        storeId: { state: 'unscoped' },
-        syncCheckpoint: { state: 'neverSynced' },
-        createdAt: '2026-08-10T00:00:00Z',
-      },
-    ]
+    const providers = [githubProvider('github_pat_accepted_secret')]
     const payload = {
       providers,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -601,10 +621,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     })
 
-    const response = dispatcher.enqueue({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload,
-    })
+    const response = dispatcher.enqueue(
+      vaultImportRequest(payload.providers, payload.queue),
+    )
 
     expect(payload.providers).toEqual([])
     expect(providers[0]?.githubPat.state).toBe('missing')
@@ -649,13 +668,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     })
 
-    const importResponse = dispatcher.enqueue({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload: {
-        providers: [],
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-      },
-    })
+    const importResponse = dispatcher.enqueue(vaultImportRequest([]))
     const resetResponse = dispatcher.enqueue({
       type: ExtensionSessionMessageType.Reset,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
@@ -686,8 +699,8 @@ describe('ExtensionSessionMessageDispatcher', () => {
       releaseBlocker = resolve
     })
     const stagedProviders = [
-      { githubPat: 'github_pat_canceled_staged_secret' },
-    ] as StorageProvider[]
+      githubProvider('github_pat_canceled_staged_secret'),
+    ]
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
         err(
@@ -719,13 +732,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     })
-    const importResponse = dispatcher.enqueue({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload: {
-        providers: [{ githubPat: 'caller-secret' }],
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-      },
-    })
+    const importResponse = dispatcher.enqueue(
+      vaultImportRequest([githubProvider('caller-secret')]),
+    )
 
     dispatcher.replaceOperations(
       new SessionOperationFailure(SessionOperationFailureKind.Closed),
@@ -749,9 +758,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const blocker = new Promise<void>((resolve) => {
       releaseBlocker = resolve
     })
-    const stagedProviders = [
-      { githubPat: 'github_pat_expired_queue_secret' },
-    ] as StorageProvider[]
+    const stagedProviders = [githubProvider('github_pat_expired_queue_secret')]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
@@ -783,17 +790,13 @@ describe('ExtensionSessionMessageDispatcher', () => {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     })
-    const importResponse = dispatcher.enqueue({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload: {
-        providers: [{ githubPat: 'caller-secret' }],
-        queue: {
-          kind: 'deadline',
-          expiresAt: Date.now() + 10,
-          priority: 'interactive',
-        },
-      },
-    })
+    const importResponse = dispatcher.enqueue(
+      vaultImportRequest([githubProvider('caller-secret')], {
+        kind: 'deadline',
+        expiresAt: Date.now() + 10,
+        priority: 'interactive',
+      }),
+    )
     const importRejection = expect(importResponse).resolves.toEqual(
       err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
     )
@@ -814,9 +817,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const decodedProviders = new Promise<StorageProvider[]>((resolve) => {
       finishDecode = resolve
     })
-    const stagedProviders = [
-      { githubPat: 'github_pat_expired_staged_secret' },
-    ] as StorageProvider[]
+    const stagedProviders = [githubProvider('github_pat_expired_staged_secret')]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
@@ -842,13 +843,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     })
 
-    const importResponse = dispatcher.enqueue({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload: {
-        providers: [{ githubPat: 'caller-secret' }],
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-      },
-    })
+    const importResponse = dispatcher.enqueue(
+      vaultImportRequest([githubProvider('caller-secret')]),
+    )
     await Promise.resolve()
     dispatcher.replaceOperations(
       new SessionOperationFailure(SessionOperationFailureKind.Closed),

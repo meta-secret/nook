@@ -39,9 +39,19 @@ type ImportVaultRequest = Extract<
 >
 
 export type ImportExtensionVaultArgs = {
-  activeManager: NookVaultManager
+  activeManager: ExtensionVaultImportManager
   message: ImportVaultRequest
 }
+
+export type ExtensionVaultImportManager = Pick<
+  NookVaultManager,
+  | 'device_id'
+  | 'activate_local_identity_for_app_id'
+  | 'import_extension_event_log_records_js'
+  | 'device_protection_status'
+  | 'replace_auth_providers_for_vault'
+  | 'save_presealed_auth_providers_snapshot'
+>
 
 export type ImportExtensionVaultDependencies = {
   decodeProviders: (snapshot: AuthProvidersSnapshot) => StorageProvider[]
@@ -61,18 +71,21 @@ export type ImportExtensionVaultWithDependenciesArgs =
   }
 
 export type OpenPasskeyVaultRequest = {
-  activeManager: NookVaultManager
+  activeManager: Pick<NookVaultManager, 'open_extension_passkey_vault_js'>
   grant: ExtensionVaultGrant
 }
 
 export type CompanionDiscoveryEndpoint =
   | {
       kind: CompanionDiscoveryEndpointKind.Initial
-      endpoint: NookCompanionExtensionEndpoint
+      endpoint: Pick<NookCompanionExtensionEndpoint, 'discover' | 'free'>
     }
   | {
       kind: CompanionDiscoveryEndpointKind.Discovered
-      endpoint: NookDiscoveredCompanionExtensionEndpoint
+      endpoint: Pick<
+        NookDiscoveredCompanionExtensionEndpoint,
+        'rediscover' | 'free'
+      >
     }
 export enum CompanionDiscoveryEndpointKind {
   Initial = 'initial',
@@ -80,7 +93,7 @@ export enum CompanionDiscoveryEndpointKind {
 }
 
 export type CompanionVaultDiscoveryArgs = {
-  activeManager: NookVaultManager
+  activeManager: Pick<NookVaultManager, 'open_extension_passkey_vault_js'>
   endpoint: CompanionDiscoveryEndpoint
   presence: CompanionExtensionPresence
 }
@@ -91,16 +104,19 @@ export type PasskeyEventProviderFlushRequest = {
 }
 
 export type ActivatedExtensionIdentityOperation<
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   Outcome extends Result<unknown, SessionOperationFailure>,
 > = {
-  activeManager: NookVaultManager
+  activeManager: Pick<
+    NookVaultManager,
+    | 'device_id'
+    | 'device_protection_status'
+    | 'activate_local_identity_for_app_id'
+  >
   deviceId: string
   operation: () => Promise<Outcome>
 }
 
 export class ActivatedExtensionIdentityLifecycle<
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   Outcome extends Result<unknown, SessionOperationFailure>,
 > {
   constructor(

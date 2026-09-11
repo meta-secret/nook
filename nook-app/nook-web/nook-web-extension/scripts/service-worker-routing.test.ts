@@ -699,20 +699,28 @@ describe('service worker routing', () => {
 
   test('keeps the decoded local-update session usable for a subsequent authenticator request', async () => {
     const delivered: ExtensionSessionMessageType[] = []
-    const sendSession = async (message: {
-      type: ExtensionSessionMessageType
-    }) => {
-      delivered.push(message.type)
-      if (message.type === ExtensionSessionMessageType.ClassifyGrantAuthority)
+    const sendSession: Parameters<typeof routeDecodedLocalUpdate>[0] = async (
+      message,
+    ) => {
+      if (!message || typeof message !== 'object' || !('type' in message)) {
+        throw new Error('expected a typed extension session request')
+      }
+      if (message.type === ExtensionSessionMessageType.ClassifyGrantAuthority) {
+        delivered.push(ExtensionSessionMessageType.ClassifyGrantAuthority)
         return ok({ kind: 'Authorized' as const, grant: routedGrant })
-      if (message.type === ExtensionSessionMessageType.UpdateVault)
+      }
+      if (message.type === ExtensionSessionMessageType.UpdateVault) {
+        delivered.push(ExtensionSessionMessageType.UpdateVault)
         return ok({ ok: true })
-      if (message.type === ExtensionSessionMessageType.AuthenticatorCode)
+      }
+      if (message.type === ExtensionSessionMessageType.AuthenticatorCode) {
+        delivered.push(ExtensionSessionMessageType.AuthenticatorCode)
         return ok({
           ok: true,
           code: '012345',
           expiresAt: Date.now() + 30_000,
         })
+      }
       return err(
         new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.DeliveryFailed,

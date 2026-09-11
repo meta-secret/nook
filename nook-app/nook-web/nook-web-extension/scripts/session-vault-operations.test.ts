@@ -9,7 +9,6 @@ import {
   DeviceProtectionStatus,
   type AuthProvidersSnapshot,
   type NookExternalEventLogRecords,
-  type NookVaultManager,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { GITHUB_PROVIDER_TYPE } from '../../nook-web-shared/src/vault-app/lib/auth/provider-types'
@@ -21,6 +20,7 @@ import {
   importExtensionVaultWithDependencies,
   type ImportExtensionVaultDependencies,
   type ImportExtensionVaultWithDependenciesArgs,
+  type ExtensionVaultImportManager,
 } from '../src/offscreen/session-vault-operations'
 import type {
   CompanionExtensionPresence,
@@ -49,13 +49,14 @@ function githubProvider(): StorageProvider {
     id: 'github',
     type: GITHUB_PROVIDER_TYPE,
     label: 'Personal GitHub',
-    githubPat: 'github_pat_session_secret',
+    githubPat: { state: 'token', value: 'github_pat_session_secret' },
     githubRepo: { state: 'defaultRepository' },
     oauthFile: { state: 'notApplicable' },
     localFolder: { state: 'notApplicable' },
     storeId: { state: 'unscoped' },
     createdAt: '2026-08-11T00:00:00Z',
-  } as StorageProvider
+    syncCheckpoint: { state: 'untracked' },
+  }
 }
 
 function importRequest(
@@ -85,7 +86,17 @@ function importDependencies(
   }
 }
 
-function importManager(state: ImportManagerState): NookVaultManager {
+function importedStatus() {
+  return {
+    imported: true,
+    vaultStoreId: 'vault',
+    eventCount: 0,
+    heads: [],
+    accessGranted: true,
+  }
+}
+
+function importManager(state: ImportManagerState): ExtensionVaultImportManager {
   return {
     get device_id() {
       return state.deviceId
@@ -95,7 +106,7 @@ function importManager(state: ImportManagerState): NookVaultManager {
       state.importedRecords = true
       if (state.rejectImport) throw new Error('import failed')
       return {
-        to_object: () => ({ imported: true }),
+        to_object: importedStatus,
         free: () => {
           state.statusFreed = true
         },
@@ -126,7 +137,7 @@ function importManager(state: ImportManagerState): NookVaultManager {
       state.deviceId = appId
       return previousAppId
     },
-  } as NookVaultManager
+  }
 }
 
 function importState(protection: DeviceProtectionStatus): ImportManagerState {
@@ -165,7 +176,7 @@ describe('extension vault import operations', () => {
     await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
       ok({
         ok: true,
-        status: { imported: true },
+        status: importedStatus(),
       }),
     )
     expect(state.importedRecords).toBe(true)
@@ -193,7 +204,7 @@ describe('extension vault import operations', () => {
     await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
       ok({
         ok: true,
-        status: { imported: true },
+        status: importedStatus(),
       }),
     )
     expect(state.replaced).toBe(false)
@@ -327,17 +338,18 @@ class CompanionVaultDiscoveryScenario {
     observedAt: 100,
   } satisfies CompanionIdentityDiscoveryObservation
 
-  private readonly activeManager = {
-    open_extension_passkey_vault_js: this.openVault.bind(this),
-  } as NookVaultManager
+  private readonly activeManager: CompanionVaultDiscoveryArgs['activeManager'] =
+    {
+      open_extension_passkey_vault_js: this.openVault.bind(this),
+    }
 
-  private readonly endpoint = {
+  private readonly endpoint: CompanionVaultDiscoveryArgs['endpoint'] = {
     kind: CompanionDiscoveryEndpointKind.Initial,
     endpoint: {
       discover: () => ({ status: this.reportUnlocked() }),
       free: () => {},
     },
-  } as CompanionVaultDiscoveryArgs['endpoint']
+  }
 
   constructor(private readonly openOutcome: CompanionVaultOpenOutcome) {}
 

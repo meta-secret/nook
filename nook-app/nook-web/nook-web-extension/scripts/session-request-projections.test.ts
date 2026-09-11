@@ -103,6 +103,7 @@ describe('extension session request projections', () => {
 
   test('removes stored-grant metadata from login reveal', () => {
     const grant = {
+      vaultType: 'simple',
       vaultStoreId: 'vault',
       deviceId: 'device',
       devicePublicKey: 'public',
@@ -110,13 +111,18 @@ describe('extension session request projections', () => {
       vaultName: 'Private vault',
       deviceLabel: 'Laptop',
       approvedAt: '2026-08-10T00:00:00Z',
-    } as StoredExtensionPairingGrant
+      scopes: ['password-filling'],
+      syncProviderCount: 0,
+      eventCount: 1,
+      eventLogHeads: ['event-1'],
+      lastLocalSyncAt: '2026-08-10T00:00:00Z',
+    } satisfies StoredExtensionPairingGrant
     const args: Parameters<typeof websiteLoginRevealSessionRequest>[0] = {
       grant,
       origin: 'https://example.com',
       secretId: 'secret',
     }
-    const expected = {
+    const expected: ReturnType<typeof websiteLoginRevealSessionRequest> = {
       type: ExtensionSessionMessageType.RevealLogin,
       payload: {
         vaultStoreId: 'vault',

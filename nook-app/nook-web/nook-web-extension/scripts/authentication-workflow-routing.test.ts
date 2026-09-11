@@ -46,6 +46,28 @@ function workflowDependencies(
   }
 }
 
+function matchedWorkflowSnapshot({
+  observationIndex,
+  action,
+}: {
+  observationIndex: number
+  action: number
+}) {
+  return {
+    kind: AuthenticationWorkflowSnapshotKind.Matched,
+    snapshot: {
+      kind: 0,
+      stage: 0,
+      action,
+      currentStep: 1,
+      totalSteps: 1,
+      approvalRequirement: 'explicit-user-approval',
+      savedLoginCapability: 'fill-saved-login',
+      observationIndex,
+    },
+  }
+}
+
 describe('authentication workflow routing', () => {
   test('waits for companion WASM before classifying cold-start passkey evidence', async () => {
     let resolveReady = () => {}
@@ -72,10 +94,7 @@ describe('authentication workflow routing', () => {
         events.push(
           `snapshot:${observations[0]?.authenticator.matchingPasskeyAccountCount}`,
         )
-        return {
-          kind: AuthenticationWorkflowSnapshotKind.Matched,
-          snapshot: { observationIndex: 0 },
-        }
+        return matchedWorkflowSnapshot({ observationIndex: 0, action: 0 })
       },
       authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
       authenticationWorkflowRequiresLoginMatchAvailability: () => true,
@@ -144,10 +163,8 @@ describe('authentication workflow routing', () => {
           kind: MatchingPasskeyAvailabilityKind.Ready,
           accountCount: 2,
         }),
-        authenticationWorkflowSnapshot: async () => ({
-          kind: AuthenticationWorkflowSnapshotKind.Matched,
-          snapshot: { observationIndex: 0, action: 4 },
-        }),
+        authenticationWorkflowSnapshot: async () =>
+          matchedWorkflowSnapshot({ observationIndex: 0, action: 4 }),
         authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
         authenticationWorkflowRequiresLoginMatchAvailability: () => true,
         websiteLoginMatchAvailability: async () => {
@@ -185,10 +202,8 @@ describe('authentication workflow routing', () => {
         kind: MatchingPasskeyAvailabilityKind.Ready,
         accountCount: 0,
       }),
-      authenticationWorkflowSnapshot: async () => ({
-        kind: AuthenticationWorkflowSnapshotKind.Matched,
-        snapshot: { observationIndex: 0, action: 0 },
-      }),
+      authenticationWorkflowSnapshot: async () =>
+        matchedWorkflowSnapshot({ observationIndex: 0, action: 0 }),
       authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
       authenticationWorkflowRequiresLoginMatchAvailability: () => false,
       websiteLoginMatchAvailability: async () => {

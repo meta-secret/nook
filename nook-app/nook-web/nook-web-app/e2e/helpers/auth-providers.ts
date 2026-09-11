@@ -52,7 +52,7 @@ export function activeAuthProviderSeedScope(
   return { kind: AuthProviderSeedScopeKind.ActiveVault, storeId }
 }
 
-export enum AuthProviderHookFailure {
+enum AuthProviderHookFailure {
   HookUnavailable = 'hook-unavailable',
   ReadFailed = 'read-failed',
   WriteFailed = 'write-failed',

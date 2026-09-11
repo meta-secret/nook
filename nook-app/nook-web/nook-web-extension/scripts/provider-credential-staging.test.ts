@@ -159,8 +159,8 @@ describe('provider credential staging', () => {
 
   test('identity-only metadata cannot become a stored provider', async () => {
     expect(
-      await providerStagingFixture.stage([{ id: 'github', type: 'github' }]),
-    ).toEqual(err(ProviderCredentialFailure.AdmissionRejected))
+      (await parseProviderImport([{ id: 'github', type: 'github' }])).kind,
+    ).toBe(ExtensionSessionRequestParseKind.Invalid)
   })
 
   test('canonical admission does not retain prototype metadata', async () => {

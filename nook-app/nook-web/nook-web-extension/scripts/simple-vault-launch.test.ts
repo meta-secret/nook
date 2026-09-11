@@ -26,14 +26,16 @@ describe('Simple Vault browser launch', () => {
       'runtimeSimpleVaultUrl',
     ).mockReturnValue(url.operation)
     const createRequests: chrome.tabs.CreateProperties[] = []
-    globalThis.chrome = {
-      tabs: {
-        create: (request: chrome.tabs.CreateProperties) => {
-          createRequests.push(request)
-          return tab.operation
+    Object.assign(globalThis, {
+      chrome: {
+        tabs: {
+          create: (request: chrome.tabs.CreateProperties) => {
+            createRequests.push(request)
+            return tab.operation
+          },
         },
       },
-    } as typeof chrome
+    })
     let completed = false
     try {
       const opening = extensionSessionLifecycle
@@ -50,7 +52,21 @@ describe('Simple Vault browser launch', () => {
         { url: 'https://simple.example.test/vault' },
       ])
       expect(completed).toBe(false)
-      tab.complete({ id: 1 } as chrome.tabs.Tab)
+      tab.complete({
+        id: 1,
+        index: 0,
+        pinned: false,
+        highlighted: false,
+        windowId: 1,
+        active: true,
+        incognito: false,
+        selected: true,
+        discarded: false,
+        autoDiscardable: true,
+        frozen: false,
+        lastAccessed: 0,
+        groupId: chrome.tabGroups.TAB_GROUP_ID_NONE,
+      })
       await opening
       expect(completed).toBe(true)
     } finally {
@@ -64,14 +80,16 @@ describe('Simple Vault browser launch', () => {
       'runtimeSimpleVaultUrl',
     ).mockRejectedValue('url unavailable')
     const createRequests: chrome.tabs.CreateProperties[] = []
-    globalThis.chrome = {
-      tabs: {
-        create: (request: chrome.tabs.CreateProperties) => {
-          createRequests.push(request)
-          return Promise.resolve({ id: 1 } as chrome.tabs.Tab)
+    Object.assign(globalThis, {
+      chrome: {
+        tabs: {
+          create: (request: chrome.tabs.CreateProperties) => {
+            createRequests.push(request)
+            return Promise.resolve()
+          },
         },
       },
-    } as typeof chrome
+    })
     try {
       await expect(extensionSessionLifecycle.openSimpleVault()).rejects.toBe(
         'url unavailable',
@@ -87,9 +105,11 @@ describe('Simple Vault browser launch', () => {
       simpleVaultRuntime,
       'runtimeSimpleVaultUrl',
     ).mockResolvedValue('https://simple.example.test/')
-    globalThis.chrome = {
-      tabs: { create: () => Promise.reject('tab unavailable') },
-    } as typeof chrome
+    Object.assign(globalThis, {
+      chrome: {
+        tabs: { create: () => Promise.reject('tab unavailable') },
+      },
+    })
     try {
       await expect(extensionSessionLifecycle.openSimpleVault()).rejects.toBe(
         'tab unavailable',

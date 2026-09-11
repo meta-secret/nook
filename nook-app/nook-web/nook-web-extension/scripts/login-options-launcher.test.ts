@@ -167,7 +167,11 @@ describe('websiteLoginOptions', () => {
       kind: 'deadline',
       priority: 'probe',
     })
-    expect(availabilityRequests[0]?.queue.expiresAt).toBeGreaterThan(Date.now())
+    const availabilityQueue = availabilityRequests[0]?.queue
+    if (!availabilityQueue || !('expiresAt' in availabilityQueue)) {
+      throw new Error('expected a bounded availability request')
+    }
+    expect(availabilityQueue.expiresAt).toBeGreaterThan(Date.now())
 
     loginAccountAvailability = { ok: false }
     const failedPassiveResponse =

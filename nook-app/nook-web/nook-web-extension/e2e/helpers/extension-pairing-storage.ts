@@ -1,5 +1,4 @@
 import type { Page, Worker } from '@playwright/test'
-import type { PageFunction } from 'playwright-core/types/structs'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   classify_extension_persistence_databases,
@@ -11,23 +10,11 @@ import {
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type ExtensionExecutionScope = Page | Worker
+type ExtensionPageFunctionWithoutArgument<Result> = () =>
+  Result | Promise<Result>
 
 function isPage(scope: ExtensionExecutionScope): scope is Page {
   return 'context' in scope
-}
-
-async function evaluateExtensionScope<Result, Argument>([
-  scope,
-  pageFunction,
-  argument,
-]: readonly [
-  ExtensionExecutionScope,
-  PageFunction<Argument, Result>,
-  Argument,
-]): Promise<Result> {
-  return isPage(scope)
-    ? scope.evaluate(pageFunction, argument)
-    : scope.evaluate(pageFunction, argument)
 }
 
 async function evaluateExtensionScopeWithoutArgument<Result>([
@@ -35,7 +22,7 @@ async function evaluateExtensionScopeWithoutArgument<Result>([
   pageFunction,
 ]: readonly [
   ExtensionExecutionScope,
-  PageFunction<void, Result>,
+  ExtensionPageFunctionWithoutArgument<Result>,
 ]): Promise<Result> {
   return isPage(scope)
     ? scope.evaluate(pageFunction)
@@ -77,22 +64,21 @@ async function observedStoreNames(
   args: IndexedDbSnapshotArgs,
 ): Promise<string[]> {
   const databaseName = extension_persistence_database_name(args.area)
-  return evaluateExtensionScope([
-    args.scope,
-    async (name: string) => {
-      const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open(name)
-        request.onsuccess = () => resolve(request.result)
-        request.onerror = () => reject(request.error)
-      })
-      try {
-        return Array.from(database.objectStoreNames)
-      } finally {
-        database.close()
-      }
-    },
-    databaseName,
-  ])
+  const readStoreNames = async (name: string) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(name)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      return Array.from(database.objectStoreNames)
+    } finally {
+      database.close()
+    }
+  }
+  return isPage(args.scope)
+    ? args.scope.evaluate(readStoreNames, databaseName)
+    : args.scope.evaluate(readStoreNames, databaseName)
 }
 
 async function readDatabaseSnapshot(
@@ -122,39 +108,38 @@ async function readDatabaseSnapshot(
     databaseName: extension_persistence_database_name(args.area),
     storeNames,
   }
-  return evaluateExtensionScope([
-    args.scope,
-    async (input: IndexedDbReadArgs) => {
-      const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open(input.databaseName)
-        request.onsuccess = () => resolve(request.result)
-        request.onerror = () => reject(request.error)
-      })
-      try {
-        const transaction = database.transaction(input.storeNames, 'readonly')
-        const snapshots = await Promise.all(
-          input.storeNames.map(async (storeName) => {
-            const store = transaction.objectStore(storeName)
-            const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
-              const request = store.getAllKeys()
-              request.onsuccess = () => resolve(request.result)
-              request.onerror = () => reject(request.error)
-            })
-            const values = await new Promise<unknown[]>((resolve, reject) => {
-              const request = store.getAll()
-              request.onsuccess = () => resolve(request.result)
-              request.onerror = () => reject(request.error)
-            })
-            return { storeName, keys, values }
-          }),
-        )
-        return JSON.stringify(snapshots)
-      } finally {
-        database.close()
-      }
-    },
-    readArgs,
-  ])
+  const readSnapshot = async (input: IndexedDbReadArgs) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(input.databaseName)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      const transaction = database.transaction(input.storeNames, 'readonly')
+      const snapshots = await Promise.all(
+        input.storeNames.map(async (storeName) => {
+          const store = transaction.objectStore(storeName)
+          const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+            const request = store.getAllKeys()
+            request.onsuccess = () => resolve(request.result)
+            request.onerror = () => reject(request.error)
+          })
+          const values = await new Promise<unknown[]>((resolve, reject) => {
+            const request = store.getAll()
+            request.onsuccess = () => resolve(request.result)
+            request.onerror = () => reject(request.error)
+          })
+          return { storeName, keys, values }
+        }),
+      )
+      return JSON.stringify(snapshots)
+    } finally {
+      database.close()
+    }
+  }
+  return isPage(args.scope)
+    ? args.scope.evaluate(readSnapshot, readArgs)
+    : args.scope.evaluate(readSnapshot, readArgs)
 }
 
 export async function readExtensionPersistenceSnapshot(
@@ -218,61 +203,59 @@ export async function writeExtensionPairingStorage(
   scope: ExtensionExecutionScope,
   entries: Record<string, unknown>,
 ): Promise<void> {
-  await evaluateExtensionScope([
-    scope,
-    async (storageEntries: Record<string, unknown>) => {
-      const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('nook_extension', 1)
-        request.onupgradeneeded = () => {
-          request.result.createObjectStore('pairing')
-        }
-        request.onsuccess = () => resolve(request.result)
-        request.onerror = () => reject(request.error)
-      })
-      try {
-        const transaction = database.transaction('pairing', 'readwrite')
-        const store = transaction.objectStore('pairing')
-        for (const [key, value] of Object.entries(storageEntries)) {
-          store.put(value, key)
-        }
-        await new Promise<void>((resolve, reject) => {
-          transaction.oncomplete = () => resolve()
-          transaction.onerror = () => reject(transaction.error)
-        })
-      } finally {
-        database.close()
+  const writeStorage = async (storageEntries: Record<string, unknown>) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('nook_extension', 1)
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore('pairing')
       }
-    },
-    entries,
-  ])
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      const transaction = database.transaction('pairing', 'readwrite')
+      const store = transaction.objectStore('pairing')
+      for (const [key, value] of Object.entries(storageEntries)) {
+        store.put(value, key)
+      }
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = () => reject(transaction.error)
+      })
+    } finally {
+      database.close()
+    }
+  }
+  await (isPage(scope)
+    ? scope.evaluate(writeStorage, entries)
+    : scope.evaluate(writeStorage, entries))
 }
 
 export async function removeExtensionPairingStorageKeys(
   scope: ExtensionExecutionScope,
   keys: string[],
 ): Promise<void> {
-  await evaluateExtensionScope([
-    scope,
-    async (storageKeys: string[]) => {
-      const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('nook_extension', 1)
-        request.onsuccess = () => resolve(request.result)
-        request.onerror = () => reject(request.error)
-      })
-      try {
-        const transaction = database.transaction('pairing', 'readwrite')
-        const store = transaction.objectStore('pairing')
-        for (const key of storageKeys) {
-          store.delete(key)
-        }
-        await new Promise<void>((resolve, reject) => {
-          transaction.oncomplete = () => resolve()
-          transaction.onerror = () => reject(transaction.error)
-        })
-      } finally {
-        database.close()
+  const removeStorageKeys = async (storageKeys: string[]) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('nook_extension', 1)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      const transaction = database.transaction('pairing', 'readwrite')
+      const store = transaction.objectStore('pairing')
+      for (const key of storageKeys) {
+        store.delete(key)
       }
-    },
-    keys,
-  ])
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = () => reject(transaction.error)
+      })
+    } finally {
+      database.close()
+    }
+  }
+  await (isPage(scope)
+    ? scope.evaluate(removeStorageKeys, keys)
+    : scope.evaluate(removeStorageKeys, keys))
 }

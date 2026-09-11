@@ -404,7 +404,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
             reason: 'workflow-forbidden-origin',
           }
           sendResponse(nookTypedArgs0_2)
-          return false
+          return
         }
         const workflowDependencies: Parameters<
           typeof authenticationWorkflowMessageResponse

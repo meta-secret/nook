@@ -546,14 +546,18 @@ class BrowserLogRuntime {
     };
     if (globalThis.fetch === marker.__nookFetchOuter) return;
 
-    const originalFetch = globalThis.fetch.bind(globalThis);
-    const fetchStatics: Pick<typeof globalThis.fetch, "preconnect"> = {
-      preconnect: globalThis.fetch.preconnect,
-    };
-    const wrapped: typeof globalThis.fetch = Object.assign(
-      async (...browserLogFetchArguments: BrowserLogFetchArguments) => {
+    const wrapped = new Proxy(globalThis.fetch, {
+      apply: async (
+        target,
+        thisArgument,
+        browserLogFetchArguments: BrowserLogFetchArguments,
+      ) => {
         const [input, init] = browserLogFetchArguments;
-        const response = await originalFetch(...browserLogFetchArguments);
+        const response = await Reflect.apply(
+          target,
+          thisArgument,
+          browserLogFetchArguments,
+        );
         if (!response.ok) {
           const url = this.sanitizeLogUrl(this.resolveFetchUrl(input));
           if (!this.isIgnoredErrorSource(url)) {
@@ -569,8 +573,7 @@ class BrowserLogRuntime {
         }
         return response;
       },
-      fetchStatics,
-    );
+    });
     marker.__nookFetchOuter = wrapped;
     globalThis.fetch = wrapped;
   }
