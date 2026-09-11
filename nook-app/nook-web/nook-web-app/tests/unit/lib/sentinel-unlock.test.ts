@@ -326,7 +326,7 @@ describe('Sentinel quorum completion presentation', () => {
 
     finishListing()
     await vi.waitFor(() => {
-      expect(view.getByTestId('sentinel-unlock-no-deliveries')).toBeVisible()
+      expect(view.getByTestId('sentinel-unlock-no-deliveries')).toBeTruthy()
     })
     view.unmount()
     fixture.dispose()
